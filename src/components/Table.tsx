@@ -35,10 +35,13 @@ export const Tables = ({headings, rows}: {headings:Array<string>, rows: TableRow
                     <Td
                       key={`cell-${index}-${idx}`}
                     >
+                      
                       {cell}
+                      
                     </Td>
                   ))}
                 </Tr>
+                
               ))}
     </Tbody>
   </Table>

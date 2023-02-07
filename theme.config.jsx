@@ -1,8 +1,3 @@
-import Image from "next/image"
-import { useColorModeValue } from "@chakra-ui/react"
-
-const lightLogo = '/images/clerk-logomark-light.svg';
-const darkLogo = '/images/clerk-logomark-dark.svg';
 
 export default {
     logo: 'Clerk Docs',
@@ -17,11 +12,13 @@ export default {
     },
     sidebar:{
       defaultMenuCollapseLevel: 1,
+      toggleButton: true,
+    
     },
     navigation: false,
     footer: {
       text: <span>
-        {new Date().getFullYear()} © <a href="https://clerk.dev" target="_blank">Clerk</a>.
+        {new Date().getFullYear()} © <a href="https://clerk.dev" target="_blank" rel="noreferrer">Clerk</a>.
       </span>,
     }
   }

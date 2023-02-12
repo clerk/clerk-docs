@@ -1,4 +1,11 @@
 export default {
+  head: (
+    <>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta property="og:title" content="Clerk" />
+      <meta property="og:description" content="Authentication and User management for the modern web" />
+    </>
+  ),
   logo: (
     <>
       <svg
@@ -51,6 +58,7 @@ export default {
   useNextSeoProps() {
     return {
       titleTemplate: "%s – Clerk",
+
     };
   },
   docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/",

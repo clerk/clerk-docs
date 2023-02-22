@@ -8,7 +8,7 @@ const config: DocsThemeConfig = {
     const { asPath } = useRouter()
     if (asPath !== '/') {
       return {
-        titleTemplate: '%s – Nextra'
+        titleTemplate: '%s – Clerk'
       }
     }
     return {}
@@ -19,7 +19,7 @@ const config: DocsThemeConfig = {
     const socialCard =
       route === '/' || !title
         ? 'clerk-docs.clerkpreview.com/clerk-og.png'
-        : `https://nextra.site/api/og?title=${title}`
+        : `https://clerk-docs.clerkpreview.com/api/og?title=${title}`
 
     return (
       <>

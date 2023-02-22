@@ -4,6 +4,15 @@ import { useConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 
 const config: DocsThemeConfig = {
+  useNextSeoProps() {
+    const { asPath } = useRouter()
+    if (asPath !== '/') {
+      return {
+        titleTemplate: '%s – Nextra'
+      }
+    }
+    return {}
+  },
   head: function useHead() {
     const { title } = useConfig()
     const { route } = useRouter()
@@ -87,14 +96,6 @@ const config: DocsThemeConfig = {
       </span>
     </>
   ),
-  useNextSeoProps() {
-    const { asPath } = useRouter()
-    if (asPath !== '/') {
-      return {
-        titleTemplate: '%s – Clerk Docs',
-      }
-    }
-  },
   docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/tree/beta",
   project: {
     link: "https://clerk.dev",

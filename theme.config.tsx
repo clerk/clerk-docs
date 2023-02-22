@@ -1,11 +1,43 @@
-export default {
-  head: (
-    <>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta property="og:title" content="Clerk" />
-      <meta property="og:description" content="Authentication and User management for the modern web" />
-    </>
-  ),
+
+import type { DocsThemeConfig} from 'nextra-theme-docs';
+import { useConfig } from 'nextra-theme-docs'
+import { useRouter } from 'next/router'
+
+const config: DocsThemeConfig = {
+  head: function useHead() {
+    const { title } = useConfig()
+    const { route } = useRouter()
+    const socialCard =
+      route === '/' || !title
+        ? 'clerk-docs.clerkpreview.com/clerk-og.png'
+        : `https://nextra.site/api/og?title=${title}`
+
+    return (
+      <>
+        <meta name="msapplication-TileColor" content="#fff" />
+        <meta name="theme-color" content="#fff" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta httpEquiv="Content-Language" content="en" />
+        <meta
+          name="description"
+          content="Authentication and User management for the modern web"
+        />
+        <meta
+          name="og:description"
+          content="Authentication and User management for the modern web"
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={socialCard} />
+        <meta name="twitter:site:domain" content="clerk.dev" />
+        <meta name="twitter:url" content="https://clerk.dev" />
+        <meta
+          name="og:title"
+          content={title ? title + ' – Clerk' : 'Clerk'}
+        />
+        <meta name="og:image" content={socialCard} />
+      </>
+    )
+  },
   logo: (
     <>
       <svg
@@ -56,12 +88,14 @@ export default {
     </>
   ),
   useNextSeoProps() {
-    return {
-      titleTemplate: "%s – Clerk",
-
-    };
+    const { asPath } = useRouter()
+    if (asPath !== '/') {
+      return {
+        titleTemplate: '%s – Clerk Docs',
+      }
+    }
   },
-  docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/",
+  docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/tree/beta",
   project: {
     link: "https://clerk.dev",
   },
@@ -83,3 +117,6 @@ export default {
     ),
   },
 };
+
+
+export default config;

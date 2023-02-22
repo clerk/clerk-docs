@@ -74,7 +74,7 @@ export default async function (req) {
             color: 'black'
           }}
         >
-         {title}
+         {title.toString()}
         </h1>
       </div>
     ),

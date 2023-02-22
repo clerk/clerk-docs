@@ -40,10 +40,6 @@ const config: DocsThemeConfig = {
         <meta name="twitter:image" content={socialCard} />
         <meta name="twitter:site:domain" content="clerk.dev" />
         <meta name="twitter:url" content="https://clerk.dev" />
-        <meta
-          name="og:title"
-          content={title ? `${title} | Clerk` : 'Clerk'}
-        />
         <meta name="og:image" content={socialCard} />
       </>
     )

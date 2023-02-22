@@ -8,7 +8,7 @@ const config: DocsThemeConfig = {
     const { asPath } = useRouter()
     if (asPath !== '/') {
       return {
-        titleTemplate: '%s – Nextra'
+        titleTemplate: '%s – Clerk'
       }
     }
     return {}

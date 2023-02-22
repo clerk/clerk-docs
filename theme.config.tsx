@@ -19,7 +19,7 @@ const config: DocsThemeConfig = {
     const socialCard =
       route === '/' || !title
         ? 'clerk-docs.clerkpreview.com/clerk-og.png'
-        : `https://clerk-docs.clerkpreview.com/api/og?title=${title}`
+        : `https://clerk-docs.clerkpreview.com/api/og?title=${encodeURIComponent(title)}`
 
     return (
       <>

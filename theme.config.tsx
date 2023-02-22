@@ -4,11 +4,12 @@ import { useConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 
 const config: DocsThemeConfig = {
+
   useNextSeoProps() {
     const { asPath } = useRouter()
     if (asPath !== '/') {
       return {
-        titleTemplate: '%s – Clerk'
+        titleTemplate: '%s | Clerk'
       }
     }
     return {}
@@ -41,7 +42,7 @@ const config: DocsThemeConfig = {
         <meta name="twitter:url" content="https://clerk.dev" />
         <meta
           name="og:title"
-          content={title ? title + ' – Clerk' : 'Clerk'}
+          content={title ? `${title} | Clerk` : 'Clerk'}
         />
         <meta name="og:image" content={socialCard} />
       </>
@@ -96,11 +97,10 @@ const config: DocsThemeConfig = {
       </span>
     </>
   ),
-  docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/tree/beta",
+  docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/tree/main",
   project: {
     link: "https://clerk.dev",
   },
-  primaryHue: 187,
   sidebar: {
     defaultMenuCollapseLevel: 1,
     toggleButton: true,

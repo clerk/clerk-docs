@@ -1,10 +1,10 @@
 import { ImageResponse } from '@vercel/og'
-
+import { NextRequest } from 'next/server'
 export const config = {
   runtime: 'edge'
 }
 
-export default async function (req) {
+export default async function (req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
 
@@ -25,7 +25,7 @@ export default async function (req) {
           alignItems: 'flex-start',
           justifyContent: 'center',
           padding: 80,
-          background: "rgb(238,174,202)",
+          backgroundColor: "rgb(238,174,202)",
           background: "radial-gradient(circle, rgba(238,174,202,1) 0%, rgba(148,187,233,1) 100%)",
           fontWeight: 600,
           color: 'white'
@@ -70,11 +70,10 @@ export default async function (req) {
             lineHeight: 1.1,
             letterSpacing: -4,
             backgroundClip: 'text',
-            '-webkit-background-clip': 'text',
             color: 'black'
           }}
         >
-         {title.toString()}
+         {title}
         </h1>
       </div>
     ),

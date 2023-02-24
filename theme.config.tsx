@@ -95,7 +95,7 @@ const config: DocsThemeConfig = {
   ),
   docsRepositoryBase: "https://github.com/clerkinc/clerk-docs/tree/main",
   project: {
-    link: "https://clerk.dev",
+    link: "https://github.com/clerkinc/clerk-docs/",
   },
   sidebar: {
     defaultMenuCollapseLevel: 1,

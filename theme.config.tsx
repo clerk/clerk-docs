@@ -116,9 +116,12 @@ const config: DocsThemeConfig = {
   banner: {
     key: 'beta-release',
     text: (
+      <>
+      <p>🎉 Welcome to the Clerk Docs Beta.</p>
       <a href="https://clerk.dev/docs" target="_blank" rel="noreferrer">
-        🎉 Welcome to the Clerk Docs Beta. Can&apos;t find what you are looking for? Go back to our stable docs →
+        Can&apos;t find what you are looking for? Go back to our stable docs →
       </a>
+      </>
     )
   },
 };

@@ -113,6 +113,9 @@ const config: DocsThemeConfig = {
       </span>
     ),
   },
+  feedback:{
+    content: "Feedback? Submit an issue"
+  },
   banner: {
     key: 'beta-release',
     text: (

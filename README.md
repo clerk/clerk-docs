@@ -25,4 +25,3 @@ Feel free to create an issue with the feedback tag, and we will take the feedbac
 If you've ever wanted to contribute to open source and want to help improve Clerk's documentation, now is your chance!
 
 See the [contributing](./CONTRIBUTING.md) docs for more information
-

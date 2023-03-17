@@ -7,12 +7,34 @@ import { Images } from "@/components/Images";
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Expo application.
 
-## Install @clerk/clerk-expo
-
 <Callout type="warning">
   Currently Clerk only works with Expo SDK 47 or lower. We are working on
   supporting the latest Expo SDK.
 </Callout>
+
+## Create your Expo Project
+<Tabs items={["npx", "yarn", "pnpm"]}>
+  <Tab>
+  ``` bash filename="terminal" copy
+  npx create-expo-app your-project --template expo-template-blank-typescript@47
+  ```
+  </Tab>
+  <Tab>
+   ``` bash filename="terminal" copy
+   yarn create-expo-app [name] --template expo-template-blank-typescript@47
+   ```
+   </Tab>
+  <Tab>
+  ``` bash filename="your-project" copy
+  pnpm create-expo-app [name] --template expo-template-blank-typescript@47
+  ```
+  </Tab>
+</Tabs>
+
+
+
+## Install @clerk/clerk-expo
+
 
 <Tabs items={["npm", "yarn", "pnpm"]}>
   <Tab>
@@ -32,17 +54,11 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   </Tab>
 </Tabs>
 
-## Set Environment Keys
-
-Below is an example of your Publishable Key file. To get the respective keys go to the API Keys page in the [Clerk dashboard](https://dashboard.clerk.dev).
-
-```sh copy
-CLERK_PUBLISHABLE_KEY=pk_test_••••••••••••••••••••••••••••••••••
-```
-
 ## Mount `<ClerkProvider>`
 
 Clerk requires your Expo application to be wrapped in the `<ClerkProvider/>` component. The `<ClerkProvider />` component provides active session and user context to Clerk's hooks and other components.
+
+The `CLERK_PUBLISHABLE_KEY` can be obtained from the API Keys page in the [Clerk dashboard](https://dashboard.clerk.dev).
 
 ```tsx filename="app.tsx" copy
 import React from "react";
@@ -87,7 +103,9 @@ export default function App() {
         <SignedIn>
           <Text>You are Signed in</Text>
         </SignedIn>
-        <SignedOut>You are Signed out</SignedOut>
+        <SignedOut>
+        <Text>You are Signed out</Text>
+        </SignedOut>
       </SafeAreaView>
     </ClerkProvider>
   );
@@ -105,11 +123,15 @@ const styles = StyleSheet.create({
 
 Using expo requires you to create custom flows in our quickstart guide, we are going to show you how to create a sign in and sign up flow using the `useSignIn` and `useSignUp` hooks.
 
+<Callout type="warning">
+The following flows are built on the default instance settings for Clerk. If you have changed your instance settings, you may need to make changes to the following code.
+</Callout>
+
 ## Build Your Sign Up
 
-The examples below use email and password to sign a user up. You will notice that we have a conditonal flow in the sign up page for verifying a code, this is an important step as it verifies the user owns their email.
+The examples below use email and password to sign a user up. You will notice that we have a conditonal flow in the sign up page for verifying a code called `pendingVerification`, this is an important step as it verifies the user owns their email.
 
-```tsx filename="components/sign-up.tsx" copy
+```tsx filename="components/SignUpScreen.tsx" copy
 import * as React from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSignUp } from "@clerk/clerk-expo";
@@ -208,15 +230,52 @@ export default function SignUpScreen() {
 }
 ```
 
-### Build Your Sign In
+<Callout type="info">
+Now would be good a time to test your sign up flow.
+</Callout>
 
-```tsx filename="components/sign-in.tsx" copy
+Make sure you update your `app` file to use the component that you have created, to keep it simple we will add the `SignUpScreen` to the `SignedOut` component.
+
+```tsx filename="app.tsx" copy
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import SignUpScreen from "./components/SignUpScreen";
+
+const CLERK_PUBLISHABLE_KEY = "pk_test_••••••••••••••••••••••••••••••••••";
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignUpScreen />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+```
+
+## Build Your Sign In
+
+```tsx filename="components/SignInScreen.tsx" copy
 import React from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSignIn } from "@clerk/clerk-expo";
 
 export default function SignInScreen() {
-  const { signIn, setSession, isLoaded } = useSignIn();
+  const { signIn, setActive, isLoaded } = useSignIn();
 
   const [emailAddress, setEmailAddress] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -231,7 +290,8 @@ export default function SignInScreen() {
         identifier: emailAddress,
         password,
       });
-      // This is an important step, otherwise Clerk will assume that the user is not signed in.
+      // This is an important step, 
+      // This indicates the user is signed in
       await setActive({ session: completeSignIn.createdSessionId });
     } catch (err: any) {
       console.log(err);
@@ -251,7 +311,6 @@ export default function SignInScreen() {
       <View>
         <TextInput
           value={password}
-          style={styles.textInput}
           placeholder="Password..."
           secureTextEntry={true}
           onChangeText={(password) => setPassword(password)}
@@ -266,13 +325,17 @@ export default function SignInScreen() {
 }
 ```
 
-Make sure you update your `app` file to use the components that you have created, to keep it simple we will just add the SignIn.
+<Callout type="info">
+Now would be good a time to test your sign in flow. Restart your server to remove the session.
+</Callout>
+
+Make sure you update your `app` file to use the component that you have created, replace the `SignUpScreen` with the `SignInScreen` to the `SignedOut` component.
 
 ```tsx filename="app.tsx" copy
 import React from "react";
 import { SafeAreaView, Text, StyleSheet } from "react-native";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
-import SignInScreen from ".components/sign-in";
+import SignInScreen from "./components/SignInScreen";
 
 const CLERK_PUBLISHABLE_KEY = "pk_test_••••••••••••••••••••••••••••••••••";
 export default function App() {
@@ -283,7 +346,7 @@ export default function App() {
           <Text>You are Signed in</Text>
         </SignedIn>
         <SignedOut>
-          <SignIn />
+          <SignInScreen />
         </SignedOut>
       </SafeAreaView>
     </ClerkProvider>
@@ -304,11 +367,29 @@ const styles = StyleSheet.create({
 If you want to add OAuth login flows to you Expo application, in most cases you want to be able to handle both sign in and sign up in a single flow. With Clerk we make this possible with transfers.
 
 <Callout type="info">
-  We are using `expo-auth-session` for session handling for this example. Please
+  We are using [`expo-auth-session`](https://docs.expo.dev/versions/v47.0.0/sdk/auth-session/) for session handling for this example. Please
   make sure it's installed before using the below code.
 </Callout>
 
-```tsx filename="SignInWithOauth" copy
+<Tabs items={["npm", "yarn", "pnpm"]}>
+  <Tab>
+  ``` bash filename="terminal" copy
+  npm install expo-auth-session expo-random
+  ```
+  </Tab>
+  <Tab>
+   ``` bash filename="terminal" copy
+  yarn add expo-auth-session expo-random
+   ```
+   </Tab>
+  <Tab>
+  ``` bash filename="your-project" copy
+  pnpm install expo-auth-session expo-random
+  ```
+  </Tab>
+</Tabs>
+
+```tsx filename="components/SignInWithOAuth.tsx" copy
 import { useSignUp, useSignIn } from "@clerk/clerk-expo";
 import React from "react";
 import { Button, View } from "react-native";
@@ -320,7 +401,7 @@ const SignInWithOAuth = () => {
   const { signUp } = useSignUp();
   if (!isLoaded) return null;
 
-  const handleSignInWithDiscordPress = async () => {
+  const handleSignInWithGooglePress = async () => {
     try {
       const redirectUrl = AuthSession.makeRedirectUri({
         path: "/oauth-native-callback",
@@ -328,7 +409,7 @@ const SignInWithOAuth = () => {
 
       // Choose your OAuth provider, based upon your instance.
       await signIn.create({
-        strategy: "oauth_discord",
+        strategy: "oauth_google",
         redirectUrl,
       });
 
@@ -389,8 +470,8 @@ const SignInWithOAuth = () => {
   return (
     <View>
       <Button
-        title="Sign in with Discord"
-        onPress={handleSignInWithDiscordPress}
+        title="Sign in with Google"
+        onPress={handleSignInWithGooglePress}
       />
     </View>
   );
@@ -399,15 +480,70 @@ const SignInWithOAuth = () => {
 export default SignInWithOAuth;
 ```
 
-### Adding a token cache
+<Callout type="info">
+Now would be good a time to test your OAuth flow. Restart your server to remove the session.
+</Callout>
 
-A token cache is important for persisting your JWT by default Clerk holds it in memory, however this shouldn't be used for Production applications. Expo provides a way to encrypt and securely store key–value pairs locally on the device via `expo-secure-store`. You can use it as your client JWT storage by setting the `tokenCache` prop in your `<ClerkProvider/>` as shown below.
+Make sure you update your `app` file to use the component that you have created, replace the `SignInScreen` with the `SignInWithOAuth` to the `SignedOut` component.
 
-#### Install expo-secure-store
+```tsx filename="app.tsx" copy
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import SignInWithOAuth from "./components/SignInWithOAuth";
 
-```bash filename="your-project" copy
-npx expo install expo-secure-store
+const CLERK_PUBLISHABLE_KEY = "pk_test_••••••••••••••••••••••••••••••••••";
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignInWithOAuth />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 ```
+
+
+## Adding a token cache
+
+A token cache is important for persisting your JWT by default Clerk holds it in memory, however this shouldn't be used for Production applications. 
+Expo provides a way to encrypt and securely store key–value pairs locally on the device via [`expo-secure-store`](https://docs.expo.dev/versions/v47.0.0/sdk/securestore/).  
+
+You can use it as your client JWT storage by setting the `tokenCache` prop in your `<ClerkProvider/>` as shown below.
+
+### Install expo-secure-store
+
+<Tabs items={["npm", "yarn", "pnpm"]}>
+  <Tab>
+  ``` bash filename="terminal" copy
+  npm install expo-secure-store
+  ```
+  </Tab>
+  <Tab>
+   ``` bash filename="terminal" copy
+  yarn add expo-secure-store
+   ```
+   </Tab>
+  <Tab>
+  ``` bash filename="your-project" copy
+  pnpm install install expo-secure-store
+  ```
+  </Tab>
+</Tabs>
 
 ---
 
@@ -415,6 +551,7 @@ npx expo install expo-secure-store
 import React from "react";
 import { SafeAreaView, Text, StyleSheet } from "react-native";
 import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import { SignInWithOAuth } from "./components/SignInWithOAuth";
 import * as SecureStore from "expo-secure-store";
 
 const CLERK_PUBLISHABLE_KEY = "pk_test_••••••••••••••••••••••••••••••••••";
@@ -447,7 +584,81 @@ export default function App() {
           <Text>You are Signed in</Text>
         </SignedIn>
         <SignedOut>
-          <SignIn />
+          <SignInWithOAuth />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+});
+```
+
+## Signing a user out
+To sign a user out you can use the `signOut` method from the `useAuth` hook. This will remove the JWT from the token cache and remove the session.
+
+```tsx filename="app.tsx" copy
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut,useAuth } from "@clerk/clerk-expo";
+import { SignInWithOAuth } from "./components/SignInWithOAuth";
+import * as SecureStore from "expo-secure-store";
+
+const CLERK_PUBLISHABLE_KEY = "pk_test_••••••••••••••••••••••••••••••••••";
+
+const tokenCache = {
+  getToken(key: string) {
+    try {
+      return SecureStore.getItemAsync(key);
+    } catch (err) {
+      return null;
+    }
+  },
+  saveToken(key: string, value: string) {
+    try {
+      return SecureStore.setItemAsync(key, value);
+    } catch (err) {
+      return null;
+    }
+  },
+};
+
+const SignOut = () => {
+  const { isLoaded,signOut } = useAuth();
+  if (!isLoaded) {
+    return null;
+  }
+  return (
+    <View>
+      <Button
+        title="Sign Out"
+        onPress={() => {
+          signOut();
+        }}
+      />
+    </View>
+  );
+};
+
+export default function App() {
+  return (
+    <ClerkProvider
+      tokenCache={tokenCache}
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+    >
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+          <SignOut/>
+        </SignedIn>
+        <SignedOut>
+          <SignInWithOAuth />
         </SignedOut>
       </SafeAreaView>
     </ClerkProvider>

@@ -12,4 +12,4 @@ export const Images = ({src, alt,width,height} : {src: string, alt: string, widt
         />
         </div>
     );
-    };
+};

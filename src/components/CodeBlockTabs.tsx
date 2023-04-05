@@ -16,9 +16,6 @@ export const CodeBlockTabs = ({
   children: Array<string>;
 }) => {
 
-  if (!children) return null;
-  if (!options) return null;
-
   const [language, setLanguage] = useState("");
   const [codeBlock, setCodeblock] = useState(children[0]);
   const [showMenu, setShowMenu] = useState(false);

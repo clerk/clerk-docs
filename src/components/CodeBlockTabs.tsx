@@ -16,9 +16,6 @@ export const CodeBlockTabs = ({
   children: Array<string>;
 }) => {
 
-  if (!children) return null;
-  if (!options) return null;
-
   const [language, setLanguage] = useState("");
   const [codeBlock, setCodeblock] = useState(children[0]);
   const [showMenu, setShowMenu] = useState(false);
@@ -54,7 +51,7 @@ export const CodeBlockTabs = ({
     <div className="relative mt-4">
       <div className="absolute right-0 top-0 z-10 min-w-44">
         <button
-          className="w-44 inline-flex right-0 top-0 p-2 z-10 rounded-md px-2 py-1 border border-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-32 md:w-44 bg-white text-slate-500	 inline-flex right-0 top-0 p-2 z-10 rounded-md px-2 py-1 border border-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           onClick={() => setShowMenu(!showMenu)}
         >
           {iconMap[language || options[0]]} {language || options[0]}
@@ -65,11 +62,11 @@ export const CodeBlockTabs = ({
           />
         </button>
         {showMenu && (
-          <div className="absolute  text-current w-44 right-0 top-10 z-10 border border-gray-400 rounded-md shadow-md ">
+          <div className="absolute text-slate-500 w-32 md:w-44 right-0 top-10 z-10 rounded-md shadow-md ">
             {options.map((option, index) => (
               <button
                 key={`lang-${index}`}
-                className={`w-44 font-medium rounded-lg px-5 py-2.5 text-center inline-flex items-center mr-2 mb-2'
+                className={`w-32 md:w-44 font-medium bg-white text-slate-500 px-5 py-2.5 text-center border border-gray-100 inline-flex items-center mr-2 mb-2'
                     }`}
                 onClick={() => {
                   handleClick({ option, index });

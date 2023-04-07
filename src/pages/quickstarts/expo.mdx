@@ -9,27 +9,10 @@ import { CodeBlockTabs } from "@/components/CodeBlockTabs";
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Expo application.
 
-<Callout type="warning">
-  Currently Clerk only works with Expo SDK 47 or lower. We are working on
-  supporting the latest Expo SDK.
-</Callout>
-
-## Create your Expo Project
-<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
-  ``` bash filename="terminal" copy
-  npx create-expo-app your-project --template expo-template-blank-typescript@47
-  ```
-   ``` bash filename="terminal" copy
-   yarn create-expo-app [name] --template expo-template-blank-typescript@47
-   ```
-  ``` bash filename="terminal" copy
-  pnpm create-expo-app [name] --template expo-template-blank-typescript@47
-  ```
-</CodeBlockTabs>
-
 
 ## Install @clerk/clerk-expo
 
+Once you have a Expo application ready, you need to install Clerk's Expo SDK.
 
 <Tabs items={["npm", "yarn", "pnpm"]}>
   <Tab>
@@ -359,119 +342,60 @@ const styles = StyleSheet.create({
 
 ## OAuth Login
 
-If you want to add OAuth login flows to you Expo application, in most cases you want to be able to handle both sign in and sign up in a single flow. With Clerk we make this possible with transfers.
+If you want to add OAuth login flows to you Expo application, in most cases you want to be able to handle both sign in and sign up in a single flow. With Clerk we make this possible with our OAuth hook.
 
-<Callout type="info">
-  We are using [`expo-auth-session`](https://docs.expo.dev/versions/v47.0.0/sdk/auth-session/) for session handling for this example. Please
-  make sure it's installed before using the below code.
-</Callout>
+```tsx filename="hookes/warmUpBrowser.tsx"" copy
+import React from "react";
+import * as WebBrowser from "expo-web-browser";
 
-<Tabs items={["npm", "yarn", "pnpm"]}>
-  <Tab>
-  ``` bash filename="terminal" copy
-  npm install expo-auth-session expo-random
-  ```
-  </Tab>
-  <Tab>
-   ``` bash filename="terminal" copy
-  yarn add expo-auth-session expo-random
-   ```
-   </Tab>
-  <Tab>
-  ``` bash filename="your-project" copy
-  pnpm install expo-auth-session expo-random
-  ```
-  </Tab>
-</Tabs>
+export const useWarmUpBrowser = () => {
+  React.useEffect(() => {
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+};
+```
 
 ```tsx filename="components/SignInWithOAuth.tsx" copy
-import { useSignUp, useSignIn } from "@clerk/clerk-expo";
 import React from "react";
-import { Button, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import { Button } from "react-native";
+import { useOAuth } from "@clerk/clerk-expo";
+import { useWarmUpBrowser } from "../hooks/useWarmUpBrowser";
 
-import * as AuthSession from "expo-auth-session";
+WebBrowser.maybeCompleteAuthSession();
 
 const SignInWithOAuth = () => {
-  const { isLoaded, signIn, setSession } = useSignIn();
-  const { signUp } = useSignUp();
-  if (!isLoaded) return null;
+  // Warm up the android browser to improve UX
+  // https://docs.expo.dev/guides/authentication/#improving-user-experience
+  useWarmUpBrowser();
 
-  const handleSignInWithGooglePress = async () => {
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+
+  const onPress = React.useCallback(async () => {
     try {
-      const redirectUrl = AuthSession.makeRedirectUri({
-        path: "/oauth-native-callback",
-      });
-
-      // Choose your OAuth provider, based upon your instance.
-      await signIn.create({
-        strategy: "oauth_google",
-        redirectUrl,
-      });
-
-      const {
-        firstFactorVerification: { externalVerificationRedirectURL },
-      } = signIn;
-
-      if (!externalVerificationRedirectURL)
-        throw "Something went wrong during the OAuth flow. Try again.";
-
-      const authResult = await AuthSession.startAsync({
-        authUrl: externalVerificationRedirectURL.toString(),
-        returnUrl: redirectUrl,
-      });
-
-      if (authResult.type !== "success") {
-        throw "Something went wrong during the OAuth flow. Try again.";
-      }
-
-      // Get the rotatingTokenNonce from the redirect URL parameters
-      const { rotating_token_nonce: rotatingTokenNonce } = authResult.params;
-
-      await signIn.reload({ rotatingTokenNonce });
-
-      const { createdSessionId } = signIn;
+      const { createdSessionId, signIn, signUp, setActive } =
+        await startOAuthFlow();
 
       if (createdSessionId) {
-        // If we have a createdSessionId, then auth was successful
-        await setSession(createdSessionId);
+        setActive({ session: createdSessionId });
       } else {
-        // If we have no createdSessionId, then this is a first time sign-in, so
-        // we should process this as a signUp instead
-        // Throw if we're not in the right state for creating a new user
-        if (
-          !signUp ||
-          signIn.firstFactorVerification.status !== "transferable"
-        ) {
-          throw "Something went wrong during the Sign up OAuth flow. Please ensure that all sign up requirements are met.";
-        }
-
-        console.log(
-          "Didn't have an account transferring, following through with new account sign up"
-        );
-
-        // Create user
-        await signUp.create({ transfer: true });
-        await signUp.reload({
-          rotatingTokenNonce: authResult.params.rotating_token_nonce,
-        });
-        await setSession(signUp.createdSessionId);
+        // Use signIn or signUp for next steps such as MFA
       }
     } catch (err) {
-      console.log(JSON.stringify(err, null, 2));
-      console.log("error signing in", err);
+      console.error("OAuth error", err);
     }
-  };
+  }, []);
 
   return (
-    <View>
-      <Button
-        title="Sign in with Google"
-        onPress={handleSignInWithGooglePress}
-      />
-    </View>
+    <Button
+      title="Sign in with Google"
+      onPress={onPress}
+    />
   );
-};
-
+}
 export default SignInWithOAuth;
 ```
 

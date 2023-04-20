@@ -9,6 +9,7 @@ export default function Document() {
           data-domain="beta-docs.clerk.dev"
           src="https://plausible.io/js/script.js"
         ></script>
+        <meta name="robots" content="noindex"></meta>
       </Head>
       <body>
         <Main />

@@ -1,5 +1,5 @@
 
-import type { DocsThemeConfig} from 'nextra-theme-docs';
+import type { DocsThemeConfig } from 'nextra-theme-docs';
 import { useConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 
@@ -113,17 +113,17 @@ const config: DocsThemeConfig = {
       </span>
     ),
   },
-  feedback:{
+  feedback: {
     content: "Feedback? Submit an issue"
   },
   banner: {
     key: 'beta-release',
     text: (
       <>
-      <p>🎉 Welcome to the Clerk Docs Beta.</p>
-      <a href="https://clerk.dev/docs" target="_blank" rel="noreferrer">
-        Can&apos;t find what you are looking for? Go back to our stable docs →
-      </a>
+        <p>🎉 Welcome to the Clerk Docs Beta.</p>
+        <a href="https://clerk.dev/docs" target="_blank" rel="noreferrer">
+          Can&apos;t find what you are looking for? Go back to our stable docs →
+        </a>
       </>
     )
   },

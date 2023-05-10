@@ -100,6 +100,14 @@ const config: DocsThemeConfig = {
   sidebar: {
     defaultMenuCollapseLevel: 1,
     toggleButton: true,
+    titleComponent: ({ title, type }) => {
+      if (type === 'separator') {
+        return (
+          <div style={{ fontSize: '1.2rem' }}>{title}</div>
+        );
+      }
+      return <>{title}</>;
+    },
   },
   navigation: false,
   footer: {
@@ -110,7 +118,7 @@ const config: DocsThemeConfig = {
           Clerk
         </a>
         .
-      </span>
+      </span >
     ),
   },
   feedback: {

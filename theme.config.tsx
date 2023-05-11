@@ -1,5 +1,5 @@
 
-import type { DocsThemeConfig} from 'nextra-theme-docs';
+import type { DocsThemeConfig } from 'nextra-theme-docs';
 import { useConfig } from 'nextra-theme-docs'
 import { useRouter } from 'next/router'
 
@@ -100,6 +100,14 @@ const config: DocsThemeConfig = {
   sidebar: {
     defaultMenuCollapseLevel: 1,
     toggleButton: true,
+    titleComponent: ({ title, type }) => {
+      if (type === 'separator') {
+        return (
+          <div style={{ fontSize: '1.2rem' }}>{title}</div>
+        );
+      }
+      return <>{title}</>;
+    },
   },
   navigation: false,
   footer: {
@@ -110,20 +118,23 @@ const config: DocsThemeConfig = {
           Clerk
         </a>
         .
-      </span>
+      </span >
     ),
   },
-  feedback:{
-    content: "Feedback? Submit an issue"
+  feedback: {
+    content: null
+  },
+  editLink: {
+    text: `Found a mistake? Fix it on GitHub →`
   },
   banner: {
     key: 'beta-release',
     text: (
       <>
-      <p>🎉 Welcome to the Clerk Docs Beta.</p>
-      <a href="https://clerk.dev/docs" target="_blank" rel="noreferrer">
-        Can&apos;t find what you are looking for? Go back to our stable docs →
-      </a>
+        <p>🎉 Welcome to the Clerk Docs Beta.</p>
+        <a href="https://clerk.dev/docs" target="_blank" rel="noreferrer">
+          Can&apos;t find what you are looking for? Go back to our stable docs →
+        </a>
       </>
     )
   },

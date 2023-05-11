@@ -122,7 +122,10 @@ const config: DocsThemeConfig = {
     ),
   },
   feedback: {
-    content: "Feedback? Submit an issue"
+    content: null
+  },
+  editLink: {
+    text: `Found a mistake? Fix it on GitHub →`
   },
   banner: {
     key: 'beta-release',

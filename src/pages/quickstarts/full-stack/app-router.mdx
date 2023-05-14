@@ -13,15 +13,17 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
 Once you have a Next.js application ready, you need to install Clerk's Next.js SDK. This gives you access to prebuilt components and hooks, as well as our helpers for Next.js API routes, server-side rendering, and middleware.
 
 <CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
-  ``` bash filename="your-project" copy
+  ```bash filename="your-project" copy
   npm install @clerk/nextjs
   ```
-  ``` bash filename="your-project" copy
+
+  ```bash filename="your-project" copy
    yarn add @clerk/nextjs
-   ```
-   ``` bash filename="your-project" copy
-   pnpm i @clerk/nextjs
-   ```
+  ```
+
+  ```bash filename="your-project" copy
+  pnpm i @clerk/nextjs
+  ```
 </CodeBlockTabs>
 
 ## Set Environment Keys
@@ -60,8 +62,8 @@ export default function RootLayout({
 ```
 
 <Callout type="warning">
- The root layout is a server component, if you plan to use the `<ClerkProvider>` outside the root layout it will need to be a server component as well.
- </Callout>
+  The root layout is a server component, if you plan to use the `<ClerkProvider>` outside the root layout it will need to be a server component as well.
+</Callout>
 
 Clerk offers a set of prebuilt components that you can use to embed sign in, sign up, and other user management functions into your Next.js application.
 
@@ -96,7 +98,7 @@ export default function Page() {
 To use server side functionality, you need to add the Clerk middleware to your Next.js application. This allows you to access the session in your Next.js API routes and server-side rendered pages. Middleware should be placed at the root of your project.
 
 <Callout type="info" emoji="ℹ️">
-If you select `src/` as part of the create-next-app CLI you will need to place the middleware file inside of that directory.
+  If you select `src/` as part of the create-next-app CLI you will need to place the middleware file inside of that directory.
 </Callout>
 
 ```tsx copy filename="middleware.ts"
@@ -130,85 +132,83 @@ export const config = {
 Clerk offers two ways to protect your Next.js application, you can use Next.js Middleware or using our Control Components.
 
 <Tabs items={['Extending Middleware', 'Control Components']}>
-<Tab>
+  <Tab>
+    Using Middleware is the most comprehensive way to implement page protection in your app. Below is an example of page protection using Middleware.
 
-Using Middleware is the most comprehensive way to implement page protection in your app. Below is an example of page protection using Middleware.
+    ```ts copy filename="middleware.ts"
+    import { withClerkMiddleware, getAuth } from "@clerk/nextjs/server";
+    import { NextResponse } from "next/server";
+    import type { NextRequest } from "next/server";
 
-```ts copy filename="middleware.ts"
-import { withClerkMiddleware, getAuth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+    // Set the paths that don't require the user to be signed in
+    const publicPaths = ["/", "/sign-in*", "/sign-up*"];
 
-// Set the paths that don't require the user to be signed in
-const publicPaths = ["/", "/sign-in*", "/sign-up*"];
+    const isPublic = (path: string) => {
+      return publicPaths.find((x) =>
+        path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
+      );
+    };
 
-const isPublic = (path: string) => {
-  return publicPaths.find((x) =>
-    path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
-  );
-};
+    export default withClerkMiddleware((request: NextRequest) => {
+      if (isPublic(request.nextUrl.pathname)) {
+        return NextResponse.next();
+      }
+      // if the user is not signed in redirect them to the sign in page.
+      const { userId } = getAuth(request);
 
-export default withClerkMiddleware((request: NextRequest) => {
-  if (isPublic(request.nextUrl.pathname)) {
-    return NextResponse.next();
-  }
-  // if the user is not signed in redirect them to the sign in page.
-  const { userId } = getAuth(request);
+      if (!userId) {
+        // redirect the users to /pages/sign-in/[[...index]].ts
 
-  if (!userId) {
-    // redirect the users to /pages/sign-in/[[...index]].ts
+        const signInUrl = new URL("/sign-in", request.url);
+        signInUrl.searchParams.set("redirect_url", request.url);
+        return NextResponse.redirect(signInUrl);
+      }
+      return NextResponse.next();
+    });
 
-    const signInUrl = new URL("/sign-in", request.url);
-    signInUrl.searchParams.set("redirect_url", request.url);
-    return NextResponse.redirect(signInUrl);
-  }
-  return NextResponse.next();
-});
+    // Stop Middleware running on static files and public folder
+    export const config = {
+      matcher: [
+        /*
+         * Match all request paths except for the ones starting with:
+         * - _next
+         * - static (static files)
+         * - favicon.ico (favicon file)
+         * - public folder
+         * - public folder
+         */
+        "/((?!static|.*\\..*|_next|favicon.ico).*)",
+        "/",
+      ],
+    }
+    ```
+  </Tab>
 
-// Stop Middleware running on static files and public folder
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next
-     * - static (static files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - public folder
-     */
-    "/((?!static|.*\\..*|_next|favicon.ico).*)",
-    "/",
-  ],
-}
-```
+  <Tab>
+    If you prefer to use Clerk's Control Components for page protection, the following examples shows you how to compose control components.
 
-</Tab>
-<Tab>
-If you prefer to use Clerk's Control Components for page protection, the following examples shows you how to compose control components.
+    #### Server Component Example
 
-#### Server Component Example
+    ```tsx copy filename="app/page.tsx"
+    import { SignedIn, SignedOut } from "@clerk/nextjs/app-beta";
+    import Link from "next/link";
 
-```tsx copy filename="app/page.tsx"
-import { SignedIn, SignedOut } from "@clerk/nextjs/app-beta";
-import Link from "next/link";
-
-export default function Home() {
-  return (
-    <main>
-      <h1>Next.js 13 with Clerk</h1>
-      <SignedIn>
-        <p>You are signed in!</p>
-      </SignedIn>
-      <SignedOut>
-        <p>You are signed out!</p>
-        <Link href="/sign-in">Sign In</Link>
-      </SignedOut>
-    </main>
-  );
-}
-```
-
-</Tab>
+    export default function Home() {
+      return (
+        <main>
+          <h1>Next.js 13 with Clerk</h1>
+          <SignedIn>
+            <p>You are signed in!</p>
+          </SignedIn>
+          <SignedOut>
+            <p>You are signed out!</p>
+            <Link href="/sign-in">Sign In</Link>
+          </SignedOut>
+        </main>
+      );
+    }
+    ```
+  </Tab>
 </Tabs>
 
 ## Read Session & User Data
@@ -342,23 +342,10 @@ Now you have an application integrated with Clerk you will want to read the foll
 
 <div className="container mx-auto my-4">
   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-    <Cards
-      title="Customization & Localization"
-      description="Learn how to customize and localize the Clerk components."
-      link="/components/customization/appearance"
-      cta="Learn More"
-    />
-    <Cards
-      title="Server Side Helpers"
-      description="Learn more about our server side helpers and how to use them."
-      link="/sdk/next/get-auth"
-      cta="Learn More"
-    />
-    <Cards
-      title="Client Side Helpers"
-      description="Learn more about our client side helpers and how to use them."
-      link="/sdk/shared/use-auth"
-      cta="Learn More"
-    />
-   </div>
+    <Cards title="Customization & Localization" description="Learn how to customize and localize the Clerk components." link="/components/customization/appearance" cta="Learn More" />
+
+    <Cards title="Server Side Helpers" description="Learn more about our server side helpers and how to use them." link="/sdk/next/get-auth" cta="Learn More" />
+
+    <Cards title="Client Side Helpers" description="Learn more about our client side helpers and how to use them." link="/sdk/shared/use-auth" cta="Learn More" />
+  </div>
 </div>

@@ -14,9 +14,9 @@ This repository holds the documentation for [Clerk](https://clerk.dev/) which is
 
 ### I've found a issue with your docs.
 
-If you have found incorrect documentation you can file an issue or create a PR to fix it. 
+If you have found incorrect documentation you can file an issue or create a PR to fix it.
 
-### I have feedback 
+### I have feedback
 
 Feel free to create an issue with the feedback tag, and we will take the feedback and iterate on it.
 

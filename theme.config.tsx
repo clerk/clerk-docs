@@ -137,9 +137,16 @@ const config: DocsThemeConfig = {
     defaultMenuCollapseLevel: 1,
     toggleButton: true,
     titleComponent: ({title, type}) => {
+      const isHeader = title.startsWith("#");
+      if (isHeader) {
+        const headerTitle = title.replace(/^#+\s*/, "");
+        return (
+          <div style={{fontSize: '1.2rem'}}>{headerTitle}</div>
+        );
+      }
       if (type === 'separator') {
         return (
-          <div style={{fontSize: '1.2rem'}}>{title}</div>
+          <hr />
         );
       }
       return <>{title}</>;

@@ -15,7 +15,6 @@ export const CodeBlockTabs = ({
   options: Array<string>;
   children: Array<string>;
 }) => {
-
   const [language, setLanguage] = useState("");
   const [codeBlock, setCodeblock] = useState(children[0]);
   const [showMenu, setShowMenu] = useState(false);
@@ -23,7 +22,6 @@ export const CodeBlockTabs = ({
   type IconMapper = {
     [key: string]: JSX.Element;
   };
-
 
   const handleClick = ({
     option,

@@ -181,6 +181,13 @@ const config: DocsThemeConfig = {
       </>
     )
   },
+  themeSwitch: {
+    useOptions: {
+        light: 'Light Theme',
+        dark: 'Dark Theme',
+        system: 'System Theme'
+      }
+    }
 };
 
 

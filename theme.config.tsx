@@ -146,10 +146,15 @@ const config: DocsThemeConfig = {
       }
       if (type === 'separator') {
         return (
-          <hr />
+          <hr/>
         );
       }
-      return <>{title}</>;
+      return (
+        <div>
+          <RootIcon name={title}/>
+          <span>{title}</span>
+        </div>
+      );
     },
   },
   navigation: false,
@@ -183,5 +188,107 @@ const config: DocsThemeConfig = {
   },
 };
 
+
+interface RootIconProps {
+  name: string;
+}
+
+function RootIcon({name}: RootIconProps) {
+  if (name === "Home") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path
+          d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Get Started") {
+    return null;
+  }
+
+  if (name === "Quickstarts") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path fillRule="evenodd"
+              d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+              clipRule="evenodd"></path>
+      </svg>
+    );
+  }
+
+  if (name === "Integrations") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path
+          d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H4a1 1 0 001-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Users") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Organizations") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path
+          d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Testing") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path fillRule="evenodd"
+              d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z"
+              clipRule="evenodd"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Advanced Usage") {
+    return null;
+  }
+
+  if (name === "Migrations & Deployments") {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false"
+           className="sidebar-icon">
+        <path fillRule="evenodd" clipRule="evenodd"
+              d="M15.8767 15.5158C19.8445 12.0469 22.8471 5.26536 21.0935 3.51175C19.3399 1.75814 12.5583 4.76075 9.08943 8.72856C6.8843 9.25328 2.4212 12.4164 3.06236 13.0576C3.38312 13.3784 5.11006 13.1972 7.03406 12.8721C6.93911 14.0457 7.32184 15.1959 8.36558 16.2397C9.40932 17.2834 10.5596 17.6661 11.7331 17.5712C11.4081 19.4952 11.2268 21.2222 11.5476 21.543C12.1887 22.1841 15.352 17.721 15.8767 15.5158ZM17.9115 8.10794C17.521 8.49844 16.8878 8.49844 16.4973 8.10794C16.1068 7.71745 16.1068 7.08423 16.4973 6.69373C16.8878 6.30323 17.521 6.30323 17.9115 6.69373C18.302 7.08423 18.302 7.71745 17.9115 8.10794Z"
+              fill="currentColor"></path>
+        <path
+          d="M3.76938 20.8359C4.55038 21.6169 7.23094 20.2027 8.01202 19.4217C8.79311 18.6406 8.79302 17.3742 8.01202 16.5932C7.23103 15.8122 5.96468 15.8121 5.1836 16.5932C4.40252 17.3743 2.98839 20.0549 3.76938 20.8359Z"
+          fill="currentColor"></path>
+      </svg>
+    )
+  }
+
+  if (name === "Security") {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+           focusable="false" className="sidebar-icon">
+        <path fillRule="evenodd"
+              d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+              clipRule="evenodd"></path>
+      </svg>
+    )
+  }
+
+  return null;
+}
 
 export default config;

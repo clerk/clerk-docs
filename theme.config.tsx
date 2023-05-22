@@ -109,6 +109,7 @@ const config: DocsThemeConfig = {
               width="24"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 127.14 96.36"
+              fill="currentColor"
             >
               <g id="图层_2" data-name="图层 2">
                 <g id="Discord_Logos" data-name="Discord Logos">
@@ -139,6 +140,7 @@ const config: DocsThemeConfig = {
               x="0px"
               y="0px"
               viewBox="0 0 248 204"
+              fill="currentColor"
             >
               <g id="Logo_1_">
                 <path

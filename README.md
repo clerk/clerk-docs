@@ -12,7 +12,7 @@
 
 This repository holds the documentation for [Clerk](https://clerk.dev/) which is using [Nextra](https://nextra.site) as the docs theme.
 
-### I've found a issue with your docs.
+### I've found an issue with your docs
 
 If you have found incorrect documentation you can file an issue or create a PR to fix it.
 
@@ -24,4 +24,4 @@ Feel free to create an issue with the feedback tag, and we will take the feedbac
 
 If you've ever wanted to contribute to open source and want to help improve Clerk's documentation, now is your chance!
 
-See the [contributing](./CONTRIBUTING.md) docs for more information
+See the [contributing](./CONTRIBUTING.md) docs for more information.

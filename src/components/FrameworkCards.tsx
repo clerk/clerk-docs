@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-interface FrameworkCards {
+interface FrameworkCardsProps {
   title: string;
   description: string;
   link: string;
@@ -21,7 +21,7 @@ export const FrameworkCards = ({
   icon,
   iconHeight = 24,
   iconWidth = 24,
-}: FrameworkCards) => (
+}: FrameworkCardsProps) => (
   <div className="max-w-sm p-6 bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700">
     {icon && (
       <Image

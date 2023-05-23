@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-interface FrameworkCards {
+interface AuthProvidersCards {
   title: string;
   description: string;
   link: string;
@@ -12,7 +12,7 @@ interface FrameworkCards {
   iconWidth: number;
 }
 
-export const FrameworkCards = ({
+export const AuthProvidersCards = ({
   title,
   description,
   link,
@@ -21,7 +21,7 @@ export const FrameworkCards = ({
   icon,
   iconHeight = 24,
   iconWidth = 24,
-}: FrameworkCards) => (
+}: AuthProvidersCards) => (
   <div className="max-w-sm p-6 bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700">
     {icon && (
       <Image

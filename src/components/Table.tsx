@@ -1,5 +1,5 @@
 type TableRow = {
-  cells: Array<string>;
+  cells: Array<string | React.ReactNode>;
 };
 
 interface HeadingMeta {
@@ -50,7 +50,8 @@ export const Tables = ({
                     key={`row-${index}`}
                   >
                     {row.cells.map((cell, idx) => {
-                      const result = cell.split(/\r?\n/);
+                      const result =
+                        typeof cell === "string" ? cell.split(/\r?\n/) : [];
                       const maxWidth =
                         headingsMeta?.[idx]?.maxWidth ?? undefined;
 

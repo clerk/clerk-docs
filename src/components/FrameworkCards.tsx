@@ -25,7 +25,7 @@ export const FrameworkCards = ({
   iconHeight = 24,
   iconWidth = 24,
 }: FrameworkCardsProps) => (
-  <div className="py-8 mb-8 bg-white shadow-lg h-max px-9 w-72 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
+  <div className="py-8 mb-8 bg-white shadow-lg h-max px-9 w-80 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
     <Link href={link}>
       {icon && (
         <Image

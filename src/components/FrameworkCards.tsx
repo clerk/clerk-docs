@@ -25,7 +25,7 @@ export const FrameworkCards = ({
   iconHeight = 24,
   iconWidth = 24,
 }: FrameworkCardsProps) => (
-  <div className="py-8 mb-8 bg-white shadow-lg h-max px-9 w-80 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
+  <div className="w-full h-auto py-8 mb-8 bg-white shadow-lg px-9 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
     <Link href={link}>
       {icon && (
         <Image
@@ -37,19 +37,19 @@ export const FrameworkCards = ({
         />
       )}
       <h5
-        className={`${figtree.className} mb-2 text-md font-semibold tracking-tight text-gray-900 dark:text-white`}
+        className={`${figtree.className} mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
       >
         {title}
       </h5>
-      <p className="text-xs font-normal text-gray-500 dark:text-gray-400">
+      <p className="text-[13px] font-normal text-gray-500 dark:text-gray-400">
         {description}
       </p>
-      <div className="inline-flex items-center mt-6 text-sm font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-violet-600">
+      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-violet-600">
         {cta}
         {!hideArrow && (
           <svg
             aria-hidden="true"
-            className="w-4 h-4 ml-2 -mr-1 group-hover:animate-move-arrow"
+            className="w-3.5 h-3.5 ml-1 -mr-1 group-hover:animate-move-arrow"
             fill="currentColor"
             viewBox="0 0 20 20"
             xmlns="http://www.w3.org/2000/svg"

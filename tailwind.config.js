@@ -21,6 +21,9 @@ module.exports = {
       animation: {
         "move-arrow": "slide 0.2s ease-out 0s 1 normal forwards",
       },
+      colors: {
+        "clerk-purple": "#6C47FF",
+      },
     },
   },
 };

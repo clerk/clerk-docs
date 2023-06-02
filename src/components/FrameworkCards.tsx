@@ -29,7 +29,7 @@ export const FrameworkCards = ({
     <Link href={link}>
       {icon && (
         <Image
-          className="mb-6"
+          className="mb-5"
           src={icon}
           alt={`${title} icon`}
           height={iconHeight}
@@ -44,7 +44,7 @@ export const FrameworkCards = ({
       <p className="text-[13px] font-normal text-gray-500 dark:text-gray-400">
         {description}
       </p>
-      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-violet-600">
+      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-clerk-purple">
         {cta}
         {!hideArrow && (
           <svg

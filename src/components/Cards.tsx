@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Figtree } from "next/font/google";
 
 const figtree = Figtree({ subsets: ["latin"] });
@@ -9,6 +10,9 @@ interface CardsProps {
   link: string;
   cta: string;
   hideArrow?: boolean;
+  icon?: string;
+  iconHeight?: number;
+  iconWidth?: number;
 }
 
 export const Cards = ({
@@ -17,9 +21,21 @@ export const Cards = ({
   link,
   cta,
   hideArrow,
+  icon,
+  iconHeight = 24,
+  iconWidth = 24,
 }: CardsProps) => (
   <div className="h-auto py-8 mb-8 bg-white shadow-lg px-9 min-w-96 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
     <Link href={link}>
+      {icon && (
+        <Image
+          className="mb-5"
+          src={icon}
+          alt={`${title} icon`}
+          height={iconHeight}
+          width={iconWidth}
+        />
+      )}
       <h5
         className={`${figtree.className} mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
       >
@@ -28,7 +44,7 @@ export const Cards = ({
       <p className="text-[13px] font-normal text-gray-500 dark:text-gray-400">
         {description}
       </p>
-      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-violet-600">
+      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-gray-400 group-hover:text-clerk-purple mb-0">
         {cta}
         {!hideArrow && (
           <svg

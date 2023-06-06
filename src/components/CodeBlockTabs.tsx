@@ -6,6 +6,12 @@ import {
   SiNextdotjs,
   SiReact,
   SiRemix,
+  SiNodedotjs,
+  SiRuby,
+  SiGo,
+  SiExpo,
+  SiCurl
+
 } from "react-icons/si";
 
 export const CodeBlockTabs = ({
@@ -39,10 +45,17 @@ export const CodeBlockTabs = ({
   // This could be SVGs instead but I was lazy.
   const iconMap: IconMapper = {
     "Next.js": <SiNextdotjs className={iconClass} />,
+    "Pages Router": <SiNextdotjs className={iconClass} />,
+    "App Router": <SiNextdotjs className={iconClass} />,
     React: <SiReact className={iconClass} />,
     Remix: <SiRemix className={iconClass} />,
     Gatsby: <SiGatsby className={iconClass} />,
     JavaScript: <SiJavascript className={iconClass} />,
+    Node: <SiNodedotjs className={iconClass} />,
+    Ruby: <SiRuby className={iconClass} />,
+    Go: <SiGo className={iconClass} />,
+    Expo: <SiExpo className={iconClass} />,
+    cURL: <SiCurl className={iconClass} />,
   };
 
   return (

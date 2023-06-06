@@ -10,7 +10,7 @@ import {
   SiRuby,
   SiGo,
   SiExpo,
-  SiCurl
+  SiCurl,
 } from "react-icons/si";
 
 export const CodeBlockTabs = ({

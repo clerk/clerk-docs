@@ -20,8 +20,8 @@ export const Tables = ({
       <div className="sm:-mx-6 lg:-mx-8">
         <div className="inline-block min-w-full py-2 sm:px-6 lg:px-8">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b font-medium dark:border-neutral-500">
+            <table className="min-w-full text-sm text-left">
+              <thead className="font-medium border-b border-[#C4B5FF]">
                 <tr>
                   {headings?.map((heading, index) => {
                     const maxWidth =
@@ -46,7 +46,7 @@ export const Tables = ({
               <tbody>
                 {rows.map((row, index) => (
                   <tr
-                    className="border-b dark:border-neutral-500"
+                    className="border-b border-[#C4B5FF]"
                     key={`row-${index}`}
                   >
                     {row.cells.map((cell, idx) => {

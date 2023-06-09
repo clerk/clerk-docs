@@ -59,24 +59,31 @@ export const CodeBlockTabs = ({
 
   return (
     <div className="relative mt-4">
-      <div className="absolute right-0 top-0 z-10 min-w-44">
+      <div
+        className="absolute top-0 right-0 z-10 min-w-44"
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setShowMenu(false);
+          }
+        }}
+      >
         <button
-          className="w-32 md:w-44 bg-white text-slate-500	 inline-flex right-0 top-0 p-2 z-10 rounded-md px-2 py-1 border border-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="top-0 right-0 z-10 inline-flex w-32 p-2 px-2 py-1 bg-white border border-gray-300 rounded-md shadow-sm md:w-44 text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white dark:bg-[#1D2428] dark:border-gray-700"
           onClick={() => setShowMenu(!showMenu)}
         >
           {iconMap[language || options[0]]} {language || options[0]}
           <RxCaretDown
             width="20px"
             height="20px"
-            className="absolute right-0 mt-0.5 z-10"
+            className="absolute right-0 z-10 mt-1 mr-1"
           />
         </button>
         {showMenu && (
-          <div className="absolute text-slate-500 w-32 md:w-44 right-0 top-10 z-10 rounded-md shadow-md ">
+          <div className="absolute right-0 z-10 w-32 rounded-md shadow-md md:w-44 top-10 text-slate-500 dark:bg-[#1D2428] bg-white">
             {options.map((option, index) => (
               <button
                 key={`lang-${index}`}
-                className={`w-32 md:w-44 font-medium bg-white text-slate-500 px-5 py-2.5 text-center border border-gray-100 inline-flex items-center mr-2 mb-2'
+                className={`w-32 md:w-44 font-medium bg-white px-5 py-2.5 text-center border-gray-100 inline-flex items-center mr-2 mb-2 dark:text-white dark:bg-[#1D2428] dark:border-none'
                     }`}
                 onClick={() => {
                   handleClick({ option, index });

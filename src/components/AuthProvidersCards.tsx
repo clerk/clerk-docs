@@ -49,7 +49,7 @@ export const AuthProvidersCards = ({
         {!hideArrow && (
           <svg
             aria-hidden="true"
-            className="w-3.5 h-3.5 ml-1 -mr-1 group-hover:animate-move-arrow"
+            className="w-3.5 h-3.5 ml-1 -mr-1 ease-linear duration-100 group-hover:translate-x-1"
             fill="currentColor"
             viewBox="0 0 20 20"
             xmlns="http://www.w3.org/2000/svg"

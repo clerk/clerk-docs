@@ -14,6 +14,8 @@ module.exports = {
       },
       colors: {
         "clerk-purple": "#6C47FF",
+        "card-dark-grey": "#222225",
+        "card-dark-text": "#798191",
       },
     },
   },

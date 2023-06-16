@@ -41,10 +41,10 @@ export const AuthProvidersCards = ({
       >
         {title}
       </h5>
-      <p className="text-[13px] font-normal text-gray-500 dark:tcard-dark-text">
+      <p className="text-[13px] font-normal text-gray-500 dark:card-dark-text">
         {description}
       </p>
-      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:tcard-dark-text group-hover:text-clerk-purple">
+      <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:card-dark-text group-hover:text-clerk-purple">
         {cta}
         {!hideArrow && (
           <svg

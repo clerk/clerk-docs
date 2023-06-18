@@ -1,0 +1,107 @@
+import { Tab, Tabs } from "nextra-theme-docs";
+import { Tables } from "@/components/Table";
+import { Images } from "@/components/Images";
+import { CodeBlockTabs } from "@/components/CodeBlockTabs";
+
+# Session
+
+The `Session` object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+
+The `Session` object includes methods for recording session activity and ending the session client-side. For security reasons, sessions can also expire server-side.
+
+As soon as a [User](https://clerk.com/docs/reference/clerkjs/user) signs in, we create a Session for the current [Client](https://clerk.com/docs/reference/clerkjs/client). Clients can have more than one sessions at any point in time, but only one of those sessions will be **active**.
+
+In certain scenarios, a session might be replaced by another one. This is often the case with [mutli-session applications](https://clerk.com/docs/authentication/multi-session-applications).
+
+All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
+
+> For more details regarding the different session states, see our documentation on [Session management](https://clerk.com/docs/request-authentication/validate-session-tokens).
+
+## Attributes
+
+| Name           | Type           | Description                                                  |
+| -------------- | -------------- | ------------------------------------------------------------ |
+| id             | string         | A unique identifier for the session.                         |
+| user           | User           | The user associated with the session.                        |
+| publicUserData | PublicUserData | Public information about the user that this session belongs to. |
+| status         | SessionStatus  | The current state of the session.                            |
+| lastActiveAt   | Date           | The time the session was last active on the Client.          |
+| abandonAt      | Date           | The time when the session was abandoned by the user.         |
+| expireAt       | Date           | The time the session expires and will seize to be active.    |
+| updatedAt      | Date           | The last time the session recorded activity of any kind.     |
+| createdAt | Date | The time the session was created. |
+| lastActiveToken | TokenResource \| null | The last active token for the session |
+| lastActiveOrganizationId | string \| null | The last active organization identifier |
+| actor | ActJWTClaim \| null | The JWT actor for the session |
+
+## Methods
+
+### `end()`
+
+```typescript
+function end(): Promise<Session>;
+```
+
+Marks the session as ended. The session will no longer be active for this Client and its status will become **ended**.
+
+### `remove()`
+
+```typescript
+function remove(): Promise<Session>;
+```
+
+Marks the session as removed. The session will no longer be active for this Client and its status will become **removed**.
+
+### `touch()`
+
+```typescript
+function touch(): Promise<Session>;
+```
+
+Touches the session, signifying some kind of user activity. Use this method to record any updates to user activity.
+
+### `getToken()`
+
+```typescript
+function getToken(options?: GetTokenOptions): Promise<string | null>;
+```
+
+Retrieves the user's session token for the given template or the default clerk token. This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for clerk token is one minute.
+
+#### `GetTokenOptions`
+
+### GetSessionTokenOptions
+
+| Name            | Type    | Description                                                  |
+| --------------- | ------- | ------------------------------------------------------------ |
+| leewayInSeconds | number  | The number of seconds that we allow the token to be cached.  |
+| template?       | string  | The name of the JWT template to generate a new token from.   |
+| throwOnError?   | boolean | Whether to throw an error or return an empty string, if an error occurs. |
+| skipCache?      | boolean | Whether to skip the cache lookup and force a call to the server instead, even within the TTL. Useful if the token claims are time-sensitive or depend on data that can be updated (e.g. user fields). (default: false) |
+
+## Types
+
+### PublicUserData
+
+| Name            | Type           | Description                                                  |
+| --------------- | -------------- | ------------------------------------------------------------ |
+| firstName       | string \| null | The user's first name. This attribute will only be populated if name is enabled in instance settings. |
+| lastName?       | string \| null | The user's last name. This attribute will only be populated if name is enabled in instance settings. |
+| profileImageUrl | string         | The URL of the user's profile image.                         |
+| identifier      | string         | The user's identifier (email address, phone number, username, etc) that was used for authentication when this session was created. |
+
+### SessionStatus
+
+```typescript
+type SessionStatus = "abandoned" | "active" | "ended" | "expired" | "removed" | "replaced" | "revoked";
+```
+
+| Value     | Description                                                  |
+| --------- | ------------------------------------------------------------ |
+| abandoned | The session was abandoned client-side.                       |
+| active    | The session is valid and all activity is allowed.            |
+| ended     | The user signed out of the session, but the `Session` remains in the Client object. |
+| expired   | The period of allowed activity for this session has passed.  |
+| removed   | The user signed out of the session and the `Session` was removed from the Client object. |
+| replaced  | The session has been replaced by another one, but the `Session` remains in the Client object. |
+| revoked   | he application ended the session and the `Session` was removed from the Client object. |

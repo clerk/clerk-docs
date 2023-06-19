@@ -67,29 +67,34 @@ The `SignIn` object's properties can be split into logical groups, with each gro
 ### `create()`
 
 ```typescript
-function create(params: SignInCreateParams): Promise<SignInResource>;
+function create(params: SignInCreateParams): Promise<SignIn>;
 ```
 
 Use this method to kick-off the sign in flow. It creates a **SignIn** object and stores the sign in lifecycle state.
 
 Depending on the use-case and the `params` you pass to the `create` method, it can either complete the sign in process in one go, or simply collect part of the necessary data for completing authentication at a later stage.
 
-**Parameters**
+#### `SignInCreateParams`
 
-| Name   | Description                                                  |
-| ------ | ------------------------------------------------------------ |
-| params | *SignInCreateParams* Depending on the keys and values passed here, the create method's behavior changes. |
+| Name                      | Type   | Description                                                  |
+| ------------------------- | ------ | ------------------------------------------------------------ |
+| identifier                | string | The authentication identifier for the sign in. This can be the value of the user's email address, phone number or username. |
+| strategy                  | string | Optional. Select the first factor verification strategy. The `strategy` value depends on the object's `identifier` value. Each authentication identifier supports different verification strategies. Possible `strategy` values are:**email_link**: User will receive an email magic link via email. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.**email_code**: User will receive a one-time authentication code via email. At least one email address should be on file for the user. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.**phone_code**: User will receive a one-time authentication code in their phone, via SMS. At least one phone number should be on file for the user. The `phone_number_id` parameter can also be specified to select which of the user's known phone numbers the SMS will go to.**web3_metamask_signature**: The verification will attempt to be completed using the user's web3 wallet public address. The `web3_wallet_id` parameter can also be specified to select which of the user's known web3 wallets will be used. Currently Clerk supports [Metamask](https://metamask.io/).**{"oauth_<provider>"}**: The user will be authenticated with their Social login account. See available OAuth Strategies.**ticket**: The user will be authenticated via a "ticket" or "token" generated from the Backend API. |
+| password                  | string | Supply the user's password, if **password** strategy has been specified. |
+| ticket                    | string | If the strategy is **ticket** you need to provide the ticket *or token* generated from the Backend API. |
+| redirectUrl               | string | The URL that the OAuth provider should redirect to, on successful authorization on their part. This parameter is required only for OAuth strategies **(oauth_\*)**. |
+| actionCompleteRedirectUrl | string | The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign in. This parameter is required only for OAuth strategies **(oauth_\*)**. |
 
 **Returns**
 
 | Type                    | Description                                                  |
 | ----------------------- | ------------------------------------------------------------ |
-| {"Promise<SignInResource>"} | This method returns a `Promise` which resolves with a `SignIn` object. Check the `status` attribute to see if the `SignIn` has been completed or a hint on what needs to happen next. |
+| {"Promise<SignIn>"} | This method returns a `Promise` which resolves with a `SignIn` object. Check the `status` attribute to see if the `SignIn` has been completed or a hint on what needs to happen next. |
 
 ### `resetPassword()`
 
 ```typescript
-function resetPassword(params: ResetPasswordParams): Promise<SignInResource>;
+function resetPassword(params: ResetPasswordParams): Promise<SignIn>;
 ```
 
 #### `ResetPasswordParams`
@@ -108,15 +113,26 @@ function resetPassword(params: ResetPasswordParams): Promise<SignInResource>;
 ### `createMagicLinkFlow()`
 
 ```typescript
-function createMagicLinkFlow(): CreateMagicLinkFlowParams<SignInStartMagicLinkFlowParams, SignInResource>;
+function createMagicLinkFlow(): {
+  startMagicLinkFlow: (params: SignInStartMagicLinkFlowParams) => Promise<SignIn>,
+  cancelMagicLinkFlow: () => void
+}
 ```
 
 Sets up a sign in with magic link flow. Calling `createMagicLinkFlow()` will return two functions. The first function is async and starts the magic link flow, preparing a magic link verification. It sends the magic link email and starts polling for verification results. The signature is `startMagicLinkFlow({ redirectUrl: string, emailAddressId: string }) => Promise<SignInResource>`.
 
 The second function can be used to stop polling at any time, allowing for full control of the flow and cleanup. The signature is `cancelMagicLinkFlow() => void`.
 
-**Returns**
+#### Returns
 
-| Type                                                         | Description                                                  |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| {"CreateMagicLinkFlowReturn<SignInStartMagicLinkFlowParams, SignInResource>"} | This method returns two functions. One to start the magic link flow and the other to cancel waiting for the results. |
+| Name                | Type   | Description                                                  |
+| ------------------- | ------ | ------------------------------------------------------------ |
+| startMagicLinkFlow  | {"(params: SignInStartMagicLinkFlowParams) => Promise<SignIn>"} | Function to start the magic link flow. It prepares a magic link verification and polls for the verification result. Accepts [SignInStartMagicLinkFlowParams](#signinstartmagicflowparams). Returns a `Promise` which resolves to a `SignIn`. |
+| cancelMagicLinkFlow | () => void | Function to cleanup the magic link flow. Stops waiting for verification results. |
+
+#### `SignInStartMagicFlowParams`
+
+| Name           | Type   | Description                                                  |
+| -------------- | ------ | ------------------------------------------------------------ |
+| redirectUrl    | string | The magic link target URL. Users will be redirected here once they click the magic link from their email. |
+| emailAddressId | string | The ID of the user's email address that's going to be used as the first factor identification for verification. |

@@ -22,7 +22,7 @@ export const FrameworkCards = ({
   iconHeight = 24,
   iconWidth = 24,
 }: FrameworkCardsProps) => (
-  <div className="w-full h-auto py-8 mb-8 bg-white shadow-lg px-9 rounded-2xl dark:bg-card-dark-grey dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
+  <div className="w-full h-auto px-8 py-8 mb-8 bg-white shadow-lg rounded-2xl dark:bg-card-dark-grey dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
     <Link href={link}>
       {icon && (
         <Image
@@ -33,10 +33,10 @@ export const FrameworkCards = ({
           width={iconWidth}
         />
       )}
-      <h5 className="font-satoshi mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white">
+      <h5 className="font-satoshi mb-2 text-[16px] font-semibold text-gray-900 dark:text-white">
         {title}
       </h5>
-      <p className="text-[13px] font-normal text-gray-500 dark:text-card-dark-description-text">
+      <p className="text-[13px] font-normal text-gray-500 dark:text-card-dark-description-text tracking-wide">
         {description}
       </p>
       <div className="inline-flex items-center mt-6 text-[13px] font-medium text-center text-gray-600 dark:text-card-dark-text group-hover:text-clerk-purple">

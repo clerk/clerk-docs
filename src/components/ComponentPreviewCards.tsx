@@ -18,9 +18,9 @@ export const ComponentPreviewCards = ({
   imageHeight = 300,
   imageWidth = 300,
 }: ComponentPreviewCardsProps) => (
-  <div className="w-full h-auto py-8 mb-8 bg-white shadow-lg px-9 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
+  <div className="w-full h-auto px-8 py-8 mb-8 bg-white shadow-lg rounded-2xl dark:bg-card-dark-grey dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
     <Link href={link} className="flex flex-col h-full">
-      <h5 className="font-satoshi mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white">
+      <h5 className="font-satoshi mb-2 text-[16px] font-semibold text-gray-900 dark:text-white">
         {title}
       </h5>
       <Image

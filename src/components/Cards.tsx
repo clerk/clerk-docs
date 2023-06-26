@@ -1,8 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Figtree } from "next/font/google";
-
-const figtree = Figtree({ subsets: ["latin"] });
 
 interface CardsProps {
   title: string;
@@ -29,16 +26,14 @@ export const Cards = ({
     <Link href={link}>
       {icon && (
         <Image
-          className="mb-5"
+          className="mb-4"
           src={icon}
           alt={`${title} icon`}
           height={iconHeight}
           width={iconWidth}
         />
       )}
-      <h5
-        className={`${figtree.className} mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
-      >
+      <h5 className="font-satoshi mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white">
         {title}
       </h5>
       <p className="text-[13px] font-normal text-gray-500 dark:card-dark-text">

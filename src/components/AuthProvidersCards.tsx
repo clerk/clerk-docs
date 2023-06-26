@@ -1,8 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Figtree } from "next/font/google";
-
-const figtree = Figtree({ subsets: ["latin"] });
 
 interface AuthProvidersCards {
   title: string;
@@ -37,7 +34,7 @@ export const AuthProvidersCards = ({
         />
       )}
       <h5
-        className={`${figtree.className} mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
+        className={`font-satoshi mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
       >
         {title}
       </h5>

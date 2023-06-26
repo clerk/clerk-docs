@@ -1,9 +1,6 @@
 import { useEffect, useState, SetStateAction } from "react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
-import { Figtree } from "next/font/google";
-
-const figtree = Figtree({ subsets: ["latin"] });
 
 export const Hero = () => {
   const { theme, systemTheme } = useTheme();
@@ -21,9 +18,7 @@ export const Hero = () => {
   return (
     <div className="flex flex-col px-4 pt-8 mb-8 border-b-2 md:justify-around h-max md:flex-row">
       <div className="flex flex-col self-center w-auto flex-nowrap">
-        <h2
-          className={`${figtree.className} mb-2 text-3xl font-semibold text-black dark:text-white md:w-48`}
-        >
+        <h2 className="mb-2 text-3xl font-semibold text-black font-satoshi dark:text-white md:w-48">
           Welcome to Clerk Docs
         </h2>
         <p className="mb-8 text-base text-gray-500 dark:text-[#545965] md:w-64">

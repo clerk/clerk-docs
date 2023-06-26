@@ -1,8 +1,5 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Figtree } from "next/font/google";
-
-const figtree = Figtree({ subsets: ["latin"] });
 
 interface ComponentPreviewCardsProps {
   title: string;
@@ -22,14 +19,12 @@ export const ComponentPreviewCards = ({
   imageWidth = 300,
 }: ComponentPreviewCardsProps) => (
   <div className="w-full h-auto py-8 mb-8 bg-white shadow-lg px-9 rounded-2xl dark:bg-gray-800 dark:border-gray-700 hover:cursor-pointer hover:shadow-2xl group">
-    <Link href={link} className="h-full flex flex-col">
-      <h5
-        className={`${figtree.className} mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white`}
-      >
+    <Link href={link} className="flex flex-col h-full">
+      <h5 className="font-satoshi mb-2 text-[16px] font-semibold tracking-tight text-gray-900 dark:text-white">
         {title}
       </h5>
       <Image
-        className="mb-5 w-full"
+        className="w-full mb-4"
         src={image}
         alt={`${title} preview`}
         height={imageHeight}

@@ -10,12 +10,13 @@ module.exports = {
     extend: {
       fontFamily: {
         inter: ["var(--font-inter)"],
-        figtree: ["var(--font-figtree)"],
+        satoshi: ["var(--font-satoshi)"],
       },
       colors: {
         "clerk-purple": "#6C47FF",
         "card-dark-grey": "#222225",
         "card-dark-text": "#798191",
+        "card-dark-description-text": "#949EB2",
       },
     },
   },

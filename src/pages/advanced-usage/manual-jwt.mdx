@@ -45,34 +45,51 @@ If the above process is successful, it means that the user is signed in to your 
 ## Example Usage
 
 ```tsx copy filename="pages/api/token-example.ts"
-import type { NextApiRequest, NextApiResponse } from 'next';
-import Cookies from 'cookies';
-import jwt from 'jsonwebtoken';
+import type { NextApiRequest, NextApiResponse } from "next";
+import Cookies from "cookies";
+import jwt from "jsonwebtoken";
 
 export default async function (req: NextApiRequest, res: NextApiResponse) {
-  const splitPem = process.env.CLERK_PEM_PUBLIC_KEY
+  const publicKey = process.env.CLERK_PEM_PUBLIC_KEY;
   const cookies = new Cookies(req, res);
-  const sessToken = cookies.get('__session');
+  const sessToken = cookies.get("__session");
   const token = req.headers.authorization;
-  if (!sessToken && !token) {
-    res.status(401).json({ error: 'not signed in' });
+  if (sessToken === undefined && token === undefined) {
+    res.status(401).json({ error: "not signed in" });
+    return;
   }
-
   try {
     let decoded = "";
-    if(token){
+    if (token) {
       decoded = jwt.verify(token, publicKey);
       res.status(200).json({ sessToken: decoded });
-      return
+      return;
+    } else {
+      decoded = jwt.verify(sessToken, publicKey);
+      res.status(200).json({ sessToken: decoded });
+      return;
     }
-     decoded = jwt.verify(sessToken, publicKey);
   } catch (error) {
     res.status(400).json({
-      error: 'Invalid Token'
+      error: "Invalid Token",
     });
     return;
   }
+}
+```
 
-  res.status(200).json({ sessToken: decoded });
+This will return the following JSON which you can then use to validate the azp and the expiration. You then have a valid `session` and `user_id` that you can use in your application
+
+```json
+{
+  "sessToken": {
+    "azp": "http://localhost:3000",
+    "exp": 1687906422,
+    "iat": 1687906362,
+    "iss": "https://magical-marmoset-51.clerk.accounts.dev",
+    "nbf": 1687906352,
+    "sid": "sess_2Ro7e2IxrffdqBboq8KfB6eGbIy",
+    "sub": "user_2RfWKJREkjKbHZy0Wqa5qrHeAnb"
+  }
 }
 ```

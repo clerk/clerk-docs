@@ -23,15 +23,15 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 ## Written in MDX
 
-Clerk's documentation content is written in variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
+Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
 ## Previewing your changes
 
-At this time, we do not currently have way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
+At this time, we do not currently have a way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
 
 ## Getting your contributions reviewed
 
-Once you open up a pull request with your changes, a member of the Clerk team will review your pull request and approve it or leave addressable feedback. We do our best to review all contributions in a timely manner, but please be patient if someone does not take a look at it right away.
+Once you open up a pull request with your changes, a member of the Clerk team will review your pull request and approve it, or leave addressable feedback. We do our best to review all contributions in a timely manner, but please be patient if someone does not take a look at it right away.
 
 Once your pull request is approved, a member of the Clerk team will merge it and make sure it gets deployed! 🚀
 
@@ -102,7 +102,7 @@ function add(a: number, b: number) {
 ​```
 ```
 
-#### <CodeBlockTabs />
+#### `<CodeBlockTabs />`
 
 If you need to render multiple variations of a code snippet, use `<CodeBlockTabs />`. The component accepts an `options` property, which is an array of strings. For each option provided, render a code block:
 

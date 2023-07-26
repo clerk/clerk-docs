@@ -23,11 +23,11 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 ## Written in MDX
 
-Our documentation content is written in variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
+Clerk's documentation content is written in variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
 ## Previewing your changes
 
-At this time, we do not currently have way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include our custom components or styles.
+At this time, we do not currently have way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
 
 ## Getting your contributions reviewed
 

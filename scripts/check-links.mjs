@@ -6,6 +6,15 @@ import { remark } from "remark";
 import reporter from "vfile-reporter";
 import { visit } from "unist-util-visit";
 
+const ERRORS = {
+  RELATIVE_LINK(url) {
+    return `Relative link detected: ${url}. Relative links are not valid, make sure the link is absolute and starts with \`/docs/\`.`;
+  },
+  FILE_NOT_FOUND(url) {
+    return `Matching file not found for path: ${url}.`;
+  },
+};
+
 const fileCheckCache = new Map();
 
 // Iterates over each link in the markdown file and checks if the link is valid by checking if the file exists locally.
@@ -18,7 +27,7 @@ const remarkPluginValidateLinks = () => (tree, file) => {
 
       if (isRelative) {
         file.message(
-          `Relative link detected: ${url}. Relative links are not valid`,
+          ERRORS.RELATIVE_LINK(url)
           node.position
         );
       } else if (isAbsolute) {
@@ -32,7 +41,7 @@ const remarkPluginValidateLinks = () => (tree, file) => {
 
         if (!exists) {
           file.message(
-            `Matching file not found for path: ${url}`,
+            ERRORS.FILE_NOT_FOUND(url),
             node.position
           );
         }

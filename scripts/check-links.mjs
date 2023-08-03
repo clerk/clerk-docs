@@ -11,7 +11,9 @@ const ERRORS = {
     return `Relative link detected: ${url}. Relative links are not valid, make sure the link is absolute and starts with \`/docs/\`.`;
   },
   FILE_NOT_FOUND(url) {
-    return `Matching file not found for path: ${url}.`;
+    return `Matching file not found for path: ${url}. Expected file to exist at \`${
+      url.split("#")[0]
+    }.mdx\`.`;
   },
 };
 
@@ -26,10 +28,7 @@ const remarkPluginValidateLinks = () => (tree, file) => {
       const isAbsolute = url.startsWith("/");
 
       if (isRelative) {
-        file.message(
-          ERRORS.RELATIVE_LINK(url)
-          node.position
-        );
+        file.message(ERRORS.RELATIVE_LINK(url), node.position);
       } else if (isAbsolute) {
         const cleanedUrl = url.split("#")[0];
         if (!fileCheckCache.has(cleanedUrl)) {
@@ -40,10 +39,7 @@ const remarkPluginValidateLinks = () => (tree, file) => {
         const exists = fileCheckCache.get(cleanedUrl);
 
         if (!exists) {
-          file.message(
-            ERRORS.FILE_NOT_FOUND(url),
-            node.position
-          );
+          file.message(ERRORS.FILE_NOT_FOUND(url), node.position);
         }
       }
     }

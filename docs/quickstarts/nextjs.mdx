@@ -9,6 +9,15 @@ import { Images } from "@/components/Images";
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Next.js application. Clerk works seamlessly on both client side and server side components.
 
+By the end of this guide, you will have installed the following user functionality in your application:
+
+- Sign Up
+- Sign In
+- Protect Pages behind authentication
+- Manage Account
+- Sign Out
+
+
 ## Install @clerk/nextjs
 
 Once you have a Next.js application ready, you need to install Clerk's Next.js SDK. This gives you access to prebuilt components and hooks, as well as our helpers for Next.js API routes, server-side rendering, and middleware.
@@ -40,43 +49,43 @@ CLERK_SECRET_KEY=sk_test_••••••••••••••••••�
 
 Update your root layout to include the `<ClerkProvider>` wrapper. The `<ClerkProvider>` component wraps your Next.js application to provide active session and user context to Clerk's hooks and other components. It is recommended that the `<ClerkProvider>` wraps the `<body>` to enable the context to be accessible anywhere within the app.
 
-<Tabs items={["App Directory", "Pages Directory"]}>
-  <Tab>
+<Tabs items={["App Router", "Pages"]}>
+
+<Tab>
 ```tsx copy filename="app/layout.tsx"
-import React from "react";
-import { ClerkProvider } from "@clerk/nextjs/app-beta";
+import { ClerkProvider } from '@clerk/nextjs'
+
+export const metadata = {
+  title: 'Next.js 13 with Clerk',
+}
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <head>
-        <title>Next.js 13 with Clerk</title>
-      </head>
-      <ClerkProvider>
-        <body>{children}</body>
-      </ClerkProvider>
-    </html>
-  );
+    <ClerkProvider>
+      <html lang="en">
+        <body className={inter.className}>{children}</body>
+      </html>
+    </ClerkProvider>
+  )
 }
+
 ```
 </Tab>
 <Tab>
 ```tsx filename="_app.tsx" copy
 import { ClerkProvider } from "@clerk/nextjs";
 import type { AppProps } from "next/app";
-
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ClerkProvider {...pageProps}>
-     <Component {...pageProps} />
+      <Component {...pageProps} />
     </ClerkProvider>
   );
 }
-
 export default MyApp;
 ```
 </Tab>
@@ -86,59 +95,84 @@ export default MyApp;
   The root layout is a server component, if you plan to use the `<ClerkProvider>` outside the root layout it will need to be a server component as well.
 </Callout>
 
-Clerk offers a set of prebuilt components that you can use to embed sign in, sign up, and other user management functions into your Next.js application.
+## Protect your application
 
-The functionality of the components are controlled by the instance settings you specify in your [Clerk Dashboard](https://dashboard.clerk.dev).
+Now that Clerk is installed and mounted in your application, it’s time to decide which pages are public and which need to hide behind authentication. We do this by creating a `middleware.ts` file at the root folder (or inside `src/` if that is how you set up your app).
+
+```tsx filename="middleware.ts" copy
+import { authMiddleware } from "@clerk/nextjs";
+
+// This example protects all routes including api/trpc routes
+// Please edit this to allow other routes to be public as needed.
+// See https://clerk.com/docs/nextjs/middleware for more information about configuring your middleware
+export default authMiddleware({});
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+
+```
+
+With this middleware, your entire application is protected. If you try to access it, the middleware will redirect you to your Sign Up page. If you want to make other routes public, check out the [authMiddleware reference page](https://clerk.com/docs/nextjs/middleware).
 
 
-## Build Your Sign Up
+
+<Callout type="info" emoji="🎉">
+
+ At this point, your application is fully protected by Clerk and uses Clerk's [Account Portal](/features/account-portal.mdx) pages that are available out of box. Start your Next.js application via `npm run dev`, visit `http://localhost:3000`, and sign up to get access to your application.
+</Callout>
 
 
-<Tabs items={["App Directory", "Pages Directory"]}>
+## Build your own sign in and sign up pages
+
+In addition to the Account Portal, Clerk also offers a set of prebuilt components that you can use instead to embed sign in, sign up, and other user management functions into your Next.js application. We are going to use the `<SignIn />`, `<SignUp />` components by utilizing the Next.js optional catch all route.
+
+
+
+### Build your sign up page
+
+
+<Tabs items={["App Router", "Pages"]}>
 <Tab>
-```tsx copy filename="app/sign-up/page.tsx"
-import { SignUp } from "@clerk/nextjs/app-beta";
+```tsx copy filename="app/sign-up/[[...sign-up]]/page.tsx"
+import { SignUp } from "@clerk/nextjs";
 
 export default function Page() {
-  return <SignUp signInUrl="/sign-in" />;
+  return <SignUp />;
 }
 ```
 </Tab>
   <Tab>
     ```tsx copy filename="/pages/sign-up/[[...index]].tsx"
-    import { SignUp } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 
-    const SignUpPage = () => (
-      <SignUp path="/sign-up" routing="path" signInUrl="/sign-in" />
-    );
-
-    export default SignUpPage;
+export default function Page() {
+  return <SignUp />;
+}
     ```
   </Tab>
 </Tabs>
 
-## Build Your Sign In
+### Build your sign in page
 
 
-<Tabs items={["App Directory", "Pages Directory"]}>
+<Tabs items={["App Router", "Pages"]}>
 <Tab>
 ```tsx copy filename="app/sign-in/page.tsx"
-import { SignIn } from "@clerk/nextjs/app-beta";
+import { SignIn } from "@clerk/nextjs";
 
 export default function Page() {
-  return <SignIn signUpUrl="/sign-up" />;
+  return <SignIn />;
 }
 ```
 </Tab>
   <Tab>
     ```tsx copy filename="/pages/sign-in/[[...index]].tsx"
-    import { SignIn } from "@clerk/nextjs";
+import { SignIn } from "@clerk/nextjs";
 
-    const SignInPage = () => (
-      <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
-    );
-
-    export default SignInPage;
+export default function Page() {
+  return <SignIn />;
+}
     ```
   </Tab>
 </Tabs>
@@ -147,175 +181,62 @@ export default function Page() {
   By default, the Clerk components inherit the font family. With create-next-app they don't apply a global font family. When you launch your application you may notice that the font family is different.
 </Callout>
 
-### Update your dashboard settings
 
-To make sure you are using the embedded components you will need to update your instance settings in the [Clerk Dashboard](https://dashboard.clerk.dev) to use the embedded components.
+### Update your environment variables 
 
-<Images
-  src="/images/common/path-setting.png"
-  width={1344}
-  height={523}
-  alt="Path setting Imagee"
-/>
+Next, add environment variables for the `signIn`, `signUp`, `afterSignUp` and `afterSignIn` paths:
 
-## Add Middleware
+```sh copy filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+    ```
 
-To use server side functionality, you need to add the Clerk middleware to your Next.js application. This allows you to access the session in your Next.js API routes and server-side rendered pages.
+These values control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
 
-```tsx filename="middleware.ts" copy
-import { withClerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+## Embed the <UserButton /> 
 
-export default withClerkMiddleware((req: NextRequest) => {
-  return NextResponse.next();
-});
+The `<UserButton />` allows users to manage their account information and log out, thus allowing you to complete a full authentication circle.
 
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next
-     * - static (static files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!static|.*\\..*|_next|favicon.ico).*)",
-    "/",
-  ],
+You can add it anywhere you want, but next to the logo in in your main application page is a good start.
+
+<Tabs items={["App Router", "Pages"]}>
+<Tab>
+```tsx copy filename="app/page.tsx"
+import { UserButton } from "@clerk/nextjs";
+
+export default function Home() {
+  return (
+    <div>
+      <UserButton afterSignOutUrl="/"/>
+    </div>
+  )
 }
 ```
-
-## Protecting Your Pages
-
-Clerk offers two ways to protect your Next.js application, you can use Next.js Middleware or using our Control Components on the client side.
-
-<Tabs items={['Extending Middleware', 'Control Components']}>
-<Tab>
-
-Using Middleware is the most comprehensive way to implement page protection in your app. Below is an example of page protection using Middleware.
-
-```tsx copy filename="middleware.ts"
-import { withClerkMiddleware, getAuth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-
-// Set the paths that don't require the user to be signed in
-const publicPaths = ["/", "/sign-in*", "/sign-up*"];
-
-const isPublic = (path: string) => {
-  return publicPaths.find((x) =>
-    path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
+</Tab>
+  <Tab>
+    ```tsx copy filename="pages/example.tsx"
+import { UserButton } from "@clerk/nextjs";
+ 
+export default function Example() {
+  return (
+    <>
+			<header>
+				<UserButton afterSignOutUrl="/"/>
+			</header>
+			<div>Your page's content can go here.</div>
+    </>
   );
-};
-
-export default withClerkMiddleware((request: NextRequest) => {
-  if (isPublic(request.nextUrl.pathname)) {
-    return NextResponse.next();
-  }
-  // if the user is not signed in redirect them to the sign in page.
-  const { userId } = getAuth(request);
-
-  if (!userId) {
-    // redirect the users to /pages/sign-in/[[...index]].ts
-
-    const signInUrl = new URL("/sign-in", request.url);
-    signInUrl.searchParams.set("redirect_url", request.url);
-    return NextResponse.redirect(signInUrl);
-  }
-  return NextResponse.next();
-});
-
-// Stop Middleware running on static files and public folder
-export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next
-     * - static (static files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    "/((?!static|.*\\..*|_next|favicon.ico).*)",
-    "/",
-  ],
 }
-```
-
-</Tab>
-<Tab>
-If you prefer to use Clerk's Control Components for page protection, the following example shows you how to compose control components.
-
-<CodeBlockTabs options={['App Directory', 'Pages Directory']}>
-  ```tsx copy filename="app/page.tsx"
-  import { SignedIn, SignedOut } from "@clerk/nextjs/app-beta";
-  import Link from "next/link";
-
-  export default function Home() {
-    return (
-      <main>
-        <h1>Next.js 13 with Clerk</h1>
-        <SignedIn>
-          <p>You are signed in!</p>
-        </SignedIn>
-        <SignedOut>
-          <p>You are signed out!</p>
-          <Link href="/sign-in">Sign In</Link>
-        </SignedOut>
-      </main>
-    );
-  }
-  ```
-  ```tsx copy filename="/pages/_app.tsx"
-  import {
-    ClerkProvider,
-    SignedIn,
-    SignedOut,
-    RedirectToSignIn,
-  } from "@clerk/nextjs";
-  import { AppProps } from "next/app";
-  import { useRouter } from "next/router";
-
-  //  List pages you want to be publicly accessible, or leave empty if
-  //  every page requires authentication. Use this naming strategy:
-  //   "/"              for pages/index.js
-  //   "/foo"           for pages/foo/index.js
-  //   "/foo/bar"       for pages/foo/bar.js
-  //   "/foo/[...bar]"  for pages/foo/[...bar].js
-  const publicPages: Array<string> = ["/sign-in/[[...index]]", "/sign-up/[[...index]]"];
-
-  function MyApp({ Component, pageProps }: AppProps) {
-    // Get the pathname
-    const { pathname } = useRouter();
-
-    // Check if the current route matches a public page
-    const isPublicPage = publicPages.includes(pathname);
-
-    // If the current route is listed as public, render it directly
-    // Otherwise, use Clerk to require authentication
-    return (
-      <ClerkProvider {...pageProps}>
-        {isPublicPage ? (
-          <Component {...pageProps} />
-        ) : (
-          <>
-            <SignedIn>
-              <Component {...pageProps} />
-            </SignedIn>
-            <SignedOut>
-              <RedirectToSignIn />
-            </SignedOut>
-          </>
-        )}
-      </ClerkProvider>
-    );
-  }
-
-  export default MyApp;
-  ```
-</CodeBlockTabs>
-</Tab>
+    ```
+  </Tab>
 </Tabs>
+
+## Sign up for your Application
+
+Now start your Next.js application via `npm run dev` , visit `http://localhost:3000`, and sign up to get access to your application.
+
 
 
 ## Read Session & User Data

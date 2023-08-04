@@ -29,6 +29,16 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 
 At this time, we do not currently have a way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
 
+## Validating your changes
+
+Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
+
+* Check for broken links
+
+```
+npm run lint
+```
+
 ## Getting your contributions reviewed
 
 Once you open up a pull request with your changes, a member of the Clerk team will review your pull request and approve it, or leave addressable feedback. We do our best to review all contributions in a timely manner, but please be patient if someone does not take a look at it right away.

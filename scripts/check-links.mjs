@@ -19,31 +19,53 @@ const ERRORS = {
 
 const fileCheckCache = new Map();
 
+const validateUrl = (url, node, file) => {
+  const isRelative = url.startsWith(".");
+  const isAbsolute = url.startsWith("/");
+
+  if (isRelative) {
+    file.message(ERRORS.RELATIVE_LINK(url), node.position);
+  } else if (isAbsolute) {
+    const cleanedUrl = url.split("#")[0];
+    if (!fileCheckCache.has(cleanedUrl)) {
+      const filePath = path.join(process.cwd(), `${cleanedUrl}.mdx`);
+      fileCheckCache.set(cleanedUrl, fs.existsSync(filePath));
+    }
+
+    const exists = fileCheckCache.get(cleanedUrl);
+
+    if (!exists) {
+      file.message(ERRORS.FILE_NOT_FOUND(url), node.position);
+    }
+  }
+};
+
 // Iterates over each link in the markdown file and checks if the link is valid by checking if the file exists locally.
 const remarkPluginValidateLinks = () => (tree, file) => {
-  visit(tree, "link", (node) => {
-    if ("url" in node) {
-      const { url } = node;
-      const isRelative = url.startsWith(".");
-      const isAbsolute = url.startsWith("/");
+  visit(
+    tree,
+    (node) =>
+      node.type === "link" ||
+      // Check known components with a link prop
+      node?.attributes?.some?.((attribute) => attribute?.name === "link"),
+    (node) => {
+      if ("url" in node) {
+        const { url } = node;
+        validateUrl(url, node, file);
+        return;
+      }
 
-      if (isRelative) {
-        file.message(ERRORS.RELATIVE_LINK(url), node.position);
-      } else if (isAbsolute) {
-        const cleanedUrl = url.split("#")[0];
-        if (!fileCheckCache.has(cleanedUrl)) {
-          const filePath = path.join("docs", `${cleanedUrl}.mdx`);
-          fileCheckCache.set(url, fs.existsSync(filePath));
-        }
+      if (node.type !== "link") {
+        const url = node.attributes.find(
+          (attribute) => attribute.name === "link"
+        )?.value;
 
-        const exists = fileCheckCache.get(cleanedUrl);
-
-        if (!exists) {
-          file.message(ERRORS.FILE_NOT_FOUND(url), node.position);
+        if (url) {
+          validateUrl(url, node, file);
         }
       }
     }
-  });
+  );
 };
 
 const processor = remark().use(remarkMdx).use(remarkPluginValidateLinks);

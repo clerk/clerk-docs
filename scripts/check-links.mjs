@@ -92,7 +92,13 @@ async function main() {
     }
   }
 
-  console.log(reporter(checkedFiles, { quiet: true }));
+  const output = reporter(checkedFiles, { quiet: true });
+
+  if (output) {
+    console.log(output);
+  } else {
+    console.log("✅ No broken links found!");
+  }
 }
 
 main();

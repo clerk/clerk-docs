@@ -1,0 +1,260 @@
+---
+title: authMiddleware() | Next.js
+description: The `authMiddleware()` method allows you to protect your Next.js application using middleware.
+---
+
+# `authMiddleware()`
+
+The `authMiddleware()` helper integrates Clerk authentication into your Next.js application through middleware. `authMiddleware()` is compatible with both the App and Pages routers.
+
+## Usage
+
+```ts filename="middleware.ts" copy
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware();
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+### Using `afterAuth()` for fine-grained control
+
+Some developers will need to handle specific cases such as detecting if the user is inside an organization, or handle redirects differently. This cases can be handled with `afterAuth()`.
+
+```ts filename="middleware.ts" copy
+import { authMiddleware, redirectToSignIn } from '@clerk/nextjs';
+
+export default authMiddleware({
+  afterAuth(auth, req, evt) {
+    // handle users who aren't authenticated
+    if (!auth.userId && !auth.isPublicRoute) {
+      return redirectToSignIn({ returnBackUrl: req.url });
+    }
+    // redirect them to organization selection page
+    if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
+      const orgSelection = new URL('/org-selection', req.url)
+      return NextResponse.redirect(orgSelection)
+    }
+  }
+});
+```
+
+### Using `beforeAuth()` to execute middleware before authentication
+
+If you need to additional middleware handlers to execute before Clerk's authentication middleware, use `beforeAuth()`. An example where the middleware handler from `next-intl` is executed can be seen below.
+
+```ts filename="middleware.ts" copy
+import { authMiddleware } from "@clerk/nextjs";
+
+import createMiddleware from "next-intl/middleware";
+
+const intlMiddleware = createMiddleware({
+  locales: ["en", "el"],
+
+  defaultLocale: "en",
+});
+
+export default authMiddleware({
+  beforeAuth: (req) => {
+    // Execute next-intl middleware before Clerk's auth middleware
+    return intlMiddleware(req);
+  },
+
+  // Ensure that locale specific sign-in pages are public
+  publicRoutes: ["/", "/:locale/sign-in"],
+});
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+### Making pages public using `publicRoutes`
+
+By default, Clerk's `authMiddleware()` treats all routes as private if the middleware runs. If you need to make specific routes public, use the `publicRoutes` option.
+
+```ts filename="middleware.ts" copy
+import { authMiddleware } from "@clerk/nextjs";
+export default authMiddleware({
+  // "/" will be accessible to all users
+  publicRoutes: ["/"]
+});
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+If you are building your own sign in pages, you don't need to add these pages to your publicRoutes. They will be inferred from your `.env` file:
+
+```ts filename=".env"
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+```
+
+
+### Execution order of `beforeAuth`, `publicRoutes`, and `afterAuth`
+  
+If you define an `afterAuth` function, it will run even if the request corresponds to a private route and no user is signed out. If you don’t define an `afterAuth` function, a redirect response to the `signInUrl` will be returned automatically. This diagram explains how and when the two handlers are invoked in the runtime.
+
+![Execution order of `beforeAuth`, `publicRoutes`, and `afterAuth`](/docs/images/nextjs/middleware-flow-chart.png)
+
+## Options
+
+<Tables
+  headings={["Name", "Type", "Description"]}
+  headingsMeta={[{maxWidth:'300px'},{maxWidth: '300px'},{maxWidth: '300px'}]}
+  rows={[
+    {
+      cells: [
+        <code>afterAuth?</code>,
+        <code>function</code>,
+        `Called after the authentication middleware is executed. This function has access to the auth object and can be used to execute logic based on the auth state.`
+      ],
+    },
+    {
+      cells: [
+        <code>apiRoutes?</code>,
+        <code>string[]</code>,
+        `A list of routes that should return 401. You can use glob patterns to match multiple routes or a function to match against the request object.`
+      ],
+    },
+    {
+      cells: [
+        <code>audience?</code>,
+        <code>string | string[]</code>,
+        `A string or list of audiences.`
+      ],
+    },
+    {
+      cells: [
+        <code>authorizedParties?</code>,
+        <code>string[]</code>,
+        `An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.`
+      ],
+    },
+    {
+      cells: [
+        <code>beforeAuth?</code>,
+        <code>function</code>,
+       `A function called before the authentication middleware is executed. If a redirect response is returned, the middleware will respect it and redirect the user. If false is returned, the auth middleware will not execute and the request will be handled as if the auth middleware was not present.`
+      ],
+    },
+    {
+      cells: [
+        <code>beforeAuth?</code>,
+        <code>function</code>,
+       `A function called before the authentication middleware is executed. If a redirect response is returned, the middleware will respect it and redirect the user. If false is returned, the auth middleware will not execute and the request will be handled as if the auth middleware was not present.`
+      ],
+    },
+    {
+      cells: [
+        <code>clockSkewInSeconds?</code>,
+        <code>number</code>,
+       `Overrides the default allowed clock skew.`
+      ],
+    },
+    {
+      cells: [
+        <code>debug?</code>,
+        <code>boolean</code>,
+       `Enables debugging mode in the Clerk middleware handler. Logs out additional debugging information.`
+      ],
+    },
+    {
+      cells: [
+        <code>domain?</code>,
+        <code>string</code>,
+       `The domain used for satellites to inform Clerk where this application is deployed.`
+      ],
+    },
+    {
+      cells: [
+        <code>ignoredRoutes?</code>,
+        <code>string[]</code>,
+       `A list of routes that should be ignored by the middleware. This list typically includes routes for static files or Next.js internals. For improved performance, these routes should be skipped using the default config.matcher instead.`
+      ],
+    },
+    {
+      cells: [
+        <code>isSatellite?</code>,
+        <code>boolean</code>,
+       `When using Clerk's satellite feature, this should be enabled for secondary domains.`
+      ],
+    },
+    {
+      cells: [
+        <code>jwksCacheTtlInMs?</code>,
+        <code>number</code>,
+       `Set the JWKs cache TTL, in milliseconds.`
+      ],
+    },
+    {
+      cells: [
+        <code>jwtKey?</code>,
+        <code>string</code>,
+       `An alternate JWT key to use at runtime.`
+      ],
+    },
+    {
+      cells: [
+        <code>proxyUrl?</code>,
+        <code>string</code>,
+       `If using a proxy, specify the URL of the proxy.`
+      ],
+    },
+    {
+      cells: [
+        <code>publicRoutes?</code>,
+        <code>string[]</code>,
+       `A list of routes that should be accessible without authentication. You can use glob patterns to match multiple routes or a function to match against the request object. The sign in and sign up URLs are included by default, unless a function is provided.`
+      ],
+    },
+    {
+      cells: [
+        <code>publishableKey?</code>,
+        <code>string</code>,
+       `An alternate Clerk publishable key.`
+      ],
+    },
+    {
+      cells: [
+        <code>secretKey?</code>,
+        <code>string</code>,
+       `An alternate Clerk secret key.`
+      ],
+    },
+    {
+      cells: [
+        <code>signInUrl?</code>,
+        <code>string</code>,
+       `An alternatve sign in URL.`
+      ],
+    },
+    {
+      cells: [
+        <code>skipJwksCache?</code>,
+        <code>boolean</code>,
+       `Disables use of the JWKs cache.`
+      ],
+    },
+    {
+      cells: [
+        <code>apiKey?</code>,
+        <code>string</code>,
+       `An alternate Clerk API key.`
+      ],
+    },
+    {
+      cells: [
+        <code>frontendApi?</code>,
+        <code>string</code>,
+       `An alternate Clerk frontend API URL.`
+      ],
+    },
+  ]}
+/>

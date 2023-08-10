@@ -1,0 +1,162 @@
+---
+title: Using tRPC and Next.js
+description: Learn how to integrate Clerk into your Next.js application using tRPC. tRPC can be used with Clerk, but requires a few tweaks from a traditional Clerk + Next.js setup.
+---
+
+# Using tRPC and Next.js
+
+Learn how to integrate Clerk into your Next.js application using [tRPC](https://trpc.io/). tRPC can be used with Clerk, but requires a few tweaks from a traditional Clerk + Next.js setup.
+
+<Callout>
+  Prefer to get started quickly? Check out the following [repo](https://github.com/perkinsjr/t3-app-clerk-minimal) which implements the essentials.
+</Callout>
+
+## Installation
+
+<Steps>
+
+### Install `@clerk/nextjs`
+
+Clerk's Next.js SDK gives you access to prebuilt components and hooks, as well as our helpers for Next.js API routes, server-side rendering, and middleware.
+
+<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+  ```bash filename="terminal" copy
+  npm install @clerk/nextjs
+  ```
+
+  ```bash filename="terminal" copy
+  yarn add @clerk/nextjs
+  ```
+
+  ```bash filename="terminal" copy
+  pnpm i @clerk/nextjs
+  ```
+</CodeBlockTabs>
+
+### Set environment keys
+
+Below is an example of an `.env.local` file. If you are signed into your Clerk Dashboard, your keys should become visible by clicking on the eye icon.
+
+<InjectKeys>
+
+```sh copy filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+```
+
+</InjectKeys>
+
+### Configure middleware
+
+[Middleware](/docs/references/nextjs/auth-middleware) needs to be placed at the root of your project. This allows you to use Clerk server-side APIs.
+
+```ts filename="middleware.ts" copy
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware();
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+<Callout>
+  This will protect every page by default, including API routes, and cause a redirect to hosted pages. Read more about Clerk's middleware [here](/docs/references/nextjs/auth-middleware).
+</Callout>
+
+</Steps>
+
+## Using Clerk in your tRPC Context
+
+To use Clerk in your tRPC context, you will need to use our server helper [`getAuth`](/docs/references/nextjs/get-auth).
+
+```ts
+import * as trpc from '@trpc/server';
+import * as trpcNext from '@trpc/server/adapters/next';
+import { getAuth } from '@clerk/nextjs/server';
+import type { SignedInAuthObject,SignedOutAuthObject } from '@clerk/nextjs/server';
+
+interface AuthContext {
+  auth: SignedInAuthObject | SignedOutAuthObject;
+}
+
+export const createContextInner = async ({ auth }: AuthContext  ) => {
+  return {
+    auth,
+  }
+}
+
+export const createContext = async (
+  opts: trpcNext.CreateNextContextOptions
+) => {
+  return await createContextInner({ auth: getAuth(opts.req) })
+}
+
+export type Context = trpc.inferAsyncReturnType<typeof createContext>;
+```
+
+## Accessing the context data in your application
+
+Once you have context in your application, you can access the data in any procedure by using `ctx` in your queries.
+
+```ts
+import { router, publicProcedure } from '../trpc';
+
+export const exampleRouter = router({
+  hello: publicProcedure.query(({ctx}) => {
+      return {
+        greeting: `hello! ${ctx.auth?.userId}`
+      }
+    })
+})
+```
+
+## Using tRPC Middleware
+
+In most cases, you need to protect your routes from users who aren't signed in. You can create a protected procedure.
+
+```ts
+import { initTRPC, TRPCError } from '@trpc/server'
+import superjson from 'superjson'
+import { type Context } from './context'
+
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+  errorFormatter({ shape }) {
+    return shape
+  }
+})
+
+// check if the user is signed in, otherwise throw a UNAUTHORIZED CODE
+const isAuthed = t.middleware(({ next, ctx }) => {
+  if (!ctx.auth.userId) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' })
+  }
+  return next({
+    ctx: {
+      auth: ctx.auth,
+    },
+  })
+})
+
+export const router = t.router
+
+export const publicProcedure = t.procedure
+
+// export this procedure to be used anywhere in your application
+export const protectedProcedure = t.procedure.use(isAuthed)
+```
+
+Once you have created your procedure, you can use it in any router. The example below uses the protected procedure and returns the user's name.
+
+```ts
+import { router, protectedProcedure } from '../trpc'
+
+export const protectedRouter = router({
+  hello: protectedProcedure.query(({ ctx }) => {
+    return {
+      secret: `${ctx.auth?.userId} is using a protected procedure`
+    }
+  })
+})
+```

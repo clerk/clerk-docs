@@ -47,7 +47,7 @@ Once your pull request is approved, a member of the Clerk team will merge it and
 
 ## Deployment
 
-The content rendered on https://clerk.com/docs is pulled from the `production` branch in this repository. In most cases, all changes merged to `main` are considered "production ready" and will be merged into the `production` branch within a reasonable amount of time.
+The content rendered on https://clerk.com/docs is pulled from the `main` branch in this repository. Once changes are merged to the `main` branch, a workflow is triggered that updates the production pages. Changes should be reflected on https://clerk.com/docs within a matter of seconds.
 
 ## Repository structure
 

@@ -88,6 +88,17 @@ CLERK_IS_SATELLITE=true
 
 ### Configure your satellite app with properties
 
+You can skip this step if you configured your satellite app with environment variables.
+
+This is an alternative configuration to the environment variable based setup that we described in the previous step.
+
+The properties related to the multi domain setup are as follows:
+* `isSatellite`: `boolean | ((url: URL) => boolean)`. This option defines that the application is a satellite application.
+* `domain`: `string | ((url: URL) => boolean)`. This option sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
+* `signInUrl`: `string`. This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
+
+The `URL` mentioned above is the request url for server side usage or the current location for client usage.
+
 <Tabs items={['Next.js', 'Remix']}>
   <Tab>
     You can embed the `<SignIn />` component using the [Next.js optional catch-all route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes#optional-catch-all-routes). This allows you to redirect the user inside your application. The `<SignIn />` component should be mounted on a public page.
@@ -99,7 +110,7 @@ import Head from "next/head";
 
 export default function App({ Component, pageProps }) {
     return (
-        <ClerkProvider isSatellite domain={(url) => url.host} {...pageProps}>
+        <ClerkProvider isSatellite domain={(url) => url.host} signInUrl='https://primary.dev/sign-in' {...pageProps}>
             <Head>
                 <title>Satellite Next.js app</title>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -121,6 +132,7 @@ export default authMiddleware({
         }
     },
     isSatellite: true,
+    signInUrl: 'https://primary.dev/sign-in'
     domain: url => url.host
 });
 
@@ -138,7 +150,6 @@ export const loader = (args) => {
         args,
         ({ request }) => {
             const { userId, sessionId, getToken } = request.auth;
-            console.log("Root loader auth:", { userId, sessionId, getToken });
             return json({
                 message: `Hello from the root loader :)`,
                 ENV: getBrowserEnvironment(),
@@ -146,6 +157,7 @@ export const loader = (args) => {
         },
         {
             loadUser: true,
+            signInUrl: 'https://primary.dev/sign-in',
             isSatellite: true,
             domain: (url) => url.host
         } as const
@@ -161,14 +173,14 @@ export default ClerkApp(App, {
 
 </Tabs>
 
-### Ready to go 🎉 - What to expect
+### Ready to go 🎉
 
 Your satellite application should now sync with your primary! 
 
-Let's run through a hypothetical scenario.
-* User visits the primary domain and signs in.
-* User visits the satellite domain.
-* User has a session in the satellite domain, so he can see the `<UserProfile />` component and update his information.
+You can see it in action by: 
+1. Visiting the primary domain and signing in.
+2. Visiting the satellite domain.
+3. You now have session in the satellite domain, so you can see the `<UserProfile />` component and update your information.
 
 You can repeat this process and create as many satellite applications as you need.
 

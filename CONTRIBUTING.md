@@ -27,7 +27,10 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 
 ## Previewing your changes
 
-At this time, we do not currently have a way to preview your changes. If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
+If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
+
+> **Note**
+> A member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
 
 ## Validating your changes
 

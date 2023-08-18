@@ -12,18 +12,25 @@
   Clerk Documentation
 </h1>
 
-This repository contains the documentation content for [Clerk docs](https://clerk.com/docs).
+Clerk is more than authentication, and we want to convey every feature of Clerk's as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
 
-If you've ever wanted to contribute to open source and want to help improve Clerk's documentation, you can follow [this guide](./CONTRIBUTING.md) to get started.
+We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./CONTRIBUTING.md).
 
-## Community
+> This repository contains the open-source documentation *content* for [Clerk docs](https://clerk.com/docs).  The *source code* for the docs site is not yet open source, so if you have any questions or suggestions about *non-content* related matters, please [reach out](https://clerk.com/support).
 
-If you have questions or just need a little clarity, our community and our team is ready to help you in the official [Clerk discord](https://discord.com/invite/b5rXHjAg7A).
+## Found an issue?
 
-## Found an issue in the docs?
+If you have found an issue with our documentation, please create an [issue](https://github.com/clerkinc/clerk-docs/issues).
 
-If you have found an issue with our documentation, please create an [issue](https://github.com/clerkinc/clerk-docs/issues) or create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) to fix it.
+If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue.  
+Go ahead and create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) with the solution :rocket:
 
 ## Want to leave feedback?
 
 Feel free to create an [issue](https://github.com/clerkinc/clerk-docs/issues) with the **feedback** label. Our team will take a look at it and get back to you as soon as we can!
+
+## Connect with us
+
+You can discuss ideas, ask questions, and meet others from the community in our [Discord](https://discord.com/invite/b5rXHjAg7A). 
+
+If you prefer, you can also find support through our [Twitter](https://twitter.com/ClerkDev), or you can [email](mailto:support@clerk.dev) us!

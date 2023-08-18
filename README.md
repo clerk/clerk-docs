@@ -2,26 +2,28 @@
   <a href="https://clerk.dev?utm_source=github&utm_medium=clerk_docs" target="_blank" rel="noopener noreferrer">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://images.clerk.dev/static/logo-dark-mode-400x400.png">
-      <img src="https://images.clerk.dev/static/logo-light-mode-400x400.png" height="64">
+      <img src="https://images.clerk.dev/static/logo-light-mode-400x400.png" height="120">
     </picture>
   </a>
   <br />
 </p>
 
-# Clerk Documentation
+<h1 align="center">
+  Clerk Documentation
+</h1>
 
-This repository contains the content for [Clerk's documentation](https://clerk.com/docs).
+This repository contains the documentation content for [Clerk docs](https://clerk.com/docs).
 
-### I've found an issue with your documentation
+If you've ever wanted to contribute to open source and want to help improve Clerk's documentation, you can follow [this guide](./CONTRIBUTING.md) to get started.
 
-If you have found an issue with our documentation, please file an issue or create a pull request to fix it.
+## Community
 
-### I have feedback
+If you have questions or just need a little clarity, our community and our team is ready to help you in the official [Clerk discord](https://discord.com/invite/b5rXHjAg7A).
 
-Feel free to create an issue with the feedback label. We will take the feedback and iterate on it.
+## Found an issue in the docs?
 
-### How do I contribute?
+If you have found an issue with our documentation, please create an [issue](https://github.com/clerkinc/clerk-docs/issues) or create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) to fix it.
 
-If you've ever wanted to contribute to open source and want to help improve Clerk's documentation, now is your chance!
+## Want to leave feedback?
 
-See the [contributing](./CONTRIBUTING.md) document for more information on how to successfully contribute to Clerk's documentation.
+Feel free to create an [issue](https://github.com/clerkinc/clerk-docs/issues) with the **feedback** label. Our team will take a look at it and get back to you as soon as we can!

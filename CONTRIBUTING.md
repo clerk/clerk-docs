@@ -9,7 +9,7 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 We are still working on migrating some pages from our CMS to this repository, so you may notice some pages only have:
 ```
 ---
-sanity-slug:
+sanity_slug:
 ---
 ```
 These pages will be updated when they are migrated to MDX. Until then, if you would like to request an edit, please create an issue and we will make sure to incorporate your feedback.

@@ -18,10 +18,10 @@ Table of Contents
   - [File metadata](#file-metadata)
   - [Headings](#headings)
   - [Code blocks](#code-blocks)
-    - [`<CodeBlockTabs />`](#code-block-tabs)
-    - [`<Tabs />`](#tabs)
+    - [`<CodeBlockTabs />`](#codeblocktabs-)
+    - [`<Tabs />`](#tabs-)
   - [Tables](#tables)
-    - [`<Tables />`](#tables)
+    - [`<Tables />`](#tables-)
   - [Images and static assets](#images-and-static-assets)
 - [Help wanted!](#help-wanted)
 

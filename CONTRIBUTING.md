@@ -2,29 +2,6 @@
 
 Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute updates and fixes to the documentation content located in this repository.
 
-Table of Contents
-- [Written in MDX](#written-in-mdx)
-- [Project setup](#project-setup)
-- [Creating an issue](#creating-an-issue)
-- [Creating a pull request](#creating-a-pull-request)
-- [Previewing your changes](#previewing-your-changes)
-- [Validating your changes](#validating-your-changes)
-- [Getting your contributions reviewed](#getting-your-contributions-reviewed)
-- [Deployment](#deployment)
-- [Repository structure](#repository-structure)
-  - [Navigation manifest](#navigation-manifest)
-    - [Navigation constructs](#navigation-constructs)
-- [Editing content](#editing-content)
-  - [File metadata](#file-metadata)
-  - [Headings](#headings)
-  - [Code blocks](#code-blocks)
-    - [`<CodeBlockTabs />`](#codeblocktabs-)
-    - [`<Tabs />`](#tabs-)
-  - [Tables](#tables)
-    - [`<Tables />`](#tables-)
-  - [Images and static assets](#images-and-static-assets)
-- [Help wanted!](#help-wanted)
-
 ## Written in MDX
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.

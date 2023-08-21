@@ -2,6 +2,10 @@
 
 Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute updates and fixes to the documentation content located in this repository.
 
+## Written in MDX
+
+Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
+
 ## Project setup
 
 1.  Fork and clone the repo
@@ -21,13 +25,34 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 > all of your pull request branches based on this `main` branch. Whenever you
 > want to update your version of `main`, do a regular `git pull`.
 
-## Written in MDX
+## Creating an issue
 
-Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
+If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerkinc/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes. 
+
+Modifications such as correcting misspelled words, addressing grammatical or punctuation errors, or making similar minor adjustments probably don't require the creation of an issue. In such cases, you are welcome to proceed by creating a pull request.
+
+The structure of the issue should be:
+
+- **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav" 
+- **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can helpful tools!
+
+## Creating a Pull Request
+
+When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerkinc/clerk-docs/pulls), also referred to as a PR.
+
+If this is your first time, or you need a refresher on how to create a PR, you can check out this video:
+
+[How to Contribute to an Open Source Project on GitHub}](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github)
+
+The structure of the PR should be:
+
+- **Title**: Summarize the change you made, using an active voice. E.g. "Fix broken "Home" link on sidenav"
+  - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
+- **Description ("Leave a comment")**: Describe what the concern was and summarize how you solved it.
 
 ## Previewing your changes
 
-If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. Note that this will not include custom components or styles.
+If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. *Note that this will not include custom components or styles.*
 
 > **Note**
 > A member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
@@ -50,7 +75,7 @@ Once your pull request is approved, a member of the Clerk team will merge it and
 
 ## Deployment
 
-The content rendered on https://clerk.com/docs is pulled from the `main` branch in this repository. Once changes are merged to the `main` branch, a workflow is triggered that updates the production pages. Changes should be reflected on https://clerk.com/docs within a matter of seconds.
+The content rendered on https://clerk.com/docs is pulled from the `main` branch in this repository. If your PR is merged to the `main` branch, a workflow is triggered that updates the production pages. Changes should be reflected on https://clerk.com/docs within a matter of seconds.
 
 ## Repository structure
 
@@ -92,6 +117,10 @@ description: Some brief, but effective description of the page's content.
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 These fields should be preset on every documentation page.
+
+### Headings
+
+Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading" 
 
 ### Code blocks
 
@@ -152,6 +181,51 @@ If you need to structure content in a tabular format, use the `<Tabs />` compone
 
 </Tab>
 </Tabs>
+```
+
+### Tables
+
+Tables can be formatted using markdown, like so:
+
+```
+| Heading1 | Heading2 |
+| --- | --- |
+| Cell1A | Cell2A |
+| Cell1B | Cell2B |
+| `code1` | `code2` |
+| [Link1](https://link1.com) | [Link2](https://link2.com)
+```
+
+#### `<Tables />` 
+
+If you have more complex content that you need inside a table, you can use the <Table /> component. 
+
+```
+<Tables
+  headings={["Name", "Type", "Description"]}
+  headingsMeta={[{maxWidth:'300px'},{maxWidth: '300px'},{maxWidth: '300px'}]}
+  rows={[
+    {
+      cells: [
+        <code>cell1A</code>,
+        <code>cell2A</code>,
+        <>This is cell3A which would be filled under the description heading.</>,
+      ]
+    },
+    {
+      cells: [
+        <code>cell2A</code>,
+        <code>cell2B</code>,
+        <>This is cell3B, and it renders components:
+          <ul>
+            <li>listitem1 inside cell3B</li>
+            <li>listitem2 inside cell3B</li> 
+            <li>listitem3 inside cell3B</li>
+          </ul>
+        </>,
+      ],
+    },
+/>
 ```
 
 ### Images and static assets

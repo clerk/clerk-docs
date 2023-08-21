@@ -6,6 +6,14 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
+We are still working on migrating some pages from our CMS to this repository, so you may notice some pages only have:
+```
+---
+sanity-slug:
+---
+```
+These pages will be updated when they are migrated over!
+
 ## Project setup
 
 1.  Fork and clone the repo

@@ -13,6 +13,16 @@
   </h1>
   <h3>More than authentication.<br />Complete user management.</h3>
   <img alt="Clerk Hero Image" src="https://github.com/clerkinc/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+  <a href="https://www.npmjs.com/package/@clerk/clerk-js">
+    <img alt="" src="https://img.shields.io/npm/dm/@clerk/clerk-js" />
+  </a>
+  <a href="https://discord.com/invite/b5rXHjAg7A">
+    <img alt="Discord" src="https://img.shields.io/discord/856971667393609759?color=7389D8&label&logo=discord&logoColor=ffffff" />
+  </a>
+  <br />
+  <a href="https://twitter.com/clerkdev">
+    <img alt="Twitter" src="https://img.shields.io/twitter/url.svg?label=%40clerkdev&style=social&url=https%3A%2F%2Ftwitter.com%2Fclerkdev" />
+  </a>
 </div>
 
 ## Community 

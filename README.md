@@ -1,18 +1,23 @@
 <p align="center">
-  <a href="https://clerk.dev?utm_source=github&utm_medium=clerk_docs" target="_blank" rel="noopener noreferrer">
+  <a href="https://clerk.com?utm_source=github&utm_medium=clerk_docs" target="_blank" rel="noopener noreferrer">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://images.clerk.dev/static/logo-dark-mode-400x400.png">
-      <img src="https://images.clerk.dev/static/logo-light-mode-400x400.png" height="120">
+      <img src="https://images.clerk.com/static/logo-light-mode-400x400.png" height="64">
     </picture>
   </a>
   <br />
 </p>
+<div align="center">
+  <h1>
+    Clerk Documentation
+  </h1>
+  <h3>More than authentication.<br />Complete user management.</h3>
+  <img alt="Clerk Hero Image" src="https://github.com/clerkinc/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+</div>
 
-<h1 align="center">
-  Clerk Documentation
-</h1>
+## Community 
 
-Clerk is more than authentication, and we want to convey every feature of Clerk's as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
+Clerk is more than authentication, and we want to convey every feature of Clerk as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
 
 We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./CONTRIBUTING.md).
 
@@ -23,7 +28,7 @@ We encourage you to contribute to Clerk's documentation! You can get started by 
 If you have found an issue with our documentation, please create an [issue](https://github.com/clerkinc/clerk-docs/issues).
 
 If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue.  
-Go ahead and create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) with the solution :rocket:
+Go ahead and create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) with the solution. :rocket:
 
 ## Want to leave feedback?
 

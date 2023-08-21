@@ -22,6 +22,7 @@
   <a href="https://twitter.com/clerkdev">
     <img alt="Twitter" src="https://img.shields.io/twitter/url.svg?label=%40clerkdev&style=social&url=https%3A%2F%2Ftwitter.com%2Fclerkdev" />
   </a>
+  <br />
   <img alt="Clerk Hero Image" src="https://github.com/clerkinc/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
 </div>
 

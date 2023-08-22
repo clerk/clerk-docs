@@ -6,6 +6,14 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
+We are still working on migrating some pages from our CMS to this repository, so you may notice some pages only have:
+```
+---
+sanity_slug:
+---
+```
+These pages will be updated when they are migrated to MDX. Until then, if you would like to request an edit, please create an issue and we will make sure to incorporate your feedback.
+
 ## Project setup
 
 1.  Fork and clone the repo
@@ -166,7 +174,7 @@ pnpm i @clerk/nextjs
 </CodeBlockTabs>
 ```
 
-### `<Tabs />`
+#### `<Tabs />`
 
 If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `options` property, which is an array of strings. For each option provided, render a `<Tab />` component:
 

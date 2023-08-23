@@ -233,6 +233,7 @@ If you have more complex content that you need inside a table, you can use the <
         </>,
       ],
     },
+  ]}
 />
 ```
 

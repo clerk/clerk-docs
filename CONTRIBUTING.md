@@ -206,12 +206,13 @@ Tables can be formatted using markdown, like so:
 
 #### `<Tables />` 
 
-If you have more complex content that you need inside a table, you can use the <Table /> component. 
+If you have more complex content that you need inside a table, such as embedding JSX elements, you can use the `<Tables />` component. While you *can* embed JSX elements in a markdown table, embedding JSX elements in a JSX component is the *better* option for formatting and readability purposes.
+
+For example, one of these cells has content that would best formatted in an unordered list.
 
 ```
 <Tables
-  headings={["Name", "Type", "Description"]}
-  headingsMeta={[{maxWidth:'300px'},{maxWidth: '300px'},{maxWidth: '300px'}]}
+  headings={["Name", "Type", "Description"]},
   rows={[
     {
       cells: [

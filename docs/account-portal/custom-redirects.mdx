@@ -1,34 +1,40 @@
 ---
-title: Customizing your Redirects
-description: The Account Portal offers a comprehensive solution for managing user authentication and profile management in your web application and is the fastest way to add Clerk's authentication to your application with minimal code required.
+title: Customizing your redirects | Account Portal
+description:  Customize where your users are redirected to after they sign-in or sign-up.
 ---
-import { CodeBlockTabs } from "@/components/CodeBlockTabs";
-import { Steps, Tab, Tabs } from 'nextra-theme-docs';
 
 # Customizing your Account Portal redirects
 
-Clerk automatically redirects users after sign-in or sign-up back to where they came from by appending a `redirect_url` query param on the Account Portal page. 
+After a user signs in or signs up, Clerk automatically redirects users back to your application by appending a `redirect_url` query param on the Account Portal page. However, Clerk provides various options for you to customize where your users are redirected to.
 
-If you want to customize this and, for example, redirect users to `/dashboard` on sign-in and `/onboarding` on sign-up this is easily done as well. 
+## Environment variables
 
+You can define the paths you want the users to be redirected to via environment variables. In this example, we redirect users to "/dashboard" after signing in, and to "/onboarding" after signing up.
 
-## Next.js Middleware
-
-
-**Environment Variables**
-
-First, you can define the paths directly in the environment variables.
-
-```sh
+<Tabs items={["Next.js", "Remix"]}>
+<Tab>
+```sh filename=".env" copy
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
 ```
+</Tab>
+<Tab>
+```sh filename=".env" copy
+CLERK_AFTER_SIGN_IN_URL=/dashboard
+CLERK_AFTER_SIGN_UP_URL=/onboarding
+```
+</Tab>
+</Tabs>
 
-**afterAuth() Function**
+## Middleware
 
-If you want a more programmatically generated redirect option, you can also use the ‘afterAuth()’ function from our Clerk Middleware.
+If you are using Next.js and want a more programmatically generated redirect option, you can use the `afterAuth()` function from our [Clerk middleware](/docs/references/nextjs/auth-middleware).
 
-```tsx
+<Callout type="info" emoji="💡">
+  The `afterAuth()` function will always take precedence over environment variables.
+</Callout>
+
+```tsx filename="middleware.ts" copy
 export default authMiddleware({
   afterAuth(auth, req, evt) {
     // handle users who aren't authenticated
@@ -44,24 +50,26 @@ export default authMiddleware({
 });
 ```
 
-<Callout type="info" emoji="💡">
-  Note that, if configured, - the afterAuth() function will always take precedence over the environment variables.
-</Callout>
+{/* TODO (Alexis and Shehzad)
+Does the afterSignInUrl and afterSignUpUrl props get passed to the ClerkProvider as well??
+Also, I thought using the `<RedirectToSignIn />` component will navigate to the URL configured (thru env variables or auth middleware). [Source](https://clerk.com/docs/components/control/redirect-to-signin#redirect-to-sign-in)
+Should these props instead be passed to the `<SignIn />` and `<SignUp />` components? [Source](https://clerk.com/docs/components/authentication/sign-in#props) */}
 
+## `afterSignInUrl` and `afterSignUpUrl` props
 
-## Control Components
+You can explicitly define the redirect paths by passing the `afterSignInUrl` and `afterSignUpUrl` props to the respective components.
 
-If you're not using Middleware, you can also explicitly define the redirect paths by passing the `afterSignInUrl` and `afterSignUpUrl` props in the respective components:
+### Control components
 
 ```javascript copy
 function App() {
   return (
-    <ClerkProvider publishableKey={clerkPubKey} afterSignInUrl={'/dashboard'} afterSignUpUrl={'/onboarding'} >
+    <ClerkProvider publishableKey={clerkPubKey} afterSignInUrl='/dashboard' afterSignUpUrl='/onboarding' >
       <SignedIn>
         <Welcome />
       </SignedIn>
       <SignedOut>
-        <RedirectToSignIn afterSignInUrl={'/dashboard'} afterSignUpUrl={'/onboarding'} />
+        <RedirectToSignIn afterSignInUrl='/dashboard' afterSignUpUrl='/onboarding' />
       </SignedOut>
     </ClerkProvider>
   );
@@ -69,42 +77,40 @@ function App() {
 ```
 
 <Callout type="info" emoji="💡">
-Note that, if configured, `RedirectToSignIn` or `RedirectToSignUp` child components will always take precedence over `ClerkProvider`. 
+  `<RedirectToSignIn />` or `<RedirectToSignUp />` child components will always take precedence over `<ClerkProvider />`. 
 </Callout>
 
+### Button components
 
-## Button Components
+In the case that you are using a [`<SignInButton />`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton />`](/docs/components/unstyled/sign-up-button), you can also pass the props into those components. We recommend defining both `afterSignInUrl` and `afterSignUpUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
 
-In the case that you are using a Sign In (or Sign Up) button, say from your marketing website, you can also pass through the props into those components. We recommend defining both AfterSignInUrl and AfterSignupUrl redirects in each button as some users may choose to sign up instead after attempting to sign in.
+## Dashboard fallbacks
 
-```javascript copy
-
-function App() {
-  return (
-        <SignInButton afterSignInUrl='/dashboard' afterSignUpUrl='/onboarding'>
-        <SignUpButton afterSignInUrl='/dashboard' afterSignUpUrl='/onboarding'>
-  );
-}
-
-```
-
-## Dashboard Fallbacks
-
-If you provide users with a direct link to the account portal pages, you can specify the redirects as a fallback in the dashboard as well. 
+If you provide users with a direct link to the Account Portal pages, you can specify the redirects as a fallback in the Clerk Dashboard. 
 
 <Callout type="info" emoji="💡">
-Note that, while we provide this functionality as a fallback **we do not recommend** configuring this through the dashboard and encourage you to specify redirects in your application flows instead. 
+  While we provide this functionality as a fallback, **we do not recommend** configuring this through the dashboard and encourage you to specify redirects in your application flows instead. 
 </Callout>
 
+### Paths
 
-1. For development, set your static fallback localhost (e.g. http://localhost:3000) that we will use if we are unable to retrieve a dev browser for your client. In production, this will always be your application homepage. 
+For development, set your static fallback localhost (e.g. http://localhost:3000) that we will use if we are unable to retrieve a dev browser for your client. In production, this will always be your application homepage. 
 
-    
-    ![Account Portal Paths](/docs/images/account-portal/account_portal_paths.png)
+<Images 
+  width={3248}
+  height={2112}
+  src="/docs/images/account-portal/account_portal_paths.png"
+  alt="Account Portal paths"
+/>
   
+### Redirects
 
-2. Next, you can specify the fallback redirects through the dashboard as well. 
+You can specify the fallback redirects through the Clerk Dashboard. 
 
-    
-    ![Account Portal Redirects](/docs/images/account-portal/account_portal_redirects.png)
+<Images 
+  width={3248}
+  height={2112}
+  src="/docs/images/account-portal/account_portal_redirects.png"
+  alt="Account Portal redirects"
+/>
   

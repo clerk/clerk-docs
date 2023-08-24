@@ -176,10 +176,10 @@ pnpm i @clerk/nextjs
 
 #### `<Tabs />`
 
-If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `options` property, which is an array of strings. For each option provided, render a `<Tab />` component:
+If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `items` property, which is an array of strings. For each option provided, render a `<Tab />` component:
 
 ```mdx
-<Tabs options={["React", "JavaScript"]}>
+<Tabs items={["React", "JavaScript"]}>
 <Tab>
 # React
 

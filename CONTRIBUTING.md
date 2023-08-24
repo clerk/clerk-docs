@@ -89,7 +89,7 @@ The content rendered on https://clerk.com/docs is pulled from the `main` branch 
 
 The documentation content is located in the [`/docs` directory](./docs/). Each MDX file located in this directory will be rendered under https://clerk.com/docs at its path relative to the root `/docs` directory, without the file extension.
 
-For example, the file at `/docs/get-started/setup-clerk.mdx` can be found at https://clerk.com/docs/get-started/setup-clerk.
+For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
 
 ### Navigation manifest
 

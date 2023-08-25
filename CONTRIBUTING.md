@@ -42,7 +42,7 @@ Modifications such as correcting misspelled words, addressing grammatical or pun
 The structure of the issue should be:
 
 - **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav" 
-- **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can helpful tools!
+- **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
 ## Creating a Pull Request
 

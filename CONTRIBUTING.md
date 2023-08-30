@@ -17,7 +17,7 @@ These pages will be updated when they are migrated to MDX. Until then, if you wo
 ## Project setup
 
 1.  Fork and clone the repo
-2.  Run `yarn install` to install dependencies
+2.  Run `npm install` to install dependencies
 3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`
 
 > Tip: Keep your `main` branch pointing at the original repository and make pull

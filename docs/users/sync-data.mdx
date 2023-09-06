@@ -31,7 +31,7 @@ You'll be presented with a form where you can specify the URL of your backend en
 
 ![Add endpoint form](/docs/images/users/guides/sync-backend/webhook-form.png)
 
-Once you click the **Create** button, you'll be presented with your webhook enpoint dashboard. Here you can see the URL of your endpoint and the events you selected and you can also test your endpoint.
+Once you click the **Create** button, you'll be presented with your webhook endpoint dashboard. Here you can see the URL of your endpoint and the events you selected and you can also test your endpoint.
 
 ### Setup your backend endpoint
 
@@ -63,7 +63,7 @@ Now you need to set up your backend endpoint to receive the webhook events. The 
 
 <Tab>
 
-If you're using Next.js, you can create a webhook endpoint in the `pages/api` directory.
+If you're using Next.js with Page Router, you can create a webhook endpoint in the `pages/api` directory.
 
 Svix provides a package for verifying the webhook signature, making it easy to verify the authenticity of the webhook events.
 
@@ -129,6 +129,9 @@ type NextApiRequestWithSvixRequiredHeaders = NextApiRequest & {
 </Tab>
 
 <Tab>
+
+If you're using Next.js with App Router, you can create a webhook endpoint in the `app/api` directory.
+
 Svix provides a package for verifying the webhook signature, making it easy to verify the authenticity of the webhook events.
 
 <CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
@@ -150,57 +153,66 @@ Next you will want to retrieve the Webhook signing secret from the Clerk Dashboa
 
 ![signing-secret-example](/docs/images/users/guides/sync-backend/sign-secret.png)
 
-```ts copy filename="app/routes/webhook.ts"
-import type { IncomingHttpHeaders } from 'http';
-import type { NextApiRequest, NextApiResponse } from 'next';
-import type { WebhookRequiredHeaders } from 'svix';
-import type { WebhookEvent } from '@clerk/nextjs/server';
-import { Webhook } from 'svix';
-import { headers } from 'next/headers';
-
-const webhookSecret: string = process.env.WEBHOOK_SECRET || '';
+```ts copy filename="app/webhook/route.ts"
+import { Webhook } from 'svix'
+import { headers } from 'next/headers'
+import { WebhookEvent } from '@clerk/nextjs/server'
 
 export async function POST(req: Request) {
-  const payload = await req.json();
-  const payloadString = JSON.stringify(payload);
-  const headerPayload = headers();
-  const svixId = headerPayload.get('svix-id');
-  const svixIdTimeStamp = headerPayload.get('svix-timestamp');
-  const svixSignature = headerPayload.get('svix-signature');
-  if (!svixId || !svixIdTimeStamp || !svixSignature) {
-    return new Response('Error occured', {
-      status: 400
-    });
-  }
-  // Create an object of the headers
-  const svixHeaders = {
-    'svix-id': svixId,
-    'svix-timestamp': svixIdTimeStamp,
-    'svix-signature': svixSignature
-  };
-  // Create a new Webhook instance with your webhook secret
-  const wh = new Webhook(webhookSecret);
 
-  let evt: WebhookEvent;
+  // you can find this in the Clerk Dashboard -> Webhooks -> choose the webhook
+  const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error('Please add WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local')
+  }
+
+  // get the headers
+  const headerPayload = headers();
+  const svix_id = headerPayload.get("svix-id");
+  const svix_timestamp = headerPayload.get("svix-timestamp");
+  const svix_signature = headerPayload.get("svix-signature");
+
+  // if there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response('Error occured -- no svix headers', {
+      status: 400
+    })
+  }
+
+  // get the body
+  const payload = await req.json()
+  const body = JSON.stringify(payload);
+
+  // create a new SVIX instance with your secret.
+  const wh = new Webhook(WEBHOOK_SECRET);
+
+  let evt: WebhookEvent
+
+  // verify the payload with the headers
   try {
-    // Verify the webhook payload and headers
-    evt = wh.verify(payloadString, svixHeaders) as WebhookEvent;
-  } catch (_) {
-    console.log('error');
+    evt = wh.verify(body, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    }) as WebhookEvent
+  } catch (err) {
+    console.error('Error verifying webhook:', err);
     return new Response('Error occured', {
       status: 400
-    });
+    })
   }
+
+  // get the id and type
   const { id } = evt.data;
-  // Handle the webhook
   const eventType = evt.type;
-  if (eventType === 'user.created') {
-    console.log(`User ${id} was ${eventType}`);
-  }
-  return new Response('', {
-    status: 201
-  });
+
+  console.log(`Webhook with and ID of ${id} and type of ${eventType}`)
+  console.log('Webhook body:', body)
+
+  return new Response('', { status: 201 })
 }
+
 ```
 
 </Tab>

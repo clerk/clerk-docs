@@ -1,0 +1,175 @@
+---
+title: Adding Satellite Domains
+description: Learn how to share sessions across different domains by adding satellite domains to your application.
+---
+
+# Adding Satellite Domains
+
+Clerk supports sharing sessions across different domains by adding one or many satellite domains to an application.
+
+Your "primary" domain is where the authentication state lives, and satellite domains are able to securely read that state from the primary domain, enabling a seamless authentication flow across domains.
+
+Users must complete the sign-in flow on the primary domain, either using Clerk’s [`<SignIn />`](/docs/components/authentication/sign-in) component or [`useSignIn()`](/docs/custom-flows/use-sign-up#use-sign-in) hook.
+
+To access authentication state from a satellite domain, users will be transparently redirected to the primary domain. If users need to sign in, they must be redirected to a sign in flow hosted on the primary domain, then redirected back to the originating satellite domain.
+
+
+## How to add Satellite Domains
+
+<Steps>
+
+### Create your application and install Clerk
+<Callout type="warning">
+Currently, multi-domain can be added to any Next.js or Remix application. For other React frameworks, multi-domain is still supported as long as you do not use server rendering or hydration.
+</Callout>
+
+To get started, you need to create an Application from the [Clerk Dashboard](https://dashboard.clerk.dev/). Once you create an instance via the dashboard, you will be prompted to choose a domain. This is your primary domain. For the purposes of this guide, the primary domain will be `primary.dev`.
+
+When building your sign-in flow, you must configure it to run within your primary application, e.g. on /sign-in.
+
+<Callout type="info">
+  For more information about creating your application, check out Clerk's [detailed guide](/docs/quickstarts/setup-clerk).
+</Callout>
+
+### Add your first satellite domain
+
+Go to the [Domains](https://dashboard.clerk.com/last-active?path=domains) tab in the Clerk dashboard and add a new satellite domain of your choice. Then, follow the instructions provided.
+
+For the purposes of this guide, the satellite domain will be "satellite.dev".
+
+
+<Images
+src="/docs/images/advance/multi-domain/satellite-domain-add.png"
+width={3024}
+height={1748}
+alt="Clerk Dashboard inside the satellites tab of the domain"
+/>
+
+### Configure your satellite app with environment variables
+
+Now that you have created the satellite application, it's time to configure it as such. You can do so with the environment variables below or via properties (see the next step).
+
+<CodeBlockTabs options={["Next.js", "Remix"]}>
+```env copy filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+
+NEXT_PUBLIC_CLERK_DOMAIN=satellite.dev
+NEXT_PUBLIC_CLERK_IS_SATELLITE=true
+
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+```
+```env filename=".env" copy
+CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+
+CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+CLERK_DOMAIN=satellite.dev
+CLERK_IS_SATELLITE=true
+```
+</CodeBlockTabs>
+
+### Configure your satellite app with properties
+
+You can skip this step if you configured your satellite app with environment variables.
+
+This is an alternative configuration to the environment variable based setup that we described in the previous step.
+
+The properties related to the multi domain setup are as follows:
+* `isSatellite`: `boolean | ((url: URL) => boolean)`. This option defines that the application is a satellite application.
+* `domain`: `string | ((url: URL) => boolean)`. This option sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
+* `signInUrl`: `string`. This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
+
+The `URL` mentioned above is the request url for server side usage or the current location for client usage.
+
+<Tabs items={['Next.js', 'Remix']}>
+  <Tab>
+    You can embed the `<SignIn />` component using the [Next.js optional catch-all route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes#optional-catch-all-routes). This allows you to redirect the user inside your application. The `<SignIn />` component should be mounted on a public page.
+
+    <CodeBlockTabs options={["<ClerkProvider />", "Middleware"]}>
+    ```jsx copy filename="_app.tsx"
+    import { ClerkProvider } from "@clerk/nextjs";
+    import Head from "next/head";
+
+    export default function App({ Component, pageProps }) {
+      return (
+        <ClerkProvider isSatellite domain={(url) => url.host} signInUrl='https://primary.dev/sign-in' {...pageProps}>
+          <Head>
+            <title>Satellite Next.js app</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          </Head>
+          <Component {...pageProps} />
+        </ClerkProvider>
+      );
+    }
+    ```
+
+    ```js copy filename="middleware.ts"
+    import { authMiddleware, redirectToSignIn } from "@clerk/nextjs/server";
+
+    export default authMiddleware({
+      afterAuth(auth) {
+        // handle users who aren't authenticated
+        if (!auth.userId && !auth.isPublicRoute) {
+          return redirectToSignIn({ returnBackUrl: "https://satellite.dev" });
+        }
+      },
+      isSatellite: true,
+      signInUrl: 'https://primary.dev/sign-in'
+      domain: url => url.host
+    });
+
+    export const config = {
+      matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api)(.*)"],
+    };
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    ```js copy filename="root.tsx"
+    export const loader = (args) => {
+      return rootAuthLoader(
+        args,
+        ({ request }) => {
+          const { userId, sessionId, getToken } = request.auth;
+          return json({
+              message: `Hello from the root loader :)`,
+              ENV: getBrowserEnvironment(),
+          });
+        },
+        {
+          loadUser: true,
+          signInUrl: 'https://primary.dev/sign-in',
+          isSatellite: true,
+          domain: (url) => url.host
+        } as const
+      );
+    };
+
+    export default ClerkApp(App, {
+      isSatellite: true,
+      domain: (url) => url.host,
+      signInUrl: 'https://primary.dev/sign-in',
+    });
+    ```
+  </Tab>
+
+</Tabs>
+
+### Ready to go 🎉
+
+Your satellite application should now be able to access the authentication state from your satellite domain! 
+
+You can see it in action by: 
+1. Visiting the primary domain and signing in.
+2. Visiting the satellite domain.
+3. You now have an active session in the satellite domain, so you can see the `<UserProfile />` component and update your information.
+
+You can repeat this process and create as many satellite applications as you need.
+
+</Steps>
+
+You can also check out the [example repository](https://github.com/clerkinc/clerk-nextjs-multi-domain-example) with a primary and a satellite Next.js application.
+
+If you have any questions about satellite domains, or you're having any trouble setting this up, please contact support@clerk.com

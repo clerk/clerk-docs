@@ -35,14 +35,14 @@ These pages will be updated when they are migrated to MDX. Until then, if you wo
 
 ## Creating an issue
 
-If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerkinc/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes. 
+If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerkinc/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes.
 
 Modifications such as correcting misspelled words, addressing grammatical or punctuation errors, or making similar minor adjustments probably don't require the creation of an issue. In such cases, you are welcome to proceed by creating a pull request.
 
 The structure of the issue should be:
 
-- **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav" 
-- **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can helpful tools!
+- **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav"
+- **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
 ## Creating a Pull Request
 
@@ -128,7 +128,7 @@ These fields should be preset on every documentation page.
 
 ### Headings
 
-Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading" 
+Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading"
 
 ### Code blocks
 
@@ -204,7 +204,7 @@ Tables can be formatted using markdown, like so:
 | [Link1](https://link1.com) | [Link2](https://link2.com)
 ```
 
-#### `<Tables />` 
+#### `<Tables />`
 
 If you have more complex content that you need inside a table, such as embedding JSX elements, you can use the `<Tables />` component. While you *can* embed JSX elements in a markdown table, embedding JSX elements in a JSX component is the *better* option for formatting and readability purposes.
 
@@ -228,7 +228,7 @@ For example, one of these cells has content that would best formatted in an unor
         <>This is cell3B, and it renders components:
           <ul>
             <li>listitem1 inside cell3B</li>
-            <li>listitem2 inside cell3B</li> 
+            <li>listitem2 inside cell3B</li>
             <li>listitem3 inside cell3B</li>
           </ul>
         </>,

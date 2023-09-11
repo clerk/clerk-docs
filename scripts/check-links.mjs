@@ -96,6 +96,7 @@ async function main() {
 
   if (output) {
     console.log(output);
+    process.exitCode = 1;
   } else {
     console.log("✅ No broken links found!");
   }

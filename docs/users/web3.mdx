@@ -15,71 +15,28 @@ You need to create a Clerk application in your [Clerk Dashboard](https://dashboa
 
 Once you have a Clerk application set up in the dashboard, it's time to create a Next.js application. Clerk provides a detailed guide on how to [create a new Next.js app with Clerk](/docs/quickstarts/nextjs).
 
-## Requiring Web3 authentication
+## Accessing the Web3 address from the frontend
 
-The easiest way to require authentication before showing a protected page is to use Clerk's [Control Components](/docs/components/overview):
+At this point, you should have a Next.js application integrated with Clerk and with Metamask authentication enabled. Run `npm run dev` and visit `localhost:3000`. If you followed the guide, all of the pages to your application should be protected, and you should see your sign-in page. 
 
-- [`​<SignedIn/>`](/docs/components/control/signed-in): Renders its children only when a user is signed in.
-- [`​<SignedOut/>`](/docs/components/control/signed-out): Renders its children only when there's no active user.
+Your Clerk application will use the [Account Portal](/docs/account-portal/overview) pages out of the box. However, if you would like more control over your authentication flow, Clerk provides a set of [components](/docs/components/overview) that you can use. If the prebuilt components don't meet your specific needs, you can build fully [custom sign-up and sign-in flows](/docs/custom-flows/overview).
 
-As a child of `<SignedOut/>`, we will include our [`<SignInWithMetamaskButton/>`](/docs/components/unstyled/sign-in-with-metamask) so the user can trigger the Metamask authentication flow.
+After signing in with Metamask on your sign-in page, you'll be presented with the Next.js default start screen. Let's modify the start screen to display a user's primary Web3 address on the page.
 
-The following example shows you how to compose Clerk's Control Components to build authentication flows that match your needs. Please note that you don't need to use any additional APIs, everything shown below is just Javascript.
-
-```jsx filename="_app.js" copy
-import '../styles/globals.css'
-import { ClerkProvider, SignedIn, SignedOut, SignInWithMetamaskButton } from '@clerk/nextjs';
-import { useRouter } from 'next/router';
-
-//  List pages you want to be publicly accessible, or leave empty if
-//  every page requires authentication. Use this naming strategy:
-//   "/"              for pages/index.js
-//   "/foo"           for pages/foo/index.js
-//   "/foo/bar"       for pages/foo/bar.js
-//   "/foo/[...bar]"  for pages/foo/[...bar].js
-const publicPages = [];
-
-function MyApp({ Component, pageProps }) {
-  // Get the pathname
-  const { pathname } = useRouter();
-
-  // Check if the current route matches a public page
-  const isPublicPage = publicPages.includes(pathname);
-
-  // If the current route is listed as public, render it directly
-  // Otherwise, use Clerk to require authentication
-  return (
-    <ClerkProvider>
-      {isPublicPage ? (
-        <Component {...pageProps} />
-      ) : (
-        <>
-          <SignedIn>
-            <Component {...pageProps} />
-          </SignedIn>
-          <SignedOut>
-            <SignInWithMetamaskButton />
-          </SignedOut>
-        </>
-      )}
-    </ClerkProvider>
-  );
-}
-
-export default MyApp;
-```
-
-Visit http://localhost:3000 to see your page. The home "/" page is not listed in the `publicPages` array, so you'll immediately see the **Sign in with Metamask** button - go ahead and try it!
-
-## Hello, world!
-
-After signing in with Metamask, you'll be presented with the Next.js default start screen. Let's update `pages/index.js` by adding a [`<UserButton />`](/docs/components/user/user-button) to retrieve the current users' Metamask address:
+In this example, the [`User`](/docs/references/javascript/user/user) object for the current user can be accessed through the [`useUser()`](/docs/references/react/use-user) hook. The user's primary Web3 address can then be retrieved from the `User` object.
 
 ```jsx filename="pages/index.js" copy
-import { UserButton, useUser } from "@clerk/nextjs";
+import { SignIn, SignOutButton, UserButton, useUser } from "@clerk/nextjs";
 
 export default function Home() {
-  const { primaryWeb3Wallet } = useUser();
+  const { user } = useUser();
+
+  if (!user) {
+    return <SignIn />;
+  }
+
+  const primaryWeb3Wallet = user?.primaryWeb3Wallet;
+
   return (
     <>
       <header
@@ -89,11 +46,15 @@ export default function Home() {
           padding: "1rem",
         }}
       >
-        <span>My first DApp</span>
+        <span>My first App</span>
         <UserButton />
       </header>
       <main style={{ padding: "1rem" }}>
-        <p>Address: {primaryWeb3Wallet.web3Wallet}</p>
+        <p>
+          Address:{" "}
+          {primaryWeb3Wallet ? primaryWeb3Wallet.web3Wallet : "Not found"}
+        </p>
+        <SignOutButton />
       </main>
     </>
   );
@@ -104,31 +65,41 @@ export default function Home() {
 
 ### Add authentication to a serverless API route
 
-A new Next.js app comes with a sample API route in `/pages/api/hello.js`. Let's modify it to retrieve the user's Web3 address:
+A new Next.js app using Pages Router comes with a sample API route in `/pages/api/hello.js`. Let's modify it to retrieve the user's Web3 address:
 
-```jsx filename="pages/api/hello.js" copy
-import { requireSession } from "@clerk/nextjs/api";
+```jsx filename="pages/api/hello.ts" copy
+import type { NextApiRequest, NextApiResponse } from "next";
+import { getAuth } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs";
 
-export default requireSession(async (req, res) => {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   try {
-    // SDK helpers for this request are coming soon!
-    const user = await fetch(
-      `https://api.clerk.com/v1/users/${req.session.userId}`,
-      {
-        headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
-      }
-    ).then((r) => r.json());
+    const { userId } = getAuth(req);
 
-    // Retrieve the address
-    const address = user.web3_wallets[0].web3_wallet;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const user = userId ? await clerkClient.users.getUser(userId) : null;
+
+    // Retrieve the user's web3Wallet
+    const walletId = user ? user.primaryWeb3WalletId : null;
+    const address = user
+      ? user.web3Wallets.find((wallet) => wallet.id === walletId)
+      : null;
+
     res.status(200).json({ address: address });
   } catch (e) {
     console.log(e);
+
     res.status(500).json({
       error: "Something went wrong retrieving the web3wallet from Clerk",
     });
   }
-});
+}
 ```
 
 ## Next steps

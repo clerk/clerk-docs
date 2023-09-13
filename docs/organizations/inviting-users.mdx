@@ -1,5 +1,101 @@
 ---
-sanity_slug: /docs/organizations/invite-users
+title: Invite users to an organization
+description: Learn how to invite new users to an organization.
 ---
 
-# This is a stub
+# Invite users to an organization
+
+Organization administrators have the ability to invite new users to their organization and manage those invitations. When an administrator invites a new member, an invitation email is sent out. The invitation recipient can be either an existing user of your application or a new user. If the latter is true, the user will be registered once they accept the invitation.
+
+In React and Next.js applications, the [`useOrganization()`](/docs/references/react/use-organization) hook returns the `organization` property, which is then used to call [`organization.inviteMember()`](/docs/references/javascript/organization/invitations#invite-member) passing in the recipient's email address and desired role (either `basic_member` or `admin`).
+
+Administrators are also able to revoke organization invitations for users that have not yet joined, which will prevent the user from becoming an organization member. This is done by calling the [`revoke()`](/docs/references/javascript/organization-invitation#revoke) method on the invitations in the `invitationList` returned by the [`useOrganization()`](/docs/references/react/use-organization) hook.
+
+## Usage
+
+{/* TO-DO (DOCS-316): Add examples for React and JavaScript. Update and validate these code examples. */}
+
+An example implementation in Next.js for inviting users and revoking pending invitations:
+
+```jsx
+import { useOrganization } from '@clerk/nextjs';
+import { useState } from 'react';
+
+function InviteMember() {
+  const { organization } = useOrganization();
+  const [emailAddress, setEmailAddress] = useState('');
+  const [role, setRole] = useState<'basic_member' | 'admin'>('basic_member');
+  const [disabled, setDisabled] = useState(false);
+
+  const onSubmit = async e => {
+    e.preventDefault();
+    setDisabled(true);
+    await organization.inviteMember({ emailAddress, role });
+    setEmailAddress('');
+    setRole('basic_member');
+    setDisabled(false);
+  };
+
+  return (
+    <form onSubmit={onSubmit}>
+      <input
+        type="text"
+        placeholder="Email address"
+        value={emailAddress}
+        onChange={e => setEmailAddress(e.target.value)}
+      />
+      <label>
+        <input
+          type="radio"
+          checked={role === 'admin'}
+          onChange={() => {
+            setRole('admin');
+          }}
+        />{' '}
+        Admin
+      </label>
+      <label>
+        <input
+          type="radio"
+          checked={role === 'basic_member'}
+          onChange={() => {
+            setRole('basic_member');
+          }}
+        />{' '}
+        Member
+      </label>{' '}
+      <button type="submit" disabled={disabled}>
+        Invite
+      </button>
+    </form>
+  );
+}
+
+export default function InvitationList() {
+  const { invitationList } = useOrganization({ invitationList: {} });
+
+  if (!invitationList) {
+    return null;
+  }
+
+  const revoke = async inv => {
+    await inv.revoke();
+  };
+
+  return (
+    <div>
+      <h2>Invite member</h2>
+      <InviteMember />
+
+      <h2>Pending invitations</h2>
+      <ul>
+        {invitationList.map(i => (
+          <li key={i.id}>
+            {i.emailAddress} <button onClick={() => revoke(i)}>Revoke</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```

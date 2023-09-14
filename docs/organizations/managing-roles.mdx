@@ -1,5 +1,511 @@
 ---
-sanity_slug: /docs/organizations/manage-member-roles
+title: Manage member roles in an organization
+description: Learn how to manage member roles in an organization.
 ---
 
-# This is a stub
+# Manage member roles in an organization
+
+Organization administrators have the ability to manage the member roles within an organization. Admins can change a member's role, remove them from an organization, and revoke organization invitations.
+
+The [`useOrganization()`](/docs/references/react/use-organization) hook can be used to retrieve the current user's membership or the list of memberships for the currently active organization. The [`destroy`](/docs/references/javascript/organization-membership#destroy) and [`update`](/docs/references/javascript/organization-membership#update) methods can be called on the membership object to remove a member or change their role.
+
+The [`useOrganization()`](/docs/references/react/use-organization) hook can also be used to retrieve the list of invitations for the currently active organization. The [`revoke`](/docs/references/javascript/organization-invitation#revoke) method can be called on the invitation object to revoke the invitation.
+
+Methods for [changing a member's role](/docs/references/backend/organization/update-organization-membership), [removing a member](/docs/references/backend/organization/delete-organization-membership), and [revoking an invitation](/docs/references/backend/organization/revoke-organization-invitation) are also available on the [Backend API](/docs/references/backend/overview). 
+
+## Usage
+
+{/* TODO (DOCS-316): Update and validate these examples. */}
+
+<CodeBlockTabs options={["Next.js", "React", "JavaScript"]}>
+```tsx filename="pages/organizations/[id].ts" copy
+import { useState, useEffect } from "react";
+import { useOrganization } from "@clerk/nextjs";
+import type { OrganizationMembershipResource } from "@clerk/types";
+
+// View and manage active organization members, 
+// along with any pending invitations.
+// Invite new members.
+export default function Organization() {
+  const {
+    organization: currentOrganization,
+    membership,
+    isLoaded,
+  } = useOrganization();
+
+  if (!isLoaded || !currentOrganization) {
+    return null;
+  }
+
+  const isAdmin = membership.role === "admin";
+  return (
+    <>
+      <h1>Organization: {currentOrganization.name}</h1>
+      <MemberList />
+      {isAdmin && <InvitationList />}
+    </>
+  );
+}
+
+// List of organization memberships. Administrators can
+// change member roles or remove members from the organization.
+function MemberList() {
+  const { membershipList, membership } = useOrganization({
+    membershipList: {},
+  });
+
+  if (!membershipList) {
+    return null;
+  }
+
+  const isCurrentUserAdmin = membership.role === "admin";
+
+  return (
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {membershipList.map((m) => (
+          <li key={m.id}>
+            {m.publicUserData.firstName} {m.publicUserData.lastName} &lt;
+            {m.publicUserData.identifier}&gt; :: {m.role}
+            {isCurrentUserAdmin && <AdminControls membership={m} />}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AdminControls({
+  membership,
+}: {
+  membership: OrganizationMembershipResource;
+}){
+  const [disabled, setDisabled] = useState(false);
+  const {
+    user: { id: userId },
+  } = useUser();
+
+  if (membership.publicUserData.userId === userId) {
+    return null;
+  }
+
+  const remove = async () => {
+    setDisabled(true);
+    await membership.destroy();
+  };
+
+  const changeRole = async (role: MembershipRole) => {
+    setDisabled(true);
+    await membership.update({ role });
+    setDisabled(false);
+  };
+
+  return (
+    <>
+      ::{" "}
+      <button disabled={disabled} onClick={remove}>
+        Remove member
+      </button>{" "}
+      {membership.role === "admin" ? (
+        <button disabled={disabled} onClick={() => changeRole("basic_member")}>
+          Change to member
+        </button>
+      ) : (
+        <button disabled={disabled} onClick={() => changeRole("admin")}>
+          Change to admin
+        </button>
+      )}
+    </>
+  );
+};
+
+// List of pending invitations to an organization. 
+// You can invite new organization members and 
+// revoke already sent invitations.
+function InvitationList() {
+  const { invitationList } = useOrganization();
+
+  if (!invitationList) {
+    return null;
+  }
+
+  const revoke = async (inv) => {
+    await inv.revoke();
+  };
+
+  return (
+    <div>
+      <h2>Invite member</h2>
+      <InviteMember />
+
+      <h2>Pending invitations</h2>
+      <ul>
+        {invitationList.map((i) => (
+          <li key={i.id}>
+            {i.emailAddress} <button onClick={() => revoke(i)}>Revoke</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function InviteMember(){
+  const { organization } = useOrganization();
+  const [emailAddress, setEmailAddress] = useState("");
+  const [role, setRole] = useState<"basic_member" | "admin">("basic_member");
+  const [disabled, setDisabled] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setDisabled(true);
+    await organization.inviteMember({ emailAddress, role });
+    setEmailAddress("");
+    setRole("basic_member");
+    setDisabled(false);
+  };
+
+  return (
+    <form onSubmit={onSubmit}>
+      <input
+        type="text"
+        placeholder="Email address"
+        value={emailAddress}
+        onChange={(e) => setEmailAddress(e.target.value)}
+      />
+      <label>
+        <input
+          type="radio"
+          checked={role === "admin"}
+          onChange={() => {
+            setRole("admin");
+          }}
+        />{" "}
+        Admin
+      </label>
+      <label>
+        <input
+          type="radio"
+          checked={role === "basic_member"}
+          onChange={() => {
+            setRole("basic_member");
+          }}
+        />{" "}
+        Member
+      </label>{" "}
+      <button type="submit" disabled={disabled}>
+        Invite
+      </button>
+    </form>
+  );
+};
+```
+
+```tsx
+import { useState, useEffect } from "react";
+import { useOrganization } from "@clerk/clerk-react";
+import type { OrganizationMembershipResource } from "@clerk/types";
+
+// View and manage active organization members,
+// along with any pending invitations.
+// Invite new members.
+export default function Organization() {
+  const {
+    organization: currentOrganization,
+    membership,
+    isLoaded,
+  } = useOrganization();
+
+  if (!isLoaded || !currentOrganization) {
+    return null;
+  }
+
+  const isAdmin = membership.role === "admin";
+  return (
+    <>
+      <h1>Organization: {currentOrganization.name}</h1>
+      <MemberList />
+      {isAdmin && <InvitationList />}
+    </>
+  );
+}
+
+// List of organization memberships. Administrators can
+// change member roles or remove members from the organization.
+function MemberList() {
+  const { membershipList, membership } = useOrganization({
+    membershipList: {},
+  });
+
+  if (!membershipList) {
+    return null;
+  }
+
+  const isCurrentUserAdmin = membership.role === "admin";
+
+  return (
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {membershipList.map((m) => (
+          <li key={m.id}>
+            {m.publicUserData.firstName} {m.publicUserData.lastName} &lt;
+            {m.publicUserData.identifier}&gt; :: {m.role}
+            {isCurrentUserAdmin && <AdminControls membership={m} />}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AdminControls({
+  membership,
+}: {
+  membership: OrganizationMembershipResource;
+}){
+  const [disabled, setDisabled] = useState(false);
+  const {
+    user: { id: userId },
+  } = useUser();
+
+  if (membership.publicUserData.userId === userId) {
+    return null;
+  }
+
+  const remove = async () => {
+    setDisabled(true);
+    await membership.destroy();
+  };
+
+  const changeRole = async (role: MembershipRole) => {
+    setDisabled(true);
+    await membership.update({ role });
+    setDisabled(false);
+  };
+
+  return (
+    <>
+      ::{" "}
+      <button disabled={disabled} onClick={remove}>
+        Remove member
+      </button>{" "}
+      {membership.role === "admin" ? (
+        <button disabled={disabled} onClick={() => changeRole("basic_member")}>
+          Change to member
+        </button>
+      ) : (
+        <button disabled={disabled} onClick={() => changeRole("admin")}>
+          Change to admin
+        </button>
+      )}
+    </>
+  );
+};
+
+// List of organization pending invitations. 
+// You can invite new organization members and 
+// revoke already sent invitations.
+function InvitationList() {
+  const { invitationList } = useOrganization();
+
+  if (!invitationList) {
+    return null;
+  }
+
+  const revoke = async (inv) => {
+    await inv.revoke();
+  };
+
+  return (
+    <div>
+      <h2>Invite member</h2>
+      <InviteMember />
+
+      <h2>Pending invitations</h2>
+      <ul>
+        {invitationList.map((i) => (
+          <li key={i.id}>
+            {i.emailAddress} <button onClick={() => revoke(i)}>Revoke</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function InviteMember(){
+  const { organization } = useOrganization();
+  const [emailAddress, setEmailAddress] = useState("");
+  const [role, setRole] = useState<"basic_member" | "admin">("basic_member");
+  const [disabled, setDisabled] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setDisabled(true);
+    await organization.inviteMember({ emailAddress, role });
+    setEmailAddress("");
+    setRole("basic_member");
+    setDisabled(false);
+  };
+
+  return (
+    <form onSubmit={onSubmit}>
+      <input
+        type="text"
+        placeholder="Email address"
+        value={emailAddress}
+        onChange={(e) => setEmailAddress(e.target.value)}
+      />
+      <label>
+        <input
+          type="radio"
+          checked={role === "admin"}
+          onChange={() => {
+            setRole("admin");
+          }}
+        />{" "}
+        Admin
+      </label>
+      <label>
+        <input
+          type="radio"
+          checked={role === "basic_member"}
+          onChange={() => {
+            setRole("basic_member");
+          }}
+        />{" "}
+        Member
+      </label>{" "}
+      <button type="submit" disabled={disabled}>
+        Invite
+      </button>
+    </form>
+  );
+};
+```
+
+```js
+<ul id="memberships_list"></ul>
+<ul id="invitations_list"></ul>
+
+<form id="new_invitation">
+  <div>
+    <label>Email address</div>
+    <br />
+    <input type="email" name="email_address" />
+  </div>
+  <button>Invite</button>
+</form>
+
+<script>
+  async function renderMemberships(organization, isAdmin) {
+    const list = document.getElementById("memberships_list");
+    try {
+      const memberships = await organization.getMembers();
+      memberships.map((membership) => {
+        const li = document.createElement("li");
+        li.textContent = `${membership.identifier} - ${membership.role}`;
+
+        // Add administrative actions; update role and remove member.
+        if (isAdmin) {
+          const updateBtn = document.createElement("button");
+          updateBtn.textContent = "Change role";
+          updateBtn.addEventListener("click", async function(e) {
+            e.preventDefault();
+            const role = membership.role === "admin" ?
+              "basic_member" :
+              "admin";
+            await membership.update({ role });
+          });
+          li.appendChild(updateBtn);
+
+          const removeBtn = document.createElement("button");
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", async function(e) {
+            e.preventDefault();
+            await currentOrganization.removeMember(membership.userId);
+          });
+          li.appendChild(removeBtn);
+        }
+
+        // Add the entry to the list
+        list.appendChild(li);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function renderInvitations(organization, isAdmin) {
+    const list = document.getElementById("invitations_list");
+    try {
+      const invitations = await organization.getPendingInvitations();
+      invitations.map((invitation) => {
+        const li = document.createElement("li");
+        li.textContent = `${invitation.emailAddress} - ${invitation.role}`;
+
+        // Add administrative actions; revoke invitation
+        if (isAdmin) {
+          const revokeBtn = document.createElement("button");
+          revokeBtn.textContent = "Revoke";
+          revokeBtn.addEventListener("click", async function(e) {
+            e.preventDefault();
+            await invitation.revoke();
+          });
+          li.appendChild(revokeBtn);
+        }
+        // Add the entry to the list
+        list.appendChild(li);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function init() {
+    // This is the current organization ID.
+    const organizationId = "org_XXXXXXX";
+    const organizationMemberships = await window.Clerk.getOrganizationMemberships()
+    const currentMembership = organizationMemberships.find(membership 
+      => membership.organization.id === organizationId);
+    const currentOrganization = currentMembership.organization;
+    
+    if (!currentOrganization) {
+      return;
+    }
+    const isAdmin = currentMembership.role === "admin";
+
+    renderMemberships(currentOrganization, isAdmin);
+    renderInvitations(currentOrganization, isAdmin);
+
+    if (isAdmin) {
+      const form = document.getElementById("new_invitation");
+      form.addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const inputEl = form.getElementsByTagName("input");
+        if (!inputEl) {
+          return;
+        }
+
+        try {
+          await currentOrganization.inviteMember({
+            emailAddress: inputEl.value,
+            role: "basic_member",
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    }
+  }
+
+  init();
+</script>
+```
+</CodeBlockTabs>
+
+{/* TO-DO: Should we mention the update method on the OrganizationMembership object? Or the updateMember method on the Organization object? Or the updateOrganizationMembership method from the Backend API? */}
+
+{/* TO-DO: ## Remove members plus examples? */}

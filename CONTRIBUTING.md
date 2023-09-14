@@ -168,7 +168,7 @@ yarn add @clerk/nextjs
 ​```
 
 ​```
-pnpm i @clerk/nextjs
+pnpm add @clerk/nextjs
 ​```
 
 </CodeBlockTabs>

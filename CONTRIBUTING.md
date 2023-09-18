@@ -142,10 +142,10 @@ function add(a: number, b: number) {
 ​```
 ```
 
-You can also specify a filename and pass a `copy` attribute to show a copy-to-clipboard button:
+You can also specify a filename:
 
 ```
-​```typescript filename="add.ts" copy
+​```typescript filename="add.ts"
 function add(a: number, b: number) {
   a + b
 }

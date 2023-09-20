@@ -1,5 +1,232 @@
 ---
-sanity_slug: /docs/authentication/user-impersonation
+title: User Impersonation
+description: Learn how to sign in as another user and detect impersonated sessions.
 ---
 
-# This is a stub
+# User Impersonation
+
+User Impersonation allows you to sign in as a different user in your application. It allows administrators to access and operate on an instance as if they were logged in as a different user of that instance.
+
+User Impersonation allows one user (Alice) to interact with your application as another (Bob). For the duration of an impersonated session, the application considers Alice to be Bob. Alice is given all the rights that Bob has, and is indistinguishable from Bob in that context.
+
+User Impersonation can be useful for testing or debugging purposes. It is a powerful feature during troubleshooting or investigation processes carried out by customer support teams.
+
+However, please consider when and how you use User Impersonation. It is advised to seek the impersonated user's consent and respect your users' privacy.
+
+## How it works
+
+Clerk allows developers or admins of an application to sign in as different users. The feature involves two parts:
+
+1. Get an actor token that can be used to sign in as a different user.
+2. Detect an impersonated session as soon as you're signed in.
+
+## Actor tokens
+
+Actor tokens are similar to [sign-in tokens](/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken). They can be used for one-time logins, but they result in impersonated sessions. You can obtain an actor token from our [Backend API](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken).
+
+Actor tokens need to declare the impersonator user (**actor**) and the impersonated user (**subject**). When Alice decides to impersonate Bob, she will issue an actor token. Alice is the actor and Bob is the subject of the Impersonation.
+
+You can also configure the validity duration of an actor token by setting an expiration time, but you can revoke it at any time.
+
+### Creating actor tokens
+
+```bash
+curl -X POST https://api.clerk.com/v1/actor_tokens -d '{ \
+  "user_id": "user_1o4qfak5AdI2qlXSXENGL05iei6", \
+  "expires_in_seconds": 600 \
+  "actor": { \
+    "sub": "user_21Ufcy98STcA11s3QckIwtwHIES", \
+  } \
+}'
+```
+
+The above request will create an actor token that is valid for 600 seconds (10 minutes). Using the generated token will result in user with ID `user_21Ufcy98STcA11s3QckIwtwHIES` (the actor) signing in as user with ID `user_1o4qfak5AdI2qlXSXENGL05iei6` (the subject).
+
+When creating actor tokens, the object that you pass as the "actor" parameter will end up in the authentication token's "act" claim. You can read more details in the [JWT claims](#jwt-claims) section of this document.
+
+### Revoking actor tokens
+
+```bash
+curl -X POST https://api.clerk.com/v1/actor_tokens/act_2EL6mQKzeUtoRwGuLZsznyfkIsH/revoke
+```
+
+The above request will revoke the actor token with ID `act_2EL6mQKzeUtoRwGuLZsznyfkIsH` even if it's not expired yet. Revoked actor tokens can no longer be used for signing in.
+
+### Signing in with an actor token
+
+Actor tokens are consumed the same way as sign in tokens.
+
+Actor tokens can be [created from the Backend API](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken). Once you've successfully created an actor token, you can use the `url` attribute of the response to consume the token and impersonate a user.
+
+The `url` attribute is a [Clerk Frontend API](https://reference.clerk.dev/reference/frontend-api-reference) URL that will use the token to sign out existing users and prepare the sign-in object for impersonation. You can directly visit the `url` provided in the response to consume the actor token.
+
+The Clerk Frontend API will redirect you to the /sign-in page of your application, where you can continue the flow by consuming the `__clerk_ticket` parameter.
+
+If you're using [ClerkJS](/docs/references/javascript/overview) directly and implementing a custom sign in flow, you should provide the token when [creating a sign in attempt](/docs/references/javascript/sign-in/sign-in#create).
+
+## Detecting impersonated sessions
+
+Once a user is signed in as a different user, Clerk provides APIs and helper methods to distinguish an impersonated session from a regular session. It also provides the whole actor object, which contains information about the impersonator user.
+
+### JWT claims
+
+Following the standard [actor claim of RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html#name-act-actor-claim), the Clerk session token includes an `act` claim with the ID of the impersonating user.
+
+```bash
+{
+  "sub": "user_1o4qfak5AdI2qlXSXENGL05iei6",
+  "act": {
+    "sub": "user_21Ufcy98STcA11s3QckIwtwHIES"
+  }
+}
+```
+
+The above JSON snippet shows only two of the claims that the actual session JWT token contains. The `sub` claim is the impersonated user (`user_1o4qfak5AdI2qlXSXENGL05iei6`), while `act.sub` contains the ID of the impersonator (`user_21Ufcy98STcA11s3QckIwtwHIES`).
+
+<Callout type="info">
+  Note that when using a custom JWT template, the `{{session.actor}}` will need to be added as a claim in order to expose it.
+</Callout>
+
+### Frontend
+
+When working with frontend (client-side) code, you can easily detect impersonated sessions and gain access to the actor ID or other information from the `act` claim.
+
+<CodeBlockTabs options={["Next.js", "React", "JavaScript"]}>
+```jsx
+import { useAuth } from "@clerk/nextjs";
+import { withServerSideAuth } from "@clerk/nextjs/ssr";
+
+// SSR authentication context
+export const getServerSideProps = withServerSideAuth(
+  async ({ req }) => {
+    // The request is augmented with an auth object. 
+    // The actor object is available in there.
+    const { userId, actor } = req.auth;
+
+    return {
+      props: { userId, actor },
+    };
+  }
+);
+
+function Home({ userId, actor }) {
+  return (
+    <div>
+      Server side info:
+      <p>
+        {actor && <span>User {actor.sub} has </span>} 
+        signed in as user {userId}
+      </p>
+      
+      <ClientSideInfo />
+    </div>
+  )
+}
+
+function ClientSideInfo() {
+  // Client-side authentication context.
+  const { userId, actor } = useAuth();
+
+  return (
+    <div>
+      Client side info:
+      <p>
+        {actor && <span>User {actor.sub} has </span>} 
+        signed in as user {userId}
+      </p>
+    </div>
+  );
+}
+```
+
+```jsx
+import { useAuth } from "@clerk/react";
+
+function Home() {
+  const { userId, actor } = useAuth();
+
+  return (
+    <div>
+      {actor && <span>user {actor.sub} has </span>}
+      logged in as user {userId}
+    </div>
+  );
+}
+```
+
+```js
+const { session } = window.Clerk;
+
+if (session.actor) {
+  const { actor, user } = session;
+
+  console.log(`User ${actor.sub} is signed in as user ${user.id}.`)
+}
+```
+</CodeBlockTabs>
+
+### Backend
+
+When working with backend code, Clerk provides middleware that can be used in Next.js API routes or directly in express-like Node.js applications. The middleware will provide information about impersonated sessions and the actor ID.
+
+<CodeBlockTabs options={["Next.js", "Node"]}>
+```jsx
+// pages/api/some-handler.js
+import { withAuth } from "@clerk/nextjs/api";
+
+export default withAuth(async (req) => {
+  // The request object is augmented with the 
+  // Clerk authentication context.
+  const { userId, actor } = req.auth;
+
+  // The response includes actor and user IDs.
+  return { data: { userId, actor } };
+});
+```
+
+```js
+import express from "express";
+import { ClerkExpressWithAuth } from "@clerk/clerk-sdk-node";
+
+const app = express();
+
+// Apply the Clerk express middleware
+app.get(
+  "/protected-endpoint", 
+  ClerkExpressWithAuth({
+    // ...options
+  }),
+  (req, res) => {
+    // The request object is augmented with the
+    // Clerk authentication context.
+    const { userId, actor } = req.auth;
+
+    res.json({ userId, actor });
+  }
+);
+
+app.listen(3000, () => { 
+  console.log("Booted.")
+});
+```
+</CodeBlockTabs>
+
+## Impersonate a user from the Clerk Dashboard
+
+If you prefer, you can impersonate a user right from the [Users](https://dashboard.clerk.com/last-active?path=users) page in the Clerk Dashboard.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/custom-flows/users.jpg"
+  alt="The 'Users' page in the Clerk Dashboard. A red arrow points to the active 'Users' tab, showing users how to get to this page."
+/>
+
+To impersonate a user, click on the 3 dots menu icon on the right side of a user's row. A dropdown menu will appear. When you click on the "Impersonate user" option, your application instance should open in a new tab with the impersonated user signed in.
+
+<Images
+  width={}
+  height={}
+  src="/docs/images/custom-flows/impersonate-user.jpg"
+  alt="The 'Users' page in the Clerk Dashboard. A red arrow points to the 3 dots menu icon on the right side of a user's row. A dropdown menu is shown a red arrow pointing to the hovered-over 'Impersonate user' option."
+/>

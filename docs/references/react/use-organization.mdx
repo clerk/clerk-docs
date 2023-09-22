@@ -8,17 +8,40 @@ description: Access attributes of the currently active organization.
 The `useOrganization()` hook gives you access to the current active organization attributes.
 
 ```jsx
-const useOrganizationParams = { 
-  invitationList: { limit, offset }, // Pagination params
-  membershipList: { limit, offset }  // Pagination params
+type useOrganizationParams = {
+  invitationList: {
+    limit?: number;
+    offset?: number;
+    }, // Pagination params
+  membershipRequests: true
+    | (commonPaginationParams & {
+        status?: OrganizationInvitationStatus; // e.g. "pending"
+      });
+  memberships: true
+    | (commonPaginationParams & {
+        role?: MembershipRole[]; // e.g. ["basic_member", "admin"]
+      });
+  domains: true
+    | (commonPaginationParams & {
+        enrollmentMode?: OrganizationEnrollmentMode; // e.g. "auomatic_invitation"
+      });
 };
+
+type commonPaginationParams = {
+  initialPage?: number;
+  pageSize?: number;
+  infinite?: boolean;
+  keepPreviousData?: boolean;
+}
 
 const { 
   isLoaded,
   organization,
-  invitationList,
-  membershipList,
   membership,
+  invitationList,
+  memberships,
+  membershipRequest,
+  domains,
 } = useOrganization(useOrganizationParams);
 ```
 
@@ -26,9 +49,9 @@ const {
   These attributes are updating automatically and will re-render their respective components whenever you set a different organization using the [`setActive({ organization })`](/docs/references/javascript/clerk/session-methods#set-active) method or update any of the memberships or invitations. No need for you to manage updating anything manually.
 </Callout>
 
-### Expanding `invitationList` and/or `membershipList`
+### Expanding and paginating attributes
 
-To keep network usage to a minimum but to also provide a smooth auto-updating experience to developers, we made the `invitationList` and `membershipList` attributes being available only when their respective parameters are present when calling the hook.
+To keep network usage to a minimum but to also provide a smooth auto-updating experience to developers, we made the `invitationList` attribute available only when its respective parameter is present when calling the hook.
 
 ```jsx
 const { invitationList } = useOrganization();
@@ -40,13 +63,15 @@ const { invitationList } = useOrganization({
 // invitationList is retrieved and auto-updating as expected.
 ```
 
+In addition, we support a paginated response with page fetching helper functions for `memberships`, `membershipRequests`, and `domains`. See [usage](#usage) below for an example.
+
 ## Usage
 
 <Callout type="warning">
   Make sure you've followed the installation guide for [Clerk React](/docs/references/react/overview) before running the snippets below.
 </Callout>
 
-In the following example, `useOrganization` is used to map over the `membershipList` of the current active organization and present membership attributes.
+In the following example, `useOrganization` is used to map over the `memberships` of the current active organization and present membership attributes. In addition, buttons support navigating through the paginated response.
 
 <Callout type="info">
   Note that your component must be a descendant of [`<ClerkProvider/>`](/docs/components/clerk-provider).
@@ -56,11 +81,14 @@ In the following example, `useOrganization` is used to map over the `membershipL
 import { useOrganization } from "@clerk/nextjs";
 
 export default function MemberList() {
-  const { membershipList, membership } = useOrganization({
-    membershipList: {},
+  const { memberships } = useOrganization({
+    memberships: {
+      infinite: true,
+      keepPreviousData: true,
+    },
   });
 
-  if (!membershipList) {
+  if (!memberships) {
     // loading state
     return null;
   }
@@ -69,13 +97,26 @@ export default function MemberList() {
     <div>
       <h2>Organization members</h2>
       <ul>
-        {membershipList.map((membership) => (
+        {memberships.map((membership) => (
           <li key={membership.id}>
             {membership.publicUserData.firstName} {membership.publicUserData.lastName} &lt;
             {membership.publicUserData.identifier}&gt; :: {membership.role}
           </li>
         ))}
       </ul>
+
+      <button
+        disabled={!memberships.hasPreviousPage}
+        onClick={memberships.fetchPrevious}
+      >
+        Prev
+      </button>
+      <button
+        disabled={!memberships.hasNextPage}
+        onClick={memberships.fetchNext}
+      >
+        Next
+      </button>
     </div>
   );
 }

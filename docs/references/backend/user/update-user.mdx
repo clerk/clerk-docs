@@ -36,60 +36,90 @@ const user = await clerkClient.users.updateUser(userId, params);
 
 ## Examples
 
-<CodeBlockTabs options={["Next.js App Router", "Next.js Pages Router", "Node"]}>
+<CodeBlockTabs options={["Next.js App Router", "Next.js Pages Router", "Node", "Remix"]}>
 ```tsx filename="app/page.[jsx/tsx]"
-import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAuth, clerkClient } from '@clerk/nextjs/server';
 
-export async function POST() {
-  // Get the user ID from the session
-  const { userId } = auth();
+// If you use `request` you don't need the type
+export async function POST(req: NextRequest) {
 
-  if (!userId) return NextResponse.redirect('/sign-in');
-  
-  // The user attributes to update
-  const params = { firstName: 'John', lastName: 'Wick' };
+	// Get the user ID from the session
+	const { userId } = getAuth(req);
 
-  const user = await clerkClient.users.updateUser(userId, params);
+	if (!userId) return NextResponse.redirect('/sign-in');
 
-  return NextResponse.json({ user });
+	// The user attributes to update
+	const params = { firstName: 'John', lastName: 'Wick' };
+
+	const user = await clerkClient.users.updateUser(userId, params);
+
+	return NextResponse.json({ user });
 }
+
 ```
 
 ```tsx filename="pages/api/updateUser.[jsx/tsx]"
-import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs';
+import { clerkClient, getAuth } from '@clerk/nextjs/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-export async function POST() {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+
   // Get the user ID from the session
-  const { userId } = auth();
+  const { userId } = getAuth(req);
 
-  if (!userId) return NextResponse.redirect('/sign-in');
-  
+  if (!userId) {
+    return res.status(500).json({ error: "No valid user" })
+  }
+
   // The user attributes to update
   const params = { firstName: 'John', lastName: 'Wick' };
 
   const user = await clerkClient.users.updateUser(userId, params);
 
-  return NextResponse.json({ user });
+  return res.status(200).json({ user });
 }
 ```
 
 ```js filename="updateUser.js"
-import { clerk } from '@clerk/clerk-sdk-node';
+import clerk from '@clerk/clerk-sdk-node';
 
-export async function POST(req, res) {
-  // Get the user ID from the session
-  const { userId } = req.session;
-
-  if (!userId) return res.redirect('/sign-in');
+app.post('/api/update-user',
+  // ClerkExpressRequireAuth returns an error for unauthorized requests
+  ClerkExpressRequireAuth(),
+  // Optionally ClerkExpressWithAuth returns an empty user with no error
+  // ClerkExpressWithAuth(),
+  async (req, res) => {
   
+    // Get the user ID from req.auth
+    const userId = req.auth.userId
+
+    // The user attributes to update
+    const params = { firstName: "John", lastName: "Wick" }
+
+    const updatedUser = await clerk.users.updateUser(userId, params)
+
+    res.json({ updatedUser })
+  })
+
+
+```
+
+```js filename="app/routes/profile.[jsx/tsx]"
+import { createClerkClient } from "@clerk/remix/api.server"
+import { getAuth } from "@clerk/remix/ssr.server"
+import { ActionFunction, json } from "@remix-run/node"
+
+export const action: ActionFunction = async (req) => {
+  // Get the user ID from the session
+  const { userId } = await getAuth(req)
+
   // The user attributes to update
   const params = { firstName: 'John', lastName: 'Wick' };
 
-  const user = await clerk.users.updateUser(userId, params);
+  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params)
 
-  return res.json({ user });
+  return json({ user })
 }
 ```
 </CodeBlockTabs>

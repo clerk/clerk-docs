@@ -1,3 +1,177 @@
 ---
-sanity_slug: /docs/reference/clerk-react/useorganization
+title: useOrganization()
+description: Access attributes of the currently active organization.
 ---
+
+# `useOrganization()`
+
+The `useOrganization()` hook gives you access to the current active organization attributes.
+
+```jsx
+const { 
+  isLoaded,
+  organization,
+  membership,
+  invitationList,
+  memberships,
+  membershipRequest,
+  domains,
+} = useOrganization(useOrganizationParams);
+```
+
+<Callout type="info">
+  These attributes are updating automatically and will re-render their respective components whenever you set a different organization using the [`setActive({ organization })`](/docs/references/javascript/clerk/session-methods#set-active) method or update any of the memberships or invitations. No need for you to manage updating anything manually.
+</Callout>
+
+### Expanding and paginating attributes
+
+To keep network usage to a minimum but to also provide a smooth auto-updating experience to developers, we made the `invitationList` attribute available only when its respective parameter is present when calling the hook.
+
+```jsx
+const { invitationList } = useOrganization();
+// invitationList is undefined.
+
+const { invitationList } = useOrganization({ 
+ invitationList: {} // Add any pagination params you might need.
+});
+// invitationList is retrieved and auto-updating as expected.
+```
+
+In addition, we support a paginated response with page fetching helper functions for `memberships`, `membershipRequests`, and `domains`. See [usage](#usage) below for an example.
+
+## Usage
+
+<Callout type="warning">
+  Make sure you've followed the installation guide for [Clerk React](/docs/references/react/overview) before running the snippets below.
+</Callout>
+
+In the following example, `useOrganization()` is used to map over the `memberships` of the current active organization and present membership attributes. In addition, buttons support navigating through the paginated response.
+
+<Callout type="info">
+  Note that your component must be a descendant of [`<ClerkProvider/>`](/docs/components/clerk-provider).
+</Callout>
+
+```jsx
+import { useOrganization } from "@clerk/nextjs";
+
+export default function MemberList() {
+  const { memberships } = useOrganization({
+    memberships: {
+      infinite: true,
+      keepPreviousData: true,
+    },
+  });
+
+  if (!memberships) {
+    // loading state
+    return null;
+  }
+
+  return (
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {memberships.data?.map((membership) => (
+          <li key={membership.id}>
+            {membership.publicUserData.firstName} {membership.publicUserData.lastName} &lt;
+            {membership.publicUserData.identifier}&gt; :: {membership.role}
+          </li>
+        ))}
+      </ul>
+
+      <button
+        disabled={!memberships.hasPreviousPage}
+        onClick={memberships.fetchPrevious}
+      >
+        Prev
+      </button>
+      <button
+        disabled={!memberships.hasNextPage}
+        onClick={memberships.fetchNext}
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+```
+
+To see a demo application utilising the hook and the organizations feature, take a look at our [organizations demo repository](https://github.com/clerkinc/organizations-demo).
+
+## Parameters
+
+`useOrganization()` accepts a single object with the following optional properties:
+
+| Properties | Description |
+| --- | --- |
+| `inivtationList?` | [`PaginationParams`](#pagination-params) |
+| `membershipRequests?` | [`CommonPaginatedParams`](#common-paginated-params) and [`OrganizationInvitationStatus`](#organization-invitation-status) |
+| `memberships?` | [`CommonPaginatedParams`](#common-paginated-params) and [`MembershipRole?`](#membership-role) |
+| `domains?` | [`CommonPaginatedParams`](#commonpaginated-params) and [`OrganizationEnrollmentMode`](#organization-enrollment-mode) |
+
+### `PaginationParams`
+
+| Properties | Description |
+| --- | --- |
+| `limit?` | The number of results to return. |
+| `offset?` | The number of results to skip. |
+
+### `CommonPaginatedParams`
+
+`CommonPaginatedParams` can be either `true` or an object with the properties described below. If set to `true`, all of the default values will be used.
+
+| Properties | Description |
+| --- | --- |
+| `initialPage?` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. Defaults to `1`. |
+| `pageSize?` | A number that indicates the maximum number of results that should be returned for a specific page. Defaults to `10`. |
+| `keepPreviousData?` | If `true`, it will persist the cached data until the new data has been fetched. Defaults to `false`. |
+| `infinite?` | If `true`, the new downloaded data will be appended to the list with the existing data. Ideal for infinite lists. Defaults to `false`. |
+
+### `OrganizationInvitationStatus`
+
+```typescript
+type OrganizationInvitationStatus = "pending" | "accepted" | "revoked";
+```
+
+### `MembershipRole`
+
+```typescript
+type MembershipRole = "admin" | "basic_member";
+```
+
+### `OrganizationEnrollmentMode`
+
+```typescript
+type OrganizationEnrollmentMode = "manual_invitation" | "automatic_invitation" | "automatic_suggestion";
+```
+
+## Returns
+
+The `memberships`, `membershipRequests`, and `domains` are returned as paginated lists.
+
+| Variables | Description |
+| --- | --- |
+| `isLoaded` | A boolean is set to `false` until Clerk loads and initializes. Once Clerk loads, `isLoaded` will be set to `true`. |
+| `organization` | The current active organization. |
+| `membership` | The current organization membership. |
+| `invitationList` | List of invitations for the current organization. |
+| `memberships` | API for fetching [paginated resources](#paginated-resources). |
+| `membershipRequests` | API for fetching [paginated resources](#paginated-resources). |
+| `domains` | API for fetching [paginated resources](#paginated-resources). |
+
+### `PaginatedResources`
+
+| Variables | Description |
+| --- | --- |
+| `data` | An array that contains the fetched data. |
+| `count` | The total count of data that exist remotely. |
+| `isLoading` | A boolean that is `true` if there is an ongoing request and there is no fetched data. |
+| `isFetching` | A boolean that is `true` if there is an ongoing request or a revalidation. |
+| `isError` | A boolean that indicates the request failed. |
+| `page` | A number that indicates the current page. |
+| `pageCount` | A number that indicates the total amount of pages. It is calculated based on `count` , `initialPage` , and `pageSize` |
+| `fetchPage` | A function that triggers a specific page to be loaded. |
+| `fetchPrevious` | A helper function that triggers the previous page to be loaded. This is the same as `fetchPage(page=> Math.max(0, page - 1))` |
+| `fetchNext` | A helper function that triggers the previous page to be loaded. This is the same as `fetchPage(page=> Math.max(0, page + 1))` |
+| `hasNextPage` | A boolean that indicates if there are available pages to be fetched. |
+| `hasPreviousPage` | A boolean that indicates if there are available pages to be fetched. |

@@ -1,5 +1,131 @@
 ---
-sanity_slug: /docs/integration/convex
+title: Convex
+description: Learn how to integrate Clerk into your Convex application.
 ---
 
-# This is a stub
+# Getting started
+
+Navigate to the [JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates) screen from the Clerk Dashboard. Click on the **New template** button to create a new template based on Convex.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/integrations/convex/jwt-templates.webp"
+  alt="The JWT Templates page in the Clerk Dashboard. The 'New template' button was clicked, and a pop up titled 'New JWT template' is shown. The 'Convex' template is hovered over."
+/>
+
+Once the Convex template is created, you will be redirected to the template's page. You can now configure the template to your needs.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/integrations/convex/create-template.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard."
+/>
+
+The Convex template will pre-populate the default audience (`aud`) claim required by Convex. You can include additional claims as necessary. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/integrations/convex/template-shortcodes.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard. The page is scrolled down to the 'Claims' section."
+/>
+
+By default, Clerk will sign the JWT with a private key automatically generated for your application, which is what most developers use for Convex. If you so choose, you can customize this key.
+
+## Configure Convex
+
+The next step is to configure Convex with the issuer domain provided by Clerk. From your Clerk **JWT template** screen, find the **Issuer** input and click to **Copy** the URL.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/integrations/convex/template-issuer.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard. There is a red box surrounding the 'Issuer' section."
+/>
+
+In your terminal, run the following command from your Convex app directory:
+
+```sh filename="terminal"
+npx convex auth add
+```
+
+Paste the **Issuer** URL you copied when it prompts you for the identity provider's URL.
+
+The application/client ID will need to match the `aud` claim (default is `convex`).
+
+```sh
+? Enter the identity providers Domain URL: https://your-issuer-url.clerk.accounts.dev/
+? Enter your application/client ID with this identity provider: convex
+? Would you like to add another provider? No
+? Configuration updated. Run npx convex dev or npx convex deploy to sync these changes.
+```
+
+## Configure the providers
+
+Both Clerk and Convex have Provider components that are required to wrap your React application to provide the authentication and client context.
+
+```jsx
+import "../styles/globals.css";
+import { useEffect } from "react";
+import { ClerkProvider, useAuth } from "@clerk/nextjs";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL);
+
+function ClerkConvexAdapter() {
+  const { getToken, isSignedIn } = useAuth();
+
+  useEffect(() => {
+    if (isSignedIn) {
+      convex.setAuth(async () =>
+        getToken({ template: "convex", skipCache: true })
+      );
+    } else {
+      convex.clearAuth();
+    }
+  }, [getToken, isSignedIn]);
+  return null;
+}
+
+export default function MyApp({ Component, pageProps }) {
+  return (
+    <ClerkProvider
+      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+    >
+      <ConvexProvider client={convex}>
+        <ClerkConvexAdapter />
+        <Component {...pageProps} />
+      </ConvexProvider>
+    </ClerkProvider>
+  );
+}
+```
+
+## Access user identity
+
+In some cases, you may need to access the user when using Convex queries and mutations. You can use the `getUserIdentity()` method provided on the `auth` property, which is passed to the context argument of every Convex function invocation.
+
+```ts filename="convex/getUser.ts"
+import type { UserIdentity } from 'convex/server';
+import { query } from './_generated/server';
+
+export default query(async ({ auth }): Promise<UserIdentity | null> => {
+  const identity = await auth.getUserIdentity();
+
+  return identity;
+});
+```
+
+The identity object should be match the [openID spec](https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims), you can update the JWT template to include them for example:
+
+```sh
+{
+  "email": "{{user.primary_email_address}}",
+  "picture": "{{user.profile_image_url}}",
+  "given_name": "{{user.first_name}}",
+  "family_name": "{{user.last_name}}",
+  "email_verified": "{{user.email_verified}}"
+}
+```

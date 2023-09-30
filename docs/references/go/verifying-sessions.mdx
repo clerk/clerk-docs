@@ -1,5 +1,102 @@
 ---
-sanity_slug: /docs/reference/golang/verifying-a-session
+title: Veryifing a session | Clerk Go SDK
+description: Learn how to verify a session with Clerk in your Go application.
 ---
 
-# This is a stub
+# Verifying a session in Go
+
+## Protect Your Backend APIs
+
+Go makes it really easy to create a simple HTTP server, and Clerk makes it simple to authenticate any request. The following examples shows how to verify a session and retrieve the corresponding user.
+
+<InjectKeys>
+
+```go
+package main
+
+import (
+	"net/http"
+	"strings"
+	
+	"github.com/clerkinc/clerk-sdk-go/clerk"
+)
+
+func main() {
+	client, _ := clerk.NewClient({{secret}})
+
+	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		// get session token from Authorization header
+		sessionToken := r.Header.Get("Authorization")
+		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
+		
+		// verify the session
+		sessClaims, err := client.VerifyToken(sessionToken)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Unauthorized"))
+			return
+		}
+
+		// get the user, and say welcome!
+		user, err := client.Users().Read(sessClaims.Claims.Subject)
+		if err != nil {
+			panic(err)
+		}
+
+		w.Write([]byte("Welcome " + *user.FirstName))
+	})
+
+	http.ListenAndServe(":8080", nil)
+}
+```
+
+</InjectKeys>
+
+## Using middleware
+
+The Clerk SDK also provides a simple middleware that adds the active session to the request's context.
+
+<InjectKeys>
+
+```go
+package main
+
+import (
+	"net/http"
+	
+	"github.com/clerkinc/clerk-sdk-go/clerk"
+)
+
+func main() {
+	client, _ := clerk.NewClient({{secret}})
+	
+	mux := http.NewServeMux()
+
+	injectActiveSession := clerk.WithSession(client)
+	mux.Handle("/hello", injectActiveSession(helloUserHandler(client)))
+
+	http.ListenAndServe(":8080", mux)
+}
+
+func helloUserHandler(client clerk.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		
+		sessClaims, ok := ctx.Value(clerk.ActiveSessionClaims).(*clerk.SessionClaims)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("Unauthorized"))
+			return
+		}
+
+		user, err := client.Users().Read(sessClaims.Claims.Subject)
+		if err != nil {
+			panic(err)
+		}
+
+		w.Write([]byte("Welcome " + *user.FirstName))
+	}
+}
+```
+
+</InjectKeys>

@@ -1,5 +1,45 @@
 ---
-sanity_slug: /docs/reference/ruby/rack-rails-integration
+title: Rack/Rails integration | Clerk Ruby SDK
+description: The Clerk SDK comes with Rack middleware and a gem that can be used in Rails apps.
 ---
 
-# This is a stub
+# Rack/Rails integration
+
+## Rack middleware
+
+The SDK comes with a Rack middleware which lazily loads the Clerk session and user. It inserts a clerk key in the Rack environment, which is an instance of `Clerk::Proxy`. To get the session or the user of the session, you call `session` or `user` respectively. In case there is no session, you can retrieve the API error with the `error` getter method.
+
+## Rails integration
+
+If you add the gem in a Rails app, the Rack middleware will be included automatically in the middleware stack. For easier access to the Clerk session and user, include the `Clerk::Authenticatable` concern in your controller:
+
+```ruby
+require "clerk/authenticatable"
+
+class ApplicationController < ActionController::Base
+  include Clerk::Authenticatable
+end
+```
+
+This gives your controller and views access to the following methods:
+
+- `clerk_session`
+- `clerk_user`
+- `clerk_user_signed_in?`
+
+## Protected controllers
+
+If you want to protect a subset of your controllers (for example, if you have an admin section), you can add a `before_filter` like this:
+
+```ruby
+class AdminsController < ApplicationController
+  before_action :require_clerk_session
+
+  private
+  def require_clerk_session
+    redirect_to clerk_sign_in_url unless clerk_session
+  end
+end
+```
+
+Don't forget to set the environment variable `CLERK_SIGN_IN_URL` or the method `clerk_sign_in_url` will fail.

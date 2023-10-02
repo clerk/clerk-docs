@@ -1,5 +1,166 @@
 ---
-sanity_slug: /docs/integration/supabase
+title: Integrate Supabase with Clerk
+description: Learn how to integrate Clerk into your Supabase application.
 ---
 
-# This is a stub
+# Integrate Supabase with Clerk
+
+The first step is to create a new Clerk application from your Clerk Dashboard if you haven’t done so already. You can choose whichever authentication strategy and social login providers you prefer. For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
+
+After your Clerk application has been created, navigate to the [JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates) screen from the Clerk Dashboard. Click on the **New template** button to create a new template based on Supabase.
+
+<Images 
+  width={3024}
+  height={1652}
+  src="/docs/images/integrations/supabase/jwt-template.webp"
+  alt="The JWT Templates page in the Clerk Dashboard. The 'New template' button was clicked, and a pop up titled 'New JWT template' is shown. The 'Supabase' template is hovered over."
+/>
+
+Once the Supabase template is created, you will be redirected to the template's page. You can now configure the template to your needs.
+
+<Images 
+  width={3024}
+  height={1652}
+  src="/docs/images/integrations/supabase/create-template.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard."
+/>
+
+The Supabase template will pre-populate the default claims required by Supabase. You can include additional claims as necessary. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
+
+<Images 
+  width={3024}
+  height={1652}
+  src="/docs/images/integrations/supabase/template-shortcodes.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard. The page is scrolled down to the 'Claims' section."
+/>
+
+Supabase requires that JWTs be signed with the H256 signing algorithm and use their signing key. You can locate the JWT secret key in your Supabase project under **Settings --> API** in the *Config* section.
+
+<Images 
+  width={2406}
+  height={1308}
+  src="/docs/images/integrations/supabase/jwt-secret-key.webp"
+  alt="The 'Create new template' page of the JWT Templates page in the Clerk Dashboard. The page is scrolled down to the 'Claims' section."
+/>
+
+Reveal the JWT secret to copy it and then paste it in the **Signing key field** in the Clerk JWT template. ​​After the key is added, you can click the Apply Changes button to save your template.
+
+<Images 
+  width={2392}
+  height={1300}
+  src="/docs/images/integrations/supabase/signing-key.webp"
+  alt="The Supabase JWT template in the Clerk Dashboard. A red box is surrounding the 'Signing Key' section."
+/>
+
+## Configure your client
+
+To configure your client, you need to set some local environment variables. Assuming a React application, set the following:
+
+```js filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_aGFuZHktZ251LTIwLmNsZXJrLmFjY291bnRzLmRldiQ
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_KEY=your-supabase-anon-key
+```
+
+You can find your Frontend API value by navigating to the [API keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard and copying your **Publishable key**.
+
+<Images
+  width={3024}
+  height={1648}
+  src="/docs/images/integrations/publishable-key.webp"
+  alt="The API keys page in the Clerk Dashboard. There is a red arrow pointing to the copy button next to the 'Publishable key'."
+/>
+
+To get the ones needed for Supabase, navigate to the same **Settings > API page** as before and locate the **anon public key** and **URL**.​
+
+<Images
+  width={2392}
+  height={1300}
+  src="/docs/images/integrations/supabase/api-keys.webp"
+  alt="The 'API' page in the Supabase Dashboard. There is a red box surrounding the 'anon public key' and 'URL' fields."
+/>
+
+<Callout type="info">
+  Note: Supabase recommends enabling [Row Level Security (RLS)](https://supabase.com/docs/guides/auth/row-level-security) for your database tables and configuring access policies as needed.
+</Callout>
+
+After setting those three environment variables, you should be able to start up your application development server.
+
+Install the JavaScript client for Supabase with:
+
+```sh filename="terminal"
+npm install @supabase/supabase-js
+```
+
+You can then initialize the Supabase client by passing it the environment variables and the access token from Clerk.
+
+```jsx
+import { useAuth } from '@clerk/clerk-react';
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseClient = async (supabaseAccessToken) => {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_KEY, {
+      global: { headers: { Authorization: `Bearer ${supabaseAccessToken}` } },
+    });
+    // set Supabase JWT on the client object,
+    // so it is sent up with all Supabase requests
+    return supabase;
+  };
+  
+function App() {
+  const { getToken } = useAuth();
+
+  const fetchData = async () => {
+    // TODO #1: Replace with your JWT template name
+    const supabaseAccessToken = await getToken({ template: 'supabase' });
+
+    const supabase = await supabaseClient(supabaseAccessToken);
+    
+    // TODO #2: Replace with your database table name
+    
+    const { data, error } = await supabase.from('your_table').select();
+
+    // TODO #3: Handle the response
+  };
+
+  return (
+    <div className="app">
+      <button onClick={fetchData}>Fetch data</button>
+    </div>
+  );
+}
+```
+
+## Access user ID in RLS policies
+
+It is common practice to need access to the user identifier on the database level, especially when working with RLS policies in Postgres. Although Supabase provides a special function `auth.uid()` to extract the user ID from the JWT, this [does not currently work](https://github.com/orgs/supabase/discussions/4954) with Clerk. The workaround is to write a custom SQL function to read the sub property from the JWT claims.
+
+In the **SQL Editor** section of the Supabase dashboard, click New Query and enter the following:
+
+```json
+create or replace function requesting_user_id()
+returns text 
+language sql stable
+as $$
+  select nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::text;
+$$;
+```
+
+This will create a `requesting_user_id()` function that can be used within an RLS policy.
+
+For example, this policy would check that the user making the request is authenticated and matches the `user_id` column of a todos table.
+
+```json
+CREATE POLICY "Authenticated users can update their own todos" 
+	ON public.todos FOR UPDATE USING (
+		auth.role() = 'authenticated'::text
+	) WITH CHECK (
+		requesting_user_id() = user_id
+	);
+```
+
+## Next steps
+
+- Get started with our official [clerk-supabase-starter](https://github.com/clerkinc/clerk-supabase-starter) repo
+- Check out our [Next.js + Supabase + Clerk tutorial​](https://clerk.com/blog/nextjs-supabase-todos-with-multifactor-authentication)
+- Try adding some [custom claims](/docs/backend-requests/making/jwt-templates) to the JWT template in `app_metadata` or `user_metadata`

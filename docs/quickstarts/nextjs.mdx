@@ -275,104 +275,54 @@ export default function Example() {
 
 ### Server side
 
-#### API Routes
+#### App Router
 
-<Tabs items={["App Router", "Pages Router"]}>
-<Tab>
-For Next.js applications using the App Router, you can protect your API routes by using the [`auth`](/docs/references/nextjs/auth) helper. 
+[`getAuth()`](/docs/references/nextjs/get-auth) will retrieve the userId of a authenticated user in your Route Handlers. Any requests from a Client Component will automatically include the user's current token as the Bearer token. [`auth()`](/docs/references/nextjs/auth) and [`currentUser()`](/docs/references/nextjs/current-user) are new helpers that you can user inside of your Server Components and Actions.
 
-```tsx filename="app/api/user/route.[jsx/tsx]"
-import { NextResponse } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
- 
-export async function POST(req: Request, res: NextResponse) {  
-  const { userId } = getAuth(req);
-  
-  if(!userId){
-    return NextResponse("Unauthorized", { status: 401 });
-  }
-
-  // Perform your Route Handler's logic
-
-  return NextResponse.json({ userId }, { status: 200 });
-}
-```
-</Tab>
-
-<Tab>
-For Next.js apps using the Pages Router, you can protect your API routes by using the [`getAuth`](/docs/references/nextjs/get-auth) helper and retrieve data from your own systems.
-
-```tsx filename="pages/api/auth.ts"
-import type { NextApiRequest, NextApiResponse } from "next";
-import { getAuth } from "@clerk/nextjs/server";
-
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { userId } = getAuth(req);
-
-  if (!userId) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  // retrieve data from your database
-
-  res.status(200).json({});
-}
-```
-</Tab>
-</Tabs>
-
-In some cases, you may need the full [`User`][user-object] object. For example, if you want to access the user's email address address or name. You can use the [`clerkClient`](/docs/references/backend/overview) helper to get the full [`User`][user-object] object.
-
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-```tsx filename="app/api/user/route.ts"
-import { NextResponse } from 'next/server';
-import { clerkClient, getAuth } from "@clerk/nextjs/server";
-
-export async function POST(req: Request, res: NextResponse) {  
-  const { userId } = getAuth(req);
-  
-  if(!userId){
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
-  const user = await clerkClient.users.getUser(userId);
-
-  // Perform your Route Handler's logic with the returned user object
-
-  return NextResponse.json({"user": user}, { status: 200})
-}
-````
-
-```tsx filename="pages/api/auth.ts"
-import { clerkClient } from "@clerk/nextjs";
-import { getAuth } from "@clerk/nextjs/server";
-import type { NextApiRequest, NextApiResponse } from "next";
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const { userId } = getAuth(req);
-
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const user = userId ? await clerkClient.users.getUser(userId) : null;
-
-  // use the user object to decide what data to return
-
-  return res.status(200).json({});
-}
-```
-</CodeBlockTabs>
-
-### Server side render user data
-
-<Tabs items={["App Router", "Pages Router"]}>
+<Tabs items={["Route Handler", "Route Handler w/ User Fetch", "auth()", "currentUser()"]}>
   <Tab>
-    [`auth()`](/docs/references/nextjs/auth) and [`currentUser()`](/docs/references/nextjs/current-user) are new helpers that you can user inside of your Server Components and Actions.
+    For Next.js applications using the App Router, you can protect your API routes by using the [`auth`](/docs/references/nextjs/auth) helper. 
+
+    ```tsx filename="app/api/user/route.[jsx/tsx]"
+    import { NextResponse } from 'next/server';
+    import { getAuth } from '@clerk/nextjs/server';
+ 
+    export async function POST(req: Request, res: NextResponse) {  
+      const { userId } = getAuth(req);
+  
+      if(!userId){
+        return NextResponse("Unauthorized", { status: 401 });
+      }
+
+      // Perform your Route Handler's logic
+
+      return NextResponse.json({ userId }, { status: 200 });
+    }
+    ```
+  </Tab>
+  <Tab>
+    In some cases, you may need the full [`User`][user-object] object. For example, if you want to access the user's email address address or name. You can use the [`clerkClient`](/docs/references/backend/overview) helper to get the full [`User`][user-object] object.
+
+   ```tsx filename="app/api/user/route.ts"
+   import { NextResponse } from 'next/server';
+    import { clerkClient, getAuth } from "@clerk/nextjs/server";
+
+    export async function POST(req: Request, res: NextResponse) {  
+      const { userId } = getAuth(req);
+  
+      if(!userId){
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+
+     const user = await clerkClient.users.getUser(userId);
+
+      // Perform your Route Handler's logic with the returned user object
+
+     return NextResponse.json({"user": user}, { status: 200})
+    }
+  ```
+  </Tab>
+  <Tab>
     
     #### **`auth()`**
 
@@ -388,7 +338,9 @@ export default async function handler(
       // ...
     }
     ```
+    </Tab>
 
+    <Tab>
     #### **`currentUser()`**
 
     [`currentUser()`](/docs/references/nextjs/current-user) loads the [`User`][user-object] object for the authenticated user from Clerk's backend API. This is helpful if you want to render information, like their first and last name, directly from the server.
@@ -403,7 +355,60 @@ export default async function handler(
       // ...
     }
     ```
-     </Tab>
+  </Tab>
+
+</Tabs>
+
+#### Pages Router
+
+<Tabs items={["Api Route", "Api Route w/ User Fetch", "getServerSideProps"]}>
+
+  <Tab>
+    For Next.js apps using the Pages Router, you can protect your API routes by using the [`getAuth`](/docs/references/nextjs/get-auth) helper and retrieve data from your own systems.
+
+    ```tsx filename="pages/api/auth.ts"
+    import type { NextApiRequest, NextApiResponse } from "next";
+    import { getAuth } from "@clerk/nextjs/server";
+
+    export default function handler(req: NextApiRequest, res: NextApiResponse) {
+      const { userId } = getAuth(req);
+
+      if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // retrieve data from your database
+  
+      res.status(200).json({});
+    }
+    ```
+  </Tab>
+  <Tab>
+
+    ```tsx filename="pages/api/auth.ts"
+    import { clerkClient } from "@clerk/nextjs";
+    import { getAuth } from "@clerk/nextjs/server";
+    import type { NextApiRequest, NextApiResponse } from "next";
+
+    export default async function handler(
+      req: NextApiRequest,
+      res: NextApiResponse
+    ) {
+      const { userId } = getAuth(req);
+
+      if (!userId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const user = userId ? await clerkClient.users.getUser(userId) : null;
+
+      // use the user object to decide what data to return
+
+      return res.status(200).json({});
+    }
+    ```
+  </Tab>
 
   <Tab>
     You can access the active session and user data in your `getServerSideProps` using the [`getAuth`](/docs/references/nextjs/get-auth) helper.
@@ -445,7 +450,10 @@ export default async function handler(
     };
     ```
   </Tab>
+
+
 </Tabs>
+
 
 ## Next steps
 

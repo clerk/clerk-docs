@@ -36,23 +36,71 @@ You can choose any path you'd like, but it must be unique and not conflict with 
 
 #### Example Configuration
 
-<Callout type="info">Every proxy configuration will be different and we're here to help. Please reach out if there's a specific use-case you're looking to solve.</Callout>
-
-```conf filename="nginx.conf"
-http {
-  # ...
-  server {
-    # ...
-    location /__clerk/ {
-      rewrite ^/__clerk/(.*)$ /$1 break;
-      proxy_pass https://frontend-api.clerk.dev;
-      proxy_set_header Clerk-Proxy-Url https://app.dev/__clerk;
-      proxy_set_header Clerk-Secret-Key sk_live_***;
-      proxy_redirect off;
+<Tabs items={['Nginx', 'Cloudflare Workers']}>
+  <Tab>
+    ```conf filename="nginx.conf"
+    http {
+      # ...
+      server {
+        # ...
+        location /__clerk/ {
+          rewrite ^/__clerk/(.*)$ /$1 break;
+          proxy_pass https://frontend-api.clerk.dev;
+          proxy_set_header Clerk-Proxy-Url https://app.dev/__clerk;
+          proxy_set_header Clerk-Secret-Key sk_live_***;
+          proxy_redirect off;
+        }
+      }
     }
-  }
-}
-```
+    ```
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["Handler", "Wrangler Config", "Environment", "Types"]}>
+      ```ts filename="src/index.ts"
+        export default {
+          async fetch(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+            const url = req.url.replace(env.CLERK_PROXY_URL, env.CLERK_FAPI)
+            const proxyReq = new Request(req, {
+              redirect: 'manual',
+            });
+
+            proxyReq.headers.set('Clerk-Proxy-Url', env.CLERK_PROXY_URL);
+            proxyReq.headers.set('Clerk-Secret-Key', env.CLERK_SECRET_KEY);
+            proxyReq.headers.set('X-Forwarded-For', req.headers.get('CF-Connecting-IP') || '');
+
+            return fetch(url, proxyReq);
+          },
+        };
+      ```
+
+      ```ts filename="worker-configuration.d.ts"
+        interface Env {
+          CLERK_FAPI: string;
+          CLERK_PROXY_URL: string;
+          CLERK_SECRET_KEY: string;
+        }
+      ```
+
+      ```toml filename="wrangler.toml"
+        name = "cloudflare-proxy"
+        main = "src/index.ts"
+        compatibility_date = "2023-10-02"
+
+        [vars]
+        CLERK_FAPI="https://frontend-api.clerk.dev"
+      ```
+
+      ```env filename=".dev.vars"
+        # Do not commit this file to source control
+        CLERK_PROXY_URL="http://localhost:8787/__clerk"
+        CLERK_SECRET_KEY="sk_test_xxxxx"
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
+<Callout type="info">Every proxy configuration will be different and we're here to help. Please reach out to support@clerk.com if there's a specific use-case you're looking to solve.</Callout>
 
 ### Enable Proxying
 

@@ -41,9 +41,6 @@ If you have found an issue with our documentation, please create an [issue](http
 If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue.  
 Go ahead and create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) with the solution. :rocket:
 
-> **Note**
-> We are still working on migrating some pages from our CMS to this respository. If you don't see an "Edit this page on GitHub" link but want to make an edit, please open an issue and we'll make sure to incorporate your feedback. 
-
 ## Want to leave feedback?
 
 Feel free to create an [issue](https://github.com/clerkinc/clerk-docs/issues) with the **feedback** label. Our team will take a look at it and get back to you as soon as we can!

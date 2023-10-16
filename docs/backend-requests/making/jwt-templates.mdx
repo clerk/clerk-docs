@@ -18,7 +18,7 @@ At a glance, the process for creating and using a template is the following:
 - Create a JWT template from the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates)
 - From your frontend, generate tokens using that template
 
-The following sections will dive into these steps and explore what you can achieve with JWT Templates. 
+The following sections will dive into these steps and explore what you can achieve with JWT Templates.
 
 ## Template basics
 
@@ -150,7 +150,7 @@ Future extensions to the template language may provide more ways to query for sp
 
 ### Interpolation
 
-Shortcodes can be interpolated inside strings. 
+Shortcodes can be interpolated inside strings.
 
 For example, you could use interpolation to build the user's full name:
 
@@ -160,7 +160,74 @@ For example, you could use interpolation to build the user's full name:
 }
 ```
 
-Interpolated shortcode substituted values will always be casted to strings. For example, if the user does not have a last name associated, the above full name value would be "null John".
+Interpolated shortcodes will always result to string values. For example, if the user does not have a last name associated, the above full name value would be "null John".
+
+### Conditional expressions
+
+Conditional expressions use the `||` operator and can be used to substitute a default fallback value for shortcodes that would otherwise result in `null` or `false` values.
+
+The format of a conditional expression is the following:
+
+```json
+{
+  "key": "{{ <operand_1> || <operand_2> || <operand_n> }}"
+}
+```
+
+As an example, given the following template (comments added for clarity):
+
+```json
+{
+  "has_contact_info": "{{user.has_verified_email || user.has_verified_phone}}",
+
+  // fallback to a string value
+  "full_name": "{{user.full_name || 'Awesome User'}}",
+
+  // fallback to a number value
+  "age": "{{user.public_metadata.age || user.unsafe_metadata.age || 30 }}"
+}
+```
+
+and given a user that:
+
+- has verified their phone number
+- has not verified their email
+- has not provided their first or last name
+- does not have any public or unsafe metadata assigned
+
+
+the output of the template after substitution would be:
+
+```json
+{
+  "has_verified_contact_info": true,
+  "full_name": "Awesome User",
+  "age": 30
+}
+```
+
+The result of a conditional expression is that of the first operand that does not evaluate to `null` or `false` (also known as "falsy"). If all operands of the expression are falsy, the last operand is returned no matter its value.
+
+Conditional expressions can also be combined with interpolation:
+```json
+{
+  "greeting": "Awesome {{user.first_name || user.last_name || 'user'}}"
+}
+```
+
+Assuming a user that has no first or last name set in their profile, the above would output:
+
+```json
+{
+  "greeting": "Awesome user"
+}
+```
+
+Following are the rules that govern conditional expressions:
+
+- the result of an expression is either the first operand that is not falsy, or the last operand (no matter its value)
+- string literals should use single quotes (`'`)
+- only strings, booleans and numbers are permitted as literal (i.e. non-shortcodes) operands
 
 ## Creating a template
 
@@ -223,7 +290,7 @@ And given the following template (comments added here for clarity):
     "aud": "https://my-site.com",
     "version": 1,
     "foo": { "bar": [1,2,3] },
-    
+
     // dynamic values
     "user_id": "{{user.id}}",
     "avatar": "{{user.image_url}}",
@@ -257,7 +324,7 @@ Using the above template, generating a token for the aforementioned user would r
         }
      },
      "invalid_shortcode": "{{user.i_dont_exist}}",
-     
+
      // default claims, included automatically
     "iat": 1639398272,
     "nbf": 1639398220,

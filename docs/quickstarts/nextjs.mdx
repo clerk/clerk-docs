@@ -272,10 +272,11 @@ export default function Example() {
 
 [`auth()`][auth-ref] and [`currentUser()`][currentuser-ref] are App Router-specific helpers that you can use inside of your Route Handlers, Middleware, Server Components, and Server Actions.
 
-
 The [`auth()`][auth-ref] helper will return the [`Authentication`](/docs/references/nextjs/authentication-object) object of the currently active user. Now that request data is available in the global scope through Next.js's `headers()` and `cookies()` methods, passing the request object to Clerk is no longer required.
 
 The [`currentUser()`][currentuser-ref] helper will return the [`User`][user-object] object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server.
+
+ Under the hood, `currentUser()` uses the [`clerkClient`](/docs/references/backend/overview) wrapper to make a call to Clerk's Backend API. This does count towards the [Backend API Request Rate Limit](/docs/backend-requests/resources/rate-limits#rate-limits). This also uses `fetch()` so it is automatically deduped per request.
 
 <Callout type="info">
   Any requests from a Client Component to a Route Handler will automatically include the user's current token as the Bearer token.
@@ -283,17 +284,16 @@ The [`currentUser()`][currentuser-ref] helper will return the [`User`][user-obje
 
 <Tabs items={["Server components and actions", "Route Handler", "Route Handler w/ User Fetch"]}>
   <Tab>
-      Clerk has introduced new [`auth()`](/docs/references/nextjs/auth) and [`currentUser()`](/docs/references/nextjs/current-user) helpers for use in server components and server actions. The `auth()` helper returns the [`Authentication` Object](/docs/references/nextjs/authentication-object) status of the user. The `currentUser()` helper loads the [`User`][user-object] object for the authenticated user. This is helpful if you want to render information, like their first and last name, directly from the server.
-
-    Under the hood, `currentUser()` uses the [`clerkClient`](/docs/references/backend/overview) wrapper to make a call to Clerk's Backend API. This does count towards the [Backend API Request Rate Limit](/docs/backend-requests/resources/rate-limits#rate-limits). This also uses `fetch()` so it is automatically deduped per request.
-
+    This example uses the new `auth()` helper to validate an authenticated user and the new `currentUser()` helper to access the [`User`][user-object] object for the authenticated user.
 
     ```tsx filename="app/page.tsx"
     import { auth, currentUser } from "@clerk/nextjs";
 
     export default async function Page() {
 
-      // Get the userId from auth() -- if null the user is not logged in
+      // Get the userId from auth() -- if null, the user is not logged in
+      const { userId } = auth();
+
       if (userId) {
         // Query DB for user specific information or display assets only to logged in users 
       }
@@ -328,8 +328,7 @@ The [`currentUser()`][currentuser-ref] helper will return the [`User`][user-obje
   <Tab>
     A Route Handler added to [`publicRoutes`](/docs/references/nextjs/auth-middleware#making-pages-public-using-public-routes) can still use the [`auth()`](/docs/references/nextjs/auth) helper to return information about the user or their authentication state, or to control access to some or all of the Route Handler. The `auth()` helper does require [Middleware](/docs/references/nextjs/auth-middleware). 
 
-    In some cases, you may need the full [`User`][user-object] object to retrieve information such as the user's email address or name. You can access the [`User`][user-object] object by using the [`currentUser()`](/docs/references/nextjs/current-user) helper. Under the hood, this helper calls `fetch()` so it is automatically deduped per request.
-
+    In this example, the `auth()` helper is used to validate an authenticated user and the `currentUser()` helper is used to access the [`User`][user-object] object for the authenticated user.
 
    ```tsx filename="app/api/user/route.ts"
     import { NextResponse } from 'next/server';

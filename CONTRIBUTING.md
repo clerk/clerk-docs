@@ -17,7 +17,7 @@ These pages will be updated when they are migrated to MDX. Until then, if you wo
 ## Project setup
 
 1.  Fork and clone the repo
-2.  Run `yarn install` to install dependencies
+2.  Run `npm install` to install dependencies
 3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`
 
 > Tip: Keep your `main` branch pointing at the original repository and make pull
@@ -64,6 +64,10 @@ If you use VSCode, consider using [the built-in markdown preview](https://code.v
 
 > **Note**
 > A member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
+
+### Previewing changes locally (for Clerk employees)
+
+Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the clerk-marketing README](https://github.com/clerkinc/clerk-marketing#previewing-local-documentation-changes).
 
 ## Validating your changes
 

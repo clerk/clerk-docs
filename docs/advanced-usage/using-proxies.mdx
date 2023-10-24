@@ -1,0 +1,236 @@
+---
+title: Using Proxies
+description: Learn how to proxy the Clerk Frontend API through your domain.
+---
+
+# Proxying the Clerk Frontend API
+
+Clerk supports two configuration methods for connecting to the Clerk Frontend API: CNAME and Proxy.
+
+The recommended way to connect to the Clerk Frontend API is to [set up CNAME records and use DNS](/docs/deployments/overview). However, if you're unable to use this approach, or would like more control over your integration with Clerk, you can use a proxy.
+
+When using a proxy, all requests to the Frontend API will be made through your domain. This allows you to use your own SSL certificate, and gives you more control over how you configure your application.
+
+## How to use Proxying
+
+<Steps>
+### Create your application and install Clerk
+
+To get started, you need to create an application from the [Clerk Dashboard](https://dashboard.clerk.com/). Once you create an instance via the Clerk Dashboard, you will be prompted to choose a domain. For the purposes of this guide, the domain will be `app.dev`.
+
+<Callout type="info">
+  For more information on creating a Clerk application, check out our [Set up your application guide](/docs/quickstarts/setup-clerk).
+</Callout>
+
+### Configure your proxy server
+
+For this example, `/__clerk` is used as the path for the proxy. Your proxy server must be on the same domain as your application.
+
+You can choose any path you'd like, but it must be unique and not conflict with any other routes in your application.
+
+#### Requirements
+
+Requests to `https://app.dev/__clerk/*` must be forwarded to `https://frontend-api.clerk.dev/*` with the body and all headers intact.
+
+##### Three additional headers must be set:
+
+  - `Clerk-Proxy-Url`: Needs to have the full proxy URL.
+  - `Clerk-Secret-Key`: The secret key for your Clerk instance.
+  - `X-Forwarded-For`: The IP address of the original client making the request.
+
+#### Example Configuration
+
+<Tabs items={['Nginx', 'Cloudflare Workers']}>
+  <Tab>
+    ```conf filename="nginx.conf"
+    http {
+      # ...
+      server {
+        # ...
+        location /__clerk/ {
+          rewrite ^/__clerk/(.*)$ /$1 break;
+          proxy_pass https://frontend-api.clerk.dev;
+          proxy_set_header Clerk-Proxy-Url https://app.dev/__clerk;
+          proxy_set_header Clerk-Secret-Key sk_live_***;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_redirect off;
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["Handler", "Wrangler Config", "Environment", "Types"]}>
+      ```ts filename="src/index.ts"
+        export default {
+          async fetch(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+            const url = req.url.replace(env.CLERK_PROXY_URL, env.CLERK_FAPI)
+            const proxyReq = new Request(req, {
+              redirect: 'manual',
+            });
+
+            proxyReq.headers.set('Clerk-Proxy-Url', env.CLERK_PROXY_URL);
+            proxyReq.headers.set('Clerk-Secret-Key', env.CLERK_SECRET_KEY);
+            proxyReq.headers.set('X-Forwarded-For', req.headers.get('CF-Connecting-IP') || '');
+
+            return fetch(url, proxyReq);
+          },
+        };
+      ```
+
+      ```toml filename="wrangler.toml"
+        name = "cloudflare-proxy"
+        main = "src/index.ts"
+        compatibility_date = "2023-10-02"
+
+        [vars]
+        CLERK_FAPI="https://frontend-api.clerk.dev"
+      ```
+
+      ```env filename=".dev.vars"
+        # Do not commit this file to source control
+        CLERK_PROXY_URL="https://app.dev/__clerk"
+        CLERK_SECRET_KEY="sk_live_xxxxx"
+      ```
+
+      ```ts filename="worker-configuration.d.ts"
+        interface Env {
+          CLERK_FAPI: string;
+          CLERK_PROXY_URL: string;
+          CLERK_SECRET_KEY: string;
+        }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Every proxy configuration will be different and we're here to help. Please [reach out](https://clerk.com/support) if there's a specific use-case you're looking to solve.
+</Callout>
+
+### Enable Proxying
+
+In order to enable proxying, you need to set a proxy URL for your Clerk instance's domain. This can be done through the Clerk Dashboard or through the Backend API.
+
+<Callout type="info">
+  To avoid downtime, your proxy must be set up according to the above configuration before it can be enabled for your instance.
+  Make sure your proxy forwards requests to the Clerk Frontend API correctly and includes the required headers.
+</Callout>
+
+<Tabs items={['Dashboard', 'Backend API']}>
+  <Tab>
+    1. Navigate to the [Domains](https://dashboard.clerk.com/last-active?path=domains) page in the Clerk Dashboard.
+    2. Navigate to the **Frontend API** section.
+    3. Click on **Advanced**.
+    4. Enter your proxy URL in the **Proxy URL** field. The proxy URL must be a valid URL and resolve correctly.
+  </Tab>
+
+  <Tab>
+    The request below will update the domain to use the proxy URL `https://app.dev/__clerk`. In doing so, it will trigger checks to validate the proxy URL.
+
+    ```bash
+    curl -X PATCH https://api.clerk.dev/v1/domains/{{DOMAIN ID}} \
+        -H "Authorization: Bearer {{SECRET KEY}}" \
+        -H "Content-Type: application/json" \
+        -d '{"proxy_url": "https://app.dev/__clerk"}}'
+    ```
+  </Tab>
+</Tabs>
+
+### Configure your proxy setup
+
+You can configure your proxy setup via environment variables or via properties.
+
+<Tabs items={['Environment Variables', 'Properties']}>
+  <Tab>
+    <InjectKeys>
+      <CodeBlockTabs options={["Next.js", "Remix", 'Gatsby']}>
+        ```env filename=".env.local"
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+        CLERK_SECRET_KEY={{secret}}
+
+        NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
+        ```
+        ```env filename=".env"
+        CLERK_PUBLISHABLE_KEY={{pub_key}}
+        CLERK_SECRET_KEY={{secret}}
+
+        CLERK_PROXY_URL=https://app.dev/__clerk
+        ```
+
+        ```env filename=".env.development"
+        CLERK_PUBLISHABLE_KEY={{pub_key}}
+        CLERK_SECRET_KEY={{secret}}
+
+        CLERK_PROXY_URL=https://app.dev/__clerk
+        ```
+      </CodeBlockTabs>
+    </InjectKeys>
+  </Tab>
+  <Tab>
+    You can skip this step if you configured your proxy setup with environment variables.
+
+    This is an alternative configuration to the environment variable based setup that we described in the previous step.
+
+    <CodeBlockTabs options={['Next.js', 'Remix', 'JavaScript']}>
+      ```tsx filename="_app.tsx"
+        import { ClerkProvider } from "@clerk/nextjs";
+        import Head from "next/head";
+
+        export default function App({ Component, pageProps }) {
+          return (
+            <ClerkProvider proxyUrl='https://app.dev/__clerk' {...pageProps}>
+              <Head>
+                <title>Proxy Next.js app</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              </Head>
+              <Component {...pageProps} />
+            </ClerkProvider>
+          );
+        }
+      ```
+
+      ```tsx filename="root.tsx"
+        export const loader = (args) => {
+          return rootAuthLoader(
+            args,
+            ({ request }) => {
+              const { userId, sessionId, getToken } = request.auth;
+              return json({
+                  message: `Hello from the root loader :)`,
+                  ENV: getBrowserEnvironment(),
+              });
+            },
+            {
+              loadUser: true,
+              proxyUrl: 'https://app.dev/__clerk'
+            } as const
+          );
+        };
+
+        export default ClerkApp(App, {
+          proxyUrl: 'https://app.dev/__clerk'
+        });
+      ```
+
+      <InjectKeys>
+        ```tsx filename="app.tsx"
+          import Clerk from '@clerk/clerk-js';
+
+          const clerkFrontendApi = `{{pub_key}}`;
+          const clerk = new Clerk(clerkFrontendApi);
+          await clerk.load({
+            proxyUrl: 'https://app.dev/__clerk',
+          });
+        ```
+      </InjectKeys>
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
+### Ready to go 🎉
+Your application should now be able to access Clerk's Frontend API from your proxy!
+</Steps>
+
+If you have any questions about proxying, or you're having any trouble setting this up, please contact support@clerk.com.

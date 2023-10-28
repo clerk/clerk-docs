@@ -59,74 +59,7 @@ To learn more about the payload structure, check out the [webhooks reference](/d
 
 Now you need to set up your backend endpoint to receive the webhook events. The exact steps depend on the backend framework you're using. Below are some examples for common frameworks.
 
-<Tabs items={["Pages Router","App Router", "Node"]}>
-
-<Tab>
-
-If you're using Next.js with Pages Router, you can create a webhook endpoint in the `pages/api` directory.
-
-Svix provides a package for verifying the webhook signature, making it easy to verify the authenticity of the webhook events.
-
-<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
-  ```bash filename="terminal"
-  npm install svix
-  ```
-
-```bash filename="terminal"
-yarn add svix
-```
-
-```bash filename="terminal"
-pnpm add svix
-```
-
-</CodeBlockTabs>
-
-Next you will want to retrieve the Webhook signing secret from the Clerk Dashboard. You can find this in the [Webhooks](https://dashboard.clerk.com/last-active?path=webhooks) section of the Clerk Dashboard. You will need to set this as an environment variable in your Next.js project.
-
-![signing-secret-example](/docs/images/users/guides/sync-backend/sign-secret.png)
-
-```ts filename="pages/api/webhook.ts"
-import type { IncomingHttpHeaders } from 'http';
-import type { NextApiRequest, NextApiResponse } from 'next';
-import type { WebhookRequiredHeaders } from 'svix';
-import type { WebhookEvent } from '@clerk/nextjs/server';
-import { Webhook } from 'svix';
-
-const webhookSecret: string = process.env.WEBHOOK_SECRET;
-
-export default async function handler(
-  req: NextApiRequestWithSvixRequiredHeaders,
-  res: NextApiResponse
-) {
-  const payload = JSON.stringify(req.body);
-  const headers = req.headers;
-  // Create a new Webhook instance with your webhook secret
-  const wh = new Webhook(webhookSecret);
-
-  let evt: WebhookEvent;
-  try {
-    // Verify the webhook payload and headers
-    evt = wh.verify(payload, headers) as WebhookEvent;
-  } catch (_) {
-    // If the verification fails, return a 400 error
-    return res.status(400).json({});
-  }
-  const { id } = evt.data;
-
-  const eventType = evt.type;
-  if (eventType === 'user.created') {
-    console.log(`User ${id} was ${eventType}`);
-    res.status(201).json({});
-  }
-}
-
-type NextApiRequestWithSvixRequiredHeaders = NextApiRequest & {
-  headers: IncomingHttpHeaders & WebhookRequiredHeaders;
-};
-```
-
-</Tab>
+<Tabs items={["App Router","Pages Router", "Node"]}>
 
 <Tab>
 
@@ -213,6 +146,73 @@ export async function POST(req: Request) {
   return new Response('', { status: 201 })
 }
 
+```
+
+</Tab>
+
+<Tab>
+
+If you're using Next.js with Pages Router, you can create a webhook endpoint in the `pages/api` directory.
+
+Svix provides a package for verifying the webhook signature, making it easy to verify the authenticity of the webhook events.
+
+<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+  ```bash filename="terminal"
+  npm install svix
+  ```
+
+```bash filename="terminal"
+yarn add svix
+```
+
+```bash filename="terminal"
+pnpm add svix
+```
+
+</CodeBlockTabs>
+
+Next you will want to retrieve the Webhook signing secret from the Clerk Dashboard. You can find this in the [Webhooks](https://dashboard.clerk.com/last-active?path=webhooks) section of the Clerk Dashboard. You will need to set this as an environment variable in your Next.js project.
+
+![signing-secret-example](/docs/images/users/guides/sync-backend/sign-secret.png)
+
+```ts filename="pages/api/webhook.ts"
+import type { IncomingHttpHeaders } from 'http';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import type { WebhookRequiredHeaders } from 'svix';
+import type { WebhookEvent } from '@clerk/nextjs/server';
+import { Webhook } from 'svix';
+
+const webhookSecret: string = process.env.WEBHOOK_SECRET;
+
+export default async function handler(
+  req: NextApiRequestWithSvixRequiredHeaders,
+  res: NextApiResponse
+) {
+  const payload = JSON.stringify(req.body);
+  const headers = req.headers;
+  // Create a new Webhook instance with your webhook secret
+  const wh = new Webhook(webhookSecret);
+
+  let evt: WebhookEvent;
+  try {
+    // Verify the webhook payload and headers
+    evt = wh.verify(payload, headers) as WebhookEvent;
+  } catch (_) {
+    // If the verification fails, return a 400 error
+    return res.status(400).json({});
+  }
+  const { id } = evt.data;
+
+  const eventType = evt.type;
+  if (eventType === 'user.created') {
+    console.log(`User ${id} was ${eventType}`);
+    res.status(201).json({});
+  }
+}
+
+type NextApiRequestWithSvixRequiredHeaders = NextApiRequest & {
+  headers: IncomingHttpHeaders & WebhookRequiredHeaders;
+};
 ```
 
 </Tab>

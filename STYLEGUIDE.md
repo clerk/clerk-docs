@@ -293,3 +293,19 @@ Clerk authentication states **`signed-in`**, **`signed-out`**, and **`unknown`**
 #### Don't
 
 > Once you have a signed-in user, you need to give them a way to sign out.
+
+### 4.6 Group like with like under tabs
+
+When presenting things in a series of tabs, ensure that similar things are grouped together. 
+
+#### Do
+
+![App Router and Pages Router exist as two tabs, side by side.](/public/images/styleguide/clerk_uncrowded-tabs.png)
+
+Next.js is a platform with two different implementations grouped underneath it.
+
+#### Don't
+
+![App Router and Pages Router are sitting alongside other very different methods of retrieving data.](/public/images/styleguide/clerk_crowded-tabs.png)
+
+Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.

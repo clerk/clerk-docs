@@ -23,7 +23,7 @@ These pages will be updated when they are migrated to MDX. Until then, if you wo
 > Tip: Keep your `main` branch pointing at the original repository and make pull
 > requests from branches on your fork. To do this, run:
 >
->     git remote add upstream https://github.com/clerkinc/clerk-docs.git
+>     git remote add upstream https://github.com/clerk/clerk-docs.git
 >     git fetch upstream
 >     git branch --set-upstream-to=upstream/main main
 >
@@ -35,7 +35,7 @@ These pages will be updated when they are migrated to MDX. Until then, if you wo
 
 ## Creating an issue
 
-If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerkinc/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes.
+If you have found a contribution you would like to make, but it is rather large, it is recommended to open an [issue](https://github.com/clerk/clerk-docs/issues) first. Doing so not only helps keep track of what you plan to work on, but also facilitates discussions with maintainers, who can provide valuable feedback and ideas even before you begin implementing changes.
 
 Modifications such as correcting misspelled words, addressing grammatical or punctuation errors, or making similar minor adjustments probably don't require the creation of an issue. In such cases, you are welcome to proceed by creating a pull request.
 
@@ -46,7 +46,7 @@ The structure of the issue should be:
 
 ## Creating a Pull Request
 
-When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerkinc/clerk-docs/pulls), also referred to as a PR.
+When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerk/clerk-docs/pulls), also referred to as a PR.
 
 If this is your first time, or you need a refresher on how to create a PR, you can check out this video:
 
@@ -67,7 +67,7 @@ If you use VSCode, consider using [the built-in markdown preview](https://code.v
 
 ### Previewing changes locally (for Clerk employees)
 
-Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the clerk-marketing README](https://github.com/clerkinc/clerk-marketing#previewing-local-documentation-changes).
+Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the clerk-marketing README](https://github.com/clerk/clerk-marketing#previewing-local-documentation-changes).
 
 ## Validating your changes
 
@@ -254,4 +254,4 @@ When rendering images, make sure that you provide appropriate alternate text. Re
 
 ## Help wanted!
 
-Looking to contribute? Please check out [the open issues](https://github.com/clerkinc/clerk-docs/issues) for opportunities to help out. Thanks for taking the time to help make Clerk's docs better!
+Looking to contribute? Please check out [the open issues](https://github.com/clerk/clerk-docs/issues) for opportunities to help out. Thanks for taking the time to help make Clerk's docs better!

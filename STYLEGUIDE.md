@@ -40,17 +40,17 @@ Tech has created many new words by associating two words with each other like "f
 
 ## 2. Write for clarity
 
-### 2.1 “We” are the authors; “you” is the reader.
+### 2.1 “You” is the reader; "Clerk" is Clerk
 
-Clerk is the entity writing these docs and providing these services. The learner is the person consuming these things and building their own projects. To distinguish between the two and write with clarity, we write from Clerk's perspective, using "we/us/our/ours," and refer to the learner with "you/your/yours."
+Clerk is the entity writing these docs and providing these services. The learner is the person consuming these things and building their own projects. To distinguish between the two and write with clarity, we refer to the learner with "you/your/yours." We objectively refer to Clerk as "Clerk," not "we/us/our/ours."
 
 #### Do
 
-> Our `<ClerkProvider />` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
+> Clerk's `<ClerkProvider />` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
 #### Don't 
 
-> `<ClerkProvider />` provides active session and user context to our hooks and other components. Let's import it into our app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of the file.
+> Our `<ClerkProvider />` provides active session and user context to our hooks and other components. Let's import it into our app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of the file.
 
 ### 2.2 "Users" are people logging in/out with Clerk. "Developers" are the audience we’re writing for.
 

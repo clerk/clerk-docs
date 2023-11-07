@@ -212,7 +212,7 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 #### Do
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > Social Connections** and open the **Settings tab.**
+> In your Clerk Dashboard, go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings** tab.
 
 > In your browser, open [`http://localhost:3000/`](http://localhost:3000/).
 

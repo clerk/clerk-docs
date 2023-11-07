@@ -282,13 +282,13 @@ export const config = {
 };
 ```
 
-### 4.5 Authentication states should be hyphenated, bold, and use monospace fonts.
+### 4.5 Authentication states should be hyphenated and bold.
 
-Clerk authentication states **`signed-in`**, **`signed-out`**, and **`unknown`** should be hyphenated, bold, and use monospace fonts to distinguish them from general states of being.
+Clerk authentication states **signed-in**, **signed-out**, and **unknown** should be hyphenated and bold to distinguish them from general states of being.
 
 #### Do
 
-> Once you have a **`signed-in`** user, you need to give them a way to sign out.
+> Once you have a **signed-in** user, you need to give them a way to sign out.
 
 #### Don't
 

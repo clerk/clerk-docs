@@ -160,7 +160,7 @@ Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargo
 
 > You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider />`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
 
-> Clerk works great with progressive web apps (an app that's built using web platform technologies, but that provides a user experience like that of a platform-specific app) as it supports offline mode. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
+> Clerk supports offline mode, a feature that lets users use an app without being connected to data or wifi. This means Clerk works great with progressive web apps, apps built with web platform technologies that provide similar experiences to platform-specific apps. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
 
 #### Don't
 

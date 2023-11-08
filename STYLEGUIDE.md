@@ -38,6 +38,18 @@ Tech has created many new words by associating two words with each other like "f
 
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example userse the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
 
+### 1.4 How to abbreviate a term
+
+If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
+
+#### Do
+
+> An abstract syntax tree (AST) is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+
+#### Don't 
+
+> An AST is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+
 ## 2. Write for clarity
 
 ### 2.1 “You” is the reader; "Clerk" is Clerk
@@ -124,7 +136,7 @@ The learner must remember the file they need to open before finding out which fo
 
 ### 2.7 Avoid colloquialisms
 
-English speakers my find themselves using phrases like "
+English speakers may find themselves using phrases which cultural meaning may be different around the world.
 
 #### Do
 
@@ -142,13 +154,19 @@ Some learners may not have heard this expression before. It may be difficult for
 
 Avoid using language that assumes someone's level of proficiency. Something that is difficult for someone new to programming may not be difficult for a senior engineer. This language can inadvertently alienate or insult a learner. Avoid words like "just," "easy," "simple," "senior," "hard."
 
+Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargon) as necessary. Describe jargon in parentheses on first reference or link to a trusted definition.
+
 #### Do
 
 > You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider />`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
 
+> Clerk works great with progressive web apps (an app that's built using web platform technologies, but that provides a user experience like that of a platform-specific app) as it supports offline mode. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
+
 #### Don't
 
 > It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment keys, wrap your app in `<ClerkProvider />`, and simply add [control components](https://clerk.com/docs/components/overview).
+
+> Clerk works great with PWA as it supports offline mode. You can use the dynamic import pattern to improve loading speeds.
 
 ### 3.2 Avoid pop culture references
 

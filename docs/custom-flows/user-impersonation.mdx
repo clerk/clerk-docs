@@ -42,7 +42,7 @@ curl -X POST https://api.clerk.com/v1/actor_tokens -d '{ \
 
 The above request will create an actor token that is valid for 600 seconds (10 minutes). Using the generated token will result in user with ID `user_21Ufcy98STcA11s3QckIwtwHIES` (the actor) signing in as user with ID `user_1o4qfak5AdI2qlXSXENGL05iei6` (the subject).
 
-When creating actor tokens, the object that you pass as the "actor" parameter will end up in the authentication token's "act" claim. You can read more details in the [JWT claims](#jwt-claims) section of this document.
+When creating actor tokens, the object that you pass as the `actor` parameter will end up in the authentication token's `act` claim. You can read more details in the [JWT claims](#jwt-claims) section of this document.
 
 ### Revoking actor tokens
 
@@ -60,9 +60,9 @@ Actor tokens can be [created from the Backend API](https://clerk.com/docs/refere
 
 The `url` attribute is a Clerk Frontend API URL that will use the token to sign out existing users and prepare the sign-in object for impersonation. You can directly visit the `url` provided in the response to consume the actor token.
 
-The Clerk Frontend API will redirect you to the /sign-in page of your application, where you can continue the flow by consuming the `__clerk_ticket` parameter.
+The Clerk Frontend API will redirect you to the `/sign-in` page of your application, where you can continue the flow by consuming the `__clerk_ticket` parameter.
 
-If you're using [ClerkJS](/docs/references/javascript/overview) directly and implementing a custom sign in flow, you should provide the token when [creating a sign in attempt](/docs/references/javascript/sign-in/sign-in#create).
+If you're using [ClerkJS](/docs/references/javascript/overview) directly and implementing a custom sign in flow, you should provide the token when [creating a sign-in attempt](/docs/references/javascript/sign-in/sign-in#create).
 
 ## Detecting impersonated sessions
 
@@ -70,18 +70,29 @@ Once a user is signed in as a different user, Clerk provides APIs and helper met
 
 ### JWT claims
 
-Following the standard [actor claim of RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html#name-act-actor-claim), the Clerk session token includes an `act` claim with the ID of the impersonating user.
+Following the standard [actor claim of RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html#name-act-actor-claim), the Clerk session token includes an `act` claim. The `act.iss` claim is the referrer of the token. The `act.sid` claim is the session ID of the impersonated session. The `act.sub` claim is the ID of the impersonator.
 
-```bash
+```json
 {
-  "sub": "user_1o4qfak5AdI2qlXSXENGL05iei6",
   "act": {
-    "sub": "user_21Ufcy98STcA11s3QckIwtwHIES"
-  }
+    "iss": "https://dashboard.clerk.com",
+    "sid": "sess_456",
+    "sub": "user_456"
+  },
+  "azp": "https://your-site.accounts.dev",
+  "exp": 1697726976,
+  "iat": 1697726916,
+  "iss": "https://your-site.clerk.accounts.dev",
+  "nbf": 1697726906,
+  "org_id": "org_123",
+  "org_role": "basic_member",
+  "org_slug": "slug",
+  "sid": "sess_123",
+  "sub": "user_123"
 }
 ```
 
-The above JSON snippet shows only two of the claims that the actual session JWT token contains. The `sub` claim is the impersonated user (`user_1o4qfak5AdI2qlXSXENGL05iei6`), while `act.sub` contains the ID of the impersonator (`user_21Ufcy98STcA11s3QckIwtwHIES`).
+The above JSON snippet shows what a Clerk session token looks like when a user is signed in as another user. The `sub` claim is the impersonated user (`user_123`), while `act.sub` contains the ID of the impersonator (`user_456`). The `iss` claim is the Clerk Dashboard because the user was impersonated from the Clerk Dashboard. The `sid` claim is the session ID of the impersonated user (`sess_123`), while `act.sid` contains the session ID of the impersonator's session (`sess_456`).
 
 <Callout type="info">
   Note that when using a custom JWT template, the `{{session.actor}}` will need to be added as a claim in order to expose it.
@@ -94,7 +105,7 @@ When working with frontend (client-side) code, you can easily detect impersonate
 <CodeBlockTabs options={["Next.js", "React", "JavaScript"]}>
 ```jsx
 import { useAuth } from "@clerk/nextjs";
-import { withServerSideAuth } from "@clerk/nextjs/ssr";
+import { withServerSideAuth } from "@clerk/nextjs";
 
 // SSR authentication context
 export const getServerSideProps = withServerSideAuth(
@@ -172,7 +183,7 @@ When working with backend code, Clerk provides middleware that can be used in Ne
 <CodeBlockTabs options={["Next.js", "Node"]}>
 ```jsx
 // pages/api/some-handler.js
-import { withAuth } from "@clerk/nextjs/api";
+import { withAuth } from "@clerk/nextjs";
 
 export default withAuth(async (req) => {
   // The request object is augmented with the 
@@ -222,7 +233,7 @@ If you prefer, you can impersonate a user right from the [Users](https://dashboa
   alt="The 'Users' page in the Clerk Dashboard. A red arrow points to the active 'Users' tab, showing users how to get to this page."
 />
 
-To impersonate a user, click on the menu icon on the right side of a user's row. A dropdown menu will appear. When you click on the "Impersonate user" option, your application instance should open in a new tab with the impersonated user signed in.
+To impersonate a user, click on the menu icon on the right side of a user's row. A dropdown menu will appear. When you click on the **Impersonate user** option, your application instance should open in a new tab with the impersonated user signed in.
 
 <Images
   width={3024}

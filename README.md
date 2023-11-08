@@ -15,7 +15,7 @@
   <a href="https://www.npmjs.com/package/@clerk/clerk-js">
     <img alt="" src="https://img.shields.io/npm/dm/@clerk/clerk-js" />
   </a>
-  <a href="https://discord.com/invite/b5rXHjAg7A">
+  <a href="https://clerk.com/discord">
     <img alt="Discord" src="https://img.shields.io/discord/856971667393609759?color=7389D8&label&logo=discord&logoColor=ffffff" />
   </a>
   <a href="https://twitter.com/clerkdev">
@@ -23,7 +23,7 @@
   </a> 
   <br />
   <br />
-  <img alt="Clerk Hero Image" src="https://github.com/clerkinc/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+  <img alt="Clerk Hero Image" src="https://github.com/clerk/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
 </div>
 
 ## Community 
@@ -36,17 +36,17 @@ We encourage you to contribute to Clerk's documentation! You can get started by 
 
 ## Found an issue?
 
-If you have found an issue with our documentation, please create an [issue](https://github.com/clerkinc/clerk-docs/issues).
+If you have found an issue with our documentation, please create an [issue](https://github.com/clerk/clerk-docs/issues).
 
 If it's a quick fix, such as a misspelled word or a broken link, feel free to skip creating an issue.  
-Go ahead and create a [pull request](https://github.com/clerkinc/clerk-docs/pulls) with the solution. :rocket:
+Go ahead and create a [pull request](https://github.com/clerk/clerk-docs/pulls) with the solution. :rocket:
 
 ## Want to leave feedback?
 
-Feel free to create an [issue](https://github.com/clerkinc/clerk-docs/issues) with the **feedback** label. Our team will take a look at it and get back to you as soon as we can!
+Feel free to create an [issue](https://github.com/clerk/clerk-docs/issues) with the **feedback** label. Our team will take a look at it and get back to you as soon as we can!
 
 ## Connect with us
 
-You can discuss ideas, ask questions, and meet others from the community in our [Discord](https://discord.com/invite/b5rXHjAg7A). 
+You can discuss ideas, ask questions, and meet others from the community in our [Discord](https://clerk.com/discord). 
 
 If you prefer, you can also find support through our [Twitter](https://twitter.com/ClerkDev), or you can [email](mailto:support@clerk.dev) us!

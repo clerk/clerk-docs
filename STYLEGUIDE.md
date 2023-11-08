@@ -28,7 +28,9 @@ Tech has created many new words by associating two words with each other like "f
 
 > Front-end and full stack developers often build web-sites with React.
 
-### 1.3 When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item.
+### 1.3 De-dupe reference links
+
+When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item.
 
 #### Do
 
@@ -37,6 +39,16 @@ Tech has created many new words by associating two words with each other like "f
 #### Don't 
 
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example userse the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
+
+### 1.4 Use sentence case for titles
+
+#### Do
+
+> ## How to set up custom pages
+
+#### Don't 
+
+> ## How to Set up Custom Pages
 
 ## 2. Write for clarity
 
@@ -64,7 +76,7 @@ People building with clerk are building for other people to make it clear whethe
 
 > Clerk helps users overcome as many challenges as possible without additional configuration. This ensures their users have a secure, safe session.
 
-### 2.3 Shorter is better.
+### 2.3 Shorter is better
 
 Write short sentences. Short sentences are easier for both human and robots to translate. Concise writing is understandable writing. Look for commas that string together different thoughts. These are often good places to shorten and clarify content.
 

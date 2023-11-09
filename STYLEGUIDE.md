@@ -260,7 +260,7 @@ Use carets to nest operations of the same type like menu navigation.
 
 #### Do
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > Social Connections** and open the **Settings tab.**
+> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings tab.**
 
 #### Don't
 

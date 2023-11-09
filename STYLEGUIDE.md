@@ -48,7 +48,7 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 #### Don't 
 
-> An AST is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+> An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.
 
 ## 2. Write for clarity
 

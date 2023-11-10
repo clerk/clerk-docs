@@ -28,15 +28,41 @@ Tech has created many new words by associating two words with each other like "f
 
 > Front-end and full stack developers often build web-sites with React.
 
-### 1.3 When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item.
+### 1.3 De-dupe reference links
+
+When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item.
 
 #### Do
 
-> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example userse the `currentUser()` helper to access the `User` object for the authenticated user.
+> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
 
 #### Don't 
 
-> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example userse the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
+> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
+
+
+### 1.4 Write out abbreviations when introducing them 
+
+If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
+
+#### Do
+
+> An abstract syntax tree (AST) is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
+
+#### Don't 
+
+> An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.
+
+### 1.5 Use sentence case for titles
+
+#### Do
+
+> ## How to set up custom pages
+
+#### Don't 
+
+> ## How to Set up Custom Pages
+
 
 ## 2. Write for clarity
 
@@ -64,7 +90,7 @@ People building with clerk are building for other people to make it clear whethe
 
 > Clerk helps users overcome as many challenges as possible without additional configuration. This ensures their users have a secure, safe session.
 
-### 2.3 Shorter is better.
+### 2.3 Shorter is better
 
 Write short sentences. Short sentences are easier for both human and robots to translate. Concise writing is understandable writing. Look for commas that string together different thoughts. These are often good places to shorten and clarify content.
 
@@ -124,7 +150,7 @@ The learner must remember the file they need to open before finding out which fo
 
 ### 2.7 Avoid colloquialisms
 
-English speakers my find themselves using phrases like "
+English speakers may find themselves using phrases which cultural meaning may be different around the world.
 
 #### Do
 
@@ -142,13 +168,19 @@ Some learners may not have heard this expression before. It may be difficult for
 
 Avoid using language that assumes someone's level of proficiency. Something that is difficult for someone new to programming may not be difficult for a senior engineer. This language can inadvertently alienate or insult a learner. Avoid words like "just," "easy," "simple," "senior," "hard."
 
+Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargon) as necessary. Describe jargon in parentheses on first reference or link to a trusted definition.
+
 #### Do
 
 > You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider />`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
 
+> Clerk supports offline mode, a feature that lets users use an app without being connected to data or wifi. This means Clerk works great with progressive web apps, apps built with web platform technologies that provide similar experiences to platform-specific apps. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
+
 #### Don't
 
 > It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment keys, wrap your app in `<ClerkProvider />`, and simply add [control components](https://clerk.com/docs/components/overview).
+
+> Clerk works great with PWA as it supports offline mode. You can use the dynamic import pattern to improve loading speeds.
 
 ### 3.2 Avoid pop culture references
 
@@ -228,7 +260,7 @@ Use carets to nest operations of the same type like menu navigation.
 
 #### Do
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > Social Connections** and open the **Settings tab.**
+> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings tab.**
 
 #### Don't
 

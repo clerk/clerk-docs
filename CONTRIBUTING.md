@@ -198,6 +198,20 @@ Do this.
 </Steps>
 ```
 
+#### `<Callout />`
+
+The `<Callout />` component draws attention to something learners should slow down and read. 
+
+> Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed! 
+
+The component accepts an optional `type` property which accepts the following strings: `'Danger' | 'Info' | 'Success' | 'Warning';`.
+
+```mdx
+<Callout type="danger">
+  Don't do this in production!
+</Callout>
+```
+
 #### `<Tabs />`
 
 If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `items` property, which is an array of strings. For each option provided, render a `<Tab />` component:

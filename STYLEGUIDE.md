@@ -353,3 +353,54 @@ Next.js is a platform with two different implementations grouped underneath it.
 ![App Router and Pages Router are sitting alongside other very different methods of retrieving data.](/public/images/styleguide/clerk_crowded-tabs.png)
 
 Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.
+
+### 4.7 Wrap component references in `< />`
+
+Component references should be wrapped in `< />`
+
+#### Do
+
+> Use the `<SignIn />` component.
+
+#### Don't 
+
+> Use the `<SignIn/>` component.
+
+> Use the "SignIn component".
+
+> Use the `SignIn` component.
+
+### 4.8 Specify syntax and filename for terminal commands
+
+If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh filename="terminal"`.
+
+#### Do
+
+```
+​```sh filename="terminal"
+npm i @clerk/nextjs
+​```
+```
+
+#### Don't
+
+```
+​```
+npm i @clerk/nextjs
+​```
+```
+
+### 4.9 Pass properties to components; Parameters to functions
+
+Be sure to use the correct term with components vs functions. 
+
+> Be sure to use the appropriate terms on reference page headings.
+
+#### Do
+
+> Pass the `signUpProps` property to `<SignUp />`. `buildUrlWithAuth()` accepts a `string` for the `to` parameter.
+
+#### Don't
+
+> The `<SignUp />` component accepts the `signUpProps` parameter. The `buildUrlWithAuth()` function accepts the `to` property.
+

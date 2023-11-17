@@ -138,6 +138,9 @@ function add(a: number, b: number) {
 ​```
 ```
 
+​```sh filename="terminal"
+
+
 You can also specify a filename:
 
 ```
@@ -148,6 +151,14 @@ function add(a: number, b: number) {
 ​```
 ```
 
+If the code should run in a terminal, set the syntax highlighting and filename like so `sh filename="terminal"`:
+
+```
+​```sh filename="terminal"
+npm i @clerk/nextjs
+​```
+```
+
 #### `<CodeBlockTabs />`
 
 If you need to render multiple variations of a code snippet, use `<CodeBlockTabs />`. The component accepts an `options` property, which is an array of strings. For each option provided, render a code block:
@@ -155,15 +166,15 @@ If you need to render multiple variations of a code snippet, use `<CodeBlockTabs
 ```mdx
 <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
 
-​```
+​```sh filename="terminal"
 npm i @clerk/nextjs
 ​```
 
-​```
+​​```sh filename="terminal"
 yarn add @clerk/nextjs
 ​```
 
-​```
+​```sh filename="terminal"
 pnpm add @clerk/nextjs
 ​```
 

@@ -178,6 +178,26 @@ pnpm add @clerk/nextjs
 </CodeBlockTabs>
 ```
 
+#### `<Steps />`
+
+Steps are used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with heading from `h2`-`h4`.
+
+```mdx
+<Steps>
+
+## Step 1
+
+### A heading inside a step
+
+Do this.
+
+## Another step
+
+Do this.
+
+</Steps>
+```
+
 #### `<Tabs />`
 
 If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `items` property, which is an array of strings. For each option provided, render a `<Tab />` component:

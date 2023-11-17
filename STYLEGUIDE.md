@@ -162,6 +162,18 @@ English speakers may find themselves using phrases which cultural meaning may be
 
 Some learners may not have heard this expression before. It may be difficult for machine translation as well.
 
+### 2.8 Use a active voice vs. passive voice.
+
+Use active verbs that put the reader in the first person instead of passive verbs ("be" verbs that describe the learners actions as a state of being like "is/was/to be").
+
+#### Do
+
+> Create the `middleware.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
+
+#### Don't
+
+> The `middleware.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
+
 ## 3. Write to include people
 
 ### 3.1 Do not assume proficiency

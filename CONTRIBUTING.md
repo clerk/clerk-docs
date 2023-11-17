@@ -276,6 +276,44 @@ For example, one of these cells has content that would best formatted in an unor
 />
 ```
 
+#### `<TutorialHero />`
+
+The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
+
+* `quickstart` denotes the framework or platform the tutorial is for
+* `beforeYouStart` accepts an array of objects containing titles and links things learnes should complete before the tutorial like so. Eg `{ title: string; link: string }[];`
+* `exampleRepo` accepts an array of objects containing titles and links to example repos. Eg `{ title: string; link: string }[];`
+
+```
+<TutorialHero 
+  quickstart="react"
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "https://clerk.com/docs/quickstarts/setup-clerk"
+    },
+    {
+      title: "Create a react application",
+      link: "https://react.dev/learn"
+    }
+  ]}
+  exampleRepo={[
+    {
+      title: "React JS app",
+      link: "https://github.com/clerk/clerk-react-starter"
+    }
+  ]}
+>
+
+- Install `@clerk/clerk-react`
+- Set up your environment keys
+- Wrap your React app in `<ClerkProvider/>`  
+- Limit access to authenticated users
+- Embed the `<UserButton/>`
+
+</TutorialHero>
+```
+
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.

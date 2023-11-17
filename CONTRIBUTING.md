@@ -180,7 +180,7 @@ pnpm add @clerk/nextjs
 
 #### `<Steps />`
 
-Steps are used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with heading from `h2`-`h4`.
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with heading from `h2`-`h4`.
 
 ```mdx
 <Steps>

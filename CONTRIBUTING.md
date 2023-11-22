@@ -213,23 +213,138 @@ The component accepts an optional `type` property which accepts the following st
 <Callout type="danger">
   Don't do this in production!
 </Callout>
+
+The component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
+
+For example, in the example below, if the user were to choose "yarn" as the tab they want to see, both `<CodeBlockTabs />` components would change their active tab to "yarn" because both components were passed `"installer"` as their `type`.
+
+```mdx
+Install the Clerk Next.js package by running the following command in your terminal: 
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+
+​```
+npm i @clerk/nextjs
+​```
+
+​```
+yarn add @clerk/nextjs
+​```
+
+​```
+pnpm add @clerk/nextjs
+​```
+
+</CodeBlockTabs>
+
+You can also install the install the Clerk React package by running the following command in your terminal: 
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+
+​```
+npm i @clerk/clerk-react
+​```
+
+​```
+yarn add @clerk/clerk-react
+​```
+
+​```
+pnpm add @clerk/clerk-react
+​```
+
+</CodeBlockTabs>
 ```
 
 #### `<Tabs />`
 
-If you need to structure content in a tabular format, use the `<Tabs />` component. The component accepts an `items` property, which is an array of strings. For each option provided, render a `<Tab />` component:
+If you need to structure content in a tabular format, use the `<Tabs />` component. 
+
+The component accepts an `items` property, which is an array of strings. For each option provided, render a `<Tab />` component as shown in the example below.
 
 ```mdx
-<Tabs items={["React", "JavaScript"]}>
+<Tabs type="framework" items={["React", "JavaScript"]}>
 <Tab>
 # React
 
+Here is some example text about React.
 </Tab>
 <Tab>
 # JavaScript
 
+Here is some example text about JavaScript.
 </Tab>
 </Tabs>
+```
+
+The component also accepts a `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
+
+For example, in the example below, if the user were to choose "JavaScript" as the tab they want to see, both `<Tabs />` components would change their active tab to "JavaScript" because both components were passed `"framework"` as their `type`.
+
+```mdx
+<Tabs type="framework" items={["React", "JavaScript"]}>
+<Tab>
+# React
+
+Here is some example text about React.
+</Tab>
+<Tab>
+# JavaScript
+
+Here is some example text about JavaScript.
+</Tab>
+</Tabs>
+
+<Tabs type="framework" items={["React", "JavaScript"]}>
+<Tab>
+# React
+
+Here is another example about React.
+</Tab>
+<Tab>
+# JavaScript
+
+Here is another example about JavaScript.
+</Tab>
+</Tabs>
+```
+
+#### Sync `<CodeBlockTabs />` and `<Tabs />`
+
+The `type` property can be used on both `<CodeBlockTabs />` and `<Tabs />` to sync instances of these components together.
+
+For example, in the example below, if the user were working with Next.js Pages Router and chose the "Pages Router" as the tab they want to see, both the `<Tabs />` and the `<CodeBlockTabs />` components would change their active tab to "Pages Router" because both components were passed `"router"` as their `type`.
+
+```mdx
+<Tabs type="router" items={["App Router", "Pages Router"]}>
+<Tab>
+The App Router information is here.
+</Tab>
+
+<Tab>
+The Pages Router information is here.
+</Tab>
+</Tabs>
+
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```tsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
+import { SignIn } from "@clerk/nextjs";
+ 
+export default function Page() {
+  return <SignIn />;
+}
+```
+
+```tsx filename="/pages/sign-in/[[...index]].tsx"
+import { SignIn } from "@clerk/nextjs";
+ 
+const SignInPage = () => (
+  <SignIn />
+);
+ 
+export default SignInPage;
+```
+</CodeBlockTabs>
 ```
 
 ### Tables

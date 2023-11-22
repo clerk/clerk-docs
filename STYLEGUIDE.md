@@ -63,6 +63,17 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > ## How to Set up Custom Pages
 
+### 1.5 When referring to Next.js proper nouns, follow Next.js's capitalization conventions
+
+"Middleware," "Server Actions," "Server Components," "Route Handlers" are capitalized in the Next.js docs and in Clerk's docs where referring to a Next.js project or code.
+
+#### Do
+
+> Add it to your app's Middleware.
+
+#### Don't 
+
+> Add it to your app's middleware.
 
 ## 2. Write for clarity
 

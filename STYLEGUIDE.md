@@ -266,7 +266,7 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 > In your browser, open [`http://localhost:3000/`](http://localhost:3000/).
 
-### 4.2 Use carets to help users navigate menus; 
+### 4.2 Use carets to help users navigate menus
 
 Use carets to nest operations of the same type like menu navigation.
 
@@ -404,3 +404,14 @@ Be sure to use the correct term with components vs functions.
 
 > The `<SignUp />` component accepts the `signUpProps` parameter. The `buildUrlWithAuth()` function accepts the `to` property.
 
+### 4.10 Start and end every Clerk Dashboard operation with specific links to the Clerk Dashboard
+
+When telling learners to perform an operation in the Clerk Dashboard, begin with "In your Clerk Dashboard" and a link to **`https://dashboard.clerk.com/`**. Then end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+
+#### Do
+
+> In your [Clerk Dashboard](https://dashboard.clerk.com/), navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+
+#### Don't
+
+> Go to **User & Authentication** in your dasboard.

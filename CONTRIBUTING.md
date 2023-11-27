@@ -159,31 +159,9 @@ npm i @clerk/nextjs
 ​```
 ```
 
-#### `<CodeBlockTabs />`
-
-If you need to render multiple variations of a code snippet, use `<CodeBlockTabs />`. The component accepts an `options` property, which is an array of strings. For each option provided, render a code block:
-
-```mdx
-<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
-
-​```sh filename="terminal"
-npm i @clerk/nextjs
-​```
-
-​​```sh filename="terminal"
-yarn add @clerk/nextjs
-​```
-
-​```sh filename="terminal"
-pnpm add @clerk/nextjs
-​```
-
-</CodeBlockTabs>
-```
-
 #### `<Steps />`
 
-The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with heading from `h2`-`h4`.
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with headings from `h2`-`h4`.
 
 ```mdx
 <Steps>
@@ -213,6 +191,29 @@ The component accepts an optional `type` property which accepts the following st
 <Callout type="danger">
   Don't do this in production!
 </Callout>
+```
+
+#### `<CodeBlockTabs />`
+
+If you need to render multiple variations of a code snippet, use `<CodeBlockTabs />`. The component accepts an `options` property, which is an array of strings. For each option provided, render a code block:
+
+```mdx
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+
+​```sh filename="terminal"
+npm i @clerk/nextjs
+​```
+
+​​```sh filename="terminal"
+yarn add @clerk/nextjs
+​```
+
+​```sh filename="terminal"
+pnpm add @clerk/nextjs
+​```
+
+</CodeBlockTabs>
+```
 
 The component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
 
@@ -277,7 +278,7 @@ Here is some example text about JavaScript.
 </Tabs>
 ```
 
-The component also accepts a `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
+The component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
 
 For example, in the example below, if the user were to choose "JavaScript" as the tab they want to see, both `<Tabs />` components would change their active tab to "JavaScript" because both components were passed `"framework"` as their `type`.
 

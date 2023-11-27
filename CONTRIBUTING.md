@@ -395,6 +395,29 @@ For example, one of these cells has content that would best formatted in an unor
 />
 ```
 
+#### `<InjectKeys />`
+
+The `<InjectKeys />` component is used to inject the user's current Clerk instance's publishable and secret keys. It should wrap around a code block, which will 
+
+```mdx
+Add the following code to your `.env.local` file to set your public and secret keys.
+
+**Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/), your secret key should become visible by clicking on the eye icon.
+
+<InjectKeys>
+
+```sh filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+```
+
+</InjectKeys>
+```
+
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+
+![Clicking on the eye icon on a code block that is wrapped in <InjectKeys /> will show the user their secret key.](/public/images/styleguide/inject-keys.mov)
+
 #### `<TutorialHero />`
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:

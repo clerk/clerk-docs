@@ -399,9 +399,11 @@ For example, one of these cells has content that would best formatted in an unor
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-* `quickstart` denotes the framework or platform the tutorial is for
-* `beforeYouStart` accepts an array of objects containing titles and links things learnes should complete before the tutorial like so. Eg `{ title: string; link: string }[];`
-* `exampleRepo` accepts an array of objects containing titles and links to example repos. Eg `{ title: string; link: string }[];`
+| Property | Type | Description |
+| --- | --- | --- |
+| `quickstart` | string | Denotes the framework or platform the tutorial is for. |
+| `beforeYouStart` | { title: string; link: string }[] | Links to things that learners should complete before the tutorial. |
+| `exampleRepo` (optional) | { title: string; link: string }[] | Links to example repositories. |
 
 ```
 <TutorialHero 

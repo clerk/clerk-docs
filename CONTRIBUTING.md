@@ -217,9 +217,9 @@ pnpm add @clerk/nextjs
 
 The component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
 
-For example, in the example below, if the user were to choose "yarn" as the tab they want to see, both `<CodeBlockTabs />` components would change their active tab to "yarn" because both components were passed `"installer"` as their `type`.
+For example, in the example below, if the user were to choose `"yarn"` as the tab they want to see, both `<CodeBlockTabs />` components would change their active tab to `"yarn"` because both components were passed `"installer"` as their `type`.
 
-```mdx
+````mdx
 Install the Clerk Next.js package by running the following command in your terminal: 
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
@@ -255,7 +255,7 @@ pnpm add @clerk/clerk-react
 ​```
 
 </CodeBlockTabs>
-```
+````
 
 #### `<Tabs />`
 
@@ -316,7 +316,7 @@ The `type` property can be used on both `<CodeBlockTabs />` and `<Tabs />` to sy
 
 For example, in the example below, if the user were working with Next.js Pages Router and chose the "Pages Router" as the tab they want to see, both the `<Tabs />` and the `<CodeBlockTabs />` components would change their active tab to "Pages Router" because both components were passed `"router"` as their `type`.
 
-```mdx
+````mdx
 <Tabs type="router" items={["App Router", "Pages Router"]}>
 <Tab>
 The App Router information is here.
@@ -346,7 +346,7 @@ const SignInPage = () => (
 export default SignInPage;
 ```
 </CodeBlockTabs>
-```
+````
 
 ### Tables
 
@@ -397,22 +397,22 @@ For example, one of these cells has content that would best formatted in an unor
 
 #### `<InjectKeys />`
 
-The `<InjectKeys />` component is used to inject the user's current Clerk instance's publishable and secret keys. It should wrap around a code block, which will 
+The `<InjectKeys />` component is used to inject the user's current Clerk instance's publishable and secret keys. It should wrap around a code block, which will render an eye icon for users to click on in order to reveal their secret keys.
 
-```mdx
-Add the following code to your `.env.local` file to set your public and secret keys.
+````mdx
+  Add the following code to your `.env.local` file to set your public and secret keys.
 
-**Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/), your secret key should become visible by clicking on the eye icon.
+  **Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/), your secret key should become visible by clicking on the eye icon.
 
-<InjectKeys>
+  <InjectKeys>
 
-```sh filename=".env.local"
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-CLERK_SECRET_KEY={{secret}}
-```
+  ```sh filename=".env.local"
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
 
-</InjectKeys>
-```
+  </InjectKeys>
+````
 
 The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
 

@@ -19,14 +19,24 @@ Private metadata is only accessible by the backend, which makes this useful for 
 
 ### Setting private metadata
 
-<CodeBlockTabs options={['cURL', 'Pages Router', 'App Router', 'Node', 'Go','Ruby']}>
-```bash filename="curl.sh"
-curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-  "private_metadata": {
-    "stripeId": "12356"
-  }
-}' 'https://api.clerk.com/v1/users/{user_id}/metadata'
+<Tabs type="framework" items={["Next.js", "Node", "Go", "Ruby", "cURL"]}>
+<Tab>
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```ts filename="app/route/private.ts"
+import { NextResponse } from 'next/server';
+import { clerkClient } from "@clerk/nextjs";
+
+export async function POST() {
+  const { stripeId, userId } = await body.json();
+  await clerkClient.users.updateUserMetadata(userId, {
+    privateMetadata: {
+      stripeId: stripeId
+    }
+  });
+  return NextResponse.json({ success: true });
+}
 ```
+
 ```ts filename="pages/api/private.ts"
 import { clerkClient } from "@clerk/nextjs";
 import { NextApiRequest, NextApiResponse } from "next";
@@ -44,20 +54,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.status(200).json({ success: true });
 }
 ```
-```ts filename="app/route/private.ts"
-import { NextResponse } from 'next/server';
-import { clerkClient } from "@clerk/nextjs";
+</CodeBlockTabs>
+</Tab>
 
-export async function POST() {
-  const { stripeId, userId } = await body.json();
-  await clerkClient.users.updateUserMetadata(userId, {
-    privateMetadata: {
-      stripeId: stripeId
-    }
-  });
-  return NextResponse.json({ success: true });
-}
-```
+<Tab>
 ```ts filename="private.ts"
 import { clerkClient } from "@clerk/clerk-sdk-node";
 
@@ -73,6 +73,9 @@ app.post('/updateStripe', (req, res) => {
 });
 
 ```
+</Tab>
+
+<Tab>
 ```ts filename="private.go"
 var client clerk.Client
 
@@ -89,6 +92,9 @@ func addStripeCustomerID(user *clerk.User, stripeCustomerID string) error {
 	}
 }
 ```
+</Tab>
+
+<Tab>
 ```ts filename="private.rb"
 // ruby json example with a private metadata and stripe id
 require 'clerk'
@@ -102,83 +108,97 @@ privateMetadata = {
 clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
 clerk.users.updateMetadata("user_xyz", private_metadata: privateMetadata)
 ```
-</CodeBlockTabs>
+</Tab>
+
+<Tab>
+```bash filename="curl.sh"
+curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
+  "private_metadata": {
+    "stripeId": "12356"
+  }
+}' 'https://api.clerk.com/v1/users/{user_id}/metadata'
+```
+</Tab>
+</Tabs>
 
 ### Retrieving private metadata
 
 You can retrieve the private metadata for a user by using the [`getUser`](/docs/references/backend/user/get-user) method. This method will return the `User` object which contains the private metadata.
 
-<Tabs items={["Next.js", "Node", "cURL", "Go", "Ruby"]}>
+<Tabs type="framework" items={["Next.js", "Node", "cURL", "Go", "Ruby"]}>
   <Tab>
-<CodeBlockTabs options={['App Router', 'Pages Router']}>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
 
-```ts filename="app/private/route.ts"
-import { NextResponse } from 'next/server';
-import { clerkClient } from "@clerk/nextjs";
+    ```ts filename="app/private/route.ts"
+    import { NextResponse } from 'next/server';
+    import { clerkClient } from "@clerk/nextjs";
 
-export async function GET(request: Request) {
-  const { stripeId, userId } = await request.body.json();
+    export async function GET(request: Request) {
+      const { stripeId, userId } = await request.body.json();
 
-  const user = await clerkClient.users.getUser(userId)
-  return NextResponse.json(user.privateMetadata);
-}
-```
+      const user = await clerkClient.users.getUser(userId)
+      return NextResponse.json(user.privateMetadata);
+    }
+    ```
 
-```ts filename="pages/api/private.ts"
-import { clerkClient } from "@clerk/nextjs";
-import { NextApiRequest, NextApiResponse } from "next";
+    ```ts filename="pages/api/private.ts"
+    import { clerkClient } from "@clerk/nextjs";
+    import { NextApiRequest, NextApiResponse } from "next";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { userId } = await req.body.json();
+    export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+      const { userId } = await req.body.json();
 
-  const user = await clerkClient.users.getUser(userId)
+      const user = await clerkClient.users.getUser(userId)
 
-  res.status(200).json(user.privateMetadata);
-}
-```
-</CodeBlockTabs>
-  </Tab>
-  <Tab>
-```ts filename="private.ts"
-import { clerkClient } from "@clerk/clerk-sdk-node";
-
-app.post('/updateStripe', (req, res) => {
-  const { userId } = await req.body.json();
-
-  const user = await clerkClient.users.getUser(userId)
-
-  res.status(200).json(user.privateMetadata);
-});
-
-```
-  </Tab>
-  <Tab>
-```bash filename="curl.sh"
-curl -XGET -H 'Authorization: CLERK_SECRET_KEY' -H "Content-type: application/json" 'https://api.clerk.com/v1/users/{user_id}'
-```
-  </Tab>
-  <Tab>
-```ts filename="private.go"
-var client clerk.Client
-
-func GetUserMetadata(user *clerk.User, stripeCustomerID string) error {
-	user, err := s.clerkClient.Users().Read(sess.UserID)
-
-	if err != nil {
-		panic(err)
-	}
-}
-```
-  </Tab>
-  <Tab>
-```ts filename="private.rb"
-// ruby json example with a private metadata and stripe id
-require 'clerk'
-clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-clerk.users.getUser("user_xyz")
-```
+      res.status(200).json(user.privateMetadata);
+    }
+    ```
+    </CodeBlockTabs>
   </Tab>
 
+  <Tab>
+  ```ts filename="private.ts"
+  import { clerkClient } from "@clerk/clerk-sdk-node";
+
+  app.post('/updateStripe', (req, res) => {
+    const { userId } = await req.body.json();
+
+    const user = await clerkClient.users.getUser(userId)
+
+    res.status(200).json(user.privateMetadata);
+  });
+
+  ```
+  </Tab>
+
+  <Tab>
+  ```bash filename="curl.sh"
+  curl -XGET -H 'Authorization: CLERK_SECRET_KEY' -H "Content-type: application/json" 'https://api.clerk.com/v1/users/{user_id}'
+  ```
+  </Tab>
+    
+  <Tab>
+  ```ts filename="private.go"
+  var client clerk.Client
+
+  func GetUserMetadata(user *clerk.User, stripeCustomerID string) error {
+    user, err := s.clerkClient.Users().Read(sess.UserID)
+
+    if err != nil {
+      panic(err)
+    }
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  ```ts filename="private.rb"
+  // ruby json example with a private metadata and stripe id
+  require 'clerk'
+  clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
+  clerk.users.getUser("user_xyz")
+  ```
+  </Tab>
 </Tabs>
 
 ## Public metadata
@@ -187,92 +207,107 @@ Public metadata is accessible by both the frontend and the backend. This is usef
 
 ### Setting public metadata
 
-<CodeBlockTabs options={['cURL', 'Pages Router', 'App Router', 'Node', 'Go','Ruby']}>
-```bash filename="curl.sh"
-curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-  "public_metadata": {
-    "role": "shopper"
-  }
-}' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-```
-```ts filename="pages/api/public.ts"
-import { clerkClient } from "@clerk/nextjs";
-import { NextApiRequest, NextApiResponse } from "next";
+<Tabs type="framework" items={["Next.js", "Node", "cURL", "Go", "Ruby"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```ts filename="app/route/public.ts"
+    import { NextResponse } from 'next/server';
+    import { clerkClient } from "@clerk/nextjs";
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    export async function POST() {
+      const { role, userId } =  await body.json();
 
-  const { role, userId } = req.body;
-
-  await clerkClient.users.updateUserMetadata(userId, {
-    publicMetadata: {
-      role
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          role
+        }
+      })
+      return NextResponse.json({ success: true });
     }
-  })
+    ```
 
-  res.status(200).json({ success: true });
-}
-```
-```ts filename="app/route/public.ts"
-import { NextResponse } from 'next/server';
-import { clerkClient } from "@clerk/nextjs";
+    ```ts filename="pages/api/public.ts"
+    import { clerkClient } from "@clerk/nextjs";
+    import { NextApiRequest, NextApiResponse } from "next";
 
-export async function POST() {
-  const { role, userId } =  await body.json();
+    export default async function handler(req: NextApiRequest, res: NextApiResponse) {
 
-  await clerkClient.users.updateUserMetadata(userId, {
-    publicMetadata: {
-      role
+      const { role, userId } = req.body;
+
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          role
+        }
+      })
+
+      res.status(200).json({ success: true });
     }
-  })
-  return NextResponse.json({ success: true });
-}
-```
-```ts filename="public.ts"
-import { clerkClient } from "@clerk/clerk-sdk-node";
+    ```
+    </CodeBlockTabs>
+  </Tab>
 
-app.post('/updateRole', (req, res) => {
+  <Tab>
+  ```ts filename="public.ts"
+  import { clerkClient } from "@clerk/clerk-sdk-node";
 
-  const { role, userId } = req.body;
+  app.post('/updateRole', (req, res) => {
 
-  await clerkClient.users.updateUserMetadata(userId, {
-    publicMetadata: {
-      role
-    }
+    const { role, userId } = req.body;
+
+    await clerkClient.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        role
+      }
+    });
+    res.status(200).json({ success: true });
   });
-  res.status(200).json({ success: true });
-});
+  ```
+  </Tab>
 
-```
-```ts filename="public.go"
-var client clerk.Client
+  <Tab>
+  ```ts filename="public.go"
+  var client clerk.Client
 
-func addStripeCustomerID(user *clerk.User, role string) error {
-    Role := map[string]interface{}{
-        "role": role,
+  func addStripeCustomerID(user *clerk.User, role string) error {
+      Role := map[string]interface{}{
+          "role": role,
+      }
+    user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
+      PublicMetadata: role,
+    })
+
+    if err != nil {
+      panic(err)
     }
-	user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-		PublicMetadata: role,
-	})
+  }
+  ```
+  </Tab>
 
-	if err != nil {
-		panic(err)
-	}
-}
-```
-```ts filename="public.rb"
-// ruby json example with a private metadata and stripe id
-require 'clerk'
-require 'json'
+  <Tab>
+  ```ts filename="public.rb"
+  // ruby json example with a private metadata and stripe id
+  require 'clerk'
+  require 'json'
 
-publicMetadata = {
-  "role": "awesome-user",
-}
+  publicMetadata = {
+    "role": "awesome-user",
+  }
 
+  clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
+  clerk.users.updateMetadata("user_xyz", public_metadata: publicMetadata)
+  ```
+  </Tab>
 
-clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-clerk.users.updateMetadata("user_xyz", public_metadata: publicMetadata)
-```
-</CodeBlockTabs>
+  <Tab>
+  ```bash filename="curl.sh"
+  curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
+    "public_metadata": {
+      "role": "shopper"
+    }
+  }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
+  ```
+  </Tab>
+</Tabs>
 
 ### Retrieving public metadata
 
@@ -294,247 +329,279 @@ The "unsafe" custom attributes can be set upon sign-up when creating or updating
 
 #### Using the Backend API
 
-<CodeBlockTabs options={['cURL', 'Pages Router', 'App Router', 'Node', 'Go','Ruby']}>
-```bash filename="curl.sh"
-curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-  "unsafe_metadata": {
-    "birthday": "11-30-1969"
+<Tabs type="framework" items={["Next.js", "Node", "cURL", "Go", "Ruby"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+
+    ```ts filename="app/route/private.ts"
+    import { NextResponse } from 'next/server';
+    import { clerkClient } from "@clerk/nextjs";
+
+    export async function POST() {
+      const { stripeId, userId } = await body.json();
+      await clerkClient.users.updateUserMetadata(userId, {
+        unsafeMetadata: {
+          "birthday": "11-30-1969"
+        }
+      });
+      return NextResponse.json({ success: true });
+    }
+    ```
+
+    ```ts filename="pages/api/private.ts"
+    import { clerkClient } from "@clerk/nextjs";
+    import { NextApiRequest, NextApiResponse } from "next";
+
+    export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+
+      const { stripeId, userId } = req.body;
+
+      await clerkClient.users.updateUserMetadata(userId, {
+        unsafeMetadata: {
+          "birthday": "11-30-1969"
+        }
+      })
+
+      res.status(200).json({ success: true });
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+  ```ts filename="private.ts"
+  import { clerkClient } from "@clerk/clerk-sdk-node";
+
+  app.post('/updateStripe', (req, res) => {
+
+    const { stripeId, userId } = await body.json();
+    await clerkClient.users.updateUserMetadata(userId, {
+      unsafeMetadata: {
+        "birthday": "11-30-1969"
+      }
+    });
+    res.status(200).json({ success: true });
+  });
+
+  ```
+  </Tab>
+
+  <Tab>
+  ```ts filename="private.go"
+  var client clerk.Client
+
+  func addStripeCustomerID(user *clerk.User, stripeCustomerID string) error {
+      birthday := map[string]interface{}{
+          "birthday": "04-20-1969",
+      }
+    user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
+      UnsafeMetadata: birthday,
+    })
+
+    if err != nil {
+      panic(err)
+    }
   }
-}' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-```
-```ts filename="pages/api/private.ts"
-import { clerkClient } from "@clerk/nextjs";
-import { NextApiRequest, NextApiResponse } from "next";
+  ```
+  </Tab>
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  <Tab>
+  ```ts filename="private.rb"
+  // ruby json example with a private metadata and stripe id
+  require 'clerk'
+  require 'json'
 
-  const { stripeId, userId } = req.body;
+  unsafeMetadata = {
+    "birthday": "04-20-1969"
+  }
 
-  await clerkClient.users.updateUserMetadata(userId, {
-    unsafeMetadata: {
+  clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
+  clerk.users.updateMetadata("user_xyz", unsafe_metadata: unsafeMetadata)
+  ```
+  </Tab>
+
+  <Tab>
+  ```bash filename="curl.sh"
+  curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
+    "unsafe_metadata": {
       "birthday": "11-30-1969"
     }
-  })
-
-  res.status(200).json({ success: true });
-}
-```
-```ts filename="app/route/private.ts"
-import { NextResponse } from 'next/server';
-import { clerkClient } from "@clerk/nextjs";
-
-export async function POST() {
-  const { stripeId, userId } = await body.json();
-  await clerkClient.users.updateUserMetadata(userId, {
-    unsafeMetadata: {
-      "birthday": "11-30-1969"
-    }
-  });
-  return NextResponse.json({ success: true });
-}
-```
-```ts filename="private.ts"
-import { clerkClient } from "@clerk/clerk-sdk-node";
-
-app.post('/updateStripe', (req, res) => {
-
-  const { stripeId, userId } = await body.json();
-  await clerkClient.users.updateUserMetadata(userId, {
-    unsafeMetadata: {
-      "birthday": "11-30-1969"
-    }
-  });
-  res.status(200).json({ success: true });
-});
-
-```
-```ts filename="private.go"
-var client clerk.Client
-
-func addStripeCustomerID(user *clerk.User, stripeCustomerID string) error {
-    birthday := map[string]interface{}{
-        "birthday": "04-20-1969",
-    }
-	user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-		UnsafeMetadata: birthday,
-	})
-
-	if err != nil {
-		panic(err)
-	}
-}
-```
-```ts filename="private.rb"
-// ruby json example with a private metadata and stripe id
-require 'clerk'
-require 'json'
-
-unsafeMetadata = {
-  "birthday": "04-20-1969"
-}
-
-
-clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-clerk.users.updateMetadata("user_xyz", unsafe_metadata: unsafeMetadata)
-```
-</CodeBlockTabs>
+  }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
+  ```
+  </Tab>
+</Tabs>
 
 #### Using the Frontend SDKs
 
-<CodeBlockTabs options={['Pages Router', 'App Router', 'React', 'Remix','Gatsby', 'JavaScript']}>
+<Tabs type="framework" items={["Next.js", "React", "Remix","Gatsby", "JavaScript"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```tsx filename="app/route/unsafe.tsx"
+    "use client"
+    import {useUser} from "@clerk/nextjs";
+    import {useState} from "react";
 
-```tsx filename="pages/unsafe.tsx"
-import {useUser} from "@clerk/nextjs";
-import {useState} from "react";
-
-export default function UnSafePage() {
-  const { user } = useUser();
-  const [birthday, setBirthday] = ""
-
-
-  return(
-    <div>
-      <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-      <button onClick={() => {
-        user.update({
-          unsafeMetadata: {
-            birthday
-          }
-        })
-      }}>Update Birthday</button>
-    </div>
-  )
-}
-```
-```tsx filename="app/route/unsafe.tsx"
-"use client"
-import {useUser} from "@clerk/nextjs";
-import {useState} from "react";
-
-export default function UnSafePage() {
-  const { user } = useUser();
-  const [birthday, setBirthday] = ""
+    export default function UnSafePage() {
+      const { user } = useUser();
+      const [birthday, setBirthday] = ""
 
 
-  return(
-    <div>
-      <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-      <button onClick={() => {
-        user.update({
-          unsafeMetadata: {
-            birthday
-          }
-        })
-      }}>Update Birthday</button>
-    </div>
-  )
-}
-```
-```tsx filename="unsafe.tsx"
-import {useUser} from "@clerk/clerk-react";
-import {useState} from "react";
-
-export default function UnSafePage() {
-  const { user } = useUser();
-  const [birthday, setBirthday] = ""
-
-
-  return(
-    <div>
-      <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-      <button onClick={() => {
-        user.update({
-          unsafeMetadata: {
-            birthday
-          }
-        })
-      }}>Update Birthday</button>
-    </div>
-  )
-}
-```
-```tsx filename="unsafe.tsx"
-import {useUser} from "@clerk/remix";
-import {useState} from "react";
-
-export default function UnSafePage() {
-  const { user } = useUser();
-  const [birthday, setBirthday] = ""
-  return(
-    <div>
-      <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-      <button onClick={() => {
-        user.update({
-          unsafeMetadata: {
-            birthday
-          }
-        })
-      }}>Update Birthday</button>
-    </div>
-  )
-}
-```
-```tsx filename="unsafe.tsx"
-// use Clerk React for gatsby
-import {useUser} from "@clerk/clerk-react";
-import {useState} from "react";
-
-export default function UnSafePage() {
-  const { user } = useUser();
-  const [birthday, setBirthday] = ""
-
-
-  return(
-    <div>
-      <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
-      <button onClick={() => {
-        user.update({
-          unsafeMetadata: {
-            birthday
-          }
-        })
-      }}>Update Birthday</button>
-    </div>
-  )
-}
-```
-```html filename="unsafe.html"
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clerk Unsafe Update</title>
-</head>
-
-<body>
-    <h1>Clerk JavaScript Email + Password</h1>
-
-    <div id="birthday-update">
-        <input placeholder="your birthday" id="birthday" type="string"></input>
-        <button onclick="updateBirthday()">Update Birthday</button>
-
-    </div>
-    <script>
-        const updateBirthday = async () => {
-            const birthday = document.getElementById('birthday').value;
-            const {user} = window.Clerk;
+      return(
+        <div>
+          <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+          <button onClick={() => {
             user.update({
-                unsafeMetadata: {
-                  "birthday": birthday
-                }
+              unsafeMetadata: {
+                birthday
+              }
             })
-        };
-    </script>
-    // Script to load Clerk up
-    <script src="src/script.js" async crossorigin="anonymous"></script>
-</body>
+          }}>Update Birthday</button>
+        </div>
+      )
+    }
+    ```
 
-</html>
-```
-</CodeBlockTabs>
+    ```tsx filename="pages/unsafe.tsx"
+    import {useUser} from "@clerk/nextjs";
+    import {useState} from "react";
+
+    export default function UnSafePage() {
+      const { user } = useUser();
+      const [birthday, setBirthday] = ""
+
+
+      return(
+        <div>
+          <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+          <button onClick={() => {
+            user.update({
+              unsafeMetadata: {
+                birthday
+              }
+            })
+          }}>Update Birthday</button>
+        </div>
+      )
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+  ```tsx filename="unsafe.tsx"
+  import {useUser} from "@clerk/clerk-react";
+  import {useState} from "react";
+
+  export default function UnSafePage() {
+    const { user } = useUser();
+    const [birthday, setBirthday] = ""
+
+    return(
+      <div>
+        <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+        <button onClick={() => {
+          user.update({
+            unsafeMetadata: {
+              birthday
+            }
+          })
+        }}>Update Birthday</button>
+      </div>
+    )
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  ```tsx filename="unsafe.tsx"
+  import {useUser} from "@clerk/remix";
+  import {useState} from "react";
+
+  export default function UnSafePage() {
+    const { user } = useUser();
+    const [birthday, setBirthday] = ""
+    return(
+      <div>
+        <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+        <button onClick={() => {
+          user.update({
+            unsafeMetadata: {
+              birthday
+            }
+          })
+        }}>Update Birthday</button>
+      </div>
+    )
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  ```tsx filename="unsafe.tsx"
+  // use Clerk React for gatsby
+  import {useUser} from "@clerk/clerk-react";
+  import {useState} from "react";
+
+  export default function UnSafePage() {
+    const { user } = useUser();
+    const [birthday, setBirthday] = ""
+
+
+    return(
+      <div>
+        <input type="text" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+        <button onClick={() => {
+          user.update({
+            unsafeMetadata: {
+              birthday
+            }
+          })
+        }}>Update Birthday</button>
+      </div>
+    )
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  ```html filename="unsafe.html"
+  <!DOCTYPE html>
+  <html lang="en">
+
+  <head>
+      <meta charset="UTF-8" />
+      <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Clerk Unsafe Update</title>
+  </head>
+
+  <body>
+      <h1>Clerk JavaScript Email + Password</h1>
+
+      <div id="birthday-update">
+          <input placeholder="your birthday" id="birthday" type="string"></input>
+          <button onclick="updateBirthday()">Update Birthday</button>
+
+      </div>
+      <script>
+          const updateBirthday = async () => {
+              const birthday = document.getElementById('birthday').value;
+              const {user} = window.Clerk;
+              user.update({
+                  unsafeMetadata: {
+                    "birthday": birthday
+                  }
+              })
+          };
+      </script>
+      // Script to load Clerk up
+      <script src="src/script.js" async crossorigin="anonymous"></script>
+  </body>
+
+  </html>
+  ```
+  </Tab>
+</Tabs>
 
 ### Retrieving unsafe metadata
 

@@ -175,7 +175,7 @@ Some learners may not have heard this expression before. It may be difficult for
 
 ### 2.8 Use a active voice vs. passive voice.
 
-Use active verbs that put the reader in the first person instead of passive verbs ("be" verbs that describe the learners actions as a state of being like "is/was/to be").
+Use active verbs that put the reader in the first person instead of passive verbs; "be" verbs that describe the learners actions as a state of being, like "is/was/to be".
 
 #### Do
 

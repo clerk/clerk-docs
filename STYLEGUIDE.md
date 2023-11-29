@@ -367,7 +367,7 @@ Next.js's two implementations are given equal weight to the other members of the
 
 ### 4.7 Wrap component references in `< />`
 
-Component references should be wrapped in `< />`
+Component references should be wrapped in `< />`.
 
 #### Do
 

@@ -415,14 +415,18 @@ Be sure to use the correct term with components vs functions.
 
 > The `<SignUp />` component accepts the `signUpProps` parameter. The `buildUrlWithAuth()` function accepts the `to` property.
 
-### 4.10 Start and end every Clerk Dashboard operation with specific links to the Clerk Dashboard
+### 4.10 Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
-When telling learners to perform an operation in the Clerk Dashboard, begin with "In your Clerk Dashboard" and a link to **`https://dashboard.clerk.com/`**. Then end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+When telling learners to perform an operation in the Clerk Dashboard, begin with "In your Clerk Dashboard". Then, end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
 
 #### Do
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+> In your Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+
+> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
 
 #### Don't
 
-> Go to **User & Authentication** in your dasboard.
+> Go to **User & Authentication** in your dashboard.
+
+> Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.

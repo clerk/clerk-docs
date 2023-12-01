@@ -160,25 +160,27 @@ npm i @clerk/nextjs
 
 #### `<Steps />`
 
-The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with headings from `h2`-`h4`.
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with H3 headings.
 
 ```mdx
 <Steps>
 
-## Step 1
+### Step 1
 
-### A heading inside a step
+Do these actions to complete Step 1.
 
-Do this.
+### Another step
 
-## Another step
+#### A heading inside a step
 
-Do this.
+Do these actions to complete Step 2.
 
 </Steps>
 ```
 
-<!-- TODO (Alexis): Add image that shows this example above, rendered. Cannot be done right now, as Steps is broken. -->
+The image below shows what this example looks like once rendered.
+
+![An example of a <Steps /> component](/public/images/styleguide/steps.png)
 
 #### `<Callout />`
 

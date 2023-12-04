@@ -40,24 +40,7 @@ Now that you have a way to process a token, you'll need to setup a page on your 
 
 Signing a user in with a token is very similar to all of our other custom flows.
 
-<CodeBlockTabs options={["React", "Next.js"]}>
-```jsx filename="accept-token.js"
-// Grab the sign in token from the query string
-const queryParams = new URLSearchParams(window.location.search);
-const signInToken = queryParams.get('token');
-
-const { signIn, setSession } = useSignIn();
-
-// Create a sign in with the ticket strategy, and the sign-in-token
-const res = await signIn.create({
-  strategy: "ticket",
-  ticket: "signInToken",
-});
-
-// Set the session as active, and then do whatever you need to!
-setSession(res.createdSessionId, () => console.log("SignedIn!"));
-```
-
+<CodeBlockTabs type="framework" options={["Next.js", "React"]}>
 ```jsx filename="pages/accept-token.jsx"
 import { InferGetServerSidePropsType, GetServerSideProps } from "next";
 import { useUser, useSignIn } from "@clerk/nextjs";
@@ -73,12 +56,12 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 const AcceptToken = ({
   signInToken,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
-  const { signIn, setSession } = useSignIn();
+  const { signIn, setActive } = useSignIn();
   const { user } = useUser();
   const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!signIn || !setSession || !signInToken) {
+    if (!signIn || !setActive || !signInToken) {
       return;
     }
 
@@ -89,9 +72,9 @@ const AcceptToken = ({
           strategy: "ticket",
           ticket: signInToken as string,
         });
-
-        setSession(res.createdSessionId, () => {
-          setSignInProcessed(true);
+        setActive({
+          session: res.createdSessionId,
+          beforeEmit: () => setSignInProcessed(true)
         });
       } catch (err) {
         setSignInProcessed(true);
@@ -99,7 +82,7 @@ const AcceptToken = ({
     };
 
     aFunc();
-  }, [signIn, setSession]);
+  }, [signIn, setActive]);
 
   if (!signInToken) {
     return <div>no token provided</div>;
@@ -117,5 +100,25 @@ const AcceptToken = ({
 };
 
 export default AcceptToken;
+```
+
+```jsx filename="accept-token.js"
+// Grab the sign in token from the query string
+const queryParams = new URLSearchParams(window.location.search);
+const signInToken = queryParams.get('token');
+
+const { signIn, setActive } = useSignIn();
+
+// Create a sign in with the ticket strategy, and the sign-in-token
+const res = await signIn.create({
+  strategy: "ticket",
+  ticket: "signInToken",
+});
+
+// Set the session as active, and then do whatever you need to!
+setActive({
+  session: res.createdSessionId,
+  beforeEmit: () => console.log("SignedIn!")
+});
 ```
 </CodeBlockTabs>

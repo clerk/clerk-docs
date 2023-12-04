@@ -1,19 +1,36 @@
 ---
-title: Use Clerk with Next.js
+title: Add authentication and user management to your Next.js app with Clerk in 7 minutes
 description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your Next.js application. Clerk works seamlessly on both client side and server side components.
 ---
 
-# Use Clerk with Next.js
-
-Learn how to use Clerk to quickly and easily add secure authentication and user management to your Next.js application. Clerk works seamlessly in both client side and server side components.
+<TutorialHero 
+  quickstart="nextjs"
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "https://clerk.com/docs/quickstarts/setup-clerk"
+    },
+    {
+      title: "Create a Next.js application",
+      link: "https://nextjs.org/docs/getting-started/installation"
+    }
+  ]}
+>
+- Install `@clerk/nextjs`
+- Set up your environment keys
+- Wrap your Next.js app in `<ClerkProvider/>`  
+- Limit access to authenticated users
+- Embed the `<UserButton/>`
+</TutorialHero>
 
 <Steps>
 
 ### Install `@clerk/nextjs`
 
-Once you have a Next.js application ready, you need to install Clerk's Next.js SDK. This gives you access to prebuilt components and hooks, as well as [helpers](/docs/references/nextjs/overview) for Next.js API routes, server-side rendering, and Middleware.
+Clerk's Next.js SDK gives you access to prebuilt [components](/docs/components/overview), [hooks](/docs/references/nextjs/overview#client-side-helpers), and [helpers](/docs/references/nextjs/overview) for Next.js Server Components, Route Handlers and Middleware. Install it by running the following command in your terminal:
 
-<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
   ```bash filename="terminal"
   npm install @clerk/nextjs
   ```
@@ -29,7 +46,11 @@ Once you have a Next.js application ready, you need to install Clerk's Next.js S
 
 ### Set environment keys
 
-Below is an example of an `.env.local` file. If you are signed into your Clerk Dashboard, your keys should become visible by clicking on the eye icon.
+In your Next.js project's root folder, you may have an `.env.local` file alongside `package.json` and other configuration files. If you don't see it, create it.
+
+Add the following code to your `.env.local` file to set your public and secret keys.
+
+**Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/), your keys should become visible by clicking on the eye icon.
 
 <InjectKeys>
 
@@ -40,62 +61,69 @@ CLERK_SECRET_KEY={{secret}}
 
 </InjectKeys>
 
-### Mount `<ClerkProvider />`
+This sets your public and secret keys.
 
-Add the [`<ClerkProvider />`][clerk-provider] wrapper to your application. The [`<ClerkProvider />`][clerk-provider] component wraps your Next.js application to provide active session and user context to Clerk's hooks and other components. A reasonable default approach is to have [`<ClerkProvider />`][clerk-provider] wrap the `<body/>` to enable the context to be accessible anywhere within the app.
+### Wrap your app in `<ClerkProvider />`
 
+The [`<ClerkProvider />`](/docs/components/clerk-provider) component provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file. 
 
-<Callout type="info">
-  The [`<ClerkProvider />`][clerk-provider] component needs to access [headers](https://nextjs.org/docs/app/api-reference/functions/headers) to authenticate correctly. This means anything wrapped by the provider will be opted into [dynamic rendering](https://nextjs.org/docs/app/building-your-application/rendering/server-components#dynamic-rendering) at request time. If you have static-optimized or ISR pages that you would prefer not to be opted into dynamic rendering, make sure they are <em>not</em> wrapped by [`<ClerkProvider />`][clerk-provider].
-  
-  This is easiest to accomplish by ensuring that [`<ClerkProvider />`][clerk-provider] is added further down the tree to wrap route groups that explicitly need authentication instead of having the provider wrap your application root as recommended above. For example, if your project includes a set of landing/marketing pages as well as a dashboard that requires login, you would create separate `(marketing)` and `(dashboard)` route groups. Adding [`<ClerkProvider />`][clerk-provider] to the `(dashboard)/layout.jsx` layout file will ensure that only those routes are opted into dynamic rendering, allowing the marketing routes to be statically optimized.
+<Tabs type="router" items={["App Router", "Pages Router"]}>
+  <Tab>
+    <Callout>
+      The `app/layout.tsx` file might be in your `src` folder if it isn't in your root folder.
+    </Callout>
 
-</Callout>
+    For this project, it makes sense to wrap the `<html />` element with `<ClerkProvider />`. This makes the active session and user context accessible anywhere within the app.
 
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-```tsx filename="app/layout.tsx"
-import { ClerkProvider } from '@clerk/nextjs'
+    ```tsx filename="/src/app/layout.tsx" {1,9,14}
+    import { ClerkProvider } from '@clerk/nextjs'
 
-export const metadata = {
-  title: 'Next.js 13 with Clerk',
-}
+    export default function RootLayout({
+      children,
+    }: {
+      children: React.ReactNode
+    }) {
+      return (
+        <ClerkProvider>
+          <html lang="en">
+            <body>{children}</body>
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>{children}</body>
-      </html>
-    </ClerkProvider>
-  )
-}
-```
+          </html>
+        </ClerkProvider>
+      )
+    }
+    ```
 
-```tsx filename="_app.tsx"
-import { ClerkProvider } from "@clerk/nextjs";
-import type { AppProps } from "next/app";
-function MyApp({ Component, pageProps }: AppProps) {
-  return (
-    <ClerkProvider {...pageProps}>
-      <Component {...pageProps} />
-    </ClerkProvider>
-  );
-}
-export default MyApp;
-```
-</CodeBlockTabs>
+    <Callout type="warning">
+      The root layout is a server component. If you plan to use the `<ClerkProvider />` outside the root layout, it will need to be a server component as well.
+    </Callout>
+  </Tab>
+  <Tab>
+    For this project, it makes sense to wrap the `<Component />` element with `<ClerkProvider />`. This makes the active session and user context accessible anywhere within `MyApp`.
 
-<Callout type="warning">
-  The root layout is a server component. If you plan to use the [`<ClerkProvider />`][clerk-provider] outside the root layout, it will need to be a server component as well.
-</Callout>
+    ```tsx filename="_app.tsx" {2,6,8}
+      import '@/styles/globals.css'
+      import { ClerkProvider } from "@clerk/nextjs";
+      import type { AppProps } from "next/app";
+      function MyApp({ Component, pageProps }: AppProps) {
+        return (
+          <ClerkProvider {...pageProps}>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        );
+      }
+      export default MyApp;
+      ```
+  </Tab>
+</Tabs>
 
-### Protect your application
+### Require authentication to access your app
 
-Now that Clerk is installed and mounted in your application, it’s time to decide which pages are public and which need to hide behind authentication. Create a `middleware.ts` file. If your application uses the `src/` directory, your `middleware.ts` file should be placed inside the `src/` folder. If you are not using a `src/` directory, place the `middleware.ts` file in your root directory.
+Now that Clerk is installed and mounted in your application, you can decide which pages are public and which should require authentication to access. 
+
+Create a `middleware.ts` file. If your application uses the `src/` directory, your `middleware.ts` file should be placed inside the `src/` folder. If you are not using a `src/` directory, place the `middleware.ts` file in your root directory alongside `.env.local`. 
+
+Copy and paste the following code into your `middleware.ts`. With this, your entire application is protected. 
 
 ```tsx filename="middleware.ts"
 import { authMiddleware } from "@clerk/nextjs";
@@ -106,84 +134,21 @@ import { authMiddleware } from "@clerk/nextjs";
 export default authMiddleware({});
 
 export const config = {
-      matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
 };
 
 ```
 
-With this Middleware, your entire application is protected. If you try to access it, the Middleware will redirect you to your Sign Up page. If you want to make other routes public, check out the [authMiddleware reference page](/docs/references/nextjs/auth-middleware).
-
-### Build your own sign-in and sign-up pages
-
-At this point, your application is fully protected by Clerk and uses Clerk's [Account Portal](/docs/account-portal/overview) pages that are available out of the box. You can start your Next.js application via `npm run dev`, visit `http://localhost:3000`, and sign up to get access to your application. 
-
-Clerk also offers a set of [prebuilt components](/docs/components/overview) and [custom flows](/docs/custom-flows/overview) that you can use instead to embed sign in, sign up, and other user management functions into your Next.js application. We are going to use the [`<SignIn />`](/docs/components/authentication/sign-in) and [`<SignUp />`](/docs/components/authentication/sign-up) components by utilizing the [Next.js optional catch-all route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes#optional-catch-all-routes).
-
-#### Build your sign-up page
-
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-  ```tsx filename="app/sign-up/[[...sign-up]]/page.tsx"
-  import { SignUp } from "@clerk/nextjs";
-
-  export default function Page() {
-    return <SignUp />;
-  }
-  ```
-
-  ```tsx filename="/pages/sign-up/[[...index]].tsx"
-  import { SignUp } from "@clerk/nextjs";
-
-  export default function Page() {
-    return <SignUp />;
-  }
-  ```
-</CodeBlockTabs>
-
-#### Build your sign-in page
-
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-  ```tsx filename="app/sign-in/[[...sign-in]]/page.tsx"
-  import { SignIn } from "@clerk/nextjs";
-
-  export default function Page() {
-    return <SignIn />;
-  }
-  ```
-
-  ```tsx filename="/pages/sign-in/[[...index]].tsx"
-  import { SignIn } from "@clerk/nextjs";
-
-  export default function Page() {
-    return <SignIn />;
-  }
-  ```
-</CodeBlockTabs>
-
-<Callout type="info" emoji="ℹ️">
-  By default, the Clerk components inherit the font family. `create-next-app` does not apply a global font family. When you launch your application, you may notice that the font family is different.
-</Callout>
-
-#### Update your environment variables
-
-Next, add environment variables for the `signIn`, `signUp`, `afterSignUp`, and `afterSignIn` paths:
-
-```sh filename=".env.local"
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
-```
-
-These values control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
+**Try accessing your app now by visiting [`http://localhost:3000`](http://localhost:3000).** The Middleware will redirect you to your Sign Up page. If you want to make other routes public, check out the [authMiddleware reference page](/docs/references/nextjs/auth-middleware). Go ahead and sign up to get access to your application. Your app is now fully protected by Clerk!
 
 ### Embed the `<UserButton />`
 
-The [`<UserButton />`](/docs/components/user/user-button) allows users to manage their account information and log out, thus allowing you to complete a full authentication circle.
+Clerk offers a set of [prebuilt components](/docs/components/overview) to add functionality to your app with minimal effort. The [`<UserButton />`](/docs/components/user/user-button) allows users to manage their account information and log out, completing the full authentication circle.
 
-You can add it anywhere you want, but next to the logo in your main application page is a good start.
+Add it anywhere inside `<ClerkProvider />` in your app. First add `import { UserButton } from "@clerk/nextjs";` to the top of your file. Then add `<UserButton afterSignOutUrl="/"/>`. The `afterSignOutUrl` prop lets you customize what page the user will be redirected to after sign out.
 
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-```tsx filename="app/page.tsx"
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```tsx filename="app/page.tsx" {1,6}
 import { UserButton } from "@clerk/nextjs";
 
 export default function Home() {
@@ -195,10 +160,10 @@ export default function Home() {
 }
 ```
 
-```tsx filename="pages/example.tsx"
+```tsx filename="pages/index.tsx" {1,7}
 import { UserButton } from "@clerk/nextjs";
 
-export default function Example() {
+export default function Home() {
   return (
     <>
 			<header>
@@ -211,269 +176,35 @@ export default function Example() {
 ```
 </CodeBlockTabs>
 
-### Sign up for your application
+### Sign out of your application
 
-Now start your Next.js application via `npm run dev`, visit `http://localhost:3000`, and sign up to get access to your application.
+Visit your Next.js application at [`localhost:3000`](http://localhost:3000), click on your avatar, and select "sign out." You are now back where you started—a sign in form.
+
+### Deploy your application
+
+You're ready to [deploy your app to production](/docs/deployments/overview) and welcome new users!
 
 </Steps>
 
-## Read session and user data
+## You're authenticated!
 
-Clerk provides a set of [hooks and helpers](/docs/references/nextjs/overview#client-side-helpers) that you can use to access the active session and user data in your Next.js application. Here are examples of how to use these helpers in both the client and server side to get you started.
+Congratulations! Your app is now only available to authenticated users! But this is just the first step. 
 
-### Client side
+If you would like a repository that demonstrates many of the features Clerk has to offer, such as user, session, and organization management, check out one of Clerk's showcase repositories:
 
-#### `useAuth`
-
-The [`useAuth`](/docs/references/react/use-auth) hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
-
-```tsx filename="example.tsx"
-"use client";
-import { useAuth } from "@clerk/nextjs";
-
-export default function Example() {
-  const { isLoaded, userId, sessionId, getToken } = useAuth();
-
-  // In case the user signs out while on the page.
-  if (!isLoaded || !userId) {
-    return null;
-  }
-
-  return (
-    <div>
-      Hello, {userId} your current active session is {sessionId}
-    </div>
-  );
-}
-```
-
-#### `useUser`
-
-The [`useUser`](/docs/references/react/use-user) hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
-
-```tsx filename="example.tsx"
-"use client";
-import { useUser } from "@clerk/nextjs";
-
-export default function Example() {
-  const { isLoaded, isSignedIn, user } = useUser();
-
-  if (!isLoaded || !isSignedIn) {
-    return null;
-  }
-
-  return <div>Hello, {user.firstName} welcome to Clerk</div>;
-}
-```
-
-### Server side
-
-#### App Router
-
-[`auth()`][auth-ref] and [`currentUser()`][currentuser-ref] are App Router-specific helpers that you can use inside of your Route Handlers, Middleware, Server Components, and Server Actions.
-
-The [`auth()`][auth-ref] helper will return the [`Authentication`](/docs/references/nextjs/authentication-object) object of the currently active user. Now that request data is available in the global scope through Next.js's `headers()` and `cookies()` methods, passing the request object to Clerk is no longer required.
-
-The [`currentUser()`][currentuser-ref] helper will return the [`User`][user-object] object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server.
-
- Under the hood, `currentUser()` uses the [`clerkClient`](/docs/references/backend/overview) wrapper to make a call to Clerk's Backend API. This does count towards the [Backend API Request Rate Limit](/docs/backend-requests/resources/rate-limits#rate-limits). This also uses `fetch()` so it is automatically deduped per request.
-
-<Callout type="info">
-  Any requests from a Client Component to a Route Handler will automatically include the user's current token as the Bearer token.
-</Callout>
-
-<Tabs items={["Server components and actions", "Route Handler", "Route Handler w/ User Fetch"]}>
-  <Tab>
-    This example uses the new `auth()` helper to validate an authenticated user and the new `currentUser()` helper to access the [`User`][user-object] object for the authenticated user.
-
-    ```tsx filename="app/page.tsx"
-    import { auth, currentUser } from "@clerk/nextjs";
-
-    export default async function Page() {
-
-      // Get the userId from auth() -- if null, the user is not logged in
-      const { userId } = auth();
-
-      if (userId) {
-        // Query DB for user specific information or display assets only to logged in users 
-      }
-
-      // Get the User object when you need access to the user's information
-      const user = await currentUser()
-      // Use `user` to render user details or create UI elements
-    }
-    ```
-  </Tab>
-  <Tab>
-    A Route Handler added to [`publicRoutes`](/docs/references/nextjs/auth-middleware#making-pages-public-using-public-routes) can still use the [`auth()`](/docs/references/nextjs/auth) helper to return information about the user or their authentication state, or to control access to some or all of the Route Handler. The `auth()` helper does require [Middleware](/docs/references/nextjs/auth-middleware). 
-
-    ```tsx filename="app/api/user/route.tsx"
-    import { NextResponse } from 'next/server';
-    import { auth } from '@clerk/nextjs';
-
-    export async function GET() {
-
-      // Get the userId from auth() -- if null, the user is not logged in
-      const { userId } = auth();
-
-      if (!userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
-      }
-
-      // Perform your Route Handler's logic
-
-      return NextResponse.json({ userId }, { status: 200 });
-    }
-    ```
-  </Tab>
-  <Tab>
-    A Route Handler added to [`publicRoutes`](/docs/references/nextjs/auth-middleware#making-pages-public-using-public-routes) can still use the [`auth()`](/docs/references/nextjs/auth) helper to return information about the user or their authentication state, or to control access to some or all of the Route Handler. The `auth()` helper does require [Middleware](/docs/references/nextjs/auth-middleware). 
-
-    In this example, the `auth()` helper is used to validate an authenticated user and the `currentUser()` helper is used to access the [`User`][user-object] object for the authenticated user.
-
-   ```tsx filename="app/api/user/route.ts"
-    import { NextResponse } from 'next/server';
-    import { currentUser, auth } from "@clerk/nextjs";
-
-    export async function GET() {
-
-      // Get the userId from auth() -- if null, the user is not logged in
-      const { userId } = auth();
-
-      if (!userId) {
-        return new NextResponse("Unauthorized", { status: 401 });
-      }
-
-      const user = await currentUser();
-
-      // Perform your Route Handler's logic with the returned user object
-
-      return NextResponse.json({ "user": user }, { status: 200 })
-    }
-  ```
-  </Tab>
-</Tabs>
-
-#### Pages Router
-
-<Tabs items={["API Route", "API Route w/ User Fetch", "getServerSideProps"]}>
-  <Tab>
-    For Next.js applications using the Pages Router, you can retrieve information about the user and their authentication state, or control access to some or all of your API routes by using the [`getAuth()`][get-auth] helper. The [`getAuth()`][get-auth] helper does require [Middleware](/docs/references/nextjs/auth-middleware). 
-
-
-    ```tsx filename="pages/api/auth.ts"
-    import type { NextApiRequest, NextApiResponse } from "next";
-    import { getAuth } from "@clerk/nextjs/server";
-
-    export default function handler(req: NextApiRequest, res: NextApiResponse) {
-      const { userId } = getAuth(req);
-
-      if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      // retrieve data from your database
-  
-      res.status(200).json({});
-    }
-    ```
-  </Tab>
-  <Tab>
-    For Next.js applications using the Pages Router, you can retrieve information about the user and their authentication state, or control access to some or all of your API routes by using the [`getAuth()`][get-auth] helper. The [`getAuth()`][get-auth] helper does require [Middleware](/docs/references/nextjs/auth-middleware). 
-
-
-    In some cases, you may need the full [`User`][user-object] object. For example, if you want to access the user's email address address or name, you can use the [`clerkClient`][clerk-client] helper to get the full [`User`][user-object] object.
-
-
-    ```tsx filename="pages/api/auth.ts"
-    import { clerkClient } from "@clerk/nextjs";
-    import { getAuth } from "@clerk/nextjs/server";
-    import type { NextApiRequest, NextApiResponse } from "next";
-
-    export default async function handler(
-      req: NextApiRequest,
-      res: NextApiResponse
-    ) {
-      const { userId } = getAuth(req);
-
-      if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      const user = userId ? await clerkClient.users.getUser(userId) : null;
-
-      // use the user object to decide what data to return
-
-      return res.status(200).json({});
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    You can access the active session and user data in your `getServerSideProps` using the [`getAuth()`][get-auth] helper.
-
-
-    <Callout type="info" emoji="ℹ️">
-      Please note the addition of `buildClerkProps` in the return statement, which informs the Clerk React helpers of the authentication state during server-side rendering (like `useAuth()`, `<SignedIn>`, and `<SignedOut>`).
-
-    </Callout>
-
-    ```tsx filename="pages/example.tsx"
-    import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
-    import { GetServerSideProps } from "next";
-
-    export const getServerSideProps: GetServerSideProps = async (ctx) => {
-      const { userId } = getAuth(ctx.req);
-
-      if (!userId) {
-        // handle user is not logged in.
-      }
-
-      // Load any data your application needs for the page using the userId
-
-      return { props: { ...buildClerkProps(ctx.req) } };
-    };
-    ```
-
-    You can also access the full [`User`][user-object] object before passing it to the page by using the [`clerkClient`][clerk-client] helper.
-
-
-    ```tsx filename="pages/example.tsx"
-    import { clerkClient } from "@clerk/nextjs";
-    import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
-    import { GetServerSideProps } from "next";
-
-    export const getServerSideProps: GetServerSideProps = async (ctx) => {
-      const { userId } = getAuth(ctx.req);
-
-      const user = userId ? await clerkClient.users.getUser(userId) : undefined;
-
-      return { props: { ...buildClerkProps(ctx.req, { user }) } };
-    };
-    ```
-  </Tab>
-</Tabs>
-
+- [Clerk + Next.js App Router Demo](https://github.com/clerk/clerk-nextjs-demo-app-router)
+- [Clerk + Next.js Pages Router Demo](https://github.com/clerk/clerk-nextjs-demo-pages-router)
 
 ## Next steps
 
-Now that your Next.js application is integrated with Clerk, you will want to read the following documentation:
-
 <div className="container mx-auto my-4">
   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-    <Cards title="Customization & Localization" description="Learn how to customize and localize the Clerk components." link="/docs/components/customization/overview" cta="Learn More" />
+    <Cards title="Create custom sign-up and sign-in pages" description="Learn how add custom sign-up and sign-in pages with Clerk components." link="/docs/references/nextjs/custom-signup-signin-pages" cta="Learn More" />
 
-    <Cards title="Authentication Components" description="Learn more about all our authentication components." link="/docs/components/overview" cta="Learn More" />
+    <Cards title="Read user and session data" description="Learn how to use Clerk's hooks and helpers to access the active session and user data in your Next.js application." link="/docs/references/nextjs/read-session-data" cta="Learn More" />
 
-    <Cards title="Client Side Helpers" description="Learn more about our client side helpers and how to use them." link="/docs/references/nextjs/overview#client-side-helpers" cta="Learn More" />
+    <Cards title="Client Side Helpers" description="Learn more about Next.js client side helpers and how to use them." link="/docs/references/nextjs/overview#client-side-helpers" cta="Learn More" />
 
     <Cards title="Next.js SDK Reference" description="Learn more about additional Next.js methods." link="/docs/references/nextjs/overview" cta="Learn More" />
   </div>
 </div>
-
-[clerk-provider]: /docs/components/clerk-provider
-[user-object]: /docs/references/javascript/user/user
-[auth-ref]: /docs/references/nextjs/auth
-[currentuser-ref]: /docs/references/nextjs/current-user
-[get-auth]: /docs/references/nextjs/get-auth
-[clerk-client]: /docs/references/backend/overview

@@ -8,11 +8,12 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Remix application. This guide assumes that you are using Remix v2 or later.
 
 <Steps>
+
 ### Install `@clerk/remix`
 
 Once you have a Remix application ready, you need to install Clerk's Remix SDK. This gives you access to our prebuilt components and hooks for Remix applications.
 
-<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
   ```bash filename="terminal"
   npm install @clerk/remix
   ```
@@ -56,11 +57,11 @@ import {
 
 import { rootAuthLoader } from "@clerk/remix/ssr.server";
 
-export const meta: MetaFunction = () => ({
+export const meta: MetaFunction = () => ([{
   charset: "utf-8",
   title: "New Remix App",
   viewport: "width=device-width,initial-scale=1",
-});
+}]);
 
 export const loader: LoaderFunction = (args) => rootAuthLoader(args);
 
@@ -372,98 +373,97 @@ export default function Example() {
 
 #### `getAuth()`
 
-<Tabs items={["Loader Function", "Action Function"]}>
+<Tabs type="function" items={["Loader Function", "Action Function"]}>
   <Tab>
+  The [`getAuth()`][get-auth] helper allows you to access the [Authentication Object][auth-obj], including the current `userId`. You can use this helper to protect your loader function or get data for the initial render of the route.
 
-The [`getAuth()`][get-auth] helper allows you to access the [Authentication Object][auth-obj], including the current `userId`. You can use this helper to protect your loader function or get data for the initial render of the route.
+  ```tsx filename="routes/example.tsx"
+  export const loader: LoaderFunction = async (args) => {
+    // Use getAuth to retrieve user data 
+    const { userId, sessionId, getToken } = await getAuth(args);
 
-```tsx filename="routes/example.tsx"
-export const loader: LoaderFunction = async (args) => {
-  // Use getAuth to retrieve user data 
-  const { userId, sessionId, getToken } = await getAuth(args);
+    // If there is no userId, then redirect to sign-in route
+    if (!userId) {
+      return redirect("/sign-in?redirect_url=" + args.request.url);
+    }
 
-  // If there is no userId, then redirect to sign-in route
-  if (!userId) {
-    return redirect("/sign-in?redirect_url=" + args.request.url);
+    // Use the userId to fetch data from your database
+    const posts = await mockGetPosts(userId);
+
+    return { posts };
+  };
+  ```
+  </Tab>
+
+  <Tab>
+  The [`getAuth()`][get-auth] helper allows you to access the [Authentication Object][auth-obj]. You can use the returns from `getAuth()` to protect the action function, update the user or perform mutations on data in your database.
+
+  ```tsx filename="routes/example.tsx"
+  export const action: ActionFunction = async (args) => {
+
+    // Use getAuth to retrieve user data 
+    const { userId, getToken } = await getAuth(args)
+
+    // Use the userId to perform a mutation on data in your database
+    const updatedPost = await mockUpdatePost(userId, postId, body)
+
+    return { updatedPost };
   }
-
-  // Use the userId to fetch data from your database
-  const posts = await mockGetPosts(userId);
-
-  return { posts };
-};
-```
-</Tab>
-<Tab>
-
-The [`getAuth()`][get-auth] helper allows you to access the [Authentication Object][auth-obj]. You can use the returns from `getAuth()` to protect the action function, update the user or perform mutations on data in your database.
-
-```tsx filename="routes/example.tsx"
-export const action: ActionFunction = async (args) => {
-
-  // Use getAuth to retrieve user data 
-  const { userId, getToken } = await getAuth(args)
-
-  // Use the userId to perform a mutation on data in your database
-  const updatedPost = await mockUpdatePost(userId, postId, body)
-
-  return { updatedPost };
-}
-```
-</Tab>
+  ```
+  </Tab>
 </Tabs>
 
 #### Examples of fetching and mutating user data
 
 
 
-<Tabs items={["Loader Function", "Action Function"]}>
+<Tabs type="function" items={["Loader Function", "Action Function"]}>
   <Tab>
+  ```tsx filename="routes/profile.tsx"
+  import { LoaderFunction, redirect } from "@remix-run/node";
+  import { getAuth } from "@clerk/remix/ssr.server";
+  import { createClerkClient } from '@clerk/remix/api.server';
 
+  export const loader: LoaderFunction = async (args) => {
+    const { userId } = await getAuth(args);
 
-```tsx filename="routes/profile.tsx"
-import { LoaderFunction, redirect } from "@remix-run/node";
-import { getAuth } from "@clerk/remix/ssr.server";
-import { createClerkClient } from '@clerk/remix/api.server';
+    if (!userId) {
+      return redirect("/sign-in?redirect_url=" + args.request.url);
+    }
 
-export const loader: LoaderFunction = async (args) => {
-  const { userId } = await getAuth(args);
+    const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
+    return { serialisedUser: JSON.stringify(user) };
+  };
+  ```
+  </Tab>
 
-  if (!userId) {
-    return redirect("/sign-in?redirect_url=" + args.request.url);
-  }
+  <Tab>
+  ```tsx filename="routes/profile.tsx"
+  import { ActionFunction, redirect } from "@remix-run/node";
+  import { getAuth } from "@clerk/remix/ssr.server";
+  import { createClerkClient } from '@clerk/remix/api.server';
 
-  const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
-  return { serialisedUser: JSON.stringify(user) };
-};
-```
-</Tab>
-<Tab>
-```tsx filename="routes/profile.tsx"
-import { ActionFunction, redirect } from "@remix-run/node";
-import { getAuth } from "@clerk/remix/ssr.server";
-import { createClerkClient } from '@clerk/remix/api.server';
+  export const action: ActionFunction = async (args) => {
+    // Use getAuth to retrieve user data
+    const { userId } = await getAuth(args)
 
-export const action: ActionFunction = async (args) => {
-  // Use getAuth to retrieve user data
-  const { userId } = await getAuth(args)
+    // If there is no userId, then redirect to sign-in route
+    if (!userId) {
+      return redirect("/sign-in?redirect_url=" + args.request.url);
+    }
+    // Prepare the data for the mutation
+    const params = { firstName: 'John', lastName: 'Wicker' };
 
-  // If there is no userId, then redirect to sign-in route
-  if (!userId) {
-    return redirect("/sign-in?redirect_url=" + args.request.url);
-  }
-  // Prepare the data for the mutation
-  const params = { firstName: 'John', lastName: 'Wicker' };
+    // Initialize clerkClient and perform the mutations
+    const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
 
-  // Initialize clerkClient and perform the mutations
-  const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
-
-  // Return the updated user
-  return { serialisedUser: JSON.stringify(updatedUser) };
-};
-```
-</Tab>
+    // Return the updated user
+    return { serialisedUser: JSON.stringify(updatedUser) };
+  };
+  ```
+  </Tab>
 </Tabs>
+
 </Steps>
 
 ### Next steps

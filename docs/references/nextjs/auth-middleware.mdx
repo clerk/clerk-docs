@@ -31,7 +31,7 @@ With the recommended matcher, all routes are protected by Clerk's authentication
 
 If there is no `afterAuth` present in the middleware, then `authMiddleware` will fall back to its default behaviour. The default bahaviour is:
 
-- If the [`.env` based settings](/docs/references/nextjs/custom-signup-signin-pages#update-your-environment-variables) for the sign-in and sign-up routes are present, add those to any routes listed in `publicRoutes`.
+- If the [`.env` based settings](/docs/references/nextjs/custom-signup-signin-pages#update-your-environment-variables) for the sign-in and sign-up routes are present, add the sign-in and sign-up routes to any routes listed in `publicRoutes`.
 - If the `.env` based settings are not present, add `/sign-in` and `/sign-up` to any routes listed in `publicRoutes`.
 - Make all routes from `publicRoutes` public.
 - Configure all routes from `ignoredRoutes` to be ignored and return no auth related information.
@@ -40,6 +40,8 @@ If there is no `afterAuth` present in the middleware, then `authMiddleware` will
 #### Example
 
 Assuming that the `.env` based settings for sign-in and sign-up are set to `/sign-in` and `/sign-up` respectively, the following `authMiddleware` would make the routes `/`, `/contact`, `/sign-in` and `/sign-up` public, no routes ignored, and all remaining routes protected.
+
+<CodeBlockTabs options={["middleware.ts", ".env.local"]}>
 
 ```ts filename="middleware.ts" {3,4,5}
 import { authMiddleware } from "@clerk/nextjs";
@@ -54,6 +56,14 @@ export const config = {
 
 ```
 
+```bash filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+```
+</CodeBlockTabs>
+
 ### Use `afterAuth()` for fine-grained control
 
 Some developers will need to handle specific cases such as handling redirects differently or detecting if a user is inside an organization. These cases can be handled with `afterAuth()`.
@@ -63,20 +73,20 @@ import { authMiddleware, redirectToSignIn } from '@clerk/nextjs';
 
 export default authMiddleware({
   afterAuth(auth, req, evt) {
-    // handle users who aren't authenticated
+    // Handle users who aren't authenticated
     if (!auth.userId && !auth.isPublicRoute) {
       return redirectToSignIn({ returnBackUrl: req.url });
     }
-    // redirect logged in users to organization selection page if they are not active in an organization
+    // Redirect logged in users to organization selection page if they are not active in an organization
     if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
       const orgSelection = new URL('/org-selection', req.url)
       return NextResponse.redirect(orgSelection)
     }
-    // if the user is logged in and trying to access a protected route, allow them to access route
+    // If the user is logged in and trying to access a protected route, allow them to access route
     if (auth.userId && !auth.isPublicRoute) {
       return NextResponse.next()
     }
-    // allow users visiting public routes to access them
+    // Allow users visiting public routes to access them
     return NextResponse.next();
   }
 });
@@ -147,7 +157,7 @@ export const config = {
 
 By default, Clerk's `authMiddleware()` treats all routes as private if the middleware runs. If you need to make specific routes public, use the `publicRoutes` option.
 
-```ts filename="middleware.ts"
+```ts filename="middleware.ts" {4}
 import { authMiddleware } from "@clerk/nextjs";
 export default authMiddleware({
   // "/" will be accessible to all users
@@ -172,13 +182,6 @@ export const config = {
   matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
 };
 ```
-
-```ts filename="middleware.ts"
-export default authMiddleware({
-  publicRoutes: req => !req.url.includes('/dashboard')
-})
-```
-
 
 You can also use regex to match routes. The following is an example of a negative assertion that makes *only* the `/admin` route protected.
 

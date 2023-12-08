@@ -17,7 +17,7 @@ Retrieve the session token from either `__session` cookie for a same origin requ
 
 ### Get your instance's Public Key
 
-There are two ways to obtain your public key:
+There are three ways to obtain your public key:
 
 1. Using the Backend API in JSON Web Key Set (JWKS) format at the following endpoint [https://api.clerk.dev/v1/jwks](https://clerk.com/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
 
@@ -37,13 +37,15 @@ alt="The 'API Keys' page in the Clerk Dashboard. There is a red box around the '
 To verify the token signature, you should:
 
 1. Use the above Public Key to verify the token's signature.
-2. Validate that the token is not expired, by checking the `exp` and `nbf` claims.
-3. If the `azp` claim exists, validate that it equals any of your known origins that are permitted to generate those tokens. This is an extra security check that we highly recommend that you do. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from `http://localhost:3000`, then the `azp` claim should equal `http://localhost:3000`. 
+2. Validate that the token is not expired by checking the `exp` and `nbf` claims.
+3. The `azp` claim in the Clerk Session JWT stands for authorized parties. If the `azp` claim exists, validate that it equals any of your known origins that are permitted to generate those tokens. This is an extra security check that we highly recommend that you do. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from `http://localhost:3000`, then the `azp` claim should equal `http://localhost:3000`. You can also pass an array of strings like so: `['http://localhost:4003', 'https://clerk.dev']`. If the `azp` claim does not exist, then you can skip this step.
 
 If the above process is successful, it means that the user is signed in to your application and you can consider them authenticated. You can also retrieve the session ID and user ID out of the token's claims.
 </Steps>
 
 ## Example usage
+
+In the example below, the [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) library is used to verify the token signature. The [cookies](https://www.npmjs.com/package/cookies) library is used to retrieve the `__session` cookie.
 
 ```tsx filename="pages/api/token-example.ts"
 import type { NextApiRequest, NextApiResponse } from "next";
@@ -55,10 +57,12 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
   const cookies = new Cookies(req, res);
   const sessToken = cookies.get("__session");
   const token = req.headers.authorization;
+
   if (sessToken === undefined && token === undefined) {
     res.status(401).json({ error: "not signed in" });
     return;
   }
+
   try {
     let decoded = "";
     if (token) {
@@ -79,7 +83,8 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
 }
 ```
 
-This will return the following JSON which you can then use to validate the `azp` and the `exp`. You then have a valid `session` and `user_id` that you can use in your application.
+{/* TO-DO: add code examples of how to validate the exp and azp claims ?? */}
+If the token is valid, the response will return a JSON object that looks similar to the one below. You can use this to validate the `exp` and `azp` claims, as mentioned in the [steps above](#verify-the-token-signature). Once the token is completely validated, you then have a valid `session` and `user_id` that you can use in your application.
 
 ```json
 {

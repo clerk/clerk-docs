@@ -7,7 +7,42 @@ import {Cards} from "@/components/Cards";
 
 # Migrate to Clerk from Another Platform
 
-Migrating from another auth platform? Here's a few guides on how to move your user data to Clerk:
+There are typically two ways you would choose to migrate your existing user management from a different platform and into Clerk:
+- Basic Export / Import
+- Trickle migration
+
+Each of these have trade-offs you'll need to consider for your application and your users. 
+
+## Basic Export / Import
+
+With Basic Export / Import, you are simply taking an export from your previous tool and importing them into Clerk. The most common way to handle this is via our [Backend API](/docs/reference/backend-api/tag/Users#operation/CreateUser) using the `CreateUser` API endpoint. Note that the `CreateUser`
+
+You'll need to provide your `password_hasher` value (The hashing algorithm used to generate the password digest) and in some instances Clerk will transparently upgrade your user's password hashes to the more secure Bcrypt hashing algorithm. More details on this are available in the [Create a new user](/docs/reference/backend-api/tag/Users#operation/CreateUser!path=password_hasher&t=request) Backend API Reference docs.  
+
+> **Note:** If you are expecting to import 100k+ users, please reach out to [support](mailto:support@clerk.dev) 
+
+### Considerations
+When evaluating the Basic Import / Export workflow there are a few tradeoffs you'll need to consider. 
+
+#### Data consistency
+One is that the data from your users will be from a moment in time; meaning there is some potential for your data being out of sync from the time you exported. To work around this you might script and coordinate the export and import actions to be as close in time as possible - or you might require some kind of downtime or maintenance window to complete this action. Again you'll have to consider our API's rate-limiting against when evaluating this option. 
+
+
+#### Active Sessions / Session Management
+Another consideration is how you are handling session management. Whereas most Auth providers don't provide session management out of the box, Clerk does. This means that when you cut over to Clerk you'll be changing which system handles your user's active sessions and will likely end any currently active sessions initiated by your previous service, unless you are able to gracefully handle this somehow within your architecture.
+
+#### Foreign Keys
+In your previous system you likely had some kind of ID / Foreign Key that you were using. As you migrate into Clerk, you may want to be able to still reference that previous ID alongside of Clerk's provided user IDs. While each use case might have some variation, a common strategy is to store previous IDs as an `external_id` and then use Clerk's JWT customization to enrich a `userId` value with the `external_id` when present, or fallback to using Clerk's native ID. You can do this by heading into Clerk Dashboard, going to Sessions -> Edit. Add the following:
+
+```json
+{
+	"userId": "{{user.external_id || user.id}}"
+}
+``````
+
+
+---
+
 
 <div className="container mx-auto my-4">
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -17,13 +52,5 @@ Migrating from another auth platform? Here's a few guides on how to move your us
             link="/docs/deployments/migrate-from-firebase"
             cta="Learn more"
         />
-        {/* TODO: Uncomment when Supabase migration guide is created */}
-        {/* <Cards
-            title="Supabase"
-            description="Learn how to migrate from Supabase to Clerk quickly and easily."
-            link="#"
-            cta="Coming Soon"
-            hideArrow={true}
-        /> */}
     </div>
 </div>

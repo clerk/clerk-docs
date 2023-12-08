@@ -19,3 +19,16 @@ Clerk provides [prebuilt components](https://clerk.com/docs/components/overview
 ## Roles
 
 Roles determine a user's level of access and permissions within an organization. Clerk comes with two default roles, `admin` and `basic_member`, and lets you create your own custom roles. Learn more in [Roles and Permissions](/docs/organizations/roles-permissions).
+
+
+## Creator role
+When a user creates a new Organization, they are automatically added as the first member and assigned to a role, which defaults to Admin. 
+Although, you have to ability to change this behavior and set your own Creator role which can be any that meets your needs. 
+The only requirement is that the role must have access to the following permissions:
+- Read members (`org:sys_memberships:read`)
+- Manage members (`org:sys_memberships:manage`)
+- Delete organization (`org:sys_profile:delete`)
+
+Please keep in mind, that you can't delete an Organization Role if it's used as the Organization Creator role.
+
+You can update this setting via Clerk Dashboard.

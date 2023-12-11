@@ -1,0 +1,102 @@
+---
+title: Implement basic Role Based Access Control with Metadata
+description: Learn how to leverage Clerk's publicMetadata to implement your own basic Role Based Access Controls
+---
+
+# Implement basic Role Based Access Control with Metadata
+
+Clerk provides [User Metadata](https://clerk.com/docs/users/metadata#user-metadata), which is a tool that can be leveraged to build flexible custom logic into your application. This guide will cover using Public Metadata to build a based Role Based Access Control (RBAC) system for your application. Clerk offers roles as part of the feature set for our [Organizations](https://clerk.com/docs/organizations/overview).  This guide will cover setting up a basic RBAC system for products that don't need Organizations.
+
+This guide assumes that you are using Next App Router. The concepts here can be adapted to Next Pages Router and Remix.
+
+## Configuring the Session
+
+The first step in building basic RBAC will be making `publicMetadata` available to applications directly from the token. This will make it easy to work with and avoid a network request to load the data. We will be using `publicMetadata` as we want to be able to read it in the browser but require updates or changes to only be done server-side or in the Clerk Dashboard. `unsafeMetadata` can be read and updated in the browser, and `privateMetadata` can not be read in the browser.
+
+In the Dashobard, navigate to the [Sessions](https://dashboard.clerk.com/last-active?path=sessions) section, click 'Edit' and in the modal enter the following JSON. If you have already customized your session token you may need to merge this with what you currently have.
+
+```
+{
+	"metadata": "{{user.public_metadata}}"
+}
+```
+
+The session should look like:
+
+create updated version of public/images/guides/basic-rbac/session-customization.png and add here.
+
+<Callout type="danger">
+The entire token has a limit of 4kb of data. Keep this in mind when customizing the session and add data sparingly.
+</Callout>
+
+## Provide a global TypeScript definition
+
+Inside the `src/` directory, add a `types` directory and then inside of that add a `globals.d.ts` file. This file will prevent TypeScript errors when working with the role, provide auto-complete and control the roles that are allowed in the application. For this guide only an 'admin' and 'user' role will be defined.
+
+
+```ts filename="src/types/globals.d.ts"
+export { };
+
+declare global {
+  interface CustomJwtSessionClaims {
+    metadata: {
+      role?: "admin" | "user";
+    };
+  }
+}
+```
+
+## Setting a role on your user
+
+Later we we add a basic admin tool to change the roles of user, but for now let's add a role to your own user account. In the Dashboard go to Users and select your own user account. Scroll down to the Metadata section and click 'Edit' on the Public metadata. Add teh following and save.
+
+```
+{
+  "role": "admin"
+}
+```
+The public metadata should look like:
+
+CREATE UPDATED VERSION OF public/images/guides/basic-rbac/user-public-metadata.png and add here.
+
+## Create an admin dashboard and protect it
+
+In your application, create a file named `page.tsx` in the `src/app/admin/dashboard` directory. You will likely need to create both the `admin` and `dashboard` directories when doing this. Copy the following code and paste it into the file.
+
+```tsx filename="src/app/admin/dashboard/page.tsx
+import { auth } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
+
+export default function AdminDashboard() {
+  const { sessionClaims } = auth();
+
+  if (sessionClaims?.metadata.role !== "admin") {
+    return redirect("/");
+  }
+
+  return (
+    <>
+      <h1>This is the admin dashboard</h1>
+      <p>This page is restricted to users with the 'admin' role</p>
+    </>
+  );
+}
+```
+
+
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npm install @clerk/nextjs
+  ```
+
+  ```bash filename="terminal"
+  yarn add @clerk/nextjs
+  ```
+
+  ```bash filename="terminal"
+  pnpm add @clerk/nextjs
+  ```
+</CodeBlockTabs>
+
+

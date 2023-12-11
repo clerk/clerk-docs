@@ -1,157 +1,188 @@
 ---
-title: Use Permissions to show and hide content from users
+title: Restrict access with Permissions
 description: 
 ---
 
-# Use Permissions to show and hide content from users
+# Restrict access with Permissions
 
-Clerk has collection of utility functions and components in order to allow developers to perform Permission-based checks.
+Clerk provides two helpers for authorization:
+
+- **Protect helpers** are opinionated and will not process unauthorized users, either by not rendering children or by throwing errords.
+- **Has helpers** are more composable and flexible. You can decide what to do if the user lacks the required Permissions.
 
 ## Authorization in Client Components
 
-### `<Protect/>` (Example in Nextjs)
+### `<Protect/>` component
 
-The following snippet renders a Client component called Gate. It will work for SSR and CSR. Because this is a Client component the exact code from below will work for any React meta framework (f.e. Remix, Gatsby)
+The following snippet uses Clerk's [`<Protect />` component](/docs/components/protect) to only render the form for users with the `org:team_settings:manage` Permissions.
 
-```tsx
-// /app/dashboard/settings/form.tsx
+This example will work for Server Side Rendering (SSR) and Client Side Rendering (CSR). Because this is a Client component, the exact code from below will work for any React meta-framework, like Next.js, Remix, or Gatsby.
+
+<CodeBlockTabs type="framework" options={["Next.js", "Other React frameworks"]}>
+```tsx filename="/app/dashboard/settings/form.tsx"
 'use client';
 
 export function SettingsForm(){
-	return (
-		<Protect 
-			permission="org:team_settings:manage"
-			fallback={<p>You are not allowed to see this section.</p>}
-		>
-			<form>
-				....
-			</form>
-		</Protect>
-	)
+  return (
+    <Protect 
+      permission="org:team_settings:manage"
+	  fallback={<p>You are not allowed to see this section.</p>}>
+      <form>
+        //....
+      </form>
+    </Protect>
+  )
 }
 ```
 
-### `useAuth()` (Example in Nextjs)
+```tsx filename="/app/dashboard/settings/form.tsx"
+export function SettingsForm(){
+  return (
+    <Protect 
+      permission="org:team_settings:manage"
+	  fallback={<p>You are not allowed to see this section.</p>}>
+      <form>
+        //....
+      </form>
+    </Protect>
+  )
+}
+```
+</CodeBlockTabs>
 
-```tsx
-// /app/dashboard/settings/form.tsx
+### `useAuth()` hook and `has`
+
+The [`useAuth()`](/docs/references/react/use-auth) hook provides the minimal information needed for data-loading and helper methods to manage the current active session. 
+
+// TODO: explain what this snippet is doing. What is `has` doing?
+
+<CodeBlockTabs type="framework" options={["Next.js"]}>
+```tsx filename="/app/dashboard/settings/form.tsx"
 'use client';
 
 export function SettingsForm(){
-	const { has } = useAuth()
-	const canManageSettings = has({ permission: "org:team_settings:manage" });
-
-	if(!canManageSettings) return null;
-
-	return (
-		<form>
-			....
-		</form>
-	)
+  const { has } = useAuth();
+  const canManageSettings = has({ permission: "org:team_settings:manage" });
+  
+  if(!canManageSettings) return null;
+  
+  return (
+    <form>
+      //...
+    </form>
+  )
 }
 ```
+</CodeBlockTabs>
 
 ## Authorization in Server Components
 
-### `<Protect/>` as RSC in Next.js
+### `<Protect/>` as a React Server Component (RSC) in Next.js
 
-```tsx
-// /app/dashboard/settings/layout.tsx
+The following snippet uses `<Protect />`'s `condition` prop to conditionally render its children if the user has either `org:team_settings:manage` or `org:team_settings:read` Permissions.
 
+<CodeBlockTabs type="framework" options={["Next.js"]}>
+```tsx filename="/app/dashboard/settings/layout.tsx"
 export default function SettingsLayout(props: PropsWithChildren){
-	return (
-		<Protect
-			condition={has => has({permission: "org:team_settings:manage"}) || has({permission: "org:team_settings:read"})}>
-				{props.children}
-		</Protect>
-	)
+return (
+  <Protect
+    condition={has => has({permission: "org:team_settings:manage"}) || has({permission: "org:team_settings:read"})}>
+   {props.children}
+  </Protect>
+)
 }
 ```
+</CodeBlockTabs>
 
-### `auth()`  server utility in a RSC
+### `auth()` server utility in an RSC
 
-```tsx
-// /app/dashboard/settings/layout.tsx
+The following snippet uses `has` to inspect a user's Permissions granularly. If the user doesn't have both `org:team_settings:manage` and `org:team_settings:read` Permissions, the component returns `null` instead of rendering its children.
 
+<CodeBlockTabs type="framework" options={["Next.js"]}>
+```tsx filename="/app/dashboard/settings/layout.tsx"
 export default function SettingsLayout(props: PropsWithChildren){
-  const { has } = auth()  
+  const { has } = auth();
   const canManage = has({permission:"org:team_settings:manage"});
   const canRead = has({permission: "org:team_settings:read"});
   const canAccessSettings = canManage || canRead;  
   if(!canAccessSettings) return null;  
-  return props.children
+  return props.children;
 }
 ```
+</CodeBlockTabs>
 
 ### `auth().protect` experimental server utility in a RSC
 
-```tsx
-// /app/dashboard/settings/layout.tsx
+In the following snippet, `userId` will always be a string because if the authorization checks fail, a `notFound` error will throw.
 
+<CodeBlockTabs type="framework" options={["Next.js"]}>
+```tsx filename="/app/dashboard/settings/layout.tsx"
 export default function SettingsLayout(props: PropsWithChildren){
-	const { userId } = auth().protect(
-			has => has({permission: "org:team_settings:manage"}) ||
-				has({permission: "org:team_settings:read"}))
-  // `userId` will always be a string because if the authorization checks fail an notFound error will throw
-	return props.children
+  const { userId } = auth().protect(
+    has => has({permission: "org:team_settings:manage"}) || has({permission: "org:team_settings:read"})
+  );
+  return props.children
 }
 ```
 
 ## Authorization in Server Actions
 
+<CodeBlockTabs type="framework" options={["Next.js"]}>
 ```tsx
 export default function ServerComponent() {
   async function myAction() {
     'use server'
-  	const { has } = auth();
+    const { has } = auth();
+    
+    const canManage = has({permission:"org:team_settings:manage"});
+    const canRead = has({permission: "org:team_settings:read"});
+    const canAccessSettings = canManage || canRead;
 
-		const canManage = has({permission:"org:team_settings:manage"});
-		const canRead = has({permission: "org:team_settings:read"});
-		const canAccessSettings = canManage || canRead;
-		...
-		// Perform a DB operation ...
+    // ... Perform a database operation ...
   }
 }
 ```
+</CodeBlockTabs>
 
 ## Authorization in Route Handlers (API routes)
 
-```tsx
-// /app/settings/route.ts
+<CodeBlockTabs type="framework" options={["Next.js"]}>
+```tsx filename="/app/settings/route.ts"
 import { auth } from "@clerk/nextjs";
 
 // using protect
 export const POST = () => {
-	const { userId } = auth().protect({permission: "org:team_settings:manage"})
-	return users.createTeam(userId);
+  const { userId } = auth().protect({permission: "org:team_settings:manage"})
+  return users.createTeam(userId);
 }
 
 // using has
 export const GET = () => {
-	const { userId, has } = auth();
+  const { userId, has } = auth();
 
-	if(!userId){
-		return Response.json({error: "Unathorized"}, {status: 401})
-	}
+  if(!userId){
+  return Response.json({error: "Unathorized"}, {status: 401})
+}
 
-	if(!has({permission: "org:team_settings:read"})){
-		return Response.json({error: "Forbidden"}, {status: 403})
-	}
+if(!has({permission: "org:team_settings:read"})){
+  return Response.json({error: "Forbidden"}, {status: 403})
+}
 
-	return users.getTeams(userId)
-	....
+return users.getTeams(userId)
+  // ...
 }
 ```
 
 ## Authorization in Remix Loaders
 
+<CodeBlockTabs type="framework" options={["Remix"]}>
 ```tsx
 export const loader: LoaderFunction = async args => {
   const { has } = await getAuth(args);
-
-	if(has({permission: "org:team_settings:manage"})){
-		return redirect('/request-access');
-	}
+  
+  if(has({permission: "org:team_settings:manage"})){
+    return redirect('/request-access');
+  }
   return {};
 };
 
@@ -166,8 +197,9 @@ export default function Settings() {
 
 ## Authorization in JS SDK
 
-If you are not using React or any of the meta-frameworks we support there is a good chance that you are using Clerk.js directly. In that case the following snippet should be able to assist.
+If you are not using React or any of the meta-frameworks we support, there's a good chance that you are using Clerk.js directly. In that case the following snippet can help.
 
+<CodeBlockTabs type="framework" options={["JavaScript"]}>
 ```tsx
 import Clerk from '@clerk/clerk-js'
 
@@ -175,6 +207,7 @@ const clerk = new Clerk(...)
 await clerk.load(...)
 
 const canManageSettings = clerk.session.checkAuthorization({
-	permission: "org:team_settings:manage"
+  permission: "org:team_settings:manage"
 })
 ```
+</CodeBlockTabs>

@@ -6,6 +6,10 @@ import { remark } from "remark";
 import reporter from "vfile-reporter";
 import { visit } from "unist-util-visit";
 
+// Some URLs are valid (e.g. they link to marketing sites or docs that are not hosted through clerk-docs) so they should be excluded from the check.
+// These URLs will be used with the .startsWith() method, so they should be specific enough to not match any URLs that should be checked.
+const EXCLUDE_LIST = ['/pricing', '/docs/reference/backend-api', '/docs/reference/frontend-api']
+
 const ERRORS = {
   RELATIVE_LINK(url) {
     return `Relative link detected: ${url}. Relative links are not valid, make sure the link is absolute and starts with \`/docs/\`.`;
@@ -27,9 +31,17 @@ const validateUrl = (url, node, file) => {
     file.message(ERRORS.RELATIVE_LINK(url), node.position);
   } else if (isAbsolute) {
     const cleanedUrl = url.split("#")[0];
+
     if (!fileCheckCache.has(cleanedUrl)) {
-      const filePath = path.join(process.cwd(), `${cleanedUrl}.mdx`);
-      fileCheckCache.set(cleanedUrl, fs.existsSync(filePath));
+      const isExcluded = EXCLUDE_LIST.some((excludedUrl) => cleanedUrl.startsWith(excludedUrl))
+
+      // If the URL is excluded, we don't need to check the filesystem. However, we should do the check here and not early return in the beginning because we want to cache the result still.
+      if (isExcluded) {
+        fileCheckCache.set(cleanedUrl, true);
+      } else {
+        const filePath = path.join(process.cwd(), `${cleanedUrl}.mdx`);
+        fileCheckCache.set(cleanedUrl, fs.existsSync(filePath));
+      }
     }
 
     const exists = fileCheckCache.get(cleanedUrl);

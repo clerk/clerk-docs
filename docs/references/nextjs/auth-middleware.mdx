@@ -27,7 +27,44 @@ export const config = {
 
 With the recommended matcher, all routes are protected by Clerk's authentication middleware, with the exception of internal `/_next/` routes and static files. Static files are detected by matching on paths that end in `.+\..+`. If your middleware needs to run on all routes but you don't want Clerk to protect every route, use the [`ignoredRoutes` option](#options).
 
-### Using `afterAuth()` for fine-grained control
+### Default behaviour
+
+If there is no `afterAuth` present in the middleware, then `authMiddleware` will fall back to its default behaviour. The default bahaviour is:
+
+- If the [`.env` based settings](/docs/references/nextjs/custom-signup-signin-pages#update-your-environment-variables) for the sign-in and sign-up routes are present, add the sign-in and sign-up routes to any routes listed in `publicRoutes`.
+- If the `.env` based settings are not present, add `/sign-in` and `/sign-up` to any routes listed in `publicRoutes`.
+- Make all routes from `publicRoutes` public.
+- Configure all routes from `ignoredRoutes` to be ignored and return no auth related information.
+- Make all remaining routes protected.
+
+#### Example
+
+Assuming that the `.env` based settings for sign-in and sign-up are set to `/sign-in` and `/sign-up` respectively, the following `authMiddleware` would make the routes `/`, `/contact`, `/sign-in` and `/sign-up` public, no routes ignored, and all remaining routes protected.
+
+<CodeBlockTabs options={["middleware.ts", ".env.local"]}>
+
+```ts filename="middleware.ts" {3,4,5}
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware({
+  publicRoutes: ["/", "/contact"],
+});
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+
+```
+
+```bash filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
+```
+</CodeBlockTabs>
+
+### Use `afterAuth()` for fine-grained control
 
 Some developers will need to handle specific cases such as handling redirects differently or detecting if a user is inside an organization. These cases can be handled with `afterAuth()`.
 
@@ -36,20 +73,57 @@ import { authMiddleware, redirectToSignIn } from '@clerk/nextjs';
 
 export default authMiddleware({
   afterAuth(auth, req, evt) {
-    // handle users who aren't authenticated
+    // Handle users who aren't authenticated
     if (!auth.userId && !auth.isPublicRoute) {
       return redirectToSignIn({ returnBackUrl: req.url });
     }
-    // redirect them to organization selection page
+    // Redirect logged in users to organization selection page if they are not active in an organization
     if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
       const orgSelection = new URL('/org-selection', req.url)
       return NextResponse.redirect(orgSelection)
     }
+    // If the user is logged in and trying to access a protected route, allow them to access route
+    if (auth.userId && !auth.isPublicRoute) {
+      return NextResponse.next()
+    }
+    // Allow users visiting public routes to access them
+    return NextResponse.next();
   }
 });
 ```
 
-### Using `beforeAuth()` to execute middleware before authentication
+#### Understanding `afterAuth` configuration
+
+When using `afterAuth`, the checks must handle all cases — a custom `afterAuth` completely overrides the default behavior covered earlier, aside from adding sign-in and sign-up to `publicRoutes`. `afterAuth` does not allow you to add just one check and rely on the default behavior otherwise. 
+
+Looking at the example immediately above, the following is happening:
+
+1. Redirect all users who are not logged in but who are visiting a protected page to the sign-in route.
+```ts 
+if (!auth.userId && !auth.isPublicRoute) {
+  return redirectToSignIn({ returnBackUrl: req.url });
+}
+```
+2. If the user is signed in but is not currently active in an organization and is not visiting the route for selecting an organization, then redirect them to the organization selector. This will force users to select and be active in an organization to visit other parts of the site.
+```ts 
+if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
+  const orgSelection = new URL('/org-selection', req.url)
+  return NextResponse.redirect(orgSelection)
+}
+```
+3. If the user is signed in and accessing a protected route, allow them to access it.
+```ts 
+ if (auth.userId && !auth.isPublicRoute) {
+  return NextResponse.next()
+}
+```
+4. If none of the above match, then the user is visiting a public route. Allow them to. Don't check if they are logged in -- it doesn't matter.
+```ts 
+return NextResponse.next();
+```
+
+
+### Use `beforeAuth()` to execute middleware before authentication
 
 If you need additional middleware handlers to execute before Clerk's authentication middleware, use `beforeAuth()`. An example where the middleware handler from `next-intl` is executed can be seen below.
 
@@ -79,11 +153,11 @@ export const config = {
 };
 ```
 
-### Making pages public using `publicRoutes`
+### Make routes public by using `publicRoutes`
 
 By default, Clerk's `authMiddleware()` treats all routes as private if the middleware runs. If you need to make specific routes public, use the `publicRoutes` option.
 
-```ts filename="middleware.ts"
+```ts filename="middleware.ts" {4}
 import { authMiddleware } from "@clerk/nextjs";
 export default authMiddleware({
   // "/" will be accessible to all users
@@ -94,6 +168,35 @@ export const config = {
       matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
 };
 ```
+
+Use the `req` object to match against urls. The following example makes all routes but `/dashboard` public.
+
+```ts filename="middleware.ts" {4}
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware({
+  publicRoutes: req => !req.url.includes('/dashboard')
+})
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+You can also use regex to match routes. The following is an example of a negative assertion that makes *only* the `/admin` route protected.
+
+```ts filename="middleware.ts" {4}
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware({
+  publicRoutes:['((?!^/admin/).*)']
+})
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
 
 If you are building your own sign in pages, you don't need to add these pages to your `publicRoutes`. They will be inferred from your `.env` file:
 
@@ -110,6 +213,22 @@ If you define an `afterAuth` function, it will run even if the request correspon
 
 ![Execution order of `beforeAuth`, `publicRoutes`, and `afterAuth`](/docs/images/nextjs/middleware-flow-chart.png)
 
+## Debug your middleware
+
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `authMiddlware`. Add `debug: true` to `authMiddlware` and you will get debug logs in your terminal. 
+
+```ts filename="middleware.ts" {4}
+import { authMiddleware } from "@clerk/nextjs";
+export default authMiddleware({
+  publicRoutes: ["/"]
+  debug: true
+});
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
 ## Options
 
 The `authMiddleware()` method accepts an optional object. The following options are available:
@@ -117,7 +236,8 @@ The `authMiddleware()` method accepts an optional object. The following options 
 | Name | Type | Description |
 | --- | --- | --- |
 | `afterAuth?` | `function` | Called after the authentication middleware is executed. This function has access to the [`Authentication`](/docs/references/nextjs/authentication-object) object and can be used to execute logic based on the auth state. |
-| `apiRoutes?` | `string[]` | A list of routes that should return 401. You can use glob patterns to match multiple routes or a function to match against the request object. For example: `['/foo', '/bar(.*)']` or [/^\/foo\/.*$/] |
+| `apiRoutes?` | `string[]` | A list of routes that should return 401 if the user is not logged in. You can use glob patterns to match multiple routes or a function to match against the request object. For example: `['/foo', '/bar(.*)']` or [/^\/foo\/.*$/] |
+| `audience?` | `string \| string[]` | A string or list of audiences. |
 | `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). If passed, it is checked against the `aud` claim in the token. |
 | `authorizedParties?` | `string[]` | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br/>For example:<br/>`['http://localhost:3000', 'https://example.com']`<br/>For more information, refer to the [reference guide](/docs/references/nodejs/token-verification#validate-the-authorized-party-of-a-session-token). |
 | `beforeAuth?` | `function` | A function called before the authentication middleware is executed. If a redirect response is returned, the middleware will respect it and redirect the user. If `false` is returned, the auth middleware will not execute and the request will be handled as if the auth middleware was not present. |

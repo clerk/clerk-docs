@@ -63,6 +63,17 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > ## How to Set up Custom Pages
 
+### 1.5 When referring to Next.js proper nouns, follow Next.js's capitalization conventions
+
+"Middleware," "Server Actions," "Server Components," "Route Handlers" are capitalized in the Next.js docs and in Clerk's docs where referring to a Next.js project or code.
+
+#### Do
+
+> Add it to your app's Middleware.
+
+#### Don't 
+
+> Add it to your app's middleware.
 
 ## 2. Write for clarity
 
@@ -162,6 +173,18 @@ English speakers may find themselves using phrases which cultural meaning may be
 
 Some learners may not have heard this expression before. It may be difficult for machine translation as well.
 
+### 2.8 Use a active voice vs. passive voice.
+
+Use active verbs that put the reader in the first person instead of passive verbs; "be" verbs that describe the learners actions as a state of being, like "is/was/to be".
+
+#### Do
+
+> Create the `middleware.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
+
+#### Don't
+
+> The `middleware.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
+
 ## 3. Write to include people
 
 ### 3.1 Do not assume proficiency
@@ -254,7 +277,7 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 > In your browser, open [`http://localhost:3000/`](http://localhost:3000/).
 
-### 4.2 Use carets to help users navigate menus; 
+### 4.2 Use carets to help users navigate menus
 
 Use carets to nest operations of the same type like menu navigation.
 
@@ -341,3 +364,69 @@ Next.js is a platform with two different implementations grouped underneath it.
 ![App Router and Pages Router are sitting alongside other very different methods of retrieving data.](/public/images/styleguide/clerk_crowded-tabs.png)
 
 Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.
+
+### 4.7 Wrap component references in `< />`
+
+Component references should be wrapped in `< />`.
+
+#### Do
+
+> Use the `<SignIn />` component.
+
+#### Don't 
+
+> Use the `<SignIn/>` component.
+
+> Use the "SignIn component".
+
+> Use the `SignIn` component.
+
+### 4.8 Specify syntax and filename for terminal commands
+
+If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh filename="terminal"`.
+
+#### Do
+
+```
+​```sh filename="terminal"
+npm i @clerk/nextjs
+​```
+```
+
+#### Don't
+
+```
+​```
+npm i @clerk/nextjs
+​```
+```
+
+### 4.9 Pass properties to components; Parameters to functions
+
+Be sure to use the correct term with components vs functions. 
+
+> Be sure to use the appropriate terms on reference page headings.
+
+#### Do
+
+> Pass the `signUpProps` property to `<SignUp />`. `buildUrlWithAuth()` accepts a `string` for the `to` parameter.
+
+#### Don't
+
+> The `<SignUp />` component accepts the `signUpProps` parameter. The `buildUrlWithAuth()` function accepts the `to` property.
+
+### 4.10 Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
+
+When telling learners to perform an operation in the Clerk Dashboard, begin with "In your Clerk Dashboard". Then, end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+
+#### Do
+
+> In your Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+
+> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
+
+#### Don't
+
+> Go to **User & Authentication** in your dashboard.
+
+> Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.

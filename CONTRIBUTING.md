@@ -452,13 +452,13 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `quickstart` | string | Denotes the framework or platform the tutorial is for. |
+| `framework` | string | Denotes the framework or platform the tutorial is for. |
 | `beforeYouStart` | { title: string; link: string }[] | Links to things that learners should complete before the tutorial. |
 | `exampleRepo` (optional) | { title: string; link: string }[] | Links to example repositories. |
 
 ```
 <TutorialHero 
-  quickstart="react"
+  framework="react"
   beforeYouStart={[
     {
       title: "Set up a Clerk application",

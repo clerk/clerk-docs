@@ -35,7 +35,7 @@ const validateUrl = (url, node, file) => {
     if (!fileCheckCache.has(cleanedUrl)) {
       const isExcluded = EXCLUDE_LIST.some((excludedUrl) => cleanedUrl.startsWith(excludedUrl))
 
-      // If the URL is excluded, we don't need to check the filesystem. However, we should do the check here and not early return in the beginning because we want to cache the result still.
+      // If the URL is excluded, we don't need to check the filesystem. However, we should do the check here and not early return in the beginning because we still want to cache the result.
       if (isExcluded) {
         fileCheckCache.set(cleanedUrl, true);
       } else {

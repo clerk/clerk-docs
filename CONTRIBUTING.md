@@ -65,7 +65,7 @@ Clerk employees can run the application and preview their documentation changes 
 
 Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
 
-- **Check for broken links.** If your change contains links that are valid but not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
+- **Check for broken links.** If your change contains URLs that are not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
 
 To run all linting steps:
 

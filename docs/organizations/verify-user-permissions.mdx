@@ -26,7 +26,7 @@ Clerk's `has()` function can be used on both the frontend and the backend to det
 
 The examples below work for both SSR and CSR. Examples are written for Next.js App Router but they are supported any React meta framework (e.g. Remix, Gatsby).
 
-<Tabs type="framework" items={["Next.js with <Protect>", "Next.js with useAuth().has()"]}>
+<Tabs type="framework" items={["Next.js with <Protect>", "Next.js with has()"]}>
   <Tab>
   The following snippet uses Clerk's `<Protect>` component to only render the form for users with the `org:team_settings:manage` Permission.
 
@@ -76,7 +76,7 @@ export function SettingsForm(){
 
 <Tabs type="framework" items={[ "RSC with has()", "RSC with auth().protect()", "RSC with <Protect>"]}>
   <Tab>
-    The following snippet uses `has()` to inspect a user's Permissions granularly. If the user doesn't have both `org:team_settings:manage` and `org:team_settings:read` Permissions, the component returns `null` instead of rendering its children.
+    The following snippet uses `has()` to inspect a user's Permissions granularly. If the user doesn't have the `org:team_settings:read` Permission, the component returns `null` instead of rendering its children.
 
     ```tsx filename="/app/dashboard/settings/layout.tsx"
 import type { PropsWithChildren } from "react";
@@ -85,9 +85,7 @@ import { auth } from "@clerk/nextjs/server";
 export default function SettingsLayout(props: PropsWithChildren){
   const { has } = auth()
 
-  const canManage = has({permission:"org:team_settings:manage"});
-  const canRead = has({permission: "org:team_settings:read"});
-  const canAccessSettings = canManage || canRead;
+  const canAccessSettings = has({permission: "org:team_settings:read"});
 
   if(!canAccessSettings) return null;
 
@@ -106,17 +104,14 @@ import type { PropsWithChildren } from "react";
 import { auth } from "@clerk/nextjs/server";
 
 export default function SettingsLayout(props: PropsWithChildren){
-  const { userId } = auth().protect(has => 
-    has({permission: "org:team_settings:manage"}) ||
-    has({permission: "org:team_settings:read"})
-  )
+  const { userId } = auth().protect({permission: "org:team_settings:read"})
 
   return props.children
 }
       ```
   </Tab>
   <Tab>
-    The following snippet uses `<Protect>`'s `condition` prop to conditionally render its children if the user has either `org:team_settings:manage` or `org:team_settings:read` Permissions.
+    The following snippet uses `<Protect>`'s `condition` prop to conditionally render its children if the user has the `org:team_settings:read` Permission.
 ```tsx filename="/app/dashboard/settings/layout.tsx"
 import type { PropsWithChildren } from "react";
 import { Protect } from "@clerk/nextjs";
@@ -124,7 +119,7 @@ import { Protect } from "@clerk/nextjs";
 export default function SettingsLayout(props: PropsWithChildren){
   return (
     <Protect
-      condition={has => has({permission: "org:team_settings:manage"}) || has({permission: "org:team_settings:read"})}
+      permission="org:team_settings:read"
     >
       {props.children}
     </Protect>
@@ -147,8 +142,6 @@ export default function SettingsLayout(props: PropsWithChildren){
         const { has } = auth();
 
         const canManage = has({permission:"org:team_settings:manage"});
-        const canRead = has({permission: "org:team_settings:read"});
-        const canAccessSettings = canManage || canRead;
         ...
         // Perform a DB operation ...
       }
@@ -252,3 +245,68 @@ const canManageSettings = clerk.session.checkAuthorization({
 })
 ```
 </CodeBlockTabs>
+
+
+## Authorizate based on Roles
+<Callout type="warning">
+  Performing role checks is not considered a best-practice and developers should avoid it as much as possible. Usually complex role checks can be refactor with a single Permission check.
+</Callout>
+
+You can pass a `role` the same way you can pass a `permission` in all the examples above.
+
+<Tabs type="framework" items={[ "RSC with <Protect>","RSC with auth().protect()", "Client Component with has()", ]}>
+  <Tab>
+    The following snippet uses `<Protect>`'s `condition` prop to conditionally render its children if the user is either an `org:admin` or an `org:billing_manager`.
+```tsx filename="/app/dashboard/settings/layout.tsx"
+import type { PropsWithChildren } from "react";
+import { Protect } from "@clerk/nextjs";
+
+export default function SettingsLayout(props: PropsWithChildren){
+  return (
+    <Protect
+      condition={has => has({role: "org:admin"}) || has({role: "org:billing_manager"})}
+    >
+      {props.children}
+    </Protect>
+  )
+}
+  ```
+  </Tab>
+  <Tab>
+    <Callout>
+      `auth().protect()` will throw a `notFound` Next.js error if authorization checks fail
+    </Callout>
+
+    ```tsx filename="/app/dashboard/settings/layout.tsx"
+import type { PropsWithChildren } from "react";
+import { auth } from "@clerk/nextjs/server";
+
+export default function SettingsLayout(props: PropsWithChildren){
+  const { userId } = auth().protect(has => has({role: "org:admin"}) || has({role: "org:billing_manager"}))
+
+  return props.children
+}
+      ```
+  </Tab>
+  <Tab>
+    The following snippet uses `useAuth()` to inspect a user's roles granularly. If the user doesn't have either an `org:admin` or an `org:billing_manager` role, the component returns `null` instead of rendering its children.
+
+```tsx filename="/app/dashboard/settings/form.tsx"
+'use client';
+import { useAuth } from "@clerk/nextjs";
+
+export function SettingsForm(){
+  const { has } = useAuth();
+  const canAccessSettings = has({role: "org:admin"}) || has({role: "org:billing_manager"})
+
+  if(!canManageSettings) return null;
+
+  return (
+    <form>
+      //...
+    </form>
+  )
+}
+  ```
+  </Tab>
+</Tabs>

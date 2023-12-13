@@ -40,13 +40,13 @@ export { };
 declare global {
   interface CustomJwtSessionClaims {
     metadata: {
-      role?: "admin" | "user";
+      role?: "admin" | "moderator";
     };
   }
 }
 ```
 
-## Setting a role on your user
+## Set a role on your user
 
 Later we we add a basic admin tool to change the roles of user, but for now let's add a role to your own user account. In the Dashboard go to Users and select your own user account. Scroll down to the Metadata section and click 'Edit' on the Public metadata. Add teh following and save.
 
@@ -83,20 +83,202 @@ export default function AdminDashboard() {
 }
 ```
 
+The `/admin/dashboard` route now requires that the user is logged into the application. It also requires that the user have a publicMetadata of `{"role": "admin" }`
+
+## Create a reusable function
+
+Let's create a helper function to make checking roles easier. The first step is modifying `globals.d.ts`. Create a `type` for `Roles` so that union type for the roles can be used in other places in the application, then modify the interface we previously added to use the new `Roles` type.
+
+```ts filename="src/types/globals.d.ts {3, 8}
+export { };
+
+export type Roles = "admin" | "moderator"
+
+declare global {
+  interface CustomJwtSessionClaims {
+    metadata: {
+      role?: Roles
+    };
+  }
+}
+```
+
+The next step is creating the helper function. Create the `src/utils` directory and inside add the file 'roles.ts'. Add the following code to that file. This function will accept a role using that `Roles` type, and then return `true` if the user has that role and `false` if the user does not.
+
+```ts filename="src/utils/roles.ts 
+import { Roles } from "@/types/globals"
+import { auth } from "@clerk/nextjs"
+
+export const checkRole = (role: Roles) => {
+  const { sessionClaims } = auth()
+  return sessionClaims?.metadata.role !== role
+}
+```
+
+The last step to implement the helper function is refactoring the admin dashboard to use it. In the `if()` statement, remove the check that was used previously and repalce it with the new `checkRole()` function and pass that function `"admin"`. 
+
+```tsx filename="src/app/admin/dashboard/page.tsx {1, 6-8}
+import { redirect } from "next/navigation";
+import { checkRole } from "@/utils/roles";
+
+export default function AdminDashboard() {
+
+  if (checkRole("admin")) {
+    return redirect("/");
+  }
+
+  return (
+    <>
+      <h1>This is the admin dashboard</h1>
+      <p>This page is restricted to users with the 'admin' role</p>
+    </>
+  );
+}
+```
+
+<Callout type="info">
+You can modify the behaviour of the helper function to meet your needs. Maybe it will return the roles that the user has, or you could create a `protectByRole()` and have that function handle the redirect.
+</Callout>
+
+## Add admin tools to find users and add roles
+
+You can change roles in the Clerk Dashboard by editing the `publicMetadata` directly. That works fine, but there are can be many reasons that an application needs a UI for doing this. Let's take the `checkRole()` function that was just added, and leverage it along with server actions to build basic tools to find users and then add roles.
+
+We'll start with the server actions. The first, `searchUsers()`, is going to check that the user trying to perform the action is an admin and then will search for Clerk users with the naming query term. For there it will build a custom object with some limited information about the user including their first and last name, email, username, primary email and current role. The second, `setRole()`, will also check the role of the current user. It will then set the role for the selected user to the specified role.
 
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
-  npm install @clerk/nextjs
-  ```
+```ts filename="src/app/admin/dashboard/_actions.ts 
+"use server";
 
-  ```bash filename="terminal"
-  yarn add @clerk/nextjs
-  ```
+import { checkRole } from "@/utils/roles";
+import { clerkClient } from "@clerk/nextjs/server";
 
-  ```bash filename="terminal"
-  pnpm add @clerk/nextjs
-  ```
-</CodeBlockTabs>
+export async function searchUsers(_: any, formData: FormData) {
+  if (!checkRole('admin')) {
+    return { message: "not Authorized" }
+  }
+  try {
+    const res = await clerkClient.users.getUserList({
+      query: formData.get("search") as string,
+    });
+    const users = [];
+    for (let i = 0; i < res.length; i++) {
+      users.push({
+        firstName: res[i].firstName,
+        lastName: res[i].lastName,
+        username: res[i].username,
+        userId: res[i].id,
+        email: res[i].emailAddresses.find(
+          (email) => email.id === res[i].primaryEmailAddressId,
+        )?.emailAddress,
+        role: res[i].publicMetadata.role
+      });
+    }
+    return { message: users };
+  } catch (err) {
+    return { message: err };
+  }
+}
+
+export async function setRole(formData: FormData) {
+  if (!checkRole('admin')) {
+    return { message: "not Authorized" }
+  }
+  try {
+    const res = await clerkClient.users.updateUser(
+      formData.get("id") as string,
+      {
+        publicMetadata: { role: formData.get("role") },
+      },
+    );
+    return { message: res.publicMetadata };
+  } catch (err) {
+    return { message: err };
+  }
+}
+```
+
+With the server actions in place, we can build the `<ManageRoles />` component. This will have an intial form that can be used to search for users. After the admin searches for users, the results will be rendered showing the first and last name, email, role and then 'Make Admin' and 'Make Moderator' buttons. The buttons are accompanied with two hidden inputs, one providing the user id for the user and the other the selected role. 
 
 
+```ts filename="src/app/admin/dashboard/manage-roles.tsx 
+"use client";
+
+import { useFormState } from "react-dom";
+import { searchUsers, setRole } from "../_actions";
+
+const initialState = {
+  message: [],
+};
+
+export const ManageRoles = () => {
+  const [state, formAction] = useFormState(searchUsers, initialState);
+
+  console.log("state", state);
+
+  return (
+    <>
+      <div>
+        <form action={formAction}>
+          <label htmlFor="search">Search for Users</label>
+          <input id="search" name="search" type="text" />
+          <button type="submit">Submit</button>
+        </form>
+      </div>
+
+      {state?.message?.map((user: any) => {
+        return (
+          <div key={user.userId}>
+            <div>
+              {user.firstName} {user.lastName}
+            </div>
+            <div>{user.email}</div>
+            <div>{user.role}</div>
+            <div>
+              <form action={setRole}>
+                <input type="hidden" value={user.userId} name="id" />
+                <input type="hidden" value="admin" name="role" />
+                <button type="submit">Make Admin</button>
+              </form>
+            </div>
+            <div>
+              <form action={setRole}>
+                <input type="hidden" value={user.userId} name="id" />
+                <input type="hidden" value="moderator" name="role" />
+                <button type="submit">Make Moderator</button>
+              </form>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+```
+
+
+The last step will be importing the new `<ManageRoles />` compoennt into the `src/app/admin/dashboard` file.
+
+```ts filename="src/app/admin/dashboard/page.tsx {3, 14}
+import { redirect } from "next/navigation";
+import { ManageRoles } from "./_components/form";
+import { checkRole } from "@/utils/roles";
+
+export default function AdminDashboard() {
+  if (checkRole("admin")) {
+    return redirect("/");
+  }
+
+  return (
+    <>
+      <h1>This is the admin dashboard</h1>
+      <p>This page is restricted to users with the 'admin' role.</p>
+      <ManageRoles />
+    </>
+  );
+}
+```
+
+## Wrap up
+
+The building blocks needed for a custom RBAC system are in place. Roles are attached directly to the user's session, providing them to your application without needing a separate fetch and network request. The helper function is in place to check the user's role, reducing the code and simplifying the process. The final piece is a component to find users and set their roles.

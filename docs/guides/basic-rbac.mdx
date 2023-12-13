@@ -5,13 +5,17 @@ description: Learn how to leverage Clerk's publicMetadata to implement your own 
 
 # Implement basic Role Based Access Control (RBAC) with Metadata
 
-Clerk provides [User Metadata](/docs/users/metadata#user-metadata), which is a tool that can be leveraged to build flexible custom logic into your application. This guide will cover using Public Metadata to build a based Role Based Access Control (RBAC) system for your application. Clerk offers Roles as part of the feature set for [Organizations](/docs/organizations/overview).  This guide will cover setting up a basic RBAC system for products that don't need Organizations.
+Clerk provides [User Metadata](/docs/users/metadata#user-metadata), which is a tool that can be leveraged to build flexible custom logic into your application. This guide will cover using Public Metadata to build a based Role Based Access Control (RBAC) system for your application. 
+
+<Callout type="info">
+Clerk offers Roles as part of the feature set for [Organizations](/docs/organizations/overview).  This guide will cover setting up a basic RBAC system for products that don't need Organizations.
+</Callout>
 
 This guide assumes that you are using Next App Router. The concepts here can be adapted to Next Pages Router and Remix.
 
 ## Configuring the Session
 
-To build basic RBAC, you need to make `publicMetadata` available to applications directly from the token. This will make it more convenient to work with and avoid a network request to load the data. `publicMetadata` can be read the browser and can only be updated server-side or in the Clerk Dashboard. `unsafeMetadata` can be read and updated in the browser, and `privateMetadata` can not be read in the browser.
+To build basic RBAC, you need to make `publicMetadata` available to applications directly from the token. This will make it more convenient to work with and avoid additional network requests to load the data. `publicMetadata` can be read by the browser and can only be updated server-side or in the Clerk Dashboard. `unsafeMetadata` can be read and updated in the browser, and `privateMetadata` can not be read in the browser. See [User metadata](/docs/users/metadata#user-metadata) for more information.
 
 In the Clerk Dashobard, navigate to the [Sessions](https://dashboard.clerk.com/last-active?path=sessions) section, click 'Edit' and in the modal enter the following JSON. If you have already customized your session token you may need to merge this with what you currently have.
 
@@ -31,7 +35,7 @@ The entire token has a limit of 4kb of data. Keep this in mind when customizing 
 
 ## Provide a global TypeScript definition
 
-Inside the `src/` directory, add a `types` directory and then inside of that add a `globals.d.ts` file. This file will prevent TypeScript errors when working with the role, provide auto-complete and control the roles that are allowed in the application. For this guide only an 'admin' and 'user' role will be defined.
+Inside the `src/` directory, add a `types` directory and then inside of that add a `globals.d.ts` file. This file will prevent TypeScript errors when working with the role, provide auto-complete and control the roles that are allowed in the application. For this guide only an `admin` and `moderator` role will be defined.
 
 
 ```ts filename="src/types/globals.d.ts"
@@ -48,7 +52,7 @@ declare global {
 
 ## Set a role on your user
 
-Later, you will add a basic admin tool to change the roles of user, but for now let's add a role to your own user account. In the Dashboard go to Users and select your own user account. Scroll down to the Metadata section and click 'Edit' on the Public metadata. Add the following and save.
+Later, you will add a basic admin tool to change the user's role, but for now let's manually add a role to your own user account. In the Dashboard go to Users and select your own user account. Scroll down to the Metadata section and click 'Edit' on the Public metadata. Add the following and save.
 
 ```bash
 {
@@ -63,7 +67,7 @@ TODO CREATE UPDATED VERSION OF public/images/guides/basic-rbac/user-public-metad
 
 In your application, create a file named `page.tsx` in the `src/app/admin/dashboard` directory. You will likely need to create both the `admin` and `dashboard` directories when doing this. Copy the following code and paste it into the file.
 
-```tsx filename="src/app/admin/dashboard/page.tsx
+```tsx filename="src/app/admin/dashboard/page.tsx"
 import { auth } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 
@@ -71,7 +75,7 @@ export default function AdminDashboard() {
   const { sessionClaims } = auth();
 
   if (sessionClaims?.metadata.role !== "admin") {
-    return redirect("/");
+    redirect("/");
   }
 
   return (
@@ -89,7 +93,7 @@ The `/admin/dashboard` route now requires that the user is logged into the appli
 
 Let's create a helper function to make checking roles easier. The first step is modifying `globals.d.ts`. Create a `type` for `Roles` so that union type for the roles can be used in other places in the application, then modify the interface you previously added to use the new `Roles` type.
 
-```ts filename="src/types/globals.d.ts {3, 8}
+```ts filename="src/types/globals.d.ts" {3, 8}
 export { };
 
 export type Roles = "admin" | "moderator"
@@ -105,26 +109,26 @@ declare global {
 
 The next step is creating the helper function. Create the `src/utils` directory and inside add the file 'roles.ts'. Add the following code to that file. This function will accept a role using that `Roles` type, and then return `true` if the user has that role and `false` if the user does not.
 
-```ts filename="src/utils/roles.ts 
+```ts filename="src/utils/roles.ts"
 import { Roles } from "@/types/globals"
 import { auth } from "@clerk/nextjs"
 
 export const checkRole = (role: Roles) => {
   const { sessionClaims } = auth()
-  return sessionClaims?.metadata.role !== role
+  return sessionClaims?.metadata.role === role
 }
 ```
 
 The last step to implement the helper function is refactoring the admin dashboard to use it. In the `if()` statement, remove the check that was used previously and repalce it with the new `checkRole()` function and pass that function `"admin"`. 
 
-```tsx filename="src/app/admin/dashboard/page.tsx {1, 6-8}
+```tsx filename="src/app/admin/dashboard/page.tsx" {2, 6-8}
 import { redirect } from "next/navigation";
 import { checkRole } from "@/utils/roles";
 
 export default function AdminDashboard() {
 
-  if (checkRole("admin")) {
-    return redirect("/");
+  if (!checkRole("admin")) {
+    redirect("/");
   }
 
   return (
@@ -144,43 +148,13 @@ You can modify the behaviour of the helper function to meet your needs. Maybe it
 
 You can change roles in the Clerk Dashboard by editing the `publicMetadata` directly. You can also build a UI in your application to do this. You can leverage the `checkRole()` function you added along with server actions to build basic tools to find users and then add roles.
 
-Start with the server actions. The first, `searchUsers()`, is going to check that the user trying to perform the action is an admin and then will search for Clerk users with the naming query term. For there it will build a custom object with some limited information about the user including their first and last name, email, username, primary email, and current role. The second, `setRole()`, will also check the role of the current user. It will then set the role for the selected user to the specified role.
+Start with the server action. The `setRole()` action will check the role of the current user using `checkRoles()` to confirm that the user is an `admin`. It will then set the role for the selected user to the specified role.
 
-
-```ts filename="src/app/admin/dashboard/_actions.ts 
+```ts filename="src/app/admin/dashboard/_actions.ts"
 "use server";
 
 import { checkRole } from "@/utils/roles";
 import { clerkClient } from "@clerk/nextjs/server";
-
-export async function searchUsers(_: any, formData: FormData) {
-  if (!checkRole("admin")) {
-    return { message: "Not Authorized" };
-  }
-  try {
-    const res = await clerkClient.users.getUserList({
-      query: formData.get("search") as string,
-    });
-    const users = [];
-    for (let i = 0; i < res.length; i++) {
-      users.push({
-        firstName: res[i].firstName,
-        lastName: res[i].lastName,
-        username: res[i].username,
-        userId: res[i].id,
-        email: res[i].emailAddresses.find(
-          (email) => email.id === res[i].primaryEmailAddressId,
-        )?.emailAddress,
-        role: res[i].publicMetadata.role,
-      });
-    }
-    return { message: users };
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      return { message: err.message };
-    }
-  }
-}
 
 export async function setRole(formData: FormData) {
   if (!checkRole("admin")) {
@@ -191,7 +165,7 @@ export async function setRole(formData: FormData) {
       formData.get("id") as string,
       {
         publicMetadata: { role: formData.get("role") },
-      },
+      }
     );
     return { message: res.publicMetadata };
   } catch (err) {
@@ -200,87 +174,100 @@ export async function setRole(formData: FormData) {
 }
 ```
 
-With the server actions in place, you can build the `<ManageRoles />` component. This will have an intial form that can be used to search for users. After the admin searches for users, the results will be rendered showing the first and last name, email, role and then 'Make Admin' and 'Make Moderator' buttons. The buttons are accompanied with two hidden inputs, one providing the user id for the user and the other the selected role. 
+With the server action in place, you can build the `<SearchUsers />` component. This will have a form that can be used to search for users. On form submission the search term is add to the URL as a serach parameter. The page component, which is a server component that you will refactor next, will perform a query based on this change.
 
-You will see that the code below is using `useFormState()` from `react-dom`. This is a new hook for working with server actions. This hook will update state in the component based on the result of the form action. The component is using it to handle recieving a list of users from the serch. Once that updated state is returned, the component will render a list of matching users.
 
-```ts filename="src/app/admin/dashboard/manage-roles.tsx 
+```ts filename="src/app/admin/dashboard/_search-users.tsx"
 "use client";
 
-import { useFormState } from "react-dom";
-import { searchUsers, setRole } from "./_actions";
+import { usePathname, useRouter } from "next/navigation";
 
-const initialState = {
-  message: new Array(),
-};
-
-export const ManageRoles = () => {
-  const [state, formAction] = useFormState(searchUsers, initialState);
+export const SearchUsers = () => {
+  const router = useRouter();
+  const pathname = usePathname();
 
   return (
-    <>
-      <div>
-        <form action={formAction}>
-          <label htmlFor="search">Search for Users</label>
-          <input id="search" name="search" type="text" />
-          <button type="submit">Submit</button>
-        </form>
-      </div>
-
-      {Array.isArray(state?.message) &&
-        state?.message?.map((user: any) => {
-          return (
-            <div key={user.userId}>
-              <div>
-                {user.firstName} {user.lastName}
-              </div>
-              <div>{user.email}</div>
-              <div>{user.role}</div>
-              <div>
-                <form action={setRole}>
-                  <input type="hidden" value={user.userId} name="id" />
-                  <input type="hidden" value="admin" name="role" />
-                  <button type="submit">Make Admin</button>
-                </form>
-              </div>
-              <div>
-                <form action={setRole}>
-                  <input type="hidden" value={user.userId} name="id" />
-                  <input type="hidden" value="moderator" name="role" />
-                  <button type="submit">Make Moderator</button>
-                </form>
-              </div>
-            </div>
-          );
-        })}
-    </>
+    <div>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const form = e.currentTarget;
+          const formData = new FormData(form);
+          const queryTerm = formData.get("search") as string;
+          router.push(pathname + "?search=" + queryTerm);
+        }}
+      >
+        <label htmlFor="search">Search for Users</label>
+        <input id="search" name="search" type="text" />
+        <button type="submit">Submit</button>
+      </form>
+    </div>
   );
 };
 ```
 
+With the server action and the search form in place, you'll refactor the server component for the `src/app/admin/dashboard` route. It will now check if a search paramater has been added to the URL by the search form, and if there is a search parameter present it will search for for users that match the entered term. If an array of one or more users is returned, then the component will render a list of users using their first and last name, primary eamil address, current role and 'Make Admin' and 'Make Moderator' buttons. The buttons include hidden inputs for the user id and the role, and use the `setRole()` server action to update the role for the user.
 
-The last step will be importing the new `<ManageRoles />` compoennt into the `src/app/admin/dashboard` file.
-
-```ts filename="src/app/admin/dashboard/page.tsx {3, 14}
+```ts filename="src/app/admin/dashboard/page.tsx" {3-5, 7-9, 14, 16, 23, 25-55}
 import { redirect } from "next/navigation";
-import { ManageRoles } from "./_components/manage-roles.tsx";
 import { checkRole } from "@/utils/roles";
+import { SearchUsers } from "./_search-users";
+import { clerkClient } from "@clerk/nextjs";
+import { setRole } from "./_actions";
 
-export default function AdminDashboard() {
-  if (checkRole("admin")) {
-    return redirect("/");
+export default async function AdminDashboard(params: {
+  searchParams: { search?: string };
+}) {
+  if (!checkRole("admin")) {
+    redirect("/");
   }
+
+  const query = params.searchParams.search;
+
+  const users = query ? await clerkClient.users.getUserList({ query }) : [];
 
   return (
     <>
       <h1>This is the admin dashboard</h1>
-      <p>This page is restricted to users with the &apos;admin&apos role.</p>
-      <ManageRoles />
+      <p>This page is restricted to users with the &apos;admin&apos; role.</p>
+
+      <SearchUsers />
+
+      {users.map((user) => {
+        return (
+          <div key={user.id}>
+            <div>
+              {user.firstName} {user.lastName}
+            </div>
+            <div>
+              {
+                user.emailAddresses.find(
+                  (email) => email.id === user.primaryEmailAddressId
+                )?.emailAddress
+              }
+            </div>
+            <div>{user.publicMetadata.role as string}</div>
+            <div>
+              <form action={setRole}>
+                <input type="hidden" value={user.id} name="id" />
+                <input type="hidden" value="admin" name="role" />
+                <button type="submit">Make Admin</button>
+              </form>
+            </div>
+            <div>
+              <form action={setRole}>
+                <input type="hidden" value={user.id} name="id" />
+                <input type="hidden" value="moderator" name="role" />
+                <button type="submit">Make Moderator</button>
+              </form>
+            </div>
+          </div>
+        );
+      })}
     </>
   );
 }
 ```
-import { ManageRoles } from "./_components/form";
 
 ## Wrap up
 

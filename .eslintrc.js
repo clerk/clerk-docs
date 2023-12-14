@@ -33,11 +33,10 @@ module.exports = {
   },
   rules: {
     indent: ["off", "tab"],
-    "prefer-arrow-callback": "off",
     "prettier/prettier": [
       "error",
       {
-        trailingComma: `es5`,
+        trailingComma: "es5",
         semi: true,
         singleQuote: false,
         printWidth: 80,

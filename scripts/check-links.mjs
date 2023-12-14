@@ -5,10 +5,15 @@ import remarkMdx from "remark-mdx";
 import { remark } from "remark";
 import reporter from "vfile-reporter";
 import { visit } from "unist-util-visit";
+import remarkFrontmatter from "remark-frontmatter";
 
 // Some URLs are valid (e.g. they link to marketing sites or docs that are not hosted through clerk-docs) so they should be excluded from the check.
 // These URLs will be used with the .startsWith() method, so they should be specific enough to not match any URLs that should be checked.
-const EXCLUDE_LIST = ['/pricing', '/docs/reference/backend-api', '/docs/reference/frontend-api']
+const EXCLUDE_LIST = [
+  "/pricing",
+  "/docs/reference/backend-api",
+  "/docs/reference/frontend-api",
+];
 
 const ERRORS = {
   RELATIVE_LINK(url) {
@@ -33,7 +38,9 @@ const validateUrl = (url, node, file) => {
     const cleanedUrl = url.split("#")[0];
 
     if (!fileCheckCache.has(cleanedUrl)) {
-      const isExcluded = EXCLUDE_LIST.some((excludedUrl) => cleanedUrl.startsWith(excludedUrl))
+      const isExcluded = EXCLUDE_LIST.some((excludedUrl) =>
+        cleanedUrl.startsWith(excludedUrl)
+      );
 
       // If the URL is excluded, we don't need to check the filesystem. However, we should do the check here and not early return in the beginning because we still want to cache the result.
       if (isExcluded) {
@@ -80,7 +87,10 @@ const remarkPluginValidateLinks = () => (tree, file) => {
   );
 };
 
-const processor = remark().use(remarkMdx).use(remarkPluginValidateLinks);
+const processor = remark()
+  .use(remarkFrontmatter)
+  .use(remarkMdx)
+  .use(remarkPluginValidateLinks);
 
 async function main() {
   console.log("🔎 Checking for broken links...");

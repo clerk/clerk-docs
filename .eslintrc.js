@@ -22,6 +22,10 @@ module.exports = {
         sourceType: "script",
       },
     },
+    {
+      files: "*.mdx",
+      parser: "eslint-mdx",
+    },
   ],
   parserOptions: {
     ecmaVersion: "latest",

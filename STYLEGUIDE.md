@@ -83,11 +83,11 @@ Clerk is the entity writing these docs and providing these services. The learner
 
 #### Do
 
-> Clerk's `<ClerkProvider />` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
+> Clerk's `<ClerkProvider>` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
 #### Don't 
 
-> Our `<ClerkProvider />` provides active session and user context to our hooks and other components. Let's import it into our app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of the file.
+> Our `<ClerkProvider>` provides active session and user context to our hooks and other components. Let's import it into our app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of the file.
 
 ### 2.2 "Users" are people logging in/out with Clerk. "Developers" are the audience we’re writing for.
 
@@ -195,13 +195,13 @@ Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargo
 
 #### Do
 
-> You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider />`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
+> You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider>`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
 
 > Clerk supports offline mode, a feature that lets users use an app without being connected to data or wifi. This means Clerk works great with progressive web apps, apps built with web platform technologies that provide similar experiences to platform-specific apps. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
 
 #### Don't
 
-> It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment keys, wrap your app in `<ClerkProvider />`, and simply add [control components](https://clerk.com/docs/components/overview).
+> It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment keys, wrap your app in `<ClerkProvider>`, and simply add [control components](https://clerk.com/docs/components/overview).
 
 > Clerk works great with PWA as it supports offline mode. You can use the dynamic import pattern to improve loading speeds.
 
@@ -365,13 +365,15 @@ Next.js is a platform with two different implementations grouped underneath it.
 
 Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.
 
-### 4.7 Wrap component references in `< />`
+### 4.7 Wrap component references in the appropriate tags
 
-Component references should be wrapped in `< />`.
+Component references should be wrapped in `< />` if they are self closing. Otherwise, they should be wrapped in `< >`.
 
 #### Do
 
 > Use the `<SignIn />` component.
+
+> Use the `<ClerkProvider>` component.
 
 #### Don't 
 
@@ -380,6 +382,14 @@ Component references should be wrapped in `< />`.
 > Use the "SignIn component".
 
 > Use the `SignIn` component.
+
+> Use the `<SignIn>` component.
+
+The last case is incorrect because the `<SignIn />` component will never wrap children, and therefore, should have a self-closing tag.
+
+> Use the `<ClerkProvider />` component.
+
+The last case is incorrect because the `<ClerkProvider>` component will always wrap children and will never be self-closing. 
 
 ### 4.8 Specify syntax and filename for terminal commands
 

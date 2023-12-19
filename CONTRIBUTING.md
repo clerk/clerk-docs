@@ -50,7 +50,7 @@ The structure of the PR should be:
   - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
 - **Description ("Leave a comment")**: Describe what the concern was and summarize how you solved it.
 
-## Previewing changes
+## Preview your changes
 
 When you open a pull request, a member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
 

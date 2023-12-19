@@ -50,12 +50,9 @@ The structure of the PR should be:
   - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
 - **Description ("Leave a comment")**: Describe what the concern was and summarize how you solved it.
 
-## Previewing your changes
+## Preview your changes
 
-If you use VSCode, consider using [the built-in markdown preview](https://code.visualstudio.com/docs/languages/markdown#_markdown-preview) to see what the rendered content will look like. *Note that this will not include custom components or styles.*
-
-> **Note**
-> A member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
+When you open a pull request, a member of the Clerk team can add the `deploy-preview` label to your pull request, which will trigger a preview deployment with your changes.
 
 ### Previewing changes locally (for Clerk employees)
 

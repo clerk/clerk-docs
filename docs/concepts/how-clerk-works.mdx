@@ -50,18 +50,26 @@ Clerk's Frontend API is responsible for maintaining the authentication state of 
 
 ### Clerk cookies
 
-Clerk Frontend API uses two cookies for production instances:
+Clerk’s Frontend API uses two cookies for session management in production instances:
 
-1. `__client` cookie: This cookie is set on Clerk Frontend API (for example `https://clerk.<example.com>`) for each instance. It’s HTTP only, first-party and secure. It contains a long-lived client JWT that lasts 7 days by default. The duration is configurable in the Clerk Dashboard's  [Sessions page](https://dashboard.clerk.com/last-active?path=sessions). The JWT identifies the current client (browser, native application, or chrome extension) and sets the current active sessions.
-2. `__session` cookie: This cookie is set on the host application that is secured by Clerk (for example `https://dashboard.<example.com>`). It’s a JS cookie, it’s secure, and contains a short-lived session JWT that lasts 60 seconds. This JWT contains the current session, user and organization identifiers and must be sent to the application API to authenticate API requests. In SSR, the `__session` cookie travels automatically to the server. ClerkJS ensures that the `__session` cookie is automatically refreshed in Client Side Rendering (CSR) and Server Side Rendering (SSR).
+* `__client` cookie: a long-lived session that is used to keep the the session JWT fresh by interacting with the Frontend API
+* `__session` cookie: a short-lived session JWT to validate requests 
 
-### The Interstitial page for SSR
+#### The `__client` cookie
 
-Clerk is a frontend-first authentication solution. [ClerkJS](/docs/references/javascript/overview) is responsible for ensuring that a fresh, valid `__session` cookie is always available to be used for CSR, SSR, and API requests by the host application. 
+This cookie is set on Clerk Frontend API (for example `https://clerk.<example.com>`) for each instance. It’s HTTP-only, first-party, and secure. It contains a long-lived client JWT that lasts 7 days by default. The duration is configurable in the Clerk Dashboard's  [Sessions page](https://dashboard.clerk.com/last-active?path=sessions). The JWT identifies the current client (browser, native application, or chrome extension) and sets the current active sessions.
 
-In SSR, it is common that the latest `__session` cookie might have expired if the user hasn’t visited the page for more than a minute. Using the `__session` cookie in the first doc-type request will result in unauthenticated request although the user is still signed-in in Clerk Frontend API. 
+#### The `__session` cookie
 
-To address this issue, Clerk SDKs in SSR frameworks such as Next.js, Remix, or Gatsby, use the Interstitial page mechanism that intercepts such requests, gives an opportunity to ClerkJS to refresh the `__session` cookie, and replays the original requests. The Interstitial page runs at Edge for maximum performance.
+This cookie is set on the host application that is secured by Clerk (for example `https://dashboard.<example.com>`). It’s a JS cookie, it’s secure, and contains a short-lived session JWT that lasts 60 seconds. This JWT contains the current session, user and organization identifiers and must be sent to the application API to authenticate API requests. In SSR, the `__session` cookie travels automatically to the server. ClerkJS ensures that the `__session` cookie is automatically refreshed in Client Side Rendering (CSR) and Server Side Rendering (SSR).
+
+If a `__session` cookie is expired on a request to an application’s backend, the SDK doesn’t know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers Clerk's client handshake.
+
+### The client handshake
+
+Clerk uses a client handshake mechanism to resolve a request’s authentication state from `unknown` to `signed-in` or `signed-out`. 
+
+With this handshake, Clerk can resolve authentication state on the backend and ensure the request is properly handled as signed in or out, instead of being in a potentially `unknown` state. The handshake flow relies on redirects to exchange session information between FAPI and the application, ensuring the resolution of unknown authentication states minimizes performance impact and behaves consistently across different framework and language implementations.
 
 ### Client piggybacking
 

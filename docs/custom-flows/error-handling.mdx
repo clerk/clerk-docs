@@ -105,7 +105,6 @@ const signIn = await client.signIn.create({
 
 If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts for password or backup code verification, you will receive an HTTP status of 403 (Forbidden) and the following error payload:
 
-
 ```json
 {
   "errors": [
@@ -114,11 +113,35 @@ If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your in
       "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, please contact support.",
       "code": "user_locked",
       "meta": {
-        "duration_in_seconds": 1800
+        "lockout_expires_in_seconds": 1800
       }
     }
   ]
 }
 ```
 
-The remaining duration will vary [depending on your configuration](/docs/security/customize-user-lockout). You can opt to render the error message returned as-is or format the supplied `duration_in_seconds` as per your liking.
+`lockout_expires_in_seconds` represents the time remaining until the user is able to attempt authentication again.
+In the above example, 1800 seconds (or 30 minutes) are left until they are able to retry, as of the current moment.
+
+The admin might have [configured](/docs/security/customize-user-lockout) e.g. a 45-minute lockout duration.
+Thus, 15 minutes after one has been locked, 30 minutes will still remain until the lockout lapses.
+
+You can opt to render the error message returned as-is or format the supplied `lockout_expires_in_seconds` value as per your liking in your own custom error message.
+
+For instance, if you wish to inform a user at which absolute time they will be able to try again, you could add the remaining seconds to the current time and format the resulting timestamp.
+
+```js
+if (errors[0].code === 'user_locked') {
+    // Get the current date and time
+    let currentDate = new Date();
+
+    // Add the remaining seconds until lockout expires
+    currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds);
+
+    // Format the resulting date and time into a human-readable string
+    const lockoutExpiresAt = currentDate.toLocaleString();
+
+    // Do something with lockoutExpiresAt
+    console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt);
+}
+```

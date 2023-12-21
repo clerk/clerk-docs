@@ -3,15 +3,10 @@ module.exports = {
     browser: true,
     es2021: true,
   },
-  extends: [
-    "eslint:recommended",
-    "plugin:mdx/recommended",
-    "plugin:prettier/recommended",
-  ],
+  extends: ["eslint:recommended", "plugin:mdx/recommended"],
   settings: {
-    "mdx/code-blocks": true,
+    "mdx/code-blocks": false,
   },
-  plugins: ["prettier"],
   overrides: [
     {
       env: {
@@ -22,6 +17,10 @@ module.exports = {
         sourceType: "script",
       },
     },
+    {
+      files: "*.mdx",
+      parser: "eslint-mdx",
+    },
   ],
   parserOptions: {
     ecmaVersion: "latest",
@@ -29,16 +28,5 @@ module.exports = {
   },
   rules: {
     indent: ["off", "tab"],
-    "prefer-arrow-callback": "off",
-    "prettier/prettier": [
-      "error",
-      {
-        trailingComma: `es5`,
-        semi: true,
-        singleQuote: false,
-        printWidth: 80,
-        endOfLine: "auto",
-      },
-    ],
   },
 };

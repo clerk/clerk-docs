@@ -70,7 +70,7 @@ export default function Sidebar() {
 
 With clerk, a user can have many organization memberships. That means they can could have joined both Organization A and Organization B, but only one of them can be active at a time.
 
-A session will always include an organizationId (which can be null), we can use this in order to [detect](#) if a user has an "active organizations".
+A session will always include an organizationId via the [`AuthenticationObject`](/docs/references/nextjs/authentication-object#example-with-active-organization), we can use this in order to [detect](#detect-an-active-organization) if a user has an "active organizations".
 
 Clerk UI Components will automatically set an organization as active each time the user creates an organization, accepts an invitation or selects a membership from the switcher. For custom flows when developers want to set an organization as active you can use the [`setActive`](#) utility
 
@@ -80,7 +80,7 @@ setActive({organization: 'org_1234'})
 
 ### Detect an active organization
 
-<Tabs type="router" items={["Server", "SSR + Client"]}>
+<Tabs type="router" items={["RSC", "SSR + Client"]}>
     <Tab>
 ```tsx
 import { auth } from '@clerk/nextjs/server'
@@ -112,56 +112,80 @@ export default function Layout() {
 
 Based on your usecase you can either decide to limit users in the entire app or a specific part of it. For example a B2B application might need to limit users with active organization for the entire app, whereas a B2B2C application would only limit the `/dashboard` path to users with active organization.
 
-We will be exploring the former case, but the implementation is almost identical for both.
+We can use the [`authMiddleware`](/docs/references/nextjs/auth-middleware) or we can use an `App Router Layout` to limit our entire application for users with an active organization.
 
-We can use the middleware or we can use a Layout to limit our entire application for users with an active organization.
+<Tabs type="router" items={["RSC", "SSR + Client"]}>
+    <Tab>
 
+```tsx filename="app/(with-active-organization)/layout.tsx"
+import { OrganizationList } from "@clerk/nextjs"
+import { auth } from "@clerk/nextjs/server"
+import { PropsWithChildren } from "react"
 
-### Require authentication to access your app
+export default function RequiredActiveOrgLayout(props: PropsWithChildren) {
+  const { orgId } = auth()
 
-Now that Clerk is installed and mounted in your application, you can decide which pages are public and which should require authentication to access.
-
-Create a `middleware.ts` file. If your application uses the `src/` directory, your `middleware.ts` file should be placed inside the `src/` folder. If you are not using a `src/` directory, place the `middleware.ts` file in your root directory alongside `.env.local`.
-
-Copy and paste the following code into your `middleware.ts`. With this, your entire application is protected.
-
-```tsx filename="middleware.ts"
-import { authMiddleware } from "@clerk/nextjs";
-
-// This example protects all routes including api/trpc routes
-// Please edit this to allow other routes to be public as needed.
-// See https://clerk.com/docs/references/nextjs/auth-middleware for more information about configuring your Middleware
-export default authMiddleware({});
-
-export const config = {
-matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-
+  if (orgId) {
+    return props.children
+  }
+  return (
+    <section>
+      <h1>Welcome</h1>
+      <p>
+        This part of the application requires the user to select an
+        organization in order to proceed. If you are not part of an
+        organization, you can accept an invitation or create your own
+        organization
+      </p>
+      <OrganizationList hidePersonal={true} />  
+    </section>
+  )
+}
 ```
+
+    </Tab>
+
+    <Tab>
+
+    See the complete example of the middleware script ([here](/docs/references/nextjs/auth-middleware#use-after-auth-for-fine-grained-control))
+```tsx filename="middleware.ts"
+import { authMiddleware, redirectToSignIn } from '@clerk/nextjs';
+ 
+export default authMiddleware({
+  afterAuth(auth, req, evt) {
+    ...
+    // Redirect logged in users to organization selection page if they are not active in an organization
+    if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
+      const orgSelection = new URL('/org-selection', req.url)
+      return NextResponse.redirect(orgSelection)
+    }
+    ...
+  }
+});
+```
+
+```tsx filename="app/org-selection/page.tsx"
+import { OrganizationList } from "@clerk/nextjs"
+import { PropsWithChildren } from "react"
+
+export default function OrganizationSelection(props: PropsWithChildren) {
+  return (
+    <section>
+      <h1>Welcome</h1>
+      <p>
+        This part of the application requires the user to select an
+        organization in order to proceed. If you are not part of an
+        organization, you can accept an invitation or create your own
+        organization
+      </p>
+      <OrganizationList hidePersonal={true} />  
+    </section>
+  )
+}
+```
+    </Tab>
+</Tabs>
 
 </Steps>
 
-## You're authenticated!
-
-Congratulations! Your app is now only available to authenticated users. But this is just the first step.
-
-If you would like a repository that demonstrates many of the features Clerk has to offer, such as user, session, and organization management, check out one of Clerk's demo repositories:
-
-- [Clerk + Next.js App Router Demo](https://github.com/clerk/clerk-nextjs-demo-app-router)
-- [Clerk + Next.js Pages Router Demo](https://github.com/clerk/clerk-nextjs-demo-pages-router)
-
-## Next steps
-
-<div className="container mx-auto my-4">
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Cards title="Create custom sign-up and sign-in pages" description="Learn how add custom sign-up and sign-in pages with Clerk components." link="/docs/references/nextjs/custom-signup-signin-pages" cta="Learn More" />
-
-        <Cards title="Read user and session data" description="Learn how to use Clerk's hooks and helpers to access the active session and user data in your Next.js application." link="/docs/references/nextjs/read-session-data" cta="Learn More" />
-
-        <Cards title="Client Side Helpers" description="Learn more about Next.js client side helpers and how to use them." link="/docs/references/nextjs/overview#client-side-helpers" cta="Learn More" />
-
-        <Cards title="Next.js SDK Reference" description="Learn more about additional Next.js methods." link="/docs/references/nextjs/overview" cta="Learn More" />
-
-        <Cards title="Use Clerk with Next.js 12 and older" description="Learn how to use Clerk with older versions of Next.js." link="/docs/references/nextjs/usage-with-older-versions" cta="Learn More" />
-    </div>
-</div>
+## Finished 🎉

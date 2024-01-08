@@ -84,7 +84,7 @@ The content rendered on https://clerk.com/docs is pulled from the `main` branch 
 
 The documentation content is located in the [`/docs` directory](./docs/). Each MDX file located in this directory will be rendered under https://clerk.com/docs at its path relative to the root `/docs` directory, without the file extension.
 
-For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
+For example, the file at `/docs/guides/setup-clerk.mdx` can be found at https://clerk.com/docs/guides/setup-clerk.
 
 ### Navigation manifest
 
@@ -459,7 +459,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
   beforeYouStart={[
     {
       title: "Set up a Clerk application",
-      link: "https://clerk.com/docs/quickstarts/setup-clerk"
+      link: "https://clerk.com/docs/guides/setup-clerk"
     },
     {
       title: "Create a react application",

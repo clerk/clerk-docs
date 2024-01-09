@@ -50,7 +50,7 @@ CLERK_SECRET_KEY={{secret}}
 
 [Middleware](/docs/references/nextjs/auth-middleware) allows you to use Clerk server-side APIs. Create a `middleware.ts` file. If your application uses the `src/` directory, your `middleware.ts` file should be placed inside the `src/` folder. If you are not using a `src/` directory, place the `middleware.ts` file in your root directory.
 
-```ts filename="middleware.ts"
+```ts filename="src/middleware.ts"
 import { authMiddleware } from "@clerk/nextjs";
 
 export default authMiddleware();
@@ -68,9 +68,9 @@ export const config = {
 
 ## Using Clerk in your tRPC Context
 
-To use Clerk in your tRPC context, you will need to use our server helper [`getAuth`](/docs/references/nextjs/get-auth).
+To use Clerk in your tRPC context, you will first need to use our server helper [`getAuth`](/docs/references/nextjs/get-auth). Create a new `context.ts` file:
 
-```ts
+```ts filename="src/server/context.ts"
 import * as trpc from '@trpc/server';
 import * as trpcNext from '@trpc/server/adapters/next';
 import { getAuth, SignedInAuthObject, SignedOutAuthObject } from '@clerk/nextjs/server';
@@ -94,11 +94,24 @@ export const createContext = async (
 export type Context = trpc.inferAsyncReturnType<typeof createContext>;
 ```
 
-## Accessing the context data in your application
+Then, add the Clerk context to every tRPC query sent to the server:
 
-Once you have context in your application, you can access the data in any procedure by using `ctx` in your queries.
+```ts filename="src/pages/api/trpc/[trpc].ts"
+import { appRouter } from '@/server/routers'
+import * as trpcNext from '@trpc/server/adapters/next'
+import { createContext } from 'src/server/context';
 
-```ts
+export default trpcNext.createNextApiHandler({
+  router: appRouter,
+  createContext: createContext,
+});
+```
+
+## Accessing the context data in your back-end
+
+Once you have context in your back-end, you can access the data in any procedure by using `ctx` in your queries.
+
+```ts filename="src/server/routers/index.ts"
 import { router, publicProcedure } from '../trpc';
 
 export const exampleRouter = router({
@@ -110,11 +123,11 @@ export const exampleRouter = router({
 })
 ```
 
-## Using tRPC Middleware
+## Update your tRPC Middleware
 
-In most cases, you need to protect your routes from users who aren't signed in. You can create a protected procedure.
+In most cases, you need to protect your routes from users who aren't signed in. You can create a protected procedure by updating your tRPC middleware like so:
 
-```ts
+```ts filename="src/server/trpc.ts"
 import { initTRPC, TRPCError } from '@trpc/server'
 import superjson from 'superjson'
 import { type Context } from './context'
@@ -148,7 +161,7 @@ export const protectedProcedure = t.procedure.use(isAuthed)
 
 Once you have created your procedure, you can use it in any router. The example below uses the protected procedure and returns the user's name.
 
-```ts
+```ts filename="src/server/routers/index.ts"
 import { router, protectedProcedure } from '../trpc'
 
 export const protectedRouter = router({

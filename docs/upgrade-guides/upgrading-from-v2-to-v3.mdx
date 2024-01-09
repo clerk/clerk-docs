@@ -1,11 +1,25 @@
 ---
-title: Client-side changes | Upgrade to V3
-description: Dive into Clerk's latest V3 update featuring the useAuth() hook, improved API consistency, and streamlined user methods.
+title: Upgrading from v2 to v3
+description: Learn how to upgrade from version 2 to version 3 of the Clerk JavaScript libraries.
 ---
 
-# Client-side changes (all frameworks)
+# Upgrading from v2 to v3
 
-## Upgrade dependencies
+On March 24, 2022, Clerk launched version 3 of its full suite of JavaScript libraries, including our SDKs for React, Next.js, Gatsby, Remix, and Redwood. This guide helps you with uprading to the next major version of your SDK.
+
+## Why upgrade?
+
+Version 3 includes a number of bug fixes, developer experience improvements, and altogether new features, including:
+
+- Support for server-side rendering
+- Reduced React re-renders
+- Improved Typescript types and IntelliSense autocomplete
+
+## Client-side changes (all frameworks)
+
+These changes apply to all frameworks, regardless of which one you use specifically.
+
+### Upgrade dependencies
 
 <CodeBlockTabs options={["Next.js", "React, Gatsby, Redwood"]}>
 ```sh filename="terminal"
@@ -18,7 +32,7 @@ npm install @clerk/clerk-react@latest
 </CodeBlockTabs>
 
 
-## `useAuth()` introduction
+### `useAuth()` introduction
 
 [`useAuth()`][use-auth] is a new, SSR-compatible hook that is recommended for all authentication tasks.
 
@@ -40,11 +54,11 @@ The [`useAuth()`][use-auth] hook unifies the way you access common auth operatio
 - `useClerk()` to access `signOut()`
 - `<SignedIn>` and `<SignedOut>` in a way that requires extra components
 
-## Hook and component API changes
+### Hook and component API changes
 
 Version 3 changes several APIs for improved consistency and usability.
 
-### `useUser()` and `useSession()`
+#### `useUser()` and `useSession()`
 
 Previously, `useUser` and `useSession` could only be called from inside the `<SignedIn>` component. This restriction has been relaxed, but now developers must manually handle the possibility the user and session objects may not be loaded when the hook is called.
 
@@ -55,7 +69,7 @@ In a future version, we plan to support React `<Suspense />` to make this even e
 | `const user = useUser();` | `const { isLoaded, isSignedIn, user } = useUser();` |
 | `const session = useSession();` | `const { isLoaded, isSignedIn, session } = useSession();` <br />If you only call `useSession` for the ID or `getToken`, please switch to [`useAuth()`][use-auth] instead. |
 
-### `<RedirectToSignIn />` and `<RedirectToSignUp/>`
+#### `<RedirectToSignIn />` and `<RedirectToSignUp/>`
 
 The behavior enabled by the `returnBack` prop has now been promoted to default behavior. `returnBack` is deprecated in favor of using an empty component.
 
@@ -64,7 +78,7 @@ The behavior enabled by the `returnBack` prop has now been promoted to default b
 | `<RedirectToSignIn returnBack/>` | `<RedirectToSignIn />` |
 | `<RedirectToSignUp returnBack/>` | `<RedirectToSignUp />` |
 
-### `<SignIn />` and `<SignUp />`
+#### `<SignIn />` and `<SignUp />`
 
 Props which take URLs (absolute or relative) have been standardized to use the Url (camelCase) suffix.
 
@@ -75,7 +89,7 @@ Props which take URLs (absolute or relative) have been standardized to use the U
 | `signUpURL` | `signUpUrl` |
 | `signInURL` | `signInUrl` |
 
-### `<UserButton />`
+#### `<UserButton />`
 
 Props which take URLs (absolute or relative) have been standardized to use the Url (camelCase) suffix.
 
@@ -87,7 +101,7 @@ Props which take URLs (absolute or relative) have been standardized to use the U
 | `afterSignOutAll` | `afterSignOutUrl` |
 | `afterSignOutOne` | `afterMultiSessionSingleSignOutUrl` |
 
-### `useSignUp()` & `useSignIn()`
+#### `useSignUp()` & `useSignIn()`
 
 `useSignUp()` and `useSignIn()` are no longer required to be contained in `<SignedOut>` or `<ClerkLoaded>`. Instead, they have been updated to include a loading state.
 
@@ -96,7 +110,7 @@ Props which take URLs (absolute or relative) have been standardized to use the U
 | `const signUp = useSignUp();` | `const { isLoaded, signUp } = useSignUp();` |
 | `const signIn = useSignIn();` | `const { isLoaded, signIn } = useSignIn();` |
 
-## Resource changes
+### Resource changes
 
 In order to make our APIs easier to use in codebases not using Typescript and make them more consistent across frameworks, we removed support for snake_cased method parameters. We also updated all method signatures to always accept a param object instead of plain positional params.
 
@@ -104,7 +118,7 @@ We expect that most users will only need to apply these changes to the `user.upd
 
 Users who have built custom auth flows using the SignIn and SignUp resources can consult the [SignUp and SignIn section below](#sign-up-and-sign-in).
 
-### User
+#### User
 
 `User.getToken("token-name")` has been deprecated and is now accessible through `getToken` from the `useAuth()` hook or `Session.getToken()`.
 
@@ -124,7 +138,7 @@ Respecting the camelCase changes we explained at the start of this section, all 
 | `User.setProfileImage(file)` | `User.setProfileImage(file)` |
 | `User.update({ first_name: "", last_name: "" })` | `User.update({ firstName: "", lastName: "" })` |
 
-### SignUp and SignIn
+#### SignUp and SignIn
 
 The `createMagicLinkFlow` and `authenticateWithRedirect` calls have had parameters renamed to use the word "redirect" instead of "callback."
 
@@ -132,5 +146,72 @@ The `createMagicLinkFlow` and `authenticateWithRedirect` calls have had paramete
 | --- | --- |
 | `createMagicLinkFlow({ callbackUrl })` | `createMagicLinkFlow({ redirectUrl })` |
 | `authenticateWithRedirect({ callbackUrl, callbackUrlComplete })` | `authenticateWithRedirect({ redirectUrl, redirectUrlComplete })` |
+
+## Next.js server-side changes
+
+<Callout type="info">
+  Before starting this guide, please complete the [Client-side changes](#client-side-changes-all-frameworks).
+</Callout>
+
+### API routes
+
+Helpers for API routes have been updated to mirror the new [`useAuth()`][use-auth] hook on the client-side.
+
+- `withSession` is deprecated and replaced with `withAuth`
+- `requireSession` is deprecated with replaced with `requireAuth`
+- Instead of decorating the `Request` object with a `Session` object, it is now decorated with an `Auth` object that mirrors [`useAuth()`][use-auth] on the client-side.
+  - `const { userId, sessionId, getToken } = req.auth;`
+
+#### Example usage
+
+```jsx
+import { withAuth } from "@clerk/nextjs/api";
+
+export default withAuth(async (req, res) => {
+  const { userId, sessionId, getToken } = req.auth;
+  const hasuraToken = await getToken({template: "hasura"});
+  // Your handler
+});
+```
+
+### Edge middleware
+
+Edge middleware has also been updated to mirror the new [`useAuth()`][use-auth] hook on the client-side. The import path has also been changed to avoid confusion.
+
+```jsx
+import { withEdgeMiddlewareAuth } from "@clerk/nextjs/edge-middleware";
+
+export const middleware = withEdgeMiddlewareAuth((req, ev) => {
+  const { userId, sessionId, getToken } = req.auth;
+  // Your middleware
+});
+```
+
+## Express server-side changes
+
+<Callout type="info">
+  Before starting this guide, please complete the [Client-side changes](#client-side-changes-all-frameworks).
+</Callout>
+
+### Middleware
+
+Express middleware been updated to mirror the new [`useAuth()`][use-auth] hook on the client-side.
+
+- `ClerkExpressWithSession` is deprecated and replaced with `ClerkExpressWithAuth`
+- `ClerkExpressRequireSession` is deprecated and replaced with `ClerkExpressRequireAuth`
+- Instead of decorating the `Request` object with a `Session` object, it is now decorated with an `Auth` object that mirrors [`useAuth()`][use-auth] on the client-side.
+  - `const { userId, sessionId, getToken } = req.auth;`
+
+#### Example usage
+
+```js
+import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+
+app.use(ClerkExpressRequireAuth());
+app.get('/', (req, res) => {
+  const { userId, sessionId, getToken } = req.auth;
+  // Your handler...
+})
+```
 
 [use-auth]: /docs/references/react/use-auth

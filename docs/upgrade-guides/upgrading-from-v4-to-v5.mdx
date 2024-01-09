@@ -1,0 +1,164 @@
+---
+title: Upgrading from v4 to v5
+description: Learn how to upgrade from version 4 to version 5 of the Clerk JavaScript libraries.
+---
+
+# Upgrading from v4 to v5
+
+On January 16, 2024, Clerk launched version 5 of its full suite of JavaScript libraries. Clerk's SDKs include React, Next.js, Remix, Gatsby, and Redwood. This guide helps you with uprading to the next major version of your SDK.
+
+Version 5 ships with an improved design and UX on its built-in components, no "flash of white page" when authenticating, and a new default middleware for Next.js which defaults to not protecting any routes. Along with these highly requested features some smaller DX improvements and housekeeping items made its way into the release. If you want to know everything that's new, read the [v5 announcement post](#TODO).
+
+**Note:** Version 5/v5 refers to the [`@clerk/clerk-js`](https://www.npmjs.com/package/@clerk/clerk-js) package version. However, other SDKs like `@clerk/backend` or `@clerk/clerk-expo` are versioned independently (and would upgrade from v1 to v2). To make this page easier to read for instances of general advice only v5 is mentioned. You can think of v4 as the previous major of your SDK and v5 as the current in those cases.
+
+If you're curious about Clerk's approach to versioning and support, head to the [long term support](/docs/upgrade-guides/long-term-support) document. For most users we expect a smooth upgrade path as only a couple of changes will be required: [Update dependencies](#update-dependencies), [update changes across SDKs](#common), and individual items of the SDK you use.
+
+## Handle deprecations
+
+Before uprading, Clerk highly recommends updating your packages to the latest v4 version. Some changes required for v5 can be applied incrementally to the latest v4, which should contribute to a smoother upgrading experience.
+
+You can use your package manager to find the possible upgrades:
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+
+  ```bash filename="terminal"
+  npm outdated
+  ```
+
+  ```bash filename="terminal"
+  yarn upgrade-interactive
+  ```
+
+  ```bash filename="terminal"
+  pnpm upgrade -i
+  ```
+
+</CodeBlockTabs>
+
+After updating, look out for deprecation messages in your terminal and browser console.
+
+## Update dependencies
+
+This section explains breaking changes for peer dependencies and tooling that were made for v5. In order to successfully upgrade, you need to resolve these changes. Clerk's SDKs enforce these requirements through setting `peerDependencies` and `engines` keys in their `package.json`.
+
+### Update to Node.js 18.17.0 or later
+
+All SDKs that rely on Node.js require you to have Node.js 18.17.0 or later installed. This is to follow the Node.js schedule of supporting only versions that are maintained. Learn how to [update and install Node.js](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs).
+
+### Update to React 18
+
+All SDKs that rely on React require you to use React 18. You can update your project by installing the latest version of `react` and `react-dom`.
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+
+  ```bash filename="terminal"
+  npm install react@latest react-dom@latest
+  ```
+
+  ```bash filename="terminal"
+  yarn add install react@latest react-dom@latest
+  ```
+
+  ```bash filename="terminal"
+  pnpm add install react@latest react-dom@latest
+  ```
+
+</CodeBlockTabs>
+
+### Update to Next.js 13.0.4 or later
+
+If you're using `@clerk/nextjs` you will need to update your Next.js project to 13.0.4 or later. Check out Next's upgrade guides:
+
+- [Upgrading from 12 to 13](https://nextjs.org/docs/pages/building-your-application/upgrading/version-13)
+- [Upgrading from 13 to 14](https://nextjs.org/docs/app/building-your-application/upgrading/version-14)
+
+## Update SDK
+
+This section explains breaking changes that were made across SDKs or only in individual ones. In order to successfully upgrade, you need to resolve these changes. While it's a long list, please note that we expect most users to only have to go through the [common changes](#common) and individual items for their SDK.
+
+As of this major version Clerk also provides a `@clerk/upgrade` CLI you can use to ease the upgrade. The CLI uses regular expressions to scan for patterns that match breaking changes and log relevant upgrade notices (it doesn't change your source code). As such there is no 100% guarantee that all occurrences of those breaking changes are found. Navigate to your project and run it in the terminal:
+
+```bash filename="terminal"
+npx @clerk/upgrade
+```
+
+### Common
+
+This section explains changes that were made in **all** SDKs.
+
+#### Replace `CLERK_API_KEY` with `CLERK_SECRET_KEY`
+
+The `CLERK_API_KEY` environment variable was renamed to `CLERK_SECRET_KEY`. Make sure to update this in all environments (dev, staging, production).
+
+#### Replace frontendApi with to publishable key
+
+The `CLERK_FRONTEND_API` environment variable was renamed to `CLERK_PUBLISHABLE_KEY`. The `frontendApi` prop passed to `<ClerkProvider>` was renamed to `publishableKey`. **Note:** The values are different, so this is not just a key replacement. You can find the publishable key in your Clerk dashboard. Make sure to update this in all environments (dev, staging, production). [More information](/docs/deployments/overview#api-keys-and-environment-variables).
+
+#### Rename Magic link to email link
+
+Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
+
+Inside your code, change the following values:
+
+- `handleMagicLinkVerification` => `handleEmailLinkVerification`
+- `isMagicLinkError` => `isEmailLinkError`
+- `MagicLinkError` => `EmailLinkError`
+- `MagicLinkErrorCode` => `EmailLinkErrorCode`
+- `useMagicLink` => `useEmailLink`
+
+#### Replace `navigate` with `routerPush` & `routerReplace`
+
+The `navigate` prop on `<ClerkProvider>` allowed developers to override the default navigation behavior with a custom function. However, `navigate` was only able to push, not replace routes. The router is now able to do both, and as such, the props for `<ClerkProvider>` were updated. The `routerPush` and `routerReplace` props replace the old `navigate` prop.
+
+For more information on what push and replace mean in relation to the browser history api, check out the ["Working with the History API"](https://developer.mozilla.org/en-US/docs/Web/API/History_API/Working_with_the_History_API) docs.
+
+If you’d like to keep the same behavior as you had with the single `navigate` prop, pass the exact same function to both `routerPush` and `routerReplace`. For example:
+
+```diff
+- <ClerkProvider navigate={x => x} />
++ <ClerkProvider routerPush={x => x} routerReplace={x => x} />
+```
+
+#### Replace `setSession` with `setActive`
+
+`setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
+
+```diff
+- await setSession('sessionID', () => void)
++ await setActive({ session: 'sessionID',  beforeEmit: () => void })
+
+- await setSession(sessionObj)
++ await setActive({ session: sessionObj })
+
+- await setSession(sessionObj, () => void)
++ await setActive({ session: sessionObj,  beforeEmit: () => void })
+```
+
+`setActive` also supports setting an active organization:
+
+```js
+await setActive({ session: 'sessionID', organization: 'orgID', beforeEmit: () => void })
+await setActive({ session: sessionObj, organization: orgObj, beforeEmit: () => void })
+```
+
+### `@clerk/backend`
+
+This is a test.
+
+<Accordion titles={["Entry One", "Entry Two"]} heading="h4">
+  <AccordionPanel>
+    Foo
+  </AccordionPanel>
+
+  <AccordionPanel>
+    Bar
+  </AccordionPanel>
+</Accordion>
+
+## Community resources
+
+Know a good resource for upgrading from v4 to v5? [Edit this page](https://github.com/clerk/clerk-docs/edit/main/docs/upgrade-guides/upgrading-from-v4-to-v5.mdx) and add a link below!
+
+## Known issues
+
+Please check the [GitHub issues](https://github.com/clerk/javascript/issues) for any reported issues, or file an issue yourself.

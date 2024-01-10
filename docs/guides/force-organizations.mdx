@@ -163,6 +163,10 @@ export const CustomOrgSwitcher = () => {
 
 #### Set an active organization based on the URL
 
+<Callout type="warning">
+  This approach still depends one the `setActive` method which only runs on the client. Due to this limitation, during SSR it is possible that `orgId` from `auth()` returns an incorrect value that does not match the organiaztion id in the URL.
+</Callout>
+
 In some cases, you might want to set an active organization based on the URL. For example, if you have a URL like `/organizations/org_123`, you might want to set `org_123` as the active organization.
 
 In the example below, a component called `SyncActiveOrganization` is created. The Next.js [`useParams()`](https://nextjs.org/docs/app/api-reference/functions/use-params) hook is used to get the organization ID from the URL, and then the `setActive` method is used to set the organization as active.
@@ -175,32 +179,51 @@ import { redirect, useParams } from "next/navigation"
 import { useAuth, useOrganizationList } from "@clerk/nextjs"
 
 export function SyncActiveOrganization() {
-  const { setActive, isLoaded } = useOrganizationList()
+  const { setActive, isLoaded } = useOrganizationList();
 
   // Get the organization ID from the session
-  const { orgId } = useAuth()
+  const { orgId } = useAuth();
 
   // Get the organization ID from the URL
-  const { orgId: urlOrgId } = useParams() as { orgId: string }
+  const { orgId: urlOrgId } = useParams() as { orgId: string };
 
   useEffect(() => {
-    if (!isLoaded) return
+    if (!isLoaded) return;
 
     // If the org ID in the URL is not valid, redirect to the homepage
     if (!urlOrgId?.startsWith("org_")) {
-      redirect("/")
-      return
+      redirect("/");
+      return;
     }
 
     // If the org ID in the URL is not the same as the org ID in the session (the active organization), set the active organization to be the org ID from the URL
     if (urlOrgId && urlOrgId !== orgId) {
-      void setActive({ organization: urlOrgId })
+      void setActive({ organization: urlOrgId });
     }
   }, [orgId, isLoaded, setActive, urlOrgId])
 
-  return null
+  return null;
 }
 ```
+
+We can now use the helper we created above inside a Layout that is directly inside the Dynamic Route with the `orgId` param.
+
+```tsx filename="app/[orgId]/layout.tsx"
+
+import { type PropsWithChildren } from "react"
+import { SyncActiveOrganization } from '../utils/sync-active-organization'
+
+export default function OrganizationLayout(props: PropsWithChildren) {
+  return (
+    <>
+      <SyncActiveOrganization/>
+      {props.children}
+    </>
+  );
+}
+```
+
+
 
 ### Limit access to users with active organizations only
 
@@ -274,10 +297,11 @@ Now that you have configured your middleware to redirect users to the `/org-sele
     "use client"
 
     import { OrganizationList } from "@clerk/nextjs"
-    import { useRouter } from "next/router";
+    import { useSearchParams } from "next/navigation";
 
     export default function OrganizationSelection() {
-      const { query } = useRouter();
+      const searchParams = useSearchParams();
+      const redirectUrl = searchParams.get('redirectUrl') ?? "/";
 
       return (
         <section>
@@ -290,8 +314,8 @@ Now that you have configured your middleware to redirect users to the `/org-sele
           </p>
           <OrganizationList
             hidePersonal={true}
-            afterCreateOrganizationUrl={query.redirectUrl ?? "/"}
-            afterSelectOrganizationUrl={query.redirectUrl ?? "/"}
+            afterCreateOrganizationUrl={redirectUrl}
+            afterSelectOrganizationUrl={redirectUrl}
           />
         </section>
       )
@@ -306,6 +330,7 @@ Now that you have configured your middleware to redirect users to the `/org-sele
 
     export default function OrganizationSelection() {
       const { query } = useRouter();
+      const redirectUrl = query.redirectUrl ?? "/"
 
       return (
         <section>
@@ -318,8 +343,8 @@ Now that you have configured your middleware to redirect users to the `/org-sele
           </p>
           <OrganizationList
             hidePersonal={true}
-            afterCreateOrganizationUrl={query.redirectUrl ?? "/"}
-            afterSelectOrganizationUrl={query.redirectUrl ?? "/"}
+            afterCreateOrganizationUrl={redirectUrl}
+            afterSelectOrganizationUrl={redirectUrl}
           />
         </section>
       )

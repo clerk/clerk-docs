@@ -99,7 +99,7 @@ You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?pat
     + import { createClerkClient } from "@clerk/backend"
 
     - const clerkClient = Clerk({ apiKey: "" })
-    + const clerkClient = Clerk({ secretKey: "" })
+    + const clerkClient = createClerkClient({ secretKey: "" })
     ```
   </AccordionPanel>
 
@@ -199,7 +199,7 @@ You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?pat
     + import { createClerkClient } from "@clerk/backend"
 
     - const clerkClient = Clerk({ frontendApi: "" })
-    + const clerkClient = Clerk({ publishableKey: "" })
+    + const clerkClient = createClerkClient({ publishableKey: "" })
     ```
   </AccordionPanel>
 
@@ -357,55 +357,437 @@ await setActive({
 })
 ```
 
+#### `API_URL` value has changed
+
+The `API_URL` export has changed from `https://api.clerk.dev` to `https://api.clerk.com`.
+
+#### Removed the `orgs` claim as a default property of the JWT
+
+In v4 of our SDKs, if you decode the session token that Clerk returns from the server, you'll currently find a `orgs` claim on it. It lists all the orgs associated with the given user. In v5 Clerk now instead returns the `org_id`, `org_slug`, and `org_role` of the **active** organization.
+
+If you would like to have your JWT return all of the user's organizations, you can create a [custom JWT template](/docs/backend-requests/making/jwt-templates) in your dashboard. Add `{ "orgs": "user.organizations" }` to it.
+
 ### `@clerk/backend`
 
-TODO
+- The top level `Clerk` import was renamed to `createClerkClient`. It's a name change and the functionality is the same.
 
-<Accordion titles={["Entry One", "Entry Two"]} heading="h4">
+    ```diff
+    - import { Clerk } from "@clerk/backend"
+    + import { createClerkClient } from "@clerk/backend"
+    ```
+
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- The response payload of **every** backend API request was changed. Instead of returning the data on success and throwing an error on failure, you'll receive this object:
+
+    ```ts
+    type ClerkBackendApiResponse<T> =
+      | {
+          data: T;
+          errors: null;
+          totalCount?: number;
+        }
+      | {
+          data: null;
+          errors: ClerkAPIError[];
+          totalCount?: never;
+          clerkTraceId?: string;
+          status?: number;
+          statusText?: string;
+        };
+    ```
+
+    So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in some cases also `clerkTraceId`, `status`, and `statusText`.
+
+    **Important:** You'll need to throw errors yourself now. Here is an example on how to keep the same behavior:
+
+    ```ts
+    import { createClerkClient } from "@clerk/backend"
+    import { ClerkAPIResponseError } from "@clerk/shared/error"
+
+    const clerkClient = createClerkClient({ secretKey: "" })
+
+    const { 
+      data,
+      errors,
+      status,
+      statusText
+    } = await clerkClient.users.getUser("")
+
+    if (errors) {
+      throw new ClerkAPIResponseError(statusText, { data: errors, status })
+    }
+    ```
+
+    And the changed response shape:
+
+    ```diff
+    - const data = await clerkClient.users.getUser("")
+    + const { data } = await clerkClient.users.getUser("")
+
+    - const data = await clerkClient.organizations.getOrganizationList()
+    - const totalCount = data.length
+    + const {
+    +  data,
+    +  totalCount
+    + } = await clerkClient.organizations.getOrganizationList()
+    ```
+
+- `clockSkewInSeconds` was renamed to `clockSkewInMs` but the default value stayed the same.
+- Use `getOrganizationInvitationList` with a `status` option instead of `getPendingOrganizationInvitationList`.
+
+    ```diff
+    - getPendingOrganizationInvitationList({ ...params })
+    + getOrganizationInvitationList({ ...params, status: "pending" })
+    ```
+
+- You need to pass a `Request` to the first argument of the `authenticateRequest` method.
+
+    ```diff
+    - const state = await clerkClient.authenticateRequest({
+    + const state = await clerkClient.authenticateRequest(req, {
+        secretKey: "",
+        publishableKey: "",
+    -   origin: req.headers.get("origin"),
+    -   host: req.headers.get("host"),
+    -   // ...etc
+      })
+    ```
+
+Some more niche use cases and their changes:
+
+<Accordion titles={["Removal of httpOptions", "Removal of pkgVersion", "Removal of createIsomorphicRequest & buildRequestUrl", "Use .imageUrl for image related responses/resources"]} heading="h4">
   <AccordionPanel>
-    Foo
+    The `httpOptions` parameter was removed from the `buildRequest` function. Provide this information on the returned `request` function instead.
+
+    ```diff
+    - const r = buildRequest({ httpsOptions: { headers: {} }})
+    + const request = buildRequest()
+    + request({ headerParams: {} })
+    ```
   </AccordionPanel>
 
   <AccordionPanel>
-    Bar
+    The `pkgVersion` parameter was removed from the `loadInterstitialFromLocal`, `loadInterstitialFromBAPI`, and `buildPublicInterstitialUrl` functions. Use `clerkJSVersion` instead. Example:
+
+    ```diff
+    - loadInterstitialFromLocal({ pkgVersion: "" })
+    + loadInterstitialFromLocal({ clerkJSVersion: "" })
+    ```   
+  </AccordionPanel>
+
+  <AccordionPanel>
+    This change is only relevant to power users of Clerk building custom integrations for frameworks that run both on the client and server (e.g. Next.js, Astro, etc.). `createIsomorphicRequest` & `buildRequestUrl` were used to adapt and transform any framework-specific request-like objects to the native `Request` class that `@clerk/backend` uses. This was done through polyfilling `fetch`. Since v5 requires you to use Node 18.17.0 or later that polyfilling is not required anymore and you can use the native `fetch`.
+
+    If your integration needs to transform its specific object to a `Request`, you can build something like the [Fastify integration](https://github.com/clerk/javascript/blob/0cfd8cf3f1bef0a8f34b7a4d2d782dd8fc2a7090/packages/fastify/src/utils.ts) is doing.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    You could do a request like the following:
+
+    ```ts
+    import { createClerkClient } from "@clerk/backend"
+
+    const clerkClient = createClerkClient({ secretKey: "" })
+
+    const { data: user } = await clerkClient.users.getUser("")
+    ```
+
+    Previously, you could access `user.profileImageUrl` and now it's `user.imageUrl`. Various image related properties were all aligned to `imageUrl`. So if you use any of these, change the property:
+
+    - `ExternalAccount.picture`
+    - `ExternalAccountJSON.avatar_url`
+    - `Organization.logoUrl`
+    - `OrganizationJSON.logo_url`
+    - `User.profileImageUrl`
+    - `UserJSON.profile_image_url`
+    - `OrganizationMembershipPublicUserData.profileImageUrl`
+    - `OrganizationMembershipPublicUserDataJSON.profile_image_url`
   </AccordionPanel>
 </Accordion>
 
 ### `@clerk/chrome-extension`
 
-TODO
+The `tokenCache` prop on `<ClerkProvider>` was renamed to `storageCache`.
+
+```diff
+- <ClerkProvider tokenCache={}>
++ <ClerkProvider storageCache={}>
+```
+
+The `storageCache` interface has been expanded to allow more flexibility:
+
+```ts
+type StorageCache = {
+  createKey: (...keys: string[]) => string;
+  get: <T = any>(key: string) => Promise<T>;
+  remove: (key: string) => Promise<void>;
+  set: (key: string, value: string) => Promise<void>;
+}
+```
 
 ### `@clerk/clerk-js`
 
-TODO
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
 
 ### `@clerk/clerk-expo`
 
-TODO
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- [Rename magic link to email link](#rename-magic-link-to-email-link)
+- [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-routerpush--routerreplace)
+- [Replace `setSession` with `setActive`](#replace-setsession-with-setactive)
 
 ### `@clerk/fastify`
 
-TODO
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
 
 ### `gatsby-plugin-clerk`
 
-TODO
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- [Rename magic link to email link](#rename-magic-link-to-email-link)
+- [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-routerpush--routerreplace)
+- The return type and shape of `withServerAuth` was changed from `ServerSideAuth` to `AuthObject`. `props.auth` now returns different values:
+
+    ```ts
+    type V4 = {
+      sessionId: string | null;
+      userId: string | null;
+      actor: ActJWTClaim | null;
+      getToken: ServerGetToken;
+      claims: ClerkJWTClaims | null;
+    }
+
+    type V5 = {
+      sessionClaims: JwtPayload;
+      sessionId: string;
+      actor: ActClaim | undefined;
+      userId: string;
+      orgId: string | undefined;
+      orgRole: OrganizationCustomRoleKey | undefined;
+      orgSlug: string | undefined;
+      orgPermissions: OrganizationCustomPermissionKey[] | undefined;
+      getToken: ServerGetToken;
+      has: CheckAuthorizationWithCustomPermissions;
+      debug: AuthObjectDebug;
+    }
+    ```
+- Changes to top-level imports in [`@clerk/clerk-react`](#clerkclerk-react) will also affect `gatsby-plugin-clerk` as it just re-exports those.
 
 ### `@clerk/nextjs`
 
-TODO
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- `withClerkMiddleware` has been deprecated in v4 and is now removed in v5. Use `clerkMiddleware` instead. Here's an example of having all routes public expect for everything under `/dashboard`.
+
+    Before:
+
+    ```ts filename="middleware.ts"
+    import { withClerkMiddleware } from "@clerk/nextjs/server";
+    import { getAuth } from "@clerk/nextjs/server";
+    import { NextResponse } from "next/server";
+    import type { NextRequest } from "next/server";
+
+    const publicPaths = ["/", "/sign-in*", "/sign-up*"];
+    
+    const isPublic = (path: string) => {
+      return publicPaths.find((x) =>
+        path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
+      );
+    };
+    
+    export default withClerkMiddleware((request: NextRequest) => {
+      if (isPublic(request.nextUrl.pathname)) {
+        return NextResponse.next();
+      }
+      const { userId } = getAuth(request);
+    
+      if (!userId) { 
+        const signInUrl = new URL("/sign-in", request.url);
+        return NextResponse.redirect(signInUrl);
+      }
+      return NextResponse.next();
+    });
+    
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+
+    After:
+
+    ```ts filename="middleware.ts"
+    import { clerkMiddleware } from '@clerk/nextjs/server';
+
+    export default clerkMiddleware((auth, request)) => {
+      if (request.url.includes("/dashboard")) {
+        auth().protect()
+      }
+
+      return NextResponse.next();
+    });
+
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    };
+    ```
+
+A couple of import subpaths have been removed. You should use `@clerk/nextjs` instead as the functionality stayed the same.
+
+<Accordion titles={["@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles"]} heading="h4">
+  <AccordionPanel>
+    The `@clerk/nextjs` import will work with both the app and pages router.
+
+    ```diff
+    - import { } from "@clerk/nextjs/app-beta"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    The top-level imports support SSR by default now.
+
+    ```diff
+    - import { } from "@clerk/nextjs/ssr"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```diff
+    - import { } from "@clerk/nextjs/edge-middleware"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```diff
+    - import { } from "@clerk/nextjs/edge-middlewarefiles"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+</Accordion>
+
+In recent versions Next.js enforced the convention that public environment variables should be prefixed with `NEXT_PUBLIC_`. This also applies to Clerk's environment variables. Please apply these changes:
+
+<Accordion titles={["NEXT_PUBLIC_", "Renamed environment variables"]} heading="h4">
+  <AccordionPanel>
+
+  - `CLERK_JS_VERSION` => `NEXT_PUBLIC_CLERK_JS_VERSION`
+
+  </AccordionPanel>
+
+  <AccordionPanel>
+
+  - `NEXT_PUBLIC_CLERK_JS` => `NEXT_PUBLIC_CLERK_JS_URL`
+
+  </AccordionPanel>
+</Accordion>
+
+A couple of exported constants have been removed from `@clerk/nextjs` as you should use your defined environment variables instead.
+
+<Accordion titles={["Removed constants"]} heading="h4">
+  <AccordionPanel>
+  Let's say you imported `API_URL` from `@clerk/nextjs`:
+
+  ```ts
+  import { API_URL } from "@clerk/nextjs"
+  ```
+
+  If you want to use it, set it in your environment variables as `CLERK_API_URL` and access it this way. Here's the whole changelog of converting the constants to environment variables:
+
+  - `API_URL` => `CLERK_API_URL`
+  - `API_VERSION` => `CLERK_API_VERSION`
+  - `CLERK_JS_URL` => `NEXT_PUBLIC_CLERK_JS_URL`
+  - `CLERK_JS_VERSION` => `NEXT_PUBLIC_CLERK_JS_VERSION`
+  - `DOMAIN` => `NEXT_PUBLIC_CLERK_DOMAIN`
+  - `IS_SATELLITE` => `NEXT_PUBLIC_CLERK_IS_SATELLITE`
+  - `PROXY_URL` => `NEXT_PUBLIC_CLERK_PROXY_URL`
+  - `PUBLISHABLE_KEY` => `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+  - `SECRET_KEY` => `CLERK_SECRET_KEY`
+  - `SIGN_IN_URL` => `NEXT_PUBLIC_CLERK_SIGN_IN_URL`
+  - `SIGN_UP_URL` => `NEXT_PUBLIC_CLERK_SIGN_UP_URL`
+
+  </AccordionPanel>
+</Accordion>
+
+**Deprecated:**
+
+- [`authMiddleware`](/docs/references/nextjs/auth-middleware). We highly recommend using [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) going forward. `clerkMiddleware` protects no routes by default and you need to add your individual routes you want to opt into protection. Here's an example of having all routes public expect for everything under `/dashboard`.
+
+    Before:
+
+    ```ts filename="middleware.ts"
+    import { authMiddleware } from "@clerk/nextjs";
+    
+    export default authMiddleware({
+      publicRoutes: (req) => !req.url.includes("/dashboard"),
+    });
+    
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    };
+    ```
+
+    After:
+
+    ```ts filename="middleware.ts"
+    import { clerkMiddleware } from '@clerk/nextjs/server';
+
+    export default clerkMiddleware((auth, request)) => {
+      if (request.url.includes("/dashboard")) {
+        auth().protect()
+      }
+
+      return NextResponse.next();
+    });
+
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    };
+    ```
 
 ### `@clerk/clerk-react`
 
-TODO
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- [Rename magic link to email link](#rename-magic-link-to-email-link)
+- [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-routerpush--routerreplace)
+- [Replace `setSession` with `setActive`](#replace-setsession-with-setactive)
+- The `ClerkProviderOptionsWrapper` type was removed from the exports. Use `ClerkProviderProps` instead.
+- Further changes to types:
+    - `redirectToUserProfile` now returns `Promise<unknown>` instead of `void`
+    - `redirectToOrganizationProfile` now returns `Promise<unknown>` instead of `void`
+    - `redirectToCreateOrganization` now returns `Promise<unknown>` instead of `void`
+    - `redirectToHome` now returns `Promise<unknown>` instead of `void`
 
 ### `@clerk/remix`
 
-TODO
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- [Rename magic link to email link](#rename-magic-link-to-email-link)
+- [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-routerpush--routerreplace)
+- [Replace `setSession` with `setActive`](#replace-setsession-with-setactive)
 
 ### `@clerk/clerk-sdk-node`
 
-TODO
+- [Replace `apiKey` with `secretKey`](#replace-apikey-with-secretkey)
+- [Replace `frontendApi` with `publishableKey`](#replace-frontendapi-with-publishablekey)
+- Use `@clerk/clerk-sdk-node` as an import, regardless of using CJS or ESM.
+
+    ```diff
+    - import { } from "@clerk/clerk-sdk-node/cjs/instance"
+    - import { } from "@clerk/clerk-sdk-node/esm/instance"
+    + import { } from "@clerk/clerk-sdk-node"
+    ```
+
+- Use `createClerkClient` and pass options to it instead of using these removed setters: `setClerkApiVersion`, `setClerkHttpOptions`, `setClerkServerApiUrl`, and `setClerkApiKey`.
+
+    ```diff
+    - import { clerkClient, setClerkApiKey } from "@clerk/clerk-sdk-node"
+    + import { createClerkClient } from "@clerk/clerk-sdk-node"
+
+    - setClerkApiKey("")
+    + const clerkClient = createClerkClient({ secretKey: "" })
+      await clerkClient.users.getUser(userId)
+    ```
 
 ## Community resources
 

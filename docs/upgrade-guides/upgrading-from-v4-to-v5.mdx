@@ -11,7 +11,7 @@ Version 5 ships with an improved design and UX on its built-in components, no "f
 
 <Callout type="info" > 
   Version 5/v5 refers to the [`@clerk/clerk-js`](https://www.npmjs.com/package/@clerk/clerk-js) package version. However, other SDKs like `@clerk/backend` or `@clerk/clerk-expo` are versioned independently (and would upgrade from v1 to v2). To make this page easier to read for instances of general advice only v5 is mentioned. You can think of v4 as the previous major of your SDK and v5 as the current in those cases.
-</ Callout> 
+</Callout>
 
 If you're curious about Clerk's approach to versioning and support, head to the [long term support](/docs/upgrade-guides/long-term-support) document. For most users we expect a smooth upgrade path as only a couple of changes will be required: [Update dependencies](#update-dependencies), [update changes across SDKs](#common), and individual items of the SDK you use.
 
@@ -74,15 +74,19 @@ If you're using `@clerk/nextjs` you will need to update your Next.js project to 
 
 This section explains breaking changes that were made across SDKs or only in individual ones. In order to successfully upgrade, you need to resolve these changes. While it's a long list, please note that we expect most users to only have to go through the [common changes](#common) and individual items for their SDK.
 
-As of this major version Clerk also provides a `@clerk/upgrade` CLI you can use to ease the upgrade. The CLI uses regular expressions to scan for patterns that match breaking changes and log relevant upgrade notices (it doesn't change your source code). As such there is no 100% guarantee that all occurrences of those breaking changes are found. Navigate to your project and run it in the terminal:
+As of this major version Clerk also provides a `@clerk/upgrade` CLI you can use to ease the upgrade. A questionnaire will ask you a couple of questions and afterwards you'll get a list of changes you'll need to apply to your project. Navigate to your project and run it in the terminal:
 
 ```bash filename="terminal"
 npx @clerk/upgrade
 ```
 
+<Callout type="info" > 
+  The CLI uses regular expressions to scan for patterns that match breaking changes and log relevant upgrade notices (it doesn't change your source code). As such there is no 100% guarantee that all occurrences of those breaking changes are found.
+</Callout>
+
 ### Common
 
-This section explains changes that were made in **across** multiple SDKs. Depending on which SDKs you use you'll need to change these common changes in multiple places.
+This section explains changes that were made **across** multiple SDKs. Depending on which SDKs you use you'll need to change these common changes in multiple places.
 
 #### Replace `apiKey` with `secretKey`
 
@@ -188,11 +192,11 @@ The `CLERK_FRONTEND_API` environment variable was renamed to `CLERK_PUBLISHABLE_
 
 The `frontendApi` prop passed to `<ClerkProvider>` was renamed to `publishableKey`. The function parameter was also renamed (you are using this with `createClerkClient` for example).
 
-**Note:** The values are different, so this is not just a key replacement. [More information](/docs/deployments/overview#api-keys-and-environment-variables).
+<Callout type="warning" > 
+  The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
+</Callout>
 
-You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
-
-<Accordion titles={["@clerk/backend", "@clerk/clerk-js", "@clerk/expo", "@clerk/fastify", "gatsby-plugin-clerk", "@clerk/nextjs", "@clerk/clerk-react", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
+<Accordion titles={["@clerk/backend", "@clerk/clerk-js", "@clerk/clerk-expo", "@clerk/fastify", "gatsby-plugin-clerk", "@clerk/nextjs", "@clerk/clerk-react", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
   <AccordionPanel>
     To learn more about the new `createClerkClient` import, read the dedicated [`@clerk/backend`](#clerkbackend) section.
 
@@ -315,6 +319,7 @@ Inside your code, change the following values:
 - `MagicLinkError` => `EmailLinkError`
 - `MagicLinkErrorCode` => `EmailLinkErrorCode`
 - `useMagicLink` => `useEmailLink`
+- `createMagicLinkFlow()` => `createEmailLinkFlow()`
 
 #### Replace `navigate` with `routerPush` & `routerReplace`
 
@@ -331,17 +336,25 @@ If you’d like to keep the same behavior as you had with the single `navigate` 
 
 #### Replace `setSession` with `setActive`
 
-`setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
+`setSession` should be replaced with [`setActive`](/docs/references/javascript/clerk/session-methods#set-active). The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail.
+
+This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
 
 ```diff
-- await setSession('sessionID', () => void)
-+ await setActive({ session: 'sessionID',  beforeEmit: () => void })
+import { useSignIn } from "@clerk/nextjs"
+ 
+export default function SignIn() { 
+  const { setActive } = useSignIn()
+
+- await setSession("sessionID", () => void)
++ await setActive({ session: "sessionID",  beforeEmit: () => void })
 
 - await setSession(sessionObj)
 + await setActive({ session: sessionObj })
 
 - await setSession(sessionObj, () => void)
 + await setActive({ session: sessionObj,  beforeEmit: () => void })
+}
 ```
 
 `setActive` also supports setting an active organization:
@@ -359,6 +372,18 @@ await setActive({
 })
 ```
 
+Or as part of the `Clerk` class of `@clerk/clerk-js`:
+
+```js
+import Clerk from "@clerk/clerk-js"
+ 
+const clerkPublishableKey = ​your_publishable_key​
+const clerk = new Clerk(clerkPublishableKey)
+await clerk.load()
+
+await clerk.setActive({ session: "" })
+```
+
 #### `API_URL` value has changed
 
 The `API_URL` export has changed from `https://api.clerk.dev` to `https://api.clerk.com`.
@@ -370,6 +395,10 @@ In v4 of our SDKs, if you decode the session token that Clerk returns from the s
 If you would like to have your JWT return all of the user's organizations, you can create a [custom JWT template](/docs/backend-requests/making/jwt-templates) in your dashboard. Add `{ "orgs": "user.organizations" }` to it.
 
 ### `@clerk/backend`
+
+<Callout type="warning" > 
+  Please take extra care in reading the instructions for the new response payload.
+</Callout>
 
 - The top level `Clerk` import was renamed to `createClerkClient`. It's a name change and the functionality is the same.
 
@@ -399,9 +428,27 @@ If you would like to have your JWT return all of the user's organizations, you c
         };
     ```
 
-    So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in some cases also `clerkTraceId`, `status`, and `statusText`.
+    So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in most cases also `clerkTraceId`, `status`, and `statusText`.
 
-    **Important:** You'll need to throw errors yourself now. Here is an example on how to keep the same behavior:
+    <Callout type="warning" > 
+      You'll need to throw errors yourself now as the `@clerk/backend` functions are not handling this for you anymore. See the examples below on how to do that. 
+    </Callout>
+
+    The new API looks like this:
+
+    ```ts
+    // Single
+    const { data, errors } = await clerkClient.users.getUser("")
+
+    // Paginated response
+    const {
+      data,
+      errors,
+      totalCount
+    } = await clerkClient.organizations.getOrganizationList()
+    ```
+
+    If you want to keep the old behavior, you can migrate your code to something like this:
 
     ```ts
     import { createClerkClient } from "@clerk/backend"
@@ -421,7 +468,7 @@ If you would like to have your JWT return all of the user's organizations, you c
     }
     ```
 
-    And the changed response shape:
+    Here's the changed response shape in a before and after:
 
     ```diff
     - const data = await clerkClient.users.getUser("")
@@ -455,6 +502,7 @@ If you would like to have your JWT return all of the user's organizations, you c
     -   // ...etc
       })
     ```
+- The `createEmail` method (and as such the `emails` API endpoint) has been removed. For the time being no alternative method will be provided for creating and sending emails directly from Clerk's JavaScript SDKs. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
 
 Some more niche use cases and their changes:
 
@@ -530,7 +578,21 @@ type StorageCache = {
 
 ### `@clerk/clerk-js`
 
+<Callout type="warning" > 
+  Please take extra care in reading the instructions for the modified shape of paginated responses and new pagination parameters.
+</Callout>
+
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
+- [Rename magic link to email link](#rename-magic-link-to-email-link)
+- [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
+- TODO: orgs JWT claim
+- TODO: ClerkPaginatedResponse
+- TODO: Pagination Params Signature
+- TODO: React hooks like `useOrganizations`. Should they be here???
+
+Some more niche use cases and their changes:
+
+- TODO: .imageUrl changes
 
 ### `@clerk/clerk-expo`
 
@@ -577,10 +639,16 @@ type StorageCache = {
     ```
 - Changes to top-level imports in [`@clerk/clerk-react`](#clerkclerk-react) will also affect `gatsby-plugin-clerk` as it just re-exports those.
 
+### `@clerk/localizations`
+
+TODO
+
 ### `@clerk/nextjs`
 
 - [Replace `apiKey` with `secretKey`](#replace-api-key-with-secret-key)
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
+- A new `@clerk/nextjs/internal` subpath import has been added. It will be used to export internal or experimental APIs. It should be treated as **unstable** and can break at any time.
+- The named import `MultiSessionAppSupport` was moved from `@clerk/nextjs` to `@clerk/nextjs/internal`
 - `withClerkMiddleware` has been deprecated in v4 and is now removed in v5. Use `clerkMiddleware` instead. Here's an example of having all routes public expect for everything under `/dashboard`.
 
     Before:
@@ -635,9 +703,9 @@ type StorageCache = {
     };
     ```
 
-A couple of import subpaths have been removed. You should use `@clerk/nextjs` instead as the functionality stayed the same.
+A couple of subpath imports have been removed. You should use `@clerk/nextjs` instead as the functionality stayed the same. In the case of the removed `@clerk/nextjs/api` subpath you can use `@clerk/clerk-sdk-node` instead.
 
-<Accordion titles={["@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles"]} heading="h4">
+<Accordion titles={["@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]} heading="h4">
   <AccordionPanel>
     The `@clerk/nextjs` import will work with both the app and pages router.
 
@@ -664,6 +732,24 @@ A couple of import subpaths have been removed. You should use `@clerk/nextjs` in
     ```diff
     - import { } from "@clerk/nextjs/edge-middlewarefiles"
     + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    The `@clerk/nextjs/api` subpath was removed completely. It re-exported helpers from `@clerk/clerk-sdk-node` and its types. If you relied on these, import from `@clerk/clerk-sdk-node` directly instead.
+
+    ```diff
+      import type {
+        ClerkMiddleware,
+        ClerkMiddlewareOptions,
+        LooseAuthProp,
+        RequireAuthProp,
+        StrictAuthProp,
+        WithAuthProp
+    - } from "@clerk/nextjs/api"
+    + } from "@clerk/clerk-sdk-node"
+
+    - import { requireAuth, withAuth } from "@clerk/nextjs/api"
+    + import { requireAuth, withAuth } from "@clerk/clerk-sdk-node"
     ```
   </AccordionPanel>
 </Accordion>
@@ -753,6 +839,37 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
+- The `useOrganizations` hook was removed. Use [`useOrganizationList`](/docs/references/react/use-organization-list) instead. Please note that the latter has different function signatures.
+- The `userProfile` prop on the [`UserButton`](/docs/references/javascript/clerk/user-button) component has been changed to `userProfileProps`. This is purely a name change, none of the values need to be updated.
+- The `afterSwitchOrganizationUrl` prop on the `<OrganizationSwitcher />` component has been renamed to `afterSelectOrganizationUrl`.
+
+    ```diff
+    - <OrganizationSwitcher afterSwitchOrganizationUrl="" />
+    + <OrganizationSwitcher afterSelectOrganizationUrl="" />
+    ```
+
+- The `invitationList` and `membershipList` parameter for the [`useOrganization`](/docs/references/react/use-organization) hook was renamed to `invitations` and `memberships`. In v4 you'd pass in `limit` and `offset`, now you have to use `initialPage` and `pageSize`.
+
+    Before:
+
+    ```js
+    const { invitationList, membershipList } = useOrganization({
+      invitationList: { limit: 10, offset: 1 },
+      membershipList: { limit: 10, offset: 1 },
+    })
+    ```
+
+    After:
+
+    ```js
+    const { invitations, memberships } = useOrganization({
+      invitations: { initialPage: 1, pageSize: 10 },
+      memberships: { initialPage: 1, pageSize: 10 },
+    })
+    ```
+
+    For more information, read the [`useOrganization`](/docs/references/react/use-organization) docs.
+
 - The `ClerkProviderOptionsWrapper` type was removed from the exports. Use `ClerkProviderProps` instead.
 - Further changes to types:
     - `redirectToUserProfile` now returns `Promise<unknown>` instead of `void`
@@ -767,6 +884,20 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
+- The `ClerkErrorBoundary` helper has been removed as it's no longer needed.
+
+    ```diff
+      import { rootAuthLoader } from "@clerk/remix/ssr.server"
+    - import { ClerkApp, ClerkErrorBoundary } from "@clerk/remix"
+    + import { ClerkApp } from "@clerk/remix"
+
+      export const loader = (args: DataFunctionArgs) => {
+        return rootAuthLoader(args);  
+      }
+
+      export default ClerkApp(App)
+    - export const ErrorBoundary = ClerkErrorBoundary()
+    ```
 
 ### `@clerk/clerk-sdk-node`
 

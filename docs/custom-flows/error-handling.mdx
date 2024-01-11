@@ -13,45 +13,69 @@ A user is attempting to sign up with your application, but they are attempting t
 
 <CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
 ```jsx
-import { useState } from "react";
+import { useState, SyntheticEvent } from "react";
 import { useSignUp } from "@clerk/clerk-react";
 
 function Example() {
-  const [error, setError] = useState(null);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<any>();
 
-  const { signUp } = useSignUp();
+  const { isLoaded, signUp, setActive } = useSignUp();
 
-  const signUpUser = async () => {
-    const response = await signUp
-      ?.create({
-        identifier: "example@email.com",
-        password: "Tester01!",
-      })
-      .then((res) => console.log("response", res))
-      .catch((err) => setError(err.errors[0].message));
+  const attemptSignUp = async (e: SyntheticEvent) => {
+    e.preventDefault();
+
+    // clear error on form submit
+    setError(undefined);
+
+    if (!isLoaded) { return }
+
+    try {
+      const result = await signUp?.create({ emailAddress, password});
+      if (result.status == 'complete') {
+        await setActive({ session: result.createdSessionId });
+      } else {
+        // handle incomplete sign-up
+        // other possible status are 'abandoned' & 'missing_requirements'
+      }
+    } catch(err: any) {
+      setError(err);
+    }
   };
 
   return (
-    <div>
-      <button onClick={signUpUser}>Sign Up</button>
+    <form onSubmit={attemptSignUp}>
       <div>
-        <error>{error}</error>
+        <label htmlFor="email">Email address</label>
+        <input 
+          id="email" 
+          type="email" 
+          value={emailAddress} 
+          onChange={(e) => {setEmailAddress(e.target.value)}} 
+        />
       </div>
-    </div>
+
+      <div>
+        <label htmlFor="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          value={password} 
+          onChange={(e) => {setPassword(e.target.value)}} 
+        />
+      </div>
+
+      {error?.clerkError && 
+        <ul>
+          {error.errors.map((el, index) => <li key={index}>{el.message}</li>)}
+        </ul>
+      }
+
+      <button type="submit">Sign Up</button>
+    </form>
   );
 }
-```
-
-```js
-const { client } = window.Clerk;
-
-const signUp = await client.signUp.create({
-  identifier: "example@email.com",
-  password: "Tester01!",
-})
-  .then((res) => console.log("response", res))
-  .catch((err) => setError(err.errors[0].message));
-
 ```
 </CodeBlockTabs>
 
@@ -59,30 +83,67 @@ Errors returned from the [`signIn()`](/docs/references/react/use-sign-in) functi
 
 <CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
 ```jsx
-import { useState } from "react";
+import { useState, SyntheticEvent } from "react";
 import { useSignIn } from "@clerk/clerk-react";
 
 function Example() {
-  const [error, setError] = useState(null);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<any>();
 
-  const { signIn } = useSignIn();
+  const { isLoaded, signIn, setActive } = useSignIn();
 
-  const signInUser = async () => {
-    const response = await signIn.create({
-      identifier: emailAddress,
-      password,
-    })    
-    .then((result) => console.log("result", result))
-    .catch((err) => setError("error", err.errors[0].message));
+  const attemptSignIn = async (e: SyntheticEvent) => {
+    e.preventDefault();
+
+    // clear error on form submit
+    setError(undefined);
+
+    if (!isLoaded) { return }
+
+    try {
+      const result = await signIn?.create({ identifier: emailAddress, password});
+      if (result.status == 'complete') {
+        await setActive({ session: result.createdSessionId });
+      } else {
+        // handle incomplete sign-in
+        // other possible status are 'needs_identifier', 'needs_first_factor', 'needs_second_factor' & 'needs_new_password'
+      }
+    } catch(err: any) {
+      setError(err);
+    }
   };
 
   return (
-    <div>
-      <button onClick={signInUser}>Sign In</button>
+    <form onSubmit={attemptSignIn}>
       <div>
-        <error>{error}</error>
+        <label htmlFor="email">Email address</label>
+        <input 
+          id="email" 
+          type="email" 
+          value={emailAddress} 
+          onChange={(e) => {setEmailAddress(e.target.value)}} 
+        />
       </div>
-    </div>
+
+      <div>
+        <label htmlFor="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          value={password} 
+          onChange={(e) => {setPassword(e.target.value)}} 
+        />
+      </div>
+
+      {error?.clerkError && 
+        <ul>
+          {error.errors.map((el, index) => <li key={index}>{el.message}</li>)}
+        </ul>
+      }
+
+      <button type="submit">Sign In</button>
+    </form>
   );
 }
 ```

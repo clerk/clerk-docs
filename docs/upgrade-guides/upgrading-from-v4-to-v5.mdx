@@ -336,7 +336,7 @@ If you’d like to keep the same behavior as you had with the single `navigate` 
 
 #### Replace `setSession` with `setActive`
 
-`setSession` should be replaced with [`setActive`](/docs/references/javascript/clerk/session-methods#set-active). The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail.
+`setSession()` should be replaced with [`setActive()`](/docs/references/javascript/clerk/session-methods#set-active). The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail.
 
 This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
 
@@ -390,7 +390,7 @@ The `API_URL` export has changed from `https://api.clerk.dev` to `https://api.cl
 
 #### Removed the `orgs` claim as a default property of the JWT
 
-In v4 of our SDKs, if you decode the session token that Clerk returns from the server, you'll currently find a `orgs` claim on it. It lists all the orgs associated with the given user. In v5 Clerk now instead returns the `org_id`, `org_slug`, and `org_role` of the **active** organization.
+In v4 of our SDKs, if you decode the session token that Clerk returns from the server, you'll currently find an `orgs` claim on it. It lists all the orgs associated with the given user. In v5 Clerk returns the `org_id`, `org_slug`, and `org_role` of the **active** organization.
 
 If you would like to have your JWT return all of the user's organizations, you can create a [custom JWT template](/docs/backend-requests/making/jwt-templates) in your dashboard. Add `{ "orgs": "user.organizations" }` to it.
 
@@ -420,7 +420,7 @@ If you would like to have your JWT return all of the user's organizations, you c
         }
       | {
           data: null;
-          errors: ClerkAPIError[];
+          errors: Array<ClerkAPIError>;
           totalCount?: never;
           clerkTraceId?: string;
           status?: number;
@@ -483,14 +483,14 @@ If you would like to have your JWT return all of the user's organizations, you c
     ```
 
 - `clockSkewInSeconds` was renamed to `clockSkewInMs` but the default value stayed the same.
-- Use `getOrganizationInvitationList` with a `status` option instead of `getPendingOrganizationInvitationList`.
+- Replace `getPendingOrganizationInvitationList` with `getOrganizationInvitationList` and pass a `status` parameter.
 
     ```diff
     - getPendingOrganizationInvitationList({ ...params })
     + getOrganizationInvitationList({ ...params, status: "pending" })
     ```
 
-- You need to pass a `Request` to the first argument of the `authenticateRequest` method.
+- You need to pass a `Request` to the first argument of the `authenticateRequest()` method.
 
     ```diff
     - const state = await clerkClient.authenticateRequest({
@@ -502,7 +502,7 @@ If you would like to have your JWT return all of the user's organizations, you c
     -   // ...etc
       })
     ```
-- The `createEmail` method (and as such the `emails` API endpoint) has been removed. For the time being no alternative method will be provided for creating and sending emails directly from Clerk's JavaScript SDKs. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
+- The `createEmail()` method (and as such the `emails` API endpoint) has been removed. For the time being no alternative method will be provided for creating and sending emails directly from Clerk's JavaScript SDKs. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
 
 Some more niche use cases and their changes:
 
@@ -585,14 +585,86 @@ type StorageCache = {
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
-- TODO: orgs JWT claim
+- [Removed the `orgs` claim as a default property of the JWT](#removed-the-orgs-claim-as-a-default-property-of-the-jwt)
 - TODO: ClerkPaginatedResponse
 - TODO: Pagination Params Signature
-- TODO: React hooks like `useOrganizations`. Should they be here???
+- TODO: .imageUrl changes
+- The [`User.update()`](/docs/references/javascript/user/user#update) method no longer accepts `password` as a parameter. If you'd like to update a users's password, please use [`User.updatePassword()`](/docs/references/javascript/user/password-management#update-password) instead.
+
+    ```diff
+    - User.update({ password: "new" })
+    + User.updatePassword({ newPassword: "new" })
+    ```
+
+- The `getOrganizationMemberships()` method on the `Clerk` class has been removed. Use `getOrganizationMemberships()` on a `user` instance instead.
+
+    ```diff
+      const clerk = new Clerk()
+    - clerk.getOrganizationMemberships()
+    + clerk.user.getOrganizationMemberships()
+    ```
+
+    Also note that the response has changed from `Array<Organization>` to `{ total_count: number; data: Array<Organization> }`.
+
+- If you used [`Clerk.addListener()`](/docs/references/javascript/clerk/clerk#add-listener) to listen for `lastOrganizationInvitation` and `lastOrganizationMember` do note that these two events have been removed. They were only relevant for internal usage and at the moment Clerk is not providing a way to achieve this functionality in another way. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
+- `Organization.create()` has a new function signature.
+
+    ```diff
+    const clerk = new Clerk()
+
+    - clerk.organization.create("example")
+    + clerk.organization.crete({ name: "example" })
+    ```
+
+- Removed `Organization.getPendingInvitations()`, you need to use `Organization.getInvitations()` instead.
+
+    ```diff
+      const clerk = new Clerk()
+
+    - clerk.organization.getPendingInvitations()
+    + clerk.organization.getInvitations({ status: "pending" })
+    ```
+
+- In [`User.createExternalAccount()`](/docs/references/javascript/user/create-metadata#create-external-account) the `redirect_url` parameter was renamed to `redirectUrl`.
+- In `Signup.attemptWeb3WalletVerification()` the parameters have changed. Use `signature` instead of `identifier`.
+
+    ```diff
+      const clerk = new Clerk()
+
+    - clerk.client.signUp.attemptWeb3WalletVerification({ identifier: "" })
+    + clerk.client.signUp.attemptWeb3WalletVerification({ signature: "" })
+    ```
+
+- The default values of `afterSignOutUrl`, `afterSignIn`, and `afterSignUp` have been changed to `/`. The URLs defined in your **Dashboard > Account Portal > Redirects** won't affect these anymore. Read the [Customizing your Account Portal redirects](/docs/account-portal/custom-redirects) to learn how to override these defaults.
+- The `Clerk.redirectToHome()` method has been removed. You can use `Clerk.redirectToAfterSignUp()` or `Clerk.redirectAfterSignIn()` instead.
+- The `Clerk.isReady()` has been removed. You can use the `Clerk.loaded` property instead.
+
+    ```diff
+      const clerk = new Clerk()
+    - clerk.isReady()
+    + clerk.loaded
+    ```
 
 Some more niche use cases and their changes:
 
-- TODO: .imageUrl changes
+<Accordion titles={["Removal of unstable/experimental properties", "Appearance"]} heading="h4">
+  <AccordionPanel>
+    Removed the following properties:
+    
+    - `Clerk.experimental_canUseCaptcha`
+    - `Clerk.experimental_captchaSiteKey`
+    - `Clerk.experimental_captchaURL`
+    - `Clerk.__unstable__invitationUpdate`
+    - `Clerk.__unstable__membershipUpdate`
+    
+    There is no replacement for these experimental properties.
+  </AccordionPanel>
+  <AccordionPanel>
+    These appearance props have changed:
+
+    - `appearence.elements.organizationPreview__organizationSwitcher` => `appearence.elements.organizationPreview__organizationSwitcherTrigger`
+  </AccordionPanel>
+</Accordion>
 
 ### `@clerk/clerk-expo`
 
@@ -631,12 +703,13 @@ Some more niche use cases and their changes:
       orgId: string | undefined;
       orgRole: OrganizationCustomRoleKey | undefined;
       orgSlug: string | undefined;
-      orgPermissions: OrganizationCustomPermissionKey[] | undefined;
+      orgPermissions: Array<OrganizationCustomPermissionKey> | undefined;
       getToken: ServerGetToken;
       has: CheckAuthorizationWithCustomPermissions;
       debug: AuthObjectDebug;
     }
     ```
+
 - Changes to top-level imports in [`@clerk/clerk-react`](#clerkclerk-react) will also affect `gatsby-plugin-clerk` as it just re-exports those.
 
 ### `@clerk/localizations`

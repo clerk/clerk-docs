@@ -435,6 +435,14 @@ The `orgs` claim was part of the `JwtPayload`. A few examples of where the `JwtP
 
 If you would like to have your JWT return all of the user's organizations, you can create a [custom JWT template](/docs/backend-requests/making/jwt-templates) in your dashboard. Add `{ "orgs": "user.organizations" }` to it.
 
+### Component appearance
+
+As mentioned in the [v5 announcement post](https://clerk.com/changelog/2024-01-16) Clerk's prebuilt components got a new look. Internally some changes were made that might be a breaking change for you:
+
+- Some borders are now implemented with the `box-shadow` property, not `border`
+
+These changes may impact your style customization applied through the `appearance` prop or class overrides.
+
 ### `@clerk/backend`
 
 <Callout type="warning" > 
@@ -636,7 +644,7 @@ Some more niche use cases and their changes:
 
 <Accordion titles={["Removal of httpOptions", "Removal of pkgVersion", "Removal of createIsomorphicRequest & buildRequestUrl", "Use .imageUrl for image related responses/resources"]} heading="h4">
   <AccordionPanel>
-    The `httpOptions` parameter was removed from the **internal** `buildRequest` function. It is used by most public facing APIs, however with this change you won't be able to provide `httpOptions` going forward. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
+    The `httpOptions` parameter was removed from the **internal** `buildRequest` function but it is used by most public facing APIs. Hence you were able to pass `httpOptions` to some functions which is not possible anymore. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
     
     The internal change itself was:
 
@@ -719,8 +727,60 @@ type StorageCache = {
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
 - [Removed the `orgs` claim as a default property of the JWT](#removed-the-orgs-claim-as-a-default-property-of-the-jwt)
-- TODO: ClerkPaginatedResponse
-- TODO: Pagination Params Signature
+- For every method that returns a paginated list the [`ClerkPaginatedResponse`](/docs/references/javascript/types/clerk-paginated-response) has changed from `[Item]` to `{ total_count: number; data: [Item] }`.
+
+    The affected methods are:
+
+    - `Organization.getRoles()`
+    - `Organization.getDomains()`
+    - `Organization.getMembershipRequests()`
+    - `Organization.getMemberships()`
+    - `Organization.getInvitations()`
+    - `User.getOrganizationInvitations()`
+    - `User.getOrganizationSuggestions()`
+    - `User.getOrganizationMemberships()`
+
+    Here's a before/after example:
+
+    ```diff
+      import Clerk from "@clerk/clerk-js"
+
+      const clerk = new Clerk()
+      await clerk.load()
+
+    - const orgs = await clerk.user.getOrganizationMemberships()
+    + const { data: orgs } = await clerk.user.getOrganizationMemberships()
+    ```
+
+- The pagination parameters on some methods have changed from `{ limit: number; offset: number }` to `{ initialPage: number; pageSize: number }`.
+
+    The affected methods are:
+
+    - `Organization.getRoles()`
+    - `Organization.getDomains()`
+    - `Organization.getMembershipRequests()`
+    - `Organization.getMemberships()`
+    - `Organization.getInvitations()`
+    - `User.getOrganizationInvitations()`
+    - `User.getOrganizationSuggestions()`
+    - `User.getOrganizationMemberships()`
+
+    Here's a before/after example:
+
+    ```diff
+      import Clerk from "@clerk/clerk-js"
+
+      const clerk = new Clerk()
+      await clerk.load()
+
+      const { data: orgs } = await clerk.user.getOrganizationMemberships({
+    -   limit: 10,
+    +   pageSize: 10,
+    -   offset: 10,
+    +   initialPage: 2,
+      })
+    ```
+
 - The [`User.update()`](/docs/references/javascript/user/user#update) method no longer accepts `password` as a parameter. If you'd like to update a users's password, please use [`User.updatePassword()`](/docs/references/javascript/user/password-management#update-password) instead.
 
     ```diff
@@ -794,13 +854,13 @@ Some more niche use cases and their changes:
   <AccordionPanel>
     The following methods will now throw an error if one occurs, instead of catching it and returning an empty fallback as data.
 
-    - `Organization.getDomains`
-    - `Organization.getInvitations`
-    - `Organization.getMembershipRequests`
-    - `Organization.getMemberships`
-    - `User.getOrganizationInvitations`
-    - `User.getOrganizationSuggestions`
-    - `User.getOrganizationMemberships`
+    - `Organization.getDomains()`
+    - `Organization.getInvitations()`
+    - `Organization.getMembershipRequests()`
+    - `Organization.getMemberships()`
+    - `User.getOrganizationInvitations()`
+    - `User.getOrganizationSuggestions()`
+    - `User.getOrganizationMemberships()`
 
     It is recommended to wrap these in a `try/catch` block.
   </AccordionPanel>

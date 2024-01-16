@@ -445,9 +445,129 @@ These changes may impact your style customization applied through the `appearanc
 
 ### `@clerk/backend`
 
+#### Response payload
+
 <Callout type="warning" > 
   Please take extra care in reading the instructions for the new response payload.
 </Callout>
+
+The response payload of **every** backend API request was changed. Instead of returning the data on success and throwing an error on failure, you'll receive this object:
+
+```ts
+type ClerkBackendApiResponse<T> =
+  | {
+      data: T;
+      errors: null;
+      totalCount?: number;
+    }
+  | {
+      data: null;
+      errors: Array<ClerkAPIError>;
+      totalCount?: never;
+      clerkTraceId?: string;
+      status?: number;
+      statusText?: string;
+    }
+```
+
+So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in most cases also `clerkTraceId`, `status`, and `statusText`.
+
+<Callout type="warning" > 
+  You'll need to throw errors yourself as the `@clerk/backend` functions are not handling this for you anymore. See the examples below on how to do that. 
+</Callout>
+
+The new API looks like this:
+
+```ts
+// Single
+const { data, errors } = await clerkClient.users.getUser("")
+
+// Paginated response
+const {
+  data,
+  errors,
+  totalCount
+} = await clerkClient.organizations.getOrganizationList()
+```
+
+If you want to keep the old behavior, you can migrate your code to something like this:
+
+```ts
+import { createClerkClient } from "@clerk/backend"
+import { ClerkAPIResponseError } from "@clerk/shared/error"
+
+const clerkClient = createClerkClient({ secretKey: "" })
+
+const { 
+  data,
+  errors,
+  status,
+  statusText
+} = await clerkClient.users.getUser("")
+
+if (errors) {
+  throw new ClerkAPIResponseError(statusText, { data: errors, status })
+}
+```
+
+Here's the changed response shape in a before and after:
+
+```diff
+- const data = await clerkClient.users.getUser("")
++ const { data } = await clerkClient.users.getUser("")
+
+- const data = await clerkClient.organizations.getOrganizationList()
+- const totalCount = data.length
++ const {
++  data,
++  totalCount
++ } = await clerkClient.organizations.getOrganizationList()
+```
+
+Here are some more examples of this change:
+
+- `sessions.getToken()`
+
+    ```diff
+    - const jwtString = await clerkClient.sessions.getToken(
+    -   { template: "" }
+    - )
+    + const { data, errors } = await clerkClient.sessions.getToken(
+    +   { template: "" }
+    + )
+    + const jwtString = data?.jwt
+    ```
+
+- **TODO: These return signatures might change - if not move back to "other" changes.** The `signJwt`, `hasValidSignature`, `decodeJwt`, `verifyJwt`, and `verifyToken` functions.
+
+    ```js
+    import {
+      signJwt,
+      hasValidSignature,
+      decodeJwt,
+      verifyJwt
+    } from "@clerk/backend/jwt"
+    import { verifyToken } from "@clerk/backend"
+
+    const { data, error } = await signJwt()
+    if (error) throw error
+
+    const { data, error } = await hasValidSignature()
+    if (error) throw error
+
+    const { data, error } = decodeJwt()
+    if (error) throw error
+
+    const { data, error } = await verifyJwt()
+    if (error) throw error
+
+    const { data, error } = await verifyToken()
+    if (error) throw error
+    ```
+
+---
+
+#### Other `@clerk/backend` changes
 
 - The top level `Clerk` import was renamed to `createClerkClient`. It's a name change and functionality stayed the same.
 
@@ -458,79 +578,6 @@ These changes may impact your style customization applied through the `appearanc
 
 - [Rename `apiKey` to `secretKey`](#rename-api-key-to-secret-key)
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
-- The response payload of **every** backend API request was changed. Instead of returning the data on success and throwing an error on failure, you'll receive this object:
-
-    ```ts
-    type ClerkBackendApiResponse<T> =
-      | {
-          data: T;
-          errors: null;
-          totalCount?: number;
-        }
-      | {
-          data: null;
-          errors: Array<ClerkAPIError>;
-          totalCount?: never;
-          clerkTraceId?: string;
-          status?: number;
-          statusText?: string;
-        };
-    ```
-
-    So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in most cases also `clerkTraceId`, `status`, and `statusText`.
-
-    <Callout type="warning" > 
-      You'll need to throw errors yourself as the `@clerk/backend` functions are not handling this for you anymore. See the examples below on how to do that. 
-    </Callout>
-
-    The new API looks like this:
-
-    ```ts
-    // Single
-    const { data, errors } = await clerkClient.users.getUser("")
-
-    // Paginated response
-    const {
-      data,
-      errors,
-      totalCount
-    } = await clerkClient.organizations.getOrganizationList()
-    ```
-
-    If you want to keep the old behavior, you can migrate your code to something like this:
-
-    ```ts
-    import { createClerkClient } from "@clerk/backend"
-    import { ClerkAPIResponseError } from "@clerk/shared/error"
-
-    const clerkClient = createClerkClient({ secretKey: "" })
-
-    const { 
-      data,
-      errors,
-      status,
-      statusText
-    } = await clerkClient.users.getUser("")
-
-    if (errors) {
-      throw new ClerkAPIResponseError(statusText, { data: errors, status })
-    }
-    ```
-
-    Here's the changed response shape in a before and after:
-
-    ```diff
-    - const data = await clerkClient.users.getUser("")
-    + const { data } = await clerkClient.users.getUser("")
-
-    - const data = await clerkClient.organizations.getOrganizationList()
-    - const totalCount = data.length
-    + const {
-    +  data,
-    +  totalCount
-    + } = await clerkClient.organizations.getOrganizationList()
-    ```
-
 - `clockSkewInSeconds` was renamed to `clockSkewInMs` but the default value stayed the same. That change affects all methods related to `VerifyJwtOptions`. Some examples:
 
     ```diff filename="verifyJwt"
@@ -583,11 +630,15 @@ These changes may impact your style customization applied through the `appearanc
     - `import type { AuthenticateRequestOptions } from "@clerk/backend/internal"`
     
 
-- Replace `getPendingOrganizationInvitationList` with `getOrganizationInvitationList` and pass a `status` parameter.
+- Replace `organizations.getPendingOrganizationInvitationList` with `organizations.getOrganizationInvitationList` and pass a `status` parameter.
 
     ```diff
-    - getPendingOrganizationInvitationList({ ...params })
-    + getOrganizationInvitationList({ ...params, status: "pending" })
+    - clerkClient.organizations.getPendingOrganizationInvitationList(
+    -   { ...params }
+    - )
+    + clerkClient.organizations.getOrganizationInvitationList(
+    +   { ...params, status: "pending" }
+    + )
     ```
 
 - You need to pass a `Request` to the first argument of the `authenticateRequest()` method.
@@ -613,36 +664,10 @@ These changes may impact your style customization applied through the `appearanc
     - clerkClient.__unstable_options.secretKey = "new"
     + const newClerkClient = createClerkClient({ secretKey: "new" })
     ```
-- The `signJwt`, `hasValidSignature`, `decodeJwt`, `verifyJwt`, and `verifyToken` signatures have changed. Instead of returning a value or throwing an error those functions will **always** return a `{ data, error }` object. You will need to throw the error yourself:
-
-  ```js
-  import {
-    signJwt,
-    hasValidSignature,
-    decodeJwt,
-    verifyJwt
-  } from "@clerk/backend/jwt"
-  import { verifyToken } from "@clerk/backend"
-
-  const { data, error } = await signJwt()
-  if (error) throw error
-
-  const { data, error } = await hasValidSignature()
-  if (error) throw error
-
-  const { data, error } = decodeJwt()
-  if (error) throw error
-
-  const { data, error } = await verifyJwt()
-  if (error) throw error
-
-  const { data, error } = await verifyToken()
-  if (error) throw error
-  ```
 
 Some more niche use cases and their changes:
 
-<Accordion titles={["Removal of httpOptions", "Removal of pkgVersion", "Removal of createIsomorphicRequest & buildRequestUrl", "Use .imageUrl for image related responses/resources"]} heading="h4">
+<Accordion titles={["Removal of httpOptions", "Removal of pkgVersion", "Removal of createIsomorphicRequest & buildRequestUrl", "Use .imageUrl for image related responses/resources"]} heading="h5">
   <AccordionPanel>
     The `httpOptions` parameter was removed from the **internal** `buildRequest` function but it is used by most public facing APIs. Hence you were able to pass `httpOptions` to some functions which is not possible anymore. If you're currently relying on this functionality and wish to update, please reach out to [Clerk's support](/support).
     
@@ -694,93 +719,99 @@ Some more niche use cases and their changes:
     - `UserJSON.profile_image_url`
     - `OrganizationMembershipPublicUserDataJSON.profile_image_url`
   </AccordionPanel>
-
 </Accordion>
 
 ### `@clerk/chrome-extension`
 
-The `tokenCache` prop on `<ClerkProvider>` was renamed to `storageCache`.
+- [Change in default routing behavior](#routing)
+- The `tokenCache` prop on `<ClerkProvider>` was renamed to `storageCache`.
 
-```diff
-- <ClerkProvider tokenCache={}>
-+ <ClerkProvider storageCache={}>
-```
+    ```diff
+    - <ClerkProvider tokenCache={}>
+    + <ClerkProvider storageCache={}>
+    ```
 
-The `storageCache` interface has been expanded to allow more flexibility:
+    The `storageCache` interface has been expanded to allow more flexibility:
 
-```ts
-type StorageCache = {
-  createKey: (...keys: string[]) => string;
-  get: <T = any>(key: string) => Promise<T>;
-  remove: (key: string) => Promise<void>;
-  set: (key: string, value: string) => Promise<void>;
-}
-```
+    ```ts
+    type StorageCache = {
+      createKey: (...keys: string[]) => string;
+      get: <T = any>(key: string) => Promise<T>;
+      remove: (key: string) => Promise<void>;
+      set: (key: string, value: string) => Promise<void>;
+    }
+    ```
 
 ### `@clerk/clerk-js`
+
+#### Pagination response & parameters
 
 <Callout type="warning" > 
   Please take extra care in reading the instructions for the modified shape of paginated responses and new pagination parameters.
 </Callout>
 
+For every method that returns a paginated list the [`ClerkPaginatedResponse`](/docs/references/javascript/types/clerk-paginated-response) has changed from `[Item]` to `{ total_count: number; data: [Item] }`.
+
+The affected methods are:
+
+- `Organization.getRoles()`
+- `Organization.getDomains()`
+- `Organization.getMembershipRequests()`
+- `Organization.getMemberships()`
+- `Organization.getInvitations()`
+- `User.getOrganizationInvitations()`
+- `User.getOrganizationSuggestions()`
+- `User.getOrganizationMemberships()`
+
+Here's a before/after example:
+
+```diff
+  import Clerk from "@clerk/clerk-js"
+
+  const clerk = new Clerk()
+  await clerk.load()
+
+- const orgs = await clerk.user.getOrganizationMemberships()
++ const { data: orgs } = await clerk.user.getOrganizationMemberships()
+```
+
+The pagination parameters on some methods have changed from `{ limit: number; offset: number }` to `{ initialPage: number; pageSize: number }`.
+
+The affected methods are:
+
+- `Organization.getRoles()`
+- `Organization.getDomains()`
+- `Organization.getMembershipRequests()`
+- `Organization.getMemberships()`
+- `Organization.getInvitations()`
+- `User.getOrganizationInvitations()`
+- `User.getOrganizationSuggestions()`
+- `User.getOrganizationMemberships()`
+
+Here's a before/after example:
+
+```diff
+  import Clerk from "@clerk/clerk-js"
+
+  const clerk = new Clerk()
+  await clerk.load()
+
+  const { data: orgs } = await clerk.user.getOrganizationMemberships({
+-   limit: 10,
++   pageSize: 10,
+-   offset: 10,
++   initialPage: 2,
+  })
+```
+
+---
+
+#### Other `@clerk/clerk-js` changes
+
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
 - [Removed the `orgs` claim as a default property of the JWT](#removed-the-orgs-claim-as-a-default-property-of-the-jwt)
-- For every method that returns a paginated list the [`ClerkPaginatedResponse`](/docs/references/javascript/types/clerk-paginated-response) has changed from `[Item]` to `{ total_count: number; data: [Item] }`.
-
-    The affected methods are:
-
-    - `Organization.getRoles()`
-    - `Organization.getDomains()`
-    - `Organization.getMembershipRequests()`
-    - `Organization.getMemberships()`
-    - `Organization.getInvitations()`
-    - `User.getOrganizationInvitations()`
-    - `User.getOrganizationSuggestions()`
-    - `User.getOrganizationMemberships()`
-
-    Here's a before/after example:
-
-    ```diff
-      import Clerk from "@clerk/clerk-js"
-
-      const clerk = new Clerk()
-      await clerk.load()
-
-    - const orgs = await clerk.user.getOrganizationMemberships()
-    + const { data: orgs } = await clerk.user.getOrganizationMemberships()
-    ```
-
-- The pagination parameters on some methods have changed from `{ limit: number; offset: number }` to `{ initialPage: number; pageSize: number }`.
-
-    The affected methods are:
-
-    - `Organization.getRoles()`
-    - `Organization.getDomains()`
-    - `Organization.getMembershipRequests()`
-    - `Organization.getMemberships()`
-    - `Organization.getInvitations()`
-    - `User.getOrganizationInvitations()`
-    - `User.getOrganizationSuggestions()`
-    - `User.getOrganizationMemberships()`
-
-    Here's a before/after example:
-
-    ```diff
-      import Clerk from "@clerk/clerk-js"
-
-      const clerk = new Clerk()
-      await clerk.load()
-
-      const { data: orgs } = await clerk.user.getOrganizationMemberships({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
-    ```
-
 - The [`User.update()`](/docs/references/javascript/user/user#update) method no longer accepts `password` as a parameter. If you'd like to update a users's password, please use [`User.updatePassword()`](/docs/references/javascript/user/password-management#update-password) instead.
 
     ```diff
@@ -839,7 +870,7 @@ type StorageCache = {
 
 Some more niche use cases and their changes:
 
-<Accordion titles={["Removal of unstable/experimental properties", "Removal of fallback data for paginated methods", "Appearance", "Use .imageUrl for image related responses/resources"]} heading="h4">
+<Accordion titles={["Removal of unstable/experimental properties", "Removal of fallback data for paginated methods", "Appearance", "Use .imageUrl for image related responses/resources"]} heading="h5">
   <AccordionPanel>
     Removed the following properties:
     
@@ -893,6 +924,7 @@ Some more niche use cases and their changes:
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
+- [Change in default routing behavior](#routing)
 
 ### `@clerk/fastify`
 
@@ -905,6 +937,7 @@ Some more niche use cases and their changes:
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
+- [Change in default routing behavior](#routing)
 - The return type and shape of `withServerAuth` was changed from `ServerSideAuth` to `AuthObject`. `props.auth` now returns different values:
 
     ```ts
@@ -941,6 +974,7 @@ TODO
 
 - [Rename `apiKey` to `secretKey`](#rename-api-key-to-secret-key)
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
+- [Change in default routing behavior](#routing)
 - The named import `MultiSessionAppSupport` was moved from `@clerk/nextjs` to `@clerk/nextjs/internal`
 - `withClerkMiddleware` has been deprecated in v4 and is now removed in v5. Use [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) instead. Here's an example of having all routes public except for everything under `/dashboard`.
 
@@ -1111,7 +1145,7 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
   </AccordionPanel>
 </Accordion>
 
-**Deprecated:**
+#### Deprecated
 
 - [`authMiddleware`](/docs/references/nextjs/auth-middleware). We highly recommend using [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) going forward. `clerkMiddleware` protects no routes by default and you need to add your individual routes you want to opt into protection. Here's an example of having all routes public except for everything under `/dashboard`.
 
@@ -1154,6 +1188,65 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
     ```
 
 ### `@clerk/clerk-react`
+
+#### Routing
+
+<Callout type="warning" > 
+  Please take extra care in reading the instructions for the new routing behavior.
+</Callout>
+
+On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` can be set to `'hash' | 'path' | 'virtual'` and describes the routing strategy that should be used. `path` defines where the component is mounted when `routing="path"` is used.
+
+With Clerk v5 the **default** `routing` strategy has become `'path'`. Unless you change the `routing` prop, you'll need to define the `path` prop. The affected components are:
+
+- `<SignIn />`
+- `<SignUp />`
+- `<UserProfile />`
+- `<CreateOrganization />`
+- `<OrganizationProfile />`
+
+Here's how you'd use the components going forward:
+
+```jsx
+<SignIn path="/sign-in" />
+<SignUp path="/sign-up" />
+<UserProfile path="/user-profile" />
+<CreateOrganization path="/create-org" />
+<OrganizationProfile path="/org-profile" />
+```
+
+If you don't define the `path` prop an error will be thrown. Of course, you can still use `routing="hash"` or `routing="virtual"`.
+
+```jsx
+<UserProfile routing="hash" />
+<OrganizationProfile routing="virtual" />
+```
+
+However, there are two exceptions to this behavior. If you're using `@clerk/nextjs` or `@clerk/remix`, you can set environment variables for `<SignIn />` and `<SignUp />`.
+
+<CodeBlockTabs options={["Next.js", "Remix"]}>
+```env filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+```
+
+```env filename=".env"
+CLERK_SIGN_IN_URL=/sign-in
+CLERK_SIGN_UP_URL=/sign-up
+```
+</CodeBlockTabs>
+
+**Only** if you're using one of these two frameworks and defined both environment variables, you're able to use the `<SignIn />` and `<SignUp />` components without any props.
+
+```jsx
+// Only works for Next.js / Remix when environment variables are set
+<SignIn />
+<SignUp />
+```
+
+---
+
+#### Other `@clerk/clerk-react` changes
 
 - [Replace `frontendApi` with `publishableKey`](#replace-frontend-api-with-publishable-key)
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
@@ -1203,6 +1296,7 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
 - [Rename magic link to email link](#rename-magic-link-to-email-link)
 - [Replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 - [Replace `setSession` with `setActive`](#replace-set-session-with-set-active)
+- [Change in default routing behavior](#routing)
 - The `ClerkErrorBoundary` helper has been removed as it's no longer needed.
 
     ```diff

@@ -6,7 +6,11 @@ type: conceptual
 
 # The client handshake
 
-Clerk uses a client handshake mechanism to resolve a request’s authentication state from unknown (`handshake`) to `signed-in` or `signed-out`. Clerk’s session management architecture relies on a short-lived session JWT to validate requests, along with a long-lived session that keeps the session JWT fresh by interacting with the Frontend API (FAPI) while the web application is active. The long-lived session token is stored in an HttpOnly cookie associated with the Frontend API domain. If a short-lived session JWT is expired on a request to an application’s backend, the SDK doesn’t know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers the handshake.
+<Callout type="warning">
+  This flow applies only to website browser traffic and not native applications.
+</Callout>
+
+Clerk uses a mechanism called "the client handshake" to resolve a request’s authentication state from unknown (`handshake`) to `signed-in` or `signed-out`. Clerk’s session management architecture relies on a short-lived session JWT to validate requests, along with a long-lived session that keeps the session JWT fresh by interacting with the Frontend API (FAPI) while the web application is active. The long-lived session token is stored in an HttpOnly cookie associated with the Frontend API domain. If a short-lived session JWT is expired on a request to an application’s backend, the SDK doesn’t know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers the handshake.
 
 With the handshake, we can resolve authentication state on the backend and ensure the request is properly handled as signed in or out, instead of being in a potentially “unknown” state. The handshake flow relies on redirects to exchange session information between FAPI and the application, ensuring the resolution of unknown authentication states minimizes performance impact and behaves consistently across different framework and language implementations.
 
@@ -18,38 +22,40 @@ The handshake mechanism operates by way of a redirect from the host application 
 
 1. A request is made to an application using Clerk.
 2. Clerk SDK determines the authentication state of the request (`signed-in`, `signed-out`, or `handshake`).
-3. If the authentication state is `handshake`, Clerk responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
+3. If the authentication state is `handshake`, Clerk SDK responds with a 307 redirect to the FAPI handshake endpoint: `https://clerk.your-domain.com/v1/client/handshake`.
 4. The handshake endpoint gets information about the current session and returns a handshake payload. The encoded handshake payload contains a list of `Set-Cookie` header directives to be passed along with the final response.
     - If the session is active, a fresh session JWT cookie is returned.
     - If the session is inactive, the session JWT cookie is wiped and the request will be treated as signed out.
 5. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development instances) or as a cookie (production instances).
-6. The handshake payload is parsed and `Set-Cookie` headers are set on the response.
+6. The handshake payload is parsed by Clerk SDK and `Set-Cookie` headers are set on the response.
 7. If an updated session JWT is returned, the JWT is verified and then, if verification is successful, the request is treated as signed in. If an updated session JWT is not returned, the request is treated as signed out.
 
 ## Scenarios that trigger a handshake
 
 <Callout type="warning">
-A handshake is only triggered if a request is determined to be a document request (detected by the presence of the `Sec-Fetch-Dest: document` header, or `Accept: text/html`). Otherwise, the request is treated as `signed-out`.
+  A handshake is only triggered if a request is determined to be a document request (detected by the presence of the `Sec-Fetch-Dest: document` header, or `Accept: text/html`). Otherwise, the request is treated as `signed-out`.
 </Callout>
 
 1. Development instance and a dev browser is detected in URL 
 [(URL-based session sync)](https://clerk.com/docs/upgrade-guides/url-based-session-syncing#url-based-session-syncing)
 2. Production instance and request is being made to a satellite application
-3. Has a session token (`__session`), but no active client is detected (`__client_uat` = 0 or missing)
-4. Has active client (`__client_uat` > 0) but no session token
-5. Client UAT is more recent than current session token issued at (`__client_uat` > `sessionToken.iat`)
-6. Session token exists but is expired
-7. Session token exists but is not active yet
+3. The current browser has a session token (`__session`), but no active client is detected (`__client_uat` = 0 or missing)
+4. The current browser has an active client (`__client_uat` > 0) but no session token
+5. The `client_uat` cookie indicating the latest timestamp a client was updated, is more recent than current session token issued at timestamp (`__client_uat` > `sessionToken.iat`)
+6. The `__session` token cookie exists but is expired
+7. The `__session` token cookie exists but is not active yet
 
 ## Handshake architecture
 
 The handshake flow is composed of two main pieces:
 
 1. The FAPI [`/client/handshake` endpoint](https://clerk.com/docs/reference/frontend-api/tag/Client#operation/handshakeClient)
-2. The `@clerk/backend` `authenticateRequest()` method
+2. The `@clerk/backend` `authenticateRequest()` method. The isomorphic `@clerk/backend` SDK is used by all framework specific Clerk SDKs such as `@clerk/nextjs`.
 
 ### Handshake payload
 
 The handshake payload is a signed JWT that contains an array of `set-cookie` header directives. This allows us to transfer cookies from the FAPI domain to the application’s domain across environments without additional cookie setting logic embedded into our SDKs. In development, the payload is transported in the URL in a `__clerk_handshake` query parameter. In production, the payload is transported in a `__clerk_handshake` cookie. On returning from the handshake endpoint, the handshake payload is parsed and the cookie directives are set on the final response.
+
+{/* TODO: Bryce to add an example of a handshake payload */}
 
 To verify the handshake payload JWT, use the instance [public RSA key](https://clerk.com/docs/reference/frontend-api/tag/Well-Known#operation/GetJWKS).

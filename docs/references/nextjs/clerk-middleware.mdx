@@ -1,18 +1,18 @@
 ---
 title: clerkMiddleware() | Next.js
-description: The `clerkMiddleware()` function allows you to protect your Next.js application using middleware.
+description: The `clerkMiddleware()` function allows you to protect your Next.js application using Middleware.
 ---
 
 # `clerkMiddleware()`
 
-The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through middleware. `clerkMiddleware()` is compatible with both the App and Pages routers. 
+The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through Middleware. `clerkMiddleware()` is compatible with both the App and Pages routers. 
 
-## Usage
+## Configure `clerkMiddleware()` and protect all routes in your application
 
 Create a `middleware.ts` file. If your application uses the `src/` directory, your `middleware.ts` file should be placed inside the `src/` folder. If you are not using a `src/` directory, place the `middleware.ts` file in your root directory. 
 
 <Callout level="info">
-For more information about middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/pages/building-your-application/routing/middleware).
+For more information about Middleware in Next.js applications, see the [Next.js documentation](https://nextjs.org/docs/pages/building-your-application/routing/middleware).
 </Callout>
 
 ```tsx filename="middleware.ts"
@@ -23,14 +23,20 @@ export default clerkMiddleware()
 export const config = {
   matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
-````
+```
 
-This basic Middleware will not protect any routes. The new `clerkMiddleware()` behaves in the opposite manner from the previous `authMiddleware()` that Clerk shipped with version 4 of our SDKs. With `clerkMiddleware()` all routes are now public and you must opt-in to protection for routes.
+The basic Middleware will protect all routes in your application. With the recommended matcher written above, all routes are matched by Clerk's authentication Middleware, with the exception of internal `/_next/` routes and static files. Static files are detected by matching on paths that end in `.+\..+`. 
 
-With the recommended matcher, all routes are matched by Clerk's authentication Middleware, with the exception of internal `/_next/` routes and static files. Static files are detected by matching on paths that end in `.+\..+`.
+If you want to protect only certain routes, you can pass a matcher to `clerkMiddleware()`. The matcher is an array of paths that you want to protect. 
 
-## Environment Variables
+{/* Throw this in a callout because it is referencing a previous version/feature, so it is supplemental information. */}
+<Callout type="warning">
+  The new `clerkMiddleware()` behaves in the opposite manner from the previous `authMiddleware()` that Clerk shipped with version 4 of our SDKs. With `clerkMiddleware()`, all routes are now public and you must opt-in to protection for routes.
+</Callout>
 
+## `clerkMiddleware()` and Environment Variables
+
+{/* Does clerkMiddleware() also accept a publicRoutes option?? */}
 If you are building your own sign in pages, you don't need to add these pages to your `publicRoutes`. They will be inferred from your `.env` file:
 
 ```ts filename=".env"
@@ -40,12 +46,15 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 ```
 
-## Protect Multiple Routes
+## Protect routes with `createRouteMatcher()` and `clerkMiddleware()`
 
-`clerkMiddleare()` shipes with the helper function `createRouteMatcher()`. `createRouteMatcher()` allows you to add an array of routes, and then check if the route the user is trying to visit matches one of the routes. You can use this matcher to protect multiple routes. The paths provided to this helper can be in the same format as the paths provided tothe Next Middleware matcher.  
+{/* Questions:
+- can you pass an empty array and it will protect all routes?
+- can you pass a single route in the array, and it protects just one single route? */}
 
-In the following example the routes `/dashboard(.*)` and `/forum(.*)` are passed to the `createRouteMatcher()` function and assigned to `isProtectedRoute`. The Middleware logic then tests if the current route is one of the protected routes with `isProtectedRoutes(req)`, which will return true if it matches and false if it does not. 
+`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it. The paths provided to this helper can be in the same format as the paths provided to the Next Middleware matcher. 
 
+In the following example, a `isProtectRoute()` helper is created where the routes `/dashboard(.*)` and `/forum(.*)` are passed to `createRouteMatcher()`. The `isProtectedRoute()` helper is then used in the Middleware logic to check if the user is trying to access one of the protected routes. If the route is protected, `auth().protect()` will check if a user is signed in (authenticated). If they are not authenticated, the user will be redirected to sign in.
 
 ```tsx filename="middleware.ts"
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
@@ -68,11 +77,9 @@ export const config = {
 };
 ```
 
-## Functions and Methods
+### Protect multiple groups of routes with `createRouteMatcher()` and `clerkMiddleware()`
 
-### `createRouteMatcher()`
-
-The `createRouteMatcher()` allows you to pass an array of routes, and then check if the user's router matches one of the routes in the array. This will return a `boolean`. You can use more than one `createRouterMatcher()` in your application if you have two or more groups of routes.
+You can use more than one `createRouteMatcher()` in your application if you have two or more groups of routes.
 
 ```tsx filename="middleware.ts" 
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
@@ -86,7 +93,6 @@ const isTenentAdminRoute = createRouteMatcher([
   '/orgId/(.*)/mememberships',
   '/orgId/(.*)/domain',
 ]);
-
 
 export default clerkMiddleware(
   (auth, req) => {
@@ -104,68 +110,111 @@ export default clerkMiddleware(
 export const config = {
   matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
-
-
 ```
 
-### `redirectToSignIn()`
+<Callout type="info">
+  The example above uses the `has()` method from Clerk's `auth()` helper. `has()` is a low level method that allows you to check if a user has a specific role or permission. For more information, see the [has() documentation](/docs/references/nextjs/auth#authorization-with-has).
+</Callout>
 
-The `redirectToSignIn()` method will redirect a user to sign in. This is an easy way to prompt a user to log in to they can access the route. `redirectToSignIn()` is a low level version of `protect()`. 
+{/* TODO: So below this line, clerkMiddleware() is not being used. But I see that auth() is being used a lot. So do we need to create another guide, or do we need to move this information into the auth() docs, or what? */}
 
-The following example would protect all routes, and redirect the user to sign in to access any route.
+## Protect routes with `redirectToSignIn()`
+
+You can also protect routes in your application by utilizing the `redirectToSignIn()` method. This method will redirect the user to the sign in page.
+
+`redirectToSignIn()` is a low level version of `protect()`.
+
+The following example would protect your entire application and redirect the user to sign in if they are not authenticated.
 
 ```tsx filename="middleware.tsx"
-if ( !auth().userId) { 
+if (!auth().userId) { 
   return auth().redirectToSignIn()
 }
 ```
 
-### `protect()`
+{/* TODO: Can you protect a specific route with this method, or only the entire application? */}
 
-The `protect()` method from `auth()` also you to protect a route based on `role` or `permission`, or simply . For the user to access the route they would need to have the specificed role or permissions. 
+## Protect routes with `protect()`
 
-The following example will require the user to be logged in and if not will redirect the user to sign in.
+The `protect()` method from `auth()` allows you to protect a route based on whether they are authenticated or not. 
+
+The following example would require the user to be signed in. If they are not authenticated, `protect()` will redirect the user to sign in.
+
 ```tsx filename="middleware.tsx"
 if (protectedRoute(req)) { 
   auth().protect()
 }
 ```
 
-This example will restrict the routes to users with the specified permission. `isProtectedRoute()` would be created using `createRouteMAthciner()`
-```tsx filename="middleware.ts" 
+### Protect routes based on roles or permissions with `protect()`
+
+You can also use the `protect()` method to protect a route based on a user's role or permissions.
+
+The following example would restrict the `/dashboard` and `/forum` routes to users with the specified permission, which in this case is `org:sys_profile:delete`. 
+
+```tsx filename="middleware.ts" {9}
+import { createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/forum(.*)',
+]);
+
 if (isProtectedRoute(req)) { 
-  auth().protect({ permission: "org:sys_profile:delete"})
+  auth().protect({ permission: "org:sys_profile:delete" })
 }
 ```
 
-The following will restrict the routes to user's with the specified role. `isProtectedRoute()` would be created using `createRouteMAthciner()`
-```tsx filename="middleware.ts"
-if (protectedRoute(req)) { 
-  auth().protect({ role: "org:admin"})
+The following would restrict the `/dashboard` and `/forum` routes to users with the specified role, which in this case is `org:admin`.
+
+```tsx filename="middleware.ts" {9}
+import { createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/forum(.*)',
+]);
+
+if (isProtectedRoute(req)) { 
+  auth().protect({ role: "org:admin" })
 }
 ```
 
+### Protect routes with `protect()` and redirect users to a specific URL
 
-#### `redirectUrl` 
+`protect()` accepts an optional `redirectUrl` parameter. If the user is not authenticated, they will be redirected to the URL specified in `redirectUrl`.
 
-You can pass a redirect parameter to `protect()`. Examples:
+The following example would redirect the user to `/subscribe` if they are visiting a `/dashboard` route and are not authenticated.
+
 ```tsx filename="middleware.tsx"
-if (protectedRoute(req)) { 
+import { createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+]);
+
+if (isProtectedRoute(req)) { 
   auth().protect({ redirectUrl: "/subscribe" })
 }
 ```
 
+The following example would redirect the user to `/org-selector` if they are visiting a `/dashboard` route and do not have the `org:admin` role.
+
 ```tsx filename="middleware.tsx"
-if (protectedRoute(req)) { 
-  auth().protect({ role: "org:admin"}, { redirectUrl: "/org-selector" })
+import { createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+]);
+
+if (isProtectedRoute(req)) { 
+  auth().protect({ role: "org:admin" }, { redirectUrl: "/org-selector" })
 }
 ```
 
-
-
 ## Debug your middleware
 
-If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add debug: true to `clerkMiddlware()` and you will get debug logs in your terminal.
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add `{ debug: true }` to `clerkMiddlware()` and you will get debug logs in your terminal.
 
 ```tsx filename="middleware.ts" {6}
 import { clerkMiddleware } from '@clerk/nextjs/server';
@@ -178,7 +227,7 @@ export default clerkMiddleware(
 export const config = {
   matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
-````
+```
 
 ## Combining Middleware
 

@@ -162,9 +162,9 @@ This section explains breaking changes that were made across SDKs or only in ind
 
 ### `@clerk/nextjs`
 
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. Reason is that this package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
+As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`.
 
-A couple of subpath imports have been removed but functionality stayed the same. You should use `@clerk/nextjs` instead.
+A couple of subpath imports have been removed but functionality stayed the same.
 
 <Accordion titles={["@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]} heading="h4">
   <AccordionPanel>
@@ -262,7 +262,7 @@ A couple of exported constants have been removed from `@clerk/nextjs` as you sho
 
 ### `@clerk/clerk-react`
 
-The `@clerk/clerk-react` package is used by all SDKs based on React and as such any change in this package can _potentially_ affect other packages, too. SDKs based on React like `@clerk/nextjs` re-export certain components and functions from `@clerk/clerk-react`. Please check your code for the changes below, even if you didn't explicitly install `@clerk/clerk-react`.
+The `@clerk/clerk-react` package is used by all SDKs based on React and as such any change in this package can _potentially_ affect those packages, too. SDKs based on React re-export certain components and functions from `@clerk/clerk-react`. Please check your code for the changes below, even if you didn't explicitly install it.
 
 #### Routing
 
@@ -332,6 +332,114 @@ If you’d like to keep the same behavior as you had with the single `navigate` 
 + <ClerkProvider routerPush={x => x} routerReplace={x => x} />
 ```
 
+#### Removal of higher order functions & components
+
+The `withUser`, `withSession`, and `withClerk` higher order functions (HOF) have been removed. The `WithUser`, `WithSession`, and `WithClerk` higher order components (HOC) have been removed. Clerk recommends using [React hooks](/docs/references/react/overview) going forward.
+
+If you would still like to use these functions and components, you can reimplement them on your own.
+
+<Accordion titles={["withClerk", "WithClerk", "withSession", "WithSession", "withUser", "WithUser"]} heading="h5">
+  <AccordionPanel>
+    ```js
+    function withClerk(Component, displayName) {
+      displayName = displayName || Component.displayName || Component.name || 'Component';
+      Component.displayName = displayName;
+      const HOC = props => {
+        const clerk = useIsomorphicClerkContext();
+
+        if (!clerk.loaded) return null;
+
+        return (
+          <Component
+            {...props}
+            clerk={clerk}
+          />
+        );
+      };
+
+      HOC.displayName = `withClerk(${displayName})`;
+      return HOC;
+    }
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```js
+    export const WithClerk = ({ children }) => {
+      const clerk = useClerk();
+      if (typeof children !== 'function') throw new Error();
+
+      return {children(clerk)};
+    };
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```js
+    function withSession(Component, displayName) {
+      displayName = displayName || Component.displayName || Component.name || 'Component';
+      Component.displayName = displayName;
+      const HOC = props => {
+        const session = useSessionContext();
+
+        if (!session) return null;
+
+        return (
+          <Component
+            {...props}
+            session={session}
+          />
+        );
+      };
+
+      HOC.displayName = `withSession(${displayName})`;
+      return HOC;
+    }
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```js
+    export const WithSession = ({ children }) => {
+      const session = useSession();
+      if (typeof children !== 'function') throw new Error();
+
+      return {children(session)};
+    };
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```js
+    function withUser(Component, displayName) {
+      displayName = displayName || Component.displayName || Component.name || 'Component';
+      Component.displayName = displayName;
+      const HOC = props => {
+        const clerk = useUserContext();
+
+        if (!user) return null;
+
+        return (
+          <Component
+            {...props}
+            user={user}
+          />
+        );
+      };
+
+      HOC.displayName = `withUser(${displayName})`;
+      return HOC;
+    }
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```js
+    export const WithUser = ({ children }) => {
+      const user = useUser();
+      if (typeof children !== 'function') throw new Error();
+
+      return {children(user)};
+    };
+    ```
+  </AccordionPanel>
+</Accordion>
+
 #### Other `@clerk/clerk-react` changes
 
 - Further changes to types:
@@ -339,7 +447,6 @@ If you’d like to keep the same behavior as you had with the single `navigate` 
     - `redirectToOrganizationProfile` now returns `Promise<unknown>` instead of `void`
     - `redirectToCreateOrganization` now returns `Promise<unknown>` instead of `void`
     - `redirectToHome` now returns `Promise<unknown>` instead of `void`
-- The `withUser`, `withSession`, and `withClerk` higher order functions (HOF) have been removed. The `WithUser`, `WithSession`, and `WithClerk` higher order components (HOC) have been removed. In both instances, please use [React hooks](/docs/references/react/overview) instead.
 - The `MultisessionAppSupport` export has moved from `@clerk/clerk-react` to `@clerk/clerk-react/internal`
 - The following exports have moved from `@clerk/clerk-react` to `@clerk/clerk-react/errors`: `isClerkAPIResponseError`, `isEmailLinkError`, `isKnownError`, `isMetamaskError`, `MagicLinkErrorCode`, and `isMagicLinkError`
 - The `MembershipRole` type was replaced with `OrganizationCustomRoleKey` (related to [roles and permissions](/docs/organizations/roles-permissions)). This TypeScript type can be found in such use cases:
@@ -361,7 +468,7 @@ If you’d like to keep the same behavior as you had with the single `navigate` 
 
 ### `@clerk/remix`
 
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. Reason is that this package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
+As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`.
 
 The `ClerkErrorBoundary` helper has been removed as it's no longer needed.
 
@@ -463,7 +570,7 @@ Here's the changed response shape in a before and after:
 
 Here are some more examples of this change.
 
-<Accordion titles={["sessions.getToken()", "signJwt, hasValidSignature, decodeJwt, verifyJwt, and verifyToken functions",]} heading="h5">
+<Accordion titles={["sessions.getToken()", "signJwt, hasValidSignature, decodeJwt, verifyJwt, and verifyToken functions"]} heading="h5">
   <AccordionPanel>
     ```diff
     - const jwtString = await clerkClient.sessions.getToken({
@@ -660,7 +767,7 @@ Some more niche use cases and their changes:
 
 #### `@clerk/chrome-extension`
 
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. Reason is that this package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
+As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
 
 - The `tokenCache` prop on `<ClerkProvider>` was renamed to `storageCache`.
 
@@ -682,13 +789,13 @@ As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood y
 
 #### `@clerk/clerk-expo`
 
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. Reason is that this package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
+As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
 
 If you're using the `navigate` prop on the `<ClerkProvider>` you'll need to [replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 
 #### `gatsby-plugin-clerk`
 
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. Reason is that this package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
+As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
 
 - If you're using the `navigate` prop on the `<ClerkProvider>` you'll need to [replace `navigate` with `routerPush` & `routerReplace`](#replace-navigate-with-router-push-router-replace)
 - The return type and shape of `withServerAuth` was changed from `ServerSideAuth` to `AuthObject`. `props.auth` now returns different values:
@@ -1070,7 +1177,51 @@ The `API_URL` export has changed from `https://api.clerk.dev` to `https://api.cl
 
 As mentioned in the [v5 announcement post](https://clerk.com/changelog/2024-01-16) Clerk's prebuilt components got a new look and UX. These changes may impact your style customization applied through the [`appearance` prop](/docs/components/customization/overview) or tokens for a [custom theme](/docs/components/customization/overview#create-a-custom-theme). Below you'll learn about the biggest changes and what to look out for.
 
-**TODO: More changes needed**
+<Callout type="info" >
+  You didn't customize Clerk's components and want to use the new design? Great! Then you don't need to do anything and can completely skip the instructions below.
+</Callout>
+
+#### New defaults
+
+**Note:** If you want your components to appear exactly as the Clerk team designed them you can skip this section.
+
+The default values of some [appearance variables](/docs/components/customization/variables) have changed which may impact your UI (if you are not already overriding them).
+
+- The default `colorPrimary` value changed from `#103FEF` to `#2F3037`. As the new color is a dark grey, the `colorPrimary` of the dark theme was changed to `#FFFFFF`.
+- The default `fontSize` value changed from `1rem` to `0.8125rem`
+- The default `fontWeight` values changed from `{ normal: 400, medium: 500, bold: 600 }` to `{ normal: 400, medium: 500, bold: 700 }`
+- Previously, the default value for `fontSmoothing` was `auto`. This value is now unset. If you want to pass a custom value to it, you can still do so.
+
+#### Changes to `elements`
+
+**Note:** If you're not using the [`elements` appearance property](/docs/components/customization/overview#use-custom-css-classes-to-style-clerk-components) you can skip this section.
+
+You're able to pass additional classes to Clerk component elements by using the `elements` property on `appearance`. Some keys have changed or have been completely removed. Clerk recommends using IntelliSense in your IDE to inspect the type of `appearance.elements`.
+
+Here are some more details on individual component changes.
+
+<Accordion titles={["<SignIn /> and <SignUp />", "<UserButton />", "<UserProfile /> and <OrganizationProfile />"]} heading="h5">
+  <AccordionPanel>
+    Change the appearance of these elements if it does not match the style of your application:
+
+    - `cardBox` (or `cl-cardBox` class). This element is the container of Clerk's cards.
+    - `footer`. The footer is now slightly darker than the card's content.
+  </AccordionPanel>
+  <AccordionPanel>
+    The `userButtonTrigger` now encapsulates the `avatarBox` which may impact the styling of your `<UserButton />`. If you have enabled multi-session handling you will also need to re-customize parts of the `<UserButton />` component.
+  </AccordionPanel>
+  <AccordionPanel>
+    Some content has moved from pages to inline cards and popovers. These pages are now shown inline and no major changes in appearance keys have taken place. Therefore most of your customizations should be preserved.
+
+    Accordions have been replaced by dropdowns, namely these menus have been moved from `<OrganizationProfile />` to `<UserProfile />`.
+  </AccordionPanel>
+</Accordion>
+
+#### Localization
+
+**Note:** If you're not using the [localization prop](/docs/components/customization/localization) you can skip this section.
+
+The `@clerk/localizations` package and the underlying structure has changed. Read the dedicated [localization upgrade guide](#clerk-localizations) to learn more.
 
 ## Deprecated
 

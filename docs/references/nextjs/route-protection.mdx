@@ -7,6 +7,9 @@ description: Learn how to protect the routes in your application
 
 Clerk offers you, the developer, any options to secure the routes in their applications, as well as easy ways to integrate role or permissions based checks. The opt-in nature of Clerk gives you flexibility in how you want to build you application.
 
+This guide will cover:
+- protecting routes from users who are not signed in
+- integrating your route protection with organization roles and permissions
 
 ## Core concepts
 
@@ -14,18 +17,59 @@ Clerk offers you, the developer, any options to secure the routes in their appli
 
 `clerkMiddleware()` provides opt-in protection for your routes. By default no routes will be protected. You will indicate what routes to protect through the Middleware, layouts or even per route/page. 
 
-### Intregration with Organizations and Roles
-
-`clerkMiddleware()` provides a new `auth().protect()` method that can be used when creating rules to protect pages. This will integrate with Organization role and permissions, allowing you to protect routes based on the permissions or roles a user has.
-
 ### Protect via Middleware, routes, pages, or a mixture of all three
 
 With the opt-in approach of `clerkMiddleware()` you are free to protect your routes and pages in the most conveniant way to you.
 
+### Intregration with Organizations and Roles
 
-## Middleware only
+`clerkMiddleware()` provides a new `auth().protect()` method that can be used when creating rules to protect pages. This will integrate with Organization role and permissions, allowing you to protect routes based on the permissions or roles a user has.
 
-Does your application have limited or straightforward route protection needs? Configuring your protection in Middleware and only Middleware could be the right choice for you. Perhaps your application is only available to signed in users, or most of your app is under the `/dashboard` route and only available for signed in users. In this case protecting from Middleware is a central location that enables this protection.
+
+## Ensure users are logged in to access a route
+
+### Protect using your Route's layout.tsx 
+
+You can use a `layout.tsx` file to protect the entire route, including all children. The following example would protect the entire `/dashboard` and require users to be signed into the application to access the route. 
+
+```tsx filename="app/src/dashboard/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout(
+  { children }: 
+  { children: React.ReactNode }
+) {
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+  return <>{children}</>
+}
+```
+
+### Protect a specific page
+
+You can protect a specific page using our auth() and its helper methods. 
+
+```tsx filename="app/src/subscribe/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+
+  return (
+    <>
+      <h1>Plan Subscription</h1>
+      <p>Subscribe to one of our plans, and get access to our service today!</p>
+    </>
+  );
+}
+```
+
+### Protect using Middleware
 
 The following will require users to be logged in to access the `/dashboard` route, and if they are not it will redirect to sign the sign-in route.
 
@@ -34,7 +78,7 @@ import { clerkMiddleware } from '@clerk/nextjs/server';
 
 export default clerkMiddleware(
   (auth, req) => {
-    if (  req.nextUrl.pathname.startsWith('/dashboard')) {
+    if ( req.nextUrl.pathname.startsWith('/dashboard')) {
       auth().protect();
     }
   }
@@ -43,6 +87,62 @@ export default clerkMiddleware(
 export const config = {
   matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
+```
+
+## Protect your routes using Organization roles or permissions
+
+
+### Protect a route using layout.tsx
+
+<CodeBlockTabs type="router" options={["protect()", "has()"]}>
+
+```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout(
+  { children }: 
+  { children: React.ReactNode }
+) {
+  const { userId } = auth().protect({ permission: "org:domains:delete"}, { redirectUrl: // PATHNAME})
+  return <>{children}</>
+}
+```
+
+```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  if (!auth().has({ role: "org:admin" })) {
+    redirect("/")
+  }
+  return <>{children}</>
+}
+```
+
+</CodeBlockTabs>
+
+
+
+### Page example
+
+```tsx filename="app/src/dashboard/manage-users/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+if (!auth().has({ role: "org:admin" })) {
+    return <p>You do not have permission to view this page.</p>
+  }
+
+  return (
+    <>
+      <h1>Manage Users</h1>
+      <p>Manage your users, invite new users or ban users</p>
+    </>
+  );
+}
 ```
 
 ## Middleware + layout or page
@@ -67,17 +167,9 @@ export const config = {
 };
 ```
 
-```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 
-export default async function HookLayout({ children }: { children: React.ReactNode }) {
-  if (!auth().has({ role: "org:admin" })) {
-    redirect("/")
-  }
-  return <>{children}</>
-}
-```
+
+
 
 ### Middleware + page example
 
@@ -97,60 +189,9 @@ export const config = {
 };
 ```
 
-```tsx filename="app/src/dashboard/manage-users/page.tsx" 
-import { auth } from '@clerk/nextjs/server'
-
-export default function Page() {
-
-if (!auth().has({ role: "org:admin" })) {
-    return <p>You do not have permission to view this page.</p>
-  }
-
-  return (
-    <>
-      <h1>Manage Users</h1>
-      <p>Manage your users, invite new users or ban users</p>
-    </>
-  );
-}
-```
 
 ## Layout or page only
 
 Since Clerk's `clerkMiddleware()` is purely opt-in, meaning if you don't add any specific protection to the Middleware all routes are by default public. This allows you to then enforce protections via only layouts or even pages and keep your protection logic scoped to that specific area it governs, in your application.
 
-
-### Layout example
-
-```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-
-export default async function HookLayout({ children }: { children: React.ReactNode }) {
-  if (!auth().has({ role: "org:admin" })) {
-    redirect("/")
-  }
-  return <>{children}</>
-}
-```
-
-### Page example
-
-```tsx filename="app/src/dashboard/manage-users/page.tsx" 
-import { auth } from '@clerk/nextjs/server'
-
-export default function Page() {
-
-if (!auth().has({ role: "org:admin" })) {
-    return <p>You do not have permission to view this page.</p>
-  }
-
-  return (
-    <>
-      <h1>Manage Users</h1>
-      <p>Manage your users, invite new users or ban users</p>
-    </>
-  );
-}
-```
 

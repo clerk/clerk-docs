@@ -166,7 +166,44 @@ As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood y
 
 A couple of subpath imports have been removed but functionality stayed the same.
 
-<Accordion titles={["@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]} heading="h4">
+<Accordion titles={["@clerk/nextjs/server", "@clerk/nextjs/errors", "@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]} heading="h4">
+  <AccordionPanel>
+    Previously these exports have been exported both from `@clerk/nextjs` and `@clerk/nextjs/server`. As of v5 they are only exported from the latter.
+
+    ```diff
+      import {
+        auth,
+        currentUser,
+        authMiddleware,
+        redirectToSignIn,
+        redirectToSignUp,
+        buildClerkProps,
+        verifyToken,
+        verifyJwt,
+        decodeJwt,
+        signJwt,
+        constants,
+        redirect,
+        createAuthenticateRequest,
+        createIsomorphicRequest,
+    - } from "@clerk/nextjs"
+    + } from "@clerk/nextjs/server"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    Exports related to errors are now under `@clerk/nextjs/errors`.
+
+    ```diff
+      import {
+        isClerkAPIResponseError,
+        isEmailLinkError,
+        isKnownError,
+        isMetamaskError,
+        EmailLinkErrorCode,
+    - } from "@clerk/nextjs"
+    + } from "@clerk/nextjs/errors"
+    ```
+  </AccordionPanel>
   <AccordionPanel>
     The `@clerk/nextjs` import will work with both the app and pages router.
 
@@ -178,7 +215,7 @@ A couple of subpath imports have been removed but functionality stayed the same.
     Some behavior may have changed between Clerk's beta and the stable release. Please check on your end if behavior stayed the same.
   </AccordionPanel>
   <AccordionPanel>
-    The top-level imports support SSR by default now.
+    The top-level exports support SSR by default now.
 
     ```diff
     - import { } from "@clerk/nextjs/ssr"
@@ -504,134 +541,16 @@ The `ClerkErrorBoundary` helper has been removed as it's no longer needed.
 - export const ErrorBoundary = ClerkErrorBoundary()
 ```
 
+If you used the default `Clerk` import, you'll need to use a named `createClerkClient` import.
+
+```diff
+- import Clerk from "@clerk/remix"
++ import { createClerkClient } from "@clerk/remix"
+```
+
 ### `@clerk/backend`
 
 If you're using an SDK based on React like `@clerk/nextjs` or `@clerk/remix` you can probably skip this section as most changes are already handled for you.
-
-#### Response payload
-
-<Callout type="warning">
-  Please take extra care in reading the instructions for the new response payload.
-</Callout>
-
-The response payload of **every** backend API request was changed. Instead of returning the data on success and throwing an error on failure, you'll receive this object:
-
-```ts
-type ClerkBackendApiResponse<T> =
-  | {
-      data: T;
-      errors: null;
-      totalCount?: number;
-    }
-  | {
-      data: null;
-      errors: Array<ClerkAPIError>;
-      totalCount?: never;
-      clerkTraceId?: string;
-      status?: number;
-      statusText?: string;
-    }
-```
-
-So on most requests you'll get back `{ data, errors }`. For requests that contain pagination information or where `data` is an array, you'll also receive `totalCount`. If an error happens, you'll get `errors` and in most cases also `clerkTraceId`, `status`, and `statusText`.
-
-<Callout type="warning" > 
-  You'll need to throw errors yourself as the `@clerk/backend` functions are not handling this for you anymore. See the examples below on how to do that. 
-</Callout>
-
-The new API looks like this:
-
-```ts
-// Single
-const { data, errors } = await clerkClient.users.getUser("")
-
-// Paginated response
-const {
-  data,
-  errors,
-  totalCount
-} = await clerkClient.organizations.getOrganizationList()
-```
-
-If you want to keep the old behavior, you can migrate your code to something like this:
-
-```ts
-import { createClerkClient } from "@clerk/backend"
-import { ClerkAPIResponseError } from "@clerk/shared/error"
-
-const clerkClient = createClerkClient({ secretKey: "" })
-
-const { 
-  data,
-  errors,
-  status,
-  statusText
-} = await clerkClient.users.getUser("")
-
-if (errors) {
-  throw new ClerkAPIResponseError(statusText, { data: errors, status })
-}
-```
-
-Here's the changed response shape in a before and after:
-
-```diff
-- const data = await clerkClient.users.getUser("")
-+ const { data } = await clerkClient.users.getUser("")
-
-- const data = await clerkClient.organizations.getOrganizationList()
-- const totalCount = data.length
-+ const {
-+  data,
-+  totalCount
-+ } = await clerkClient.organizations.getOrganizationList()
-```
-
-Here are some more examples of this change.
-
-<Accordion titles={["sessions.getToken()", "signJwt, hasValidSignature, decodeJwt, verifyJwt, and verifyToken functions"]} heading="h5">
-  <AccordionPanel>
-    ```diff
-    - const jwtString = await clerkClient.sessions.getToken({
-    -   template: "" 
-    - })
-    + const { data, errors } = await clerkClient.sessions.getToken({
-    +   template: "" 
-    + })
-    + const jwtString = data?.jwt
-    ```
-  </AccordionPanel>
-  <AccordionPanel>
-    Their `errors` array will only ever have one item so you can [destructure](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment) it directly.
-
-    ```js
-    import {
-      signJwt,
-      hasValidSignature,
-      decodeJwt,
-      verifyJwt
-    } from "@clerk/backend/jwt"
-    import { verifyToken } from "@clerk/backend"
-
-    const { data, errors: [error] } = await signJwt()
-    if (error) throw error
-
-    const { data, errors: [error] } = await hasValidSignature()
-    if (error) throw error
-
-    const { data, errors: [error] } = decodeJwt()
-    if (error) throw error
-
-    const { data, errors: [error] } = await verifyJwt()
-    if (error) throw error
-
-    const { data, errors: [error] } = await verifyToken()
-    if (error) throw error
-    ```
-  </AccordionPanel>
-</Accordion>
-
-#### Other `@clerk/backend` changes
 
 - The top level `Clerk` import was moved from a default export to a named `createClerkClient` export. It's a name change and functionality stayed the same.
 
@@ -810,36 +729,6 @@ As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood y
 #### `@clerk/clerk-expo`
 
 As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
-
-#### `gatsby-plugin-clerk`
-
-As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`. In most cases you probably only need to check if the [change in default routing behavior](#routing) affects you.
-
-The return type and shape of `withServerAuth` was changed from `ServerSideAuth` to `AuthObject`. `props.auth` now returns different values:
-
-```ts
-type V4 = {
-  sessionId: string | null;
-  userId: string | null;
-  actor: ActJWTClaim | null;
-  getToken: ServerGetToken;
-  claims: ClerkJWTClaims | null;
-}
-
-type V5 = {
-  sessionClaims: JwtPayload;
-  sessionId: string;
-  actor: ActClaim | undefined;
-  userId: string;
-  orgId: string | undefined;
-  orgRole: OrganizationCustomRoleKey | undefined;
-  orgSlug: string | undefined;
-  orgPermissions: Array<OrganizationCustomPermissionKey> | undefined;
-  getToken: ServerGetToken;
-  has: CheckAuthorizationWithCustomPermissions;
-  debug: AuthObjectDebug;
-}
-```
 
 #### `@clerk/localizations`
 
@@ -1173,6 +1062,21 @@ The [en-US localization object](https://github.com/clerk/javascript/blob/main/pa
     ```
 
 - The `request.auth` object type has changed from `LegacyAuthObject` to `AuthObject`
+- If you used the default `Clerk` import, you'll need to use a named `createClerkClient` import.
+
+    ```diff
+    - import Clerk from "@clerk/clerk-sdk-node"
+    + import { createClerkClient } from "@clerk/clerk-sdk-node"
+    ```
+
+#### `@clerk/fastify`
+
+If you used the default `Clerk` import, you'll need to use a named `createClerkClient` import.
+
+```diff
+- import Clerk from "@clerk/fastify"
++ import { createClerkClient } from "@clerk/fastify"
+```
 
 ### Common
 
@@ -1190,7 +1094,7 @@ As mentioned in the [v5 announcement post](https://clerk.com/changelog/2024-01-1
   You didn't customize Clerk's components and want to use the new design? Great! Then you don't need to do anything and can completely skip the instructions below.
 </Callout>
 
-#### New defaults
+#### New styling defaults
 
 **Note:** If you want your components to appear exactly as the Clerk team designed them you can skip this section.
 
@@ -1308,7 +1212,7 @@ The `apiKey` parameter was renamed to `secretKey`. You are using this with `crea
 
 You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
 
-<Accordion titles={["@clerk/backend", "@clerk/fastify", "gatsby-plugin-clerk", "@clerk/nextjs", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
+<Accordion titles={["@clerk/backend", "@clerk/fastify", "@clerk/nextjs", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
   <AccordionPanel>
     ```diff
     - import { Clerk } from "@clerk/backend"
@@ -1316,12 +1220,6 @@ You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?pat
 
     - const clerkClient = Clerk({ apiKey: "" })
     + const clerkClient = createClerkClient({ secretKey: "" })
-    ```
-  </AccordionPanel>
-  <AccordionPanel>
-    ```diff
-    - createClerkClient({ apiKey: "" })
-    + createClerkClient({ secretKey: "" })
     ```
   </AccordionPanel>
   <AccordionPanel>
@@ -1401,7 +1299,7 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
   The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
 </Callout>
 
-<Accordion titles={["@clerk/backend", "@clerk/clerk-js", "@clerk/clerk-expo", "@clerk/fastify", "gatsby-plugin-clerk", "@clerk/nextjs", "@clerk/clerk-react", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
+<Accordion titles={["@clerk/backend", "@clerk/clerk-js", "@clerk/clerk-expo", "@clerk/fastify", "@clerk/nextjs", "@clerk/clerk-react", "@clerk/remix", "@clerk/clerk-sdk-node"]} heading="h5">
   <AccordionPanel>
     To learn more about the new `createClerkClient` import, read the dedicated [`@clerk/backend`](#clerk-backend) section.
 
@@ -1413,7 +1311,6 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
     + const clerkClient = createClerkClient({ publishableKey: "" })
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - const clerkFrontendApi = "pk_[frontend_api]"
@@ -1432,14 +1329,12 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
     + s.setAttribute("data-clerk-publishable-key", clerkPublishableKey)
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - <ClerkProvider frontendApi="">
     + <ClerkProvider publishableKey="">
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - createClerkClient({ frontendApi: "" })
@@ -1451,14 +1346,6 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
     + fastify.register(clerkPlugin, { publishableKey: "" })
     ```
   </AccordionPanel>
-
-  <AccordionPanel>
-    ```diff
-    - createClerkClient({ frontendApi: "" })
-    + createClerkClient({ publishableKey: "" })
-    ```
-  </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - <ClerkProvider frontendApi="">
@@ -1475,14 +1362,12 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
     + export default clerkMiddleware({ publishableKey: "" })
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - <ClerkProvider frontendApi="">
     + <ClerkProvider publishableKey="">
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - <ClerkProvider frontendApi="">
@@ -1494,7 +1379,6 @@ The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should us
     + rootAuthLoader(args, { publishableKey: "" })
     ```
   </AccordionPanel>
-
   <AccordionPanel>
     ```diff
     - createClerkClient({ frontendApi: "" })
@@ -1584,7 +1468,7 @@ In v4 of Clerk's SDKs, if you decode the session token that Clerk returns from t
 
 The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where the `JwtPayload` could be found.
 
-<Accordion titles={["Next.js", "Fastify", "Gatsby", "@clerk/backend", "@clerk/clerk-sdk-node"]} heading="h5">
+<Accordion titles={["Next.js", "Fastify", "@clerk/backend", "@clerk/clerk-sdk-node"]} heading="h5">
   <AccordionPanel>
     ```typescript filename="Next.js"
     import { getAuth } from "@clerk/nextjs/server"
@@ -1598,11 +1482,6 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
     ```typescript filename="Fastify"
     import { getAuth } from "@clerk/fastify"
     const claims: JwtPayload = (await getAuth(request)).sessionClaims
-    ```
-  </AccordionPanel>
-  <AccordionPanel>
-    ```typescript filename="Gatsby"
-    const claims: JwtPayload = request.auth.sessionClaims
     ```
   </AccordionPanel>
   <AccordionPanel>

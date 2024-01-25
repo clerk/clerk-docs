@@ -1,0 +1,480 @@
+---
+title: Upgrading Next.js from v4 to v5
+description: Learn how to upgrade Clerk's Next.js SDK from v4 to v5.
+---
+
+# Upgrading Next.js from v4 to v5
+
+By the end of this guide, you’ll have successfully upgraded your Next.js project to use `@clerk/nextjs` v5. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations.
+
+Step-by-step instructions will lead you through the process. If you’re looking for a reference list of changes, check out the general [upgrading from v4 to v5 guide](/docs/upgrade-guides/upgrading-from-v4-to-v5).
+
+To aid you in this upgrade, Clerk built a CLI called [`@clerk/upgrade`](https://www.npmjs.com/package/@clerk/upgrade). Throughout this guide you'll see prompts to use the CLI which you can invoke directly in your terminal.
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npx @clerk/upgrade
+  ```
+
+  ```bash filename="terminal"
+  yarn dlx @clerk/upgrade
+  ```
+
+  ```bash filename="terminal"
+  pnpm dlx @clerk/upgrade
+  ```
+</CodeBlockTabs>
+
+## Prerequisites
+
+If you’re already meeting all these requirements, feel free to skip this section. If not, go through the steps to continue with the upgrade.
+
+1. Update Node.js
+
+    You need to have Node.js 18.17.0 or later installed. Last year Node.js 16 entered EOL (End of life) status so it's time to bump the required version for `@clerk/nextjs`, too. Learn how to [update and install Node.js](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs).
+
+1. Update React
+
+    `@clerk/nextjs` requires you to use React 18. You can update your project by installing the latest version of `react` and `react-dom`.
+        
+    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+      ```bash filename="terminal"
+      npm install react@latest react-dom@latest
+      ```
+
+      ```bash filename="terminal"
+      yarn add react@latest react-dom@latest
+      ```
+
+      ```bash filename="terminal"
+      pnpm add react@latest react-dom@latest
+      ```
+    </CodeBlockTabs>
+    
+1. Update Next.js
+    
+    You will need to update your Next.js project to 13.0.4 or later. Check out Next's upgrade guides:
+    
+    - [Upgrading from 12 to 13](https://nextjs.org/docs/pages/building-your-application/upgrading/version-13)
+    - [Upgrading from 13 to 14](https://nextjs.org/docs/app/building-your-application/upgrading/version-14)
+
+## Redesigned components
+
+v5 ships with improved design and UX on all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/components/customization/overview) or tokens for a [custom theme](/docs/components/customization/overview#create-a-custom-theme), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/components/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
+
+<Callout type="info" >
+  Use the `@clerk/upgrade` CLI to more quickly find changes required for the redesigned components.
+</Callout>
+
+Follow the instructions below to update your `appearance` prop and localization keys to the new structure.
+
+<Accordion titles={["Changes to appearance prop", "Changes to elements appearance property", "Changes to localization"]} heading="h3">
+  <AccordionPanel>
+    **Note:** If you want your components to appear exactly as the Clerk team designed them you can skip this section.
+
+    The default values of some [appearance variables](/docs/components/customization/variables) have changed which may impact your UI (if you are not already overriding them).
+
+    - The default `colorPrimary` value changed from `#103FEF` to `#2F3037`. As the new color is a dark grey, the `colorPrimary` of the dark theme was changed to `#FFFFFF`.
+    - The default `fontSize` value changed from `1rem` to `0.8125rem`
+    - The default `fontWeight` values changed from `{ normal: 400, medium: 500, bold: 600 }` to `{ normal: 400, medium: 500, bold: 700 }`
+    - Previously, the default value for `fontSmoothing` was `auto`. This value is now unset. If you want to pass a custom value to it, you can still do so.
+  </AccordionPanel>
+  <AccordionPanel>
+    **Note:** If you're not using the [`elements` appearance property](/docs/components/customization/overview#use-custom-css-classes-to-style-clerk-components) you can skip this section.
+
+    You're able to pass additional classes to Clerk component elements by using the `elements` property on `appearance`. Some keys have changed or have been completely removed. Clerk recommends using IntelliSense in your IDE to inspect the type of `appearance.elements`.
+
+    Here are some more details on individual component changes.
+
+    #### `<SignIn />` and `<SignUp />`
+
+    Change the appearance of these elements if it does not match the style of your application:
+
+    - `cardBox` (or `cl-cardBox` class). This element is the container of Clerk's cards.
+    - `footer`. The footer is now slightly darker than the card's content.
+
+    #### `<UserButton />`
+
+    The `userButtonTrigger` now encapsulates the `avatarBox` which may impact the styling of your `<UserButton />`. If you have enabled multi-session handling you will also need to re-customize parts of the `<UserButton />` component.
+
+    #### `<UserProfile />` and `<OrganizationProfile />`
+
+    Some content has moved from pages to inline cards and popovers. These pages are now shown inline and no major changes in appearance keys have taken place. Therefore most of your customizations should be preserved.
+
+    Accordions have been replaced by dropdowns, namely these menus have been moved from `<OrganizationProfile />` to `<UserProfile />`.
+  </AccordionPanel>
+  <AccordionPanel>
+    **Note:** If you're not using the [localization prop](/docs/components/customization/localization) you can skip this section.
+
+    The `@clerk/localizations` package and the underlying structure has changed. Read the dedicated [localization upgrade guide](/docs/upgrade-guides/upgrading-from-v4-to-v5#clerk-localizations) to learn more.
+  </AccordionPanel>
+</Accordion>
+
+## New default middleware
+
+Your feedback about Clerk's `authMiddleware()` was heard, so v5 comes with a completely new middleware helper called [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). It features:
+
+- By default it's not protecting any routes and you have to opt-in your routes to auth
+- It boasts a simpler API, giving you more control over your middleware logic and making it easier to combine it with other middleware helpers
+- Lastly, with the new [route protection](/docs/references/nextjs/route-protection) logic you can choose to protect your routes either through Next.js Middleware, placing auth logic into pages/layouts, or a mixture of both
+
+### Examples
+
+Here's an example of the new `clerkMiddleware()` inside `middleware.ts`.
+
+```ts filename="middleware.ts"
+import {
+  clerkMiddleware,
+  createRouteMatcher,
+} from "@clerk/nextjs/server"
+
+const isDashboardRoute = createRouteMatcher(["/dashboard(.*)"])
+const isAdminRoute = createRouteMatcher(["/admin"])
+
+export default clerkMiddleware((auth, req) => {
+  // Restrict admin route to users with specific role
+  if (isAdminRoute(req)) {
+    auth().protect((has) =>
+      has({ role: "org:admin" }),
+    )
+  }
+  // Restrict dashboard routes to logged in users
+  if (isDashboardRoute(req)) {
+    auth().protect()
+  }
+})
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+}
+```
+
+<Accordion titles={["Explanation of the code example above"]} heading="h4">
+  <AccordionPanel>
+    The `createRouteMatcher()` functions allows you to pass an array of routes and then check if the user's route matches one of the routes in the array. This allows you to protect multiple routes and control the order of checks yourself.
+
+    Inside the `clerkMiddleware` itself you can use `auth().protect()` to protect a route based on `role`, `permission`, or simply if the user is logged in.
+  </AccordionPanel>
+</Accordion>
+
+Alternatively, you could move the auth logic directly to your routes.
+
+- Add the `clerkMiddleware()` to `middleware.ts`
+
+    ```ts filename="middleware.ts"
+    import { clerkMiddleware } from '@clerk/nextjs/server'
+    
+    export default clerkMiddleware()
+    
+    export const config = {
+      matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+
+- Use the `auth().protect()` in layouts to protect routes.
+
+    ```ts filename="app/src/dashboard/layout.tsx"
+    import { auth } from '@clerk/nextjs/server'
+    
+    export default async function Layout(
+      { children }
+    ) {
+      if (!auth().userId) {
+        return auth().redirectToSignIn()
+      }
+
+      return <>{children}</>
+    }
+    ```
+
+    ```ts filename="app/src/admin/layout.tsx"
+    import { auth } from '@clerk/nextjs/server'
+    import { redirect } from 'next/navigation'
+    
+    export default async function Layout(
+      { children }
+    ) {
+      if (!auth().userId) {
+        return auth().redirectToSignIn()
+      }
+      if (!auth().has({ role: "org:admin" })) {
+        redirect("/")
+      }
+
+      return <>{children}</>
+    }
+    ```
+
+To learn more, check out the [`clerkMiddleware()` documentation](/docs/references/nextjs/clerk-middleware) and [route protection guide](/docs/references/nextjs/route-protection).
+
+### How to migrate
+
+TODO
+
+## Changes to top-level exports
+
+The top-level exports of `@clerk/nextjs` have changed to improve bundle size and tree-shaking efficiency. These changes have resulted in a ~75% reduction in build size for middleware bundles.
+
+<Callout type="info" >
+  Use the `@clerk/upgrade` CLI to find occurences of old imports.
+</Callout>
+
+<Accordion titles={["@clerk/nextjs/server", "@clerk/nextjs/errors", "@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]} heading="h4">
+  <AccordionPanel>
+    Previously these exports have been exported both from `@clerk/nextjs` and `@clerk/nextjs/server`. As of v5 they are only exported from the latter.
+
+    ```diff
+      import {
+        auth,
+        currentUser,
+        authMiddleware,
+        buildClerkProps,
+        verifyToken,
+        verifyJwt,
+        decodeJwt,
+        signJwt,
+        constants,
+        redirect,
+        createAuthenticateRequest,
+        createIsomorphicRequest,
+    - } from "@clerk/nextjs"
+    + } from "@clerk/nextjs/server"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    Exports related to errors are now under `@clerk/nextjs/errors`.
+
+    ```diff
+      import {
+        isClerkAPIResponseError,
+        isEmailLinkError,
+        isKnownError,
+        isMetamaskError,
+        EmailLinkErrorCode,
+    - } from "@clerk/nextjs"
+    + } from "@clerk/nextjs/errors"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    The `@clerk/nextjs` import will work with both the app and pages router.
+
+    ```diff
+    - import { } from "@clerk/nextjs/app-beta"
+    + import { } from "@clerk/nextjs"
+    ```
+
+    Some behavior may have changed between Clerk's beta and the stable release. Please check on your end if behavior stayed the same.
+  </AccordionPanel>
+  <AccordionPanel>
+    The top-level exports support SSR by default now.
+
+    ```diff
+    - import { } from "@clerk/nextjs/ssr"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```diff
+    - import { } from "@clerk/nextjs/edge-middleware"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    ```diff
+    - import { } from "@clerk/nextjs/edge-middlewarefiles"
+    + import { } from "@clerk/nextjs"
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    The `@clerk/nextjs/api` subpath was removed completely. It re-exported helpers from `@clerk/clerk-sdk-node` and its types. If you relied on these, import from `@clerk/clerk-sdk-node` directly instead.
+
+    ```diff
+      import type {
+        ClerkMiddleware,
+        ClerkMiddlewareOptions,
+        LooseAuthProp,
+        RequireAuthProp,
+        StrictAuthProp,
+        WithAuthProp
+    - } from "@clerk/nextjs/api"
+    + } from "@clerk/clerk-sdk-node"
+
+    - import { requireAuth, withAuth } from "@clerk/nextjs/api"
+    + import { requireAuth, withAuth } from "@clerk/clerk-sdk-node"
+    ```
+  </AccordionPanel>
+</Accordion>
+
+## Deprecation removals & housekeeping items
+
+A range of changes were made to `@clerk/nextjs` that are very unlikely to impact you. Most of these changes are removing formerly deprecated functions and properties. Clerk highly recommends using the `@clerk/upgrade` CLI to scan your codebase for these occurences. The CLI will give you instructions on how to resolve these deprecation removals and other required changes.
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npx @clerk/upgrade
+  ```
+
+  ```bash filename="terminal"
+  yarn dlx @clerk/upgrade
+  ```
+
+  ```bash filename="terminal"
+  pnpm dlx @clerk/upgrade
+  ```
+</CodeBlockTabs>
+
+Below you can find a full list of all the changes relevant to `@clerk/nextjs`. Read the general [upgrading from v4 to v5 guide](/docs/upgrade-guides/upgrading-from-v4-to-v5) to have an overview of all changes.
+
+<Accordion titles={["Environment variables", "Removed constants", "Renamed: apiKey", "Removed: frontendApi", "Renamed: Magic link", "withClerkMiddleware"]} heading="h3">
+  <AccordionPanel>
+    In recent versions Next.js enforced the convention that public environment variables should be prefixed with `NEXT_PUBLIC_`. This also applies to Clerk's environment variables.
+
+    - `CLERK_JS_VERSION` => `NEXT_PUBLIC_CLERK_JS_VERSION`
+    - `NEXT_PUBLIC_CLERK_JS` => `NEXT_PUBLIC_CLERK_JS_URL`
+  </AccordionPanel>
+  <AccordionPanel>
+    A couple of exported constants have been removed from `@clerk/nextjs` as you should use your defined environment variables instead.
+
+    Let's say you imported `API_URL` from `@clerk/nextjs`:
+
+    ```ts
+    import { API_URL } from "@clerk/nextjs"
+    ```
+
+    If you want to use it, set it in your environment variables as `CLERK_API_URL` and access it this way. Here's the whole changelog of converting the constants to environment variables:
+
+    - `API_URL` => `CLERK_API_URL`
+    - `API_VERSION` => `CLERK_API_VERSION`
+    - `CLERK_JS_URL` => `NEXT_PUBLIC_CLERK_JS_URL`
+    - `CLERK_JS_VERSION` => `NEXT_PUBLIC_CLERK_JS_VERSION`
+    - `DOMAIN` => `NEXT_PUBLIC_CLERK_DOMAIN`
+    - `IS_SATELLITE` => `NEXT_PUBLIC_CLERK_IS_SATELLITE`
+    - `PROXY_URL` => `NEXT_PUBLIC_CLERK_PROXY_URL`
+    - `PUBLISHABLE_KEY` => `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+    - `SECRET_KEY` => `CLERK_SECRET_KEY`
+    - `SIGN_IN_URL` => `NEXT_PUBLIC_CLERK_SIGN_IN_URL`
+    - `SIGN_UP_URL` => `NEXT_PUBLIC_CLERK_SIGN_UP_URL`
+  </AccordionPanel>
+  <AccordionPanel>
+    The `CLERK_API_KEY` environment variable was renamed to `CLERK_SECRET_KEY`. Make sure to update this in all environments (e.g. dev, staging, production).
+
+    The `apiKey` parameter was renamed to `secretKey`. You are using this with `createClerkClient` for example.
+
+    You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
+
+    ```diff
+    - import { authMiddleware } from "@clerk/nextjs"
+    + import { clerkMiddleware } from "@clerk/nextjs/server"
+
+    - export default authMiddleware({ apiKey: "" })
+    + export default clerkMiddleware({ secretKey: "" })
+    ```
+
+    ```diff
+    - createClerkClient({ apiKey: "" })
+    + createClerkClient({ secretKey: "" })
+    ```
+
+    ```diff
+    - getAuth(args, { apiKey: "" })
+    + getAuth(args, { secretKey: "" })
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    The `CLERK_FRONTEND_API` environment variable was removed. Use `CLERK_PUBLISHABLE_KEY` on your frontend instead. Make sure to update this in all environments (e.g. dev, staging, production).
+
+    The `frontendApi` prop passed to `<ClerkProvider>` was removed and you should use `publishableKey`. The function parameter was also renamed (you are using this with `createClerkClient` for example).
+
+    The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework.
+
+    ```diff
+    - <ClerkProvider frontendApi="">
+    + <ClerkProvider publishableKey="">
+    ```
+
+    To learn more about the new `clerkMiddleware` helper, read the dedicated [`clerkMiddleware` docs](/docs/references/nextjs/clerk-middleware).
+
+    ```diff
+    - import { authMiddleware } from "@clerk/nextjs"
+    + import { clerkMiddleware } from "@clerk/nextjs/server"
+
+    - export default authMiddleware({ frontendApi: "" })
+    + export default clerkMiddleware({ publishableKey: "" })
+    ```
+  </AccordionPanel>
+  <AccordionPanel>
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
+
+    Inside your code, change the following values:
+
+    - `handleMagicLinkVerification` => `handleEmailLinkVerification`
+    - `isMagicLinkError` => `isEmailLinkError`
+    - `MagicLinkError` => `EmailLinkError`
+    - `MagicLinkErrorCode` => `EmailLinkErrorCode`
+    - `useMagicLink` => `useEmailLink`
+    - `createMagicLinkFlow()` => `createEmailLinkFlow()`
+
+    Functionality stayed the same and only the name changed.
+  </AccordionPanel>
+  <AccordionPanel>
+    `withClerkMiddleware` has been removed. Use [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) instead. Here's an example of having all routes public except for everything under `/dashboard`.
+
+    Before:
+
+    ```ts filename="middleware.ts"
+    import { withClerkMiddleware } from "@clerk/nextjs/server"
+    import { getAuth } from "@clerk/nextjs/server"
+    import { NextResponse } from "next/server"
+    import type { NextRequest } from "next/server"
+
+    const publicPaths = ["/", "/sign-in*", "/sign-up*"]
+
+    const isPublic = (path: string) => {
+      return publicPaths.find((x) =>
+        path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
+      )
+    }
+
+    export default withClerkMiddleware((request: NextRequest) => {
+      if (isPublic(request.nextUrl.pathname)) {
+        return NextResponse.next();
+      }
+      const { userId } = getAuth(request)
+
+      if (!userId) { 
+        const signInUrl = new URL("/sign-in", request.url)
+        return NextResponse.redirect(signInUrl)
+      }
+      return NextResponse.next()
+    })
+
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+
+    After:
+
+    ```ts filename="middleware.ts"
+    import {
+      clerkMiddleware,
+      createRouteMatcher
+    } from "@clerk/nextjs/server"
+    import { NextResponse } from "next/server"
+
+    const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"])
+
+    export default clerkMiddleware((auth, request) => {
+      if (isProtectedRoute(request)) {
+        auth().protect()
+      }
+
+      return NextResponse.next()
+    })
+
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+  </AccordionPanel>
+</Accordion>

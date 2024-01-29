@@ -17,25 +17,11 @@ If you're curious about Clerk's approach to versioning and support, head to the 
 
 For most users we expect a smooth upgrade path as only a couple of changes will be required: [Update dependencies](#update-dependencies), run the `@clerk/upgrade` CLI, [update Clerk](#update-clerk), and handle any [breaking changes](#breaking-changes).
 
+If you're using **Next.js**, you can read a more streamlined [Upgrading Next.js from v4 to v5](/docs/upgrade-guides/upgrading-nextjs-from-v4-to-v5) guide.
+
 ## Handle deprecations
 
 Before uprading, Clerk highly recommends updating your packages to the latest v4 version. Some changes required for v5 can be applied incrementally to the latest v4, which should contribute to a smoother upgrading experience.
-
-You can use your package manager to find the possible upgrades:
-
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
-  npm outdated
-  ```
-
-  ```bash filename="terminal"
-  yarn upgrade-interactive
-  ```
-
-  ```bash filename="terminal"
-  pnpm update --interactive
-  ```
-</CodeBlockTabs>
 
 After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip some breaking changes for v5.
 
@@ -92,7 +78,7 @@ If you're using `@clerk/nextjs` you will need to update your Next.js project to 
 
 Update each Clerk dependency to the latest version using your package manager. Below you can find some snippets for popular SDKs.
 
-<Tabs type="v4-to-v5-sdk" items={["Next.js", "React", "Remix"]}>
+<Tabs type="v4-to-v5-sdk" items={["Next.js", "React", "Remix", "JavaScript", "Node.js"]}>
   <Tab>
     <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
       ```bash filename="terminal"
@@ -138,23 +124,37 @@ Update each Clerk dependency to the latest version using your package manager. B
       ```
     </CodeBlockTabs>
   </Tab>
+  <Tab>
+    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+      ```bash filename="terminal"
+      npm install @clerk/clerk-js@latest
+      ```
+
+      ```bash filename="terminal"
+      yarn add @clerk/clerk-js@latest
+      ```
+
+      ```bash filename="terminal"
+      pnpm add @clerk/clerk-js@latest
+      ```
+    </CodeBlockTabs>
+  </Tab>
+  <Tab>
+    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+      ```bash filename="terminal"
+      npm install @clerk/clerk-sdk-node@latest
+      ```
+
+      ```bash filename="terminal"
+      yarn add @clerk/clerk-sdk-node@latest
+      ```
+
+      ```bash filename="terminal"
+      pnpm add @clerk/clerk-sdk-node@latest
+      ```
+    </CodeBlockTabs>
+  </Tab>
 </Tabs>
-
-You can use your package manager to find more possible upgrades:
-
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
-  npm outdated
-  ```
-
-  ```bash filename="terminal"
-  yarn upgrade-interactive --latest
-  ```
-
-  ```bash filename="terminal"
-  pnpm update --interactive --latest
-  ```
-</CodeBlockTabs>
 
 ## Breaking Changes
 
@@ -163,6 +163,10 @@ This section explains breaking changes that were made across SDKs or only in ind
 ### `@clerk/nextjs`
 
 As this package uses [`@clerk/clerk-react`](#clerk-clerk-react) under the hood you _potentially_ have to take its changes into account, too. This package re-exports functions and components from `@clerk/clerk-react`.
+
+<Callout type="info" >
+  You can read a more streamlined guide at [Upgrading Next.js from v4 to v5](/docs/upgrade-guides/upgrading-nextjs-from-v4-to-v5).
+</Callout>
 
 A couple of subpath imports have been removed but functionality stayed the same.
 
@@ -1147,43 +1151,43 @@ The following deprecated features are no longer supported and documented. Please
 
 The [`authMiddleware`](/docs/references/nextjs/auth-middleware) API from `@clerk/nextjs` has been marked as deprecated. We highly recommend using [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) going forward. `clerkMiddleware` protects no routes by default and you need to add your individual routes you want to opt into protection. Here's an example of having all routes public except for everything under `/dashboard`.
 
-Before:
+<Tabs type="auth-middleware-before-and-after" items={["Before", "After"]}>
+  <Tab>
+    ```ts filename="middleware.ts"
+    import { authMiddleware } from "@clerk/nextjs"
 
-```ts filename="middleware.ts"
-import { authMiddleware } from "@clerk/nextjs"
+    export default authMiddleware({
+      publicRoutes: (req) => !req.url.includes("/dashboard"),
+    })
 
-export default authMiddleware({
-  publicRoutes: (req) => !req.url.includes("/dashboard"),
-})
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```ts filename="middleware.ts"
+    import {
+      clerkMiddleware,
+      createRouteMatcher
+    } from "@clerk/nextjs/server"
 
-export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-}
-```
+    const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"])
 
-After:
+    export default clerkMiddleware((auth, request) => {
+      if (isProtectedRoute(request)) {
+        auth().protect()
+      }
+    })
 
-```ts filename="middleware.ts"
-import {
-  clerkMiddleware,
-  createRouteMatcher
-} from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+  </Tab>
+</Tabs>
 
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"])
-
-export default clerkMiddleware((auth, request) => {
-  if (isProtectedRoute(request)) {
-    auth().protect()
-  }
-
-  return NextResponse.next()
-})
-
-export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-}
-```
+You can also read the [How to migrate](/docs/upgrade-guides/upgrading-nextjs-from-v4-to-v5#how-to-migrate) section of the Next.js upgrade guide for more examples.
 
 ## Previously deprecated features
 
@@ -1517,63 +1521,64 @@ If you would like to have your JWT return all of the user's organizations, you c
 
 `withClerkMiddleware` has been removed. Use [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) instead. Here's an example of having all routes public except for everything under `/dashboard`.
 
-Before:
+<Tabs type="with-clerk-middleware-before-and-after" items={["Before", "After"]}>
+  <Tab>
+    ```ts filename="middleware.ts"
+    import { withClerkMiddleware } from "@clerk/nextjs/server"
+    import { getAuth } from "@clerk/nextjs/server"
+    import { NextResponse } from "next/server"
+    import type { NextRequest } from "next/server"
 
-```ts filename="middleware.ts"
-import { withClerkMiddleware } from "@clerk/nextjs/server"
-import { getAuth } from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+    const publicPaths = ["/", "/sign-in*", "/sign-up*"]
 
-const publicPaths = ["/", "/sign-in*", "/sign-up*"]
+    const isPublic = (path: string) => {
+      return publicPaths.find((x) =>
+        path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
+      )
+    }
 
-const isPublic = (path: string) => {
-  return publicPaths.find((x) =>
-    path.match(new RegExp(`^${x}$`.replace("*$", "($|/)")))
-  )
-}
+    export default withClerkMiddleware((request: NextRequest) => {
+      if (isPublic(request.nextUrl.pathname)) {
+        return NextResponse.next();
+      }
+      const { userId } = getAuth(request)
 
-export default withClerkMiddleware((request: NextRequest) => {
-  if (isPublic(request.nextUrl.pathname)) {
-    return NextResponse.next();
-  }
-  const { userId } = getAuth(request)
+      if (!userId) { 
+        const signInUrl = new URL("/sign-in", request.url)
+        return NextResponse.redirect(signInUrl)
+      }
+      return NextResponse.next()
+    })
 
-  if (!userId) { 
-    const signInUrl = new URL("/sign-in", request.url)
-    return NextResponse.redirect(signInUrl)
-  }
-  return NextResponse.next()
-})
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```ts filename="middleware.ts"
+    import {
+      clerkMiddleware,
+      createRouteMatcher
+    } from "@clerk/nextjs/server"
+    import { NextResponse } from "next/server"
 
-export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-}
-```
+    const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"])
 
-After:
+    export default clerkMiddleware((auth, request) => {
+      if (isProtectedRoute(request)) {
+        auth().protect()
+      }
 
-```ts filename="middleware.ts"
-import {
-  clerkMiddleware,
-  createRouteMatcher
-} from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
+      return NextResponse.next()
+    })
 
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"])
-
-export default clerkMiddleware((auth, request) => {
-  if (isProtectedRoute(request)) {
-    auth().protect()
-  }
-
-  return NextResponse.next()
-})
-
-export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-}
-```
+    export const config = {
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ### `@clerk/clerk-react`
 

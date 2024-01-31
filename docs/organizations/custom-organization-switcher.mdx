@@ -7,62 +7,51 @@ description: Learn how to build a custom organization switcher using the useOrga
 
 If you need more control than what Clerk's prebuilt [`<OrganizationSwitcher />`](/docs/components/organization/organization-switcher) component provides, you can build your own organization switcher using the [`useOrganizationList()`](/docs/references/react/use-organization-list) hook.
 
-The following example shows how you can build an organization switcher in a Next.js application. It requires the installation of the [`react-select`](https://www.npmjs.com/package/react-select) package and the [`@emotion/react`](https://www.npmjs.com/package/@emotion/react) package. For your convenience, you can copy and paste the following into your terminal:
+The following example shows how you can build a custom organization switcher. For the sake of this guide, the example is written for Next.js App Router, but it is supported by any React meta framework, such as Remix or Gatsby. 
 
-<CodeBlockTabs type="terminal" options={["npm", "yarn", "pnpm"]}>
-```sh filename="terminal"
-npm i react-select @emotion/react
-```
+To get started, create a new file called `OrganizationSwitcher.tsx` and paste the following code into it. You can place this file anywhere in your project, but in this example, it is placed in a folder called `components`.
 
-```sh filename="terminal"
-yarn add react-select @emotion/react
-```
-
-```sh filename="terminal"
-pnpm add react-select @emotion/react
-```
-</CodeBlockTabs>
-
-Then, create a new file called `OrganizationSwitcher.jsx` and paste the following code into it. You can place this file anywhere in your project, but in this example, it is placed in a folder called `components`.
-
-```tsx filename="app/components/OrganizationSwitcher.jsx"
+```tsx filename="app/components/OrganizationSwitcher.tsx"
 "use client"
 
-import { useOrganization, useOrganizationList } from '@clerk/nextjs';
-import Select from 'react-select';
+import { useOrganizationList } from "@clerk/nextjs";
 
-function createOrganizationOptions(userMemberships) {
-  return userMemberships.data.map(({ organization }) => ({
-    value: organization.id,
-    label: organization.name
-  }));
-}
-
-export default function CustomOrganizationSwitcher() {
-  const { setActive, userMemberships, isLoaded } = useOrganizationList({
-    userMemberships: true,
+export const CustomOrganizationSwitcher = () => {
+  const { isLoaded, setActive, userMemberships } = useOrganizationList({
+    userMemberships: {
+      infinite: true,
+    },
   });
 
-  const { organization } = useOrganization();
-
   if (!isLoaded) {
-    return null;
-  }
-
-  const handleOrgChange = e => {
-    setActive({ organization: e.value });
-  };
-
-  if (!organization) {
-    return null;
+    return <>Loading</>;
   }
 
   return (
-    <Select
-      options={createOrganizationOptions(userMemberships)}
-      onChange={handleOrgChange}
-      value={{ value: organization.id, label: organization.name }}
-    />
+    <>
+      <h2>Custom Organization Switcher</h2>
+      <ul>
+        {userMemberships.data?.map((mem) => (
+          <li key={mem.id}>
+            <span>{mem.organization.name}</span>
+            <button
+              onClick={() => setActive({ organization: mem.organization.id })}
+            >
+              Select
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        disabled={!userMemberships.hasNextPage}
+        onClick={() => userMemberships.fetchNext()}
+      >
+        Load more organizations
+      </button>
+    </>
   );
-}
+};
 ```
+
+In this example, the `useOrganizationList()` hook is used to fetch `userMemberships`, which contains a `data` array of the user's organizations. The `data` array is paginated and will only return the first 10 results, so the `fetchNext()` method is used to load more organizations if they are available. For more information about the properties and methods available on the `userMemberships` object, visit the [`useOrganizationList()` reference page](https://clerk.com/docs/references/react/use-organization-list#paginated-resources).

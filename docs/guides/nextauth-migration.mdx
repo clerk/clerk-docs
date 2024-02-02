@@ -1,9 +1,9 @@
 ---
-title: Migrating from NextAuth.js
+title: Migrating to Clerk from NextAuth.js
 description: Migrating from NextAuth.js
 ---
 
-This guide shows how to migrate a NextAuth.js application to Clerk for authentication.
+This guide shows how to migrate an application using NextAuth.js to use Clerk for authentication.
 
 ## Install `@clerk/nextjs`
 
@@ -26,15 +26,15 @@ CLERK_SECRET_KEY=sk_test_••••••••••••••••••�
 
 ## Signing in
 
-**Account Portal**
+### Account Portal
 
 Account Portal is the fastest way to authenticate your app. It does not require you to build any authentication UI in your app, similar to the [default unbranded pages](https://next-auth.js.org/getting-started/rest-api#get-apiauthsignin) provided by NextAuth. [Read more about Account Portal](https://clerk.com/docs/account-portal/getting-started).
 
-To use the Account Portal, simply replace the links to the sign-in/sign-up pages with `<SignInButton>` or `<SignUpButton>`.
+To use the Account Portal, simply replace the links to the sign-in/sign-up pages with `[<SignInButton>](/docs/components/unstyled/sign-in-button)` or `[<SignUpButton>](/docs/components/unstyled/sign-out-button)`.
 
-**Self-hosted UI**
+### Self-hosted UI
 
-If you want sign-in and sign-up pages in your own application, you can use Clerk's pre-built components, or implement the UI yourself using Clerk's hooks.
+If you want sign-in and sign-up pages in your own application, you can use [Clerk's pre-built components](/docs/references/nextjs/custom-signup-signin-pages), or implement the UI yourself using [Clerk's hooks](/docs/custom-flows/overview).
 
 Add the following environment variables to define your sign-in, sign-up, and redirect URLs with Clerk.
 
@@ -64,9 +64,9 @@ For fully custom UI, replace the existing functionality with [appropriate custom
 
 ## Protecting your app
 
-**Provider**
+### Provider
 
-Replace `<SessionProvider session={session}>` with `<ClerkProvider {...pageProps}>` (or just `<ClerkProvider>` for App Router)
+Replace `<SessionProvider session={session}>` with `<ClerkProvider>` if you are using App Router or `<ClerkProvider {...pageProps}>` if you are using Pages Router.
 
 ```tsx
 // With NextAuth.js
@@ -99,7 +99,7 @@ export default function App({ Component, pageProps }) {
 }
 ```
 
-**Middleware**
+## Middleware
 
 Replace NextAuth middleware with clerkMiddleware, use `protectedRoutes` as needed.
 
@@ -137,11 +137,11 @@ export const config = {
 
 NextAuth's middleware always rejects unauthorized requests, and you might be using the Next.js middleware config to protect specific private routes. Clerk's middleware can run for your entire application and gives you fine-grained control over handling the authenticated state. In this snippet, `createRouteMatcher` is used to define routes that should be protected, and the callback function checks for protected routes and redirects the user to a sign in page.
 
-**Rendering**
+### Use Clerk's control components to control access
 
-To conditionally render UI when the user is signed in, wrap it with `<SignedIn>`
+To conditionally render UI when the user is signed in, wrap it with `[<SignedIn>](/docs/components/control/signed-in)`
 
-To conditionally render UI when the user is NOT signed in, wrap it with `<SignedOut>`
+To conditionally render UI when the user is NOT signed in, wrap it with `[<SignedOut>](/docs/components/control/signed-out)`
 
 ```tsx
 // With Clerk
@@ -156,7 +156,7 @@ To conditionally render UI when the user is NOT signed in, wrap it with `<Signed
 
 ## Reading user and session data
 
-Replace any `getServerSession(req, res, authOptions)` to `getAuth(req)` from Clerk.
+Replace any `getServerSession(req, res, authOptions)` to Clerk's `[auth(req)](/docs/references/nextjs/auth#auth)` if you are using App Router and `[getAuth(req)](/docs/references/nextjs/get-auth#get-auth)` if you are using Pages Router.
 
 ```tsx
 // With NextAuth.js
@@ -177,7 +177,7 @@ export async function getServerSideProps(context) {
 };
 ```
 
-Replace NextAuth's `useSession` with Clerk's `useAuth` (or `useUser` if you need the full user object)
+Replace NextAuth's `useSession` with Clerk's `[useAuth()](/docs/references/react/use-auth)` if you need basic authentication information or `[useUser](/docs/references/react/use-user)` if you need the full user object.
 
 ```tsx
 // With NextAuth.js
@@ -196,7 +196,9 @@ const { userId, sessionId, getToken } = useAuth();
 const { isSignedIn, user } = useUser();
 ```
 
-**User IDs as Foreign Keys**       
+### User IDs as Foreign Keys    
+
+#### Use Clerk's `externalId` field
 
 When you migrate user data from NextAuth's database to Clerk, Clerk generates new user IDs for each user. If you are using existing user IDs as foreign keys in your database (e.g. in a `user_id` column), you can save those IDs as the user's `externalId` in Clerk.
 
@@ -212,30 +214,28 @@ const { userId, sessionId, getToken } = useAuth();
 
 , you'll get the `externalId` for the migrated users, and the Clerk-generated ID for users who sign up after the migration.
 
+#### Update your database
+
 Alternatively, after the data migration, you can update all the user IDs stored in your database as a foreign key to the new Clerk user IDs.
 
-You can read more about user IDs and user data migration [here](https://github.com/clerk/migration-script).
+You can read more about user IDs and user data migration in the migration script [README](https://github.com/clerk/migration-script?tab=readme-ov-file#handling-the-foreign-key-constraint).
 
-## Production Config
+## Migrate users to a production instance
 
-Every Clerk application has a Development and a Production environment. Before you start migrating user data, you can enable Clerk's production environment and migrate your users directly onto the production instance.
+Every Clerk application has a Development and a Production instance. Before you start migrating user data, you will configure production instance and migrate your users directly into that instance.
 
 *You can migrate a small set of users on the development instance for testing/staging.*
 
-1. In the Clerk Dashboard, **create a production instance** for your application.
-2. Configure DNS settings as instructed
-3. Enable all the OAuth providers you have credentials for
-4. Copy the OAuth credentials from your environment to the Clerk Dashboard.
-5. Update the callback URLs in your OAuth applications on each respective service to the new URLs shown on the Clerk Dashboard.
+The [Deploying to Production](/docs/deployments/overview#deploying-to-production) page covers creating a production instance.
 
 ## Migrating User Data
 
 This walkthrough will help you move user data from your existing database to Clerk.
 
-T*o retain the user data in your database for easy querying, check out the documentation on [data synchronization with webhooks](https://clerk.com/docs/users/sync-data).*
+*To retain the user data in your database for easy querying, check out the documentation on [data synchronization with webhooks](https://clerk.com/docs/users/sync-data).*
 
-1. Separately, clone `github.com/clerk/migration-script`
-2. Create a `.env` file in the root with the `CLERK_SECRET_KEY` **of your production instance**.
+1. Clone `github.com/clerk/migration-script`
+2. Create a `.env` file in the root of the cloned repository with the `CLERK_SECRET_KEY` **of your production instance**.
 3. Export all the user data from your database into a users.json file
     1. The file should be in the format described in the migration script readme and sample.
     2. If you already have an API endpoint that returns a list of users you could use that.

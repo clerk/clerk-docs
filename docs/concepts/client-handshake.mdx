@@ -1,6 +1,6 @@
 ---
 title: Client handshake
-description: The client handshake is a mechanism that is used to resolve a request’s authentication state from “unknown” to definitively signed in or signed out.
+description: The client handshake is a mechanism that is used to resolve a request's authentication state from “unknown” to definitively signed in or signed out.
 type: conceptual
 ---
 
@@ -10,7 +10,7 @@ type: conceptual
   This flow applies only to website browser traffic and not native applications.
 </Callout>
 
-Clerk uses a mechanism called "the client handshake" to resolve a request’s authentication state from unknown (`handshake`) to `signed-in` or `signed-out`. Clerk’s session management architecture relies on a short-lived session JWT to validate requests, along with a long-lived session that keeps the session JWT fresh by interacting with the Frontend API (FAPI) while the web application is active. The long-lived session token is stored in an HttpOnly cookie associated with the Frontend API domain. If a short-lived session JWT is expired on a request to an application’s backend, the SDK doesn’t know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers the handshake.
+Clerk uses a mechanism called "the client handshake" to resolve a request's authentication state from unknown (`handshake`) to `signed-in` or `signed-out`. Clerk's session management architecture relies on a short-lived session JWT to validate requests, along with a long-lived session that keeps the session JWT fresh by interacting with the Frontend API (FAPI) while the web application is active. The long-lived session token is stored in an HttpOnly cookie associated with the Frontend API domain. If a short-lived session JWT is expired on a request to an application's backend, the SDK doesn't know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers the handshake.
 
 With the handshake, we can resolve authentication state on the backend and ensure the request is properly handled as signed in or out, instead of being in a potentially “unknown” state. The handshake flow relies on redirects to exchange session information between FAPI and the application, ensuring the resolution of unknown authentication states minimizes performance impact and behaves consistently across different framework and language implementations.
 
@@ -54,8 +54,17 @@ The handshake flow is composed of two main pieces:
 
 ### Handshake payload for `/client/handshake` endpoint
 
-The handshake payload is a signed JWT that contains an array of `set-cookie` header directives. This allows us to transfer cookies from the FAPI domain to the application’s domain across environments without additional cookie setting logic embedded into our SDKs. In development, the payload is transported in the URL in a `__clerk_handshake` query parameter. In production, the payload is transported in a `__clerk_handshake` cookie. On returning from the handshake endpoint, the handshake payload is parsed and the cookie directives are set on the final response.
+The handshake payload is a signed JWT that contains an array of `set-cookie` header directives. This allows us to transfer cookies from the FAPI domain to the application's domain across environments without additional cookie setting logic embedded into our SDKs. In development, the payload is transported in the URL in a `__clerk_handshake` query parameter. In production, the payload is transported in a `__clerk_handshake` cookie. On returning from the handshake endpoint, the handshake payload is parsed and the cookie directives are set on the final response.
 
-{/* TODO: Bryce to add an example of a handshake payload */}
+Below is an example of a handshake payload:
+
+```json
+  "handshake": [
+    "__client_uat=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "__clerk_handshake=; Path=/; Domain=example.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "__client_uat=1706822359; Path=/; Domain=example.com; Max-Age=315360000; Secure; SameSite=Lax",
+    "__session=<...CLERK_SESSION_JWT...>; Path=/; Expires=Wed, 05 Feb 2025 09:08:53 GMT; Secure"
+  ]
+```
 
 To verify the handshake payload JWT, use the instance [public RSA key](https://clerk.com/docs/reference/frontend-api/tag/Well-Known#operation/GetJWKS).

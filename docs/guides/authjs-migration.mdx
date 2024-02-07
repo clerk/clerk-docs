@@ -141,7 +141,9 @@ You will need to remove the Auth.js Middleware from your application, and replac
 
 Remove the Auth.js Middleware and replace it with Clerk's `authMiddleware()`.
 
-The example below is the starting Middleware configuration. Please read the [`authMiddleware()`](/docs/references/nextjs/auth-middleware) documentation to learn how to configuration your Middleware. Clerk's Middleware will, by default, run for your entire application and gives you fine-grained control over handling the authenticated state. 
+Clerk's Middleware gives you fine-grained control over handling the authenticated state and will, by default, run for your entire application. 
+
+The example below is a basic configuration that protects all routes. You will need to edit this to allow specific routes to be public as needed. Read the [`authMiddleware()`](/docs/references/nextjs/auth-middleware) documentation to learn more about how you can configure your Middleware.
 
 ```tsx filename="middleware.ts"
 import { authMiddleware } from "@clerk/nextjs";
@@ -160,7 +162,7 @@ export const config = {
 
 To conditionally render UI when the user is signed in, wrap it with [`<SignedIn>`](/docs/components/control/signed-in).
 
-To conditionally render UI when the user is NOT signed in, wrap it with [`<SignedOut>`](/docs/components/control/signed-out).
+To conditionally render UI when the user is _not_ signed in, wrap it with [`<SignedOut>`](/docs/components/control/signed-out).
 
 ```tsx filename="app/page.tsx"
 import { SignedIn, SignedOut } from "@clerk/nextjs";
@@ -183,13 +185,15 @@ export default function Home() {
 
 #### Server side
 
-Replace any `getServerSession(req, res, authOptions)` with Clerk's helpers.
+Replace any Auth.js `getServerSession(req, res, authOptions)` with Clerk's helpers.
+
+Let's see what your code might look like with Auth.js's `getServerSession()`:
 
 ```tsx filename="app/page.tsx"
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 
-export default function Home() {
+export default function Page() {
   const data = await getServerSession(authOptions);
   console.log(data)
 
@@ -230,7 +234,9 @@ export async function getServerSideProps(context) {
 
 #### Client Side
 
-Replace Auth's `useSession` with Clerk's hooks.
+Replace Auth.js's `useSession()` hook with Clerk's hooks.
+
+Let's see what your code might look like with Auth.js's `useSession()`:
 
 ```tsx filename="app/page.tsx"
 'use client'
@@ -246,7 +252,9 @@ export default function Home() {
 }
 ```
 
-Use [`useAuth()`](/docs/references/react/use-auth) if you need basic authentication information or [`useUser()`](/docs/references/react/use-user) if you need the full user object.
+Clerk's [`useAuth()`](/docs/references/react/use-auth) hook can be used to retrieve basic authentication information. Clerk's [`useUser()`](/docs/references/react/use-user) hook can be used to retrieve the full [`User`](https://clerk.com/docs/references/javascript/user/user#user) object, which includes information about the user, such as their first name, emails, phone numbers, and more.
+
+Let's see what your code might look like when you replace Auth.js's `useSession()` hook with Clerk's hooks:
 
 ```tsx filename="app/page.tsx"
 'use client'
@@ -265,7 +273,10 @@ export default function Home() {
 
 ### User IDs as Foreign Keys  
 
-When you migrate to Clerk, you will likely need to resolve the foreign key that you used in your database. If you used the `userId` from NextAuth.js, you could resolve this issue with one of the two following options.
+When you migrate to Clerk, you will likely need to resolve the foreign key that you used in your database. If you used the `userId` from NextAuth.js, you could resolve this issue with one of the following two options:
+
+- [Use Clerk's `externalId` field](#use-clerk-s-external-id-field)
+- Update your Auth.js database(#update-your-auth-js-database)
 
 #### Use Clerk's `externalId` field
 
@@ -295,7 +306,7 @@ export default async function Page() {
 ```
 
 <Callout type="info">
-You can not access the above from the client side. If you are using one of Clerk's hooks then you will need to check if `externalID` exists and if not then read the `userId`. 
+You can not access the above from the client side. If you are using one of Clerk's hooks, then you will need to check if `externalID` exists. If it doesn't, then read the `userId`. 
 </Callout>
 
 #### Update your database
@@ -304,21 +315,21 @@ Alternatively, after the data migration, you can update all the user IDs stored 
 
 You can read more about user IDs and user data migration in the [Migration Script README](https://github.com/clerk/migration-script?tab=readme-ov-file#handling-the-foreign-key-constraint).
 
-### Create a production instance
+### Create a Clerk production instance
 
-Every Clerk application has a Development and a Production instance. Before you start migrating user data, you will configure production instance and migrate your users directly into that instance. The [Deploying to Production](/docs/deployments/overview#deploying-to-production) page covers creating a production instance.
+Every Clerk application has a `Development` and a `Production` instance. Before you start migrating user data, you need to configure your Clerk `Production` instance and migrate your Auth.js users directly into that instance. The [Deploying to Production](/docs/deployments/overview#deploying-to-production) page covers creating a `Production` instance.
 
-You can migrate a small set of users on the development instance for testing/staging. To enable importing users to your development instance, add `IMPORT_TO_DEV_INSTANCE=true` to the `.env` for the migration script.
+You can migrate a small set of users on the `Development` instance for testing/staging. To enable importing users to your `Development` instance, add `IMPORT_TO_DEV_INSTANCE=true` to the `.env` for the migration script.
 
-### Migrate User Data
+### Migrate user data from Auth.js to Clerk
 
 This walkthrough will help you move user data from your existing database to Clerk.
 
 To retain the user data in your database for easy querying, check out the documentation on [data synchronization with webhooks](/docs/users/sync-data).
 
 1. Clone `github.com/clerk/migration-script`
-2. Create a `.env` file in the root of the cloned repository with the `CLERK_SECRET_KEY` **of your production instance**.
-3. Export all the user data from your database into a users.json file. The file should be in the following format.
+2. Create a `.env` file in the root of the cloned repository with the `CLERK_SECRET_KEY` **of your `Production` instance**.
+3. Export all the user data from your database into a `users.json` file. The file should be in the following format:
 ```json filename="users.json"
 [
   {
@@ -331,7 +342,9 @@ To retain the user data in your database for easy querying, check out the docume
   }
 ]
 ```
-4. If you already have an API endpoint in your Auth.js app that returns a list of users you could use that. Otherwise you will need to query your database to obtain the user information, or use an export function from a database management tool.
+4. If you already have an API endpoint in your Auth.js app that returns a list of users, you can use that. Otherwise, you will need to query your database to obtain the user information, or use an export function from a database management tool.
+
+The example below is a SQL query that would return the user information in the correct format for the migration script.
     
 ```sql
   SELECT id as userId, email, name FROM users
@@ -342,7 +355,7 @@ To retain the user data in your database for easy querying, check out the docume
 7. Verify by signing in to your application secured by Clerk, and by checking the users listed in the [Users](https://dashboard.clerk.com/last-active?path=users) section of the Clerk Dashboard.
 9. Check for an error log for any users that were not migrated successfully.
 
-### Further Support
+### Finding further support for migrating from Auth.js to Clerk
 
 This guide covers the most common steps that you would take for the migration. If you have more complex integrations with Auth that are not covered here, don't hesitate to hop into the Clerk discord and open a support question.
 

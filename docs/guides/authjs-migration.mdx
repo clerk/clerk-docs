@@ -64,7 +64,7 @@ pnpm add @clerk/nextjs
 
 Add the following code to your `.env.local` file to set your public and secret keys.
 
-Pro tip! If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys), your secret key should become visible by clicking on the eye icon.
+**Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys), your secret key should become visible by clicking on the eye icon.
 
 <InjectKeys>
 
@@ -81,7 +81,7 @@ You will need to remove the `<SessionProvider session={session}>` provider from 
 
 <CodeBlockTabs type="installer" options={["App Router", "Pages Router"]}>
 
-```tsx filename="app/layout.tsx" {1,10,13}
+```tsx filename="app/layout.tsx" {1,10,14}
 import { ClerkProvider } from '@clerk/nextjs'
 import './globals.css'
  
@@ -137,13 +137,13 @@ With Clerk, you can control access to your application in a few different ways. 
 
 #### Control access to your app with Clerk Middleware
 
-You will need to remove the Auth.js Middleware from your application, and replace it with the Clerk Middleware helper. Auth.js's middleware always rejects unauthorized requests. You may have additionally configured the Next.js middleware config to protect specific private routes. You will need to make note of this configuration so you can recreate it.
+You will need to remove the Auth.js Middleware from your application, and replace it with the Clerk's Middleware helper, `authMiddleware()`. 
 
-Remove the Auth.js Middleware and replace it with Clerk's `authMiddleware()`.
+Auth.js's middleware always rejects unauthorized requests. You may have additionally configured the Next.js middleware config to protect specific private routes. You will need to make note of this configuration so you can recreate it.
 
-Clerk's Middleware gives you fine-grained control over handling the authenticated state and will, by default, run for your entire application. 
+Clerk's Middleware gives you fine-grained control over handling the authenticated state and will, by default, run for your entire application.
 
-The example below is a basic configuration that protects all routes. You will need to edit this to allow specific routes to be public as needed. Read the [`authMiddleware()`](/docs/references/nextjs/auth-middleware) documentation to learn more about how you can configure your Middleware.
+The example below is a basic configuration that requires authentication for all routes. You will need to edit this to allow specific routes to be public, as needed. Read the [`authMiddleware()`](/docs/references/nextjs/auth-middleware) documentation to learn more about how you can configure your Middleware.
 
 ```tsx filename="middleware.ts"
 import { authMiddleware } from "@clerk/nextjs";
@@ -158,7 +158,7 @@ export const config = {
 };
 ```
 
-3. Control access to your app with Clerk's components
+#### Control access to your app with Clerk's components
 
 To conditionally render UI when the user is signed in, wrap it with [`<SignedIn>`](/docs/components/control/signed-in).
 
@@ -206,31 +206,34 @@ export default function Page() {
 Now let's see what your code should look like when replacing `getServerSession` with Clerk's helpers:
 
 <Tabs type="installer" items={["App Router", "Pages Router"]}>
-<Tab>
-You can replace Auth.js's `setServerSession` with Clerk's [`auth()`](/docs/references/nextjs/auth#auth) helper in order to read your user data.
-```tsx failename="app/page.tsx"
-import { auth, currentUser } from "@clerk/nextjs";
- 
-export default async function Page() {
- 
-  const { userId } = auth();
-  console.log(userId)
-  return (
-    <p>Home Page</p>
-  )
-}
-```
-</Tab>
-<Tab>
-You can replace Auth.js's `setServerSession` with Clerk's [`getAuth()`](/docs/references/nextjs/get-auth#get-auth) helper in order to read your user data.
-```tsx filename="pages/index.tsx"
-export async function getServerSideProps(context) {
-  const session = getAuth(context.req);
-	
-	return { props: { ...buildClerkProps(ctx.req) } };
-};
-```
-</Tab>
+  <Tab>
+  You can replace Auth.js's `setServerSession` with Clerk's [`auth()`](/docs/references/nextjs/auth#auth) helper in order to read your user data.
+
+  ```tsx failename="app/page.tsx"
+  import { auth, currentUser } from "@clerk/nextjs";
+  
+  export default async function Page() {
+    const { userId } = auth();
+    console.log(userId)
+    
+    return (
+      <p>Home Page</p>
+    )
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  You can replace Auth.js's `setServerSession` with Clerk's [`getAuth()`](/docs/references/nextjs/get-auth#get-auth) helper in order to read your user data.
+
+  ```tsx filename="pages/index.tsx"
+  export async function getServerSideProps(context) {
+    const session = getAuth(context.req);
+    
+    return { props: { ...buildClerkProps(ctx.req) } };
+  };
+  ```
+  </Tab>
 </Tabs>
 
 #### Client Side
@@ -277,7 +280,7 @@ export default function Home() {
 When you migrate to Clerk, you will likely need to resolve the foreign key that you used in your database. If you used the `userId` from NextAuth.js, you could resolve this issue with one of the following two options:
 
 - [Use Clerk's `externalId` field](#use-clerk-s-external-id-field)
-- Update your Auth.js database(#update-your-auth-js-database)
+- [Update your Auth.js database](#update-your-auth-js-database)
 
 #### Use Clerk's `externalId` field
 
@@ -290,49 +293,48 @@ When you migrate user data from Auth.js to Clerk, Clerk generates new user IDs f
 ``` 
 
 <Tabs type="router" items={["App Router", "Pages Router"]}>
-<Tab>
-To access the `userId` from the session claims, you can use the `auth()` helper.
+  <Tab>
+  To access the `userId` from the session claims, you can use the `auth()` helper.
 
-```tsx filename="app/page.tsx"
-import { auth } from "@clerk/nextjs";
- 
-export default async function Page() {
- 
-  const { sessionClaims: { userId } } = auth()
-  console.log(userId)
+  ```tsx filename="app/page.tsx"
+  import { auth } from "@clerk/nextjs";
+  
+  export default async function Page() {
+    const { sessionClaims: { userId } } = auth()
+    console.log(userId)
 
-  return (
-    <p>Home Page</p>
-  )
+    return (
+      <p>Home Page</p>
+    )
 
-}
-```
-</Tab>
-
-<Tab>
-To access the `userId` from the session claims, you can use the `getAuth()` helper.
-```tsx filename="pages/index.tsx"
-import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
-import { GetServerSideProps } from "next";
- 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const { userId } = getAuth(ctx.req);
- 
-  if (!userId) {
-    // handle user is not logged in.
   }
- 
-  const { sessionClaims: { userId } } = getAuth(req)
-  console.log(userId)
- 
-  return { props: { ...buildClerkProps(ctx.req) } };
-};
-```
-</Tab>
+  ```
+  </Tab>
+
+  <Tab>
+  To access the `userId` from the session claims, you can use the `getAuth()` helper.
+  ```tsx filename="pages/index.tsx"
+  import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
+  import { GetServerSideProps } from "next";
+  
+  export const getServerSideProps: GetServerSideProps = async (ctx) => {
+    const { userId } = getAuth(ctx.req);
+  
+    if (!userId) {
+      // handle user is not logged in.
+    }
+  
+    const { sessionClaims: { userId } } = getAuth(req)
+    console.log(userId)
+  
+    return { props: { ...buildClerkProps(ctx.req) } };
+  };
+  ```
+  </Tab>
 </Tabs>
 
 <Callout type="info">
-You can not access the above from the client side. If you are using one of Clerk's hooks, then you will need to check if `externalID` exists. If it doesn't, then read the `userId`. 
+  You can not access the above from the client side. If you are using one of Clerk's hooks, then you will need to check if `externalID` exists. If it doesn't, then read the `userId`. 
 </Callout>
 
 #### Update your database

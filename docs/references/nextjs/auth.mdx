@@ -11,7 +11,40 @@ The `auth()` helper does require [Middleware](/docs/references/nextjs/auth-middl
 
 A Route Handler added to [`publicRoutes`](/docs/references/nextjs/auth-middleware#making-pages-public-using-public-routes) can still use the [`auth()`](/docs/references/nextjs/auth) helper to return information about the user or their authentication state, or to control access to some or all of the Route Handler.
 
-## Retrieving userId
+## Return type of `auth()`
+
+`auth()` returns the [`Authentication`](/docs/references/nextjs/authentication-object) object with a few extra properties:
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `protect` | Function | Accepts a permission or a role key or a function with `has` as the first parameter. It will throw a `notFound` Next.js error if the user is unauthorized. Otherwise, it returns an `Authentication` object. |
+| `redirectToSignIn` | <code>(params?: [RedirectToParams](#redirect-to-params)) => ReturnType</code> | Redirects the user to the sign-in page. |
+
+### `protect()`
+
+You can use the `protect()` helper to check if a user is authorized to access a component. It will return the `Authentication` object if the user is authorized. If the user is not authorized, it will throw a `notFound` Next.js error.
+
+<Callout type="warning">
+  `auth().protect()` only works for App Router and is considered experimental.
+</Callout>
+
+`protect()` accepts the following parameters:
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `role` | `string` | The role to check for. |
+| `permission` | `string` | The permission to check for. |
+| `has` | <code>(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions) => boolean</code> | A function that returns a boolean based on the permission or role provided as parameter. Can be used for authorization. See the dedicated [`has()`](/docs/references/nextjs/authentication-object#has) section for more information. |
+
+### `RedirectToParams`
+
+Parameter for `redirectToSignIn`, a method accessible on the `auth()` helper.
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `returnBackUrl?` | `string \| URL` | The URL to redirect the user back to after they sign in. |
+
+## Retrieve `userId`
 
 ```tsx filename="app/page.[jsx/tsx]"
 import { auth } from '@clerk/nextjs';
@@ -32,37 +65,44 @@ import { auth } from '@clerk/nextjs';
 
 export async function GET() {
   const {userId, getToken} = auth();
+
   if(!userId){
     return new Response("Unauthorized", { status: 401 });
   }
+
   const token = await getToken({template: "supabase"});
-  // Fetch data from Supabase and return it.
+
+  // Add logic here to fetch data from Supabase and return it.
+  
   const data = { supabaseData: 'Hello World' };
+  
   return NextResponse.json({ data });
 }
 ```
 
-## Authorization
+## Authorization with `has()`
 
-Use `has` in order to check if a user is authorized to access a component.
+Use the [`has()`](/docs/references/nextjs/authentication-object#has) helper in order to check if a user is authorized to access a component.
 
-```tsx filename="app/page.[jsx/tsx]"
+```tsx filename="app/page.tsx"
 import { auth } from '@clerk/nextjs';
 
 export default async function Page() {
   const { has } = auth();
 
-  const canManage = has({permission:"org:team_settings:manage"});
+  const canManage = has({ permission:"org:team_settings:manage" });
 
   if(!canManage) return null;  
 
-  return <h1v>Team Settings</h1>
+  return <h1>Team Settings</h1>
 }
 ```
 
-## Authorization with `protect`
+## Authorization with `protect()`
 
-<Callout type="warning" emoji="⚠️">
+Use the [`protect()`](#protect) helper to check if a user is authorized to access a component.
+
+<Callout type="warning">
   `auth().protect()` only works for App Router and is considered experimental.
 </Callout>
 
@@ -70,12 +110,11 @@ export default async function Page() {
 import { auth } from "@clerk/nextjs";
 
 export const POST = () => {
-  const { userId } = auth().protect({permission: "org:team_settings:manage"});
+  const { userId } = auth().protect({ permission: "org:team_settings:manage" });
 
   return users.createTeam(userId);
 }
 ```
-
 
 ## Check your current user's role
 
@@ -93,14 +132,3 @@ export default async function Page() {
   )
 }
 ```
-
-
-## Return type of `auth`
-
-`auth` returns the [`Authentication`](/docs/references/nextjs/authentication-object) object with a few extra properties.
-
-### Properties
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `protect` | Function | Accepts a permission or a role key or a function with `has` as the first parameter. It will throw a `notFound` Next.js error if the user is unauthorized. Otherwise, it returns an `Authentication` object. |

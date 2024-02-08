@@ -5,68 +5,86 @@ decription: Add a new email address to the user's account, including verifying t
 
 # Add Email to Account
 
-
+Adding a new email and verifying it for a user requires the following 4 steps:
+1. Add the email to the user's account as unverified.
+2. Load the `emailAddress` object for the new email
+3. Use the `prepateVerification` method to send a verification email
+4. Verify that the user received the email
 
 ```tsx filename="app/add-email/page.tsx"
 'use client';
 
-import * as React from 'react'
+import * as React from 'react';
 import { useUser } from '@clerk/nextjs';
-import { Title } from '@/components/ui/title';
 import { EmailAddressResource } from '@clerk/types';
 
 export default function Page() {
-  const { isLoaded, user } = useUser()
-  const [email, setEmail] = React.useState("")
-  const [code, setCode] = React.useState("")
-  const [isVerifying, setIsVerifying] = React.useState(false)
-  const [successful, setSuccessful] = React.useState(false)
-  const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+  const { isLoaded, user } = useUser();
+  const [email, setEmail] = React.useState('');
+  const [code, setCode] = React.useState('');
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [successful, setSuccessful] = React.useState(false);
+  const [emailObj, setEmailObj] = React.useState<
+    EmailAddressResource | undefined
+  >();
 
-  if (!isLoaded || !user) return null
+  if (!isLoaded || !user) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
+    // Add the new email to the user
+    // Filter user.emailAddresses to get the object for the new email
+    // Send the verification email -- this example uses a OTP code
     try {
-      const res = await user.createEmailAddress({ email })
-      await user.reload()
-      const emailAddress = user.emailAddresses.find(a => a.id === res.id);
-      setEmailObj(emailAddress)
-      emailAddress?.prepareVerification({ strategy: "email_code" })
-      setIsVerifying(true)
+      const res = await user.createEmailAddress({ email });
+      await user.reload();
+      const emailAddress = user.emailAddresses.find((a) => a.id === res.id);
+      setEmailObj(emailAddress);
+      emailAddress?.prepareVerification({ strategy: 'email_code' });
+      setIsVerifying(true);
     } catch (error: any) {
-      console.log(error)
+      console.log(error);
     }
-  }
+  };
 
+  // Verify that the OTP code the user entered is correct
+  // This will set the email to verified status
   const verifyCode = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      await emailObj?.attemptVerification({ code })
-      setSuccessful(true)
+      await emailObj?.attemptVerification({ code });
+      setSuccessful(true);
     } catch (error) {
-      console.log(error)
+      console.log(error);
     }
-  }
+  };
 
+  // Show a success message.
   if (successful) {
     return (
       <>
         <Title variant="h1">Email Added</Title>
       </>
-    )
+    );
   }
 
+  // If the user has entered a new email, show the verification form
   if (isVerifying) {
     return (
       <>
-        <Title variant="h1">Verify Email</Title>
+        <h1>Verify Email</h1>
         <div>
           <form onSubmit={(e) => verifyCode(e)}>
             <div>
               <label htmlFor="code">Enter Code</label>
-              <input onChange={(e) => setCode(e.target.value)} id="code" name="code" type="text" value={code} />
+              <input
+                onChange={(e) => setCode(e.target.value)}
+                id="code"
+                name="code"
+                type="text"
+                value={code}
+              />
             </div>
             <div>
               <button type="submit">Verify</button>
@@ -74,18 +92,24 @@ export default function Page() {
           </form>
         </div>
       </>
-    )
+    );
   }
 
-
+  // Prompt the user to enter the new email
   return (
     <>
-      <Title variant="h1">Add Email</Title>
+      <h1>Add Email</h1>
       <div>
-        <form onSubmit={(e) => handleSubmit(e)} >
+        <form onSubmit={(e) => handleSubmit(e)}>
           <div>
             <label htmlFor="email">Add Email</label>
-            <input onChange={(e) => setEmail(e.target.value)} id="email" name="email" type="email" value={email} />
+            <input
+              onChange={(e) => setEmail(e.target.value)}
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+            />
           </div>
           <div>
             <button type="submit">Continue</button>

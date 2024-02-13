@@ -1,13 +1,13 @@
 ---
-title: "Upgrading Remix from v4 to v5"
-description: "Learn how to upgrade from version 4 to version 5 of the Clerk Remix SDK."
+title: "Upgrading React from v4 to v5"
+description: "Learn how to upgrade Clerk's React SDK from v4 to v5."
 ---
 
-# Upgrading `@clerk/remix` from v4 to v5
+# Upgrading `@clerk/clerk-react` from v4 to v5
 
-Version 5 of the Remix SDK ships with an improved design and UX for its built-in components, no "flash of white page" when authenticating, no more need to add a custom error boundary, and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
+Version 5 of the React SDK ships with an improved design and UX for its built-in components, no "flash of white page" when authenticating, and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
 
-By the end of this guide, you’ll have successfully upgraded your Next.js project to use `@clerk/remix` v5. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
+By the end of this guide, you’ll have successfully upgraded your React project to use `@clerk/clerk-react` v5. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
 
 ## Preparing to upgrade
 
@@ -48,15 +48,15 @@ Whenever you feel ready, go ahead and install the latest beta version of any Cle
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
     ```bash filename="terminal"
-    npm install @clerk/remix@beta
+    npm install @clerk/clerk-react@beta
     ```
 
     ```bash filename="terminal"
-    yarn add @clerk/remix@beta
+    yarn add @clerk/clerk-react@beta
     ```
 
     ```bash filename="terminal"
-    pnpm add @clerk/remix@beta
+    pnpm add @clerk/clerk-react@beta
     ```
 
 </CodeBlockTabs>
@@ -86,26 +86,6 @@ If you are having trouble with `npx`, it's also possible to install directly wit
 
 ## Breaking Changes
 
-### `ClerkErrorBoundary` removed
-
-`ClerkErrorBoundary` is no longer needed for correct error handling in remix, so we have removed this function from the remix SDK, and it can be removed from your code as well. Example below:
-
-```diff
- import { rootAuthLoader } from '@clerk/remix/ssr.server';
- import {
-     ClerkApp,
--    ClerkErrorBoundary
- } from '@clerk/remix';
-
- export const loader = (args: DataFunctionArgs) => {
-   return rootAuthLoader(args);
- };
-
- export default ClerkApp(App);
-
-- export const ErrorBoundary = ClerkErrorBoundary();
-```
-
 ### Component design adjustments
 
 The new version ships with improved design and UX across all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/components/customization/overview) or tokens for a [custom theme](/docs/components/customization/overview#create-a-custom-theme), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/components/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
@@ -122,6 +102,21 @@ As part of this change, the default URL for each of these props has been set to 
 - <UserButton afterSignOutUrl='/' />
 + <UserButton />
 ```
+
+### `navigate` prop to `ClerkProvider` replaced by `routerPush` and `routerReplace`
+
+The `navigate` prop on ClerkProvider allowed developers to override the default navigation behavior with a custom function. However, navigate was only able to push, not replace routes. We have now added the capability for the router to push or replace, and as such, upgraded the provider prop so that it can handle either depending on the circumstance.
+
+Two new props have been added to `ClerkProvider` that replace the single `navigate` prop, and can be used to override the default navigation behavior for either a push or replace navigation. For more information on what push and replace mean in relation to the browser history api, [check out these wonderful MDN docs](https://developer.mozilla.org/en-US/docs/Web/API/History_API/Working_with_the_History_API).
+
+If you’d like to keep the same behavior as you had with the single `navigate` prop, pass the exact same function to both `routerPush` and `routerReplace` and the behavior will be identical. For example:
+
+```diff
+- <ClerkProvider navigate={ x => x } />
++ <ClerkProvider routerPush={ x => x } routerReplace={ x => x } />
+```
+
+However, you now have the option to differentiate behavior based on whether the navigation will be a push or replace.
 
 ### Removed: `orgs` claim on JWT
 
@@ -257,71 +252,32 @@ As part of this major version, a number of previously deprecated props, arugment
 
 ### Deprecation removals
 
-<Accordion titles={["<code>apiKey</code> -&gt; <code>secretKey</code> as argument to createClerkClient", "<code>apiKey</code> -&gt; <code>secretKey</code> as argument to rootAuthLoader", "<code>apiKey</code> -&gt; <code>secretKey</code> as argument to getAuth", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as prop to <code>ClerkProvider</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as argument to rootAuthLoader", "<code>CLERK_FRONTEND_API</code> replaced by <code>CLERK_PUBLISHABLE_KEY</code>", "<code>CLERK_API_KEY</code> replaced by <code>CLERK_SECRET_KEY</code>", "<code>Clerk</code> -&gt; <code>{ createClerkClient }</code>"]}>
-  <AccordionPanel>    
-    The `apiKey` argument passed to `createClerkClient` must be changed to `secretKey`.
-    
-    ```diff
-    import { createClerkClient } from '@clerk/remix/api.server';
-    
-    - createClerkClient({ apiKey: '...' });
-    + createClerkClient({ secretKey: '...' });
-    ```
-  </AccordionPanel>
-  <AccordionPanel>    
-    The `apiKey` argument passed to `rootAuthLoader` must be changed to `secretKey`.
-    
-    ```diff
-    import { rootAuthLoader } from '@clerk/remix/ssr.server';
-    
-    - export const loader = args => rootAuthLoader(args, { apiKey: '...' });
-    + export const loader = args => rootAuthLoader(args, { secretKey: '...' });
-    ```
-  </AccordionPanel>
-  <AccordionPanel>    
-    The `apiKey` argument passed to `getAuth` must be changed to `secretKey`.
-    
-    ```diff
-    import { getAuth } from '@clerk/remix/ssr.server';
-    
-    export const loader: LoaderFunction = async args => {
-    -  return getAuth(args, { apiKey: '...' });
-    +  return getAuth(args, { secretKey: '...' });
-    };
-    ```
-  </AccordionPanel>
+<Accordion titles={["<code>frontendApi</code> -&gt; <code>publishableKey</code> as prop to <code>ClerkProvider</code>", "<code>afterSwitchOrganizationUrl</code> -&gt; <code>afterSelectOrganizationUrl</code> in <code>OrganizationSwitcher</code>", "<code>ClerkProviderOptionsWrapper</code> type removed"]}>
   <AccordionPanel>    
     The `frontendApi` prop passed to `<ClerkProvider>` was renamed to `publishableKey`. **Note:** The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production). [More information](/docs/deployments/overview#api-keys-and-environment-variables).
   </AccordionPanel>
   <AccordionPanel>    
-    The `frontendApi` argument passed to `rootAuthLoader` must be changed to `publishableKey`.
+    The `afterSwitchOrganizationUrl` prop on the `<OrganizationSwitcher />` component has been renamed to `afterSelectOrganizationUrl`. This is a quick and simple rename.
     
     ```diff
-    import { rootAuthLoader } from '@clerk/remix/ssr.server';
-    
-    - export const loader = args => rootAuthLoader(args, { frontendApi: '...' });
-    + export const loader = args => rootAuthLoader(args, { publishableKey: '...' });
+    - <OrganizationSwitcher afterSwitchOrganizationUrl='...' />
+    + <OrganizationSwitcher afterSelectOrganizationUrl='...' />
     ```
   </AccordionPanel>
   <AccordionPanel>    
-    The `CLERK_FRONTEND_API` environment variable was renamed to `CLERK_PUBLISHABLE_KEY`. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production). **Note:** The values are different, so this is not just a key replacement. [More information](/docs/deployments/overview#api-keys-and-environment-variables).
-  </AccordionPanel>
-  <AccordionPanel>    
-    The `CLERK_API_KEY` environment variable was renamed to `CLERK_SECRET_KEY`. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production).
-  </AccordionPanel>
-  <AccordionPanel>    
-    The `Clerk` default import has changed to `createClerkClient` and been moved to a named import rather than default. You must update your import path in order for it to work correctly. Example below of the fix that needs to be made:
-    
-    ```diff
-    - import Clerk from "@clerk/remix"
-    + import { createClerkClient } from "@clerk/remix"
-    ```
+    This type was extending `ClerkProviderProps` with but was not necessary. This type is typically used internally and is not required to be imported and used directly. If needed, import and use `ClerkProviderProps` instead.
   </AccordionPanel>
 </Accordion>
 
 ### Other Breaking Changes
 
-<Accordion titles={["<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>setSession</code> -&gt; <code>setActive</code>", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}>
+<Accordion titles={["<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>MagicLinkError</code> -&gt; <code>EmailLinkError</code>", "<code>handleMagicLinkVerification</code> -&gt; <code>handleEmailLinkVerification</code>", "<code>setSession</code> -&gt; <code>setActive</code>", "<code>invitationList</code> -&gt; <code>invitations</code> as param to <code>useOrganizations</code>", "<code>membershipList</code> -&gt; <code>members</code> as param to <code>useOrganization</code>", "<code>useOrganizations</code> -&gt; <code>useOrganizationList</code>", "<code>userProfile</code> -&gt; <code>userProfileProps</code> for <code>UserButton</code>", "<code>MultisessionAppSupport</code> import moved to <code>/internal</code>", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}>
+  <AccordionPanel>    
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
+  </AccordionPanel>
+  <AccordionPanel>    
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects functionality.
+  </AccordionPanel>
   <AccordionPanel>    
     Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
   </AccordionPanel>
@@ -362,6 +318,87 @@ As part of this major version, a number of previously deprecated props, arugment
     ```
   </AccordionPanel>
   <AccordionPanel>    
+    The `invitationList` param to the `useOrganizations` hook has been replaced by `invitations`. This param also has a slightly different way of working, examples included below. Note also that `useOrganizations` is deprecated and should be updated to `useOrganization` instead.
+    
+    ```js
+    // before
+    const { invitationList } = useOrganization({
+    	invitationList: { limit: 10, offset: 1 },
+    });
+    
+    // after
+    const { invitations } = useOrganization({
+    	invitations: {
+    		initialPage: 1,
+    		pageSize: 10,
+    	},
+    });
+    
+    // you can also simply return all invitations
+    const { invitations } = useOrganization({ invitations: true });
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The `membershipList` param from the `useOrganization` hook has been removed. Instead, [use the `memberships` param](https://clerk.com/docs/references/react/use-organization#parameters). Examples of each can be seen here:
+    
+    ```js
+    // before
+    const { membershipList } = useOrganization({
+    	membershipList: { limit: 10, offset: 1 },
+    });
+    
+    // after
+    const { memberships } = useOrganization({
+    	memberships: {
+    		initialPage: 1,
+    		pageSize: 10,
+    	},
+    });
+    
+    // you can also simply return all memberships
+    const { memberships } = useOrganization({ memberships: true });
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    Any place where `useOrganizations` is used should be switched to [`useOrganizationList`](https://clerk.com/docs/references/react/use-organization-list) or [`useOrganization`](https://clerk.com/docs/references/react/use-organization) instead. The return signature has also changed, so take note of this when making the upgrade.
+    
+    ```js
+    // before: useOrganizations return values
+    {
+        isLoaded: boolean,
+        createOrganization: clerk.createOrganization,
+        getOrganizationMemberships: clerk.getOrganizationMemberships,
+        getOrganization: clerk.getOrganization,
+    }
+    
+    // after: useOrganizationList return values
+    {
+        isLoaded: boolean,
+        createOrganization: clerk.createOrganization,
+        userMemberships: PaginatedResourcesWithDefault<...> | PaginatedResources<...>,
+        userInvitations: PaginatedResourcesWithDefault<...> | PaginatedResources<...>,
+        userSuggestions: PaginatedResourcesWithDefault<...> | PaginatedResources<...>,
+        setActive: clerk.setActive,
+    }
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The `userProfile` prop on [the `UserButton` component](https://clerk.com/docs/references/javascript/clerk/user-button#user-button-component) has been changed to `userProfileProps`. This is purely a name change, none of the values need to be updated.
+    
+    ```diff
+    - <UserButton userProfile={} />
+    + <UserButton userProfileProps={} />
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    `MultiSessionAppSupport` is a component that handles the intermediate “undefined” state for multisession apps by unmounting and remounting the components during the session switch (` setActive`` call) in order to solve theoretical edge-cases that can arise while switching sessions. It is undocumented and intended only for internal use, so it has been moved to an  `/internal` import path. Please note that internal imports are not intended for public use, and are outside the scope of semver.
+    
+    ```diff
+    - import { MultiSessionAppSupport } from '@clerk/clerk-react'
+    + import { MultiSessionAppSupport } from '@clerk/clerk-react/internal'
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
     The `signOutCallback` prop on the [`<SignOutButton />` component](https://clerk.com/docs/components/unstyled/sign-out-button) has been removed. Instead, you can use the `redirectUrl` prop. Example below:
     
     ```diff
@@ -380,3 +417,6 @@ As part of this major version, a number of previously deprecated props, arugment
     ```
   </AccordionPanel>
 </Accordion>
+
+
+

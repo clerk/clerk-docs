@@ -452,8 +452,9 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 | `framework` | string | Denotes the framework or platform the tutorial is for. |
 | `beforeYouStart` | { title: string; link: string }[] | Links to things that learners should complete before the tutorial. |
 | `exampleRepo` (optional) | { title: string; link: string }[] | Links to example repositories. |
+| `exampleRepoTitle` (optional) | string | The title for the example repository/repositories. Defaults to `'Example repository'`. |
 
-```
+```mdx
 <TutorialHero 
   framework="react"
   beforeYouStart={[

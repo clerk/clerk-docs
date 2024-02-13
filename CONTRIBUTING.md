@@ -427,7 +427,7 @@ The `<InjectKeys />` component is used to inject the user's current Clerk instan
 ````mdx
   Add the following code to your `.env.local` file to set your public and secret keys.
 
-  **Pro tip!** If you are signed into your [Clerk Dashboard](https://dashboard.clerk.com/), your secret key should become visible by clicking on the eye icon.
+  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
   <InjectKeys>
 

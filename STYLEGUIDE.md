@@ -30,7 +30,7 @@ Tech has created many new words by associating two words with each other like "f
 
 ### 1.3 De-dupe reference links
 
-When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item.
+When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the first mention of that item. The exception to this rule is when the reference is mentioned under a different heading. In that case, link to the reference documentation again.
 
 #### Do
 

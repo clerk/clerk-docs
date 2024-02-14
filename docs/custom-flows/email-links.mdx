@@ -5,47 +5,24 @@ description: Learn how to authenticate or verify users with email links.
 
 # Email links
 
-Clerk supports passwordless authentication with email links, which lets users sign in and sign up without having to remember a password. During sign in or registration, users will be asked to enter their email address. They will receive an email message with a link that can be clicked in order to complete the authentication process.
-
-This one-click, link-based verification method is often referred to as an "email link". The process is similar to sending a one-time code to your users but skipping the part where they have to come back to your app and enter the code.
-
-As a form of passwordless authentication, email links arguably provide greater security and a better user experience than traditional passwords. Since there are fewer steps involved in every authentication attempt, the user experience is better than one-time codes. However, email links are not without their downsides, and often still boil down to the email provider's "knowledge-based factor" instead of yours.
-
-Email links are the default passwordless authentication strategy when using Clerk. They can be used to sign up new users, sign in existing ones, or allow existing users to verify newly entered email addresses to their profile.
-
-Your users will still be able to choose an alternative authentication (or verification) method even after they've clicked the email link they received in their inbox. Email links are simply the default authentication method for email address-based, passwordless authentication in Clerk.
-
-<Callout type="info">
-  Looking for one-time code (OTP) authentication? Check out our [one-time code authentication](/docs/custom-flows/email-sms-otp) guide.
-</Callout>
-
-## Email link flow
-
-Email links can be used to easily authenticate users or verify their email addresses. Clerk will take care of the plumbing and allow you to offer a seamless experience to your users. The email link flow looks like this:
+[Email links](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategy) can be used to easily authenticate users or verify their email addresses. The email link flow looks like this:
 
 1. The user enters their email address and asks for an email link.
-2. Your application waits for the verification result.
-3. Clerk sends an email to the user, containing a link to the verification URL.
-4. The user clicks the email link. This can happen on the same device where they entered their email address, or on a different device.
-5. Clerk will verify the user's identity and advance any sign-in or sign-up attempt that might be in progress. In case the verification fails, Clerk will inform the user.
-6. Your user will now be signed in on the device or tab that they opened the link.
+2. Clerk sends an email to the user, containing a link to the verification URL.
+3. The user clicks the email link. This can happen on the same device where they entered their email address, or on a different device.
+4. Clerk will verify the user's identity and advance any sign-in or sign-up attempt that might be in progress. In case the verification fails, Clerk will inform the user.
+5. If the verification is successful, the user is signed in or signed up, or their email address is verified.
 
-Email links work on any device. There's no constraint on where the link will be opened. For example, a user might try to sign in from their desktop browser, but open the link from their mobile phone.
+Clerk's [prebuilt components](/docs/components/overview) handle the entire email link flow for you, but you can also use the Clerk API to create a completely custom email link flow. Clerk's API is highly flexible and allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based authentication or verification flow. This guide will walk you through how to build a custom email link flow using the [`useSignUp()`](/docs/references/react/use-sign-up) and [`useSignIn()`](/docs/references/react/use-sign-up) hooks.
 
-As an additional security measure, we expire email links after a while. This way, we can guard against cases where a stale link might be compromised. From a user experience perspective, the email link flow is supposed to be nearly synchronous. Don't worry, your users will have plenty of time to complete the flow before the email link expires.
+### Enable email link authentication
 
-Clerk provides a highly flexible API that allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based authentication or verification flow.
+To use email and password authentication, you first need to enable these authentication strategies in the Clerk Dashboard.
 
-We take care of the boring stuff, like efficient polling, secure session management, and different device authentication so you can focus on your application code.
-
-## Before you start
-
-- You need to create a Clerk Application in your [Clerk Dashboard](https://dashboard.clerk.com/). For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
-- You need to install the correct SDK for your application. You can find steps on how to do so through Clerk's [quickstart](/docs/quickstarts/overview) guides.
-
-## Set up email link authentication in Your Clerk application
-
-Email link authentication can be configured through the Clerk Dashboard. Go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)**. In the **Authentication factors** section of this page, choose **Email verification link** as the authentication factor.
+1. Navigate to the Clerk Dashboard.
+2. Go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)** in the sidebar menu.
+3. Ensure that you've configured your application instance to request the user's email address, as users can receive email links only via email messages. In the **Contact information** section, **Email address** should be toggled on.
+4. In the **Authentication strategies** section, toggle on **Email verification link**.
 
 <Images
   width={3024}
@@ -54,40 +31,21 @@ Email link authentication can be configured through the Clerk Dashboard. Go to *
   alt="The 'Authentication factors' section of the 'Email, Phone, and Username' page in the Clerk dashboard. There is a red arrow pointing to the 'Email verification link' toggle, which is toggled on."
 />
 
-Don't forget that you also need to make sure you've configured your application instance to request the user's email address. Users can receive email links only via email messages. Make sure you toggle on **Email address** under the **Contact information** section.
+Users can now sign up and sign in with their email addresses using email links.
 
-<Images
-  width={3024}
-  height={1654}
-  src="/docs/images/custom-flows/toggle-email-address.jpg"
-  alt="The 'Contact information' section of the 'Email, Phone, and Username' page in the Clerk dashboard. There is a red arrow pointing to the 'Email address' toggle, which is toggled on."
-/>
+### Enable email link verification
 
-If you click on the **Settings cog** icon next to **Email address**, the email address configuration screen will pop open. You can toggle on **Require** if you want to make sure that all users have an email address associated with their profile.
+**Verification methods** are different from **Authentication strategies**. **Verification methods** are used for verifying a user's identifier, such as an email address upon initial sign-up or when updating their profile. **Authentication strategies** are used for authenticating a user, such as when they are signing in to your application.
 
-You can also find the **Verification methods** section on this screen. Here, you can toggle on **Email verification link** if you would like to allow your users to verify their email with an email link. You can also toggle on **Email verification code** if you would like to allow your users to verify their email with a one-time passcode.
+1. On this same page, next to **Email address**, click on the settings cog icon.
+2. In the modal that pops up, there is a **Verification methods** section. Check the box for the **Email verification link** option. For the sake of this guide, uncheck the box for **Email verification code**.
+3. Click **Continue** in the bottom right corner.
 
-<Callout type="info">
-  **Verification methods** are different from **Authentication strategies**. **Verification methods** are used for verifying a user's identifier, such as an email address upon initial sign-up or when updating their profile. **Authentication strategies** are used for authenticating a user, such as when they are signing in to your application.
-</Callout>
+#### Create the email link sign-up flow
 
-### Enable email link authentication using the Clerk API
+To sign up a user using an email link, you need to:
 
-In case one of the above integration methods doesn't cover your needs, you can make use of lower-level commands and create a completely custom email link authentication flow.
-
-<Callout type="warning">
-  You still need to configure your instance in order to enable email link authentication, as described at the top of this guide.
-</Callout>
-
-#### Sign up using a custom flow (Clerk API)
-
-Registration with email links follows a set of steps that require users to enter their email address as an authentication identifier and click on a link that's delivered to them via email message.
-
-The sign-up process can be completed on the same or a different device. For example, users might enter their email address in their desktop browser, but click the sign-up email link from their mobile phone. The user's email address will still be verified and registration will proceed.
-
-Let's see all the steps involved in more detail.
-
-1. Initiate the sign-up process by collecting the user's identifier. It must be their email address.
+1. Initiate the sign-up process by collecting the user's email address.
 2. Start the email link verification flow. There are two parts to the flow:
   - Prepare a verification for the email address by sending an email with an email link to the user.
   - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
@@ -95,7 +53,7 @@ Let's see all the steps involved in more detail.
   - The verification was successful so you need to continue with the sign-up flow.
   - The verification failed or the email link has expired.
 
-Clerk provides a highly flexible API that allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based sign-up flow.
+In the following example, the user is prompted to enter their email address and then click a button to sign up using an email link. The user is then redirected to a verification page where they can see the result of the email link verification.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
 ```jsx
@@ -474,15 +432,11 @@ cancelEmailLinkFlow();
 ```
 </CodeBlockTabs>
 
-#### Sign in using a custom flow (Clerk API)
+#### Create the email link sign-in flow
 
-Signing users into your application is probably the most popular use case for email links. Users enter their email address and then click on a link that's delivered to them via email message in order to sign in.
+To authenticate a user using an email link, you need to:
 
-The sign-in process can be completed on the same or a different device. For example, users might enter their email address in their desktop browser, but click the sign-in email link from their mobile phone. The user's email address will still be verified and authentication will proceed.
-
-Let's see all the steps involved in more detail.
-
-1. Initiate the sign-in process, by collecting the user's authentication identifier. It must be their email address.
+1. Initiate the sign-in process by collecting the user's authentication identifier.
 2. Start the email link verification flow. There are two parts to the flow:
   - Prepare a verification for the email address by sending an email with an email link to the user.
   - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
@@ -490,7 +444,7 @@ Let's see all the steps involved in more detail.
   - The verification was successful so you need to continue with the sign-in flow.
   - The verification failed or the email link has expired.
 
-Clerk provides a highly flexible API that allows you to hook into any of the above steps, while abstracting away all the complexities of an email link based sign-in flow.
+In the following example, the user is prompted to enter their email address and then click a button to sign in using an email link. The user is then redirected to a verification page where they can see the result of the email link verification.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
 ```jsx
@@ -872,11 +826,11 @@ cancelEmailLinkFlow();
 ```
 </CodeBlockTabs>
 
-#### Set up email address verification using a custom flow (Clerk API)
+#### Create the email link verification flow
 
 Email links can also provide a nice user experience for verifying email addresses that users add when updating their profiles. The flow is similar to one-time code verification, but users need only click on the email link; there's no need to return to your app.
 
-1. Collect the user's email address.
+1. Initiate the verification process by collecting the user's email address.
 2. Start the email link verification flow. There are two parts to the flow:
   - Prepare a verification for the email address by sending an email with an email link to the user.
   - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
@@ -884,7 +838,7 @@ Email links can also provide a nice user experience for verifying email addresse
   - The verification was successful.
   - The verification failed or the email link has expired.
 
-Clerk provides a highly flexible API that allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based email address verification.
+In the following example, the user is prompted to enter their email address and then click a button to verify their email address using an email link. The user is then redirected to a verification page where they can see the result of the email link verification.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
 ```jsx

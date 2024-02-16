@@ -5,28 +5,104 @@ description: The Authentication object contains information about the current us
 
 # `Authentication` object
 
-Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/references/nextjs/get-auth) return an `Authentication` object. This JavaScript object contains important information like session data, your user's ID, as well as their active organization ID.
+Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/references/nextjs/get-auth) return an `Authentication` object. This JavaScript object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
 
-## Properties
+## `Authentication` object properties
 
-| Name | Description |
-| --- | --- |
-| `actor` | Holds identifier for the user that is impersonating the current user. |
-| `debug` | Used to help debug issues when using Clerk in development. |
-| `getToken` | A function that returns a promise that resolves to the current user's session token. Can also be used to retrieve a custom JWT template. |
-| `has` | A function that returns a boolean based on the [permission or role](/docs/organizations/roles-permissions) provided as parameter. Can be used for authorization. |
-| `orgId` | The current user's active organization ID. |
-| `orgRole` | The current user's active organization role. |
-| `orgPermissions` | The current user's active organization permissions. |
-| `orgSlug` | The current user's active organization slug. |
-| `organization` | The current user's active organization object. |
-| `sessionClaim` | The current user's session claim. |
-| `sessionId` | The current user's session ID. |
-| `userId` | The current user's unique identifier. |
+| Name | Type | Description |
+| --- | --- | --- |
+| `sessionId` | `string` | The current user's session ID. |
+| `userId` | `string` | The current user's unique identifier. |
+| `orgId` | `string \| undefined` | The current user's active organization ID. |
+| `orgRole` | <code>[OrganizationCustomRoleKey](#organization-custom-role-key) \| undefined</code> | The current user's active organization role. |
+| `orgSlug` | `string \|undefined` | The current user's active organization slug. |
+| `orgPermissions` | <code>[OrganizationCustomPermissionKey[]](#organization-custom-role-key) \| undefined</code> | The current user's active organization permissions. |
+| [`has`](#has) | <code>(isAuthorizedParams: [CheckAuthorizationParamsWithCustomPermissions](#check-authorization-params-with-custom-permissions)) => boolean</code> | A function that returns a boolean based on the permission or role provided as parameter. Can be used for authorization. |
+| [`getToken`](#get-token) | [`ServerGetToken`](#server-get-token) | A function that returns a promise that resolves to the current user's session token. Can also be used to retrieve a custom JWT template. |
+| `claims` | `JwtPayload` | The current user's [session claims](/docs/backend-requests/resources/session-tokens#default-session-claims). |
+| `actor` | `ActClaim \| undefined` | Holds identifier for the user that is impersonating the current user. |
+| `debug` | `AuthObjectDebug` | Used to help debug issues when using Clerk in development. |
 
-## Example
+### `OrganizationCustomRoleKey`
 
-{/* TODO: Update example to include the newly added properties (has, orgPermissions, organization) */}
+The `orgRole` property on the `Authentication` object has the type `OrganizationCustomRoleKey`.
+
+`OrganizationCustomRoleKey` is a string that represents the user's role in the organization. Clerk provides the [default roles](/docs/organizations/roles-permissions#default-roles) `org:admin` and `org:member`. However, you can create [custom roles](/docs/organizations/create-roles-permissions) as well.
+
+### `OrganizationCustomPermissionKey`
+
+The `orgPermissions` property on the `Authentication` object has the type `OrganizationCustomPermissionKey`.
+
+`OrganizationCustomPermissionKey` is a string that represents the permission of the user in the organization. Clerk provides [default System Permissions](/docs/organizations/roles-permissions#system-permissions), and you can create [custom permissions](/docs/organizations/create-roles-permissions#create-a-new-permission-for-your-organization).
+
+### `has()`
+
+`has()` can be used on both the frontend and the backend to determine if the user *has* a role or permission.
+
+You can use `has()` anywhere Clerk returns an [`Authentication`](/docs/references/nextjs/authentication-object) object:
+
+- [`auth()`](/docs/references/nextjs/auth) in Next.js App Router
+- [`useAuth()`](/docs/references/react/use-auth) in Client Components, including during SSR
+- [`getAuth(request)`](/docs/references/nextjs/get-auth) in server contexts outside of the App Router and SSR (Remix Loaders, Node, Express, Fastify, etc)
+
+`has()` has the following function signature:
+
+```typescript
+function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions) => boolean;
+```
+
+#### `CheckAuthorizationParamsWithCustomPermissions`
+
+`CheckAuthorizationParamsWithCustomPermissions` has the following properties:
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `role` | `string` | The role to check for. |
+| `permission` | `string` | The permission to check for. |
+
+#### `has()` example
+
+You can use `has()` to check if a user is authorized to access a component. 
+
+In the following example:
+- `has()` is used to check if the user has the `org:team_settings:manage` permission.
+- If the user does not have the permission, `null` is returned and the "Team Settings" component is not rendered.
+
+```tsx filename="app/page.tsx"
+import { auth } from '@clerk/nextjs';
+
+export default async function Page() {
+  const { has } = auth();
+
+  const canManage = has({ permission:"org:team_settings:manage" });
+
+  if(!canManage) return null;  
+
+  return <h1>Team Settings</h1>
+}
+```
+
+### `getToken()`
+
+You can use `getToken()` on an `Authentication` object to retrieve the current user's session token. You can also use this method to retrieve a custom JWT template. It has the type `ServerGetToken`.
+
+#### `ServerGetToken`
+
+```typescript
+type ServerGetToken = (options?: ServerGetTokenOptions) => Promise<string | null>;
+```
+
+#### `ServerGetTokenOptions`
+
+`getToken()` accepts an optional `options` parameter, which has the following properties:
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `template?` | `string` | The name of the custom JWT template to retrieve. |
+
+## `Authentication` object example without active organization
+
+The following is an example of the `Authentication` object without an active organization:
 
 ```js
 {
@@ -50,7 +126,9 @@ Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/reference
 }
 ```
 
-## Example with active organization
+## `Authentication` object example with active organization
+
+The following is an example of the `Authentication` object with an active organization:
 
 ```js
 {

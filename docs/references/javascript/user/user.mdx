@@ -9,7 +9,7 @@ The `User` object holds all of the information for a single user of your applica
 
 A user can be contacted at their primary email address or primary phone number. They can have more than one registered email address, but only one of them will be their primary email address. This goes for phone numbers as well; a user can have more than one, but only one phone number will be their primary. At the same time, a user can also have one or more external accounts by connecting to [OAuth providers](/docs/authentication/social-connections/overview) such as Google, Apple, Facebook, and many more.
 
-Finally, a `User` object holds profile data like the user's name, profile picture, and a set of [metadata](/docs/users/metadata) that can be used internally to store arbitrary information. The metadata are split into `publicMetadata` and `privateMetadata`. Both types are set from the [Backend API](https://clerk.com/docs/reference/backend-api), but public metadata can also be accessed from the Frontend API.
+Finally, a `User` object holds profile data like the user's name, profile picture, and a set of [metadata](/docs/users/metadata) that can be used internally to store arbitrary information. The metadata are split into `publicMetadata` and `privateMetadata`. Both types are set from the [Backend API](https://clerk.com/docs/reference/backend-api), but public metadata can also be accessed from the [Frontend API](https://clerk.com/docs/reference/frontend-api).
 
 The ClerkJS SDK provides some helper [methods](#methods) on the `User` object to help retrieve and update user information and authentication status.
 
@@ -22,9 +22,9 @@ The ClerkJS SDK provides some helper [methods](#methods) on the `User` object to
 | `lastName` | `string \| null` | The user's last name. |
 | `fullName` | `string \| null` | The user's full name. |
 | `username` | `string \| null` | The user's username. |
-| `imageUrl` | `string` | Holds the users profile image or avatar. |
 | `hasImage` | `boolean` | A getter boolean to check if the user has uploaded an image or one was copied from OAuth. Returns `false` if Clerk is displaying an avatar for the user. |
 | `profileImageUrl` (deprecated) | `string \| null` | Deprecated in favor of `image_url`. |
+| `imageUrl` | `string` | The URL of the user's profile image. |
 | `primaryEmailAddress` | [`EmailAddress`][email-ref] \| `null` | Information about the user's primary email address. |
 | `primaryEmailAddressId` | `string \| null` | The unique identifier for the `EmailAddress` that the user has set as primary. |
 | `emailAddresses` | [`EmailAddress[]`][email-ref] | An array of all the `EmailAddress` objects associated with the user. Includes the primary. |
@@ -47,8 +47,8 @@ The ClerkJS SDK provides some helper [methods](#methods) on the `User` object to
 | `backupCodeEnabled` | `boolean` | A boolean indicating whether the user has enabled Backup codes. |
 | `createOrganizationEnabled` | `boolean` | A boolean indicating whether the organization creation is enabled for the user or not. |
 | `deleteSelfEnabled` | `boolean` | A boolean indicating whether the user is able to delete their own account or not. |
-| `publicMetadata` | `{[string]: any} \| null` | Metadata that can be read from the Frontend API and [Backend API](https://clerk.com/docs/reference/backend-api) and can be set only from the Backend API . |
-| `privateMetadata` | `{[string]: any} \| null` | Metadata that can be read and set only from the [Backend API](https://clerk.com/docs/reference/backend-api). |
+| `publicMetadata` | `{[string]: any} \| null` | Metadata that can be read from the Frontend API and Backend API and can be set only from the Backend API . |
+| `privateMetadata` | `{[string]: any} \| null` | Metadata that can be read and set only from the Backend API. |
 | `unsafeMetadata` | `{[string]: any} \| null` | Metadata that can be read and set from the Frontend API. One common use case for this attribute is to implement custom fields that will be attached to the `User` object.<br />Please note that there is also an `unsafeMetadata` attribute in the [`SignUp`](/docs/references/javascript/sign-up/sign-up) object. The value of that field will be automatically copied to the user's unsafe metadata once the sign up is complete. |
 | `lastSignInAt` | `Date` | Date when the user last signed in. May be empty if the user has never signed in. |
 | `createdAt` | `Date` | Date when the user was first created. |
@@ -58,11 +58,13 @@ The ClerkJS SDK provides some helper [methods](#methods) on the `User` object to
 
 ### `update()`
 
+Updates the user's attributes. Use this method to save information you collected about the user.
+
+The appropriate settings must be enabled in the Clerk Dashboard for the user to be able to update their attributes. For example, if you want to use the `update({ firstName })` method, you must enable the **Name** setting. It can be found in the the Clerk Dashboard under **User & Authentication > Email, Phone, Username > [Personal information](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).**
+
 ```typescript
 function update: (params: UpdateUserParams) => Promise<User>;
 ```
-
-Updates the user's attributes. Use this method to save information you collected about the user.
 
 #### `UpdateUserParams`
 
@@ -79,21 +81,153 @@ All props below are optional.
 | `primaryWeb3WalletId` | `string` | The unique identifier for the [`Web3Wallet`][web3-ref] that the user signed up with. |
 | `unsafeMetadata` | `{[string]: any} \| null` | Metadata that can be read and set from the Frontend API. One common use case for this attribute is to implement custom fields that will be attached to the `User` object.<br />Please note that there is also an `unsafeMetadata` attribute in the [`SignUp`](/docs/references/javascript/sign-up/sign-up) object. The value of that field will be automatically copied to the user's unsafe metadata once the sign up is complete. |
 
+#### `update()` returns
+
+| Type | Description |
+| --- | --- |
+| <code>Promise\<User\></code> | This method returns a `Promise` which resolves with the current `User` object. |
+
+#### `update()` example
+
+In the following example, the user's first name is updated to "Test".
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
+  ```typescript {17}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk(`{{pub_key}}`);
+  await clerk.load();
+
+  if (!clerk.user) {
+    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+    document.querySelector<HTMLDivElement>(
+      "#app"
+    )!.innerHTML = `<div id="sign-in"></div>`;
+
+    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
+
+    clerk.mountSignIn(signInComponent, {});
+  } else {
+    await clerk.user.update({ firstName: "Test" });
+  }
+  ```
+
+  ```html {26}
+  <script>
+    // Get your publishable key and frontend API URL from the Clerk Dashboard
+    const clerkPublishableKey = `{{pub_key}}`;
+    const frontendApi = 'https://[your-domain].clerk.accounts.dev';
+    const version = '@latest'; // Set to appropriate version
+
+    // Creates asynchronous script
+    const script = document.createElement('script');
+    script.setAttribute('data-clerk-frontend-api', frontendApi);
+    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
+    script.async = true;
+    script.src = `${frontendApi}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
+
+    // Adds listener to initialize ClerkJS after it's loaded
+    script.addEventListener('load', async function () {
+      await window.Clerk.load();
+
+      if (!window.Clerk.user) {
+        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
+
+        const signInComponent = document.querySelector("#sign-in");
+
+        window.Clerk.mountSignIn(signInComponent, {});
+      } else {
+        await window.Clerk.user.update({ firstName: "Test" })
+      }
+    });
+    document.body.appendChild(script);
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
+
 ### `delete()`
+
+Deletes the current user.
 
 ```typescript
 function delete: () => Promise<void>;
 ```
 
-Deletes the current user.
+#### `delete()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
+  ```typescript {17}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk(`{{pub_key}}`);
+  await clerk.load();
+  
+  if (!clerk.user) {
+    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+    document.querySelector<HTMLDivElement>(
+      "#app"
+    )!.innerHTML = `<div id="sign-in"></div>`;
+
+    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
+
+    clerk.mountSignIn(signInComponent, {});
+  } else {
+    await clerk.user.delete();
+  }
+  ```
+
+  ```html {26}
+  <script> 
+    // Get your publishable key and frontend API URL from the Clerk Dashboard
+    const clerkPublishableKey = `{{pub_key}}`;
+    const frontendApi = 'https://[your-domain].clerk.accounts.dev';
+    const version = '@latest'; // Set to appropriate version
+
+    // Creates asynchronous script
+    const script = document.createElement('script');
+    script.setAttribute('data-clerk-frontend-api', frontendApi);
+    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
+    script.async = true;
+    script.src = `${frontendApi}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
+
+    // Adds listener to initialize ClerkJS after it's loaded
+    script.addEventListener('load', async function () {
+      await window.Clerk.load();
+
+      if (!window.Clerk.user) {
+        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
+
+        const signInComponent = document.querySelector("#sign-in");
+
+        window.Clerk.mountSignIn(signInComponent, {});
+      } else {
+        await window.Clerk.user.delete();
+      }
+    });
+    document.body.appendChild(script);
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
 
 ### `setProfileImage()`
+
+Adds the user's profile image or replaces it if one already exists. This method will upload an image and associate it with the user.
 
 ```typescript
 function setProfileImage: (params: SetProfileImageParams) => Promise<ImageResource>;
 ```
-
-Adds the user's profile image or replaces it if one already exists. This method will upload an image and associate it with the user.
 
 #### `SetProfileImageParams`
 
@@ -101,11 +235,11 @@ Adds the user's profile image or replaces it if one already exists. This method 
 | --- | --- | --- |
 | `file` | `Blob \| File \| string \| null` | The file to set as the user's profile image. |
 
-#### Returns
+#### `setProfileImage()` returns
 
 | Type | Description |
 | --- | --- |
-| <code>Promise\<[ImageResource](#image-resource)\></code> | The uploaded image. |
+| <code>Promise\<[ImageResource](#image-resource)\></code> | This method returns a `Promise` which resolves with the current uploaded image. |
 
 ##### `ImageResource`
 
@@ -115,30 +249,91 @@ Adds the user's profile image or replaces it if one already exists. This method 
 | `name` | `string \| null` | The name of the image. |
 | `publicUrl` | `string \| null` | The publically accessible url for the image. |
 
-
 ### `getSessions()`
+
+Retrieves all **active** sessions for this user. This method uses a cache so a network request will only be triggered only once.
 
 ```typescript
 function getSessions: () => Promise<SessionWithActivities[]>;
 ```
 
-Retrieves all **active** sessions for this user. This method uses a cache so a network request will only be triggered only once.
-
-#### Returns
+#### `getSessions()` returns
 
 | Type | Description |
 | --- | --- |
-| <code>Promise\<[SessionWithActivities](/docs/references/javascript/session-with-activities)\></code> | The list of active user sessions. |
+| <code>Promise\<[SessionWithActivities](/docs/references/javascript/session-with-activities)[]\></code> | This method returns a `Promise` which resolves with an array of `SessionWithActivities` objects. |
+
+#### `getSessions()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
+  ```typescript {17}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk(`{{pub_key}}`);
+  await clerk.load();
+
+  if (!clerk.user) {
+    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+    document.querySelector<HTMLDivElement>(
+      "#app"
+    )!.innerHTML = `<div id="sign-in"></div>`;
+
+    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
+
+    clerk.mountSignIn(signInComponent, {});
+  } else {
+    await clerk.user.getSessions();
+  }
+  ```
+
+  ```html {26}
+  <script>
+    // Get your publishable key and frontend API URL from the Clerk Dashboard
+    const clerkPublishableKey = `{{pub_key}}`;
+    const frontendApi = 'https://[your-domain].clerk.accounts.dev';
+    const version = '@latest'; // Set to appropriate version
+
+    // Creates asynchronous script
+    const script = document.createElement('script');
+    script.setAttribute('data-clerk-frontend-api', frontendApi);
+    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
+    script.async = true;
+    script.src = `${frontendApi}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
+
+    // Adds listener to initialize ClerkJS after it's loaded
+    script.addEventListener("load", async function () {
+      await window.Clerk.load();
+
+      if (!window.Clerk.user) {
+        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
+        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
+
+        const signInComponent = document.querySelector("#sign-in");
+
+        window.Clerk.mountSignIn(signInComponent, {});
+      } else {
+        await window.Clerk.user.getSessions();
+      }
+    });
+    document.body.appendChild(script);
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
 
 ### `isPrimaryIdentification()`
+
+A check whether or not the given resource is the primary identifier for the user.
 
 ```typescript
 function isPrimaryIdentification: (ident: EmailAddressResource | PhoneNumberResource | Web3WalletResource) => boolean;
 ```
 
-A check whether or not the given resource is the primary identifier for the user.
-
-#### Params
+#### `isPrimaryIdentification()` params
 
 | Name | Type | Description |
 | --- | --- | --- |
@@ -150,22 +345,22 @@ In addition to the methods listed above, the `User` class also has the following
 
 ### Time-based one-time password (TOTP)
 
-*   [`createTOTP()`](/docs/references/javascript/user/totp#create-totp)
-*   [`verifyTOTP()`](/docs/references/javascript/user/totp#verify-totp)
-*   [`disableTOTP()`](/docs/references/javascript/user/totp#disable-totp)
-*   [`createBackupCode()`](/docs/references/javascript/user/totp#create-backup-code)
+- [`createTOTP()`](/docs/references/javascript/user/totp#create-totp)
+- [`verifyTOTP()`](/docs/references/javascript/user/totp#verify-totp)
+- [`disableTOTP()`](/docs/references/javascript/user/totp#disable-totp)
+- [`createBackupCode()`](/docs/references/javascript/user/totp#create-backup-code)
 
 ### Password management
 
-*   [`updatePassword()`](/docs/references/javascript/user/password-management#update-password)
-*   [`removePassword()`](/docs/references/javascript/user/password-management#remove-password)
+- [`updatePassword()`](/docs/references/javascript/user/password-management#update-password)
+- [`removePassword()`](/docs/references/javascript/user/password-management#remove-password)
 
 ### Create metadata
 
-*   [`createEmailAddress()`](/docs/references/javascript/user/create-metadata#create-email-address)
-*   [`createPhoneNumber()`](/docs/references/javascript/user/create-metadata#create-phone-number)
-*   [`createWeb3Wallet()`](/docs/references/javascript/user/create-metadata#create-web-3-wallet)
-*   [`createExternalAccount()`](/docs/references/javascript/user/create-metadata#create-external-account)
+- [`createEmailAddress()`](/docs/references/javascript/user/create-metadata#create-email-address)
+- [`createPhoneNumber()`](/docs/references/javascript/user/create-metadata#create-phone-number)
+- [`createWeb3Wallet()`](/docs/references/javascript/user/create-metadata#create-web-3-wallet)
+- [`createExternalAccount()`](/docs/references/javascript/user/create-metadata#create-external-account)
 
 [web3-ref]: /docs/references/javascript/web3-wallet/web3-wallet
 [exacc-ref]: /docs/references/javascript/external-account

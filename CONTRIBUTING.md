@@ -42,7 +42,7 @@ When you're ready to submit your contribution, you're going to create a [pull re
 
 If this is your first time, or you need a refresher on how to create a PR, you can check out this video:
 
-[How to Contribute to an Open Source Project on GitHub}](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github)
+[How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github)
 
 The structure of the PR should be:
 
@@ -183,9 +183,9 @@ The image below shows what this example looks like once rendered.
 
 #### `<Callout />`
 
-The `<Callout />` component draws attention to something learners should slow down and read. 
+The `<Callout />` component draws attention to something learners should slow down and read.
 
-> Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed! 
+> Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed!
 
 The `<Callout />` component accepts an optional `type` property which accepts the following strings: `'Danger' | 'Info' | 'Success' | 'Warning';`.
 
@@ -223,7 +223,7 @@ The image below shows what this example looks like once rendered.
 
 ![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/public/images/styleguide/codeblocktabs.png)
 
-The `<CodeBlockTabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
+The `<CodeBlockTabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property.
 
 For example, in the example below, if the user were to choose `"yarn"` as the tab they want to see, both `<CodeBlockTabs />` components would change their active tab to `"yarn"` because both components were passed `"installer"` as their `type`.
 
@@ -242,7 +242,7 @@ For example, in the example below, if the user were to choose `"yarn"` as the ta
   ```
 </CodeBlockTabs>
 
-You can also install the install the Clerk React package by running the following command in your terminal: 
+You can also install the install the Clerk React package by running the following command in your terminal:
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
   ```sh filename="terminal"
@@ -287,7 +287,7 @@ The video below shows what this example looks like once rendered.
 
 ![An example of a <Tabs /> component. There are two tab options: 'react' and 'javascript'.](/public/images/styleguide/tabs.mov)
 
-The `<Tabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property. 
+The `<Tabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property.
 
 For example, in the example below, if the user were to choose "JavaScript" as the tab they want to see, both `<Tabs />` components would change their active tab to "JavaScript" because both components were passed `"framework"` as their `type`.
 
@@ -343,7 +343,7 @@ The Pages Router information is here.
 <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
 ```tsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
 import { SignIn } from "@clerk/nextjs";
- 
+
 export default function Page() {
   return <SignIn />;
 }
@@ -351,11 +351,11 @@ export default function Page() {
 
 ```tsx filename="/pages/sign-in/[[...index]].tsx"
 import { SignIn } from "@clerk/nextjs";
- 
+
 const SignInPage = () => (
   <SignIn />
 );
- 
+
 export default SignInPage;
 ```
 </CodeBlockTabs>
@@ -455,7 +455,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 | `exampleRepoTitle` (optional) | string | The title for the example repository/repositories. Defaults to `'Example repository'`. |
 
 ```mdx
-<TutorialHero 
+<TutorialHero
   framework="react"
   beforeYouStart={[
     {
@@ -477,7 +477,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 
 - Install `@clerk/clerk-react`
 - Set up your environment keys
-- Wrap your React app in `<ClerkProvider/>`  
+- Wrap your React app in `<ClerkProvider/>`
 - Limit access to authenticated users
 - Embed the `<UserButton/>`
 

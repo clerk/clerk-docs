@@ -5,32 +5,113 @@ description: Learn how to integrate Go into your Clerk application.
 
 # Go
 
-Clerk's Go SDK is a thin wrapper over the Clerk Backend API. Add the following import statement:
+Clerk's [Go SDK](https://github.com/clerk/clerk-sdk-go) is a wrapper over the [Clerk Backend API](https://clerk.com/docs/reference/backend-api).
+
+## Installation
+
+If you're using Go Modules and have a `go.mod` file in your project's root, you can import `clerk-sdk-go` directly:
 
 ```go
-import "github.com/clerkinc/clerk-sdk-go/clerk"
+import (
+    "github.com/clerk/clerk-sdk-go/v2"
+)
 ```
 
-Go doesn't automatically add the module. You can explicitly add it with:
+Alternatively, you can `go get` the package explicitly:
+
+```sh filename="terminal"
+go get -u github.com/clerk/clerk-sdk-go/v2
+```
+
+## Usage
+
+For details on how to use this module, see the [Go Documentation](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2).
+
+The library is organized using a resource-based structure similar to the [Clerk Backend API](https://clerk.com/docs/reference/backend-api).
+Each API supports specific operations, like Create or List. While operations for each resource vary, a similar pattern is applied throughout the library.
+
+To execute API operations, you must configure the library with your Clerk API secret key. Depending on your use case,
+there are two ways to use the library: With or without a client.
+
+For most use cases, the API without a client is a better choice. It requires a minimal setup and provides a more concise API for invoking operations.
+
+However, if you need to operate on multiple Clerk instances from one application, or need more flexibility for tests and mocking,
+you can instantiate multiple API clients with different API keys.
+
+The following examples demonstrate both approaches.
+
+### Usage without a client
+
+If you only use one API key, you can import the packages required for the APIs you need. Then you can execute your desired request methods as functions, such as $resource$.Get() or $resource$.Delete(). The following example demonstrates this process:
 
 ```go
-$ go get github.com/clerkinc/clerk-sdk-go
+import (
+    "github.com/clerk/clerk-sdk-go/v2"
+    "github.com/clerk/clerk-sdk-go/v2/$resource$"
+)
+
+// Each operation requires a context.Context as the first argument.
+ctx := context.Background()
+
+// Set the API key
+clerk.SetKey("sk_live_XXX")
+
+// Create
+resource, err := $resource$.Create(ctx, &$resource$.CreateParams{})
+
+// Get
+resource, err := $resource$.Get(ctx, id)
+
+// Update
+resource, err := $resource$.Update(ctx, id, &$resource$.UpdateParams{})
+
+// Delete
+resource, err := $resource$.Delete(ctx, id)
+
+// List
+list, err := $resource$.List(ctx, &$resource$.ListParams{})
+for _, resource := range list.$Resource$s {
+    // do something with the resource
+}
 ```
 
-## `Clerk` client
+### Usage with a client
 
-Now, you can create a `Clerk` client by calling the `clerk.NewClient()` function. This function requires your Clerk secret key. If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can retrieve your Clerk secret key from the Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
+If you're working with multiple keys, you should use the library with a client. The API packages for each
+resource export a `Client`, which supports all the API's operations.
+This way you can create as many clients as needed, each with their own API key, as shown in the following example:
 
-With your Clerk secret key, create a `Client` object to use the various services Clerk provides.
+```go
+import (
+    "github.com/clerk/clerk-sdk-go/v2"
+    "github.com/clerk/clerk-sdk-go/v2/$resource$"
+)
 
-<InjectKeys>
+// Each operation requires a context.Context as the first argument.
+ctx := context.Background()
 
-```go filename=".env"
-client, err := clerk.NewClient(`{{secret}}`)
-if err != nil {
-    // handle error
-} 
+// Initialize a client with an API key
+config := &clerk.ClientConfig{}
+config.Key = "sk_live_XXX"
+client := $resource$.NewClient(config)
+
+// Create
+resource, err := client.Create(ctx, &$resource$.CreateParams{})
+
+// Get
+resource, err := client.Get(ctx, id)
+
+// Update
+resource, err := client.Update(ctx, id, &$resource$.UpdateParams{})
+
+// Delete
+resource, err := client.Delete(ctx, id)
+
+// List
+list, err := client.List(ctx, &$resource$.ListParams{})
+for _, resource := range list.$Resource$s {
+    // do something with the resource
+}
 ```
 
-</InjectKeys>
-
+For more usage details, check out the [examples](/docs/references/go/other-examples) or the library's [README file](https://github.com/clerk/clerk-sdk-go).

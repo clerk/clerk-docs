@@ -3,100 +3,153 @@ title: Veryifing a session | Clerk Go SDK
 description: Learn how to verify a session with Clerk in your Go application.
 ---
 
-# Verifying a session in Go
+# Verifying a Clerk session in Go
 
-## Protect your backend APIs
-
-Go makes it really easy to create a simple HTTP server, and Clerk makes it simple to authenticate any request. The following examples shows how to verify a session and retrieve the corresponding user.
-
-<InjectKeys>
-
-```go
-package main
-
-import (
-	"net/http"
-	"strings"
-
-	"github.com/clerk/clerk-sdk-go/clerk"
-)
-
-func main() {
-	client, _ := clerk.NewClient(`{{secret}}`)
-
-	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		// get session token from Authorization header
-		sessionToken := r.Header.Get("Authorization")
-		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
-
-		// verify the session
-		sessClaims, err := client.VerifyToken(sessionToken)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
-
-		// get the user, and say welcome!
-		user, err := client.Users().Read(sessClaims.Claims.Subject)
-		if err != nil {
-			panic(err)
-		}
-
-		w.Write([]byte("Welcome " + *user.FirstName))
-	})
-
-	http.ListenAndServe(":8080", nil)
-}
-```
-
-</InjectKeys>
+Go enables you to create a simple HTTP server, and Clerk enables you to authenticate any request. The following examples show how to verify a session and retrieve the corresponding user.
 
 ## Using middleware
 
-The Clerk SDK also provides a simple middleware that adds the active session to the request's context.
+The library provides two functions for adding authentication to HTTP handlers with Clerk.
+
+Both middleware functions support header based authentication with a bearer token. The token will be parsed, verified, and
+its claims will be extracted as [SessionClaims](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaims).
+
+The claims will then be made available in the `http.Request.Context` for the next handler in the chain. The library
+provides the [SessionClaimsFromContext](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) helper for accessing the claims from the context.
+
+There are also two middleware helpers:
+- [WithHeaderAuthorization](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#WithHeaderAuthorization)
+- [RequireHeaderAuthorization](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#RequireHeaderAuthorization), which calls `WithHeaderAuthorization` under the hood, but responds with HTTP 403 Forbidden if it fails to detect valid session claims.
+
+<Callout type="info">
+Your Clerk secret key is required. If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can retrieve your Clerk secret key from the Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
+</Callout>
 
 <InjectKeys>
-
 ```go
-package main
-
 import (
-	"net/http"
+  "fmt"
+  "net/http"
 
-	"github.com/clerk/clerk-sdk-go/clerk"
+  "github.com/clerk/clerk-sdk-go/v2"
+  clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 )
 
 func main() {
-	client, _ := clerk.NewClient(`{{secret}}`)
+  clerk.SetKey(`{{secret}}`)
 
-	mux := http.NewServeMux()
+  mux := http.NewServeMux()
+  mux.HandleFunc("/", publicRoute)
+  protectedHandler := http.HandlerFunc(protectedRoute)
+  mux.Handle(
+    "/protected",
+    clerkhttp.WithHeaderAuthorization()(protectedHandler),
+  )
 
-	injectActiveSession := clerk.WithSessionV2(client)
-	mux.Handle("/hello", injectActiveSession(helloUserHandler(client)))
-
-	http.ListenAndServe(":8080", mux)
+  http.ListenAndServe(":3000", mux)
 }
 
-func helloUserHandler(client clerk.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+func publicRoute(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte(`{"access": "public"}`))
+}
 
-		sessClaims, ok := clerk.SessionFromContext(ctx)
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
-
-		user, err := client.Users().Read(sessClaims.Claims.Subject)
-		if err != nil {
-			panic(err)
-		}
-
-		w.Write([]byte("Welcome " + *user.FirstName))
-	}
+func protectedRoute(w http.ResponseWriter, r *http.Request) {
+  claims, ok := clerk.SessionClaimsFromContext(r.Context())
+  if !ok {
+    w.WriteHeader(http.StatusUnauthorized)
+    w.Write([]byte(`{"access": "unauthorized"}`))
+    return
+  }
+  fmt.Fprintf(w, `{"user_id": "%s"}`, claims.Subject)
 }
 ```
+</InjectKeys>
 
+## Custom token verification
+
+It is recommended to use the middleware functions for verifying Clerk sessions in an HTTP context.
+
+The middleware guarantees better performance and efficiency by making the minimum necessary requests to the Clerk Backend API.
+
+Verifying a Clerk session requires providing a JSON Web Key. The middleware fetches the key once and caches it.
+
+If you decide to verify the session token on your own, please be mindful of API rate limits. It is recommended to cache your JSON Web Key and invalidate the cache only when a replacement key is generated.
+
+<InjectKeys>
+```go
+import (
+  "fmt"
+  "net/http"
+
+  "github.com/clerk/clerk-sdk-go/v2"
+  "github.com/clerk/clerk-sdk-go/v2/jwks"
+  "github.com/clerk/clerk-sdk-go/v2/jwt"
+)
+
+func main() {
+  clerk.SetKey(`{{secret}}`)
+
+  mux := http.NewServeMux()
+  mux.HandleFunc("/", publicRoute)
+
+  // Fetch the JSON Web Key Set.
+  // Make sure you refetch the JSON Web Key Set whenever your
+  // Clerk secret key changes.
+  jwks, err := jwks.Get(context.Background() &jwks.GetParams{})
+  if err != nil {
+    panic(err)
+  }
+  mux.Handle("/protected", protectedRoute(jwks)),
+
+  http.ListenAndServe(":3000", mux)
+}
+
+func publicRoute(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte(`{"access": "public"}`))
+}
+
+func protectedRoute(jwks *clerk.JSONWebKeySet) func(http.ResponseWriter, *http.Request) {
+  return func(w http.ResponseWriter, r *http.Request) {
+    // Get the session JWT from the Authorization header
+    sessionToken := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
+    unsafeClaims, err := jwt.Decode(r.Context(), &jwt.DecodeParams{
+      Token: sessionToken,
+    })
+    if err != nil {
+      // handle the error
+      w.WriteHeader(http.StatusUnauthorized)
+      w.Write([]byte(`{"access": "unauthorized"}`))
+      return
+    }
+
+    // Fetch the correct JSON Web Key
+    var jwk *clerk.JSONWebKey
+    for _, k := range jwks.Keys {
+      if k.KeyID == unsafeClaims.KeyID {
+        jwk = k
+        break
+      }
+    }
+    if jwk == nil {
+      w.WriteHeader(http.StatusUnauthorized)
+      w.Write([]byte(`{"access": "unauthorized"}`))
+      return
+    }
+
+    // Verify the session
+    claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
+      Token: sessionToken,
+      JWK: jwk,
+    })
+    if err != nil {
+      // handle the error
+      w.WriteHeader(http.StatusUnauthorized)
+      w.Write([]byte(`{"access": "unauthorized"}`))
+      return
+    }
+    fmt.Fprintf(w, `{"user_id": "%s"}`, claims.Subject)
+  }
+}
+```
 </InjectKeys>

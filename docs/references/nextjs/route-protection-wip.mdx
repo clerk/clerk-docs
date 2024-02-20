@@ -1,0 +1,211 @@
+---
+title: Route protection | Next.js
+description: Learn how to protect the routes in your application 
+---
+
+# Route protection
+
+CClerk offers you many options to protect the routes in your application, as well as easy ways to integrate role or permissions-based checks. The opt-in nature of Clerk gives you flexibility in how you build your application.
+
+This guide will cover:
+- protecting routes from users who are not signed in
+- integrating your route protection with organization roles and permissions
+
+## Clerk's core concepts for route protection
+
+### Opt-in protection for routes
+
+`clerkMiddleware()` provides opt-in protection for your routes. By default, no routes will be protected. You will indicate what routes to protect through the Middleware, layouts, or even per route/page.
+
+### Integration with organizations and roles
+
+`clerkMiddleware()` provides a new `auth().protect()` method that can be used when creating rules to protect pages. This will integrate with organization roles and permissions, allowing you to protect routes based on the roles or permissions a user has.
+
+### Protect via Middleware, routes, pages, or a mixture of all three
+
+With the opt-in approach of `clerkMiddleware()`, you are free to protect your routes and pages in the most convenient way to you.
+
+### Protect routes with Middleware only
+
+The following example requires users visiting the `/dashboard` route to be signed in, in order to access the route. If they are not authenticated, [`auth().protect()`](/docs/references/nextjs/auth#authorization-with-protect) will redirect them to the sign-in route.
+
+```tsx filename="app/src/middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware((auth, req) => {
+  if (req.nextUrl.pathname.startsWith('/dashboard')) auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+### Protect routes using a Layout
+
+Use a `layout.tsx` file to protect the entire route, including all pages within the route.
+
+The following example requires users to be signed into the application to access any `/dashboard` route.
+
+```tsx filename="app/src/dashboard/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout({ children }: { children: React.ReactNode }){
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+  return <>{children}</>
+}
+```
+
+### Protect a specific page
+
+Use `auth()` and its helper methods to protect a specific page. 
+
+The following example requires users to be signed into the application to access the `/subscribe` route.
+
+```tsx filename="app/src/subscribe/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+
+  return (
+    <>
+      <h1>Plan Subscription</h1>
+      <p>Subscribe to one of our plans, and get access to our service today!</p>
+    </>
+  );
+}
+```
+
+## Protect your routes using organization roles or permissions
+
+### Layout example
+
+Use the [`auth().has()`](/docs/references/nextjs/authentication-object#has) method in a Layout file to require users to have a specific role or permission in order to access all pages within the route.
+
+The following example uses the `has()` method to require users to have the `org:admin` role in order to access any `/dashboard/manage-users` routes.
+
+```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  if (!auth().has({ role: "org:admin" })) {
+    redirect("/")
+  }
+  return <>{children}</>
+}
+```
+
+Use the [`auth().protect()`](/docs/references/nextjs/auth#protect) method in a Layout file to require users to have a specific role or permission in order to access all pages within the route.
+
+The following example uses the `protect()` method to require users to have the `org:domains:delete` permission in order to access any `/dashboard/manage-users` routes. 
+
+<Callout type="warning">
+  `auth().protect()` only works for App Router and is considered experimental.
+</Callout>
+
+{/* TODO: is this code example complete?  it grabs userId but does nothing with it. and when would we use protect over has - is there a benefit to one over the other? */}
+
+```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout(
+  { children }: 
+  { children: React.ReactNode }
+) {
+  const { userId } = auth().protect({ permission: "org:domains:delete"})
+  return <>{children}</>
+}
+```
+
+### Page example
+
+Use the [`auth().has()`](/docs/references/nextjs/authentication-object#has) method in a Page file to control access to the page based on a user's role or permission.
+
+```tsx filename="app/src/dashboard/manage-users/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+if (!auth().has({ role: "org:admin" })) {
+    return <p>You do not have permission to view this page.</p>
+  }
+
+  return (
+    <>
+      <h1>Manage Users</h1>
+      <p>Manage your users, invite new users or ban users</p>
+    </>
+  );
+}
+```
+
+## Protect routes with Middleware and Layout or Page
+
+Applications with more complex protection needs may be well suited to use a mix of Middleware and Layout or Page-based protection. Your application may have a `/dashboard` section, but within that, it might have routes or specific pages that are limited to users with a specific role or permission. In a situation such as this, you might enforce that only signed in users can access `/dashboard` in your Middleware, and then add specific role-based checks to the `layout.tsx` for a route like `/dashboard/manage-users`.
+
+### Protect routes with Middleware and Layout example
+
+The following example uses `clerkMiddleware()` to protect all `/dashboard` routes. If a user is not authenticated, [`auth().protect()`](/docs/references/nextjs/auth#authorization-with-protect) redirects them to the sign-in route.
+
+```tsx filename="app/src/middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if (  req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+Paired with the example above, the following example requires users visiting the `/dashboard/manage-users` route to be authenticated *and* to have the `org:admin` role. If they are not authenticated or do not have the `org:admin` role, [`auth().protect()`](/docs/references/nextjs/auth#authorization-with-protect) redirects them to the sign-in route.
+
+```tsx filename="app/src/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+export default async function HookLayout({ children }: { children: React.ReactNode }) {
+  if (!auth().has({ role: "org:admin" })) {
+    redirect("/")
+  }
+  return <>{children}</>
+}
+```
+
+### Protect routes with Middleware and Page example
+
+```tsx filename="app/src/middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if (  req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+
+## Layout or page only
+
+Since Clerk's `clerkMiddleware()` is purely opt-in, meaning if you don't add any specific protection to the Middleware all routes are by default public. This allows you to then enforce protections via only layouts or even pages and keep your protection logic scoped to that specific area it governs, in your application.
+
+

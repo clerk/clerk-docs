@@ -27,8 +27,6 @@ function getOrganization(organizationId: string): Promise<Organization | undefin
 
 ### `getOrganization` example
 
-The following example demonstrates how to retrieve information about the currently active organization.
-
 <InjectKeys>
 
 <Tabs type="npm-script" items={['NPM module', '<script>']}>
@@ -43,21 +41,10 @@ The following example demonstrates how to retrieve information about the current
 
     if (clerk.user) {
       if (clerk.organization.id) {
-        await clerk.getOrganization(clerk.organization.id)
-          .then((res) => console.log(res))
-          .catch((error) => console.log("An error occurred:", error.errors));
+        const organization = await clerk.getOrganization(clerk.organization.id);
+        console.log(organization);
       } else {
-        // If there is no active organization,
-        // mount Clerk's <OrganizationSwitcher />
-        // to allow the user to set an organization as active
-        document.getElementById("app").innerHTML = `
-          <h2>Select an organization to set it as active</h2>
-          <div id="org-switcher"></div>
-        `;
-
-        const orgSwitcherDiv = document.getElementById("org-switcher");
-
-        clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+        console.log("User is not a member of an organization");
       }
     } else {
       document.getElementById("app").innerHTML = `
@@ -90,18 +77,8 @@ The following example demonstrates how to retrieve information about the current
   </Tab>
 
   <Tab>
-  ```html filename="index.html" {19}
+  ```html filename="index.html" {9}
   <div id="sign-in"></div>
-
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
 
   <script>
     window.addEventListener("load", async function () {
@@ -109,21 +86,10 @@ The following example demonstrates how to retrieve information about the current
 
       if (Clerk.user) {
         if (Clerk.organization.id) {
-          await Clerk.getOrganization(Clerk.organization.id)
-            .then((res) => console.log(res))
-            .catch((error) => console.log("An error occurred:", error.errors));
+          const organization = await Clerk.getOrganization(Clerk.organization.id);
+          console.log(organization);
         } else {
-          // If there is no active organization,
-          // mount Clerk's <OrganizationSwitcher />
-          // to allow the user to set an organization as active
-          document.getElementById("app").innerHTML = `
-            <h2>Select an organization to set it as active</h2>
-            <div id="org-switcher"></div>
-          `;
-
-          const orgSwitcherDiv = document.getElementById("org-switcher");
-
-          Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+          console.log("User is not a member of an organization");
         }
       } else {
         const signInDiv = document.getElementById("sign-in");
@@ -173,11 +139,18 @@ function createOrganization({name, slug}: CreateOrganizationParams): Promise<Org
 
     if (clerk.user) {
       const createOrgButton = document.getElementById("create-org-button");
-      createOrgButton.addEventListener("click", () => {
-        clerk.createOrganization({ name: "test" })
-          .then((res) => console.log(res))
-          .catch((error) => console.log("An error occurred:", error.errors));
-      });
+      createOrgButton.onclick = function () {
+        clerk
+          .createOrganization({
+            name: "test-2",
+          })
+          .then((org) => {
+            console.log(org);
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      };
     } else {
       document.getElementById("app").innerHTML = `
         <div id="sign-in"></div>
@@ -210,19 +183,9 @@ function createOrganization({name, slug}: CreateOrganizationParams): Promise<Org
   </Tab>
 
   <Tab>
-  ```html filename="index.html" {22-24}
+  ```html filename="index.html" {12-14}
   <div id="sign-in"></div>
   <div id="create-org-button"></div>
-
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
 
   <script>
     window.addEventListener("load", async function () {
@@ -230,11 +193,18 @@ function createOrganization({name, slug}: CreateOrganizationParams): Promise<Org
 
       if (Clerk.user) {
         const createOrgButton = document.getElementById("create-org-button");
-        createOrgButton.addEventListener("click", () => {
-          Clerk.createOrganization({ name: "test" })
-            .then((res) => console.log(res))
-            .catch((error) => console.log("An error occurred:", error.errors));
-        });
+        createOrgButton.onclick = function () {
+          clerk
+            .createOrganization({
+              name: "test-2",
+            })
+            .then((org) => {
+              console.log(org);
+            })
+            .catch((error) => {
+              console.error(error);
+            });
+        };
       } else {
         const signInDiv = document.getElementById("sign-in");
 
@@ -247,3 +217,62 @@ function createOrganization({name, slug}: CreateOrganizationParams): Promise<Org
 </Tabs>
 
 </InjectKeys>
+
+### `createOrganization()` example
+
+<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
+```javascript filename="index.js" {7-24}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk(`{{pub_key}}`);
+  await clerk.load();
+
+  // Create an organization
+  const org = await clerk.createOrganization({
+    name: 'My Organization',
+    slug: 'my-organization',
+  });
+
+  // org will be the newly created Organization object
+  // you can use org however you would like moving forward,
+  // for example, check the org ID:
+  console.log(org.id);
+```
+
+```html filename="index.html" {18-28}
+  <script>
+    // Get this URL and Publishable Key from the Clerk Dashboard
+    const clerkPublishableKey = `{{pub_key}}`;
+    const frontendApiUrl = 'https://[your-domain].clerk.accounts.dev';
+    const version = '@latest'; // Set to appropriate version
+
+    // Creates asynchronous script
+    const script = document.createElement('script');
+    script.setAttribute('data-clerk-frontend-api', frontendApiUrl);
+    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
+    script.async = true;
+    script.src = `${frontendApi}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
+
+    // Adds listener to initialize ClerkJS after it's loaded
+    script.addEventListener('load', async function () {
+      await window.Clerk.load();
+
+      // Create an organization
+      const org = await window.Clerk.createOrganization({
+        name: 'My Organization',
+        slug: 'my-organization',
+      });
+
+      // org will be the newly created Organization object
+      // you can use org however you would like moving forward,
+      // for example, check the org ID:
+      console.log(org.id);
+    });
+    document.body.appendChild(script);
+  </script>
+```
+</CodeBlockTabs>
+
+[org-ref]: /docs/references/javascript/organization/organization
+[orgmem-ref]: /docs/references/javascript/organization-membership

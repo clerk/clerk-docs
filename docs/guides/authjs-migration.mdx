@@ -6,11 +6,11 @@ description: Learn how to migrate an application using Auth.js to use Clerk for 
 <TutorialHero
   framework="authjs"
   exampleRepoTitle="Migration Script Repository"
-  exampleRepo={[ 
+  exampleRepo={[
     {
       title: "Migration Script",
       link: "https://github.com/clerk/migration-script"
-      
+
     }
   ]}
 
@@ -77,7 +77,7 @@ CLERK_SECRET_KEY={{secret}}
 
 ### Wrap your Next.js app in `<ClerkProvider />`
 
-You will need to remove the `<SessionProvider session={session}>` provider from Auth.js and replace it with the `<ClerkProvider />` provider from Clerk. `<ClerkProvider />` will need to wrap your application, or wrap the portion of your app where you want to handle authentication. 
+You will need to remove the `<SessionProvider session={session}>` provider from Auth.js and replace it with the `<ClerkProvider />` provider from Clerk. `<ClerkProvider />` will need to wrap your application, or wrap the portion of your app where you want to handle authentication.
 
 <CodeBlockTabs type="installer" options={["App Router", "Pages Router"]}>
 
@@ -119,7 +119,7 @@ export default MyApp;
 
 #### Account Portal
 
-Account Portal is the fastest way to authenticate your app. Clerk's Account Portal hosts the `<SignIn />`, `<SignUp />`, `<UserProfile />`, and other components for your application. Read more about [Account Portal](/docs/account-portal/getting-started). 
+Account Portal is the fastest way to authenticate your app. Clerk's Account Portal hosts the `<SignIn />`, `<SignUp />`, `<UserProfile />`, and other components for your application. Read more about [Account Portal](/docs/account-portal/getting-started).
 
 To use the Account Portal, remove the routes that mount the Auth.js sign-in and sign-up UI. Replace the links to those routes with the [`<SignInButton>`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton>`](/docs/components/unstyled/sign-out-button) components.
 
@@ -136,24 +136,24 @@ With Clerk, you can control access to your application in a few different ways. 
 
 #### Control access to your app with Clerk Middleware
 
-You will need to remove the Auth.js Middleware from your application, and replace it with the Clerk's Middleware helper, `authMiddleware()`. 
+You will need to remove the Auth.js Middleware from your application, and replace it with the Clerk's Middleware helper, `clerkMiddleware()`.
 
 Auth.js's middleware always rejects unauthorized requests. You may have additionally configured the Next.js middleware config to protect specific private routes. You will need to make note of this configuration so you can recreate it.
 
 Clerk's Middleware gives you fine-grained control over handling the authenticated state and will, by default, run for your entire application.
 
-The example below is a basic configuration that requires authentication for all routes. You will need to edit this to allow specific routes to be public, as needed. Read the [`authMiddleware()`](/docs/references/nextjs/auth-middleware) documentation to learn more about how you can configure your Middleware.
+The example below is a basic configuration that does not protect any routes. All routes are public and you must opt-in to protection for routes. Read the [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) documentation to learn more about how you can configure your Middleware.
 
 ```tsx filename="middleware.ts"
-import { authMiddleware } from "@clerk/nextjs";
+import { clerkMiddleware } from "@clerk/nextjs";
 
-// This example protects all routes including api/trpc routes
-// Please edit this to allow other routes to be public as needed.
-// See https://clerk.com/docs/references/nextjs/auth-middleware for more information about configuring your Middleware
-export default authMiddleware({});
+export default clerkMiddleware();
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: [
+    '/((?!.*\\..*|_next).*)', // Don't run middleware on static files
+    '/', // Run middleware on index page
+    '/(api|trpc)(.*)'], // Run middleware on API routes
 };
 ```
 
@@ -192,11 +192,11 @@ Replace any Auth.js `getServerSession(req, res, authOptions)` with Clerk's helpe
 
   ```tsx failename="app/page.tsx"
   import { auth, currentUser } from "@clerk/nextjs";
-  
+
   export default async function Page() {
     const { userId } = auth();
     console.log(userId)
-    
+
     return (
       <p>Home Page</p>
     )
@@ -210,7 +210,7 @@ Replace any Auth.js `getServerSession(req, res, authOptions)` with Clerk's helpe
   ```tsx filename="pages/index.tsx"
   export async function getServerSideProps(context) {
     const session = getAuth(context.req);
-    
+
     return { props: { ...buildClerkProps(ctx.req) } };
   };
   ```
@@ -238,7 +238,7 @@ export default function Home() {
 }
 ```
 
-### User IDs as Foreign Keys  
+### User IDs as Foreign Keys
 
 When you migrate to Clerk, you will likely need to resolve the foreign key that you used in your database. If you used the `userId` from NextAuth.js, you could resolve this issue with one of the following two options:
 
@@ -253,7 +253,7 @@ When you migrate user data from Auth.js to Clerk, Clerk generates new user IDs f
 {
 	"userId": "{{user.external_id || user.id}}"
 }
-``` 
+```
 
 <Tabs type="router" items={["App Router", "Pages Router"]}>
   <Tab>
@@ -261,7 +261,7 @@ When you migrate user data from Auth.js to Clerk, Clerk generates new user IDs f
 
   ```tsx filename="app/page.tsx"
   import { auth } from "@clerk/nextjs";
-  
+
   export default async function Page() {
     const { sessionClaims: { userId } } = auth()
     console.log(userId)
@@ -279,17 +279,17 @@ When you migrate user data from Auth.js to Clerk, Clerk generates new user IDs f
   ```tsx filename="pages/index.tsx"
   import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
   import { GetServerSideProps } from "next";
-  
+
   export const getServerSideProps: GetServerSideProps = async (ctx) => {
     const { userId } = getAuth(ctx.req);
-  
+
     if (!userId) {
       // handle user is not logged in.
     }
-  
+
     const { sessionClaims: { userId } } = getAuth(req)
     console.log(userId)
-  
+
     return { props: { ...buildClerkProps(ctx.req) } };
   };
   ```
@@ -297,7 +297,7 @@ When you migrate user data from Auth.js to Clerk, Clerk generates new user IDs f
 </Tabs>
 
 <Callout type="info">
-  You can not access the above from the client side. If you are using one of Clerk's hooks, then you will need to check if `externalID` exists. If it doesn't, then read the `userId`. 
+  You can not access the above from the client side. If you are using one of Clerk's hooks, then you will need to check if `externalID` exists. If it doesn't, then read the `userId`.
 </Callout>
 
 #### Update your database

@@ -76,9 +76,9 @@ You can skip this step if you configured your satellite app with environment var
 This is an alternative configuration to the environment variable based setup that we described in the previous step.
 
 The properties related to the multi domain setup are as follows:
-* `isSatellite`: `boolean | ((url: URL) => boolean)`. This option defines that the application is a satellite application.
-* `domain`: `string | ((url: URL) => boolean)`. This option sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
-* `signInUrl`: `string`. This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
+- `isSatellite`: `boolean | ((url: URL) => boolean)`. This option defines that the application is a satellite application.
+- `domain`: `string | ((url: URL) => boolean)`. This option sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
+- `signInUrl`: `string`. This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
 
 The `URL` mentioned above is the request url for server side usage or the current location for client usage.
 
@@ -105,23 +105,21 @@ The `URL` mentioned above is the request url for server side usage or the curren
     ```
 
     ```js filename="middleware.ts"
-    import { authMiddleware, redirectToSignIn } from "@clerk/nextjs/server";
+    import {
+      clerkMiddleware,
+      createRouteMatcher
+    } from "@clerk/nextjs/server"
 
-    export default authMiddleware({
-      afterAuth(auth) {
-        // handle users who aren't authenticated
-        if (!auth.userId && !auth.isPublicRoute) {
-          return redirectToSignIn({ returnBackUrl: "https://satellite.dev" });
-        }
-      },
-      isSatellite: true,
-      signInUrl: 'https://primary.dev/sign-in'
-      domain: url => url.host
-    });
+    const isPublicRoute = createRouteMatcher(["/"])
+
+    export default clerkMiddleware((auth, req) => {
+      if (isPublicRoute(req)) return // if it's a public route, do nothing
+      auth().protect() // for any other route, require auth
+    })
 
     export const config = {
-      matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
-    };
+      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    }
     ```
     </CodeBlockTabs>
   </Tab>
@@ -159,9 +157,9 @@ The `URL` mentioned above is the request url for server side usage or the curren
 
 ### Ready to go 🎉
 
-Your satellite application should now be able to access the authentication state from your satellite domain! 
+Your satellite application should now be able to access the authentication state from your satellite domain!
 
-You can see it in action by: 
+You can see it in action by:
 1. Visiting the primary domain and signing in.
 2. Visiting the satellite domain.
 3. You now have an active session in the satellite domain, so you can see the [`<UserProfile />`](/docs/components/user/user-profile) component and update your information.

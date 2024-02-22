@@ -1,0 +1,147 @@
+---
+title: Requiring Authorization for Route protection | Next.js
+description: Learn how to protect the B2B (Business to Business) routes in your Next.js application that require authorization.
+---
+
+# Required Authorization for Route protection 
+
+Clerk offers you, the developer, any options to secure the routes in their applications, as well as easy ways to integrate role or permissions based checks. The opt-in nature of Clerk gives you flexibility in how you want to build you application.
+
+This guide will cover:
+- protecting routes from users who are not signed in
+- integrating your route protection with organization roles and permissions
+
+
+## Protect your routes using Organization roles or permissions
+
+
+### Protect a route using layout.tsx
+
+You can use `protect()` and `has()` in a route's `layout.tsx` to protect based on roles or permissions.
+
+<CodeBlockTabs type="router" options={["protect()", "has()"]}>
+
+```tsx filename="app/dashboard/manage-users/layout.tsx" 
+import { auth } from "@clerk/nextjs/server";
+
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  auth().protect({ permission: "org:test:permission" })
+  return (
+    <div>{children}</div>
+  )
+}
+```
+
+```tsx filename="app/dashboard/manage-users/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  if (!auth().has({ role: "org:admin" })) {
+    redirect("/")
+  }
+  return <>{children}</>
+}
+```
+</CodeBlockTabs>
+
+### Page example
+
+You can use `protect()` and `has()` in a specific page to protect using roles and permissions from organizations.
+
+<CodeBlockTabs type="router" options={["protect()", "has()"]}>
+```tsx filename="app/manage-users/page.tsx"
+import { auth } from "@clerk/nextjs/server"
+
+export default function Page() {
+
+  auth().protect({ permission: "org:test:permission" })
+
+  return (
+    <p>This is a page</p>
+  )
+}
+```
+
+```tsx filename="app/dashboard/manage-users/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+if (!auth().has({ role: "org:admin" })) {
+    return <p>You do not have permission to view this page.</p>
+  }
+
+  return (
+    <>
+      <h1>Manage Users</h1>
+      <p>Manage your users, invite new users or ban users</p>
+    </>
+  );
+}
+```
+</CodeBlockTabs>
+
+
+### Middleware
+
+You can manage your route protection with `clerkMiddleware()` along with `has()` and `protect()` to protect based on organization roles and permissions.
+
+<CodeBlockTabs type="router" options={["protect()", "has()"]}>
+```tsx filename="middleware.tsx"
+import {
+  clerkMiddleware,
+  createRouteMatcher,
+} from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard'
+]);
+
+export default clerkMiddleware((auth, req) => {
+  // Restricted to logged in users
+  // Logged out users will be redirected to sign-in route
+  if (isProtectedRoute(req)) {
+    console.log('test', auth().protect())
+    auth().protect()
+  }
+}
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+```tsx filename="app/dashboard/manage-users/page.tsx" 
+import {
+  clerkMiddleware,
+  createRouteMatcher,
+} from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard'
+]);
+
+export default clerkMiddleware((auth, req) => {
+  // restrict protected routes to users with specific permissions 
+  if (isProtectedRoute(req)) {
+    console.log('test')
+    auth().protect(has => {
+      return (
+        has({ permission: 'org:test:permission' })
+      )
+    })
+  }
+}
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+</CodeBlockTabs>
+
+

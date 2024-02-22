@@ -3,31 +3,33 @@ title: Requiring Authentication for Route protection | Next.js
 description: Learn how to protect the routes in your Next.js application that require authentication.
 ---
 
-# Required Authenication for Route protection 
+# Requiring Authenication for Route protection 
 
-Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized Auth object that you can use to require authentication throughout your application. Below, we explain how to access and use the Auth object.
+Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized [Auth](/docs/references/nextjs/authentication-object) object that you can use to require authentication throughout your application. Below, we explain how to access and use the Auth object.
 
-If you want to learn about protecting routes based on [organization](/docs/organizations/overview) roles or permissions, see the [requiring authorization](/docs/references/nextjs/current-user) guide.
+If you want to learn about protecting routes based on [organization](/docs/organizations/overview) roles or permissions, see the [requiring authorization](/docs/references/nextjs/route-protection-requiring-authorization) guide.
 
 ## App Router
 
-### Protect using your Route's layout.tsx or protect a specific page
+### Protect a layout or page
 
-You can use a `layout.tsx` file to protect the entire route, including all children. The following example would protect the entire `/dashboard` and require users to be signed into the application to access the route.  You can protect a specific page using our auth() and its helper methods. 
+You can use a `layout.tsx` file to protect the entire route, including all children. You can also protect a specific page using our auth() and its helper methods. The following examples would protect the route or page and require the user to be logged into the application.
+
 
 <CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
 
-```tsx filename="app/dashboard/layout.tsx" 
+```tsx filename="app/dashboard/layout.tsx"
 import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
 
 export default async function Layout(
-  { children }: 
-  { children: React.ReactNode }
+  { children }:
+    { children: React.ReactNode }
 ) {
-  if (!auth().userId) {
-    return auth().redirectToSignIn()
-  }
+  // This is an opinitonated auth check
+  // If the user is not logged in they will be redirected to the sign-in route
+  // If the user is logged in they can view the route
+  auth().protect()
+
   return <>{children}</>
 }
 ```
@@ -39,7 +41,7 @@ import { auth } from '@clerk/nextjs/server'
 export default function Page() {
 
   if (!auth().userId) {
-    return auth().redirectToSignIn()
+    return auth().protect()
   }
 
   return (
@@ -52,99 +54,164 @@ export default function Page() {
 ```
 </CodeBlockTabs>
 
+If `auth().protect()` is too opinionated, you can check for the `userID` and then perform whatever action you want based on whether a user is signed in and `userId` exists or the user is signed out and its `null`.
 
-### Protect using Middleware
+<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
 
-The following will require users to be logged in to access the `/dashboard` route, and if they are not it will redirect to sign the sign-in route.
+```tsx filename="app/dashboard/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { SignInButton, SignOutButton } from '@clerk/nextjs'
 
-```tsx filename="middleware.ts"
-import { clerkMiddleware } from '@clerk/nextjs/server';
-
-export default clerkMiddleware(
-  (auth, req) => {
-    if ( req.nextUrl.pathname.startsWith('/dashboard')) {
-      auth().protect();
-    }
+export default async function Layout(
+  { children }:
+    { children: React.ReactNode }
+) {
+  const { userId } = auth()
+  if (!userId) {
+    return (
+      <>
+        <header>
+          <div>Your Company Logo</div>
+          <div><SignInButton /></div>
+        </header>
+        <main>
+          {children}
+        </main>
+      </>
+    )
   }
-);
-
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
-
-### Middleware + layout or page
-
-Applications with more complex protection needs may be well suited to use a mix of Middleware and layout or page based protection. Your application may have a `/dashboard` section, but it may also have routes or specific pages that are limited to users with a specific role or permission. In a situation such as this you might enforce that only signed in users can access `/dashboard` in your Middleware, and then add specific role based checks the `layout.tsx` for a route like `app/orgs/layout.tsx"`.
-
-### Middleware + layout example
-
-<CodeBlockTabs type="router" options={["middleware.ts", "app/orgs/layout.tsx"]}>
-```tsx filename="middleware.ts"
-import { clerkMiddleware } from '@clerk/nextjs/server';
-
-export default clerkMiddleware(
-  (auth, req) => {
-    if (  req.nextUrl.pathname.startsWith('/dashboard')) {
-      auth().protect();
-    }
-  }
-);
-
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
-
-```tsx filename="app/orgs/layout.tsx" 
-import { auth } from "@clerk/nextjs/server";
-
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  auth().protect({ permission: "org:test:permission" })
   return (
-    <div>{children}</div>
+    <>
+      <header>
+        <div>Your Company Logo</div>
+        <p>Your userId is {userId}</p>
+        <div><SignOutButton /></div>
+      </header>
+      <main>
+        {children}
+      </main>
+    </>
+
+  )
+}
+```
+
+
+```tsx filename="app/subscribe/page.tsx" 
+import { SignInButton } from "@clerk/nextjs"
+import { auth } from "@clerk/nextjs/server"
+
+export default function Page() {
+
+  const { userId } = auth()
+
+  if (!userId) {
+    return (
+      <div>
+        <p>You are not signed in. Please sign in to see this content</p>
+        <SignInButton />
+      </div>
+    )
+  }
+
+  return (
+    <p>This is a protected page. You can see this because you are logged in.</p>
   )
 }
 ```
 </CodeBlockTabs>
 
 
+### Protect your Route Handlers and Server Actions
+
+You can use `auth().protect()` or the `userId` your Route Handlers or Server actions, allowing you to protect queries and mutations.
+
+<CodeBlockTabs type="router" options={["auth().protect()", "auth().userId()"]}>
+
+```tsx filename="/app/api/dashboard/route.ts 
+import { auth } from "@clerk/nextjs/server";
+
+export async function GET() {
+  console.log('FETCH')
+
+  // If there is no signed in user, this 
+  auth().protect()
+
+  // Perform your Route Handler logic here
+
+  return Response.json({ userId: auth().userId })
+}
+```
+
+```tsx filename="app/api/dashboard/route.ts"
+import { auth } from "@clerk/nextjs/server";
+
+export async function GET() {
+
+  const { userId } = auth()
+  if (!userId) {
+    return new Response('Error: No signed in user', { status: 401 })
+  }
+
+  // Perform your Route Handler logic here
+
+  return Response.json({ userId: userId })
+
+}
+```
+</CodeBlockTabs>
 
 ## Pages Router
 
-### Protect a specific page
+### Protect a page
 
 You can use a `layout.tsx` file to protect the entire route, including all children. The following example would protect the entire `/dashboard` and require users to be signed into the application to access the route.  You can protect a specific page using our auth() and its helper methods. 
 
-<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
+<CodeBlockTabs type="router" options={["getServerSideProps", "Client side"]}>
 
-```tsx filename="app/dashboard/layout.tsx" 
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+```tsx filename="app/subscribe/page.tsx" 
+import { getAuth, buildClerkProps } from "@clerk/nextjs/server";
+import { GetServerSideProps, InferGetServerSidePropsType } from "next";
 
-export default async function Layout(
-  { children }: 
-  { children: React.ReactNode }
-) {
-  if (!auth().userId) {
-    return auth().redirectToSignIn()
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+
+  const { userId } = getAuth(ctx.req);
+  if (!userId) {
+    return {
+      redirect: {
+        permanent: false,
+        destination: `/sign-in`,
+      },
+    };
   }
-  return <>{children}</>
+
+  return { props: { ...buildClerkProps(ctx.req) } };
+}
+
+export default function Page(props: InferGetServerSidePropsType<typeof getServerSideProps>) {
+
+  return (
+    <>
+      <h1>Plan Subscription</h1>
+      <p>Subscribe to one of our plans, and get access today!</p>
+    </>
+  );
 }
 ```
 
 
 ```tsx filename="app/subscribe/page.tsx" 
-import { auth } from '@clerk/nextjs/server'
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/router";
 
 export default function Page() {
+  const { isLoaded, user } = useUser()
+  const router = useRouter()
 
-  if (!auth().userId) {
-    return auth().redirectToSignIn()
+  if (!isLoaded) return null
+
+  if (!user?.id) {
+    router.push('/sign-in')
   }
 
   return (
@@ -157,8 +224,7 @@ export default function Page() {
 ```
 </CodeBlockTabs>
 
-
-### Protect using _app.tsx
+### Protect your application with _app.tsx
 
 The following will require users to be logged in to access the `/dashboard` route, and if they are not it will redirect to sign the sign-in route.
 
@@ -178,9 +244,11 @@ export const config = {
 };
 ```
 
-### Middleware
 
-Applications with more complex protection needs may be well suited to use a mix of Middleware and layout or page based protection. Your application may have a `/dashboard` section, but it may also have routes or specific pages that are limited to users with a specific role or permission. In a situation such as this you might enforce that only signed in users can access `/dashboard` in your Middleware, and then add specific role based checks the `layout.tsx` for a route like `app/orgs/layout.tsx"`.
+
+## Protect your application with Middleware
+
+You an protect your routes in Middleware using [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). `clerkMiddleware()` allows you select the routes you want to protect, and how you want to protect them. The example below is just protecting one route, but you can protect many routes.
 
 ```tsx filename="middleware.ts"
 import { clerkMiddleware } from '@clerk/nextjs/server';

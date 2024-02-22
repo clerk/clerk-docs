@@ -1,0 +1,202 @@
+---
+title: Requiring Authentication for Route protection | Next.js
+description: Learn how to protect the routes in your Next.js application that require authentication.
+---
+
+# Required Authenication for Route protection 
+
+Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized Auth object that you can use to require authentication throughout your application. Below, we explain how to access and use the Auth object.
+
+If you want to learn about protecting routes based on [organization](/docs/organizations/overview) roles or permissions, see the [requiring authorization](/docs/references/nextjs/current-user) guide.
+
+## App Router
+
+### Protect using your Route's layout.tsx or protect a specific page
+
+You can use a `layout.tsx` file to protect the entire route, including all children. The following example would protect the entire `/dashboard` and require users to be signed into the application to access the route.  You can protect a specific page using our auth() and its helper methods. 
+
+<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
+
+```tsx filename="app/dashboard/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout(
+  { children }: 
+  { children: React.ReactNode }
+) {
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+  return <>{children}</>
+}
+```
+
+
+```tsx filename="app/subscribe/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+
+  return (
+    <>
+      <h1>Plan Subscription</h1>
+      <p>Subscribe to one of our plans, and get access today!</p>
+    </>
+  );
+}
+```
+</CodeBlockTabs>
+
+
+### Protect using Middleware
+
+The following will require users to be logged in to access the `/dashboard` route, and if they are not it will redirect to sign the sign-in route.
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if ( req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+### Middleware + layout or page
+
+Applications with more complex protection needs may be well suited to use a mix of Middleware and layout or page based protection. Your application may have a `/dashboard` section, but it may also have routes or specific pages that are limited to users with a specific role or permission. In a situation such as this you might enforce that only signed in users can access `/dashboard` in your Middleware, and then add specific role based checks the `layout.tsx` for a route like `app/orgs/layout.tsx"`.
+
+### Middleware + layout example
+
+<CodeBlockTabs type="router" options={["middleware.ts", "app/orgs/layout.tsx"]}>
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if (  req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+```tsx filename="app/orgs/layout.tsx" 
+import { auth } from "@clerk/nextjs/server";
+
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  auth().protect({ permission: "org:test:permission" })
+  return (
+    <div>{children}</div>
+  )
+}
+```
+</CodeBlockTabs>
+
+
+
+## Pages Router
+
+### Protect a specific page
+
+You can use a `layout.tsx` file to protect the entire route, including all children. The following example would protect the entire `/dashboard` and require users to be signed into the application to access the route.  You can protect a specific page using our auth() and its helper methods. 
+
+<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
+
+```tsx filename="app/dashboard/layout.tsx" 
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function Layout(
+  { children }: 
+  { children: React.ReactNode }
+) {
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+  return <>{children}</>
+}
+```
+
+
+```tsx filename="app/subscribe/page.tsx" 
+import { auth } from '@clerk/nextjs/server'
+
+export default function Page() {
+
+  if (!auth().userId) {
+    return auth().redirectToSignIn()
+  }
+
+  return (
+    <>
+      <h1>Plan Subscription</h1>
+      <p>Subscribe to one of our plans, and get access today!</p>
+    </>
+  );
+}
+```
+</CodeBlockTabs>
+
+
+### Protect using _app.tsx
+
+The following will require users to be logged in to access the `/dashboard` route, and if they are not it will redirect to sign the sign-in route.
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if ( req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+### Middleware
+
+Applications with more complex protection needs may be well suited to use a mix of Middleware and layout or page based protection. Your application may have a `/dashboard` section, but it may also have routes or specific pages that are limited to users with a specific role or permission. In a situation such as this you might enforce that only signed in users can access `/dashboard` in your Middleware, and then add specific role based checks the `layout.tsx` for a route like `app/orgs/layout.tsx"`.
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware(
+  (auth, req) => {
+    if ( req.nextUrl.pathname.startsWith('/dashboard')) {
+      auth().protect();
+    }
+  }
+);
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+
+

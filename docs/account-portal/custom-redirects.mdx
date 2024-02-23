@@ -12,9 +12,9 @@ After a user signs in or signs up, Clerk automatically redirects users back to y
 You can define the paths you want the users to be redirected to via environment variables. In this example, we redirect users to `/dashboard` after signing in, and to `/onboarding` after signing up.
 
 <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
-```sh filename=".env" 
+```sh filename=".env"
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding 
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
 ```
 
 ```sh filename=".env"
@@ -25,26 +25,18 @@ CLERK_AFTER_SIGN_UP_URL=/onboarding
 
 ## Middleware
 
-If you are using Next.js and want a more programmatically generated redirect option, you can use the `afterAuth()` function from our [Clerk middleware](/docs/references/nextjs/auth-middleware).
-
-<Callout type="info" emoji="💡">
-  The `afterAuth()` function will always take precedence over environment variables.
-</Callout>
+If you are using Next.js and want a more programmatically generated redirect option, you can use the [`auth().protect()`](/docs/references/nextjs/auth#protect) method in your [Clerk middleware](/docs/references/nextjs/clerk-middleware).
 
 ```tsx filename="middleware.ts"
-export default authMiddleware({
-  afterAuth(auth, req, evt) {
-    // handle users who aren't authenticated
-    if (!auth.userId && !auth.isPublicRoute) {
-      if (req.url === "/onboarding") {
-        return redirectToSignUp({ returnBackUrl: "/onboarding" });
-      } else if (req.url === "/dashboard") {
-        return redirectToSignIn({ returnBackUrl: "/dashboard" });
-      }
-    }
-  },
-  publicRoutes: ["/publicly-available-page"],
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware((auth, req) => {
+  if (req.nextUrl.pathname.startsWith('/dashboard')) auth().protect();
 });
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
 ```
 
 ## `afterSignInUrl` and `afterSignUpUrl` props
@@ -113,7 +105,7 @@ function App() {
 </CodeBlockTabs>
 
 <Callout type="info" emoji="💡">
-  `<RedirectToSignIn />` or `<RedirectToSignUp />` child components will always take precedence over `<ClerkProvider>`. 
+  `<RedirectToSignIn />` or `<RedirectToSignUp />` child components will always take precedence over `<ClerkProvider>`.
 </Callout>
 
 ### Button components
@@ -128,7 +120,7 @@ export default function Home() {
 return (
   <div>
     <h1>Welcome!</h1>
-    
+
     <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
       Sign in
     </SignInButton>

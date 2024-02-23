@@ -234,64 +234,61 @@ It's possible for a user to be signed in, but not have an active organization. T
   - The user joined or created multiple organizations, and left or deleted the active organization
 
 There are two ways to limit access to users with active organizations only:
-  - [Limit access using the `authMiddleware()` helper](#limit-access-using-the-auth-middleware-helper)
+  - [Limit access using the `clerkMiddleware()` helper](#limit-access-using-the-clerk-middleware-helper)
   - [Limit access using an App Router layout](#limit-access-using-an-app-router-layout)
 
 Based on your use case, you can decide to limit users either in the entire app or a specific part of it. For example, a B2B application might need to limit access to only users with an active organization, whereas a B2B2C application might limit only the `/dashboard` path to users with an active organization.
 
-#### Limit access using the `authMiddleware()` helper
 
-Clerk's [`authMiddleware()`](/docs/references/nextjs/auth-middleware) helper can be used in both App Router and Pages Router applications to limit access to users with active organizations only.
+#### Limit access using the `clerkMiddleware()` helper
 
-To limit access to the entire application, your middleware can be configured as follows:
+Clerk's [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) helper can be used in both App Router and Pages Router applications to limit access to users with active organizations only.
+
+In the example below, the `clerkMiddleware()` helper is used to redirect logged in users to the organization selection page if they are not active in an organization.
 
 ```tsx filename="middleware.ts"
-  import { authMiddleware, redirectToSignIn } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-  export default authMiddleware({
-    afterAuth(auth, req, evt) {
-      ...
-      // Redirect signed-in users to organization selection page if they are not active in an organization
-      if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
-        const searchParams = new URLSearchParams({
-          redirectUrl: req.url
-        })
+export default clerkMiddleware((auth, req) => {
+  // Redirect logged in users to organization selection page if they are not active in an organization
+  if(auth.userId && !auth.orgId && req.nextUrl.pathname !== "/org-selection"){
+    const searchParams = new URLSearchParams({redirectUrl: req.url});
 
-        const orgSelection = new URL(`/org-selection?${searchParams.toString()}`, req.url);
+    const orgSelection = new URL(`/org-selection?${searchParams.toString()}`, req.url);
 
-        return NextResponse.redirect(orgSelection)
-      }
-      ...
-    }
-  });
+    return NextResponse.redirect(orgSelection);
+  }
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
 ```
 
 To limit access to a specific part of the application, you can check if the path the user is visiting is the path you want to limit access to. In this example, the `/dashboard` path is limited to users with active organizations only. If the user is not active in an organization, they will be redirected to the `/dashboard/org-selection` page.
 
 ```tsx filename="middleware.ts"
-  import { authMiddleware, redirectToSignIn } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-  export default authMiddleware({
-    afterAuth(auth, req, evt) {
-      ...
-      // Redirect signed-in users to organization selection page if they are not active in an organization
-      if(
-        auth.userId &&
-        !auth.orgId &&
-        req.nextUrl.pathname.startsWith('/dashboard') &&
-        req.nextUrl.pathname !== "/dashboard/org-selection"
-        ){
-      const searchParams = new URLSearchParams({
-        redirectUrl: req.url
-      })
+export default clerkMiddleware((auth, req) => {
+  // Redirect logged in users to organization selection page if they are not active in an organization
+  if(
+    auth.userId &&
+    !auth.orgId &&
+    req.nextUrl.pathname.startsWith('/dashboard') &&
+    req.nextUrl.pathname !== "/dashboard/org-selection"
+  ){
+    const searchParams = new URLSearchParams({redirectUrl: req.url})
 
-      const orgSelection = new URL(`/dashboard/org-selection?${searchParams.toString()}`, req.url);
+    const orgSelection = new URL(`/dashboard/org-selection?${searchParams.toString()}`, req.url);
 
-      return NextResponse.redirect(orgSelection)
-      }
-      ...
-    }
-  });
+    return NextResponse.redirect(orgSelection);
+  }
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
 ```
 
 Now that you have configured your middleware to redirect users to the `/org-selection` page if they are not active in an organization, you need to create the `/org-selection` page. This page will allow users to select an organization or create their own organization.
@@ -360,7 +357,7 @@ Now that you have configured your middleware to redirect users to the `/org-sele
 
 #### Limit access using an App Router layout
 
-In Next.js App Router applications, instead of using `authMiddleware()`, you also have the option to use a layout to limit access to users with active organizations only.
+In Next.js App Router applications, instead of using `clerkMiddleware()`, you also have the option to use a layout to limit access to users with active organizations only.
 
 In the example below, a component called `RequiredActiveOrgLayout` is created. This component will be used as a layout for all pages that require an active organization. If the user has an active organization, the route the user is visting will be rendered. If the user does not have an active organization, the organization selection page will be rendered.
 
@@ -404,6 +401,6 @@ You have configured your Clerk application to hide personal accounts and enforce
 - detect an active organization by using Clerk's `auth()` helper function or `useAuth()` hook
 - set an active organization automatically through Clerk components or manually using the `setActive` method
 - set an active organization based on the URL
-- limit access to your application to only users with active organizations by utilizing Clerk's `authMiddleware()` helper or by implementing an App Router layout
+- limit access to your application to only users with active organizations by utilizing Clerk's `clerkMiddleware()` helper or by implementing an App Router layout
 
 Now that you've completed these steps, your application is well-configured for organizational use, providing a streamlined experience for users associated with organizations.

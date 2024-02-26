@@ -1,28 +1,34 @@
 ---
-title: Veryifing a session | Clerk Go SDK
+title: Verify a Clerk session in Go
 description: Learn how to verify a session with Clerk in your Go application.
 ---
 
-# Verifying a Clerk session in Go
+# Verify a Clerk session in Go
 
-Go enables you to create a simple HTTP server, and Clerk enables you to authenticate any request. The following examples show how to verify a session and retrieve the corresponding user.
+There are two ways to verify a session with Clerk in your Go application:
+- [Using Clerk middleware](#use-clerk-middleware-to-verify-a-session)
+<br/>If you want to verify a session in an HTTP context, it is recommended to use Clerk middleware. Clerk middleware guarantees better performance and efficiency by making the minimum necessary requests to the Clerk Backend API.
 
-## Using middleware
+- [Manually verifying the session token](#manually-verify-a-session-token)
+<br/>If you want to verify a session in a non-HTTP context, or if you would like total control over the verification process, you can verify the session token on your own.
 
-The library provides two functions for adding authentication to HTTP handlers with Clerk.
+## Use Clerk middleware to verify a session
 
-Both middleware functions support header based authentication with a bearer token. The token will be parsed, verified, and
-its claims will be extracted as [SessionClaims](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaims).
+Go enables you to create a simple HTTP server, and Clerk enables you to authenticate any request. Together, you can create a secure server that only allows authenticated users to access certain routes.
 
-The claims will then be made available in the `http.Request.Context` for the next handler in the chain. The library
-provides the [SessionClaimsFromContext](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) helper for accessing the claims from the context.
+Clerk Go SDK provides two functions for adding authentication to HTTP handlers:
 
-There are also two middleware helpers:
-- [WithHeaderAuthorization](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#WithHeaderAuthorization)
-- [RequireHeaderAuthorization](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#RequireHeaderAuthorization), which calls `WithHeaderAuthorization` under the hood, but responds with HTTP 403 Forbidden if it fails to detect valid session claims.
+- [`WithHeaderAuthorization()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#WithHeaderAuthorization)
+- [`RequireHeaderAuthorization()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#RequireHeaderAuthorization), which calls `WithHeaderAuthorization()` under the hood, but responds with `HTTP 403 Forbidden` if it fails to detect valid session claims.
+
+Both middleware functions support header based authentication with a bearer token. The token will be parsed, verified, and its claims will be extracted as [`SessionClaims`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaims).
+
+The claims will then be made available in the `http.Request.Context` for the next handler in the chain. Clerk Go SDK provides the [`SessionClaimsFromContext()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) helper for accessing the claims from the context.
+
+The following example demonstrates how to use the `WithHeaderAuthorization()` middleware to protect a route. If the user tries accessing the route and their session token is valid, the user's ID will be returned in the response.
 
 <Callout type="info">
-Your Clerk secret key is required. If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can retrieve your Clerk secret key from the Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
+Your Clerk secret key is required. If you are signed in to your Clerk Dashboard, your secret key should become visible by selecting the eye icon. Otherwise, you can retrieve your Clerk secret key from the Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
 </Callout>
 
 <InjectKeys>
@@ -65,15 +71,15 @@ func protectedRoute(w http.ResponseWriter, r *http.Request) {
 ```
 </InjectKeys>
 
-## Custom token verification
+## Manually verify a session token
 
-It is recommended to use the middleware functions for verifying Clerk sessions in an HTTP context.
+Verifying a Clerk session manually is useful when you want to verify a session in a non-HTTP context, or if you would like total control over the verification process. With the solution above, Clerk middleware makes the minimum necessary requests to the Clerk Backend API. With this solution, you must be mindful of API rate limits.
 
-The middleware guarantees better performance and efficiency by making the minimum necessary requests to the Clerk Backend API.
+Verifying a session token requires providing a JSON Web Key. When using Clerk middleware to verify a session, it fetches the JSON Web Key once and caches it for you. However, when manually verifying a session, you are required to fetch and cache the JSON Web Key yourself.
 
-Verifying a Clerk session requires providing a JSON Web Key. The middleware fetches the key once and caches it.
+Clerk Go SDK provides a set of functions for decoding and verifying JWTs, as well as fetching JSON Web Key Sets. It is recommended to cache your JSON Web Key and invalidate the cache only when a replacement key is generated.
 
-If you decide to verify the session token on your own, please be mindful of API rate limits. It is recommended to cache your JSON Web Key and invalidate the cache only when a replacement key is generated.
+The following example demonstrates how to manually verify a session token. If the user tries accessing the route and their session token is valid, the user's ID will be returned in the response.
 
 <InjectKeys>
 ```go

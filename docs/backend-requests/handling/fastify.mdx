@@ -1,0 +1,175 @@
+---
+title: Handling requests with Fastify
+description: Learn how to handle authenticated requests with Fastify plugin using Clerk. 
+---
+
+# Handling requests with Fastify
+
+## Fastify plugin
+
+The Clerk Fastify SDK offers a plugin specifically for [Fastify](https://fastify.dev/).
+
+`clerkPlugin` is a lax plugin that determines the authenticated / unauthenticated request state 
+and is used in combination with `getAuth()` to retrieve the auth and handle appropriately the request.
+
+## Implementing lax authentication
+
+<CodeBlockTabs type="js-ts" options={["JavaScript", "TypeScript"]}>
+  ```js
+  import 'dotenv/config'; // To read CLERK_PUBLISHABLE_KEY & CLERK_SECRET_KEY
+  import Fastify from 'fastify';
+  import { clerkPlugin, getAuth } from '@clerk/fastify';
+
+  const server = Fastify({ logger: true });
+
+  server.register(clerkPlugin);
+
+  server.get('/private', (req, reply) => {
+    const auth = getAuth(req);
+    if (!auth.userId) {
+      return reply.code(401).send();
+    }
+    return { hello: 'world' };
+  });
+
+  const start = async () => {
+    try {
+      await server.listen({ port: 3000 });
+    } catch (err) {
+      server.log.error(err);
+      process.exit(1);
+    }
+  };
+  start();
+  ```
+
+  ```typescript
+  import 'dotenv/config'; // To read CLERK_PUBLISHABLE_KEY & CLERK_SECRET_KEY
+  import Fastify from 'fastify';
+  import { clerkPlugin, getAuth } from '@clerk/fastify';
+  import type { FastifyInstance } from 'fastify';
+
+  const server: FastifyInstance = Fastify({ logger: true });
+
+  server.register(clerkPlugin);
+
+  server.get('/private', (req, reply) => {
+    const auth = getAuth(req);
+    if (!auth.userId) {
+      return reply.code(401).send();
+    }
+    return { hello: 'world' };
+  });
+
+  const start = async () => {
+    try {
+      await server.listen({ port: 3000 });
+    } catch (err) {
+      server.log.error(err);
+      process.exit(1);
+    }
+  };
+  start();
+  ```
+</CodeBlockTabs>
+
+## Implementing strict authentication
+
+<CodeBlockTabs type="js-ts" options={["JavaScript", "TypeScript"]}>
+  ```js
+  import Fastify from 'fastify';
+  import { clerkPlugin, getAuth } from '@clerk/fastify';
+
+  const server = Fastify({ logger: true });
+
+  server.register(clerkPlugin);
+
+  const clerkRequireAuth = (request, reply) => {
+    const auth = getAuth(request);
+    if (!auth.userId) {
+      return reply.code(401).send(null);
+    }
+    return reply;
+  };
+
+  const privateRoutes = async (fastify) => {
+    fastify.addHook('preHandler', clerkRequireAuth);
+
+    fastify.get('/private', async (req, _reply) => {
+      return { hello: 'world', auth: getAuth(req) };
+    });
+  };
+
+  server.register(privateRoutes);
+
+  const start = async () => {
+    try {
+      await server.listen({ port: 3000 });
+    } catch (err) {
+      server.log.error(err);
+      process.exit(1);
+    }
+  };
+  start();
+  ```
+
+  ```typescript
+  import 'dotenv/config'; // To read CLERK_PUBLISHABLE_KEY & CLERK_SECRET_KEY
+  import Fastify from 'fastify';
+  import { clerkPlugin, getAuth } from '@clerk/fastify';
+  import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+
+  const server = Fastify({ logger: true });
+
+  server.register(clerkPlugin);
+
+  const clerkRequireAuth = (request: FastifyRequest, reply: FastifyReply) => {
+    const auth = getAuth(request);
+    if (!auth.userId) {
+      return reply.code(401).send(null);
+    }
+    return reply;
+  };
+
+  const privateRoutes = async (fastify: FastifyInstance) => {
+    fastify.addHook('preHandler', clerkRequireAuth);
+
+    fastify.get('/private', async (req: FastifyRequest, _reply: FastifyReply) => {
+      return { hello: 'world', auth: getAuth(req) };
+    });
+  };
+
+  server.register(privateRoutes);
+
+  const start = async () => {
+    try {
+      await server.listen({ port: 3000 });
+    } catch (err) {
+      server.log.error(err);
+      process.exit(1);
+    }
+  };
+  start();
+  ```
+</CodeBlockTabs>
+  
+
+## Plugin options
+
+These options can be used `clerkPlugin`.
+
+| Name        | Type        | Description    |
+| ----------- | ----------- | -------------- |
+| `jwtKey`  | `string` | Clerk's JWT session token can be verified in a networkless manner using the JWT verification key. By default, Clerk will use our well-known JWKs endpoint to fetch and cache the key for any subsequent token verification. If you use the `CLERK_JWT_KEY` environment variable or the `jwtKey` option to supply the key, Clerk will pick it up and do networkless verification for session tokens using it. For more information, refer to [Networkless Token Verification](https://clerk.com/docs/references/nodejs/token-verification#validate-the-authorized-party-of-a-session-token). |
+| `hookName` | `string` | Can be `onRequest` or `preHandler`  |
+| `secretKey` | `string` | TODO  |
+| `apiUrl` | `string` | TODO  |
+| `apiVersion` | `string` | TODO  |
+| `userAgent` | `string` | TODO  |
+| `audience` | `string \| string[]` | TODO  |
+| `publishableKey` | `string` | TODO  |
+| `isSatellite` | `boolean` | TODO  |
+| `domain` | `string` | TODO  |
+| `proxyUrl` | `string` | TODO  |
+| `sdkMetadata` | `{ name: string, version: string }` | TODO  |
+| `telemetry` | `{ disabled: boolean, debug: boolean }` | TODO  |

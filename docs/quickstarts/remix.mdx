@@ -7,6 +7,10 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Remix application. This guide assumes that you are using Remix v2 or later.
 
+<Callout type='info'>
+  You're reading the quickstart guide for the **beta** of the next major version of the Remix SDK. For more information about the changes from the current version, [check out the upgrade guide](/docs/upgrade-guides/core-2/remix)!
+</Callout>
+
 <Steps>
 
 ### Install `@clerk/remix`
@@ -29,13 +33,13 @@ Once you have a Remix application ready, you need to install Clerk's Remix SDK. 
 
 ### Set environment variables
 
-Below is an example of an `.env` file.
+Below is an example of an `.env.local` file.
 
 **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
 <InjectKeys>
 
-```sh filename=".env"
+```sh filename=".env.local"
 CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```
@@ -149,6 +153,72 @@ function App() {
 
 // Wrap your app in ClerkApp(app)
 export default ClerkApp(App);
+```
+
+### Set root `ErrorBoundary`
+
+Clerk uses short lived tokens to keep your application secure. To refresh expired tokens, Clerk uses Remix's error boundary.
+
+<Callout type="info">
+  If you are seeing a 401 after a short period of time, even though your user is signed in, please verify you have implemented this section.
+</Callout>
+
+```tsx filename="app/root.tsx"
+import type { MetaFunction, LoaderFunction } from "@remix-run/node";
+
+import {
+  Links,
+  LiveReload,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+} from "@remix-run/react";
+
+import { rootAuthLoader } from "@clerk/remix/ssr.server";
+import { ClerkApp, ClerkErrorBoundary } from "@clerk/remix";
+
+export const meta: MetaFunction = () => ({
+  charset: "utf-8",
+  title: "New Remix App",
+  viewport: "width=device-width,initial-scale=1",
+});
+
+export const loader: LoaderFunction = (args) => rootAuthLoader(args);
+// add an Error Boundary
+export const ErrorBoundary = ClerkErrorBoundary();
+
+function App() {
+  return (
+    <html lang="en">
+      <head>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <Outlet />
+        <ScrollRestoration />
+        <Scripts />
+        <LiveReload />
+      </body>
+    </html>
+  );
+}
+
+export default ClerkApp(App);
+```
+
+#### Custom boundary
+
+If you need to add a custom boundary to your application, you can pass it as an argument to the `ClerkErrorBoundary`.
+
+```tsx filename="app/root.tsx"
+// Imports
+
+// YourBoundary is passed as an argument to ClerkErrorBoundary
+export const ErrorBoundary = ClerkErrorBoundary(YourBoundary);
+
+// Additional application code
 ```
 
 ### Build your own sign-in and sign-up pages

@@ -1,24 +1,27 @@
 ---
-title: Requiring Authorization for Route protection | Next.js
+title: Requiring authorization for route protection | Next.js
 description: Learn how to protect the B2B (Business to Business) routes in your Next.js application that require authorization.
 ---
 
-# Required Authorization for Route protection 
+# Required authorization for route protection
 
-Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized [Auth](/docs/references/nextjs/authentication-object) object that you can use to require authorication throughout your application. This allows you to integrate your route protection with Clerk's [Organizations](http://localhost:4003/docs/organizations/overview) and the roles and permissions available with organizations. Below, we explain how to access and use the Auth object.
+Whether you're using the App Router, Pages Router, or Middleware, Clerk provides access to a standardized [`auth()`](/docs/references/nextjs/authentication-object) object that you can use to access authorization throughout your application. This allows you to protect routes based on Clerk's [organizations](/docs/organizations/overview) and their roles and permissions.
 
 If you want to learn about protecting routes based on authentication, see the [requiring authentication](/docs/references/nextjs/route-protection-requiring-authentication) guide.
-
 
 ## App Router
 
 ### Protect a layout or page
 
-You can use `protect()` and `has()` in a route's `layout.tsx` to protect based on [permissions](/docs/organizations/verify-user-permissions) or [roles](/docs/organizations/verify-user-permissions#authorize-with-roles.
+You can protect an entire route tree or an individual page by using Clerk helpers based on [permissions](/docs/organizations/verify-user-permissions) or [roles](/docs/organizations/verify-user-permissions#authorize-with-roles). There are two methods that you can use depending on your use case:
+
+- Using [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign in route automatically
+- Using [`auth().has()`](/docs/references/nextjs/authentication-object#has) if you want more control over what your app does based on the authorization status
+
+#### Protect a layout
 
 <CodeBlockTabs type="router" options={["protect()", "has()"]}>
-
-```tsx filename="app/dashboard/manage-users/layout.tsx" 
+```tsx filename="app/dashboard/manage-users/layout.tsx"
 import { auth } from "@clerk/nextjs/server";
 
 export default async function Layout({
@@ -27,13 +30,14 @@ export default async function Layout({
   children: React.ReactNode;
 }) {
   auth().protect({ permission: "org:sys_memberships:manage" })
+
   return (
     <div>{children}</div>
   )
 }
 ```
 
-```tsx filename="app/dashboard/manage-users/layout.tsx" 
+```tsx filename="app/dashboard/manage-users/layout.tsx"
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 
@@ -46,8 +50,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
 ```
 </CodeBlockTabs>
 
-
-You can use `protect()` and `has()` in a specific page to protect using roles and permissions from organizations.
+#### Protect a page
 
 <CodeBlockTabs type="router" options={["protect()", "has()"]}>
 ```tsx filename="app/manage-users/page.tsx"
@@ -63,7 +66,7 @@ export default function Page() {
 }
 ```
 
-```tsx filename="app/dashboard/manage-users/page.tsx" 
+```tsx filename="app/dashboard/manage-users/page.tsx"
 import { auth } from '@clerk/nextjs/server'
 
 export default function Page() {
@@ -84,7 +87,12 @@ if (!auth().has({ role: "org:admin" })) {
 
 ### Protect your Route Handlers and Server Actions
 
-You can use auth().protect() to check permissions in your Route Handlers or Server actions, allowing you to protect queries and mutations.
+{/* TODO: Add has example */}
+
+You can use protect queries and mutations in your Route Handlers or Server Actions in two ways:
+
+- `auth().protect()` if you want Clerk to automatically return an error
+- `auth().has()` if you want to customize the behavior or error message
 
 ```tsx filename="/app/api/dashboard/route.ts"
 import { auth } from "@clerk/nextjs/server";
@@ -100,62 +108,44 @@ export async function GET() {
 }
 ```
 
-
 ## Pages Router
 
 ### Protect a page
 
-You can protect a page in your application by checking either the permissions or the role that the user has. 
+You can protect a page using [`getServerSideProps()`](https://nextjs.org/docs/pages/building-your-application/data-fetching/get-server-side-props) when using Server Side Rendering, or with [`useAuth()`](/docs/references/react/use-auth) from the client side.
 
-```tsx filename="/pages/dashboard/manage-memberships"
-import { useAuth } from "@clerk/nextjs";
+<Tabs type="router" items={["Server Side Rendered", "Client side"]}>
+  <Tab>
+  {/* TODO: Add getServerSideProps example */}
+  </Tab>
 
-export default function Page() {
+  <Tab>
+  Note that in the following example, all content is sent to the client. If JavaScript doesn't run, the user can see the content. If you need to protect sensitive content, use the "Server Side Rendered" example or [`clerkMiddleware()`](#protect-your-application-with-middleware) instead.
 
-  const { has, isLoaded } = useAuth()
+  ```tsx filename="/pages/dashboard/manage-memberships"
+  import { useAuth } from "@clerk/nextjs";
 
-  if (!isLoaded) return "Loading..."
+  export default function Page() {
 
-  if (!has({ permission: "org:sys_memberships:manage" })) {
-    return <p>You do not have access to this page</p>
+    const { has, isLoaded } = useAuth()
+
+    if (!isLoaded) return "Loading..."
+
+    if (!has({ permission: "org:sys_memberships:manage" })) {
+      return <p>You do not have access to this page</p>
+    }
+
+    return (
+      <>
+        <h1>Manage Memberships</h1>
+        <p>Use this page to manage the memberships in your organization</p>
+      </>
+    );
   }
-
-  return (
-    <>
-      <h1>Manage Memberships</h1>
-      <p>Use this page to manage the memberships in your organization<p>
-    </>
-  );
-}
-````
+  ```
+  </Tab>
+</Tabs>
 
 ## Protect your application with Middleware
 
-You an protect your routes in Middleware using [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). `clerkMiddleware()` allows you select the routes you want to protect, and how you want to protect them. The example below is just protecting one route, but you can protect many routes.
-
-This is just a simple example of `clerkMiddleware()`. Please see the clerkMiddleware documentation for detailed information on the options and configurations available.
-
-```tsx filename="middleware.tsx"
-import {
-  clerkMiddleware,
-  createRouteMatcher,
-} from '@clerk/nextjs/server';
-
-const isProtectedRoute = createRouteMatcher([
-  '/dashboard'
-]);
-
-export default clerkMiddleware((auth, req) => {
-  // Restricted to users with the org:sys_memberships:manage'
-  // Logged out users will be redirected to sign-in route
-  if (isProtectedRoute(req)) {
-    auth().protect({ permission: "org:sys_memberships:manage" })
-  }
-}
-
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
-
-
+You can protect your routes using Middleware with `clerkMiddleware()`, which allows you to select the routes you want to protect. See the [reference documentation](/docs/references/nextjs/clerk-middleware) for more information.

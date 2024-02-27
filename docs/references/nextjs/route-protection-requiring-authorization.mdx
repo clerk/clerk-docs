@@ -5,16 +5,16 @@ description: Learn how to protect the B2B (Business to Business) routes in your 
 
 # Required Authorization for Route protection 
 
-Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized [Auth](/docs/references/nextjs/authentication-object) object that you can use to require authentication throughout your application. Below, we explain how to access and use the Auth object.
+Whether you're in the App Router, Pages Router, or Middleware, Clerk provides access to a standardized [Auth](/docs/references/nextjs/authentication-object) object that you can use to require authorication throughout your application. This allows you to integrate your route protection with Clerk's [Organizations](http://localhost:4003/docs/organizations/overview) and the roles and permissions available with organizations. Below, we explain how to access and use the Auth object.
 
-If you want to learn about protecting routes based on [organization](/docs/organizations/overview) roles or permissions, see the [requiring authentication](/docs/references/nextjs/route-protection-requiring-authentication) guide.
+If you want to learn about protecting routes based on authentication, see the [requiring authentication](/docs/references/nextjs/route-protection-requiring-authentication) guide.
 
 
 ## App Router
 
 ### Protect a layout or page
 
-You can use `protect()` and `has()` in a route's `layout.tsx` to protect based on roles or permissions.
+You can use `protect()` and `has()` in a route's `layout.tsx` to protect based on [permissions](/docs/organizations/verify-user-permissions) or [roles](/docs/organizations/verify-user-permissions#authorize-with-roles.
 
 <CodeBlockTabs type="router" options={["protect()", "has()"]}>
 
@@ -84,21 +84,56 @@ if (!auth().has({ role: "org:admin" })) {
 
 ### Protect your Route Handlers and Server Actions
 
-asdfs
+You can use auth().protect() to check permissions in your Route Handlers or Server actions, allowing you to protect queries and mutations.
+
+```tsx filename="/app/api/dashboard/route.ts"
+import { auth } from "@clerk/nextjs/server";
+
+export async function GET() {
+
+  // If there is no signed in user, this will return an error
+  auth().protect({ permission: "org:test:permission" })
+
+  // Perform your Route Handler logic here
+
+  return Response.json({ userId: auth().userId })
+}
+```
 
 
 ## Pages Router
 
 ### Protect a page
-sadff
 
-### Protect your application with `_app.tsx`
+You can protect a page in your application by checking either the permissions or the role that the user has. 
 
-assda
+```tsx filename="/pages/dashboard/manage-memberships"
+import { useAuth } from "@clerk/nextjs";
+
+export default function Page() {
+
+  const { has, isLoaded } = useAuth()
+
+  if (!isLoaded) return "Loading..."
+
+  if (!has({ permission: "org:sys_memberships:manage" })) {
+    return <p>You do not have access to this page</p>
+  }
+
+  return (
+    <>
+      <h1>Manage Memberships</h1>
+      <p>Use this page to manage the memberships in your organization<p>
+    </>
+  );
+}
+````
 
 ## Protect your application with Middleware
 
-You can manage your route protection with `clerkMiddleware()` along with `has()` and `protect()` to protect based on organization roles and permissions.
+You an protect your routes in Middleware using [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). `clerkMiddleware()` allows you select the routes you want to protect, and how you want to protect them. The example below is just protecting one route, but you can protect many routes.
+
+This is just a simple example of `clerkMiddleware()`. Please see the clerkMiddleware documentation for detailed information on the options and configurations available.
 
 ```tsx filename="middleware.tsx"
 import {
@@ -111,10 +146,10 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware((auth, req) => {
-  // Restricted to logged in users
+  // Restricted to users with the org:test:permission'
   // Logged out users will be redirected to sign-in route
   if (isProtectedRoute(req)) {
-    console.log('test', auth().protect())
+    console.log('test', auth().protect({ permission: "org:test:permission" }))
     auth().protect()
   }
 }

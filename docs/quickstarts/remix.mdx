@@ -7,469 +7,397 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Remix application. This guide assumes that you are using Remix v2 or later.
 
-<Callout type='info'>
+<Callout type="info">
   You're reading the quickstart guide for the **beta** of the next major version of the Remix SDK. For more information about the changes from the current version, [check out the upgrade guide](/docs/upgrade-guides/core-2/remix)!
 </Callout>
 
 <Steps>
+  ### Install `@clerk/remix`
 
-### Install `@clerk/remix`
+  Once you have a Remix application ready, you need to install Clerk's Remix SDK. This gives you access to our prebuilt components and hooks for Remix applications.
 
-Once you have a Remix application ready, you need to install Clerk's Remix SDK. This gives you access to our prebuilt components and hooks for Remix applications.
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash filename="terminal"
+    npm install @clerk/remix
+    ```
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
-  npm install @clerk/remix
+    ```bash filename="terminal"
+    yarn add @clerk/remix
+    ```
+
+    ```bash filename="terminal"
+    pnpm add @clerk/remix
+    ```
+  </CodeBlockTabs>
+
+  ### Set environment variables
+
+  Below is an example of an `.env.local` file.
+
+  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+
+  <InjectKeys>
+    ```sh filename=".env.local"
+    CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    ```
+  </InjectKeys>
+
+  ### Configure `rootAuthLoader`
+
+  To configure Clerk in your Remix application, you will need to update your root loader. This will enable you to have access to authentication state in any Remix routes.
+
+  ```tsx filename="app/root.tsx"
+  import type { MetaFunction, LoaderFunction } from "@remix-run/node";
+  import {
+    Links,
+    LiveReload,
+    Meta,
+    Outlet,
+    Scripts,
+    ScrollRestoration,
+  } from "@remix-run/react";
+
+  import { rootAuthLoader } from "@clerk/remix/ssr.server";
+
+  export const meta: MetaFunction = () => ([{
+    charset: "utf-8",
+    title: "New Remix App",
+    viewport: "width=device-width,initial-scale=1",
+  }]);
+
+  export const loader: LoaderFunction = (args) => rootAuthLoader(args);
+
+  export default function App() {
+    return (
+      <html lang="en">
+        <head>
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          <Outlet />
+          <ScrollRestoration />
+          <Scripts />
+          <LiveReload />
+        </body>
+      </html>
+    );
+  }
   ```
 
-  ```bash filename="terminal"
-  yarn add @clerk/remix
-  ```
+  If you need to load in additonal data, you can pass your loader directly to the `rootAuthLoader`.
 
-  ```bash filename="terminal"
-  pnpm add @clerk/remix
-  ```
-</CodeBlockTabs>
+  ```tsx filename="app/root.tsx"
+  // Imports
 
-### Set environment variables
 
-Below is an example of an `.env.local` file.
-
-**Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
-
-<InjectKeys>
-
-```sh filename=".env.local"
-CLERK_PUBLISHABLE_KEY={{pub_key}}
-CLERK_SECRET_KEY={{secret}}
-```
-
-</InjectKeys>
-
-### Configure `rootAuthLoader`
-
-To configure Clerk in your Remix application, you will need to update your root loader. This will enable you to have access to authentication state in any Remix routes.
-
-```tsx filename="app/root.tsx"
-import type { MetaFunction, LoaderFunction } from "@remix-run/node";
-import {
-  Links,
-  LiveReload,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "@remix-run/react";
-
-import { rootAuthLoader } from "@clerk/remix/ssr.server";
-
-export const meta: MetaFunction = () => ([{
-  charset: "utf-8",
-  title: "New Remix App",
-  viewport: "width=device-width,initial-scale=1",
-}]);
-
-export const loader: LoaderFunction = (args) => rootAuthLoader(args);
-
-export default function App() {
-  return (
-    <html lang="en">
-      <head>
-        <Meta />
-        <Links />
-      </head>
-      <body>
-        <Outlet />
-        <ScrollRestoration />
-        <Scripts />
-        <LiveReload />
-      </body>
-    </html>
-  );
-}
-```
-
-If you need to load in additonal data, you can pass your loader directly to the `rootAuthLoader`.
-
-```tsx filename="app/root.tsx"
-// Imports
-
-
-export const loader: LoaderFunction = args => {
-  return rootAuthLoader(args, ({ request }) => {
-    const { sessionId, userId, getToken } = request.auth;
-    // fetch data
-    return { yourData: 'here' };
-  });
-};
-
-// Additonal application code
-```
-
-### Configure `ClerkApp`
-
-Clerk provides a `ClerkApp` wrapper to provide the authentication state to your React tree. This helper works with Remix SSR out-of-the-box and follows the "higher-order component" paradigm.
-
-```tsx filename="app/root.tsx"
-import type { MetaFunction, LoaderFunction } from "@remix-run/node";
-
-import {
-  Links,
-  LiveReload,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "@remix-run/react";
-
-import { rootAuthLoader } from "@clerk/remix/ssr.server";
-// Import ClerkApp
-import { ClerkApp } from "@clerk/remix";
-
-export const meta: MetaFunction = () => ({
-  charset: "utf-8",
-  title: "New Remix App",
-  viewport: "width=device-width,initial-scale=1",
-});
-
-export const loader: LoaderFunction = (args) => rootAuthLoader(args);
-
-function App() {
-  return (
-    <html lang="en">
-      <head>
-        <Meta />
-        <Links />
-      </head>
-      <body>
-        <Outlet />
-        <ScrollRestoration />
-        <Scripts />
-        <LiveReload />
-      </body>
-    </html>
-  );
-}
-
-// Wrap your app in ClerkApp(app)
-export default ClerkApp(App);
-```
-
-### Set root `ErrorBoundary`
-
-Clerk uses short lived tokens to keep your application secure. To refresh expired tokens, Clerk uses Remix's error boundary.
-
-<Callout type="info">
-  If you are seeing a 401 after a short period of time, even though your user is signed in, please verify you have implemented this section.
-</Callout>
-
-```tsx filename="app/root.tsx"
-import type { MetaFunction, LoaderFunction } from "@remix-run/node";
-
-import {
-  Links,
-  LiveReload,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "@remix-run/react";
-
-import { rootAuthLoader } from "@clerk/remix/ssr.server";
-import { ClerkApp, ClerkErrorBoundary } from "@clerk/remix";
-
-export const meta: MetaFunction = () => ({
-  charset: "utf-8",
-  title: "New Remix App",
-  viewport: "width=device-width,initial-scale=1",
-});
-
-export const loader: LoaderFunction = (args) => rootAuthLoader(args);
-// add an Error Boundary
-export const ErrorBoundary = ClerkErrorBoundary();
-
-function App() {
-  return (
-    <html lang="en">
-      <head>
-        <Meta />
-        <Links />
-      </head>
-      <body>
-        <Outlet />
-        <ScrollRestoration />
-        <Scripts />
-        <LiveReload />
-      </body>
-    </html>
-  );
-}
-
-export default ClerkApp(App);
-```
-
-#### Custom boundary
-
-If you need to add a custom boundary to your application, you can pass it as an argument to the `ClerkErrorBoundary`.
-
-```tsx filename="app/root.tsx"
-// Imports
-
-// YourBoundary is passed as an argument to ClerkErrorBoundary
-export const ErrorBoundary = ClerkErrorBoundary(YourBoundary);
-
-// Additional application code
-```
-
-### Build your own sign-in and sign-up pages
-
-In addition to the [Account Portal pages](/docs/account-portal/overview), Clerk also offers a set of [prebuilt components](/docs/components/overview) that you can use instead to embed sign-in, sign-up, and other user management functions into your Remix application. We are going to use the `<SignIn /> `and `<SignUp />` components by utilizing the Remix optional catch-all route.
-
-The functionality of the components are controlled by the instance settings you specify in your [Clerk Dashboard](https://dashboard.clerk.com).
-
-#### Build your sign-up page
-
-```tsx filename="app/routes/sign-up.$.tsx"
-import { SignUp } from "@clerk/remix";
-
-export default function SignUpPage() {
-  return (
-    <div>
-      <h1>Sign Up route</h1>
-      <SignUp />
-    </div>
-  );
-}
-```
-
-#### Build your sign-in page
-
-```tsx filename="app/routes/sign-in.$.tsx"
-import { SignIn } from "@clerk/remix";
-
-export default function SignInPage() {
-  return (
-    <div>
-      <h1>Sign In route</h1>
-      <SignIn />
-    </div>
-  );
-}
-```
-
-### Update your environment variables
-
-Next, add environment variables for the `signIn`, `signUp`, `afterSignUp`, and `afterSignIn` paths:
-
-```sh filename=".env"
-CLERK_SIGN_IN_URL=/sign-in
-CLERK_SIGN_UP_URL=/sign-up
-CLERK_AFTER_SIGN_IN_URL=/
-CLERK_AFTER_SIGN_UP_URL=/
-```
-
-These values control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
-
-### Protecting your pages
-
-#### Client side
-
-Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
-
-```tsx filename="routes/index.tsx"
-import {
-  SignedIn,
-  SignedOut,
-  RedirectToSignIn,
-  UserButton,
-} from "@clerk/remix";
-
-export default function Index() {
-  return (
-    <div>
-      <SignedIn>
-        <h1>Index route</h1>
-        <p>You are signed in!</p>
-        <UserButton />
-      </SignedIn>
-      <SignedOut>
-        <RedirectToSignIn />
-      </SignedOut>
-    </div>
-  );
-}
-```
-
-#### Server side
-
-To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
-
-```tsx filename="routes/index.tsx"
-import { UserButton } from "@clerk/remix";
-import { getAuth } from "@clerk/remix/ssr.server";
-import { LoaderFunction, redirect } from "@remix-run/node";
-
-export const loader: LoaderFunction = async (args) => {
-  const { userId } = await getAuth(args);
-  if (!userId) {
-    return redirect("/sign-in");
-  }
-  return {};
-}
-
-export default function Index() {
-  return (
-    <div>
-        <h1>Index route</h1>
-        <p>You are signed in!</p>
-        <UserButton />
-    </div>
-  );
-}
-```
-
-### Read session and user data
-
-Clerk provides a set of [hooks and helpers](/docs/references/react/use-user) that you can use to access the active session and user data in your Remix application. Here are examples of how to use these helpers.
-
-#### Client side
-
-#### `useAuth()`
-
-The `useAuth` hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
-
-```tsx filename="routes/example.tsx"
-import { useAuth } from "@clerk/remix";
-
-export default function Example() {
-  const { isLoaded, userId, sessionId, getToken } = useAuth();
-
-  // In case the user signs out while on the page.
-  if (!isLoaded || !userId) {
-    return null;
-  }
-
-  return (
-    <div>
-      Hello, {userId} your current active session is {sessionId}
-    </div>
-  );
-}
-```
-
-#### `useUser()`
-
-The `useUser` hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
-
-```tsx filename="routes/example.tsx"
-import { useUser } from "@clerk/remix";
-
-export default function Example() {
-  const { isLoaded, isSignedIn, user } = useUser();
-
-  if (!isLoaded || !isSignedIn) {
-    return null;
-  }
-
-  return <div>Hello, {user.firstName} welcome to Clerk</div>;
-}
-```
-
-#### Server side
-
-#### `getAuth()`
-
-<Tabs type="function" items={["Loader Function", "Action Function"]}>
-  <Tab>
-  The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object), including the current `userId`. You can use this helper to protect your loader function or get data for the initial render of the route.
-
-  ```tsx filename="routes/example.tsx"
-  export const loader: LoaderFunction = async (args) => {
-    // Use getAuth to retrieve user data
-    const { userId, sessionId, getToken } = await getAuth(args);
-
-    // If there is no userId, then redirect to sign-in route
-    if (!userId) {
-      return redirect("/sign-in?redirect_url=" + args.request.url);
-    }
-
-    // Use the userId to fetch data from your database
-    const posts = await mockGetPosts(userId);
-
-    return { posts };
+  export const loader: LoaderFunction = args => {
+    return rootAuthLoader(args, ({ request }) => {
+      const { sessionId, userId, getToken } = request.auth;
+      // fetch data
+      return { yourData: 'here' };
+    });
   };
+
+  // Additonal application code
   ```
-  </Tab>
 
-  <Tab>
-  The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object). You can use the returns from `getAuth()` to protect the action function, update the user or perform mutations on data in your database.
+  ### Configure `ClerkApp`
 
-  ```tsx filename="routes/example.tsx"
-  export const action: ActionFunction = async (args) => {
+  Clerk provides a `ClerkApp` wrapper to provide the authentication state to your React tree. This helper works with Remix SSR out-of-the-box and follows the "higher-order component" paradigm.
 
-    // Use getAuth to retrieve user data
-    const { userId, getToken } = await getAuth(args)
+  ```tsx filename="app/root.tsx"
+  import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 
-    // Use the userId to perform a mutation on data in your database
-    const updatedPost = await mockUpdatePost(userId, postId, body)
+  import {
+    Links,
+    LiveReload,
+    Meta,
+    Outlet,
+    Scripts,
+    ScrollRestoration,
+  } from "@remix-run/react";
 
-    return { updatedPost };
+  import { rootAuthLoader } from "@clerk/remix/ssr.server";
+  // Import ClerkApp
+  import { ClerkApp } from "@clerk/remix";
+
+  export const meta: MetaFunction = () => ({
+    charset: "utf-8",
+    title: "New Remix App",
+    viewport: "width=device-width,initial-scale=1",
+  });
+
+  export const loader: LoaderFunction = (args) => rootAuthLoader(args);
+
+  function App() {
+    return (
+      <html lang="en">
+        <head>
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          <Outlet />
+          <ScrollRestoration />
+          <Scripts />
+          <LiveReload />
+        </body>
+      </html>
+    );
+  }
+
+  // Wrap your app in ClerkApp(app)
+  export default ClerkApp(App);
+  ```
+
+  ### Build your own sign-in and sign-up pages
+
+  In addition to the [Account Portal pages](/docs/account-portal/overview), Clerk also offers a set of [prebuilt components](/docs/components/overview) that you can use instead to embed sign-in, sign-up, and other user management functions into your Remix application. We are going to use the `<SignIn /> `and `<SignUp />` components by utilizing the Remix optional catch-all route.
+
+  The functionality of the components are controlled by the instance settings you specify in your [Clerk Dashboard](https://dashboard.clerk.com).
+
+  #### Build your sign-up page
+
+  ```tsx filename="app/routes/sign-up.$.tsx"
+  import { SignUp } from "@clerk/remix";
+
+  export default function SignUpPage() {
+    return (
+      <div>
+        <h1>Sign Up route</h1>
+        <SignUp />
+      </div>
+    );
   }
   ```
-  </Tab>
-</Tabs>
 
-#### Examples of fetching and mutating user data
+  #### Build your sign-in page
 
+  ```tsx filename="app/routes/sign-in.$.tsx"
+  import { SignIn } from "@clerk/remix";
 
+  export default function SignInPage() {
+    return (
+      <div>
+        <h1>Sign In route</h1>
+        <SignIn />
+      </div>
+    );
+  }
+  ```
 
-<Tabs type="function" items={["Loader Function", "Action Function"]}>
-  <Tab>
-  ```tsx filename="routes/profile.tsx"
-  import { LoaderFunction, redirect } from "@remix-run/node";
+  ### Update your environment variables
+
+  Next, add environment variables for the `signIn`, `signUp`, `afterSignUp`, and `afterSignIn` paths:
+
+  ```sh filename=".env"
+  CLERK_SIGN_IN_URL=/sign-in
+  CLERK_SIGN_UP_URL=/sign-up
+  CLERK_AFTER_SIGN_IN_URL=/
+  CLERK_AFTER_SIGN_UP_URL=/
+  ```
+
+  These values control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
+
+  ### Protecting your pages
+
+  #### Client side
+
+  Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
+
+  ```tsx filename="routes/index.tsx"
+  import {
+    SignedIn,
+    SignedOut,
+    RedirectToSignIn,
+    UserButton,
+  } from "@clerk/remix";
+
+  export default function Index() {
+    return (
+      <div>
+        <SignedIn>
+          <h1>Index route</h1>
+          <p>You are signed in!</p>
+          <UserButton />
+        </SignedIn>
+        <SignedOut>
+          <RedirectToSignIn />
+        </SignedOut>
+      </div>
+    );
+  }
+  ```
+
+  #### Server side
+
+  To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
+
+  ```tsx filename="routes/index.tsx"
+  import { UserButton } from "@clerk/remix";
   import { getAuth } from "@clerk/remix/ssr.server";
-  import { createClerkClient } from '@clerk/remix/api.server';
+  import { LoaderFunction, redirect } from "@remix-run/node";
 
   export const loader: LoaderFunction = async (args) => {
     const { userId } = await getAuth(args);
-
     if (!userId) {
-      return redirect("/sign-in?redirect_url=" + args.request.url);
+      return redirect("/sign-in");
+    }
+    return {};
+  }
+
+  export default function Index() {
+    return (
+      <div>
+          <h1>Index route</h1>
+          <p>You are signed in!</p>
+          <UserButton />
+      </div>
+    );
+  }
+  ```
+
+  ### Read session and user data
+
+  Clerk provides a set of [hooks and helpers](/docs/references/react/use-user) that you can use to access the active session and user data in your Remix application. Here are examples of how to use these helpers.
+
+  #### Client side
+
+  #### `useAuth()`
+
+  The `useAuth` hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
+
+  ```tsx filename="routes/example.tsx"
+  import { useAuth } from "@clerk/remix";
+
+  export default function Example() {
+    const { isLoaded, userId, sessionId, getToken } = useAuth();
+
+    // In case the user signs out while on the page.
+    if (!isLoaded || !userId) {
+      return null;
     }
 
-    const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
-    return { serialisedUser: JSON.stringify(user) };
-  };
+    return (
+      <div>
+        Hello, {userId} your current active session is {sessionId}
+      </div>
+    );
+  }
   ```
-  </Tab>
 
-  <Tab>
-  ```tsx filename="routes/profile.tsx"
-  import { ActionFunction, redirect } from "@remix-run/node";
-  import { getAuth } from "@clerk/remix/ssr.server";
-  import { createClerkClient } from '@clerk/remix/api.server';
+  #### `useUser()`
 
-  export const action: ActionFunction = async (args) => {
-    // Use getAuth to retrieve user data
-    const { userId } = await getAuth(args)
+  The `useUser` hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
 
-    // If there is no userId, then redirect to sign-in route
-    if (!userId) {
-      return redirect("/sign-in?redirect_url=" + args.request.url);
+  ```tsx filename="routes/example.tsx"
+  import { useUser } from "@clerk/remix";
+
+  export default function Example() {
+    const { isLoaded, isSignedIn, user } = useUser();
+
+    if (!isLoaded || !isSignedIn) {
+      return null;
     }
-    // Prepare the data for the mutation
-    const params = { firstName: 'John', lastName: 'Wicker' };
 
-    // Initialize clerkClient and perform the mutations
-    const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
-
-    // Return the updated user
-    return { serialisedUser: JSON.stringify(updatedUser) };
-  };
+    return <div>Hello, {user.firstName} welcome to Clerk</div>;
+  }
   ```
-  </Tab>
-</Tabs>
 
+  #### Server side
+
+  #### `getAuth()`
+
+  <Tabs type="function" items={["Loader Function", "Action Function"]}>
+    <Tab>
+      The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object), including the current `userId`. You can use this helper to protect your loader function or get data for the initial render of the route.
+
+      ```tsx filename="routes/example.tsx"
+      export const loader: LoaderFunction = async (args) => {
+        // Use getAuth to retrieve user data
+        const { userId, sessionId, getToken } = await getAuth(args);
+
+        // If there is no userId, then redirect to sign-in route
+        if (!userId) {
+          return redirect("/sign-in?redirect_url=" + args.request.url);
+        }
+
+        // Use the userId to fetch data from your database
+        const posts = await mockGetPosts(userId);
+
+        return { posts };
+      };
+      ```
+    </Tab>
+
+    <Tab>
+      The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object). You can use the returns from `getAuth()` to protect the action function, update the user or perform mutations on data in your database.
+
+      ```tsx filename="routes/example.tsx"
+      export const action: ActionFunction = async (args) => {
+
+        // Use getAuth to retrieve user data
+        const { userId, getToken } = await getAuth(args)
+
+        // Use the userId to perform a mutation on data in your database
+        const updatedPost = await mockUpdatePost(userId, postId, body)
+
+        return { updatedPost };
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  #### Examples of fetching and mutating user data
+
+  <Tabs type="function" items={["Loader Function", "Action Function"]}>
+    <Tab>
+      ```tsx filename="routes/profile.tsx"
+      import { LoaderFunction, redirect } from "@remix-run/node";
+      import { getAuth } from "@clerk/remix/ssr.server";
+      import { createClerkClient } from '@clerk/remix/api.server';
+
+      export const loader: LoaderFunction = async (args) => {
+        const { userId } = await getAuth(args);
+
+        if (!userId) {
+          return redirect("/sign-in?redirect_url=" + args.request.url);
+        }
+
+        const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
+        return { serialisedUser: JSON.stringify(user) };
+      };
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx filename="routes/profile.tsx"
+      import { ActionFunction, redirect } from "@remix-run/node";
+      import { getAuth } from "@clerk/remix/ssr.server";
+      import { createClerkClient } from '@clerk/remix/api.server';
+
+      export const action: ActionFunction = async (args) => {
+        // Use getAuth to retrieve user data
+        const { userId } = await getAuth(args)
+
+        // If there is no userId, then redirect to sign-in route
+        if (!userId) {
+          return redirect("/sign-in?redirect_url=" + args.request.url);
+        }
+        // Prepare the data for the mutation
+        const params = { firstName: 'John', lastName: 'Wicker' };
+
+        // Initialize clerkClient and perform the mutations
+        const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
+
+        // Return the updated user
+        return { serialisedUser: JSON.stringify(updatedUser) };
+      };
+      ```
+    </Tab>
+  </Tabs>
 </Steps>
 
 ### Next steps

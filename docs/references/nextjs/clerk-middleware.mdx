@@ -1,0 +1,169 @@
+---
+title: clerkMiddleware() | Next.js
+description: The `clerkMiddleware()` function allows you to protect your Next.js application using Middleware.
+---
+
+# `clerkMiddleware()`
+
+The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through Middleware. `clerkMiddleware()` is compatible with both the App and Pages routers.
+
+## Configure `clerkMiddleware()`
+
+Create a `middleware.ts` file at the root of your project, or in your `src/` directory if you have one.
+
+<Callout level="info">
+  For more information about Middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/pages/building-your-application/routing/middleware).
+</Callout>
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    '/((?!.*\\..*|_next).*)', // Don't run middleware on static files
+    '/', // Run middleware on index page
+    '/(api|trpc)(.*)'], // Run middleware on API routes
+};
+```
+
+By default, `clerkMiddleware` will not protect any routes. All routes are public and you must opt-in to protection for routes.
+
+## Protect routes with `createRouteMatcher()` and `clerkMiddleware()`
+
+`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it. The paths provided to this helper can be in the same format as the paths provided to the Next Middleware matcher.
+
+The `createRouteMatcher()` helper returns a function that, if called with the `req` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
+
+The [`protect()`](/docs/references/nextjs/auth#protect) method returned by `auth()` will redirect the user to the sign-in page if they are not authenticated.
+
+```tsx filename="middleware.ts"
+import {
+  clerkMiddleware,
+  createRouteMatcher
+} from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/forum(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  if (isProtectedRoute(req)) auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+### Protect multiple groups of routes
+
+You can use more than one `createRouteMatcher()` in your application if you have two or more groups of routes.
+
+The following example uses the `has()` method from Clerk's `auth()` helper. `has()` is a low level method that allows you to check if a user has a specific role or permission. For more information, see the [has() documentation](/docs/references/nextjs/authentication-object#has).
+
+```tsx filename="middleware.ts"
+import {
+  clerkMiddleware,
+  createRouteMatcher
+} from '@clerk/nextjs/server';
+
+const isTenantRoute = createRouteMatcher([
+  '/organization-selector',
+  '/orgid/(.*)'
+])
+
+const isTenentAdminRoute = createRouteMatcher([
+  '/orgId/(.*)/mememberships',
+  '/orgId/(.*)/domain',
+]);
+
+
+export default clerkMiddleware((auth, req) => {
+  // restrict admin routes to users with specific permissions
+  if (isTenantAdminRoute(req)) {
+    auth().protect(has => {
+      return (
+        has({ permission: 'org:sys_memberships:manage' }) ||
+        has({ permission: 'org:sys_domains_manage' })
+      )
+    })
+  }
+  // restrict organiztion routes to logged in users
+  if (isTenantRoute(req)) auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+## Debug your Middleware
+
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
+
+```tsx filename="middleware.ts" {6}
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware((auth, req) => {
+  // Your middleware checks
+}, { debug: true })
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+If you would like to set up debugging for your development environment only, you can use the `process.env.NODE_ENV` variable to conditionally enable debugging. For example, `{ debug: process.env.NODE_ENV === 'development' }`.
+
+## Combining Middleware
+
+You can combine other Middleware with Clerk's Middleware by returning the second Middleware from `clerkMiddleware()`.
+
+```js filename="middleware.ts"
+import {
+  clerkMiddleware,
+  createRouteMatcher,
+  redirectToSignIn,
+} from '@clerk/nextjs/server';
+import createMiddleware from 'next-intl/middleware';
+
+import { AppConfig } from './utils/AppConfig';
+
+const intlMiddleware = createMiddleware({
+  locales: AppConfig.locales,
+  localePrefix: AppConfig.localePrefix,
+  defaultLocale: AppConfig.defaultLocale,
+});
+
+const isProtectedRoute = createRouteMatcher([
+  'dashboard/(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  if (isProtectedRoute(req)) return auth().protect();
+
+  return intlMiddleware(req);
+});
+
+export const config = {
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+## `clerkMiddleware()` options
+
+The `clerkMiddleware()` function accepts an optional object. The following options are available:
+
+| Name                               | Type                 | Description                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audience?`                        | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). If passed, it is checked against the `aud` claim in the token.                                                                                                                                                                                    |
+| `authorizedParties?`               | `string[]`           | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br/>For example: `['http://localhost:3000', 'https://example.com']`<br/>For more information, refer to the [reference guide](/docs/references/nodejs/token-verification#validate-the-authorized-party-of-a-session-token). |
+| `clockSkewInMs?` | `number`             | Specifies the allowed time difference (in milliseconds) between the Clerk server (which generates the token) and the clock of the user's application server when validating a token. Defaults to 5000 ms (5 seconds).                                                                                                                                                                                                                                                                                                         |
+| `domain?`                          | `string`             | The domain used for satellites to inform Clerk where this application is deployed.                                                                                                                                                                                                                                                              |
+| `isSatellite?`                     | `boolean`            | When using Clerk's satellite feature, this should be set to `true` for secondary domains.                                                                                                                                                                                                                                                             |
+| `jwtKey?`                          | `string`             | An optional [custom JWT key](/docs/references/nodejs/token-verification#networkless-token-verification-using-the-jwt-verification-key) to use for session token validation.                                                                                                                                                                     |
+| `proxyUrl?`                        | `string`             | Specify the URL of the proxy, if using a proxy.                                                                                                                                                                                                                                                                                                 |
+| `signInUrl?`                       | `string`             | An alternative sign in URL.                                                                                                                                                                                                                                                                                                                     |

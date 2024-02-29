@@ -25,7 +25,7 @@ You can protect an entire route tree or an individual page by using Clerk helper
 import { auth } from '@clerk/nextjs/server';
 
 export default async function Layout({ children }) {
-  auth().protect({ permission: 'org:sys_memberships:manage' });
+  auth().protect({ permission: 'org:team_settings:manage' });
 
   return <div>{children}</div>;
 }
@@ -52,7 +52,7 @@ export default async function Layout({ children }) {
 import { auth } from '@clerk/nextjs/server';
 
 export default function Page() {
-  auth().protect({ permission: 'org:sys_memberships:manage' });
+  auth().protect({ permission: 'org:team_settings:manage' });
 
   return <p>This is a page</p>;
 }
@@ -78,8 +78,6 @@ export default function Page() {
 
 ### Protect your Route Handlers and Server Actions
 
-{/* TODO: Add has example */}
-
 You can use protect queries and mutations in your Route Handlers or Server Actions in two ways:
 
 - `auth().protect()` if you want Clerk to redirect user who isn't signed in to the sign-in route, or return a 404 if the user does not have the role or permission
@@ -89,7 +87,7 @@ You can use protect queries and mutations in your Route Handlers or Server Actio
 import { auth } from '@clerk/nextjs/server';
 
 export async function GET() {
-  if (!auth().has({ permission: 'org:sys_memberships:manage' })) {
+  if (!auth().has({ permission: 'org:team_settings:manage' })) {
     return Response.json(
       { error: 'Error: User does not have required permissions' },
       { status: 401 },
@@ -106,8 +104,39 @@ export async function GET() {
 
 ### Protect a page
 
-`getAuth()` does not provide access to the `has()` method. We recommend that you handle authorization for routes in the Middleware, where `clerkMiddleware()` will provide access to `auth().protect()` and `auth().has()`.
+You can protect a page using `has()` from [`getAuth()`](docs/references/nextjs/get-auth) when using [`getServerSideProps()`](https://nextjs.org/docs/pages/building-your-application/data-fetching/get-server-side-props) for Server Side Rendering.
 
+```tsx filename="/pages/manage-team.tsx
+import { getAuth, buildClerkProps } from '@clerk/nextjs/server';
+import { GetServerSideProps, InferGetServerSidePropsType } from 'next';
+
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const { has } = getAuth(ctx.req);
+
+  if (!has({ permission: 'org:team_settings:manage' })) {
+    return {
+      redirect: {
+        permanent: false,
+        destination: `/sign-in`,
+      },
+    };
+  }
+
+  return { props: { ...buildClerkProps(ctx.req) } };
+};
+
+export default function Page(
+  props: InferGetServerSidePropsType<typeof getServerSideProps>,
+) {
+  return (
+    <>
+      <h1>Team Settings</h1>
+      <p>
+      </p>
+    </>
+  );
+}
+```
 
 ## Protect your application with Middleware
 

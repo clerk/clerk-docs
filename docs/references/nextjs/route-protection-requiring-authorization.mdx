@@ -15,64 +15,55 @@ If you want to learn about protecting routes based on authentication, see the [r
 
 You can protect an entire route tree or an individual page by using Clerk helpers based on [permissions](/docs/organizations/verify-user-permissions) or [roles](/docs/organizations/verify-user-permissions#authorize-with-roles). There are two methods that you can use depending on your use case:
 
-- Using [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign in route automatically
+- Using [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to redirect user who isn't signed in to the sign-in route, or return a 404 if the user does not have the role or permission
 - Using [`auth().has()`](/docs/references/nextjs/authentication-object#has) if you want more control over what your app does based on the authorization status
 
 #### Protect a layout
 
 <CodeBlockTabs type="router" options={["protect()", "has()"]}>
 ```tsx filename="app/dashboard/manage-users/layout.tsx"
-import { auth } from "@clerk/nextjs/server";
+import { auth } from '@clerk/nextjs/server';
 
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  auth().protect({ permission: "org:sys_memberships:manage" })
+export default async function Layout({ children }) {
+  auth().protect({ permission: 'org:sys_memberships:manage' });
 
-  return (
-    <div>{children}</div>
-  )
+  return <div>{children}</div>;
 }
 ```
 
 ```tsx filename="app/dashboard/manage-users/layout.tsx"
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 
-export default async function Layout({ children }: { children: React.ReactNode }) {
-  if (!auth().has({ role: "org:admin" })) {
-    redirect("/")
+export default async function Layout({ children }) {
+  if (!auth().has({ role: 'org:admin' })) {
+    redirect('/');
   }
-  return <>{children}</>
+  return <>{children}</>;
 }
 ```
 </CodeBlockTabs>
 
 #### Protect a page
 
+
 <CodeBlockTabs type="router" options={["protect()", "has()"]}>
 ```tsx filename="app/manage-users/page.tsx"
-import { auth } from "@clerk/nextjs/server"
+import { auth } from '@clerk/nextjs/server';
 
 export default function Page() {
+  auth().protect({ permission: 'org:sys_memberships:manage' });
 
-  auth().protect({ permission: "org:sys_memberships:manage" })
-
-  return (
-    <p>This is a page</p>
-  )
+  return <p>This is a page</p>;
 }
 ```
 
 ```tsx filename="app/dashboard/manage-users/page.tsx"
-import { auth } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server';
 
 export default function Page() {
-
-if (!auth().has({ role: "org:admin" })) {
-    return <p>You do not have permission to view this page.</p>
+  if (!auth().has({ role: 'org:admin' })) {
+    return <p>You do not have permission to view this page.</p>;
   }
 
   return (
@@ -91,20 +82,23 @@ if (!auth().has({ role: "org:admin" })) {
 
 You can use protect queries and mutations in your Route Handlers or Server Actions in two ways:
 
-- `auth().protect()` if you want Clerk to automatically return an error
+- `auth().protect()` if you want Clerk to redirect user who isn't signed in to the sign-in route, or return a 404 if the user does not have the role or permission
 - `auth().has()` if you want to customize the behavior or error message
 
 ```tsx filename="/app/api/dashboard/route.ts"
-import { auth } from "@clerk/nextjs/server";
+import { auth } from '@clerk/nextjs/server';
 
 export async function GET() {
+  if (!auth().has({ permission: 'org:sys_memberships:manage' })) {
+    return Response.json(
+      { error: 'Error: User does not have required permissions' },
+      { status: 401 },
+    );
+  }
 
-  // If there is no signed in user, this will return an error
-  auth().protect({ permission: "org:sys_memberships:manage" })
+  // Add your Route Handler logic here
 
-  // Perform your Route Handler logic here
-
-  return Response.json({ userId: auth().userId })
+  return Response.json({ userId: auth().userId });
 }
 ```
 
@@ -112,39 +106,8 @@ export async function GET() {
 
 ### Protect a page
 
-You can protect a page using [`getServerSideProps()`](https://nextjs.org/docs/pages/building-your-application/data-fetching/get-server-side-props) when using Server Side Rendering, or with [`useAuth()`](/docs/references/react/use-auth) from the client side.
+`getAuth()` does not provide access to the `has()` method. We recommend that you handle authorization for routes in the Middleware, where `clerkMiddleware()` will provide access to `auth().protect()` and `auth().has()`.
 
-<Tabs type="router" items={["Server Side Rendered", "Client side"]}>
-  <Tab>
-  {/* TODO: Add getServerSideProps example */}
-  </Tab>
-
-  <Tab>
-  Note that in the following example, all content is sent to the client. If JavaScript doesn't run, the user can see the content. If you need to protect sensitive content, use the "Server Side Rendered" example or [`clerkMiddleware()`](#protect-your-application-with-middleware) instead.
-
-  ```tsx filename="/pages/dashboard/manage-memberships"
-  import { useAuth } from "@clerk/nextjs";
-
-  export default function Page() {
-
-    const { has, isLoaded } = useAuth()
-
-    if (!isLoaded) return "Loading..."
-
-    if (!has({ permission: "org:sys_memberships:manage" })) {
-      return <p>You do not have access to this page</p>
-    }
-
-    return (
-      <>
-        <h1>Manage Memberships</h1>
-        <p>Use this page to manage the memberships in your organization</p>
-      </>
-    );
-  }
-  ```
-  </Tab>
-</Tabs>
 
 ## Protect your application with Middleware
 

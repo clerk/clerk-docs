@@ -13,27 +13,38 @@ Administrators are also able to revoke organization invitations for users that h
 
 ## Usage
 
-{/* TODO (DOCS-316): Add examples for App vs Pages Router, React and JavaScript. Update and validate these code examples. */}
+{/* TODO (DOCS-316): Should have only App Router and JavaScript examples. Update and validate these code examples. */}
 
-An example implementation in Next.js for inviting users and revoking pending invitations:
+The example below includes an `InviteMember()` component that allows administrators to invite new members to their organization. It also includes an `InvitationList()` component that lists all pending invitations and allows administrators to revoke them. This example is written for Next.js App Router but is supported by any React meta framework, such as Remix or Gatsby.
 
-```jsx
+```tsx
+"use client"
+
 import { useOrganization } from '@clerk/nextjs';
 import { useState } from 'react';
 
 function InviteMember() {
-  const { organization } = useOrganization();
+  const { organization, isLoaded } = useOrganization();
   const [emailAddress, setEmailAddress] = useState('');
   const [role, setRole] = useState<'org:member' | 'admin'>('org:member');
   const [disabled, setDisabled] = useState(false);
 
-  const onSubmit = async e => {
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    if (!organization || !isLoaded) {
+      return <>Loading</>;
+    }
+
     e.preventDefault();
     setDisabled(true);
+    try {
     await organization.inviteMember({ emailAddress, role });
     setEmailAddress('');
     setRole('org:member');
     setDisabled(false);
+    } catch (error) {
+      // Handle error if one if returned
+      console.log('Error:', error)
+    }
   };
 
   return (
@@ -72,15 +83,11 @@ function InviteMember() {
 }
 
 export default function InvitationList() {
-  const { invitationList } = useOrganization({ invitationList: {} });
+  const { invitations, isLoaded } = useOrganization({ invitations: {} });
 
-  if (!invitationList) {
-    return null;
+  if (!invitations || !isLoaded) {
+    return <>Loading</>;
   }
-
-  const revoke = async inv => {
-    await inv.revoke();
-  };
 
   return (
     <div>
@@ -88,13 +95,16 @@ export default function InvitationList() {
       <InviteMember />
 
       <h2>Pending invitations</h2>
-      <ul>
-        {invitationList.map(i => (
+
+        {invitations.data && invitations.data.length ? invitations.data?.map(i => (
+          <ul>
           <li key={i.id}>
-            {i.emailAddress} <button onClick={() => revoke(i)}>Revoke</button>
+            {i.emailAddress} <button onClick={() => i.revoke()}>Revoke</button>
           </li>
-        ))}
-      </ul>
+          </ul>
+        )) : (
+          <p>No pending invitations</p>
+        )}
     </div>
   );
 }

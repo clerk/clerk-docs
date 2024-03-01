@@ -476,7 +476,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 >
 
 - Install `@clerk/clerk-react`
-- Set up your environment keys
+- Set up your environment variables
 - Wrap your React app in `<ClerkProvider/>`
 - Limit access to authenticated users
 - Embed the `<UserButton/>`

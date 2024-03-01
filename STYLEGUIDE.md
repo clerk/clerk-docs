@@ -12,7 +12,7 @@ Clerk is an American company and the epicenter of our development community is l
 
 > You might not realize it, but you can change the colors of your Clerk components with global CSS.
 
-#### Don't 
+#### Don't
 
 > You might not realise it, but you can change the colours of your Clerk components with global CSS.
 
@@ -24,7 +24,7 @@ Tech has created many new words by associating two words with each other like "f
 
 > Frontend and fullstack developers often build websites with React.
 
-#### Don't 
+#### Don't
 
 > Front-end and full stack developers often build web-sites with React.
 
@@ -36,12 +36,12 @@ When mentioning a documented component, function, etc, multiple times on a page,
 
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
 
-#### Don't 
+#### Don't
 
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
 
 
-### 1.4 Write out abbreviations when introducing them 
+### 1.4 Write out abbreviations when introducing them
 
 If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
 
@@ -49,7 +49,7 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > An abstract syntax tree (AST) is a tree representation of code. ASTs are a fundamental part of the way a compiler works.
 
-#### Don't 
+#### Don't
 
 > An AST is a tree representation of code. AST's are a fundamental part of the way a compiler works.
 
@@ -59,7 +59,7 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > ## How to set up custom pages
 
-#### Don't 
+#### Don't
 
 > ## How to Set up Custom Pages
 
@@ -71,7 +71,7 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > Add it to your app's Middleware.
 
-#### Don't 
+#### Don't
 
 > Add it to your app's middleware.
 
@@ -85,7 +85,7 @@ Clerk is the entity writing these docs and providing these services. The learner
 
 > Clerk's `<ClerkProvider>` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
-#### Don't 
+#### Don't
 
 > Our `<ClerkProvider>` provides active session and user context to our hooks and other components. Let's import it into our app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of the file.
 
@@ -127,7 +127,7 @@ English gerunds ("-ing" words like "running") turn verbs into nouns ("run" becom
 
 ### 2.5 Use task and outcome-based headings and titles that use verbs.
 
-Tell the learner what they will learn from diving into the content. 
+Tell the learner what they will learn from diving into the content.
 
 #### Do
 
@@ -195,13 +195,13 @@ Use as little [jargon](https://dictionary.cambridge.org/dictionary/english/jargo
 
 #### Do
 
-> You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment keys, and then wrap your app in `<ClerkProvider>`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
+> You can authenticate your app with Clerk in three steps. Install Clerk with `npm install @clerk/nextjs`, add your environment variables, and then wrap your app in `<ClerkProvider>`, and add [control components](https://clerk.com/docs/components/overview). Visit our [Quickstarts](https://clerk.com/docs/quickstarts/overview) for a step-by-step guide written for your framework.
 
 > Clerk supports offline mode, a feature that lets users use an app without being connected to data or wifi. This means Clerk works great with progressive web apps, apps built with web platform technologies that provide similar experiences to platform-specific apps. You can use the [dynamic import pattern](https://www.patterns.dev/vanilla/dynamic-import) to improve loading speeds.
 
 #### Don't
 
-> It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment keys, wrap your app in `<ClerkProvider>`, and simply add [control components](https://clerk.com/docs/components/overview).
+> It's easy to authenticate your app with Clerk! Just install Clerk with `npm install @clerk/nextjs`, add your environment variables, wrap your app in `<ClerkProvider>`, and simply add [control components](https://clerk.com/docs/components/overview).
 
 > Clerk works great with PWA as it supports offline mode. You can use the dynamic import pattern to improve loading speeds.
 
@@ -257,7 +257,7 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 #### Don't
 
-> Click the **Settings tab.** 
+> Click the **Settings tab.**
 
 > Click the **Google** social connection.
 
@@ -316,7 +316,7 @@ Conform to the [JSON standard](https://www.json.org/json-en.html):
   email: '{{user.primary_email_address}}'
 }
 ```
- 
+
 ### 4.4 Use 2-space indents for code blocks
 
 We use 2-space indents to conserve horizontal space in code blocks.
@@ -351,7 +351,7 @@ Clerk authentication states **signed-in**, **signed-out**, and **unknown** shoul
 
 ### 4.6 Group like with like under tabs
 
-When presenting things in a series of tabs, ensure that similar things are grouped together. 
+When presenting things in a series of tabs, ensure that similar things are grouped together.
 
 #### Do
 
@@ -375,7 +375,7 @@ Component references should be wrapped in `< />` if they are self closing. Other
 
 > Use the `<ClerkProvider>` component.
 
-#### Don't 
+#### Don't
 
 > Use the `<SignIn/>` component.
 
@@ -389,7 +389,7 @@ The last case is incorrect because the `<SignIn />` component will never wrap ch
 
 > Use the `<ClerkProvider />` component.
 
-The last case is incorrect because the `<ClerkProvider>` component will always wrap children and will never be self-closing. 
+The last case is incorrect because the `<ClerkProvider>` component will always wrap children and will never be self-closing.
 
 ### 4.8 Specify syntax and filename for terminal commands
 
@@ -413,7 +413,7 @@ npm i @clerk/nextjs
 
 ### 4.9 Pass properties to components; Parameters to functions
 
-Be sure to use the correct term with components vs functions. 
+Be sure to use the correct term with components vs functions.
 
 > Be sure to use the appropriate terms on reference page headings.
 

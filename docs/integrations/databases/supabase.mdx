@@ -23,11 +23,11 @@ description: Learn how to integrate Clerk into your Supabase application.
 
 </TutorialHero>
 
-Integrating Supabase with Clerk gives you the benefits of using a Supabase database while leveraging Clerk's authentication, prebuilt components, and webhooks.
+Integrating Supabase with Clerk gives you the benefits of using a Supabase database while leveraging Clerk's authentication, prebuilt components, and webhooks. To get the most out of Supabase with Clerk, you must implement custom [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) (RLS) policies.
 
 ## Tutorial
 
-This tutorial will teach you how to integrate Supabase with Clerk by creating [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) (RLS) policies that show users content associated with their account.
+This tutorial will teach you how to integrate Supabase with Clerk by creating RLS policies that show users content associated with their account.
 
 <Callout type="info">
   You must have a local project with Clerk set up already to follow this tutorial. See [the quickstart docs](/docs/quickstarts/overview) to get started.
@@ -42,7 +42,7 @@ To show users content scoped to their account, you must create RLS policies that
 - In your Supabase dashboard, in the sidebar, navigate to **Database** > **Tables**. From here, you can choose which table you want to edit, and add the new column.
     - Name it `user_id`.
     - **This column's data type must be `text`**.
-
+    - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
 <Callout type="info">
   This step is required becase Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
 </Callout>
@@ -183,83 +183,6 @@ The final result should be similar to this:
 
 The following steps will show you how to fetch and send content to your Supabase tables based on the user's ID. It assumes you have a table named "Addresses" with a `content` field, but you can adapt this code for any use case.
 
-1. These examples require you to be able to access `Clerk` from the `window` object. To ensure this is possible, add [`<ClerkLoaded>`](https://clerk.com/docs/components/control/clerk-loaded) to your app:
-    <InjectKeys>
-    <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-    ```tsx filename="app/layout.tsx"
-    import "./globals.css";
-    import { ClerkLoaded, ClerkProvider } from "@clerk/nextjs";
-
-    export default function RootLayout({
-      children,
-    }: Readonly<{
-      children: React.ReactNode;
-    }>) {
-      return (
-        <html lang="en">
-          <body>
-            <ClerkProvider>
-              <ClerkLoaded>{children}</ClerkLoaded>
-            </ClerkProvider>
-          </body>
-        </html>
-      );
-    }
-    ```
-    ```tsx filename="pages/_app.tsx"
-    import "@/styles/globals.css";
-    import { ClerkLoaded, ClerkProvider } from "@clerk/nextjs";
-    import { AppProps } from "next/app";
-    
-    function MyApp({ Component, pageProps }: AppProps) {
-      return (
-    
-      <ClerkProvider {...pageProps}>
-        <ClerkLoaded>
-          <Component {...pageProps} />
-        </ClerkLoaded>
-      </ClerkProvider>
-      ); 
-    }
-    
-    export default MyApp;
-    ```
-    ```tsx filename="app.tsx"
-    import React, { useEffect } from "react";
-    import { ClerkLoaded, ClerkProvider } from "@clerk/clerk-react";
-    
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
-    
-    function App() {
-      return (
-        <ClerkProvider publishableKey={`{{pub_key}}`}>
-          <ClerkLoaded>
-            <Page />
-          </ClerkLoaded>
-        </ClerkProvider>
-      ); 
-    }
-    
-    function Page() {
-      useEffect(() => {
-        // no need to check if window.Clerk exists
-        document.title = "This page uses Clerk " +
-        window.Clerk.version;
-      }, []);
-    
-      return (
-        <div>The content </div>
-      ); 
-    }
-    
-    export default App;
-    ```
-    </CodeBlockTabs>
-    </InjectKeys>
 1. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your JWT template in Clerk:
     <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
     ```ts filename="app/supabase/page.tsx"
@@ -300,6 +223,8 @@ The following steps will show you how to fetch and send content to your Supabase
         }
       );
     }
+
+    const client = createClerkSupabaseClient();
     ```
     ```ts filename="pages/supabase/index.tsx"
     import { createClient } from "@supabase/supabase-js";
@@ -338,6 +263,8 @@ The following steps will show you how to fetch and send content to your Supabase
         }
       );
     }
+
+    const client = createClerkSupabaseClient();
     ```
     ```ts filename="components/supabase.tsx"
     import { createClient } from "@supabase/supabase-js";
@@ -376,14 +303,14 @@ The following steps will show you how to fetch and send content to your Supabase
         }
       );
     }
+
+    const client = createClerkSupabaseClient();
     ```
     </CodeBlockTabs>
 1. Next, define a component with methods for sending and getting a user's addresses from your database:
     <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
     ```tsx filename="app/supabase/page.tsx"
     export default function Supabase() {
-      const client = createClerkSupabaseClient();
-
       const [addresses, setAddresses] = useState<any>();
       const listAddresses = async () => {
         // Fetches all addresses scoped to the user
@@ -396,7 +323,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });
@@ -421,7 +347,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });
@@ -446,7 +371,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });
@@ -576,9 +500,9 @@ The following steps will show you how to fetch and send content to your Supabase
       );
     }
 
-    export default function Supabase() {
-      const client = createClerkSupabaseClient();
+    const client = createClerkSupabaseClient();
 
+    export default function Supabase() {
       const [addresses, setAddresses] = useState<any>();
       const listAddresses = async () => {
         // Fetches all addresses scoped to the user
@@ -591,7 +515,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });
@@ -661,9 +584,9 @@ The following steps will show you how to fetch and send content to your Supabase
       );
     }
 
-    export default function Supabase() {
-      const client = createClerkSupabaseClient();
+    const client = createClerkSupabaseClient();
 
+    export default function Supabase() {
       const [addresses, setAddresses] = useState<any>();
       const listAddresses = async () => {
         // Fetches all addresses scoped to the user
@@ -676,7 +599,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });
@@ -746,9 +668,9 @@ The following steps will show you how to fetch and send content to your Supabase
       );
     }
 
-    export default function Supabase() {
-      const client = createClerkSupabaseClient();
+    const client = createClerkSupabaseClient();
 
+    export default function Supabase() {
       const [addresses, setAddresses] = useState<any>();
       const listAddresses = async () => {
         // Fetches all addresses scoped to the user
@@ -761,7 +683,6 @@ The following steps will show you how to fetch and send content to your Supabase
       const sendAddress = async () => {
         if (!inputRef.current?.value) return;
         await client.from("Posts").insert({
-          user_id: window.Clerk.session?.user.id,
           // Replace content with whatever field you want
           content: inputRef.current?.value,
         });

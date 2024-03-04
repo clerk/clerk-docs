@@ -75,6 +75,18 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > Add it to your app's middleware.
 
+### 1.6 No periods at the ends of the final sentence in a list
+
+This includes bulleted lists and numbered lists.
+
+#### Do
+
+> 1. List item without period
+
+#### Don't
+
+> 1. List item with period.
+
 ## 2. Write for clarity
 
 ### 2.1 “You” is the reader; "Clerk" is Clerk

@@ -16,16 +16,71 @@ This is the main entrypoint class for the `@clerk/clerk-js` package. It contains
 | `isSatellite` | `boolean` | Clerk Flag for satellite apps |
 | `domain` | `string` | A getter for the current Clerk app's domain.<br />Prefixed with `clerk.` on production if not already prefixed.<br />Returns `""` when ran on the server |
 | `proxyUrl` | `string` | A getter for your Clerk app's proxy URL. Required for applications that run behind a reverse proxy.<br />Can be either a relative path (`/__clerk`) or a full URL (`https://<your-domain>/__clerk`). |
-| `instanceId` | `'production' \| 'development'` | A getter to see the if a Clerk instance is running in production or development mode |
-| `client` | [`Client`][client-ref] | The [`Client`][client-ref] object for the current window. |
-| `session` | [`Session`][session-ref] \| `null` \| `undefined` | The currently active [`Session`][session-ref], which is guaranteed to be one of the sessions in `Client.sessions`. If there is no active session, this field will be `null`. If the session is loading, this field will be `undefined`. |
-| `user` | [`User`][user-ref] \| `null` \| `undefined` | A shortcut to `Session.user` which holds the currently active [`User`][user-ref] object. If the session is `null` or `undefined`, the user field will match. |
-| `organization` | [`Organization`][organization-ref] \| `null` \| `undefined` | A shortcut to the last active `Session.user.organizationMemberships` which holds an instance of a [`Organization`][organization-ref] object. If the session is `null` or `undefined`, the user field will match. |
+| `instanceType` | `'production' \| 'development'` | A getter to see the if a Clerk instance is running in production or development mode |
+| `client` | [`Client`][client-ref] | The `Client` object for the current window. |
+| `session` | [`Session`][session-ref] \| `null` \| `undefined` | The currently active `Session`, which is guaranteed to be one of the sessions in `Client.sessions`. If there is no active session, this field will be `null`. If the session is loading, this field will be `undefined`. |
+| `user` | [`User`][user-ref] \| `null` \| `undefined` | A shortcut to `Session.user` which holds the currently active `User` object. If the session is `null` or `undefined`, the user field will match. |
+| `organization` | [`Organization`][organization-ref] \| `null` \| `undefined` | A shortcut to the last active `Session.user.organizationMemberships` which holds an instance of a `Organization` object. If the session is `null` or `undefined`, the user field will match. |
 | `publishableKey` | `string \| undefined` | The publishable key from your Clerk Dashboard, used to connect to Clerk |
 
 ## Methods
 
+### `addListener()`
+
+Registers a listener that triggers a callback whenever a change in the [`Client`][client-ref], [`Session`][session-ref], or [`User`][user-ref] object occurs. This method is primarily used to build frontend SDKs like [`@clerk/clerk-react`](https://www.npmjs.com/package/@clerk/clerk-react).
+
+```typescript
+function addListener(listener: ((emission: Resources) => void)): UnsubscribeCallback;
+```
+
+#### `Resources`
+
+| Name | Type |
+| --- | --- |
+| `client` | [`Client`][client-ref] |
+| `session` | [`Session`][session-ref] \| `null` \| `undefined` |
+| `user` | [`User`][user-ref] \| `null` \| `undefined` |
+| `organization` | [`Organization`][organization-ref] \| `null` \| `undefined` |
+| `lastOrganizationInvitation` | [`OrganizationInvitation`](/docs/references/javascript/organization-invitation) \| `null` \| `undefined` |
+| `lastOrganizationMember` | [`OrganizationMembership`](/docs/references/javascript/organization-membership) \| `null` \| `undefined` |
+
+<Callout>
+  Note the following about `User` and `Session`:
+    - When there is an active session, `user === session.user`.
+    - When there is no active session, `User` and `Session` will both be `null`.
+</Callout>
+
+#### `addListener()` returns
+
+The `addListener` method returns an `UnsubscribeCallback` function that can be used to remove the listener from the `Clerk` object.
+
+```typescript
+type UnsubscribeCallback = () => void;
+```
+
+### `authenticateWithMetamask()`
+
+```typescript
+function authenticateWithMetamask({
+  redirectUrl,
+  signUpContinueUrl,
+  customNavigate,
+}?: AuthenticateWithMetamaskParams): Promise<void>;
+```
+
+#### `AuthenticateWithMetamaskParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `redirectUrl?` | `string \| undefined` | Full URL or path to navigate to after a successful sign in or sign up. |
+| `signUpContinueUrl?` | `string \| undefined` | The location to continue navigation to in the sign up process if data is missing. |
+| `customNavigate?` | `((to: string) => Promise<unknown> \| unknown) \| undefined` | Allows you to define a custom navigation function |
+
 ### `constructor()`
+
+Create an instance of the `Clerk` class with dedicated options.
+
+This method is only available when importing `Clerk` from `@clerk/clerk-js`, rather than using a Window script.
 
 ```typescript
 class Clerk {
@@ -33,11 +88,7 @@ class Clerk {
 }
 ```
 
-Create an instance of the `Clerk` class with dedicated options.
-
-> This method is only available when importing `Clerk` from `@clerk/clerk-js`, rather than using a Window script.
-
-#### Properties
+#### `constructor()` properties
 
 | Name | Type | Description |
 | --- | --- | --- |
@@ -50,33 +101,18 @@ Only one of the two properties are allowed to be set at a time.
 
 | Name | Type | Description |
 | --- | --- | --- |
-| `proxyUrl?` | `never \| string \| ((url: URL) => string)` | The proxyUrl used to connect to Clerk. If a function, will be called with a `URL` made from `window.location.href` |
+| `proxyUrl?` | `never \| string \| ((url: URL) => string)` | The proxy URL used to connect to Clerk. If a function, will be called with a `URL` made from `window.location.href` |
 | `domain?` | `never \| string \| ((url: URL) => string)` | The domain used to connect to Clerk. If a function, will be called with a `URL` made from `window.location.href` |
 
-### `isReady()`
-
-```typescript
-function isReady(): boolean;
-```
-
-Indicates when the [ClerkJS](/docs/references/javascript/overview) library has fully loaded and the `Clerk` object is ready for use.
-
-#### Returns
-
-
-| Type | Description |
-| --- | --- |
-| `boolean` | Returns `true` when the `Clerk` object is ready. Returns `false` otherwise. |
-
 ### `load()`
+
+Initializes the `Clerk` object and loads all necessary environment configuration and instance settings from the [Frontend API](https://clerk.com/docs/reference/frontend-api).
+
+You must call this method before using the `Clerk` object in your code. Refer to the [ClerkJS installation](/docs/quickstarts/javascript) guide for more details.
 
 ```typescript
 function load(options?: ClerkOptions): Promise<void>;
 ```
-
-Initializes the `Clerk` object and loads all necessary environment configuration and instance settings from the [Frontend API](https://clerk.com/docs/reference/frontend-api).
-
-It is absolutely necessary to call this method before using the `Clerk` object in your code. Refer to the [ClerkJS installation](/docs/quickstarts/javascript) guide for more details.
 
 #### `ClerkOptions`
 
@@ -102,13 +138,16 @@ All props below are optional.
 
 ### `signOut()`
 
+- In a [multi-session application](/docs/custom-flows/multi-session-applications): Signs out the active user from all sessions
+- In a single-session context: Signs out the active user from the current session
+
+The current client will be deleted. You can specify a specific session to sign out by passing the `sessionId` parameter.
+
 ```typescript
 function signOut(options?: SignOutOptions): Promise<void>;
 // OR
 function signOut(signOutCallback?: (() => void | Promise<any>), options?: SignOutOptions): Promise<void>;
 ```
-
-Signs out the active user from all sessions in a [multi-session application](/docs/custom-flows/multi-session-applications), or simply the current session in a single-session context. The current client will be deleted. You can also specify a specific session to sign out by passing the `sessionId` parameter.
 
 #### `SignOutOptions`
 
@@ -116,59 +155,11 @@ Signs out the active user from all sessions in a [multi-session application](/do
 | --- | --- | --- |
 | `sessionId?` | `string \| undefined` | Specify a specific session to sign out. Useful for multi-session applications. |
 
-### `addListener()`
-
-```typescript
-function addListener(listener: ((emission: Resources) => void)): UnsubscribeCallback;
-```
-
-Registers a listener that triggers a callback whenever a change in the [`Client`][client-ref], [`Session`][session-ref], or [`User`][user-ref] object occurs. This method is primary used to build frontend SDKs like [@clerk/clerk-react](https://www.npmjs.com/package/@clerk/clerk-react).
-
-#### `Resources`
-
-
-| Name | Type | 
-| --- | --- |
-| `client` | [`Client`][client-ref] |
-| `session` | [`Session`][session-ref] \| `null` \| `undefined` |
-| `user` | [`User`][user-ref] \| `null` \| `undefined` |
-| `organization` | [`Organization`][organization-ref] \| `null` \| `undefined` |
-| `lastOrganizationInvitation` | [`OrganizationInvitation`](/docs/references/javascript/organization-invitation) \| `null` \| `undefined` |
-| `lastOrganizationMember` | [`OrganizationMembership`](/docs/references/javascript/organization-membership) \| `null` \| `undefined` |
-
-<Callout>
-  Please note that the [`Session`][session-ref] and [`User`][user-ref] object have a special relationship that the type definition alone does not capture:
-    - When there is an active session, `user === session.user`. When there is no active session, [`User`][user-ref] and [`Session`][session-ref] will both be `null`.
-    - When a session is loading, [`User`][user-ref] and [`Session`][session-ref] will be `undefined`.
-</Callout>
-
-#### Returns
-
-```typescript
-type UnsubscribeCallback = () => void;
-```
-
-The `addListener` method returns an `UnsubscribeCallback` function that can be used to remove the listener from the `Clerk` object.
-
-### `authenticateWithMetamask()`
-
-```typescript
-function authenticateWithMetamask({
-  redirectUrl,
-  signUpContinueUrl,
-  customNavigate,
-}?: AuthenticateWithMetamaskParams): Promise<void>;
-```
-
-#### `AuthenticateWithMetamaskParams`
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `redirectUrl?` | `string \| undefined` | Full URL or path to navigate after successful sign in or sign up. |
-| `signUpContinueUrl?` | `string \| undefined` | The location to continue navigation to in the sign up process if data is missing. |
-| `customNavigate?` | `((to: string) => Promise<unknown> \| unknown) \| undefined` | Allows you to define a custom navigation function |
-
 ## Components
+
+Many of the methods on the `Clerk` class are used to interact with Clerk's UI components, such as mounting and unmounting them.
+
+Select a component below to learn more about the `Clerk` methods available for it:
 
 <div className="container mx-auto my-4">
   <div className="grid lg:grid-cols-2 lg:grid-rows-4 justify-center gap-x-7">
@@ -182,7 +173,6 @@ function authenticateWithMetamask({
   </div>
 </div>
 
-
 ## Additional methods
 
 In addition to the methods listed above, the `Clerk` class also has the following methods:
@@ -191,7 +181,7 @@ In addition to the methods listed above, the `Clerk` class also has the followin
 
 - [`getOrganization()`](/docs/references/javascript/clerk/organization-methods#get-organization)
 - [`createOrganization()`](/docs/references/javascript/clerk/organization-methods#create-organization)
-- [`getOrganizationMemberships()`](/docs/references/javascript/clerk/organization-methods#get-organization-memberships)
+- [`getOrganizationMemberships()` (deprecated)](/docs/references/javascript/clerk/organization-methods#get-organization-memberships)
 
 ### Redirect
 
@@ -202,7 +192,7 @@ In addition to the methods listed above, the `Clerk` class also has the followin
 - [`redirectToUserProfile()`](/docs/references/javascript/clerk/redirect-methods#redirect-to-user-profile)
 - [`redirectToCreateOrganization()`](/docs/references/javascript/clerk/redirect-methods#redirect-to-create-organization)
 - [`redirectToOrganizationProfile()`](/docs/references/javascript/clerk/redirect-methods#redirect-to-organization-profile)
-- [`redirectToHome()`](/docs/references/javascript/clerk/redirect-methods#redirect-to-home)
+- [`redirectToHome()` (deprecated)](/docs/references/javascript/clerk/redirect-methods#redirect-to-home)
 
 ### Build URLs
 
@@ -222,7 +212,7 @@ In addition to the methods listed above, the `Clerk` class also has the followin
 
 ### Session
 
-- [`setSession()`](/docs/references/javascript/clerk/session-methods#set-session)
+- [`setSession()` (deprecated)](/docs/references/javascript/clerk/session-methods#set-session)
 - [`setActive()`](/docs/references/javascript/clerk/session-methods#set-active)
 
 [client-ref]: /docs/references/javascript/client

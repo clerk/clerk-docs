@@ -37,20 +37,20 @@ This tutorial will teach you how to integrate Supabase with Clerk by creating RL
  
 ### Add a column for user IDs to your Supabase tables
 
-To show users content scoped to their account, you must create RLS policies that check the user's ID. To leverage RLS policies, you must store Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
+To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
 
-- In your Supabase dashboard, in the sidebar, navigate to **Database** > **Tables**. From here, you can choose which table you want to edit, and add the new column.
-    - Name it `user_id`.
+- In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
+    - Name the column `user_id`.
     - **This column's data type must be `text`**.
     - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
 <Callout type="info">
-  This step is required becase Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
+  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
 </Callout>
 
 ### Create a SQL query that checks the user ID
 
-Create a `requesting_user_id()` function so you can access the user ID in your RLS policies:
-    1. In your Supabase dashboard, in the sidebar, navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
+Create a `requesting_user_id()` function, which will get the Clerk user ID of the requesting user from the request headers. This will allow you to access the user ID in your RLS policies.
+    1. In the sidebar of your Supabase dashboard, navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
         ```sql
         CREATE OR REPLACE FUNCTION requesting_user_id() 
         RETURNS TEXT AS $$
@@ -60,14 +60,14 @@ Create a `requesting_user_id()` function so you can access the user ID in your R
             )::text;
         $$ LANGUAGE SQL STABLE;
         ```
-    1. Select **Run** to execute the query and create the function.
+    1. Select **Run** to execute the query and create the `requesting_user_id` function.
 
 ### Create ID-based RLS policies
 
-Create RLS policies that allow users to modify and read content associated with their user IDs:
+Create RLS policies that allow users to modify and read content associated with their user IDs. This example will use an `Addresses` table, but you can replace `Addresses` with whatever table you're using.
 1. Create an RLS policy for inserting content:
     - In your Supabase dashboard, in the sidebar, navigate to **Authentication** > **Policies**. Under the name of the table you want users to have access to, select **New Policy**.
-    - If you're using the policy editor, paste the following snippet:
+    - If you're using the policy editor, paste the following snippet, replacing `address` and `"Addresses"` with whatever you want:
         ```sql filename="Supabase policy editor"
         CREATE POLICY "create user address" ON "public"."Addresses"
         AS PERMISSIVE FOR INSERT
@@ -75,7 +75,7 @@ Create RLS policies that allow users to modify and read content associated with 
 
         WITH CHECK (requesting_user_id() = user_id)
         ```       
-    - If you're using the policy creator instead of the editor, select **For full customization**.
+    - If you're using the policy creator instead of the editor:
         - Name the policy whatever you want.
         - For **Allowed operation**, select **INSERT**.
         - For **Target roles**, select **authenticated**.
@@ -88,7 +88,7 @@ Create RLS policies that allow users to modify and read content associated with 
 
 ### Get your Supabase JWT secret key
 
-To give users access to your data, Supabase's API requires an authentication token to authenticate requests. Your Clerk project can generate these authentication tokens, but it needs your Supabase project's JWT secret key first.
+To give users access to your data, Supabase's API requires an authentication token. Your Clerk project can generate these authentication tokens, but it needs your Supabase project's JWT secret key first.
 
 To find the JWT secret key:
 
@@ -154,13 +154,12 @@ Then, set up your environment variables:
 1. Find your Clerk publishable key and secret key. If you're signed into Clerk, the `.env.local` snippet below will contain your keys. Otherwise:
     - Navigate to your Clerk Dashboard.
     - Select your application, then select **API Keys** in the sidebar menu.
-    - You can copy your keys from the Quick Copy section.
+    - You can copy your keys from the **Quick Copy** section.
 1. Add your keys to your `.env.local` file.
 1. Find your Supabase credentials:
     - Go to your Supabase dashboard. In the sidebar, select **Settings** > **API**.
-    - Copy the **Project URL**.
-    - Copy the value beside `anon` `public` in the **Project API Keys** section.
-1. Add your Supabase credentials to your `.env.local` file.
+    - Copy the **Project URL** and add it to your `.env.local` file.
+    - Copy the value beside `anon` `public` in the **Project API Keys** section and add it to your `.env.local` file.
 
 The final result should be similar to this:
 
@@ -181,9 +180,9 @@ The final result should be similar to this:
 
 ### Fetch Supabase data in your code 
 
-The following steps will show you how to fetch and send content to your Supabase tables based on the user's ID. It assumes you have a table named "Addresses" with a `content` field, but you can adapt this code for any use case.
+The following steps will show you how to fetch and send content to your Supabase tables based on the user's ID. It assumes you have a table named `"Addresses"` with a `content` field, but you can adapt this code for any use case.
 
-1. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your JWT template in Clerk:
+1. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your Clerk JWT template:
     <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
     ```ts filename="app/supabase/page.tsx"
     "use client";

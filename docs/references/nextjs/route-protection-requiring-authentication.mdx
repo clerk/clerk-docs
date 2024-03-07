@@ -11,9 +11,56 @@ If you want to learn about protecting routes based on [organization](/docs/organ
 
 ## App Router
 
-### Protect a layout or page
+### Protect a route
+You can protect an entire route tree or an individual page by using Middleware and the `clerkMiddleware` helper. There are two methods that you can use depending on your use case:
+- Using [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign in route automatically
+- Using [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status
 
-You can protect an entire route tree or an individual page by using Clerk helpers. There are two methods that you can use depending on your use case:
+
+#### Use `auth().protect()`
+The following example require a user to be signed in to view the content. If the user is not signed in, they will be redirected to the sign-in route.
+
+<CodeBlockTabs type="router" options={["app/dashboard/page.tsx", "app/subscribe/page.tsx"]}>
+```tsx filename="app/middlware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
+
+export default clerkMiddleware((auth, request) => {
+    if (isProtectedRoute(request)) {
+        auth().protect();
+    }
+});
+
+export const config = { matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)']};
+```
+</CodeBlockTabs>
+
+#### Use `auth().userId`
+If you want to do something other than redirecting the user to the sign-in route, or you want to run custom logic before the redirect happens,  you can use `auth().userId` to check if the user is signed in and then perform the action you want based on the user's authentication status.
+
+<CodeBlockTabs type="router" options={["app/dashboard/page.tsx", "app/subscribe/page.tsx"]}>
+```tsx filename="app/middlware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)']);
+
+export default clerkMiddleware((auth, request) => {
+    if (!auth().userId && isProtectedRoute(request)) {
+        // run custom logic before redirecting
+        logger('unauthenticated access');
+        return auth().redirectToSignIn();
+    }
+});
+
+export const config = { matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)']};
+```
+</CodeBlockTabs>
+
+
+### Protect a page
+
+You can protect an individual page by using Clerk helpers. There are two methods that you can use depending on your use case:
 
 - Using [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign in route automatically
 - Using [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status
@@ -22,17 +69,17 @@ You can protect an entire route tree or an individual page by using Clerk helper
 
 The following examples require a user to be signed in to view the content. If the user is not signed in, they will be redirected to the sign-in route.
 
-<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
+<CodeBlockTabs type="router" options={["app/dashboard/page.tsx", "app/subscribe/page.tsx"]}>
 
-```tsx filename="app/dashboard/layout.tsx"
+```tsx filename="app/dashboard/page.tsx"
 import { auth } from '@clerk/nextjs/server';
 
-export default async function Layout({ children }) {
+export default async function Page() {
   // If the user is not logged in they will be redirected to the sign-in route
   // If the user is logged in they can view the content
   auth().protect();
 
-  return <>{children}</>;
+  return <>content</>;
 }
 ```
 
@@ -44,7 +91,7 @@ export default function Page() {
   if (!auth().userId) {
     // If the user is not logged in they will be redirected to the sign-in route
     // If the user is logged in they can view the route
-    return auth().protect();
+    return auth().redirectToSignIn();
   }
 
   return (
@@ -61,42 +108,7 @@ export default function Page() {
 
 If you want to do something other than redirecting the user to the sign-in route, you can use `auth().userId` to check if the user is signed in and then perform the action you want based on the user's authentication status.
 
-<CodeBlockTabs type="router" options={["app/dashboard/layout.tsx", "app/subscribe/page.tsx"]}>
-
-```tsx filename="app/dashboard/layout.tsx"
-import { auth } from '@clerk/nextjs/server';
-import { SignInButton, SignOutButton } from '@clerk/nextjs';
-
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { userId } = auth();
-
-  if (!userId) {
-    return (
-      <>
-        <header>
-          <SignInButton />
-        </header>
-        <main>{children}</main>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <header>
-        <p>Your userId is {userId}</p>
-        <SignOutButton />
-      </header>
-      <main>{children}</main>
-    </>
-  );
-}
-```
-
+<CodeBlockTabs type="router" options={["app/subscribe/page.tsx"]}>
 ```tsx filename="app/subscribe/page.tsx"
 import { SignInButton } from '@clerk/nextjs';
 import { auth } from '@clerk/nextjs/server';

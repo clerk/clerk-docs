@@ -239,11 +239,11 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 #### Do
 
-> When the user logs out using the button, they will be taken to the login page.
+> When the user logs out using the button, they will be taken to the sign in page.
 
 #### Don't
 
-> When he logs out using the button, he will be taken to the login page.
+> When he logs out using the button, he will be taken to the sign in page.
 
 ### 3.4 Avoid "click"
 

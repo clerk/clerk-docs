@@ -40,7 +40,7 @@ This tutorial will teach you how to integrate Supabase with Clerk by creating RL
 
 To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
 
-- In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
+In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
   - Name the column `user_id`.
   - **This column's data type must be `text`**.
   - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
@@ -186,88 +186,95 @@ The final result should be similar to this:
 The following steps will show you how to fetch and send content to your Supabase tables based on the user's ID. It assumes you have a table named `"Addresses"` with a `content` field, but you can adapt this code for any use case.
 
 1. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your Clerk JWT template:
-  <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-  ```ts filename="app/supabase/page.tsx"
-  "use client";
-  import { createClient } from "@supabase/supabase-js";
-  import { useRef, useState } from "react";
+<Tabs type="framework" items={["Next.js", "React"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```ts filename="app/supabase/page.tsx"
+    "use client";
+    import { createClient } from "@supabase/supabase-js";
+    import { useRef, useState } from "react";
 
-  // Add clerk to Window to avoid type errors
-  declare global {
-    interface Window {
-      Clerk: any;
-    }
-  }
-
-  function createClerkSupabaseClient() {
-    return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-      process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
-      {
-        global: {
-          // Get the Supabase token with a custom fetch method
-          fetch: async (url, options = {}) => {
-            const clerkToken = await window.Clerk.session?.getToken({
-              template: "supabase",
-            });
-
-            // Construct fetch headers
-            const headers = new Headers(options?.headers);
-            headers.set("Authorization", `Bearer ${clerkToken}`);
-
-            // Now call the default fetch
-            return fetch(url, {
-              ...options,
-              headers,
-            });
-          },
-        },
+    // Add clerk to Window to avoid type errors
+    declare global {
+      interface Window {
+        Clerk: any;
       }
-    );
-  }
-
-  const client = createClerkSupabaseClient();
-  ```
-  ```ts filename="pages/supabase/index.tsx"
-  import { createClient } from "@supabase/supabase-js";
-  import { useRef, useState } from "react";
-
-  // Add clerk to Window to avoid type errors
-  declare global {
-    interface Window {
-      Clerk: any;
     }
-  }
 
-  function createClerkSupabaseClient() {
-    return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-      process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
-      {
-        global: {
-          // Get the Supabase token with a custom fetch method
-          fetch: async (url, options = {}) => {
-            const clerkToken = await window.Clerk.session?.getToken({
-              template: "supabase",
-            });
+    function createClerkSupabaseClient() {
+      return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
+        {
+          global: {
+            // Get the Supabase token with a custom fetch method
+            fetch: async (url, options = {}) => {
+              const clerkToken = await window.Clerk.session?.getToken({
+                template: "supabase",
+              });
 
-            // Construct fetch headers
-            const headers = new Headers(options?.headers);
-            headers.set("Authorization", `Bearer ${clerkToken}`);
+              // Construct fetch headers
+              const headers = new Headers(options?.headers);
+              headers.set("Authorization", `Bearer ${clerkToken}`);
 
-            // Now call the default fetch
-            return fetch(url, {
-              ...options,
-              headers,
-            });
+              // Now call the default fetch
+              return fetch(url, {
+                ...options,
+                headers,
+              });
+            },
           },
-        },
-      }
-    );
-  }
+        }
+      );
+    }
 
-  const client = createClerkSupabaseClient();
-  ```
+    const client = createClerkSupabaseClient();
+    ```
+
+    ```ts filename="pages/supabase/index.tsx"
+    import { createClient } from "@supabase/supabase-js";
+    import { useRef, useState } from "react";
+
+    // Add clerk to Window to avoid type errors
+    declare global {
+      interface Window {
+        Clerk: any;
+      }
+    }
+
+    function createClerkSupabaseClient() {
+      return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
+        {
+          global: {
+            // Get the Supabase token with a custom fetch method
+            fetch: async (url, options = {}) => {
+              const clerkToken = await window.Clerk.session?.getToken({
+                template: "supabase",
+              });
+
+              // Construct fetch headers
+              const headers = new Headers(options?.headers);
+              headers.set("Authorization", `Bearer ${clerkToken}`);
+
+              // Now call the default fetch
+              return fetch(url, {
+                ...options,
+                headers,
+              });
+            },
+          },
+        }
+      );
+    }
+
+    const client = createClerkSupabaseClient();
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
   ```ts filename="components/supabase.tsx"
   import { createClient } from "@supabase/supabase-js";
   import React, { useRef, useState } from "react";
@@ -308,56 +315,64 @@ The following steps will show you how to fetch and send content to your Supabase
 
   const client = createClerkSupabaseClient();
   ```
-  </CodeBlockTabs>
+  </Tab>
+</Tabs>
 
 2. Next, define a component with methods for sending and getting a user's addresses from your database:
-  <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-  ```tsx filename="app/supabase/page.tsx"
-  export default function Supabase() {
-    const [addresses, setAddresses] = useState<any>();
-    const listAddresses = async () => {
-      // Fetches all addresses scoped to the user
-      // Replace "Addresses" with your table name
-      const { data, error } = await client.from("Posts").select();
-      if (!error) setAddresses(data);
-    };
+<Tabs type="framework" items={["Next.js", "React"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```tsx filename="app/supabase/page.tsx"
+    export default function Supabase() {
+      const [addresses, setAddresses] = useState<any>();
+      const listAddresses = async () => {
+        // Fetches all addresses scoped to the user
+        // Replace "Addresses" with your table name
+        const { data, error } = await client.from("Posts").select();
+        if (!error) setAddresses(data);
+      };
 
-    const inputRef = useRef<HTMLInputElement>(null);
-    const sendAddress = async () => {
-      if (!inputRef.current?.value) return;
-      await client.from("Posts").insert({
-        // Replace content with whatever field you want
-        content: inputRef.current?.value,
-      });
-    };
+      const inputRef = useRef<HTMLInputElement>(null);
+      const sendAddress = async () => {
+        if (!inputRef.current?.value) return;
+        await client.from("Posts").insert({
+          // Replace content with whatever field you want
+          content: inputRef.current?.value,
+        });
+      };
 
-    return null;
-  }
-  ```
-  ```tsx filename="pages/supabase/index.tsx"
-  export default function Supabase() {
-    const client = createClerkSupabaseClient();
+      return null;
+    }
+    ```
 
-    const [addresses, setAddresses] = useState<any>();
-    const listAddresses = async () => {
-      // Fetches all addresses scoped to the user
-      // Replace "Addresses" with your table name
-      const { data, error } = await client.from("Posts").select();
-      if (!error) setAddresses(data);
-    };
+    ```tsx filename="pages/supabase/index.tsx"
+    export default function Supabase() {
+      const client = createClerkSupabaseClient();
 
-    const inputRef = useRef<HTMLInputElement>(null);
-    const sendAddress = async () => {
-      if (!inputRef.current?.value) return;
-      await client.from("Posts").insert({
-        // Replace content with whatever field you want
-        content: inputRef.current?.value,
-      });
-    };
+      const [addresses, setAddresses] = useState<any>();
+      const listAddresses = async () => {
+        // Fetches all addresses scoped to the user
+        // Replace "Addresses" with your table name
+        const { data, error } = await client.from("Posts").select();
+        if (!error) setAddresses(data);
+      };
 
-    return null;
-  }
-  ```
+      const inputRef = useRef<HTMLInputElement>(null);
+      const sendAddress = async () => {
+        if (!inputRef.current?.value) return;
+        await client.from("Posts").insert({
+          // Replace content with whatever field you want
+          content: inputRef.current?.value,
+        });
+      };
+
+      return null;
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
   ```tsx filename="component/supabase.tsx"
   export default function Supabase() {
     const client = createClerkSupabaseClient();
@@ -382,60 +397,67 @@ The following steps will show you how to fetch and send content to your Supabase
     return null;
   }
   ```
-  </CodeBlockTabs>
+  </Tab>
+</Tabs>
 
 3. Edit your component to return a basic UI that allows you to list all your addresses and send new ones:
-  <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-  ```tsx filename="app/supabase/page.tsx"
-  return (
-    <>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <input
-          onSubmit={sendAddress}
-          type="text"
-          ref={inputRef}
-        />
-        <button onClick={sendAddress}>Send Address</button>
-        <button onClick={listAddresses}>Fetch Addresses</button>
-      </div>
-      <h2>Addresses</h2>
-      {!addresses ? (
-        <p>No addresses</p>
-      ) : (
-        <ul>
-          {addresses.map((address: any) => (
-            <li key={address.id}>{address.content}</li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-  ```
-  ```tsx filename="page/supabase/index.tsx"
-  return (
-    <>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <input
-          onSubmit={sendAddress}
-          type="text"
-          ref={inputRef}
-        />
-        <button onClick={sendAddress}>Send Address</button>
-        <button onClick={listAddresses}>Fetch Addresses</button>
-      </div>
-      <h2>Addresses</h2>
-      {!addresses ? (
-        <p>No addresses</p>
-      ) : (
-        <ul>
-          {addresses.map((address: any) => (
-            <li key={address.id}>{address.content}</li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-  ```
+<Tabs type="framework" items={["Next.js", "React"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```tsx filename="app/supabase/page.tsx"
+    return (
+      <>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <input
+            onSubmit={sendAddress}
+            type="text"
+            ref={inputRef}
+          />
+          <button onClick={sendAddress}>Send Address</button>
+          <button onClick={listAddresses}>Fetch Addresses</button>
+        </div>
+        <h2>Addresses</h2>
+        {!addresses ? (
+          <p>No addresses</p>
+        ) : (
+          <ul>
+            {addresses.map((address: any) => (
+              <li key={address.id}>{address.content}</li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+    ```
+    ```tsx filename="page/supabase/index.tsx"
+    return (
+      <>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <input
+            onSubmit={sendAddress}
+            type="text"
+            ref={inputRef}
+          />
+          <button onClick={sendAddress}>Send Address</button>
+          <button onClick={listAddresses}>Fetch Addresses</button>
+        </div>
+        <h2>Addresses</h2>
+        {!addresses ? (
+          <p>No addresses</p>
+        ) : (
+          <ul>
+            {addresses.map((address: any) => (
+              <li key={address.id}>{address.content}</li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
   ```tsx filename="components/supabase.tsx"
   return (
     <>
@@ -461,178 +483,187 @@ The following steps will show you how to fetch and send content to your Supabase
     </>
   );
   ```
-  </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
 4. The final result should be similar to this:
-  <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-  ```ts filename="app/supabase/page.tsx"
-  "use client";
-  import { createClient } from "@supabase/supabase-js";
-  import { useRef, useState } from "react";
+<Tabs type="framework" items={["Next.js", "React"]}>
+  <Tab>
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```ts filename="app/supabase/page.tsx"
+    "use client";
+    import { createClient } from "@supabase/supabase-js";
+    import { useRef, useState } from "react";
 
-  // Add clerk to Window to avoid type errors
-  declare global {
-    interface Window {
-      Clerk: any;
-    }
-  }
-
-  function createClerkSupabaseClient() {
-    return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-      process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
-      {
-        global: {
-          // Get the Supabase token with a custom fetch method
-          fetch: async (url, options = {}) => {
-            const clerkToken = await window.Clerk.session?.getToken({
-              template: "supabase",
-            });
-
-            // Construct fetch headers
-            const headers = new Headers(options?.headers);
-            headers.set("Authorization", `Bearer ${clerkToken}`);
-
-            // Now call the default fetch
-            return fetch(url, {
-              ...options,
-              headers,
-            });
-          },
-        },
+    // Add clerk to Window to avoid type errors
+    declare global {
+      interface Window {
+        Clerk: any;
       }
-    );
-  }
-
-  const client = createClerkSupabaseClient();
-
-  export default function Supabase() {
-    const [addresses, setAddresses] = useState<any>();
-    const listAddresses = async () => {
-      // Fetches all addresses scoped to the user
-      // Replace "Addresses" with your table name
-      const { data, error } = await client.from("Posts").select();
-      if (!error) setAddresses(data);
-    };
-
-    const inputRef = useRef<HTMLInputElement>(null);
-    const sendAddress = async () => {
-      if (!inputRef.current?.value) return;
-      await client.from("Posts").insert({
-        // Replace content with whatever field you want
-        content: inputRef.current?.value,
-      });
-    };
-
-    return (
-      <>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <input
-            onSubmit={sendAddress}
-            style={{ color: "black" }}
-            type="text"
-            ref={inputRef}
-          />
-          <button onClick={sendAddress}>Send Address</button>
-          <button onClick={listAddresses}>Fetch Addresses</button>
-        </div>
-        <h2>Addresses</h2>
-        {!addresses ? (
-          <p>No addresses</p>
-        ) : (
-          <ul>
-            {addresses.map((address: any) => (
-              <li key={address.id}>{address.content}</li>
-            ))}
-          </ul>
-        )}
-      </>
-    );
-  }
-  ```
-  ```ts filename="pages/supabase/index.tsx"
-  import { createClient } from "@supabase/supabase-js";
-  import { useRef, useState } from "react";
-
-  // Add clerk to Window to avoid type errors
-  declare global {
-    interface Window {
-      Clerk: any;
     }
-  }
 
-  function createClerkSupabaseClient() {
-    return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-      process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
-      {
-        global: {
-          // Get the Supabase token with a custom fetch method
-          fetch: async (url, options = {}) => {
-            const clerkToken = await window.Clerk.session?.getToken({
-              template: "supabase",
-            });
+    function createClerkSupabaseClient() {
+      return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
+        {
+          global: {
+            // Get the Supabase token with a custom fetch method
+            fetch: async (url, options = {}) => {
+              const clerkToken = await window.Clerk.session?.getToken({
+                template: "supabase",
+              });
 
-            // Construct fetch headers
-            const headers = new Headers(options?.headers);
-            headers.set("Authorization", `Bearer ${clerkToken}`);
+              // Construct fetch headers
+              const headers = new Headers(options?.headers);
+              headers.set("Authorization", `Bearer ${clerkToken}`);
 
-            // Now call the default fetch
-            return fetch(url, {
-              ...options,
-              headers,
-            });
+              // Now call the default fetch
+              return fetch(url, {
+                ...options,
+                headers,
+              });
+            },
           },
-        },
+        }
+      );
+    }
+
+    const client = createClerkSupabaseClient();
+
+    export default function Supabase() {
+      const [addresses, setAddresses] = useState<any>();
+      const listAddresses = async () => {
+        // Fetches all addresses scoped to the user
+        // Replace "Addresses" with your table name
+        const { data, error } = await client.from("Posts").select();
+        if (!error) setAddresses(data);
+      };
+
+      const inputRef = useRef<HTMLInputElement>(null);
+      const sendAddress = async () => {
+        if (!inputRef.current?.value) return;
+        await client.from("Posts").insert({
+          // Replace content with whatever field you want
+          content: inputRef.current?.value,
+        });
+      };
+
+      return (
+        <>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <input
+              onSubmit={sendAddress}
+              style={{ color: "black" }}
+              type="text"
+              ref={inputRef}
+            />
+            <button onClick={sendAddress}>Send Address</button>
+            <button onClick={listAddresses}>Fetch Addresses</button>
+          </div>
+          <h2>Addresses</h2>
+          {!addresses ? (
+            <p>No addresses</p>
+          ) : (
+            <ul>
+              {addresses.map((address: any) => (
+                <li key={address.id}>{address.content}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      );
+    }
+    ```
+
+    ```ts filename="pages/supabase/index.tsx"
+    import { createClient } from "@supabase/supabase-js";
+    import { useRef, useState } from "react";
+
+    // Add clerk to Window to avoid type errors
+    declare global {
+      interface Window {
+        Clerk: any;
       }
-    );
-  }
+    }
 
-  const client = createClerkSupabaseClient();
+    function createClerkSupabaseClient() {
+      return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+        process.env.NEXT_PUBLIC_SUPABASE_KEY ?? "",
+        {
+          global: {
+            // Get the Supabase token with a custom fetch method
+            fetch: async (url, options = {}) => {
+              const clerkToken = await window.Clerk.session?.getToken({
+                template: "supabase",
+              });
 
-  export default function Supabase() {
-    const [addresses, setAddresses] = useState<any>();
-    const listAddresses = async () => {
-      // Fetches all addresses scoped to the user
-      // Replace "Addresses" with your table name
-      const { data, error } = await client.from("Posts").select();
-      if (!error) setAddresses(data);
-    };
+              // Construct fetch headers
+              const headers = new Headers(options?.headers);
+              headers.set("Authorization", `Bearer ${clerkToken}`);
 
-    const inputRef = useRef<HTMLInputElement>(null);
-    const sendAddress = async () => {
-      if (!inputRef.current?.value) return;
-      await client.from("Posts").insert({
-        // Replace content with whatever field you want
-        content: inputRef.current?.value,
-      });
-    };
+              // Now call the default fetch
+              return fetch(url, {
+                ...options,
+                headers,
+              });
+            },
+          },
+        }
+      );
+    }
 
-    return (
-      <>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <input
-            onSubmit={sendAddress}
-            style={{ color: "black" }}
-            type="text"
-            ref={inputRef}
-          />
-          <button onClick={sendAddress}>Send Address</button>
-          <button onClick={listAddresses}>Fetch Addresses</button>
-        </div>
-        <h2>Addresses</h2>
-        {!addresses ? (
-          <p>No addresses</p>
-        ) : (
-          <ul>
-            {addresses.map((address: any) => (
-              <li key={address.id}>{address.content}</li>
-            ))}
-          </ul>
-        )}
-      </>
-    );
-  }
-  ```
+    const client = createClerkSupabaseClient();
+
+    export default function Supabase() {
+      const [addresses, setAddresses] = useState<any>();
+      const listAddresses = async () => {
+        // Fetches all addresses scoped to the user
+        // Replace "Addresses" with your table name
+        const { data, error } = await client.from("Posts").select();
+        if (!error) setAddresses(data);
+      };
+
+      const inputRef = useRef<HTMLInputElement>(null);
+      const sendAddress = async () => {
+        if (!inputRef.current?.value) return;
+        await client.from("Posts").insert({
+          // Replace content with whatever field you want
+          content: inputRef.current?.value,
+        });
+      };
+
+      return (
+        <>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <input
+              onSubmit={sendAddress}
+              style={{ color: "black" }}
+              type="text"
+              ref={inputRef}
+            />
+            <button onClick={sendAddress}>Send Address</button>
+            <button onClick={listAddresses}>Fetch Addresses</button>
+          </div>
+          <h2>Addresses</h2>
+          {!addresses ? (
+            <p>No addresses</p>
+          ) : (
+            <ul>
+              {addresses.map((address: any) => (
+                <li key={address.id}>{address.content}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      );
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
   ```ts filename="components/supabase.tsx"
   import { createClient } from "@supabase/supabase-js";
   import React, { useRef, useState } from "react";
@@ -717,7 +748,9 @@ The following steps will show you how to fetch and send content to your Supabase
     );
   }
   ```
-  </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
 5. Try out your application. When you visit the page with your component, you'll be required to sign in. Try creating and fetching content.
 
 </Steps>

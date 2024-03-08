@@ -75,6 +75,18 @@ If you want to abbreviate a term in your article, write it out fully first, then
 
 > Add it to your app's middleware.
 
+### 1.6 Use "Sign in", not "Log in"
+
+When referring to Clerk's SDKs, components, and dashboard, use "sign in" and "sign out" rather than "log in" or "log out". This is consistent with our `<SignIn />` component and `SignIn` class.
+
+#### Do
+
+> `<SignInButton />` creates a button that allows users to sign into your Clerk application.
+
+#### Don't
+
+> `<SignInButton />` creates a button that allows users to log into your Clerk application.
+
 ## 2. Write for clarity
 
 ### 2.1 “You” is the reader; "Clerk" is Clerk
@@ -239,11 +251,11 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 #### Do
 
-> When the user logs out using the button, they will be taken to the login page.
+> When the user logs out using the button, they will be taken to the sign-in page.
 
 #### Don't
 
-> When he logs out using the button, he will be taken to the login page.
+> When he logs out using the button, he will be taken to the sign-in page.
 
 ### 3.4 Avoid "click"
 

@@ -23,9 +23,9 @@ Because of this, passkeys are generally more secure than passwords, and you shou
 
 To use passkeys, you must first enable the feature in your Clerk Dashboard:
 
-- Instructions
-- Go
-- Here
+1. Visit the Dashboard and select your project.
+1. Expand **User & Authentication**, then select [**Email, Phone, Username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
+1. Navigate to **Authentication strategies**, and toggle **Passkeys**.
 
 ## Manage user passkeys
 
@@ -33,43 +33,182 @@ If you're using the prebuilt `<UserProfile>` component, your users can create an
 
 ### Create user passkeys
 
-To create a passkey for a user, you must call the `createPasskey()` method on the `User` object as shown in the following example:
+To create a passkey for a user, you must call the [`createPasskey()`](/docs/references/javascript/user/user#create-passkey) method on the [`User`](/docs/references/javascript/user/user) object as shown in the following example:
 
-<CodeBlockTabs options={["Next.js App router"]}>
-```ts filename="components/CustomCreatePasskeysButton.tsx"
-create code here
-```
-</CodeBlockTabs>
+<CodeBlockTabs options={["Next.js App Router"]}>
+```ts filename="app/components/CustomCreatePasskeysButton.tsx"
+"use client";
 
-### Rename user passkeys
+import { useUser } from "@clerk/nextjs";
 
-Sometimes users may want to rename a passkey to make it easier to identify. To rename a user's passkey in your Clerk app, you must call the `x()` method of the `x` object as shown in the following example: 
+export function CreatePasskeyButton() {
+  const { user } = useUser();
 
-<CodeBlockTabs options={["Next.js App router"]}>
-```ts filename="components/RenamePasskeyForm.tsx"
-rename code here
-```
-</CodeBlockTabs>
+  const createClerkPasskey = () => {
+    (async () => {
+      try {
+        const response = await user?.createPasskey();
+        console.log(response);
+      } catch (error) {
+        console.log(error);
+      }
+    })();
+  };
 
-### Delete user passkeys
-
-To delete a user's passkey from your Clerk app, you must call the `x()` method of the `x` object as shown in the following example: 
-
-<CodeBlockTabs options={["Next.js App router"]}>
-```ts filename="components/DeletePasskeyForm.tsx"
-delete code here
+  return <button onClick={createClerkPasskey}>Create a passkey now</button>;
+}
 ```
 </CodeBlockTabs>
 
 ## Sign a user in with a passkey
 
-To sign a user into your Clerk app with a passkey, you must call the `authenticateWithPasskey()` method of the `SignIn` object. This method allows users to choose from discoverable passkeys, such as hardware keys or passkeys in password managers.
+To sign a user into your Clerk app with a passkey, you must call the [`authenticateWithPasskey()`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-passkey) method of the [`SignIn`](/docs/references/javascript/sign-in/sign-in) object. This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
 
 If called when the page loads, this method will prompt users to autofill their passkey information.
 
 <CodeBlockTabs options={["Next.js App router"]}>
-```ts filename="app/passkey-example/page.tsx"
-authenticate code here
+```ts filename="components/SignInWithPasskeyButton.tsx"
+"use client";
+
+import { useSignIn } from "@clerk/nextjs";
+
+export function SignInWithPasskeyButton() {
+  const { signIn } = useSignIn();
+
+  const signInWithPasskey = () => {
+    (async () => {
+      try {
+        const response = await signIn?.authenticateWithPasskey();
+        console.log(response);
+      } catch (error) {
+        console.log(error);
+      }
+    })();
+  };
+
+  return <button onClick={signInWithPasskey}>Sign in with a passkey</button>;
+}
+```
+</CodeBlockTabs>
+
+### Rename user passkeys
+
+Clerk generates a name based on the device associated with the passkey when it's created. Sometimes users may want to rename a passkey to make it easier to identify. To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/references/javascript/types/passkey-resource#update) method of the passkey object as shown in the following example: 
+
+<CodeBlockTabs options={["Next.js App router"]}>
+
+```ts filename="components/RenamePasskeyUI.tsx"
+"use client";
+
+import { useUser } from "@clerk/nextjs";
+import { useRef, useState } from "react";
+
+export function RenamePasskeyUI() {
+  const { user } = useUser();
+  const passkeyToUpdateId = useRef<HTMLInputElement>(null);
+  const newPasskeyName = useRef<HTMLInputElement>(null);
+  const { passkeys } = user;
+  const [success, setSuccess] = useState(false);
+
+  const renamePasskey = () => {
+    (async () => {
+      try {
+        const passkeyToUpdate = passkeys?.find(
+          (pk: PasskeyResource) => pk.id === passkeyToUpdateId.current?.value
+        );
+        const response = await passkeyToUpdate?.update({
+          name: newPasskeyName.current?.value,
+        });
+        console.log(response);
+        setSuccess(true);
+      } catch (error) {
+        console.log(error);
+        setSuccess(false);
+      }
+    })();
+  };
+
+  return (
+    <>
+      <p>Passkeys:</p>
+      <ul>
+        {passkeys?.map((pk: PasskeyResource) => {
+          return (
+            <li key={pk.id}>
+              Name: {pk.name} | ID: {pk.id}
+            </li>
+          );
+        })}
+      </ul>
+      <input 
+        ref={passkeyToUpdateId}
+        type="text"
+        placeholder="ID of passkey to update"
+      />
+      <input type="text" placeholder="New name" ref={newPasskeyName} />
+      <button onClick={renamePasskey}>Rename your passkey</button>
+      <p>Passkey updated: {success ? "Yes" : "No"}</p>
+    </>
+  );
+}
+```
+</CodeBlockTabs>
+
+### Delete user passkeys
+
+To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object as shown in the following example: 
+
+<CodeBlockTabs options={["Next.js App router"]}>
+```ts filename="components/DeletePasskeyUI.tsx"
+"use client";
+
+import { useUser } from "@clerk/nextjs";
+import { useRef, useState } from "react";
+
+export function DeletePasskeyUI() {
+  const { user } = useUser();
+  const passkeyToDeleteId = useRef<HTMLInputElement>(null);
+  const { passkeys } = user;
+  const [success, setSuccess] = useState(false);
+
+  const deletePasskey = () => {
+    (async () => {
+      try {
+        const passkeyToDelete = passkeys?.find(
+          (pk: any) => pk.id === passkeyToDeleteId.current?.value
+        );
+        const response = await passkeyToDelete?.delete();
+        console.log(response);
+        setSuccess(true);
+      } catch (error) {
+        console.log(error);
+        setSuccess(false);
+      }
+    })();
+  };
+
+  return (
+    <>
+      <p>Passkeys:</p>
+      <ul>
+        {passkeys?.map((pk: any) => {
+          return (
+            <li key={pk.id}>
+              Name: {pk.name} | ID: {pk.id}
+            </li>
+          );
+        })}
+      </ul>
+      <input
+        ref={passkeyToDeleteId}
+        type="text"
+        placeholder="ID of passkey to delete"
+      />
+      <button onClick={deletePasskey}>Delete passkey</button>
+      <p>Passkey deleted: {success ? "Yes" : "No"}</p>
+    </>
+  );
+}
 ```
 </CodeBlockTabs>
 
@@ -78,3 +217,4 @@ authenticate code here
 - Passkeys are not currently available as an MFA option.
 - Not all devices and browsers are compatible with passkeys. passkeys are built on WebAuthn technology, and you should check [the Browser Compatibility docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API#browser_compatibility) for an up to date list.
     - Passkeys are not officially supported in browsers on iOS devices.
+- You can have a max of 10 passkeys per account.

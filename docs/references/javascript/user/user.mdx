@@ -1,9 +1,9 @@
 ---
-title: User
+title: User object
 description: The User object holds all the information for a user of your application and provides a set of methods to manage their account. Users have a unique authentication identifier which might be their email address, phone number or a username.
 ---
 
-# `User`
+# `User` object
 
 The `User` object holds all of the information for a single user of your application and provides a set of methods to manage their account. Each user has a unique authentication identifier which might be their email address, phone number, or a username.
 
@@ -62,7 +62,7 @@ Updates the user's attributes. Use this method to save information you collected
 
 The appropriate settings must be enabled in the Clerk Dashboard for the user to be able to update their attributes. For example, if you want to use the `update({ firstName })` method, you must enable the **Name** setting. It can be found in the the Clerk Dashboard under **User & Authentication > Email, Phone, Username > [Personal information](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).**
 
-```typescript
+```js
 function update: (params: UpdateUserParams) => Promise<User>;
 ```
 
@@ -78,13 +78,13 @@ All props below are optional.
 | `primaryEmailAddressId` | `string` | The unique identifier for the [`EmailAddress`][email-ref] that the user has set as primary. |
 | `primaryPhoneNumberId` | `string` | The unique identifier for the [`PhoneNumber`][phone-ref] that the user has set as primary. |
 | `primaryWeb3WalletId` | `string` | The unique identifier for the [`Web3Wallet`][web3-ref] that the user signed up with. |
-| `unsafeMetadata` | `{[string]: any} \| null` | Metadata that can be read and set from the Frontend API. One common use case for this attribute is to implement custom fields that will be attached to the `User` object.<br />Please note that there is also an `unsafeMetadata` attribute in the [`SignUp`](/docs/references/javascript/sign-up/sign-up) object. The value of that field will be automatically copied to the user's unsafe metadata once the sign up is complete. |
+| `unsafeMetadata` | `{[string]: any} \| null` | Metadata that can be read and set from the Frontend API. One common use case for this attribute is to implement custom fields that will be attached to the `User` object.<br />Updating this value overrides the previous value; it does not merge. To perform a merge, you can pass something like `{ …user.unsafeMetadata, …newData }` to this parameter. |
 
 #### `update()` returns
 
 | Type | Description |
 | --- | --- |
-| <code>Promise\<User\></code> | This method returns a `Promise` which resolves with the current `User` object. |
+| `Promise<User>` | This method returns a `Promise` which resolves with the current [`User`](#user) object. |
 
 #### `update()` example
 
@@ -92,58 +92,60 @@ In the following example, the user's first name is updated to "Test".
 
 <InjectKeys>
 
-<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
-  ```typescript {17}
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
   import Clerk from '@clerk/clerk-js';
 
   // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk(`{{pub_key}}`);
+  const clerk = new Clerk('{{pub_key}}');
   await clerk.load();
 
-  if (!clerk.user) {
-    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-    document.querySelector<HTMLDivElement>(
-      "#app"
-    )!.innerHTML = `<div id="sign-in"></div>`;
-
-    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
-
-    clerk.mountSignIn(signInComponent, {});
+  if (clerk.user) {
+    await clerk.user.update({ firstName: "Test" })
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
   } else {
-    await clerk.user.update({ firstName: "Test" });
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
   }
   ```
 
-  ```html {26}
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
   <script>
-    // Get your publishable key and frontend API URL from the Clerk Dashboard
-    const clerkPublishableKey = `{{pub_key}}`;
-    const frontendApiUrl = 'https://[your-domain].clerk.accounts.dev';
-    const version = '@latest'; // Set to appropriate version
+    window.addEventListener('load', async function () {
+      await Clerk.load();
 
-    // Creates asynchronous script
-    const script = document.createElement('script');
-    script.setAttribute('data-clerk-frontend-api', frontendApiUrl);
-    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
-    script.async = true;
-    script.src = `${frontendApiUrl}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
-
-    // Adds listener to initialize ClerkJS after it's loaded
-    script.addEventListener('load', async function () {
-      await window.Clerk.load();
-
-      if (!window.Clerk.user) {
-        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
-
-        const signInComponent = document.querySelector("#sign-in");
-
-        window.Clerk.mountSignIn(signInComponent, {});
+      if (Clerk.user) {
+        await Clerk.user.update({ firstName: "Test" })
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
       } else {
-        await window.Clerk.user.update({ firstName: "Test" })
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
       }
     });
-    document.body.appendChild(script);
   </script>
   ```
 </CodeBlockTabs>
@@ -154,7 +156,7 @@ In the following example, the user's first name is updated to "Test".
 
 Deletes the current user.
 
-```typescript
+```js
 function delete: () => Promise<void>;
 ```
 
@@ -162,58 +164,60 @@ function delete: () => Promise<void>;
 
 <InjectKeys>
 
-<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
-  ```typescript {17}
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
   import Clerk from '@clerk/clerk-js';
 
   // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk(`{{pub_key}}`);
+  const clerk = new Clerk('{{pub_key}}');
   await clerk.load();
 
-  if (!clerk.user) {
-    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-    document.querySelector<HTMLDivElement>(
-      "#app"
-    )!.innerHTML = `<div id="sign-in"></div>`;
-
-    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
-
-    clerk.mountSignIn(signInComponent, {});
+  if (clerk.user) {
+    await clerk.user.delete()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
   } else {
-    await clerk.user.delete();
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
   }
   ```
 
-  ```html {26}
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
   <script>
-    // Get your publishable key and frontend API URL from the Clerk Dashboard
-    const clerkPublishableKey = `{{pub_key}}`;
-    const frontendApiUrl = 'https://[your-domain].clerk.accounts.dev';
-    const version = '@latest'; // Set to appropriate version
+    window.addEventListener('load', async function () {
+      await Clerk.load();
 
-    // Creates asynchronous script
-    const script = document.createElement('script');
-    script.setAttribute('data-clerk-frontend-api', frontendApiUrl);
-    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
-    script.async = true;
-    script.src = `${frontendApiUrl}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
-
-    // Adds listener to initialize ClerkJS after it's loaded
-    script.addEventListener('load', async function () {
-      await window.Clerk.load();
-
-      if (!window.Clerk.user) {
-        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
-
-        const signInComponent = document.querySelector("#sign-in");
-
-        window.Clerk.mountSignIn(signInComponent, {});
+      if (Clerk.user) {
+        await Clerk.user.delete()
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
       } else {
-        await window.Clerk.user.delete();
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
       }
     });
-    document.body.appendChild(script);
   </script>
   ```
 </CodeBlockTabs>
@@ -224,7 +228,7 @@ function delete: () => Promise<void>;
 
 Adds the user's profile image or replaces it if one already exists. This method will upload an image and associate it with the user.
 
-```typescript
+```js
 function setProfileImage: (params: SetProfileImageParams) => Promise<ImageResource>;
 ```
 
@@ -248,11 +252,172 @@ function setProfileImage: (params: SetProfileImageParams) => Promise<ImageResour
 | `name` | `string \| null` | The name of the image. |
 | `publicUrl` | `string \| null` | The publically accessible url for the image. |
 
+#### `setProfileImage()` example
+
+<InjectKeys>
+
+<Tabs type="npm-script" items={['NPM module', '<script>']}>
+  <Tab>
+    For the following example, your HTML file should look like this:
+
+    ```html filename="index.html"
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <input type="file" id="profile-image" />
+        <button id="upload-image">Upload profile image</button>
+
+        <script type="module" src="/main.js"></script>
+      </body>
+    </html>
+    ```
+
+    And your JavaScript file should look like this:
+
+    ```js filename="main.js"
+    import Clerk from '@clerk/clerk-js';
+
+    // Initialize Clerk with your Clerk publishable key
+    const clerk = new Clerk('{{pub_key}}');
+    await clerk.load();
+
+    if (clerk.user) {
+      // Get the current organization
+      const currentOrganization = clerk.organization;
+
+      // Update the user's profile image
+      document.getElementById("upload-image").addEventListener("click", () => {
+        const profileImage = document.getElementById("profile-image").files[0];
+        console.log(profileImage);
+
+        currentOrganization.setLogo({ file: profileImage })
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
+        });
+    } else {
+      document.getElementById("app").innerHTML = `
+        <div id="sign-in"></div>
+      `;
+
+      const signInDiv = document.getElementById("sign-in");
+
+      clerk.mountSignIn(signInDiv);
+    }
+    ```
+  </Tab>
+
+  <Tab>
+  ```html filename="index.html"
+    <div id="app"></div>
+
+    <input type="file" id="profile-image" />
+    <button id="upload-image">Upload profile image</button>
+
+    <!-- Initialize Clerk with your
+    Clerk publishable key and Frontend API URL -->
+    <script
+      async
+      crossorigin="anonymous"
+      data-clerk-publishable-key='{{pub_key}}'
+      src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+      type="text/javascript"
+    ></script>
+
+    <script>
+      window.addEventListener("load", async function () {
+        await Clerk.load();
+        if (Clerk.user) {
+          // Get the current organization
+          const currentOrganization = Clerk.organization;
+
+          // Update the user's profile image
+          document.getElementById("upload-image").addEventListener("click", () => {
+            const profileImage = document.getElementById("profile-image").files[0];
+
+            currentOrganization.setLogo({ file: profileImage })
+              .then((res) => console.log(res))
+              .catch((error) => console.log("An error occurred:", error.errors));
+            });
+        } else {
+          document.getElementById("app").innerHTML = `
+            <div id="sign-in"></div>
+          `;
+          const signInDiv = document.getElementById("sign-in");
+          Clerk.mountSignIn(signInDiv);
+        }
+      });
+    </script>
+  ```
+  </Tab>
+</Tabs>
+
+</InjectKeys>
+
+### `reload()`
+
+Reloads the user's data from Clerk's API. This method is useful when you want to refresh the user's data after performing some form of mutation.
+
+```js
+function reload: (p?: ClerkResourceReloadParams) => Promise<this>;
+```
+
+#### `ClerkResourceReloadParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `rotatingTokenNonce?` | `string` | A nonce to use for rotating the user's token. Used in native application OAuth flows to allow the native client to update its JWT once despite changes in its rotating token. |
+
+#### `reload()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {7}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk('{{pub_key}}');
+  await clerk.load();
+
+  await clerk.user.reload();
+  ```
+
+  ```html filename="index.html" {15}
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      await Clerk.user.reload();
+    });
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
+
 ### `getSessions()`
 
 Retrieves all **active** sessions for this user. This method uses a cache so a network request will only be triggered only once.
 
-```typescript
+```js
 function getSessions: () => Promise<SessionWithActivities[]>;
 ```
 
@@ -260,64 +425,66 @@ function getSessions: () => Promise<SessionWithActivities[]>;
 
 | Type | Description |
 | --- | --- |
-| <code>Promise\<[SessionWithActivities](/docs/references/javascript/session-with-activities)[]\></code> | This method returns a `Promise` which resolves with an array of `SessionWithActivities` objects. |
+| `Promise<SessionWithActivities[]>` | This method returns a `Promise` which resolves with an array of [`SessionWithActivities`](/docs/references/javascript/session-with-activities) objects. |
 
 #### `getSessions()` example
 
 <InjectKeys>
 
-<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
-  ```typescript {17}
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
   import Clerk from '@clerk/clerk-js';
 
   // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk(`{{pub_key}}`);
+  const clerk = new Clerk('{{pub_key}}');
   await clerk.load();
 
-  if (!clerk.user) {
-    // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-    document.querySelector<HTMLDivElement>(
-      "#app"
-    )!.innerHTML = `<div id="sign-in"></div>`;
-
-    const signInComponent = document.querySelector<HTMLDivElement>("#sign-in")!;
-
-    clerk.mountSignIn(signInComponent, {});
+  if (clerk.user) {
+    await clerk.user.getSessions()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
   } else {
-    await clerk.user.getSessions();
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
   }
   ```
 
-  ```html {26}
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
   <script>
-    // Get your publishable key and frontend API URL from the Clerk Dashboard
-    const clerkPublishableKey = `{{pub_key}}`;
-    const frontendApiUrl = 'https://[your-domain].clerk.accounts.dev';
-    const version = '@latest'; // Set to appropriate version
+    window.addEventListener("load", async function () {
+      await Clerk.load();
 
-    // Creates asynchronous script
-    const script = document.createElement('script');
-    script.setAttribute('data-clerk-frontend-api', frontendApiUrl);
-    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
-    script.async = true;
-    script.src = `${frontendApiUrl}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
-
-    // Adds listener to initialize ClerkJS after it's loaded
-    script.addEventListener("load", async function () {
-      await window.Clerk.load();
-
-      if (!window.Clerk.user) {
-        // Selects for <div id="app"> and adds a <div id="sign-in"> to it
-        document.querySelector("#app").innerHTML = `<div id="sign-in"></div>`;
-
-        const signInComponent = document.querySelector("#sign-in");
-
-        window.Clerk.mountSignIn(signInComponent, {});
+      if (Clerk.user) {
+        await Clerk.user.getSessions()
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
       } else {
-        await window.Clerk.user.getSessions();
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
       }
     });
-    document.body.appendChild(script);
   </script>
   ```
 </CodeBlockTabs>
@@ -328,112 +495,9 @@ function getSessions: () => Promise<SessionWithActivities[]>;
 
 A check whether or not the given resource is the primary identifier for the user.
 
-```typescript
+```js
 function isPrimaryIdentification: (ident: EmailAddressResource | PhoneNumberResource | Web3WalletResource) => boolean;
 ```
-
-#### `isPrimaryIdentification()` params
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `ident` | [`EmailAddress`][email-ref] \| [`PhoneNumber`][phone-ref] \| [`Web3Wallet`][web3-ref] | The resource checked against the user to see if it is the primary identifier. |
-
-### `getOrganizationMemberships()`
-
-Retrieves all of the organizations the user is a member of.
-
-```typescript
-  function getOrganizationMemberships: (params?: GetUserOrganizationMembershipParams) => Promise<ClerkPaginatedResponse<OrganizationMembershipResource>>;
-```
-
-#### `GetUserOrganizationMembershipParams`
-
-| Properties | Type | Description |
-| --- | --- | --- |
-| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
-| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
-
-#### `getOrganizationMemberships()` returns
-
-| Type | Description |
-| --- | --- |
-| <code>Promise\<[ClerkPaginatedResponse](/docs/references/javascript/types/clerk-paginated-response)\<OrganizationMembershipResource\>\></code> | The list of organizations the user is a member of. |
-
-#### `getOrganizationMemberships()` example
-
-<InjectKeys>
-
-<CodeBlockTabs type="npm-script" options={['NPM Module', 'window.Clerk']}>
-```javascript filename="index.js" {7-24}
-  import Clerk from '@clerk/clerk-js';
-
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk(`{{pub_key}}`);
-  await clerk.load();
-
-  const { data } = await clerk.user.getOrganizationMemberships();
-
-  /* data is an array that contains an OrganizationMembershipResource, which would look something like this:
-  [
-    {
-      id: "orgmem_123",
-      organization: { ...Organization }, // Organization object
-      permissions: [ "org:sys_memberships:read", "org:sys_memberships:manage", "org:sys_domains:read" ],
-      publicMetadata: {},
-      publicUserData: { firstName: "John", lastName: "Doe", imageUrl: "https://image-url.com", hasImage: true, identifier: "johndoe@email.com", userId: "user_123" },
-      role: "admin",
-      createdAt: "2021-09-28T14:00:00.000Z",
-      updatedAt: "2021-09-28T14:00:00.000Z",
-      destroy: () => { ... },
-      update: (updateParams) => { ... },
-    }
-  ]
-  */
-```
-
-```html filename="index.html" {18-35}
-  <script>
-    // Get this URL and Publishable Key from the Clerk Dashboard
-    const clerkPublishableKey = `{{pub_key}}`;
-    const frontendApiUrl = 'https://[your-domain].clerk.accounts.dev';
-    const version = '@latest'; // Set to appropriate version
-
-    // Creates asynchronous script
-    const script = document.createElement('script');
-    script.setAttribute('data-clerk-frontend-api', frontendApiUrl);
-    script.setAttribute('data-clerk-publishable-key', clerkPublishableKey);
-    script.async = true;
-    script.src = `${frontendApiUrl}/npm/@clerk/clerk-js${version}/dist/clerk.browser.js`;
-
-    // Adds listener to initialize ClerkJS after it's loaded
-    script.addEventListener('load', async function () {
-      await window.Clerk.load();
-
-      const { data } = await window.Clerk.user.getOrganizationMemberships();
-
-      /* data is an array that contains an OrganizationMembershipResource, which would look something like this:
-      [
-        {
-          id: "orgmem_123",
-          organization: { ...Organization }, // Organization object
-          permissions: [ "org:sys_memberships:read", "org:sys_memberships:manage", "org:sys_domains:read" ],
-          publicMetadata: {},
-          publicUserData: { firstName: "John", lastName: "Doe", imageUrl: "https://image-url.com", hasImage: true, identifier: "johndoe@email.com", userId: "user_123" },
-          role: "admin",
-          createdAt: "2021-09-28T14:00:00.000Z",
-          updatedAt: "2021-09-28T14:00:00.000Z",
-          destroy: () => { ... },
-          update: (updateParams) => { ... },
-        }
-      ]
-      */
-    });
-    document.body.appendChild(script);
-  </script>
-```
-</CodeBlockTabs>
-
-</InjectKeys>
 
 ### `createPasskey()`
 
@@ -447,6 +511,273 @@ Learn more:
 - [`PasskeyResource`](/docs/references/javascript/types/passkey-resource)
 
 For an example of how to use this method, see the [Passkeys custom flows documentation](/docs/custom-flows/passkeys#create-user-passkeys).
+
+<Callout type="Info">
+  When creating a passkey for a user in a multi-domain Clerk app, `createPasskey()` must be called from the primary domain.
+</Callout>
+
+#### `isPrimaryIdentification()` params
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `ident` | [`EmailAddress`][email-ref] \| [`PhoneNumber`][phone-ref] \| [`Web3Wallet`][web3-ref] | The resource checked against the user to see if it is the primary identifier. |
+
+### `getOrganizationInvitations()`
+
+Retrieves a list of organization invitations for the user.
+
+```js
+function getOrganizationInvitations: (params?: GetUserOrganizationInvitationsParams) => Promise<ClerkPaginatedResponse<UserOrganizationInvitation>>;
+```
+
+### `GetUserOrganizationInvitationsParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
+| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
+| `status?` | `'pending' \| 'accepted' \| 'revoked'` | The status an invitation can have. |
+
+#### `getOrganizationInvitations()` returns
+
+| Type | Description |
+| --- | --- |
+| `Promise<ClerkPaginatedResponse<UserOrganizationInvitation>>` | This method returns a `Promise` which resolves to a [ClerkPaginatedResponse](/docs/references/javascript/types/clerk-paginated-response) of `UserOrganizationInvitation` objects. |
+
+#### `getOrganizationInvitations()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk('{{pub_key}}');
+  await clerk.load();
+
+  if (clerk.user) {
+    await clerk.user.getOrganizationInvitations()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
+  }
+  ```
+
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        await Clerk.user.getOrganizationInvitations()
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
+
+### `getOrganizationSuggestions()`
+
+Retrieves a list of organization suggestions for the user.
+
+```js
+function getOrganizationSuggestions: (params?: GetUserOrganizationSuggestionsParams) => Promise<ClerkPaginatedResponse<OrganizationSuggestion>>;
+```
+
+### `GetUserOrganizationSuggestionsParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
+| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
+| `status?` | `'pending' \| 'accepted'` \| `['pending' \| 'accepted']` | The status an invitation can have. |
+
+#### `getOrganizationSuggestions()` returns
+
+| Type | Description |
+| --- | --- |
+| `Promise<ClerkPaginatedResponse<OrganizationSuggestion>>` | This method returns a `Promise` which resolves to a [ClerkPaginatedResponse](/docs/references/javascript/types/clerk-paginated-response) of `OrganizationSuggestion` objects. |
+
+#### `getOrganizationSuggestions()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk('{{pub_key}}');
+  await clerk.load();
+
+  if (clerk.user) {
+    await clerk.user.getOrganizationSuggestions()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
+  }
+  ```
+
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        await Clerk.user.getOrganizationSuggestions()
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
+
+### `getOrganizationMemberships()`
+
+Retrieves a list of organization memberships for the user.
+
+```js
+function getOrganizationMemberships: (params?: GetUserOrganizationMembershipParams) => Promise<ClerkPaginatedResponse<OrganizationMembershipResource>>;
+```
+
+### `GetUserOrganizationMembershipParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
+| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
+
+#### `getOrganizationMemberships()` returns
+
+| Type | Description |
+| --- | --- |
+| `Promise<ClerkPaginatedResponse<OrganizationSuggestion>>` | This method returns a `Promise` which resolves to a [ClerkPaginatedResponse](/docs/references/javascript/types/clerk-paginated-response) of `OrganizationMembership` objects. |
+
+#### `getOrganizationMemberships()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk('{{pub_key}}');
+  await clerk.load();
+
+  if (clerk.user) {
+    await clerk.user.getOrganizationMemberships()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
+  }
+  ```
+
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key='{{pub_key}}'
+    src="https://[your-domain].clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        await Clerk.user.getOrganizationMemberships()
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
 
 ## Additional methods
 

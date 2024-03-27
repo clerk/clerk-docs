@@ -5,32 +5,7 @@ description: Add authentication and user management to your Next.js app with Cle
 
 # Next.js Quickstart
 
-<TutorialHero
-  framework="nextjs"
-  beforeYouStart={[
-    {
-      title: "Set up a Clerk application",
-      link: "https://clerk.com/docs/quickstarts/setup-clerk",
-    },
-    {
-      title: "Create a Next.js application",
-      link: "https://nextjs.org/docs/getting-started/installation",
-    },
-  ]}
->
-
-- Install `@clerk/nextjs`
-- Set up your environment variables
-- Wrap your Next.js app in `<ClerkProvider />`
-- Limit access to authenticated users
-- Specify which routes are publicly accessible
-- Enable users to manage their session with `<UserButton />`
-
-</TutorialHero>
-
-<Callout type='info' emoji='💡'>
-  The next major version of the Clerk Next.js SDK is coming soon! If you're just starting a project, consider [trying out the Core 2 beta](https://beta.clerk.com/docs/quickstarts/nextjs) instead.
-</Callout>
+Protect your Next.js application with Clerk auth in less than ten minutes. This guide will show you how to install Clerk, add middleware to protect specific routes, and embed the `<UserButton />` component for account management.
 
 <Steps>
 
@@ -57,14 +32,22 @@ pnpm add @clerk/nextjs
 
 ### Set your environment variables
 
-1. If you don't have an `.env.local` file in the root directory of your Next.js project, create one now.
-2. Find your Clerk publishable key and secret key. If you're signed into Clerk, the `.env.local` snippet below will contain your keys. Otherwise:
-  - Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys) and select your application.
-  - In the navigation sidebar, select **API Keys**.
-  - You can copy your keys from the **Quick Copy** section.
-3. Add your keys to your `.env.local` file.
+<SignedIn>
 
-The final result should look as follows:
+Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+
+</SignedIn>
+
+<SignedOut>
+
+1. Navigate to the Clerk Dashboard.
+2. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+3. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+4. Paste your keys into your `.env.local` file.
+
+The final result should resemble the following:
+
+</SignedOut>
 
   <InjectKeys>
 
@@ -79,7 +62,7 @@ The final result should look as follows:
 
 All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context.
 
-Select your preferred router below to learn how to make this data available across your entire app:
+Select your preferred router to learn how to make this data available across your entire app:
 
 <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
   ```tsx filename="/src/app/layout.tsx" {1,10-14}
@@ -122,36 +105,30 @@ Select your preferred router below to learn how to make this data available acro
 Now that Clerk is installed and mounted in your application, you can decide which pages are public and which should require authentication to access:
 
 1. Create a `middleware.ts` file at the root of your project, or in your `src/` directory if you have one.
-2. In your `middleware.ts`, export Clerk's [`authMiddleware()`](https://clerk.com/docs/references/nextjs/auth-middleware) helper:
+2. In your `middleware.ts` file, export Clerk's [`authMiddleware()`](https://clerk.com/docs/references/nextjs/auth-middleware) helper. This helper enables authentication and blocks access for signed out visitors on routes that your middleware runs on.
+
+  Next.js middleware only runs on routes specified with [`matcher`](https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher). Add the following code to your `middleware.ts` to protect your routes:
+
   ```tsx filename="middleware.ts"
   import { authMiddleware } from "@clerk/nextjs";
 
-  export default authMiddleware({});
-  ```
-3. With `authMiddleware()`, authentication will be enabled by default on all routes that your Next.js middleware runs on, blocking access to all signed out visitors. You can specify valid routes using Next.js's [`matcher`](https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher). Add the following code to your `middleware.ts` to protect your entire application:
-
-  ```tsx filename="middleware.ts" {15}
-  import { authMiddleware } from "@clerk/nextjs";
-
+  // See https://clerk.com/docs/references/nextjs/auth-middleware
+  // for more information about configuring your Middleware
   export default authMiddleware({
-    // Routes that can be accessed while signed out
-    publicRoutes: ['/anyone-can-visit-this-route'],
-    // Routes that can always be accessed, and have
-    // no authentication information
-    ignoredRoutes: ['/no-auth-in-this-route'],
+    // Allow signed out users to access the specified routes:
+    // publicRoutes: ['/anyone-can-visit-this-route'],
   });
 
   export const config = {
-    // Protects all routes, including api/trpc.
-    // See https://clerk.com/docs/references/nextjs/auth-middleware
-    // for more information about configuring your Middleware
-    matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+    matcher: [
+      // Exclude files with a "." followed by an extension, which are typically static files.
+      // Exclude files in the _next directory, which are Next.js internals.
+      "/((?!.+\\.[\\w]+$|_next).*)",
+      // Re-include any files in the api or trpc folders that might have an extension
+      "/(api|trpc)(.*)"
+    ]
   };
   ```
-
-<Callout type="info">
-  See the [`authMiddleware()`](/docs/references/nextjs/auth-middleware#default-behaviour) docs to learn more about `publicRoutes` and `ignoredRoutes`.
-</Callout>
 
 ### Try accessing your app
 
@@ -174,7 +151,6 @@ Access your app to verify that authentication is enabled:
   </CodeBlockTabs>
 2. Visit [`http://localhost:3000`](http://localhost:3000) to access your app. The Middleware will redirect you to your Sign Up page, provided by Clerk's [Account Portal](/docs/account-portal/overview) feature.
 3. Sign up to gain access to your application.
-4. Sign into your new account. You should be able to access it now.
 
 ### Embed the `<UserButton />`
 
@@ -214,20 +190,9 @@ export default function Home() {
 
 Then, visit your app's homepage at [`localhost:3000`](http://localhost:3000) to see the `<UserButton />` in action. It should show your avatar from the account you signed in with.
 
-### Sign out
-
-Finally, use the `<UserButton />` by selecting your avatar, then selecting **Sign out**.
-
 </Steps>
 
 ## Next steps
-
-To see an example application that demonstrates user authentication, and session and organization management, explore one of Clerk's Next.js demo repos:
-
-- [Clerk + Next.js App Router Demo](https://github.com/clerk/clerk-nextjs-demo-app-router)
-- [Clerk + Next.js Pages Router Demo](https://github.com/clerk/clerk-nextjs-demo-pages-router)
-
-## More resources
 
 <div className="container mx-auto my-4">
   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -243,6 +208,10 @@ To see an example application that demonstrates user authentication, and session
     <Cards title="Deploy to Production" description="Learn how to deploy your Clerk app to production." link="/docs/deployments/overview" cta="Learn More" />
 
     <Cards title="Deploy to Vercel" description="Learn how to deploy your Clerk app to production on Vercel." link="/docs/deployments/deploy-to-vercel" cta="Learn More" />
+
+    <Cards title="Clerk + Next.js App Router Quickstart Repo" description="The official companion repo for Clerk's Next.js Quickstart using App Router." link="https://github.com/clerk/clerk-nextjs-app-quickstart" cta="Learn More" />
+
+    <Cards title="Clerk + Next.js Pages Router Quickstart Repo" description="The official companion repo for Clerk's Next.js Quickstart using Pages Router." link="https://github.com/clerk/clerk-nextjs-pages-quickstart" cta="Learn More" />
 
   </div>
 </div>

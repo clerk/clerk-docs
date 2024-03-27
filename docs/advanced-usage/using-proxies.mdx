@@ -140,94 +140,152 @@ In order to enable proxying, you need to set a proxy URL for your Clerk instance
 
 ### Configure your proxy setup
 
-You can configure your proxy setup via environment variables or via properties.
+You can configure your proxy setup by either:
+- Setting environment variables
+- Using properties in your application
 
-**Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+#### Environment variables
 
-<Tabs items={["Environment Variables", "Properties"]}>
+To configure your proxy setup using environment variables, your `.env.local` file should look like this:
+
+<InjectKeys>
+  <Tabs type="framework" items={["Next.js", "Remix", "JavaScript"]}>
+    <Tab>
+    ```env filename=".env.local"
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+
+    NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
+    ```
+    </Tab>
+
+    <Tab>
+    ```env filename=".env.local"
+    CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+
+    CLERK_PROXY_URL=https://app.dev/__clerk
+    ```
+    </Tab>
+
+    <Tab>
+    You will only need to set environment variables in your JavaScript application if you are using a bundler (the `NPM module` method for ClerkJS installation). If you are using the `<script>` method, configure your proxy setup using [properties in your application](#properties-in-your-application) instead.
+
+    ```env filename=".env.local"
+    CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+
+    CLERK_PROXY_URL=https://app.dev/__clerk
+    ```
+    </Tab>
+  </Tabs>
+</InjectKeys>
+
+#### Properties in your application
+
+<Tabs type="framework" items={["Next.js", "Remix", "JavaScript"]}>
   <Tab>
-    <InjectKeys>
-      <CodeBlockTabs type="framework" options={["Next.js", "Remix", 'Gatsby']}>
-        ```env filename=".env.local"
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+    To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](https://clerk.com/docs/components/clerk-provider) component.
 
-        NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
-        ```env filename=".env"
-        CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    ```tsx filename="app/layout.tsx" {9}
+    import { ClerkProvider } from '@clerk/nextjs';
 
-        CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
+    export default function RootLayout({
+      children,
+    }: {
+      children: React.ReactNode
+    }) {
+      return (
+        <ClerkProvider proxyUrl='https://app.dev/__clerk'>
+          <html lang="en">
+            <body>{children}</body>
+          </html>
+        </ClerkProvider>
+      )
+    }
+    ```
 
-        ```env filename=".env.development"
-        CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+    ```tsx filename="_app.tsx" {6}
+    import { ClerkProvider } from "@clerk/nextjs";
+    import type { AppProps } from "next/app";
 
-        CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
-      </CodeBlockTabs>
-    </InjectKeys>
+    function MyApp({ Component, pageProps }: AppProps) {
+      return (
+        <ClerkProvider proxyUrl='https://app.dev/__clerk' {...pageProps}>
+          <Component {...pageProps} />
+        </ClerkProvider>
+      );
+    }
+    export default MyApp;
+    ```
+    </CodeBlockTabs>
   </Tab>
+
   <Tab>
-    You can skip this step if you configured your proxy setup with environment variables.
+    To configure your proxy setup using properties in your Remix application, set the `proxyUrl` property on the [`ClerkApp`](/docs/references/remix/clerk-app) wrapper.
 
-    This is an alternative configuration to the environment variable based setup that we described in the previous step.
+    ```tsx filename="root.tsx"
+      export const loader = (args) => {
+        return rootAuthLoader(
+          args,
+          ({ request }) => {
+            const { userId, sessionId, getToken } = request.auth;
+            return json({
+                message: `Hello from the root loader :)`,
+                ENV: getBrowserEnvironment(),
+            });
+          },
+          {
+            loadUser: true,
+            proxyUrl: 'https://app.dev/__clerk'
+          } as const
+        );
+      };
 
-    <CodeBlockTabs type="framework" options={["Next.js", "Remix", "JavaScript"]}>
-      ```tsx filename="_app.tsx"
-        import { ClerkProvider } from "@clerk/nextjs";
-        import Head from "next/head";
+      export default ClerkApp(App, {
+        proxyUrl: 'https://app.dev/__clerk'
+      });
+    ```
+  </Tab>
 
-        export default function App({ Component, pageProps }) {
-          return (
-            <ClerkProvider proxyUrl='https://app.dev/__clerk' {...pageProps}>
-              <Head>
-                <title>Proxy Next.js app</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              </Head>
-              <Component {...pageProps} />
-            </ClerkProvider>
-          );
-        }
-      ```
+  <Tab>
+    To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/references/javascript/clerk/clerk#load) method.
 
-      ```tsx filename="root.tsx"
-        export const loader = (args) => {
-          return rootAuthLoader(
-            args,
-            ({ request }) => {
-              const { userId, sessionId, getToken } = request.auth;
-              return json({
-                  message: `Hello from the root loader :)`,
-                  ENV: getBrowserEnvironment(),
-              });
-            },
-            {
-              loadUser: true,
-              proxyUrl: 'https://app.dev/__clerk'
-            } as const
-          );
-        };
-
-        export default ClerkApp(App, {
-          proxyUrl: 'https://app.dev/__clerk'
-        });
-      ```
-
-      <InjectKeys>
-        ```tsx filename="app.tsx"
+    <InjectKeys>
+      <CodeBlockTabs type="npm-script" options={["NPM module", "<script>"]}>
+        ```js filename="main.js"
           import Clerk from '@clerk/clerk-js';
 
-          const clerkPublishableKey = `{{pub_key}}`;
-          const clerk = new Clerk(clerkPublishableKey);
+          // Initialize Clerk with your Clerk publishable key
+          const clerk = new Clerk('{{pub_key}}');
+
           await clerk.load({
             proxyUrl: 'https://app.dev/__clerk',
           });
         ```
-      </InjectKeys>
-    </CodeBlockTabs>
+
+        ```html filename="index.html"
+          <!-- Initialize Clerk with your
+          Clerk Publishable key and Frontend API URL -->
+          <script
+            async
+            crossorigin="anonymous"
+            data-clerk-publishable-key="{{pub_key}}"
+            src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+            type="text/javascript"
+          ></script>
+
+          <script>
+            window.addEventListener("load", async function () {
+              await Clerk.load({
+                proxyUrl: 'https://app.dev/__clerk',
+              });
+            });
+          </script>
+        ```
+      </CodeBlockTabs>
+    </InjectKeys>
   </Tab>
 </Tabs>
 

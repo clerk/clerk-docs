@@ -1,0 +1,120 @@
+---
+title: How Clerk works
+description: Learn about the main concepts and objects that power Clerk's powerful authentication and user management system.
+type: conceptual
+---
+
+# How Clerk works
+
+Clerk is a powerful authentication and user management system that allows you to add secure authentication to your application in minutes. This guide will discuss some of the main concepts and objects that power Clerk.
+
+<Callout type="info">
+  Did you know that Clerk has a blog? You can learn more in-depth about how Clerk works by reading our ["How We Roll"](https://clerk.com/blog/how-we-roll-roundup) blog series.
+</Callout>
+
+## Development and production instances
+
+Clerk provices both development and production environments for your app. Production instances are used for production, pre-production, or staging environments with fixed domains. Production instances offer the strongest security and performance guarantees. Development instances contain certain trade-offs meant to support ease of active development. 
+
+<Callout type="warning">
+Never use a development instance in a production environment. Development instances don't have strong security guarantees.
+</Callout>
+
+## Main objects
+
+Clerk uses five main objects:
+
+### [Client](/docs/references/javascript/client#client)
+
+A client represents the current device or software accessing an application such as your web browser, native application for Android or iOS, Chrome Extension, or Electron app.
+
+### [Session](/docs/references/javascript/session)
+
+A session is a secure representation of the authentication state of the current user. Each client can hold multiple sessions on the same device. This is identical to how Gmail works in a browser.
+
+### [User](/docs/users/overview)
+
+A user represents the current user of the session. The object holds all the basic user information such as the user's name, email addresses, and phone numbers, and including their public, private, and unsafe metadata.
+
+### [Organization](/docs/organizations/roles-permissions)
+
+An organization represents the current organization of the session. Users can belong to many organizations. One of them will be the current organization of the session. 
+
+### [Roles](/docs/organizations/roles-permissions)
+
+A user belongs to an organization with a role that defines their permissions. Currently, Clerk supports two roles, `org:admin` and `org:member`.
+
+## Clerk Frontend API (FAPI)
+
+Every Clerk development and production instance has a dedicated [Frontend API](https://clerk.com/docs/reference/frontend-api). This is the authentication, session, user & organization management API you or your users will interact with within the web browser, native application, Chrome extension, or Electron app.
+
+Clerk assigns a unique random API URL such as `https://delicate-wahoo-73.accounts.dev/sign-in` to each development instance. For production instances, the Frontend API lives at `https://clerk.[your-domain.com]`.
+
+### How Clerk's Frontend API works
+
+Clerk's Frontend API is responsible for maintaining the authentication state of the current client (browser or native application). Based on the authentication's state (`signed-in`, `signed-out`, `handshake`) it mints a short-lived session [JSON Web Token (JWT)](/docs/backend-requests/making/jwt-templates) for the current user and session to be used by the host application that is secured by Clerk. The session JWT is stored in a cookie or can be retrieved at any time via the [`getToken()`](/docs/references/javascript/session#get-token) method.
+
+### Clerk cookies
+
+Clerk's Frontend API uses two cookies for session management in production instances:
+
+* `__client` cookie: a long-lived session that is used to keep the the session JWT fresh by interacting with the Frontend API.
+* `__session` cookie: a short-lived session JWT to validate requests on your application or your API. 
+
+#### The `__client` cookie
+
+The `__client` cookie is set on Clerk Frontend API (for example `https://clerk.<example.com>`) for each instance. It's HTTP-only, first-party, and secure. It contains a long-lived client JWT that lasts 7 days by default. The duration is configurable in the Clerk Dashboard's  [Sessions page](https://dashboard.clerk.com/last-active?path=sessions). The JWT identifies the current client (browser, native application, or chrome extension) and sets the current active sessions.
+
+#### The `__session` cookie
+
+The `__session` cookie is set on the host application that is secured by Clerk (for example `https://dashboard.<example.com>`). It's a JS cookie, it's secure, and it contains a short-lived session JWT that lasts 60 seconds. This JWT contains the current session, user, and organization identifiers and must be sent to the application API to authenticate API requests. In SSR, the `__session` cookie travels automatically to the server. ClerkJS ensures that the `__session` cookie is automatically refreshed in Client Side Rendering (CSR) and Server Side Rendering (SSR), ensuring a fresh session is always available.
+
+However, if a `__session` cookie is expired on a request to an application's backend, the SDK doesn't know if the session has ended, or if a new short-lived JWT needs to be issued. When an SDK gets into this state, it triggers Clerk's client handshake.
+
+#### The `__client_uat` cookie
+
+The `__client_uat` cookie is set on the host application that is secured by Clerk and hints Clerk SDKs about the timestamp of the latest authentication update of the current client.
+
+### The client handshake
+
+Clerk uses a client handshake mechanism to resolve a request's authentication state from unknown (`handshake`) to `signed-in` or `signed-out`. 
+
+With this handshake, Clerk can resolve authentication state on the backend and ensure the request is properly handled as signed in or out, instead of being in a potentially unknown state. The handshake flow relies on redirects to exchange session information between FAPI and the application, ensuring the resolution of unknown authentication states minimizes performance impact and behaves consistently across different framework and language implementations.
+
+Learn more about [how Clerk's client handshake works.](/docs/concepts/client-handshake).
+
+### Client piggybacking
+
+Every Frontend API request returns a response payload that contains two top level keys: 
+
+```json
+{
+  "client": ...,
+  "response": ...
+}
+```
+
+<Callout type="info">
+  The `/v1/client/sessions/:id/tokens` endpoint refreshes the Clerk session tokens and is an exception to this format.
+</Callout>
+
+The `response` key contains the resource or resources of each endpoint. The `client` key contains the client piggybacking payload. The `client` object identifies the current device and contains all sessions, users, and organization data for the current device (see [Main Objects](#main-objects) section). 
+
+This is effectively the necessary frontend state for ClerkJS and powers the JS SDKs, the [React hooks](/docs/references/react/use-user), and [Clerk components](/docs/components/overview). It is a best-effort way for the backend to update the frontend state on every Frontend API request. 
+
+### Clerk Frontend API for non-standard web browsers
+
+Clerk's [Frontend API](https://clerk.com/docs/reference/frontend-api) offers a seamless authentication solution for non-standard web browser environments such as React Native applications, Chrome Extensions, and hybrid apps in platforms like Capacitor.js or Electron.
+
+These platforms treat cookies differently than web browsers. As a result, ClerkJS should use the HTTP Authorization header instead of the `__client` cookie for secure communication with the Clerk Frontend API. To achieve session persistence, the `__client` JWT should be stored in a secure storage provided by each platform and then it should be injected into every Clerk Frontend API request. 
+
+It's not recommended to use Client piggybacking because of the following issues:
+
+1. It's a very large chunk of a tree-like state and doesn't change often.
+1. It's hard to compute on the backend as it requires a lot of data from the database. The computation takes place on every request, adding a significant overhead.
+1. It's best effort.
+1. It's not a two-way communication channel.
+
+## Clerk Backend API (BAPI)
+
+Clerk's [Backend API](https://clerk.com/docs/reference/backend-api) is a restful CRUD API for the server side. It allows a sudo-level management of all Clerk objects.

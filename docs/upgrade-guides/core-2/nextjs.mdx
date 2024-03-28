@@ -17,7 +17,7 @@ Before uprading, it's highly recommended that you update your Clerk SDKs to the 
   Note that Core 2 is currently in beta, while we field feedback and ensure stability. Deploying beta versions to production is not recommended and should be done at your own risk.
 </Callout>
 
-Additionally, some of the minumum version requirements for some base dependencies have been updated such that versions that are no longer supported or are at end-of-life are no longer guaranteed to work correctly with Clerk.
+Additionally, some of the minumum version requirements for some base dependencies have been updated such that versions that are no longer supported or are at end-of-life and are no longer guaranteed to work correctly with Clerk.
 
 **Updating Node.js**
 
@@ -119,7 +119,7 @@ export default clerkMiddleware((auth, req) => {
   // Restrict admin route to users with specific role
   if (isAdminRoute(req)) auth().protect({ role: 'org:admin' });
 
-  // Restrict dashboard routes to logged in users
+  // Restrict dashboard routes to signed in users
   if (isDashboardRoute(req)) auth().protect();
 });
 
@@ -138,7 +138,7 @@ See the [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) docs for
 
 #### Migrating to `clerkMiddleware()`
 
-Clerk strongly recommends migrating to the new `clerkMiddleware()` for an improved DX and access to all present and upcoming features, but also want to note that `authMiddleware()`, while deprecated, will continue to work in v5 and will not be removed until the next major version, so you do not _need_ to make any changes to your Middleware setup this version.
+Clerk strongly recommends migrating to the new `clerkMiddleware()` for an improved DX and access to all present and upcoming features. However, `authMiddleware()`, while deprecated, will continue to work in v5 and will not be removed until the next major version, so you do not _need_ to make any changes to your Middleware setup this version.
 
 The most basic migration will be updating the import and changing out the default export, then mirroring the previous behavior of protecting all routes as such:
 
@@ -160,7 +160,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
   <AccordionPanel>
     By default, `clerkMiddleware()` treats all pages as public unless explicitly protected. If you prefer for it to operate the other way around (all pages are protected unless explicitly made public), you can reverse the middleware logic in this way:
 
-    Before:
+    Before (with `authMiddleware()`):
 
     ```ts filename="middleware.ts"
     import { authMiddleware } from "@clerk/nextjs"
@@ -174,7 +174,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     }
     ```
 
-    After:
+    After (with `clerkMiddleware()`):
 
     ```ts filename="middleware.ts"
     import {
@@ -196,9 +196,9 @@ Of course, in most cases you'll have a more complicated setup than this. You can
 
   </AccordionPanel>
   <AccordionPanel>
-    An example can be seen below of code that ensures that all routes are public except everything under `/dashboard`.
+    You can protect a single route by using the [`createRouteMatcher()`](/docs/references/nextjs/clerk-middleware#protect-routes-with-create-route-matcher) helper.
 
-    Before:
+    Before (with `authMiddleware()`):
 
     ```ts filename="middleware.ts"
     import { authMiddleware } from "@clerk/nextjs"
@@ -212,7 +212,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     }
     ```
 
-    After:
+    After (with `clerkMiddleware()`):
 
     ```ts filename="middleware.ts"
     import {
@@ -235,7 +235,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
   <AccordionPanel>
     You can call other Middlewares inside `clerkMiddleware()`, giving you more direct control over what is called where. An example would be [next-intl](https://next-intl-docs.vercel.app/) to add internationalization to your app.
 
-    Before:
+    Before (with `authMiddleware()`):
 
     ```ts filename="middleware.ts"
     import { authMiddleware } from "@clerk/nextjs"
@@ -258,7 +258,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     }
     ```
 
-    After:
+    After (with `clerkMiddleware()`):
 
     ```ts filename="middleware.ts"
     import {
@@ -335,7 +335,7 @@ As part of this release, some of the top-level exports of `@clerk/nextjs` have b
 
   </AccordionPanel>
   <AccordionPanel>
-    The `@clerk/nextjs` import will work with both the app and pages router.
+    The `@clerk/nextjs` import will work with both the App and Pages Router.
 
     ```diff
     - import { } from "@clerk/nextjs/app-beta"
@@ -389,7 +389,8 @@ As part of this release, some of the top-level exports of `@clerk/nextjs` have b
 
 ### After sign up/in/out URL handling
 
-Defining redirect URLs for after sign up, in, and/or out via the Clerk dashboard has been removed in Core 2. In your Clerk dashboard, under "paths", there is a section called "Component paths", where URLs could be defined that had a deprecation warning. In Core 2, this functionality has been removed, and specifying redirect paths via the dashboard will no longer work. If you need to pass a redirect URL for after sign in/up/out, there are [a few different ways this can be done](https://clerk.com/docs/account-portal/custom-redirects), from environment variables to middleware to supplying them directly to the relevant components.
+Defining redirect URLs for after sign up, in, and/or out via the Clerk Dashboard has been removed in Core 2. In your Clerk Dashboard, under **Paths** in the sidebar on the left, there is a section called **Component paths** that has a deprecation warning. In Core 2, this functionality has been removed, and specifying redirect paths via the dashboard will no longer work. If you need to pass a redirect URL for after sign in/up/out, there are [a few different ways this can be done](https://clerk.com/docs/account-portal/custom-redirects), from environment variables to
+Middleware to supplying them directly to the relevant components.
 
 As part of this change, the default URL for each of these props has been set to `/`, so if you are passing `/` explicitly to any one of the above props, that line is no longer necessary and can be removed.
 
@@ -451,9 +452,9 @@ If you would like to have your JWT return all of the user's organizations, you c
 
 ### Path routing is now the default
 
-On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` can be set to `'hash' | 'path' | 'virtual'` and describes the routing strategy that should be used. `path` defines where the component is mounted when `routing="path"` is used.
+On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` describes the routing strategy that should be used and can be set to `'hash' | 'path' | 'virtual'`. `path` defines where the component is mounted when `routing='path'` is used.
 
-In the latest version, the **default** `routing` strategy has become `'path'`. Unless you change the `routing` prop, you'll need to define the `path` prop. The affected components are:
+In the latest version, the **default** `routing` strategy has become `'path'`. Unless you change the `routing` prop, you will need to define the `path` prop. The affected components are:
 
 - `<SignIn />`
 - `<SignUp />`
@@ -461,7 +462,7 @@ In the latest version, the **default** `routing` strategy has become `'path'`. U
 - `<CreateOrganization />`
 - `<OrganizationProfile />`
 
-Here's how you'd use the components going forward:
+Here is how you would use the components going forward:
 
 ```jsx
 <SignIn path="/sign-in" />
@@ -471,34 +472,26 @@ Here's how you'd use the components going forward:
 <OrganizationProfile path="/org-profile" />
 ```
 
-If you don't define the `path` prop an error will be thrown. Of course, you can still use `routing="hash"` or `routing="virtual"`.
+If you do not define the `path` prop, an error will be thrown. Of course, you can still use `routing='hash'` or `routing='virtual'`.
 
 ```jsx
 <UserProfile routing="hash" />
 <OrganizationProfile routing="virtual" />
 ```
 
-
-For the @clerk/nextjs SDK, you can set environment variables for the sign up/in URLs and avoid needing to explicitly pass the path to the `<SignIn />` and `<SignUp />` components.
-
-
+For the `@clerk/nextjs` SDK, you can avoid needing to explicitly pass the path to the `<SignIn />` and `<SignUp />` components by setting environment variables for the sign in/up URLs like so:
 
 ```env filename=".env.local"
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 ```
 
-
-
-
-If you have defined both environment variables, you're able to use the `<SignIn />` and `<SignUp />` components without any props, as such:
+If you have defined both environment variables as above, you can use the `<SignIn />` and `<SignUp />` components without any props:
 
 ```jsx
 <SignIn />
 <SignUp />
 ```
-
-
 
 ### Image URL Name Consolidation
 
@@ -607,14 +600,14 @@ As part of this major version, a number of previously deprecated props, arugment
     The `frontendApi` prop passed to `<ClerkProvider>` was renamed to `publishableKey`. **Note:** The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production). [More information](/docs/deployments/overview#api-keys-and-environment-variables).
   </AccordionPanel>
   <AccordionPanel>
-    If you are using the `@clerk/nextjs/app-beta` import anywhere, it should use `@clerk/nextjs` instead. The `app-beta` import has been removed as our approuter support is stable, if there are any places you’re using it you can remove.
+    If you are using the `@clerk/nextjs/app-beta` import anywhere, it should use `@clerk/nextjs` instead. The `app-beta` import has been removed as our App Router support is stable.
 
     Make this change carefully as some behavior may have changed between our beta and stable releases. You can refer to [our documentation](https://clerk.com/docs/quickstarts/nextjs) and/or [approuter example](https://github.com/clerk/clerk-nextjs-app-quickstart) for up-to-date usage.
 
     The `@clerk/nextjs` import will work with both App Router and Pages Router.
   </AccordionPanel>
   <AccordionPanel>
-    If you are importing from `@clerk/nextjs/ssr`, you can use `@clerk/nextjs` instead. Our top-level import supports SSR functionality by default now, so the subpath on the import is no longer needed. This import can be directly replaced without any other considerations.
+    If you are importing from `@clerk/nextjs/ssr`, you can use `@clerk/nextjs` instead. Our top-level import supports SSR functionality by default now, so the subpath on the import is no longer needed. This import can be directly replaced without any other considerations.
   </AccordionPanel>
   <AccordionPanel>
     This deprecated import has been replaced by `@clerk/nextjs`. Usage should now look as such: `import { authMiddleware } from @clerk/nextjs`. There may be changes in functionality between the two exports depending on how old the version used is, so upgrade with caution.

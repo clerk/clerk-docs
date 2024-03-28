@@ -1,0 +1,144 @@
+---
+title: Add an email to a user's account
+description: Learn how to use the Clerk API to add a new email address to the user's account and verify it.
+---
+
+# Add an email to a user's account
+
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To allow users to add and verify new email addresses with a *prebuilt* UI, you should use Clerk's [User Profile page](/docs/account-portal/user-profile-org-profile#user-profile) or [`<UserProfile />`](/docs/components/user/user-profile) component. 
+</Callout>
+
+Users can have multiple email addresses associated with their account. This guide will walk you through how to build a custom user interface for adding and verifying a new email address using Clerk's API. 
+
+{/* TODO: option 1:
+Users can have multiple email addresses associated with their account. Clerk's [User Profile page](/docs/account-portal/user-profile-org-profile#user-profile) and [`<UserProfile />`](/docs/components/user/user-profile) component allow users to add and verify new email addresses out of the box. However, in the case that you want to build a custom user interface, this guide will walk you through how to use the Clerk API to add a new email address to the user's account and verify it. */}
+
+{/* TODO: It feels wrong to repeat what's in the callout... we could instead maybe say:
+Users can have multple email addresses associated with their account. This guide will walk you through how to build a custom user interface for adding and verifying a new email address using Clerk's API. 
+*/}
+
+Adding a new email and verifying it for a user requires the following 4 steps:
+1. Add the email to the user's account as unverified.
+2. Load the [`EmailAddress`](/docs/references/javascript/email-address/email-address) object for the new email.
+3. Use the [`prepareVerification()`](/docs/references/javascript/email-address/verification#prepare-verification) method to send a verification email.
+4. Use the [`attemptVerification()`](/docs/references/javascript/email-address/verification#attempt-verification) method to verify the user's new email address.
+
+In the following example, 
+1. The user is prompted to enter a new email address.
+2. The user is prompted to enter the OTP code that was sent to the new email address. 
+3. The OTP code is used to verify the email during [first factor verification](https://clerk.com/docs/custom-flows/overview#factor-one-verification). You can use any [verification strategy]() that you have set up in your Clerk settings.
+
+{/* TODO (Roy): Add JS examples (use Tabs for Nextjs vs JS). Use CodeBlockTabs and add examples for  NPM Module vs window.Clerk (Script) - see the /docs/components/user-button update I did in this PR */}
+
+The example below is written for Next.js App Router, but it is supported by any React meta framework, such as Remix or Gatsby. 
+
+```tsx filename="app/add-email/page.tsx"
+'use client';
+
+import * as React from 'react';
+import { useUser } from '@clerk/nextjs';
+import { EmailAddressResource } from '@clerk/types';
+
+export default function Page() {
+  const { isLoaded, user } = useUser();
+  const [email, setEmail] = React.useState('');
+  const [code, setCode] = React.useState('');
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [successful, setSuccessful] = React.useState(false);
+  const [emailObj, setEmailObj] = React.useState<
+    EmailAddressResource | undefined
+  >();
+
+  if (!isLoaded || !user) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Add the new email to the user
+    // Filter user.emailAddresses to get the object for the new email
+    // Send the verification email -- this example uses an OTP code
+    try {
+      const res = await user.createEmailAddress({ email });
+      await user.reload();
+      const emailAddress = user.emailAddresses.find((a) => a.id === res.id);
+      setEmailObj(emailAddress);
+      emailAddress?.prepareVerification({ strategy: 'email_code' });
+      setIsVerifying(true);
+    } catch (error: any) {
+      console.log(error);
+    }
+  };
+
+  // Verify that the OTP code the user entered is correct
+  // This will set the email to verified status
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await emailObj?.attemptVerification({ code });
+      setSuccessful(true);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  // Show a success message.
+  if (successful) {
+    return (
+      <>
+        <Title variant="h1">Email Added</Title>
+      </>
+    );
+  }
+
+  // If the user has entered a new email, show the verification form
+  if (isVerifying) {
+    return (
+      <>
+        <h1>Verify Email</h1>
+        <div>
+          <form onSubmit={(e) => verifyCode(e)}>
+            <div>
+              <label htmlFor="code">Enter Code</label>
+              <input
+                onChange={(e) => setCode(e.target.value)}
+                id="code"
+                name="code"
+                type="text"
+                value={code}
+              />
+            </div>
+            <div>
+              <button type="submit">Verify</button>
+            </div>
+          </form>
+        </div>
+      </>
+    );
+  }
+
+  // Prompt the user to enter the new email
+  return (
+    <>
+      <h1>Add Email</h1>
+      <div>
+        <form onSubmit={(e) => handleSubmit(e)}>
+          <div>
+            <label htmlFor="email">Add Email</label>
+            <input
+              onChange={(e) => setEmail(e.target.value)}
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+            />
+          </div>
+          <div>
+            <button type="submit">Continue</button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+```

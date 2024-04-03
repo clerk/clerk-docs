@@ -1,53 +1,17 @@
 ---
-title: Organization Domains
-description: These are all methods on the Organization class that allow you to manage the domains of an organization.
+title: Organization domain methods
+description: Learn about the methods on the Organization object that allow you to manage the domains of an organization.
 ---
 
-# Organization Domains
+# Organization domain methods
 
-These are all methods on the [Organization](/docs/references/javascript/organization/organization) class that allow you to manage the domains of an organization.
+These methods on the [`Organization`](/docs/references/javascript/organization/organization) object allow you to manage the domains of an organization.
 
-## `getDomains()`
+The following examples assume:
 
-Retrieves a list of domains for the currently active organization.
-
-```typescript
-function getDomains(params?: GetDomainsParams): Promise<PaginatedResources<OrganizationDomain>>;
-```
-
-### `GetDomainsParams`
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
-| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
-| `enrollmentMode?` | `'manual_invitation' \| 'automatic_invitation' \| 'automatic_suggestion'` | An [enrollment mode][enrollment-mode-ref] will change how new users join an organization. |
-
-### `getDomains()` returns
-
-| Type | Description |
-| --- | --- |
-| <code>Promise\<[ClerkPaginatedResponse][pag-res-ref]\<[OrganizationDomain][org-domain-ref]\>></code> | A `Promise` which resolves with a [`ClerkPaginatedResponse`][pag-res-ref] of [`OrganizationDomain`][org-domain-ref] objects. |
-
-## `getDomain()`
-
-Retrieves a domain for an organization based on the given domain ID.
-
-```typescript
-function getDomain(params: GetDomainParams): Promise<OrganizationDomain>;
-```
-
-### `GetDomainParams`
-
-| Name | Type | Description |
-| --- | --- | --- |
-| `domainId` | string |  The ID of the domain that will be fetched. |
-
-### `getDomain()` returns
-
-| Type | Description |
-| --- | --- |
-| <code>Promise\<[OrganizationDomain][org-domain-ref]\></code> | A `Promise` which resolves to the [`OrganizationDomain`][org-domain-ref] for the corresponding ID. |
+- you have followed the [quickstart](/docs/quickstarts/javascript) in order to add Clerk to your JavaScript application
+- you have [enabled the Organizations feature in your Clerk Dashboard](/docs/organizations/overview#enable-organizations-in-your-application)
+- you have [enabled **Verified domains** for your organization](/docs/organizations/verified-domains)
 
 ## `createDomain()`
 
@@ -67,9 +31,328 @@ function createDomain: (domainName: string) => Promise<OrganizationDomainResourc
 
 | Type | Description |
 | --- | --- |
-| <code>Promise\<[OrganizationDomain][org-domain-ref]\></code> | This method returns a `Promise` which resolves to the [`OrganizationDomain`][org-domain-ref] for the corresponding ID. |
+| `Promise<OrganizationDomain>` | This method returns a `Promise` that resolves to the [`OrganizationDomain`][org-domain-ref] for the corresponding ID. |
 
+### `createDomain()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+```js filename="main.js" {10}
+import Clerk from '@clerk/clerk-js';
+
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk('{{pub_key}}');
+await clerk.load();
+
+if (clerk.user) {
+  // Check for an active organization
+  if (clerk.organization) {
+    await clerk.organization.createDomain("test-domain.com")
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    // If there is no active organization,
+    // mount Clerk's <OrganizationSwitcher />
+    // to allow the user to set an organization as active
+    document.getElementById("app").innerHTML = `
+      <h2>Select an organization to set it as active</h2>
+      <div id="org-switcher"></div>
+    `;
+
+    const orgSwitcherDiv = document.getElementById("org-switcher");
+
+    clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+  }
+} else {
+  document.getElementById("app").innerHTML = `
+    <div id="sign-in"></div>
+  `;
+
+  const signInDiv = document.getElementById("sign-in");
+
+  clerk.mountSignIn(signInDiv);
+}
+```
+
+```html filename="index.html" {20}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk Publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="{{pub_key}}"
+    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        // Check for an active organization
+        if (Clerk.organization) {
+          await Clerk.organization.createDomain("test-domain.com")
+            .then((res) => console.log(res))
+            .catch((error) => console.log("An error occurred:", error.errors));
+        } else {
+          // If there is no active organization,
+          // mount Clerk's <OrganizationSwitcher />
+          // to allow the user to set an organization as active
+          document.getElementById("app").innerHTML = `
+            <h2>Select an organization to set it as active</h2>
+            <div id="org-switcher"></div>
+          `;
+
+          const orgSwitcherDiv = document.getElementById("org-switcher");
+
+          Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+        }
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+        const signInDiv = document.getElementById("sign-in");
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+```
+</CodeBlockTabs>
+
+</InjectKeys>
+
+## `getDomains()`
+
+Retrieves the list of domains for the currently active organization.
+
+```typescript
+function getDomains(params?: GetDomainsParams): Promise<ClerkPaginatedResponse<OrganizationDomain>>;
+```
+
+### `GetDomainsParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
+| `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
+| `enrollmentMode?` | `'manual_invitation' \| 'automatic_invitation' \| 'automatic_suggestion'` | An [enrollment mode](/docs/organizations/verified-domains#enrollment-modes) will change how new users join an organization. |
+
+### `getDomains()` returns
+
+| Type | Description |
+| --- | --- |
+| `Promise<ClerkPaginatedResponse<OrganizationDomain>>` | This method returns a `Promise` that resolves to a [`ClerkPaginatedResponse`](/docs/references/javascript/types/clerk-paginated-response) of [`OrganizationDomain`][org-domain-ref] objects. |
+
+### `getDomains()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+```js filename="main.js" {10}
+import Clerk from '@clerk/clerk-js';
+
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk('{{pub_key}}');
+await clerk.load();
+
+if (clerk.user) {
+  // Check for an active organization
+  if (clerk.organization) {
+    await clerk.organization.getDomains()
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    // If there is no active organization,
+    // mount Clerk's <OrganizationSwitcher />
+    // to allow the user to set an organization as active
+    document.getElementById("app").innerHTML = `
+      <h2>Select an organization to set it as active</h2>
+      <div id="org-switcher"></div>
+    `;
+
+    const orgSwitcherDiv = document.getElementById("org-switcher");
+
+    clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+  }
+} else {
+  document.getElementById("app").innerHTML = `
+    <div id="sign-in"></div>
+  `;
+
+  const signInDiv = document.getElementById("sign-in");
+
+  clerk.mountSignIn(signInDiv);
+}
+```
+
+```html filename="index.html" {20}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk Publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="{{pub_key}}"
+    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        // Check for an active organization
+        if (Clerk.organization) {
+          await Clerk.organization.getDomains()
+            .then((res) => console.log(res))
+            .catch((error) => console.log("An error occurred:", error.errors));
+        } else {
+          // If there is no active organization,
+          // mount Clerk's <OrganizationSwitcher />
+          // to allow the user to set an organization as active
+          document.getElementById("app").innerHTML = `
+            <h2>Select an organization to set it as active</h2>
+            <div id="org-switcher"></div>
+          `;
+
+          const orgSwitcherDiv = document.getElementById("org-switcher");
+
+          Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+        }
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+        const signInDiv = document.getElementById("sign-in");
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+```
+</CodeBlockTabs>
+
+</InjectKeys>
+
+## `getDomain()`
+
+Retrieves a domain for an organization based on the given domain ID.
+
+```typescript
+function getDomain(params: GetDomainParams): Promise<OrganizationDomain>;
+```
+
+### `GetDomainParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `domainId` | string |  The ID of the domain that will be fetched. |
+
+### `getDomain()` returns
+
+| Type | Description |
+| --- | --- |
+| `Promise<OrganizationDomain>` | This method returns a `Promise` that resolves to the [`OrganizationDomain`][org-domain-ref] for the corresponding ID. |
+
+### `getDomain()` example
+
+<InjectKeys>
+
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+```js filename="main.js" {12}
+import Clerk from '@clerk/clerk-js';
+
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk('{{pub_key}}');
+await clerk.load();
+
+if (clerk.user) {
+  // Check for an active organization
+  if (clerk.organization) {
+    const domainId = "orgdmn_123";
+
+    await clerk.organization.getDomain({ domainId })
+      .then((res) => console.log(`Domains:`, res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    // If there is no active organization,
+    // mount Clerk's <OrganizationSwitcher />
+    // to allow the user to set an organization as active
+    document.getElementById("app").innerHTML = `
+      <h2>Select an organization to set it as active</h2>
+      <div id="org-switcher"></div>
+    `;
+
+    const orgSwitcherDiv = document.getElementById("org-switcher");
+
+    clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+  }
+} else {
+  document.getElementById("app").innerHTML = `
+    <div id="sign-in"></div>
+  `;
+
+  const signInDiv = document.getElementById("sign-in");
+
+  clerk.mountSignIn(signInDiv);
+}
+```
+
+```html filename="index.html" {22}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk Publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="{{pub_key}}"
+    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener("load", async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        // Check for an active organization
+        if (Clerk.organization) {
+          const domainId = "orgdmn_123";
+
+          await Clerk.organization.getDomain({ domainId })
+            .then((res) => console.log(`Domains:`, res))
+            .catch((error) => console.log("An error occurred:", error.errors));
+        } else {
+          // If there is no active organization,
+          // mount Clerk's <OrganizationSwitcher />
+          // to allow the user to set an organization as active
+          document.getElementById("app").innerHTML = `
+            <h2>Select an organization to set it as active</h2>
+            <div id="org-switcher"></div>
+          `;
+
+          const orgSwitcherDiv = document.getElementById("org-switcher");
+
+          Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+        }
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+        const signInDiv = document.getElementById("sign-in");
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+```
+</CodeBlockTabs>
+
+</InjectKeys>
 
 [org-domain-ref]: /docs/references/javascript/organization-domain
-[pag-res-ref]: /docs/references/javascript/types/clerk-paginated-response
-[enrollment-mode-ref]: /docs/organizations/verified-domains#enrollment-modes

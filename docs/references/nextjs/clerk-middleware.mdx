@@ -30,14 +30,37 @@ export const config = {
 
 By default, `clerkMiddleware` will not protect any routes. All routes are public and you must opt-in to protection for routes.
 
-## Protect routes with `createRouteMatcher()` and `clerkMiddleware()`
+## `createRouteMatcher()`
 
 `createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it. The paths provided to this helper can be in the same format as the paths provided to the Next Middleware matcher.
 
 The `createRouteMatcher()` helper returns a function that, if called with the `req` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
 
-The [`protect()`](/docs/references/nextjs/auth#protect) method returned by `auth()` will redirect the user to the sign-in page if they are not authenticated.
+In the following example, `createRouteMatcher()` sets all `/dashboard` and `/forum` routes as protected routes.
 
+```tsx
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/forum(.*)',
+]);
+```
+
+## Protect routes
+
+You can protect routes by checking either or both of the following:
+- [User authentication status](#protect-routes-based-on-user-authentication-status) (user is signed in or out)
+- [User authorization status](#protect-routes-based-on-user-authorization-status) (user has the required role or permission)
+
+### Protect routes based on user authentication status
+
+You can protect routes based on user authentication status by checking if the user is signed in.
+
+There are two methods that you can use:
+
+- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
+- Use [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status.
+
+<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
 ```tsx filename="middleware.ts"
 import {
   clerkMiddleware,
@@ -58,11 +81,92 @@ export const config = {
 };
 ```
 
-### Protect multiple groups of routes
+```tsx filename="app/middleware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/forum(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  if (!auth().userId && isProtectedRoute(req)) {
+
+    // Add custom logic to run before redirecting
+
+    return auth().redirectToSignIn();
+  }
+});
+
+export const config = { matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)']};
+```
+</CodeBlockTabs>
+
+### Protect routes based on user authorization status
+
+You can protect routes based on user authorization status by checking if the user has the required roles or permissions.
+
+There are two methods that you can use:
+
+- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
+- Use [`auth().has()`](/docs/references/nextjs/auth-object#has) if you want more control over what your app does based on the authorization status.
+
+<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
+```tsx filename="middleware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/admin(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  // Restrict admin routes to users with specific permissions
+  if (isProtectedRoute(req)) {
+    auth().protect(has => {
+      return (
+        has({ permission: 'org:sys_memberships:manage' }) ||
+        has({ permission: 'org:sys_domains_manage' })
+      )
+    })
+  }
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/admin(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  // Restrict admin routes to users with specific permissions
+  if (isProtectedRoute(req) &&
+    !auth().has({ permission: 'org:sys_memberships:manage' }) ||
+    !auth().has({ permission: 'org:sys_domains_manage' })
+  ){
+
+    // Add logic to run if the user does not have the required permissions
+
+    return auth.redirectToSignIn();
+  }
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+</CodeBlockTabs>
+
+## Protect multiple groups of routes
 
 You can use more than one `createRouteMatcher()` in your application if you have two or more groups of routes.
 
-The following example uses the `has()` method from Clerk's `auth()` helper. `has()` is a low level method that allows you to check if a user has a specific role or permission. For more information, see the [has() documentation](/docs/references/nextjs/authentication-object#has).
+The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) method from Clerk's `auth()` helper.
 
 ```tsx filename="middleware.ts"
 import {
@@ -76,13 +180,13 @@ const isTenantRoute = createRouteMatcher([
 ])
 
 const isTenentAdminRoute = createRouteMatcher([
-  '/orgId/(.*)/mememberships',
+  '/orgId/(.*)/memberships',
   '/orgId/(.*)/domain',
 ]);
 
 
 export default clerkMiddleware((auth, req) => {
-  // restrict admin routes to users with specific permissions
+  // Restrict admin routes to users with specific permissions
   if (isTenantAdminRoute(req)) {
     auth().protect(has => {
       return (
@@ -104,11 +208,11 @@ export const config = {
 
 If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
 
-```tsx filename="middleware.ts" {6}
+```tsx filename="middleware.ts" {5}
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
 export default clerkMiddleware((auth, req) => {
-  // Your middleware checks
+  // Add your middleware checks
 }, { debug: true })
 
 export const config = {
@@ -167,3 +271,5 @@ The `clerkMiddleware()` function accepts an optional object. The following optio
 | `jwtKey?`                          | `string`             | An optional [custom JWT key](/docs/references/nodejs/token-verification#networkless-token-verification-using-the-jwt-verification-key) to use for session token validation.                                                                                                                                                                     |
 | `proxyUrl?`                        | `string`             | Specify the URL of the proxy, if using a proxy.                                                                                                                                                                                                                                                                                                 |
 | `signInUrl?`                       | `string`             | An alternative sign in URL.                                                                                                                                                                                                                                                                                                                     |
+| `publishableKey` | `string` | The Clerk publishable key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.|
+| `secretKey?` | `string` | The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.  |

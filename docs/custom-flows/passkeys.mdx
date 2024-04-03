@@ -5,35 +5,15 @@ description: Learn how to allow your users authenticate with passkeys with Clerk
 
 # Build a custom authentication flow using passkeys
 
-<Callout type="Info">
-  Passkey user sign-in is available on Pro plans. [Upgrade](/pricing) to enable this feature.
+<Callout type="warning">
+This guide is for users who want to build a custom user interface using the Clerk API. To authenticate users with passkeys using a prebuilt UI, you should use Clerk's [`<SignIn />`](/docs/components/authentication/sign-in) component. See [the sign-in and sign-out options docs](/docs/authentication/configuration/sign-up-sign-in-options) to learn more.
 </Callout>
 
-A passkey is a type of sign-in credential that requires one user action, but uses two authentication factors:
-  1. A pin number or biometric data
-  1. A physical device
+Clerk supports passwordless authentication via passkeys, enabling users to sign in without having to remember a password. Instead, users select a passkey associated with their device, which they can use to authenticate themselves.
 
-Because of this, passkeys are generally more secure than passwords, and you should allow users to sign into your Clerk app with them. You can do so with the prebuilt [`<SignIn>`](/docs/components/authentication/sign-in) component, or with Clerk's JS SDK.
+This guide will teach you how to build custom flows for creating, signing users in with, and managing passkeys.
 
-<Callout type="Info">
-  Users can't create passkeys with the `<SignUp>` component.
-</Callout>
-
-## Enable passkeys in your dashboard
-
-To use passkeys, you must first enable the feature in your Clerk Dashboard:
-
-1. Visit the Dashboard and select your project.
-1. Expand **User & Authentication**, then select [**Email, Phone, Username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
-1. Navigate to **Authentication strategies**, and toggle **Passkeys**.
-
-## Manage user passkeys
-
-If you're using the prebuilt [`<UserProfile>`](/docs/components/user/user-profile) component, your users can create and manage their passkeys in the **Security** section of their [account portal](/docs/account-portal/overview#account-portal-overview).
-
-The following instructions will teach you how to enable this functionality with a custom UI.
-
-### Create user passkeys
+## Create user passkeys
 
 To create a passkey for a user, you must call the [`createPasskey()`](/docs/references/javascript/user/user#create-passkey) method on the [`User`](/docs/references/javascript/user/user) object as shown in the following example:
 
@@ -64,15 +44,40 @@ export function CreatePasskeyButton() {
 ```
 </CodeBlockTabs>
 
-#### Passkey development instance behavior
+## Sign a user in with a passkey
 
-Passkeys are associated with the domain they're created on, and cannot be used across domains.
+To sign a user into your Clerk app with a passkey, you must call the [`authenticateWithPasskey()`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-passkey) method of the [`SignIn`](/docs/references/javascript/sign-in/sign-in) object. This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
 
-For example, a passkey created in localhost will be associated with the `localhost` domain, and won't work with your app's [hosted account portal or sign-in pages](/docs/account-portal/overview#account-portal-overview).
+<CodeBlockTabs options={["Next.js App router"]}>
+```tsx filename="components/SignInWithPasskeyButton.tsx"
+"use client";
 
-This will not be a problem for production instances, since the production account portal is a subdomain of your production app's domain.
+import { useSignIn } from "@clerk/nextjs";
 
-### Rename user passkeys
+export function SignInWithPasskeyButton() {
+  const { signIn } = useSignIn();
+
+  const signInWithPasskey = async () => {
+    try {
+      // 'discoverable' lets the user choose a passkey without autofilling
+      // any of the options
+      const response = await signIn?.__experimental_authenticateWithPasskey({ flow: 'discoverable' });
+      console.log(response);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  return (
+    <button onClick={signInWithPasskey}>
+      Sign in with a passkey
+    </button>
+  );
+}
+```
+</CodeBlockTabs>
+
+## Rename user passkeys
 
 Clerk generates a name based on the device associated with the passkey when it's created. Sometimes users may want to rename a passkey to make it easier to identify.
 
@@ -135,7 +140,7 @@ export function RenamePasskeyUI() {
 ```
 </CodeBlockTabs>
 
-### Delete user passkeys
+## Delete user passkeys
 
 To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object as shown in the following example: 
 
@@ -190,44 +195,3 @@ export function DeletePasskeyUI() {
 }
 ```
 </CodeBlockTabs>
-
-## Sign a user in with a passkey
-
-To sign a user into your Clerk app with a passkey, you must call the [`authenticateWithPasskey()`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-passkey) method of the [`SignIn`](/docs/references/javascript/sign-in/sign-in) object. This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
-
-<CodeBlockTabs options={["Next.js App router"]}>
-```tsx filename="components/SignInWithPasskeyButton.tsx"
-"use client";
-
-import { useSignIn } from "@clerk/nextjs";
-
-export function SignInWithPasskeyButton() {
-  const { signIn } = useSignIn();
-
-  const signInWithPasskey = async () => {
-    try {
-      // 'discoverable' lets the user choose a passkey without autofilling
-      // any of the options
-      const response = await signIn?.__experimental_authenticateWithPasskey({ flow: 'discoverable' });
-      console.log(response);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  return (
-    <button onClick={signInWithPasskey}>
-      Sign in with a passkey
-    </button>
-  );
-}
-```
-</CodeBlockTabs>
-
-
-## Limitations
-
-- Passkeys are not currently available as an MFA option.
-- Not all devices and browsers are compatible with passkeys. passkeys are built on WebAuthn technology, and you should check [the Browser Compatibility docs](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API#browser_compatibility) for an up-to-date list.
-    - Passkeys are not officially supported in browsers on iOS devices.
-- Your users can have a max of 10 passkeys per account.

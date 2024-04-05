@@ -1,32 +1,29 @@
 ---
 title: JWT templates
-description: Customize your authentication tokens and integrate with anyone.
+description: Learn how to create custom JWT templates to generate JSON Web Tokens with Clerk.
 ---
+
+<Callout type="warning">
+  This guide is for creating custom JWT templates in order to generate JSON Web Tokens with Clerk. If you are looking for how to customize your Clerk-generated session token, refer to the [Customize your session token](/docs/backend-requests/making/custom-session-token) guide.
+</Callout>
 
 # JWT templates
 
-Clerk offers the ability to generate [JSON Web Tokens](https://en.wikipedia.org/wiki/JSON_Web_Token) (JWTs) representing users that are signed in to your application. Clerk provides the ability to extend this functionality by allowing you to *customize* the contents of these tokens through JWT Templates. This enables you to integrate with any third-party services that support authentication with JWTs.
+Clerk offers the ability to generate [JSON Web Tokens](https://en.wikipedia.org/wiki/JSON_Web_Token) (JWTs). Each JWT, or token, represents a user that is currently signed in to your application.
 
-JWTs can be generated from your frontend using Clerk.js. Each token depicts a user who is authenticated to your application. Tokens can only be generated for signed in users and each token is tied to a particular user.
+You can control the claims that will go into these tokens by creating custom **JWT Templates** that fit your needs. This enables you to integrate with any third-party services that support authentication with JWTs. An example use case is integrating with a third-party service that is able to consume JWTs, but requires them to be in a particular format.
 
-Tokens are cryptographically signed with your instance's private key and can be verified using its public key, which can be fetched from your instance's JWKS endpoint, typically `https://clerk.your-site.com/.well-known/jwks.json`.
+## What is a JWT template?
 
-With JWT Templates, you can control the claims that will go into these tokens by defining custom templates that fit your needs. An example use case is integrating with a third-party service that is able to consume JWTs, but requires them to be in a particular format.
+**JWT Templates** are essentially JSON objects that specify claims to be included in the generated tokens, along with their respective values.
 
-At a glance, the process for creating and using a template is the following:
+Claim values can be either static or dynamic.
 
-- In the Clerk Dashboard, create a JWT template from the **[JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates)** page.
-- From your frontend, generate tokens using that template.
+Static values can be any of the regular JSON data types (strings, numbers, booleans, arrays, objects, null) and will be included as-is in the tokens.
 
-The following sections will dive into these steps and explore what you can achieve with JWT Templates.
+Dynamic values, also called **shortcodes**, are special strings that will be substituted for their actual values when the tokens are generated. Read more in the [Shortcodes](#shortcodes) section.
 
-## Template basics
-
-Templates are essentially JSON objects that specify claims to be included in the generated tokens, along with their respective values.
-
-Claim values can be either static or dynamic. Static values can be any of the regular JSON data types (strings, numbers, booleans, arrays, objects, null) and will be included as-is in the tokens. Dynamic values, also called shortcodes, are special strings that will be substituted for their actual values when the tokens are generated.
-
-Example of a template that specifies both static values and shortcodes:
+The following example shows a template that demonstrates both static values and shortcodes. In this example, the values of the `aud` and `interests` claims are static, and the values of the `name` and `email` claims are dynamic.
 
 ```json
 {
@@ -38,9 +35,7 @@ Example of a template that specifies both static values and shortcodes:
 }
 ```
 
-In this example, the values of the `aud` and `interests` claims are static. The values of the `name` and `email` claims are dynamic.
-
-A token generated using the template above, would look roughly like this:
+A token generated using the template above would look something like this:
 
 ```json
 {
@@ -49,76 +44,28 @@ A token generated using the template above, would look roughly like this:
   "name": "John",
   "surname": null,
   "email": "john@doe.org"
-  // ...plus some automatically-included claims; more on that below
+  // ...plus some automatically-included claims
+  // See the following section section for more information
 }
 ```
 
-## Default claims
+### Default claims
 
-In the previous example, "automatically-included claims" was briefly mentioned. Besides the claims specified by the template, there are certain claims that are automatically included in all tokens and cannot be overridden by templates. Clerk calls these "default claims" and they are the following:
+In every generated token, there are certain claims that are automatically included and cannot be overridden by templates. Clerk calls these "default claims" and you can learn more about them in the [Session tokens](/docs/backend-requests/resources/session-tokens) reference documentation.
 
-* `azp`: authorized party - the `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application (e.g. `https://example.com`). This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null.
-* `exp`: expiration time - the time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates).
-* `iat`: issued at - the time at which the token was issued, as a Unix timestamp (e.g. `1516239022`).
-* `iss`: issuer - the Frontend API URL of your instance (e.g. `https://clerk.your-site.com`).
-* `jti`: JWT ID - a random alphanumeric string, used as a unique identifier for the token.
-* `nbf`: not before - the time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates).
-* `sub`: subject - the ID of the current user of the session (e.g. `user_123`).
+### Shortcodes
 
-<Images
-  width={894}
-  height={912}
-  src="/docs/images/backend-requests/jwt-template-token.webp"
-  alt="A Clerk session token payload generated from a JWT template, including all of the default session claims that Clerk provides."
-/>
-
-Many of these are standard claims registered by IANA. For generic information about them, refer to [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1).
-
-## Shortcodes
-
-To include dynamic data in a token, you can use shortcodes. Shortcodes are special strings that are substituted for their corresponding values during token generation. They are typically used to refer to data that depend on the currently authenticated user.
-
-Shortcodes are strings of the form `{{some.identifier}}` and they can be used in place of values (but not keys).
-
-The available shortcodes are the following:
+To include dynamic values in your tokens, you can use shortcodes. Shortcodes are strings that Clerk will replace with the actual values of the corresponding user information when the token is generated.
 
 <Callout type="info">
-  Even though in templates, shortcodes are string values, their type in the generated token depends on the original type of the information that's included. For example, `{{user.public_metadata}}` will be substituted for a JSON object, not a string.
+  Even though shortcodes are string values, their type in the generated token depends on the original type of the information that's included. For example, `{{user.public_metadata}}` will be substituted for a JSON object, not a string.
 </Callout>
 
-| Shortcode | Description | Type | Example |
-| --- | --- | --- | --- |
-| `{{user.id}}` | The user's unique identifier in Clerk. | `string` | `user_abc123bcde` |
-| `{{user.first_name}}` | The user's first name, if provided. | `string \| null` | `John` |
-| `{{user.last_name}}` | The user's last name, if provided. | `string \| null` | `Doe` |
-| `{{user.full_name}}` | The user's full name, if provided. | `string \| null` | `John Doe` |
-| `{{user.username}}` | The user's username. | `string \| null` | `johndoe` |
-| `{{user.external_id}}` | The user's external ID. | `string \| null` | `abcdef1234` |
-| `{{user.created_at}}` | Date and time when the user has signed up to the instance, as a Unix timestamp. | `number` | `1640104791` |
-| `{{user.updated_at}}` | Date and time when the user was last updated, as a Unix timestamp. | `number` | `1640104748` |
-| `{{user.primary_email_address}}` | The user's primary email, if provided. | `string \| null` | `john@example.com` |
-| `{{user.primary_phone_number}}` | The user's primary phone, if provided. | `string \| null` | `+12025550188` |
-| `{{user.email_verified}}` | Whether the user has a verified email address tied to their account. | `boolean` | `true` |
-| `{{user.phone_number_verified}}` | Whether the user has a verified phone number tied to their account. | `boolean` | `false` |
-| `{{user.image_url}}` | The user's avatar image URL. If not provided, the default avatar is used. | `string` | `https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc194eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHgiLCJyaWQiOiJ1c2VyX3h4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eCJ` |
-| `{{user.two_factor_enabled}}` | Denotes if the user has enabled Multifactor for their account. | `boolean` | `true` |
-| `{{user.public_metadata}}` | The user's metadata object. To retrieve specific attributes, see [Metadata](#metadata). | `object` | `{"interests": ["hiking", "knitting"] }` |
-| `{{user.unsafe_metadata}}` | The user's metadata object. To retrieve specific attributes, see [Metadata](#metadata). | `object` | `{}` |
-| `{{org.id}}` | The id of the user's active organization for the current session. | `string` | `org_abc123bcde` |
-| `{{org.role}}` | The role the user has in the active organization for the current session. | `string` | `admin` |
-| `{{org.name}}` | The name of the user's active organization for the current session. | `string` | `My Org` |
-| `{{org.slug}}` | The slug of the user's active organization for the current session. | `string` | `my-org-slug` |
-| `{{org.public_metadata}}` | The user's active organization public metadata for the current session. To retrieve specific attributes, see [Metadata](#metadata). | `object` | `{}` |
-| `{{org_membership.public_metadata}}` | The user's active organization membership public metadata for the current session. To retrieve specific attributes, see [Metadata](#metadata). | `object` | `{}` |
-| `{{org_membership.permissions}}` | The user's active organization membership permissions for the current session. | `string[]` | `['org:article:publish']` |
+#### Metadata in shortcodes
 
-If you need something that is missing from this list, please do not hesitate to [contact us](https://clerk.com/support).
+While you can use the `{{user.public_metadata}}` or `{{user.unsafe_metadata}}` shortcodes to include the complete metadata object in the final token, there might be cases where you only need a specific piece of information.
 
-### Metadata
-
-While you can use `{{user.public_metadata}}` or `{{user.unsafe_metadata}}` to include the complete metadata object in the final token, there might be cases where you only need a specific piece of information.
-
-To keep your tokens lean, there is a syntax you can use to do just that.
+To keep your tokens lean, you can use the dot notation to access nested fields of the metadata object.
 
 Let's assume the user's public metadata are the following:
 
@@ -132,31 +79,23 @@ Let's assume the user's public metadata are the following:
 }
 ```
 
-To access the `interests` array, you would use the shortcode `{{user.public_metadata.interests}}`. To access the `Home` address, you would use `{{user.public_metadata.addresses.Home}}`.
-
-An example follows:
+To access the `interests` array, you would use the shortcode `{{user.public_metadata.interests}}`. To access the `Home` address, you would use `{{user.public_metadata.addresses.Home}}`. See the following example:
 
 ```json
-// template
+// The template
 {
   "likes_to_do": "{{user.public_metadata.interests}}",
   "shipping_address": "{{user.public_metadata.addresses.Home}}"
 }
 
-// actual token
+// The generated token
 {
   "likes_to_do": ["hiking", "knitting"],
   "shipping_address": "2355 Pointe Lane, 56301 Minnesota"
 }
 ```
 
-Using the same notation (`.`), you can fetch data from nested fields of arbitrary depth. The examples above use public metadata, but the same notation works for unsafe metadata as well.
-
-The same syntax works also for organization and organization membership metadata fields.
-
-Future extensions to the template language may provide more ways to query for specific data. Until then, please [contact us](https://clerk.com/support) if you need something that is not currently supported.
-
-### Interpolation
+#### Interpolation in shortcodes
 
 Shortcodes can be interpolated inside strings.
 
@@ -168,9 +107,9 @@ For example, you could use interpolation to build the user's full name:
 }
 ```
 
-Interpolated shortcodes will always result to string values. For example, if the user does not have a last name associated, the above full name value would be "null John".
+Interpolated shortcodes will always result to string values. For example, if the user does not have a last name associated, the above full name value would be `null John`.
 
-### Conditional expressions
+#### Conditional expressions in shortcodes
 
 Conditional expressions use the `||` operator and can be used to substitute a default fallback value for shortcodes that would otherwise result in `null` or `false` values.
 
@@ -182,7 +121,7 @@ The format of a conditional expression is the following:
 }
 ```
 
-As an example, given the following template (comments added for clarity):
+The result of a conditional expression is that of the first operand that does not evaluate to `null` or `false` (also known as "falsy"). If all operands of the expression are falsy, the last operand is returned no matter its value. Therefore, you should always place the default value as the last operand. See the following example:
 
 ```json
 {
@@ -196,15 +135,14 @@ As an example, given the following template (comments added for clarity):
 }
 ```
 
-and given a user that:
+For this example, in the case that user:
 
 - has verified their phone number
 - has not verified their email
 - has not provided their first or last name
 - does not have any public or unsafe metadata assigned
 
-
-the output of the template after substitution would be:
+Then, the output of the generated token would be:
 
 ```json
 {
@@ -214,30 +152,13 @@ the output of the template after substitution would be:
 }
 ```
 
-The result of a conditional expression is that of the first operand that does not evaluate to `null` or `false` (also known as "falsy"). If all operands of the expression are falsy, the last operand is returned no matter its value.
+The rules that govern conditional expressions are as follows:
 
-Conditional expressions can also be combined with interpolation:
-```json
-{
-  "greeting": "Awesome {{user.first_name || user.last_name || 'user'}}"
-}
-```
+- The result of an expression is either the first operand that is not falsy, or the last operand (no matter its value).
+- String literals should use single quotes (`'`).
+- Only strings, booleans and numbers are permitted as literal (i.e. non-shortcodes) operands.
 
-Assuming a user that has no first or last name set in their profile, the above would output:
-
-```json
-{
-  "greeting": "Awesome user"
-}
-```
-
-Following are the rules that govern conditional expressions:
-
-- the result of an expression is either the first operand that is not falsy, or the last operand (no matter its value)
-- string literals should use single quotes (`'`)
-- only strings, booleans and numbers are permitted as literal (i.e. non-shortcodes) operands
-
-## Creating a template
+## Create a JWT template
 
 A template consists of the following four properties:
 
@@ -246,38 +167,19 @@ A template consists of the following four properties:
 - Token allowed clock skew: the time in seconds, provided as a leeway to account for clock skews between different servers. This setting determines the value of the `nbf` claim (i.e. `nbf=current_time-allowed_clock_skew`). Default is 5 seconds.
 - Claims: the actual template that's entered into the JSON editor (see screenshot below). A template is essentially a JSON object that describes what the final token claims will look like (shortcodes can be used here). This is a required field.
 
-Templates can be created from the Clerk Dashboard on the [JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates) page.
+To create a JWT template:
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates).
+2. In the navigation sidebar, select **JWT Templates**.
+3. Select **New template**.
+4. You can either create a new template from scratch or use a provided template as a starting point.
 
-<Images
-width={3024}
-height={1650}
-src="/docs/images/backend-requests/jwt_template.jpg"
-alt="The 'JWT Templates' section of the Clerk Dashboard."
-/>
+## Generate a JWT
 
-## Using a template
-
-Tokens are generated by your frontend via Clerk.js, by specifying the template to use.
-
-Assuming you named your template `my-template-1`, you can generate a token using that template, like so:
-
-```js
-try {
-  await Clerk.session.getToken({ template: 'my-template-1' }) // => "eyJhbGciOiJSUzI1NiIsImtpZC..."
-} catch(e) {
-    // handle error
-}
-```
-
-The return value is a Promise, since this code will query the Frontend API (`clerk.your-site.com`) to generate the JWT and fetch it, encoded in Base64.
-
-<Callout type="info">
-  Tokens can only be generated if the current user is signed in.
-</Callout>
+To generate a token using a template, you can use the `getToken()` method. See the [reference documentation](/docs/references/nextjs/auth-object#get-token) for more information and example usage.
 
 ## Complete example
 
-A more detailed example follows, which demonstrates the full capabilities of JWT Templates, including static claim values, dynamic claim values via shortcodes and automatically included claims.
+The following example demonstrates the full capabilities of JWT Templates, including static claim values, dynamic claim values via shortcodes, and Clerk's "default claims".
 
 Given the following user:
 
@@ -290,7 +192,7 @@ Given the following user:
 - Public metadata: `{ "profile" : {"interests": ["reading", "climbing"] } }`
 - Unsafe metadata: `{ "foo" : { "bar": 42 } }`
 
-And given the following template (comments added here for clarity):
+And given the following JWT template:
 
 ```json
 {
@@ -312,7 +214,7 @@ And given the following template (comments added here for clarity):
 }
 ```
 
-Using the above template, generating a token for the aforementioned user would result in roughly the following claims:
+The generated token would look like this:
 
 ```json
 {
@@ -330,19 +232,16 @@ Using the above template, generating a token for the aforementioned user would r
         "foo" : {
             "bar": 42
         }
-     },
-     "invalid_shortcode": "{{user.i_dont_exist}}",
+    },
+    "invalid_shortcode": null,
 
      // default claims, included automatically
-    "iat": 1639398272,
-    "nbf": 1639398220,
-    "jti": "ab293jfirnbmc90qhjwen21",
+    "azp": "http://localhost:3000",
     "exp": 1639398300,
-    "iss": "https://clerk.my-site.com",
-    "sub": "user_abcdef123456789"
+    "iat": 1639398272,
+    "iss": "https://clean-mayfly-62.clerk.accounts.dev",
+    "nbf": 1639398220,
+    "sid": "sess_2ehYpzsasKNOZrpqPZ9yDWhrYVe",
+    "sub": "user_1deJLArSTiWiF1YdsEWysnhJLLY"
 }
 ```
-
-## Customizing session tokens
-
-JWT Templates can also be used to customize your instance's session tokens. Refer to [Session token customization](/docs/backend-requests/making/custom-session-token) for more information.

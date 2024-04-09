@@ -1,0 +1,363 @@
+---
+title: Create a Clerk webhook using Svix
+description: Learn how to create a Clerk webhook with Svix.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk + Next.js application",
+      link: "https://clerk.com/docs/quickstarts/nextjs"
+    }
+  ]}
+>
+- Listen for an event in the Clerk Dashboard
+- Create a webhook handler that
+  - uses Svix to verify the webhook signature
+  - receives the webhook's payload
+- Test the webhook locally using ngrok and the Clerk Dashboard
+- Add logic to your application to trigger the webhook
+</TutorialHero>
+
+# Create a Clerk webhook using Svix
+
+Clerk is a powerful tool for managing user authentication and authorization, and Svix is a webhook delivery service that makes it easy to send and receive webhooks securely. By combining Clerk and Svix, you can create a webhook that will notify your application whenever a Clerk event happens, such as a user or organization being created.
+
+In this guide, you will learn how to create a Clerk webhook using Svix. You will listen for the `user.updated` event by creating a webhook endpoint in the Clerk Dashboard, creating a webhook handler in your Next.js application, and testing the webhook locally using ngrok and the Clerk Dashboard.
+
+This guide can be adapted to listen for any Clerk event.
+
+## Set up ngrok
+
+To test a webhook locally, you will need to expose your local server to the internet. For this guide, you will use [ngrok](https://ngrok.com/).
+
+1. Go to the [ngrok website](https://ngrok.com/) and create an account.
+2. Once you have made it to the [ngrok dashboard](https://dashboard.ngrok.com/get-started/setup/macos), in the **Installation** section, follow the instructions to install ngrok on your machine.
+3. To deploy your local server to the internet, run the following command in your terminal:
+
+`ngrok http http://localhost:3000`
+
+4. In your terminal, ngrok should display a **Forwarding** URL that looks something like `https://fb3f-2603-1700-2458-3410-a006-dc38-e9d6-1275.ngrok-free.app/`. Copy this URL.
+
+## Create an endpoint in the Clerk Dashboard
+
+To create a webhook endpoint, you must provide the **Endpoint URL** and then choose the events you want to listen to. For this guide, you will listen to the `user.updated` event.
+
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=webhooks).
+2. In the navigation sidenav, select **Webhooks**.
+3. Select the **Add Endpoint** button.
+4. In the **Endpoint URL** field, paste the ngrok URL you copied earlier followed by `/api/webhooks`. This is the endpoint that you will later create, that Svix will send the webhook payload to. The full URL should look something like `https://fb3f-2603-1700-2458-3410-a006-dc38-e9d6-1275.ngrok-free.app/api/webhooks`.
+5. In the **Message Filtering** section, select the `user.updated` event.
+6. Select the **Create** button.
+7. You will be redirected to your endpoint's settings page. Leave this page open.
+
+## Add your signing secret to your `.env` file
+
+To verify the webhook payload, you will need your endpoint's signing secret. However, you do not want to expose this secret in your codebase, so you will store it in a `.env` file.
+
+1. On the endpoint's settings page, copy the **Signing Secret**. It should be on the right hand side of the page with an eye icon next to it.
+2. In your project's root directory, you should have an `.env.local` file that includes your Clerk API keys. Here, assign your signing secret to `WEBHOOK_SECRET`. Your file should look something like this:
+
+<InjectKeys>
+
+```sh filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+WEBHOOK_SECRET=whsec_123
+```
+
+</InjectKeys>
+
+## Install `svix`
+
+You will use [`svix`](https://www.npmjs.com/package/svix) to verify the webhook signature. Install it by running the following command in your terminal:
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npm install svix
+  ```
+
+```bash filename="terminal"
+yarn add svix
+```
+
+```bash filename="terminal"
+pnpm add svix
+```
+
+</CodeBlockTabs>
+
+## Create a webhook handler
+
+Create a Route Handler that uses `svix` to verify the webhook signature and that receives the webhook's payload.
+
+For the sake of this guide, you will only log the payload to the console. In a real world application, you would use the payload to trigger some action. For example, you are listening for the `user.updated` event, so you could display a notification to all users in the application that a user was just updated.
+
+<Callout type="info">
+  This Route Handler is not specific to the `user.updated` event and can be used for any webhook event you choose to listen to.
+</Callout>
+
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```ts filename="app/api/webhooks/route.ts"
+import { Webhook } from 'svix'
+import { headers } from 'next/headers'
+import { WebhookEvent } from '@clerk/nextjs/server'
+
+export async function POST(req: Request) {
+
+  // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
+  const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error('Please add WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local')
+  }
+
+  // Get the headers
+  const headerPayload = headers();
+  const svix_id = headerPayload.get("svix-id");
+  const svix_timestamp = headerPayload.get("svix-timestamp");
+  const svix_signature = headerPayload.get("svix-signature");
+
+  // If there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response('Error occured -- no svix headers', {
+      status: 400
+    })
+  }
+
+  // Get the body
+  const payload = await req.json()
+  const body = JSON.stringify(payload);
+
+  // Create a new Svix instance with your secret.
+  const wh = new Webhook(WEBHOOK_SECRET);
+
+  let evt: WebhookEvent
+
+  // Verify the payload with the headers
+  try {
+    evt = wh.verify(body, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    }) as WebhookEvent
+  } catch (err) {
+    console.error('Error verifying webhook:', err);
+    return new Response('Error occured', {
+      status: 400
+    })
+  }
+
+  // Do something with the payload
+  // For this guide, you simply log the payload to the console
+  const { id } = evt.data;
+  const eventType = evt.type;
+  console.log(`Webhook with and ID of ${id} and type of ${eventType}`)
+  console.log('Webhook body:', body)
+
+  return new Response('', { status: 200 })
+}
+
+```
+
+```ts filename="pages/api/webhooks.ts"
+import { Webhook } from 'svix'
+import { WebhookEvent } from '@clerk/nextjs/server'
+import { NextApiRequest, NextApiResponse } from 'next'
+import { buffer } from 'micro'
+
+export const config = {
+  api: {
+    bodyParser: false,
+  }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405)
+  }
+  // You can find this in the Clerk Dashboard -> Webhooks -> choose the webhook
+  const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET
+
+  if (!WEBHOOK_SECRET) {
+    throw new Error('Please add WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local')
+  }
+
+  // Get the headers
+  const svix_id = req.headers["svix-id"] as string;
+  const svix_timestamp = req.headers["svix-timestamp"] as string;
+  const svix_signature = req.headers["svix-signature"] as string;
+
+
+  // If there are no headers, error out
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return res.status(400).json({ error: 'Error occured -- no svix headers' })
+  }
+
+  console.log('headers', req.headers, svix_id, svix_signature, svix_timestamp)
+  // Get the body
+  const body = (await buffer(req)).toString()
+
+  // Create a new Svix instance with your secret.
+  const wh = new Webhook(WEBHOOK_SECRET);
+
+  let evt: WebhookEvent
+
+  // Verify the payload with the headers
+  try {
+    evt = wh.verify(body, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    }) as WebhookEvent
+  } catch (err) {
+    console.error('Error verifying webhook:', err);
+    return res.status(400).json({ 'Error': err })
+  }
+
+  // Do something with the payload
+  // For this guide, you simply log the payload to the console
+  const { id } = evt.data;
+  const eventType = evt.type;
+  console.log(`Webhook with and ID of ${id} and type of ${eventType}`)
+  console.log('Webhook body:', body)
+
+  return res.status(200).json({ response: 'Success' })
+}
+```
+</CodeBlockTabs>
+
+## Add your endpoint to Middleware
+
+Your Route Handler must be made public or ignored by Middleware to allow the request to succeed. The following example will make any webhooks created under `/api/webhooks/` public. See [authMiddleware](/docs/references/nextjs/auth-middleware) for more information.
+
+```tsx filename="middleware.tsx" {4}
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware({
+  publicRoutes: ["/api/webhooks(.*)"],
+});
+
+export const config = {
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+## Test your webhook
+
+1. Start your Next.js server.
+2. On your endpoint's settings page in the Clerk Dashboard, select the **Testing** tab.
+3. In the **Select event** dropdown, select `user.updated`.
+4. Select the **Send Example** button.
+5. Below that section, in the **Message Attempts** section, you should see a successful attempt with a status of `200`.
+
+### Message failed
+
+If the message failed:
+
+1. Select the message.
+2. Scroll down to the **Webhook Attempts** section.
+3. Select the arrow icon the left side.
+4. Investigate the error. Your solution is going to depend on the error message. If you are having trouble debugging, reach out to [Clerk support](/support).
+
+## Add logic for updating a user
+
+Before, you were using the Clerk Dashboard to *test* what would happen if a `user.updated` event occurred.
+
+Now, you can add logic to your application for this event to actually be able to occur.
+
+<Callout type="warning">
+  You may need to enable the **Name** setting. It can be found in the the Clerk Dashboard under User & Authentication > Email, Phone, Username > [Personal information](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
+</Callout>
+
+In the file for your homepage, add the following code:
+
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```jsx filename="app/page.tsx"
+"use client";
+
+import { UserButton, useUser } from "@clerk/nextjs";
+
+export default function Home() {
+  const { user, isLoaded } = useUser();
+
+  if (!isLoaded) {
+    // Handle loading state however you like
+    return null;
+  }
+
+  if (!user) return null;
+
+  const updateUser = async () => {
+    await user
+      .update({
+        firstName: "Test",
+      })
+      .then(() => {
+        console.log(user.firstName);
+      })
+      .catch((error) => console.log(error.errors));
+  };
+
+  return (
+    <div className="h-screen">
+      <UserButton afterSignOutUrl="/" />
+
+      <p>user.firstName: {user?.firstName}</p>
+
+      <button onClick={updateUser}>Update user</button>
+    </div>
+  );
+}
+```
+
+```jsx filename="/src/pages/index.tsx"
+import { UserButton, useUser } from "@clerk/nextjs";
+
+export default function Home() {
+  const { user, isLoaded } = useUser();
+
+  if (!isLoaded) {
+    // Handle loading state however you like
+    return null;
+  }
+
+  if (!user) return null;
+
+  const updateUser = async () => {
+    await user
+      .update({
+        firstName: "Test",
+      })
+      .then(() => {
+        console.log(user.firstName);
+      })
+      .catch((error) => console.log(error.errors));
+  };
+
+  return (
+    <div className="h-screen">
+      <header>
+        <UserButton afterSignOutUrl="/" />
+      </header>
+
+      <p>user.firstName: {user?.firstName}</p>
+
+      <button onClick={updateUser}>Update user</button>
+    </div>
+  )
+}
+```
+</CodeBlockTabs>
+
+## Trigger your webhook
+
+To trigger the `user.updated` event, navigate to your application's homepage and select the **Update user** button. This will update the user's first name to `Test` and trigger the webhook.
+
+You should be able to see the webhook's payload logged to your terminal. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-your-webhook).
+
+If the webhook failed, check the console of your application to see if the `updateUser()` method failed. If it did, you can debug the error message to see what went wrong. If it succeeded, you can [check the Clerk Dashboard to investigate why the webhook attempt failed](#message-failed).
+
+## Wrap up
+
+In this guide, you learned how to create a Clerk webhook using Svix. You created a webhook in the Clerk Dashboard to listen for the `user.updated` event and created a Route Handler for your webhook endpoint to verify the webhook signature and receive the payload. You tested the webhook locally using ngrok and the Clerk Dashboard to ensure it was configured properly. And lastly, you added logic to your application to actually trigger the `user.updated` event. Now, you can do whatever you want with the webhook payload, such as sending a notification to your users, updating a database, or anything else you can think of.

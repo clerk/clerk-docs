@@ -1,64 +1,45 @@
 ---
-title: Email/SMS OTP (One-time Password)
-description: Learn how to send one-time codes (OTP) to authenticate users.
+title: Build a custom email or SMS OTP authentication flow
+description: Learn how build a custom email or SMS one time code (OTP) authentication flow using using Clerk's useSignUp() and useSignIn() hooks.
 ---
 
-# Email/SMS OTP (One-time Password)
+# Build a custom email or SMS OTP authentication flow
 
-Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. During sign-in, users will be asked to enter their identifier (email address or phone number) to receive a one-time password (OTP), also referred to as a one-time code, and complete the authentication process.
-
-Arguably, passwordless authentication provides greater security and a better user experience than traditional passwords. However, it is not without its downsides, and often still boils down to the email providers "knowledge based factor" instead of yours.
-
-There are multiple ways to set up passwordless authentication in Clerk such as using [Clerk Components](/docs/components/overview), or by creating a [custom flow](#custom-flow) using Clerk's SDKs.
-
-The rest of this guide will explain how to set up passwordless authentication using any of the above methods. Before you start, you will need to [configure](#configuration) your instance to allow passwordless sign-ins.
-
-<Callout type="info">
-  Looking for magic links? Check out our [Magic links authentication](/docs/custom-flows/magic-links) guide.
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To authenticate users with one-time passwords using a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 </Callout>
 
-<Callout type="info">
-  Looking for two-factor authentication (2FA)? Check out our [Multi-factor authentication](/docs/custom-flows/mfa) guide.
-</Callout>
+Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a one-time password (OTP), also known as a one-time code, via email or SMS, which they can use to authenticate themselves.
 
-## Before you start
+This guide will walk you through how to build a custom email or SMS OTP sign-up and sign-in flow using the [`useSignUp()`](/docs/references/react/use-sign-up) and [`useSignIn()`](/docs/references/react/use-sign-up) React hooks.
 
-- You need to create a Clerk Application in your [Clerk Dashboard](https://dashboard.clerk.com/). For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
-- You need to install the correct SDK for your application. You can find steps on how to do so through Clerk's [quickstart](/docs/quickstarts/overview) guides.
+{/* TODO: Update these Steps when the Steps component can accept other headings. As of right now, Steps can only accept H3s. */}
 
-## Set up passwordless authentication for your Clerk application
+<Steps>
 
-To enable passwordless authentication, you need to configure your instance to allow passwordless sign-ins. You can do this through the Clerk Dashboard or by creating a custom flow using the Clerk API.
+### Enable email and SMS OTP
 
-### Enable passwordless authentication in the Clerk Dashboard
+To use email and SMS OTP, you first need to enable these authentication strategies in the Clerk Dashboard.
 
-Passwordless authentication can be configured through the Clerk Dashboard. Go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)**. In the **Authentication strategies** section of this page, choose one of the available passwordless authentication strategies that send one-time codes.
+1. Navigate to the Clerk Dashboard.
+2. Go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)** in the sidebar menu.
+3. In the **Authentication factors** section of this page, toggle on the **Email verification code** and **SMS verification code** strategies.
 
-For more information on how to configure passwordless authentication, check out the [Sign-in and sign-up options](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies) guide.
+### Create the OTP sign-up flow
 
-### Enable passwordless authentication using the Clerk API
+To sign up a user using an OTP, you need to:
 
-In case one of the above integration methods doesn't cover your needs, you can make use of lower-level commands and create a completely custom passwordless authentication flow.
+1. Initiate the sign-up process by collecting the user's email address and password.
+2. Prepare the email address verification, which sends a one-time code to the given address.
+3. Attempt to complete the email address verification by supplying the one-time code.
+4. If the email address verification is successful, complete the sign-up process by creating the user account and setting their session as active.
 
-<Callout type="warning">
-  You still need to configure your instance in order to enable passwordless authentication, as described at the top of this guide.
-</Callout>
+In the following example, the user is asked to provide their phone number. Once the user submits their phone number, a one-time code is sent to them. The user is then prompted to enter the code to complete the sign-up process. If the verification is successful, the user's session is set as active.
 
-#### Sign up using a custom flow (Clerk API)
-
-The passwordless sign-up flow is a process that requires users to provide their authentication identifier (email address or phone number) and a one-time code that is sent to them. The important thing to note here is that a user's email address or phone number needs to be verified before the registration is completed.
-
-A successful sign-up consists of the following steps:
-
-- Initiate the sign-up process by collecting the user's identifier (email address or phone number).
-- Prepare the identifier verification.
-- Attempt to complete the identifier verification.
-
-Let's see the above in action. If you want to learn more about sign-ups, check out our documentation on Clerk's [sign-up flow](/docs/custom-flows/overview#sign-up-flow).
-
-<Tabs type="framework" items={["Next.js", "React", "JavaScript"]}>
+<Tabs type="framework" items={["Next.js", "JavaScript"]}>
   <Tab>
-    <CodeBlockTabs type="router" options={["App Router"]}>
+    For the sake of this guide, this example is written for Next.js App Router but it is supported by any React meta framework, such as Remix or Gatsby.
+
     ```ts filename="app/sign-up/page.tsx"
     'use client'
 
@@ -147,47 +128,9 @@ Let's see the above in action. If you want to learn more about sign-ups, check o
       );
     }
     ```
-    </CodeBlockTabs>
   </Tab>
 
-  <Tab>
-  ```jsx filename="SignUpPage.jsx"
-  import { useSignUp } from "@clerk/clerk-react";
-
-  function SignUpPage() {
-      const { signUp,setActive } = useSignUp();
-
-      async function onClick(e) {
-          e.preventDefault();
-          // Kick off the sign-up process, passing the user's
-          // phone number.
-          await signUp.create({
-              phoneNumber: "+11111111111",
-          });
-
-          // Prepare phone number verification. An SMS message
-          // will be sent to the user with a one-time
-          // verification code.
-          await signUp.preparePhoneNumberVerification();
-
-          // Attempt to verify the user's phone number by
-          // providing the one-time code they received.
-          await signUp.attemptPhoneNumberVerification({
-              code: "123456",
-          });
-
-          await setActive({session: signUp.createdSessionId});
-      }
-
-      return (
-          <button onClick={onClick}>
-              Sign up without password
-          </button>
-      );
-  }
-  ```
-  </Tab>
-
+{/* TODO (Roy): Use CodeBlockTabs and add example for NPM Module vs window.Clerk (Script) - see the /docs/components/user-button update I did in this PR */}
   <Tab>
   ```js filename="SignUpPage.js"
   const { client } = window.Clerk;
@@ -212,23 +155,21 @@ Let's see the above in action. If you want to learn more about sign-ups, check o
   </Tab>
 </Tabs>
 
-You can also verify your users via their email address. There's two additional helper methods: [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#attempt-email-address-verification) that work the same way as their phone number counterparts do. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in/sign-in) object documentation.
+You can also verify your users via their email address. There's two additional helper methods: [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the above example. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in/sign-in) object documentation.
 
-#### Sign in using a custom flow (Clerk API)
+### Create the OTP sign-in flow
 
-The passwordless sign-in flow is a process that requires users to provide their authentication identifier (email address or phone number) and subsequently a one-time code that is sent to them. We call this one-time code the first factor of authentication.
+To authenticate a user using a one-time code, you need to:
 
-So, in essence, when you want to authenticate users in your application, you need to
+1. Initiate the sign-in process by collecting the user's authentication identifier.
+2. Prepare the first factor verification.
+3. Attempt to complete the first factor verification.
+4. If the verification is successful, set the newly created session as active.
 
-- Initiate the sign-in process by collecting the user's authentication identifier.
-- Prepare the first factor verification.
-- Attempt to complete the first factor verification.
+In the following example, the user is asked to provide their phone number. Once the user submits their phone number, a one-time code is sent to them. The user is then prompted to enter the code to complete the sign-in process. If the verification is successful, the user's session is set as active.
 
-Let's see the above in action. If you want to learn more about sign-ins, check out our documentation on Clerk's [sign-in flow](/docs/custom-flows/overview#sign-in-flow).
-
-<Tabs type="framework" items={["Next.js", "React", "JavaScript"]}>
+<Tabs type="framework" items={["Next.js","JavaScript"]}>
   <Tab>
-    <CodeBlockTabs type="router" options={["App Router"]}>
       ```tsx filename="app/sign-in/page.tsx"
       'use client'
 
@@ -334,59 +275,10 @@ Let's see the above in action. If you want to learn more about sign-ins, check o
         );
       }
       ```
-    </CodeBlockTabs>
   </Tab>
 
-  <Tab>
-    ```jsx filename="SignInPage.jsx"
-    import { useSignIn } from "@clerk/clerk-react";
-
-    function SignInPage() {
-        const { signIn,setActive } = useSignIn();
-
-        async function onClick(e) {
-            e.preventDefault();
-            // Kick off the sign-in process, passing the user's
-            // authentication identifier. In this case it's their
-            // phone number.
-            const { supportedFirstFactors } = await signIn.create({
-                identifier: "+11111111111",
-            });
-
-            // Find the phoneNumberId from all the available first factors for the current sign in
-            const firstPhoneFactor = supportedFirstFactors.find(factor => {
-              return factor.strategy === 'phone_code'
-            });
-
-            const { phoneNumberId } = firstPhoneFactor;
-
-            // Prepare first factor verification, specifying
-            // the phone code strategy.
-            await signIn.prepareFirstFactor({
-                strategy: "phone_code",
-                phoneNumberId,
-            });
-
-            // Attempt to verify the user providing the
-            // one-time code they received.
-            await signIn.attemptFirstFactor({
-                strategy: "phone_code",
-                code: "123456",
-            });
-
-            await setActive({session: signIn.createdSessionId});
-        }
-
-        return (
-            <button onClick={onClick}>
-                Sign in without password
-            </button>
-        );
-    }
-    ```
-  </Tab>
-
-  <Tab>
+{/* TODO (Roy): Use CodeBlockTabs and add example for NPM Module vs window.Clerk (Script) - see the /docs/components/user-button update I did in this PR */}
+   <Tab>
     ```js filename="SignInPage.js"
     const { client } = window.Clerk;
     // Kick off the sign-in process, passing the user's
@@ -421,3 +313,5 @@ Let's see the above in action. If you want to learn more about sign-ins, check o
 </Tabs>
 
 You can also achieve passwordless sign-ins with an email address. Simply pass the value `email_code` as the first factor strategy. Just make sure you've collected the user's email address first. You can find all available methods in the [`SignIn`](/docs/references/javascript/sign-in/sign-in) object documentation.
+
+</Steps>

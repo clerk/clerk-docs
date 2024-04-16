@@ -11,28 +11,29 @@ description: Learn how build a custom email or SMS one time code (OTP) authentic
 
 Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a one-time password (OTP), also known as a one-time code, via email or SMS, which they can use to authenticate themselves.
 
-This guide will walk you through how to build a custom email or SMS OTP sign-up and sign-in flow using the [`useSignUp()`](/docs/references/react/use-sign-up) and [`useSignIn()`](/docs/references/react/use-sign-up) React hooks.
+This guide will walk you through how to build a custom SMS OTP sign-up and sign-in flow. If you would like to use email OTP instead, the process is similar, and the differences will get pointed out along the way.
 
 {/* TODO: Update these Steps when the Steps component can accept other headings. As of right now, Steps can only accept H3s. */}
 
 <Steps>
 
-### Enable email and SMS OTP
+### Enable SMS OTP
 
-To use email and SMS OTP, you first need to enable these authentication strategies in the Clerk Dashboard.
+To use SMS OTP as an authentication strategy, you first need to enable it in the Clerk Dashboard.
 
 1. Navigate to the Clerk Dashboard.
 2. Go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)** in the sidebar menu.
-3. In the **Authentication factors** section of this page, toggle on the **Email verification code** and **SMS verification code** strategies.
+3. In the **Contact information** section, ensure only **Phone number** is toggled on. This will allow users to add phone numbers to their accounts. If you would like to use email OTP instead, you can enable the **Email address** option instead of the phone number option.
+4. In the **Authentication strategies** section of this page, ensure only **SMS verification code** is enabled. Ensure **Password** is toggled off, as you are priotirizing passwordless, SMS OTP-only authentication in this guide. If you would like to use email OTP instead, you can enable the **Email verification code** strategy instead of the SMS strategy.
 
 ### Create the OTP sign-up flow
 
 To sign up a user using an OTP, you need to:
 
-1. Initiate the sign-up process by collecting the user's email address and password.
-2. Prepare the email address verification, which sends a one-time code to the given address.
-3. Attempt to complete the email address verification by supplying the one-time code.
-4. If the email address verification is successful, complete the sign-up process by creating the user account and setting their session as active.
+1. Initiate the sign-up process by collecting the user's phone number.
+2. Prepare the phone number verification, which sends a one-time code to the given address.
+3. Attempt to complete the phone number verification by supplying the one-time code.
+4. If the phone number verification is successful, complete the sign-up process by creating the user account and setting their session as active.
 
 In the following example, the user is asked to provide their phone number. Once the user submits their phone number, a one-time code is sent to them. The user is then prompted to enter the code to complete the sign-up process. If the verification is successful, the user's session is set as active.
 
@@ -40,24 +41,24 @@ In the following example, the user is asked to provide their phone number. Once 
   <Tab>
     For the sake of this guide, this example is written for Next.js App Router but it is supported by any React meta framework, such as Remix or Gatsby.
 
-    ```ts filename="app/sign-up/page.tsx"
-    'use client'
+    ```js filename="app/sign-up/page.tsx"
+    "use client";
 
-    import * as React from 'react'
+    import * as React from "react";
     import { useSignUp } from "@clerk/nextjs";
-    import { useRouter } from 'next/navigation';
+    import { useRouter } from "next/navigation";
 
     export default function Page() {
       const { isLoaded, signUp, setActive } = useSignUp();
-      const [verifying, setVerifying] = React.useState(false)
-      const [phone, setPhone] = React.useState("")
-      const [code, setCode] = React.useState("")
-      const router = useRouter()
+      const [verifying, setVerifying] = React.useState(false);
+      const [phone, setPhone] = React.useState("");
+      const [code, setCode] = React.useState("");
+      const router = useRouter();
 
       async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
-        if (!isLoaded && !signUp) return null
+        if (!isLoaded && !signUp) return null;
 
         try {
           // Start the Sign Up process using the phone number method
@@ -70,18 +71,17 @@ In the following example, the user is asked to provide their phone number. Once 
           await signUp.preparePhoneNumberVerification();
 
           // Set 'verifying' true to display second form and capture the OTP code
-          setVerifying(true)
-        }
-        catch (err) {
+          setVerifying(true);
+        } catch (err) {
           // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
+          console.error("Error:", JSON.stringify(err, null, 2));
         }
       }
 
       async function handleVerification(e: React.FormEvent) {
-        e.preventDefault()
+        e.preventDefault();
 
-        if (!isLoaded && !signUp) return null
+        if (!isLoaded && !signUp) return null;
 
         try {
           // Use the code provided by the user and attempt verification
@@ -91,40 +91,53 @@ In the following example, the user is asked to provide their phone number. Once 
 
           // This mainly for debuggin while developing.
           // Once your Instance is setup this should not be required.
-          if (completeSignUp.status !== 'complete') {
-            console.error(JSON.stringify(completeSignUp, null, 2))
+          if (completeSignUp.status !== "complete") {
+            console.error(JSON.stringify(completeSignUp, null, 2));
           }
 
           // If verification was completed, create a session for the user
-          if (completeSignUp.status === 'complete') {
+          if (completeSignUp.status === "complete") {
             await setActive({ session: completeSignUp.createdSessionId });
 
             // redirect user
-            router.push("/")
+            router.push("/");
           }
-        }
-        catch (err) {
+        } catch (err) {
           // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
+          console.error("Error:", JSON.stringify(err, null, 2));
         }
       }
 
       if (verifying) {
         return (
           <form onSubmit={handleVerification}>
-            <label id="code">Code</label>
-            <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
+            <label htmlFor="code">Code</label>
+            <input
+              value={code}
+              id="code"
+              name="code"
+              onChange={(e) => setCode(e.target.value)}
+            />
             <button type="submit">Verify</button>
           </form>
-        )
+        );
       }
 
       return (
-        <form onSubmit={handleSubmit}>
-          <label id="phone">Phone</label>
-          <input value={phone} id="phone" name="phone" type="tel" onChange={(e) => setPhone(e.target.value)} />
-          <button type="submit">Send Code</button>
-        </form>
+        <>
+          <h1>Sign up</h1>
+          <form onSubmit={handleSubmit}>
+            <label id="phone">Enter phone number</label>
+            <input
+              value={phone}
+              id="phone"
+              name="phone"
+              type="tel"
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <button type="submit">Continue</button>
+          </form>
+        </>
       );
     }
     ```

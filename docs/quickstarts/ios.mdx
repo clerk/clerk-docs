@@ -109,21 +109,14 @@ struct SignInView: View {
             } else {
                 TextField("Email", text: $emailAddress)
                 SecureField("Password", text: $password)
-                Button("Sign In", action: signIn)
+                Button("Sign In", action: {
+                    Task {
+                        try? await clerk.client?.createSignIn(strategy: .identifier(emailAddress, password: password))
+                    }
+                })
             }
         }
-        .padding()
     }
-}
-
-extension SignInView {
-    
-    private func signIn() {
-        Task {
-            try? await clerk.client?.createSignIn(strategy: .identifier(emailAddress, password: password))
-        }
-    }
-    
 }
 ```
 
@@ -140,9 +133,7 @@ class SignInViewController: UIViewController {
     @IBOutlet weak var userIdLabel: UILabel!
     @IBOutlet weak var emailTextField: UITextField!
     @IBOutlet weak var passwordTextField: UITextField!
-    
-    private var asyncSequenceTask: Task<Void, Error>?
-    
+        
     @IBAction func signIn(_ sender: Any) {
         guard let emailAddress = emailTextField.text, let password = passwordTextField.text else {
             return
@@ -150,23 +141,9 @@ class SignInViewController: UIViewController {
         
         Task {
             try? await Clerk.shared.client?.createSignIn(strategy: .identifier(emailAddress, password: password))
+            userIdLabel.text = Clerk.shared.user?.id
         }
     }
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        
-        asyncSequenceTask = Task {
-            for await _ in Clerk.shared.$client.values {
-                userIdLabel.text = Clerk.shared.user?.id
-            }
-        }
-    }
-    
-    deinit {
-        asyncSequenceTask?.cancel()
-    }
-    
 }
 ```
 </CodeBlockTabs>

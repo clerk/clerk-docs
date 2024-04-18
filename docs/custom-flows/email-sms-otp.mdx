@@ -30,12 +30,12 @@ To use SMS OTP as an authentication strategy, you first need to enable it in the
 
 To sign up a user using an OTP, you need to:
 
-1. Initiate the sign-up process by collecting the user's phone number.
-2. Prepare the phone number verification, which sends a one-time code to the given address.
-3. Attempt to complete the phone number verification by supplying the one-time code.
-4. If the phone number verification is successful, complete the sign-up process by creating the user account and setting their session as active.
+1. Initiate the sign-up process by collecting the user's identifier, which for this example is a phone number.
+2. Prepare the verification, which sends a one-time code to the given identifier.
+3. Attempt to complete the verification by supplying the one-time code.
+4. If the verification is successful, complete the sign-up process by creating the user account and setting their session as active.
 
-In the following example, the user is asked to provide their phone number. Once the user submits their phone number, a one-time code is sent to them. The user is then prompted to enter the code to complete the sign-up process. If the verification is successful, the user's session is set as active.
+In the following example, the user is asked to provide their phone number. Once the user submits their phone number, a one-time code is sent to them. The user is then prompted to enter the code to complete the sign-up process. If the verification is successful, the user's session is set as active. To ease the development process, Clerk-related error messages will be displayed on the user interface.
 
 <Tabs type="framework" items={["Next.js", "JavaScript"]}>
   <Tab>
@@ -161,11 +161,13 @@ In the following example, the user is asked to provide their phone number. Once 
         <body>
           <div id="signed-in"></div>
 
+          <p id="error" hidden></p>
+
           <div id="sign-up">
             <h2>Sign up</h2>
             <form id="sign-up-form">
-              <label for="sign-up-phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-up-phone" />
+              <label for="phone-number">Enter phone number</label>
+              <input type="tel" name="phone-number" id="phone-number" />
               <button type="submit">Continue</button>
             </form>
           </div>
@@ -205,25 +207,27 @@ In the following example, the user is asked to provide their phone number. Once 
 
         clerk.mountUserButton(userbuttonDiv);
       } else {
+        const errorContainer = document.getElementById("error");
+
         // Handle the sign-up form
         document.getElementById("sign-up-form")
           .addEventListener("submit", async (e) => {
             e.preventDefault();
 
             const formData = new FormData(e.target);
-            const phone = formData.get("phone");
+            const phoneNumber = formData.get("phone-number");
 
             try {
               // Start the sign-up process using the phone number method
-              await clerk.client.signUp.create({
-                phoneNumber: phone,
-              });
+              await clerk.client.signUp.create({ phoneNumber });
               await clerk.client.signUp.preparePhoneNumberVerification();
               // Hide sign-up form
               document.getElementById("sign-up").setAttribute("hidden", "");
               // Show verification form
               document.getElementById("verifying").removeAttribute("hidden");
             } catch (error) {
+              errorContainer.removeAttribute("hidden");
+              errorContainer.innerHTML = error.errors[0].longMessage;
               console.error(error);
             }
           });
@@ -242,6 +246,8 @@ In the following example, the user is asked to provide their phone number. Once 
             // Now that the user is created, set the session to active.
             await clerk.setActive({ session: verify.createdSessionId });
           } catch (error) {
+            errorContainer.removeAttribute("hidden");
+            errorContainer.innerHTML = error.errors[0].longMessage;
             console.error(error);
           }
         });
@@ -261,11 +267,13 @@ In the following example, the user is asked to provide their phone number. Once 
         <body>
           <div id="signed-in"></div>
 
+          <p id="error" hidden></p>
+
           <div id="sign-up">
             <h2>Sign up</h2>
             <form id="sign-up-form">
-              <label for="sign-up-phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-up-phone" />
+              <label for="phone-number">Enter phone number</label>
+              <input type="tel" name="phone-number" id="phone-number" />
               <button type="submit">Continue</button>
             </form>
           </div>
@@ -298,6 +306,8 @@ In the following example, the user is asked to provide their phone number. Once 
 
                 Clerk.mountUserButton(userbuttonDiv);
               } else {
+                const errorContainer = document.getElementById("error");
+
                 // Handle the sign-up form
                 document
                   .getElementById("sign-up-form")
@@ -305,19 +315,19 @@ In the following example, the user is asked to provide their phone number. Once 
                     e.preventDefault();
 
                     const formData = new FormData(e.target);
-                    const phone = formData.get("phone");
+                    const phoneNumber = formData.get("phone-number");
 
                     try {
                       // Start the sign-up process using the phone number method
-                      await Clerk.client.signUp.create({
-                        phoneNumber: phone,
-                      });
+                      await Clerk.client.signUp.create({ phoneNumber });
                       await Clerk.client.signUp.preparePhoneNumberVerification();
                       // Hide sign-up form
                       document.getElementById("sign-up").setAttribute("hidden", "");
                       // Show verification form
                       document.getElementById("verifying").removeAttribute("hidden");
                     } catch (error) {
+                      errorContainer.removeAttribute("hidden");
+                      errorContainer.innerHTML = error.errors[0].longMessage;
                       console.error(error);
                     }
                   });
@@ -339,6 +349,8 @@ In the following example, the user is asked to provide their phone number. Once 
                       // Now that the user is created, set the session to active.
                       await Clerk.setActive({ session: verify.createdSessionId });
                     } catch (error) {
+                      errorContainer.removeAttribute("hidden");
+                      errorContainer.innerHTML = error.errors[0].longMessage;
                       console.error(error);
                     }
                   });
@@ -355,13 +367,13 @@ In the following example, the user is asked to provide their phone number. Once 
   </Tab>
 </Tabs>
 
-You can also verify your users via their email address. There's two additional helper methods: [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the above example. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in/sign-in) object documentation.
+To create a sign-up flow for email OTP, you can use the [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the above example. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in/sign-in) object documentation.
 
 ### Create the OTP sign-in flow
 
-To authenticate a user using a one-time code, you need to:
+To authenticate a user using an OTP, you need to:
 
-1. Initiate the sign-in process by collecting the user's authentication identifier.
+1. Initiate the sign-in process by collecting the user's authentication identifier, which for this example is a phone number.
 2. Prepare the first factor verification.
 3. Attempt to complete the first factor verification.
 4. If the verification is successful, set the newly created session as active.
@@ -370,115 +382,137 @@ In the following example, the user is asked to provide their phone number. Once 
 
 <Tabs type="framework" items={["Next.js","JavaScript"]}>
   <Tab>
-      ```tsx filename="app/sign-in/page.tsx"
-      'use client'
+    ```jsx filename="app/sign-in/page.tsx"
+    'use client'
 
-      import * as React from 'react'
-      import { useSignIn } from "@clerk/nextjs";
-      import { PhoneCodeFactor, SignInFirstFactor } from '@clerk/types';
-      import { useRouter } from 'next/navigation';
+    import * as React from 'react'
+    import { useSignIn } from "@clerk/nextjs";
+    import { PhoneCodeFactor, SignInFirstFactor } from '@clerk/types';
+    import { useRouter } from 'next/navigation';
 
-      export default function Page() {
-        const { isLoaded, signIn, setActive } = useSignIn()
-        const [verifying, setVerifying] = React.useState(false)
-        const [phone, setPhone] = React.useState("")
-        const [code, setCode] = React.useState("")
-        const router = useRouter()
+    export default function Page() {
+      const { isLoaded, signIn, setActive } = useSignIn()
+      const [verifying, setVerifying] = React.useState(false)
+      const [phone, setPhone] = React.useState("")
+      const [code, setCode] = React.useState("")
+      const router = useRouter()
 
-        async function handleSubmit(e: React.FormEvent) {
-          e.preventDefault();
+      async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
 
-          if (!isLoaded && !signIn) return null
+        if (!isLoaded && !signIn) return null
 
-          try {
-            // Start the Sign Up process using the phone number method
-            const { supportedFirstFactors } = await signIn.create({
-              identifier: phone,
-            });
+        try {
+          // Start the Sign Up process using the phone number method
+          const { supportedFirstFactors } = await signIn.create({
+            identifier: phone,
+          });
 
-            // Filter the returned array to find the 'phone_code' entry
-            const isPhoneCodeFactor = (
-              factor: SignInFirstFactor
-            ): factor is PhoneCodeFactor => {
-              return factor.strategy === "phone_code";
-            };
-            const phoneCodeFactor = supportedFirstFactors?.find(isPhoneCodeFactor);
+          // Filter the returned array to find the 'phone_code' entry
+          const isPhoneCodeFactor = (
+            factor: SignInFirstFactor
+          ): factor is PhoneCodeFactor => {
+            return factor.strategy === "phone_code";
+          };
+          const phoneCodeFactor = supportedFirstFactors?.find(isPhoneCodeFactor);
 
-            if (phoneCodeFactor) {
-              // Grab the phoneNumberId
-              const { phoneNumberId } = phoneCodeFactor
+          if (phoneCodeFactor) {
+            // Grab the phoneNumberId
+            const { phoneNumberId } = phoneCodeFactor
 
-              // Send the OTP code to the user
-              await signIn.prepareFirstFactor({
-                strategy: 'phone_code',
-                phoneNumberId
-              })
-
-              // Set 'verifying' true to display second form and capture the OTP code
-              setVerifying(true)
-            }
-          }
-          catch (err) {
-            // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
-            console.error('Error:', JSON.stringify(err, null, 2))
-          }
-        }
-
-        async function handleVerification(e: React.FormEvent) {
-          e.preventDefault()
-
-          if (!isLoaded && !signIn) return null
-
-          try {
-            // Use the code provided by the user and attempt verification
-            const completeSignIn = await signIn.attemptFirstFactor({
+            // Send the OTP code to the user
+            await signIn.prepareFirstFactor({
               strategy: 'phone_code',
-              code
+              phoneNumberId
             })
 
-            // This mainly for debuggin while developing.
-            // Once your Instance is setup this should not be required.
-            if (completeSignIn.status !== 'complete') {
-              console.error(JSON.stringify(completeSignIn, null, 2))
-            }
-
-            // If verification was completed, create a session for the user
-            if (completeSignIn.status === 'complete') {
-              await setActive({ session: completeSignIn.createdSessionId });
-
-              // Redirect user
-              router.push("/")
-            }
-          }
-          catch (err) {
-            // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
-            console.error('Error:', JSON.stringify(err, null, 2))
+            // Set 'verifying' true to display second form and capture the OTP code
+            setVerifying(true)
           }
         }
-
-        if (verifying) {
-          return (
-            <form onSubmit={handleVerification}>
-              <label id="code">Code</label>
-              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
-              <button type="submit">Verify</button>
-            </form>
-          )
+        catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
         }
-
-        return (
-          <form onSubmit={handleSubmit}>
-            <label id="phone">Phone</label>
-            <input value={phone} id="phone" name="phone" type="tel" onChange={(e) => setPhone(e.target.value)} />
-            <button type="submit">Send Code</button>
-          </form>
-        );
       }
-      ```
+
+      async function handleVerification(e: React.FormEvent) {
+        e.preventDefault()
+
+        if (!isLoaded && !signIn) return null
+
+        try {
+          // Use the code provided by the user and attempt verification
+          const completeSignIn = await signIn.attemptFirstFactor({
+            strategy: 'phone_code',
+            code
+          })
+
+          // This mainly for debuggin while developing.
+          // Once your Instance is setup this should not be required.
+          if (completeSignIn.status !== 'complete') {
+            console.error(JSON.stringify(completeSignIn, null, 2))
+          }
+
+          // If verification was completed, create a session for the user
+          if (completeSignIn.status === 'complete') {
+            await setActive({ session: completeSignIn.createdSessionId });
+
+            // Redirect user
+            router.push("/")
+          }
+        }
+        catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling for more on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+        }
+      }
+
+      if (verifying) {
+        return (
+          <form onSubmit={handleVerification}>
+            <label id="code">Code</label>
+            <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
+            <button type="submit">Verify</button>
+          </form>
+        )
+      }
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <label id="phone">Phone</label>
+          <input value={phone} id="phone" name="phone" type="tel" onChange={(e) => setPhone(e.target.value)} />
+          <button type="submit">Send Code</button>
+        </form>
+      );
+    }
+    ```
   </Tab>
 
-{/* TODO (Roy): Use CodeBlockTabs and add example for NPM Module vs window.Clerk (Script) - see the /docs/components/user-button update I did in this PR */}
-   <Tab>
+
+  <Tab>
+    <InjectKeys>
+
+    <Tabs type="npm-script" items={["NPM module", "<script>"]}>
+      <Tab>
+      For the following example, your HTML file should look like this:
+
+      ```html filename="index.html"
+      ```
+
+      And your JavaScript file should look like this:
+
+      ```js filename="main.js"
+      ```
+      </Tab>
+
+      <Tab>
+      ```html filename="index.html"
+      ```
+      </Tab>
+    </Tabs>
+
+    </InjectKeys>
     ```js filename="SignInPage.js"
     const { client } = window.Clerk;
     // Kick off the sign-in process, passing the user's

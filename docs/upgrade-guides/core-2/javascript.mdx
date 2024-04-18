@@ -3,6 +3,8 @@ title: "Upgrading Javascript to Core 2"
 description: "Learn how to upgrade Clerk's Javascript SDK to the latest version."
 ---
 
+{/* WARNING: This is a generated file and should not be edited directly. To update its contents, see the "upgrade" package in the clerk/javascript repo. */}
+
 # Upgrading `@clerk/clerk-js` to Core 2
 
 Core 2 is included in the Javascript SDK starting with version 5. This new version ships with an improved design and UX for its built-in components, no "flash of white page" when authenticating, and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
@@ -13,15 +15,11 @@ By the end of this guide, you'll have successfully upgraded your JS project to u
 
 Before uprading, it's highly recommended that you update your Clerk SDKs to the latest Core 1 version (`npm i @clerk/clerk-js@4`). Some changes required for Core 2 SDKs can be applied incrementally to the v5 release, which should contribute to a smoother upgrading experience. After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip many breaking changes from Core 2.
 
-<Callout>
-  Note that Core 2 is currently in beta, while we field feedback and ensure stability. Deploying beta versions to production is not recommended and should be done at your own risk.
-</Callout>
-
 Additionally, some of the minumum version requirements for some base dependencies have been updated such that versions that are no longer supported or are at end-of-life are no longer guaranteed to work correctly with Clerk.
 
-## Updating to Core 2 Beta
+## Updating to Core 2
 
-Whenever you feel ready, go ahead and install the latest beta version of any Clerk SDKs you are using. Make sure that you are prepared to patch some breaking changes before your app will work properly, however. The commands below demonstrate how to install the latest beta.
+Whenever you feel ready, go ahead and install the latest version of any Clerk SDKs you are using. Make sure that you are prepared to patch some breaking changes before your app will work properly, however. The commands below demonstrate how to install the latest version.
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
     ```bash filename="terminal"
@@ -67,9 +65,9 @@ If you are having trouble with `npx`, it's also possible to install directly wit
 
 The new version ships with improved design and UX across all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/components/customization/overview) or tokens for a [custom theme](/docs/components/customization/overview#create-a-custom-theme), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/components/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
 
-[More detail on these changes &raquo;](/docs/upgrade-guides/core-2/component-redesign)
+[More detail on these changes &raquo;](component-redesign)
 
-### After sign up/in/out URL handling
+### After sign up/in/out default value change
 
 Defining redirect URLs for after sign up, in, and/or out via the Clerk dashboard has been removed in Core 2. In your Clerk dashboard, under "paths", there is a section called "Component paths", where URLs could be defined that had a deprecation warning. In Core 2, this functionality has been removed, and specifying redirect paths via the dashboard will no longer work. If you need to pass a redirect URL for after sign in/up/out, there are [a few different ways this can be done](https://clerk.com/docs/account-portal/custom-redirects), from environment variables to middleware to supplying them directly to the relevant components.
 
@@ -78,6 +76,26 @@ As part of this change, the default URL for each of these props has been set to 
 ```diff
 - <UserButton afterSignOutUrl='/' />
 + <UserButton />
+```
+
+### `afterSignXUrl` changes
+
+Some changes are being made to the way that "after sign up/in url"s and redirect url props are handled as part of this new version, in order to make behavior more clear and predictable.
+
+> We will refer to these urls as `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
+
+Previously, setting `afterSignInUrl` or `afterSignOutUrl` would only actually redirect some of the time. If the user clicks on any form of link that takes them to a sign up/in page, Clerk automatically sets `redirect_url` in the querystring such that after the sign up or in, the user is returned back to the page they were on before. This is a common pattern for sign up/in flows, as it leads to the least interruption of the user's navigation through your app. When a `redirect_url` is present, any value passed to `afterSignInUrl` or `afterSignUpUrl` is ignored. However, if the user navigates directly to a sign up/in page, there’s no redirect url in the querystring and in this case the `afterSignInUrl` or `afterSignOutUrl` would take effect. This behavior was not intuitive and didn't give a way to force a redirect after sign up/in, so the behavior is changing to address both of these issues.
+
+All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been removed, and should be replaced by one of the following options:
+
+- `signXForceRedirectUrl` / `CLERK_SIGN_X_FORCE_REDIRECT_URL` - if set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user’s flow by taking them away from the page they were on before.
+- `signXFallbackRedirectUrl` / `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` - if set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
+
+If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`. If you'd like to retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
+
+```diff
+- <SignIn afterSignInUrl='/foo' />
++ <SignIn signInFallbackRedirectUrl='/foo' />
 ```
 
 ### Removed: `orgs` claim on JWT
@@ -288,9 +306,19 @@ There were some changes made to pagination-related arguments passed into functio
 
 There have been changes to return signatures for some functions. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. This change also aligns the response shape with what is returned from the Clerk backend API. Each impacted function is listed below, along with code examples:
 
-<Accordion titles={["<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed"]}>
+<Accordion titles={["<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed"]}>
   <AccordionPanel>    
-    The response payload of `Users.getOrganizationInvitationList` was changed as part of the v5 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    The response payload of `Users.getOrganizationMembershipList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.users.getOrganizationMembershipList()
+    + const { data, totalCount } = await clerkClient.users.getOrganizationMembershipList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Users.getOrganizationInvitationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
     
     Here's an example of how the response shape would change with this modification:
     
@@ -323,7 +351,7 @@ There have been changes to return signatures for some functions. Since Clerk's A
     ```
   </AccordionPanel>
   <AccordionPanel>    
-    The response payload of `Users.getOrganizationList` was changed as part of the v5 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    The response payload of `Users.getOrganizationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
     
     Here's an example of how the response shape would change with this modification:
     
@@ -341,6 +369,76 @@ There have been changes to return signatures for some functions. Since Clerk's A
     
     - orgList.forEach(() => {})
     + orgList.data.forEach(() => {})
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Invitations.getInvitationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.invitations.getInvitationList()
+    + const { data, totalCount } = await clerkClient.invitations.getInvitationList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Sessions.getSessionList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.sessions.getSessionList()
+    + const { data, totalCount } = await clerkClient.sessions.getSessionList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Users.getUserList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.users.getUserList()
+    + const { data, totalCount } = await clerkClient.users.getUserList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `AllowlistIdentifiers.getAllowlistIdentifierList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
+    + const { data, totalCount } = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Clients.getClientList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.clients.getClientList()
+    + const { data, totalCount } = await clerkClient.allowlistIdentifiers.getClientList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `RedirectUrls.getRedirectUrlList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.redirectUrls.getRedirectUrlList()
+    + const { data, totalCount } = await clerkClient.redirectUrls.getRedirectUrlList()
+    ```
+  </AccordionPanel>
+  <AccordionPanel>    
+    The response payload of `Users.getUserOauthAccessToken` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
+    
+    Here's an example of how the response shape would change with this modification:
+    
+    ```diff
+    - const data = await clerkClient.users.getUserOauthAccessToken()
+    + const { data, totalCount } = await clerkClient.users.getUserOauthAccessToken()
     ```
   </AccordionPanel>
 </Accordion>
@@ -409,7 +507,7 @@ As part of this major version, a number of previously deprecated props, arugment
 
 #### Other Breaking changes
 
-<Accordion titles={["<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>MagicLinkError</code> -&gt; <code>EmailLinkError</code>", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>handleMagicLinkVerification</code> -&gt; <code>handleEmailLinkVerification</code>", "<code>[User|OrganizationMembershipPublicData].profileImageUrl</code> -&gt; <code>[User|OrganizationMembershipPublicData].imageUrl</code>", "<code>Clerk.getOrganizationMemberships()</code> -&gt; <code>user.getOrganizationMemberships()</code>", "<code>lastOrganizationInvitation</code> and <code>lastOrganizationMember</code> dropped from event emitter", "<code>Clerk.redirectToHome()</code> removed", "<code>Clerk.isReady()</code> removed", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}>
+<Accordion titles={["<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>MagicLinkError</code> -&gt; <code>EmailLinkError</code>", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>handleMagicLinkVerification</code> -&gt; <code>handleEmailLinkVerification</code>", "<code>[User|OrganizationMembershipPublicData].profileImageUrl</code> -&gt; <code>[User|OrganizationMembershipPublicData].imageUrl</code>", "<code>Clerk.getOrganizationMemberships()</code> -&gt; <code>user.getOrganizationMemberships()</code>", "<code>lastOrganizationInvitation</code> and <code>lastOrganizationMember</code> dropped from event emitter", "<code>Clerk.redirectToHome()</code> removed", "<code>Clerk.isReady()</code> removed", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>", "<code>Clerk</code> import changed"]}>
   <AccordionPanel>    
     `setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
     
@@ -516,7 +614,12 @@ As part of this major version, a number of previously deprecated props, arugment
       }
     ```
   </AccordionPanel>
+  <AccordionPanel>    
+    The top level `Clerk` import was changed to a named export, like `{ Clerk }`. This is just a name change and can be treated as a text replacement, no changes to the params or return types.
+    
+    ```diff
+    - import Clerk from '@clerk/clerk-js';
+    + import { Clerk } from '@clerk/clerk-js';
+    ```
+  </AccordionPanel>
 </Accordion>
-
-
-

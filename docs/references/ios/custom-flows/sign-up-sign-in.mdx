@@ -1,0 +1,165 @@
+---
+title: Sign Up and Sign In
+description: Learn how to use the SignUp and SignUp objects to build a custom sign-up and sign-in flow.
+---
+
+# Sign Up and Sign In
+
+Clerk enables you to build fully custom sign-up and sign-in flows using the `SignUp` and `SignIn` objects.
+
+## `SignUp`
+
+The [`SignUp`][signup-ref] object enables you to build a custom sign-up flow. The [`SignUp`][signup-ref] object will also contain the state of the sign-up attempt that is currently in progress, which gives you the ability to examine all the details and act accordingly.
+
+### Usage
+
+Getting access to the [`SignUp`][signup-ref] object is simple.
+
+The following example accesses the [`SignUp`][signup-ref] object to check the current sign-up attempt's status.
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignUpStatusView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        if let signUp = clerk.client?.signUp {
+            Text("The current sign up attempt status is \(signUp.status.rawValue)")
+        }
+    }
+}
+```
+
+The more involved example below shows an approach for creating a custom form for registering users. In this case, the [Password](/docs/custom-flows/email-password) strategy is used. This example assumes that additional requirements, like username or phone, are not enabled. 
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignUpView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    @State private var emailAddress = ""
+    @State private var password = ""
+    
+    var body: some View {
+        // if there is already an active SignUp,
+        // investigate the SignUp object, to see if
+        // the user needs to complete more steps.
+        if let signUp = clerk.client?.signUp {
+            switch signUp.status {
+            case .abandoned:
+                //
+            case .missingRequirements:
+                //
+            case .complete:
+                //
+            }
+        } else {
+            // if there is not already an active SignUp,
+            // collect the information needed to start a new SignUp
+            VStack {
+                TextField("Email Address", text: $emailAddress)
+                SecureField("Password", text: $password)
+                Button("Sign Up", action: signUp)
+            }
+            .padding()
+        }
+    }
+    
+    // start the sign up process
+    private func signUp() {
+        Task {
+            do {
+                try await clerk.client?.createSignUp(.standard(emailAddress: emailAddress, password: password))
+            } catch {
+                print(error.localizedDescription)
+            }
+        }
+    }
+}
+```
+
+## `SignIn`
+
+The [`SignIn`][signin-ref] object and its available methods enable you to build a custom sign-in flow. The [`SignIn`][signin-ref] object will also contain the state of the sign-in attempt that is currently in progress, which gives you the ability to examine all the details and act accordingly.
+
+### Usage
+
+Getting access to the [`SignIn`][signin-ref] object is simple.
+
+The following example accesses the [`SignIn`][signin-ref] object to check the current sign-in attempt's status.
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignInStatusView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        if let signIn = clerk.client?.signIn {
+            Text("The current sign in attempt status is \(signIn.status.rawValue)")
+        }
+    }
+}
+```
+
+The more involved example below shows an approach for creating a custom form for signing in users. In this case, a [Password](/docs/custom-flows/email-password) strategy is used.
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignInView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    @State private var emailAddress = ""
+    @State private var password = ""
+    
+    var body: some View {
+        // if there is already an active SignIn,
+        // investigate the SignIn object, to see if
+        // the user needs to complete more steps.
+        if let signIn = clerk.client?.signIn {
+            switch signIn.status {
+            case .needsIdentifier:
+                //
+            case .needsFirstFactor:
+                //
+            case .needsSecondFactor:
+                //
+            case .needsNewPassword:
+                //
+            case .complete:
+                //
+            case .abandoned:
+                //
+            }
+        } else {
+            // if there is not already an active SignIn,
+            // collect the information needed to start a new SignIn
+            VStack {
+                TextField("Email", text: $emailAddress)
+                SecureField("Password", text: $password)
+                Button("Sign In", action: signIn)
+            }
+            .padding()
+        }
+    }
+
+    // start the sign in process
+    private func signIn() {
+        Task {
+            do {
+                try await clerk.client?.createSignIn(strategy: .identifier(emailAddress, password: password))
+            } catch {
+                print(error.localizedDescription)
+            }
+        }
+    }
+}
+```
+
+[signup-ref]: /docs/references/javascript/sign-up/sign-up
+[signin-ref]: /docs/references/javascript/sign-in/sign-in

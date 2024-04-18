@@ -1,0 +1,103 @@
+---
+title: Multi-factor
+description: Learn how to require a second step during authentication.
+---
+
+# Multi-factor
+
+Clerk supports multifactor authentication (MFA), often referred to as two-factor authentication or 2FA. By enabling MFA, you can encourage or require your users to perform a second verification check during sign-in.
+
+The term multi-factor comes from the 3 main types of verifications:
+
+- Knowledge-based - something you know, i.e. a password
+- Possession-based - something you have, i.e. a phone or yubikey
+- Inherent based - something you are, i.e. a fingerprint or a facial scan
+
+By enforcing two different types of verifications, you can drastically improve your user's security. Most websites make this step optional, empowering their users with their own security.
+
+<Callout type="info">
+  Interested in single-factor authentication? Check out our guides on [password-based](/docs/custom-flows/email-password) and [passwordless](/docs/custom-flows/email-sms-otp) authentication.
+</Callout>
+
+## Before you start
+
+- You need to create a Clerk Application in your [Clerk Dashboard](https://dashboard.clerk.com/). For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
+- You need to install the correct SDK for your application. You can find steps on how to do so through Clerk's [quickstart](/docs/quickstarts/overview) guides.
+
+## Configuration
+
+Although not available as an option in the initial new application screen, you can opt to turn on multifactor authentication (MFA) from the configuration screen in the Clerk Dashboard. Go to **User & Authentication > [Multi-factor](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)**.
+
+Clerk currently offers the following MFA strategies:
+
+- SMS verification code
+- Authenticator application (also known as TOTP - Time-based One-time Password)
+- Backup codes
+
+<Images
+width={3024}
+height={1652}
+src="/docs/images/custom-flows/multifactor.jpg"
+alt="The 'Multi-factor' tab under the 'User & Authentication' section of the Clerk Dashboard."
+/>
+
+Once MFA is turned on, registered users can turn on MFA for their own account through their [User Profile](/docs/account-portal/user-profile-org-profile#user-profile) page.
+
+## Custom flow
+
+If you want more flexibility, you can make use of lower-level commands and create a completely custom multi-factor authentication flow.
+
+<Callout type="warning">
+  You still need to configure your instance in order to enable mutli-factor authentication, and your users will also need to explicitly enable MFA for their account, as described at the top of this guide.
+</Callout>
+
+Signing in to an MFA-enabled account is identical to the regular sign-in process. However, in the case of an MFA-enabled account, a sign-in won't convert until both verifications (first factor and second factor) are completed.
+
+- Initiate the sign-in process by collecting the user's authentication identifier.
+- Prepare the first factor verification.
+- Attempt to complete the first factor verification.
+- Prepare the second factor verification. (This is where MFA comes into play)
+- Attempt to complete the second factor verification.
+
+Let's see the above in action.
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignInMFAView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        Button("Sign in with MFA", action: signInWithMFA)
+    }
+    
+    private func signInWithMFA() {
+        Task {
+            do {
+                // Sign the user in with email address and
+                // password.
+                try await clerk.client?.createSignIn(strategy: .identifier("user@example.com", password: "********"))
+                
+                // Prepare the second factor verification by
+                // specifying the phone code strategy. An SMS
+                // message with a one-time code will be sent
+                // to the user's verified phone number.
+                try await clerk.client?.signIn?.prepareSecondFactor(for: .phoneCode)
+                
+                // Attempt to complete the second factor
+                // verification, passing the previously
+                // received one-time code.
+                try await clerk.client?.signIn?.attemptSecondFactor(for: .phoneCode(code: "123456"))
+                
+                // If the sign in succeeds, there will be values for `clerk.user` and `clerk.session`
+                if let user = clerk.user {
+                    print(user.id)
+                }
+            } catch {
+                print(error.localizedDescription)
+            }
+        }
+    }
+}
+```

@@ -5,21 +5,35 @@ description: Customize where your users are redirected to after they sign in or 
 
 # Customizing your Account Portal redirects
 
-After a user signs in or signs up, Clerk automatically redirects users back to your application by appending a `redirect_url` query param on the Account Portal page. However, Clerk provides various options for you to customize where your users are redirected to.
+When a user clicks on a link or button to navigate to a Clerk sign up or sign in page, Clerk will persist the page the user was on before into a `redirect_url` querystring, and navigate back to that page after the sign up or sign in is completed in order to not interrupt the user's flow through your app. So, for example, if you were on `example.com/foo`, and clicked a "sign in" button on that page, it might take you to `example.com/sign-in?redirect_url=example.com/foo`. After the sign in was complete, you'd be taken back to `example.com/foo`. However, Clerk provides various options for you to customize where your users are redirected to.
 
 ## Environment variables
 
-You should define the paths you want the users to be redirected to via environment variables. In this example, we redirect users to `/dashboard` after signing in, and to `/onboarding` after signing up.
+You should define the paths you want the users to be redirected to via environment variables. In this example, we redirect users to `/dashboard` after signing in, and to `/onboarding` after signing up, if the user was not already on a page that would be redirected back to.
 
 <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
 ```sh filename=".env"
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
 ```
 
 ```sh filename=".env"
-CLERK_AFTER_SIGN_IN_URL=/dashboard
-CLERK_AFTER_SIGN_UP_URL=/onboarding
+CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+```
+</CodeBlockTabs>
+
+If you'd like to force the redirect regardless of whether the user was on another page previously, you can use the "force" environment variable values instead as such:
+
+<CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+```sh filename=".env"
+NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
+```
+
+```sh filename=".env"
+CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
 ```
 </CodeBlockTabs>
 
@@ -39,9 +53,18 @@ export const config = {
 };
 ```
 
-## `afterSignInUrl` and `afterSignUpUrl` props
+## Redirect URL props
 
-You can explicitly define the redirect paths by passing the `afterSignInUrl` and `afterSignUpUrl` properties to the respective components. In general, you should [use environment variables instead](#environment-variables).
+You can explicitly define the redirect paths after sign up or sign in by passing one of the following properties to the respective components:
+
+- `signInFallbackRedirectUrl`
+- `signInForceRedirectUrl`
+- `signUpFallbackRedirectUrl`
+- `signUpForceRedirectUrl`
+
+By default, when a user clicks on a link or button to navigate to a sign up or sign in page, Clerk will persist the page the user was on before into a `redirect_url` querystring, and navigate back to that page after the sign up or sign in is completed, in order to not interrupt the user's flow through your app. So, for example, if you were on `example.com/foo`, and clicked a "sign in" button on that page, it might take you to `example.com/sign-in?redirect_url=example.com/foo`. After the sign in was complete, you'd be taken back to `example.com/foo`.
+
+This behavior can be modified using the above props, or by using [environment variables](#environment-variables). The "force redirect url" props will _always_ redirect to the provided url after sign up or sign in, regardless of what page the user was on before - it will override the `redirect_url` value if present. The "fallback redirect url" props will only redirect to the provided url if the user navigated directly to the sign up or sign in page and therefore there is no `redirect_url` value. If there is one, the fallback redirect url will not be used.
 
 ### Control components
 
@@ -52,8 +75,8 @@ function App() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/onboarding"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/onboarding"
     >
       <SignedIn>
         <Welcome />
@@ -75,8 +98,8 @@ function App() {
       </SignedIn>
       <SignedOut>
         <RedirectToSignIn
-          afterSignInUrl="/dashboard"
-          afterSignUpUrl="/onboarding"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
         />
       </SignedOut>
     </ClerkProvider>
@@ -93,8 +116,8 @@ function App() {
       </SignedIn>
       <SignedOut>
         <RedirectToSignUp
-          afterSignInUrl="/dashboard"
-          afterSignUpUrl="/onboarding"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
         />
       </SignedOut>
     </ClerkProvider>
@@ -110,7 +133,7 @@ function App() {
 
 ### Button components
 
-In the case that you are using a [`<SignInButton>`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton>`](/docs/components/unstyled/sign-up-button), you can also pass the properties into those components. We recommend defining both `afterSignInUrl` and `afterSignUpUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
+In the case that you are using a [`<SignInButton>`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton>`](/docs/components/unstyled/sign-up-button), you can also pass the properties into those components. We recommend defining both `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "Remix", "Gatsby"]}>
 ```jsx filename="pages/index.js"
@@ -121,11 +144,11 @@ return (
   <div>
     <h1>Welcome!</h1>
 
-    <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+    <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
       Sign in
     </SignInButton>
 
-    <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+    <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
       Sign up
     </SignUpButton>
   </div>
@@ -141,11 +164,11 @@ export default function Example() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>
@@ -161,11 +184,11 @@ export default function Home() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>
@@ -181,11 +204,11 @@ export default function Home() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>

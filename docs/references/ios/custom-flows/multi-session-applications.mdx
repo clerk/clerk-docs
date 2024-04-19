@@ -1,0 +1,118 @@
+---
+title: Build a custom multi-session flow
+description: Learn how to use the Clerk API to add multi-session handling to your application.
+---
+
+# Build a custom multi-session flow
+
+<Callout type="warning">
+  This guide is for users who want to build a *custom* user interface using the Clerk API.
+</Callout>
+
+A multi-session application is an application that allows multiple accounts to be signed in from the same device at the same time. The user can switch from one account to another seamlessly. Each account is independent from the rest and has access to different resources.
+
+This guide provides you with the necessary information to build a custom multi-session flow using Clerk's API.
+
+To implement the multi-session feature to your application, you need to handle the following scenarios:
+
+- [Switching between different accounts](#switch-between-sessions)
+- [Adding new accounts](#add-a-new-session)
+- [Signing out from one account, while remaining signed in to the rest](#sign-out-active-session)
+- [Signing out from all accounts](#sign-out-all-sessions)
+
+## Enable multi-session in your application
+
+To enable multi-session in your application, you need to configure it in the Clerk Dashboard.
+
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=sessions) and select your application.
+2. In the navigation sidebar, select **Sessions**.
+3. Toggle on **Multi-session handling**.
+4. Select **Save changes**.
+
+## Get the active session and user
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct ContentView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        if let user = clerk.user {
+            Text(user.id)
+        }
+
+        if let session = clerk.session {
+            Text(session.id)
+        }
+    }
+}
+```
+
+## Switch between sessions
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct MultiSessionView: View {
+    @ObservedObject private var clerk = Clerk.shared
+
+    private var activeSessions: [Session] {
+        clerk.client?.activeSessions ?? []
+    }
+    
+    var body: some View {
+        VStack {
+            if let currentSession = clerk.session {
+                Text("Current session id is \(currentSession.id)")
+            }
+            
+            ForEach(activeSessions) { session in
+                Button {
+                    setActiveSession(sessionId: session.id)
+                } label: {
+                    Text(session.id)
+                }
+            }
+        }
+    }
+    
+    private func setActiveSession(sessionId: String) {
+        Task {
+            do {
+                try await clerk.setActive(sessionId: sessionId)
+            } catch {
+                print(error.localizedDescription)
+            }
+        }
+    }
+}
+```
+
+## Add a new session
+
+To add a new session, simply link to your existing sign-in flow. New sign-ins will automatically add to the list of available sessions on the client. To create a sign-in flow, please check one of the following popular guides:
+
+- [Email and password](/docs/custom-flows/email-password)
+- [Passwordless authentication](/docs/custom-flows/email-sms-otp)
+- [Social sign-in (OAuth)](/docs/authentication/social-connections/oauth)
+
+For more information on how Clerk's sign-in flow works, check out the [detailed sign-in guide](/docs/custom-flows/overview#sign-in-flow).
+
+## Sign out all sessions
+
+Use [`signOut()`](/docs/references/javascript/clerk/clerk#sign-out) to deactivate all sessions on the current client.
+
+```swift
+try await clerk.signOut()
+```
+
+## Sign out active session
+
+Use [`signOut(sessionId: String)`](/docs/references/javascript/clerk/clerk#sign-out) to deactivate a specific session by passing the session ID.
+
+```swift
+try await clerk.signOut(sessionId: session.id)
+```

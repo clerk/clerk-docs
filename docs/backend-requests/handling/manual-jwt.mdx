@@ -21,16 +21,9 @@ There are three ways to obtain your public key:
 
 1. Using the Backend API in JSON Web Key Set (JWKS) format at the following endpoint [https://api.clerk.com/v1/jwks](https://clerk.com/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
 
-2. Using the Frontend API in JSON Web Key Set (JWKS) format at the following endpoint `https://<YOUR_FRONTEND_API>/.well-known/jwks.json`. This can be obtained from the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. Scroll down and click on **Advanced** and in the **JWT public key** section, copy the **JWKS URL**.
+2. Using the Frontend API in JSON Web Key Set (JWKS) format at the following endpoint `https://<YOUR_FRONTEND_API>/.well-known/jwks.json`. This can be obtained from the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. At the left sidebar click on **Show JWT public key** and in the model that will show up you can find and copy the **JWKS URL**.
 
-<Images
-  src="/docs/images/backend-requests/jwt-public-key.jpg"
-  width={3024}
-  height={1650}
-  alt="The 'API Keys' page in the Clerk Dashboard. There is a red box around the 'JWT public key' section, with a red arrow pointing to the 'JWKS URL' tab of the code example."
-/>
-
-3. Using the PEM public key provided in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. Scroll down and click on **Advanced** and in the **JWT public key** section, copy the **PEM public key**. This option should only be used as a fallback for when the first two options are not available.
+3. Using the PEM public key provided in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. At the left sidebar click on **Show JWT public key** and in the model that will show up you can find and copy the **PEM Public Key**.. This option should only be used as a fallback for when the first two options are not available.
 
 ### Verify the token signature
 
@@ -46,40 +39,30 @@ If the above process is successful, it means that the user is signed in to your 
 
 ## Example usage
 
-In the example below, the [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) library is used to verify the token signature. The [cookies](https://www.npmjs.com/package/cookies) library is used to retrieve the `__session` cookie.
+In the example below, the [@clerk/backend](https://www.npmjs.com/package/@clerk/backend) is used to verify the token signature. This example uses Next.js route handlers just to showcase how this works, you can use `verifyToken` with any JS framework or no framework at all.
 
-```tsx filename="pages/api/token-example.ts"
-import type { NextApiRequest, NextApiResponse } from "next";
-import Cookies from "cookies";
-import jwt from "jsonwebtoken";
+```tsx filename="app/api/route.ts"
+import { verifyToken } from '@clerk/backend';
+import { cookies } from 'next/headers';
 
-export default async function (req: NextApiRequest, res: NextApiResponse) {
-  const publicKey = process.env.CLERK_PEM_PUBLIC_KEY;
-  const cookies = new Cookies(req, res);
-  const sessToken = cookies.get("__session");
-  const token = req.headers.authorization;
+export async function GET(request: Request) {
+  const cookieStore = cookies()
+  const sessToken = cookieStore.get('__session')?.value
+  const bearerToken = request.headers.get('Authorization')?.replace('Bearer ', '');
+  const token = sessToken || bearerToken;
 
-  if (sessToken === undefined && token === undefined) {
-    res.status(401).json({ error: "not signed in" });
-    return;
+  if (!token) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    let decoded = "";
-    if (token) {
-      decoded = jwt.verify(token, publicKey);
-      res.status(200).json({ sessToken: decoded });
-      return;
-    } else {
-      decoded = jwt.verify(sessToken, publicKey);
-      res.status(200).json({ sessToken: decoded });
-      return;
-    }
-  } catch (error) {
-    res.status(400).json({
-      error: "Invalid Token",
+    const verifiedSession = await verifyToken(token, {
+      jwtKey: process.env.CLERK_JWT_KEY,
     });
-    return;
+
+    return Response.json({ verifiedSession });
+  } catch (error) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
 ```
@@ -89,7 +72,7 @@ If the token is valid, the response will return a JSON object that looks similar
 
 ```json
 {
-  "sessToken": {
+  "verifiedSession": {
     "azp": "http://localhost:3000",
     "exp": 1687906422,
     "iat": 1687906362,

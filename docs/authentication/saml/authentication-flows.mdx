@@ -1,0 +1,66 @@
+---
+title: SAML SSO authentication flows
+description: Learn about the SAML SSO authentication flows.
+---
+
+# SAML SSO authentication flows
+
+The SAML protocol supports two different methods in order to start an SSO flow: SP-initiated and IdP-initiated. This guide will explore the differences between the two.
+
+## SP-initiated flow (recommended)
+
+In an SP-initiated flow:
+- The user starts the authentication flow from your application (SP), by providing the email address.
+- The user is redirected to the SAML provider (IdP) where they must authenticate themselves.
+- After successful authentication, the user is redirected back to your application, gaining access to their account.
+
+## IdP-initiated flow
+
+In an IdP-initiated flow:
+- The user starts the authentication flow from the SAML provider (IdP), by selecting which application (SP) they would like to access.
+- The user is redirected to the application of their choice, gaining access to their account.
+
+<Callout type="info">
+  IdP-Initiated flow carries [a security risk](#risks-of-idp-initiated-flow). We recommend using a SP-Initiated flow whenever possible.
+</Callout>
+
+To allow IdP-initiated flows for your Enterprise Connection:
+
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com).
+2. In the navigation sidebar, select **User & Authentication > [Enterprise Connections](https://dashboard.clerk.com/last-active?path=user-authentication/enterprise-connections)**.
+3. Select the Enterprise Connection you want to enable IdP-initiated flow for.
+4. Select the **Advanced** tab.
+5. Toggle on **Allow IdP-Initiated flow**.
+
+### Risks of IdP-initiated flow
+
+While IdP-initiated flows may offer a layer of convenience for your users, it is also potentially susceptible to MITM (man-in-the-middle) attacks in which a bad actor may be able to hijack the IdP response and uses it to gain access to a compromised account.
+
+By enabling an IdP-Initiated flow, it's possible for Clerk to receive unsolicited authentication requests and neither the Service Provider nor the Identity Provider will be able to verify that the flow was initiated by the specified user.
+
+A bad actor could also can intercept the IdP response and replace it with another to make the target user sign in as the attacker, performing a Login CSRF attack.
+
+To this end, Clerk recommends using the [SP-initiated flow](#sp-initiated-flow-recommended).
+
+That said, in order to protect and offer the best possible security for your application and users, Clerk mitigates these risks by implementing several security measures:
+
+#### Unsolicited `InResponseTo` attribute
+
+In accordance with the [SAML 2.0 profiles specification](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf), Clerk ensures that an unsolicited response does not contain an `InResponseTo` attribute.
+
+This prevents bad actors from stealing a response used in an SP-initiated flow and using it in an IdP-initiated flow.
+
+#### Replay detection
+
+Clerk prevents responses from being re-used by consuming them and remembering which have already been used.
+This prevents bad actors from stealing and reusing a response to gain access to a user's account.
+
+#### Multi-factor authentication
+
+Multi-factor authentication (MFA) is a security mechanism that requires users to provide two or more forms of verification before gaining access to their account. By enforcing two different types of verifications, you can drastically improve your user's security.
+
+Clerk supports MFA for a SAML IdP-initiated flow.
+
+#### Use small validation periods
+
+Each SAML response defines when they were issued and when they will expire. As an IdP-initiated flow is expected to be completed within a time frame of seconds, you must ensure that these validation periods are as small as possible to prevent attacks. Common providers, such as Azure, Google, and Okta, handle this. However, if you are using a custom IdP, you must ensure that the validation periods are set correctly.

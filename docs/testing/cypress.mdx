@@ -1,0 +1,206 @@
+---
+title: Testing with Cypress
+description: Use Cypress to write end-to-end tests with Clerk.
+---
+
+# Testing with Cypress
+
+Cypress is a well-established JavaScript End-to-End Testing framework known for its simplicity and powerful features. This guide aims to help you set up your environment for creating authenticated tests with Clerk. This guide will assume you're somewhat familiar with Clerk and Cypress.
+
+If you would like to see a full example of a Cypress project with Clerk, check out [this repo](https://github.com/clerk/example-cypress-nextjs).
+
+<Callout type="info">
+  Since Cypress does not allow third-party cookies by default, you might be interested in the experimental [Cookieless Dev](/docs/upgrade-guides/url-based-session-syncing) mode.
+</Callout>
+
+## Cypress commands
+
+A practical method for testing with Clerk involves creating sign-in and sign-out helpers, which can be effectively reused in all of your tests.
+
+### Sign-out helper
+
+The sign-out helper clears all cookies, which effectively puts the browser back into a "signed out" state.
+
+```js filename="commands.js"
+Cypress.Commands.add(`signOut`, () => {
+  cy.log(`sign out by clearing all cookies.`);
+  cy.clearCookies({ domain: null });
+});
+```
+
+### Sign-in helper
+
+The sign-in helper signs in an existing user depending on the authentication strategy. The following helper uses an email/password strategy to sign in the user. If you're using one-time passcodes (OTPs), visit the [guide on testing OTPs](/docs/testing/test-emails-and-phones).
+
+The sign-in helper will read from the [Cypress environment variables](https://docs.cypress.io/guides/guides/environment-variables). To define the email and password, create a `cypress.env.json` file.
+
+<Callout type="info">
+  Be careful not to call this method once per test. You will get rate-limited. Instead, sign in once and then re-use the same session for multiple tests. See below for an example.
+</Callout>
+
+{/* TODO: Redo this example. Clerk.isReady() is now removed in v5  */}
+
+```js filename="commands.js"
+Cypress.Commands.add(`signIn`, () => {
+  cy.log(`Signing in.`);
+  cy.visit(`/`);
+
+  cy.window()
+    .should((window) => {
+      expect(window).to.not.have.property(`Clerk`, undefined);
+      expect(window.Clerk.isReady()).to.eq(true);
+    })
+    .then(async (window) => {
+      await cy.clearCookies({ domain: window.location.domain });
+      const res = await window.Clerk.client.signIn.create({
+        identifier: Cypress.env(`test_email`),
+        password: Cypress.env(`test_password`),
+      });
+
+      await window.Clerk.setActive({
+        session: res.createdSessionId,
+      });
+
+      cy.log(`Finished Signing in.`);
+    });
+});
+```
+
+```json filename="cypress.env.json"
+{
+  "test_email": "example@clerk.dev",
+  "test_password": "clerkpassword1234"
+}
+```
+
+## Basic tests
+
+Now that some commands have been created, here are some examples on how to write some basic tests.
+
+This example will be testing a basic dashboard page that displays different content depending on whether the user is signed in or not.
+
+```jsx
+import { SignedIn, SignedOut } from "@clerk/nextjs";
+
+export default function Dashboard() {
+  return (
+    <>
+      <SignedIn>
+        <h1>Signed in</h1>
+      </SignedIn>
+      <SignedOut>
+        <h1>Signed out</h1>
+      </SignedOut>
+    </>
+  );
+}
+```
+
+### Test signed out
+
+```js filename="app.cy.js"
+describe("Signed out", () => {
+  it("should navigate to the dashboard in a signed out state", () => {
+    // open dashboard page
+    cy.visit("http://localhost:3000/dashboard");
+
+    // check h1 says signed out
+    cy.get("h1").contains("Signed out");
+  });
+});
+```
+
+### Test signed in
+
+Note the use of `before` and `beforeEach`. You want to be careful about signing in too many times quickly as you might get rate limited. You should only sign in once for all of your tests inside of `before`. Then, since Cypress will clear cookies by default after tests, you need to use `beforeEach` to maintain these cookies and keep the browser in the `signedIn` state.
+
+```js filename="app.cy.js"
+describe("Signed in", () => {
+  beforeEach(() => {
+    cy.session('signed-in', () => {
+      cy.signIn();
+    });
+  });
+
+  it("navigate to the dashboard", () => {
+    // open dashboard page
+    cy.visit("http://localhost:3000/dashboard");
+
+    // check h1 says signed in
+    cy.get("h1").contains("Signed in");
+  });
+});
+```
+
+## SSR tests
+
+You need to make some slight modifications to test in an SSR context. Because Clerk uses short-lived JWTs, middleware is used to re-load the JWT from a different page if necessary. This page might return a 401, so Cypress needs to be told to ignore the 401 and continue. This is done by passing `failOnStatusCode: false` to the `cy.visit` command.
+
+Here's a simple SSR page, where the auth check is done on the server side, and returned to the frontend.
+
+```jsx
+import { withServerSideAuth } from "@clerk/nextjs";
+
+export const getServerSideProps = withServerSideAuth(async ({ req }) => {
+  const { sessionId, getToken } = req.auth;
+  const sessionToken = await getToken();
+
+  return {
+    props: {
+      signedIn: sessionId != null,
+      sessionToken: sessionToken,
+      sessionId: sessionId,
+    },
+  };
+});
+
+export default function Page({ signedIn, sessionToken, sessionId }) {
+  return (
+    <>
+      <h1>{signedIn ? "Signed in" : "Signed out"}</h1>
+      <div>sessionId: {sessionId}</div>
+      <div>sessionToken: {sessionToken}</div>
+    </>
+  );
+}
+```
+
+### Test signed out (SSR)
+
+```js filename="app.cy.js"
+describe("Signed out", () => {
+  it("should navigate to the ssr page in a signed out state", () => {
+    // open dashboard page
+    cy.visit("http://localhost:3000/dashboard-ssr", {
+      failOnStatusCode: false,
+    });
+
+    // check h1 says signed in
+    cy.get("h1").contains("Signed out");
+  });  
+})
+```
+
+### Test signed in (SSR)
+
+Note the use of `before` and `beforeEach`. You want to be careful about signing in too many times quickly as you might get rate limited. So, you should only sign in once for all your tests inside of `before`. Then, since Cypress will clear cookies by default after tests, you need to use `beforeEach` to maintain these cookies and keep the browser in the `signedIn` state.
+
+```js filename="app.cy.js"
+describe("Signed in", () => {
+  beforeEach(() => {
+    cy.session('signed-in', () => {
+      cy.signIn();
+    });
+  });
+
+  it("SSR: navigate to the ssr dashboard", () => {
+    // open dashboard page
+    cy.visit("http://localhost:3000/dashboard-ssr", {
+      failOnStatusCode: false,
+    });
+
+    // check h1 says signed in
+    cy.get("h1").contains("Signed in");
+  });
+});
+```

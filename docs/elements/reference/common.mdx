@@ -2,7 +2,7 @@
 description: Reference documentation for common Clerk Elements components.
 ---
 
-# Clerk Elements common components
+# Common components
 
 Clerk Elements provides a set of common components that are used across all flows. It's recommended to import them all under the `Clerk.` namespace to make discovery easier and reduce naming conflicts with other common components throughout your application. The code snippets on this page assume you have imported the components this way.
 
@@ -12,21 +12,52 @@ import * as Clerk from '@clerk/elements/common'
 
 Unless otherwise mentioned, all components accept a `className` prop.
 
+## `<Connection>`
+
+Render a social connection button based on the provided `name`. If your instance does not have the social connection enabled, this component will throw an error in development. Read [Social connections (OAuth)](/docs/authentication/social-connections/oauth) to learn how to enable them in your Clerk dashboard.
+
+By default, `<Connection>` will be rendered as an unstyled `<button>`.
+
+### Properties
+
+| Name       | Type                                                          | Description                                                                      |
+| ---------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `asChild` | `boolean` (optional) | If `true`, `<Connection>` will render as its child element, passing along any necessary props. |
+| `name`     | `string`                                                      | Name of the social connection to render.    |
+
+### Examples
+
+#### Basic
+
+You can enrich this example by providing an [`<Icon>`](#icon) to display the social connection's logo.
+
+```tsx {3-5}
+<SignIn.Root>
+  <SignIn.Step name="start">
+    <Clerk.Connection name="google">
+      Sign in with Google
+    </Clerk.Connection>
+  </SignIn.Step>
+</SignIn.Root>
+```
+
 ## `<Field>`
 
-Field is used to associate its child elements with a specific input. It automatically handles unique ID generation and associating the contained label and input elements.
+`<Field>` is used to associate its child elements with a specific `<Input>`. It automatically handles unique ID generation and associating the contained `<Label>` and `<Input>` elements.
 
-### Props
+### Properties
 
 | Name       | Type                                                          | Description                                                                      |
 | ---------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `name`     | `string`                                                      | Name for form field, will be used to associate all underlying field elements.    |
 | `alwaysShow`     | `boolean` (optional)                                                      | When `true`, the field will always be rendered, regardless of its state. By default, a field is hidden if it's optional or if it's a filled-out required field.    |
-| `children` | `(state: 'valid' \| 'invalid') => React.ReactNode` (optional) | Provide a function as children and access the field's state. |
+| `children` | `(state: 'success' \| 'error' \| 'warning' \| 'info' \| 'idle') => React.ReactNode` (optional) | Provide a function as children and access the field's state. |
 
 ### Examples
 
 #### Basic
+
+Place common components like [`<Input>`](#input), [`<FieldError>`](#field-error), or [`<Label>`](#label) inside `<Field>`.
 
 ```tsx
 <Clerk.Field name="unique-name">{/* Your content */}</Clerk.Field>
@@ -34,13 +65,17 @@ Field is used to associate its child elements with a specific input. It automati
 
 #### Function as children
 
+The `state` you can access here is the same as in [`<FieldState>`](#field-state).
+
 ```tsx
-<Clerk.Field name="unique-name">{(state) => <p>Field's state is: {state}</p>}</Clerk.Field>
+<Clerk.Field name="unique-name">
+  {(state) => <p>Field's state is: {state}</p>}
+</Clerk.Field>
 ```
 
 ## `<FieldError>`
 
-FieldError renders error messages associated with a specific field. By default, the error's message will be rendered in an unstyled `<span>`. Optionally, the `children` prop accepts a function to completely customize rendering.
+`<FieldError>` renders error messages associated with a specific `<Field>`. By default, the error's message will be rendered in an unstyled `<span>`. Optionally, the `children` prop accepts a function to completely customize rendering.
 
 ### Properties
 
@@ -53,6 +88,8 @@ FieldError renders error messages associated with a specific field. By default, 
 
 #### Basic
 
+If the `<Field>` is in an error state, `<FieldError>` will display its message.
+
 ```tsx
 <Clerk.Field name="unique-name">
   <Clerk.FieldError />
@@ -60,6 +97,8 @@ FieldError renders error messages associated with a specific field. By default, 
 ```
 
 #### Function as children
+
+By having access to both `message` and `code` you can enrich the incoming `message` or localize it by checking for specific `code`.
 
 ```tsx
 <Clerk.Field name="unique-name">
@@ -75,21 +114,53 @@ FieldError renders error messages associated with a specific field. By default, 
 
 ## `<FieldState>`
 
-Programmatically access the state of the wrapping `<Field>`. Useful for implementing animations when direct access to the state value is necessary.
+Programmatically access additional information of the wrapping `<Field>`. Useful for implementing animations when direct access to the state value is necessary. By default, you'll have access to `state`.
+
+If you use `<Input type="password" validatePassword>` additional information in the form of `message` and `codes` is provided.
 
 ### Properties
 
 | Name       | Type                                               | Description                                         |
 | ---------- | -------------------------------------------------- | --------------------------------------------------- |
-| `children` | `(state: 'valid' \| 'invalid') => React.ReactNode` | Use this function to access the field's state. |
+| `children` | `(args: { state: 'success' \| 'error' \| 'warning' \| 'info' \| 'idle'; message: string \| undefined; codes: ErrorMessageKey[] \| undefined }) => React.ReactNode` | Use this function to access the field's state. Optionally, information regarding password validation is given. |
 
 ### Examples
 
 #### Basic
 
-```tsx
-<Clerk.Field name="unique-name">
-  <Clerk.FieldState>{(state) => <p>Field's state is: {state}</p>}</Clerk.FieldState>
+Initially, the `<Input>` will have a `state` of `idle` until the user interacts with the input. Depending on the user's input, the `state` will change to `success` or `error`.
+
+```tsx {4-6}
+<Clerk.Field name="emailAddress">
+  <Clerk.Label>Email</Clerk.Label>
+  <Clerk.Input />
+  <Clerk.FieldState>
+    {({ state }) => <p>Field's state is: {state}</p>}
+  </Clerk.FieldState>
+</Clerk.Field>
+```
+
+#### `<Input type="password" validatePassword>`
+
+If you're using [`<Input type="password" validatePassword>`](#input-type-password) the `<FieldState>`'s children function receives additional arguments: `codes` and `message`.
+
+Initially, the `<Input>` will have a `state` of `idle` until the user interacts with the input. Depending on the user's input, the `state` will change to `'success' | 'error' | 'warning' | 'info'`.
+
+`message` is the english, standardized message generated for the current state of the input. The `message` is generated through `codes`. By having access to `codes` yourself you can customize or localize the returned `message`.
+
+```tsx {4-12}
+<Clerk.Field name="password">
+  <Clerk.Label>Password</Clerk.Label>
+  <Clerk.Input type="password" validatePassword />
+  <Clerk.FieldState>
+    {({ state, codes, message }) => (
+      <div>
+        <pre>Field state: {state}</pre>
+        <pre>Field msg: {message}</pre>
+        <pre>Codes: {codes?.join(', ')}</pre>
+      </div>
+    )}
+  </Clerk.FieldState>
 </Clerk.Field>
 ```
 
@@ -117,6 +188,8 @@ Used to render errors that are returned from Clerk's API, but that are not assoc
 
 #### Function as children
 
+By having access to both `message` and `code` you can enrich the incoming `message` or localize it by checking for specific `code`.
+
 ```tsx
 <SignIn.Root>
   <Clerk.GlobalError>
@@ -127,6 +200,155 @@ Used to render errors that are returned from Clerk's API, but that are not assoc
     )}
   </Clerk.GlobalError>
 </SignIn.Root>
+```
+
+## `<Icon>`
+
+`<Icon>` **must** be used inside [`<Connection>`](#connection). By default, `<Icon>` will render as an `<img>` element with the `src` pointing to the logo of the currently used `<Connection>`.
+
+<Callout type="info">
+
+The purpose of `<Icon>` is to provide quick access to Clerk's social connections logos which you can use while setting up your application. Most likely you wish to customize their look or use your own icon library. Hence the scope of `<Icon>` is small and customizability limited by design. If you need further control, please consider using solutions like [Iconify](https://iconify.design/getting-started/).
+
+</Callout>
+
+### Properties
+
+| Name       | Type                                                          | Description                                                                      |
+| ---------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `asChild` | `boolean` (optional) | If `true`, `<Icon>` will render as its child element, passing along any necessary props. |
+
+### Examples
+
+#### Basic
+
+`<Icon>` will render as the Google logo here.
+
+```tsx {4}
+<SignIn.Root>
+  <SignIn.Step name="start">
+    <Clerk.Connection name="google">
+      <Clerk.Icon />
+      Sign in with Google
+    </Clerk.Connection>
+  </SignIn.Step>
+</SignIn.Root>
+```
+
+## `<Input>`
+
+Handles rendering of `<input />` elements within Clerk's flows. Supports special `type` prop values to render input types that are unique to authentication and user management flows. Additional props will be passed through to the [`<input />` element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input).
+
+### Properties
+
+| Name    | Type                                                  | Description                                                                                                                                           |
+| ------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asChild` | `boolean` (optional)                                  | If true, `<Input>` will render as its child element, passing along any necessary props.                                                             |
+| `name`    | `string` (optional)                                   | Name for form field, will be used to associate all underlying field elements. Can be automatically inferred from the name on the `<Field>` component. |
+| `type`    | `text \| email \| tel \| otp* \| password` (optional) | Type for the input. Default: `text`                                                                                                                   |
+
+_Values denoted with \* are unique Clerk input types._
+
+The following data attributes are also added to the underlying Element:
+
+- `data-valid` - If the field state is valid
+- `data-invalid` - If the field state is invalid (has an associated error)
+- `date-state` - Refers to the [`<FieldState>`](#field-state) status
+
+### Examples
+
+#### Basic
+
+Make sure to always include a [`<Label>`](#label) to correctly announce your `<Input>` to screen readers.
+
+```tsx
+<Clerk.Field name="identifier">
+  <Clerk.Label>Email</Label>
+  <Clerk.Input type="email" />
+</Clerk.Field>
+```
+
+## `<Input type="otp">`
+
+A special type used to render an input that accepts a one-time passcode (OTP). If the corresponding `<Field>` has `name="code"`, the contained `<Input>` will default to the `otp` type. Only numbers are accepted as inputs, and the default max length is 6.
+
+By default, a single text `<input />` will be rendered. If provided, the `render` prop will be called for each character currently present in the input. This enables UI patterns where an OTP input is visually represented as N distinct elements.
+
+### Properties
+
+| Name                  | Type                 | Description                                                                                                                                                                                                                                                                                   |
+| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `length`                | `number` (optional)  | Define how many numbers the input should hold. Default: `6`                                                                                                                                                                                                                                     |
+| `autoSubmit`            | `boolean` (optional) | If true, the form will be automatically submitted once the input is filled out. Default: `false`                                                                                                                                                                                                |
+| `passwordManagerOffset` | `number` (optional)  | Password managers place their icon inside an `<input />`. This default behaviour is not desirable when you use the render prop to display N distinct element. With this prop you can increase the width of the `<input />` so that the icon is rendered outside the OTP inputs. Default: `40` |
+| `render`              | `({ value, status }: { value: string; status: 'none' \| 'selected' \| 'cursor' \| 'hovered' }) => React.ReactNode` (optional) | A render prop function that receives the `value` and `status` of each character. `value` is the character to render, `status` is the current status of the input character.                                                                                                                           |
+
+The properties `asChild` and `name` from [`<Input>`](#input) also apply to `<Input type="otp">`.
+
+### Examples
+
+#### Basic
+
+A single `<input type="text" />` input that only allows 6 numbers to be entered. Once the user filled in all information, the form is automatically submitted.
+
+```tsx
+<Clerk.Field name="code">
+  <Clerk.Input type="otp" autoSubmit />
+</Clerk.Field>
+```
+
+#### Segmented
+
+You can render each number into an individual item and animate its appearance depending on the `status`.
+
+```tsx
+<Clerk.Field name="code">
+  <Clerk.Input
+    type="otp"
+    passwordManagerOffset={40}
+    render={({ value, status }) => <span data-status={status}>{value}</span>}
+  />
+</Clerk.Field>
+```
+
+## `<Input type="password">`
+
+A thin wrapper around the [`<input type="password" />` element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/password) to provide password validation logic. You can define [password rules](/docs/security/password-protection) in your Clerk dashboard and according to these rules your users' passwords are checked. By default, this validation is turned off and you need to set a `validatePassword` prop.
+
+Once activated, you can access the instant validation feedback through [`<FieldState>`](#field-state) and display rich information to your users.
+
+### Properties
+
+| Name    | Type                                                  | Description                                                                                                                                           |
+| ------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validatePassword` | `boolean` (optional)                                  | If true, password validation according to your [password rules](/docs/security/password-protection) is happening while the user types in their password.                                                             |
+
+The following data attributes are also added to the underlying Element if `validatePassword` is `true`:
+
+- `data-has-passed-validation` - If the password has passed the validation or not
+
+The existing data attributes from [`<Input>`](#input) are also present on this Element.
+
+### Examples
+
+#### Basic
+
+For more information on how to use `state`, `codes`, and `message` check the [`<FieldState>`](#field-state) docs.
+
+```tsx {3}
+<Clerk.Field name="password">
+  <Clerk.Label>Password</Clerk.Label>
+  <Clerk.Input type="password" validatePassword />
+  <Clerk.FieldState>
+    {({ state, codes, message }) => (
+      <div>
+        <pre>Field state: {state}</pre>
+        <pre>Field msg: {message}</pre>
+        <pre>Codes: {codes?.join(', ')}</pre>
+      </div>
+    )}
+  </Clerk.FieldState>
+</Clerk.Field>
 ```
 
 ## `<Label>`
@@ -159,83 +381,16 @@ Renders a `<label>` element that is automatically associated with its sibling `<
 </Clerk.Field>
 ```
 
-## `<Input>`
-
-Handles rendering of `<input>` elements within Clerk's flows. Supports special `type` prop values to render input types that are unique to authentication and user management flows. Additional props will be passed through to the [`<input>` element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input).
-
-### Properties
-
-| Name    | Type                                                  | Description                                                                                                                                           |
-| ------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `asChild` | `boolean` (optional)                                  | If true, `<Input />` will render as its child element, passing along any necessary props.                                                             |
-| `name`    | `string` (optional)                                   | Name for form field, will be used to associate all underlying field elements. Can be automatically inferred from the name on the `<Field>` component. |
-| `type`    | `text \| email \| tel \| otp* \| password` (optional) | Type for the input. Default: `text`                                                                                                                   |
-
-_Values denoted with \* are unique Clerk input types._
-
-The following data attributes are also added to the underlying Element:
-
-- `data-valid` - If the field state is valid
-- `data-invalid` - If the field state is invalid (has an associated error)
-
-### Examples
-
-#### Basic
-
-```tsx
-<Clerk.Field name="identifier">
-  <Clerk.Label>Email</Label>
-  <Clerk.Input type="email" />
-</Clerk.Field>
-```
-
-## `<Input type="otp">`
-
-A special type used to render an input that accepts a one-time passcode (OTP). If the corresponding `Field` has `name="code"`, the contained `Input` will default to the `otp` type. Only numbers are accepted as inputs, and the default max length is 6.
-
-By default, a single text `<input />` will be rendered. If provided, the `render` prop will be called for each character currently present in the input. This enables UI patterns where an OTP input is visually represented as N distinct elements.
-
-### Properties
-
-| Name                  | Type                 | Description                                                                                                                                                                                                                                                                                   |
-| --------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `length`                | `number` (optional)  | Define how many numbers the input should hold. Default: `6`                                                                                                                                                                                                                                     |
-| `autoSubmit`            | `boolean` (optional) | If true, the form will be automatically submitted once the input is filled out. Default: `false`                                                                                                                                                                                                |
-| `passwordManagerOffset` | `number` (optional)  | Password managers place their icon inside an `<input />`. This default behaviour is not desirable when you use the render prop to display N distinct element. With this prop you can increase the width of the `<input />` so that the icon is rendered outside the OTP inputs. Default: `40` |
-| `render`              | `({ value, status }: { value: string; status: 'none' \| 'selected' \| 'cursor' \| 'hovered' }) => React.ReactNode` (optional) | A render prop function that receives the `value` and `status` of each character. `value` is the character to render, `status` is the current status of the input character.                                                                                                                           |
-
-### Examples
-
-#### Basic
-
-```tsx
-<Clerk.Field name="code">
-  <Clerk.Input type="otp" autoSubmit />
-</Clerk.Field>
-```
-
-#### Segmented
-
-```tsx
-<Clerk.Field name="code">
-  <Clerk.Input
-    type="otp"
-    passwordManagerOffset={40}
-    render={({ value, status }) => <span data-status={status}>{value}</span>}
-  />
-</Clerk.Field>
-```
-
 ## `<Loading>`
 
-Access the loading state of a chosen scope. Scope can refer to a step, a `<Provider>`, or the global loading state. The global loading state is `true` when any of the other scopes are loading.
+Access the loading state of a chosen scope. Scope can refer to a step, a `<Connection>`, or the global loading state. The global loading state is `true` when any of the other scopes are loading.
 
 ### Properties
 
 | Name | Type | Description |
 | --- | --- | --- |
 | `children` | `(isLoading: boolean) => React.ReactNode` | A function that receives `isLoading` as an argument. `isLoading` is a boolean that indicates if the current scope is loading or not. |
-| `scope` | `string` (optional) | Specify which loading state to access. Can be a step, a provider, or the global loading state. If `<Loading>` is used outside a `<Step>`, the scope will default to "global". If used inside a `<Step>` the scope will default to the current step. For external authentication providers, the scope needs to be manually defined in the format of `provider:<provider name>`. |
+| `scope` | `string` (optional) | Specify which loading state to access. Can be a step, a connection, or the global loading state. If `<Loading>` is used outside a `<Step>`, the scope will default to "global". If used inside a `<Step>` the scope will default to the current step. For external authentication providers, the scope needs to be manually defined in the format of `provider:<provider name>`. |
 
 Relying on the auto-inference of the scope can be helpful when using `<Loading>` in shared components, which might be referenced inside different steps. You won't need to manually pass the scope as a prop to your shared component.
 
@@ -249,11 +404,11 @@ Relying on the auto-inference of the scope can be helpful when using `<Loading>`
     {(isGlobalLoading) => isGlobalLoading ? "Global Loading..." : "Global"}
   </Clerk.Loading>
   <SignIn.Step name="start">
-    <Clerk.Provider name="google">
+    <Clerk.Connection name="google">
       <Clerk.Loading scope="provider:google">
         {(isLoading) => isLoading ? "Loading..." : "Continue with Google"}
       </Clerk.Loading>
-    </Clerk.Provider>
+    </Clerk.Connection>
     <SignIn.Action submit>
       <Clerk.Loading>
         {(isLoading) => isLoading ? "Loading..." : "Submit"}
@@ -265,18 +420,18 @@ Relying on the auto-inference of the scope can be helpful when using `<Loading>`
 
 #### Nested loading states
 
-To target the loading state of a specific `<Provider>`, you need to specify the scope as `provider:<provider name>`.
+To target the loading state of a specific `<Connection>`, you need to specify the scope as `provider:<provider name>`.
 
 ```tsx
 <SignIn.Root>
   <Clerk.Loading>
     {(isGlobalLoading) => (
       <SignIn.Step name="start">
-        <Clerk.Provider name="google" disabled={isGlobalLoading}>
+        <Clerk.Connection name="google" disabled={isGlobalLoading}>
           <Clerk.Loading scope="provider:google">
             {(isLoading) => isLoading ? "Loading..." : "Continue with Google"}
           </Clerk.Loading>
-        </Clerk.Provider>
+        </Clerk.Connection>
         <SignIn.Action submit disabled={isGlobalLoading}>
           <Clerk.Loading>
             {(isLoading) => isLoading ? "Loading..." : "Submit"}

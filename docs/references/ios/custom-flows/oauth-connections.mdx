@@ -1,0 +1,90 @@
+---
+title: OAuth connections
+description: Learn how to leverage the Clerk SDK to build completely custom OAuth flows.
+---
+
+# OAuth connections
+
+In case one of our [standard OAuth integration methods](/docs/authentication/social-connections/oauth) doesn't cover your needs, you can leverage the Clerk SDK to build completely custom OAuth flows.
+
+<Callout type="info">
+  You still need to configure your instance through the Clerk Dashboard, as described at [the top of the OAuth guide](/docs/authentication/social-connections/oauth#configuration).
+</Callout>
+
+When using OAuth, the sign-in and sign-up are equivalent. A successful OAuth flow consists of the following steps:
+
+1. Start the OAuth flow by creating a `SignUp` or `SignIn` using the `.externalProvider` strategy.
+2. After successfully, creating a `SignUp`/`SignIn`, call `.authenticateWithRedirect()` on the `SignUp`/`SignIn` to start the OAuth flow.
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct OAuthView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        Button("Sign in with oauth", action: signInWithOAuth)
+    }
+    
+    private func signInWithOAuth() {
+        Task {
+            do {
+                // Create a new sign in object with 
+                // the externalProvider strategy
+                try await clerk.client?.createSignIn(strategy: .externalProvider(.google))
+
+                // Will present an ASWebAuthenticationSession
+                // to authenticate with the provided provider
+                try await clerk.client?.signIn?.authenticateWithRedirect()
+                
+                // If the sign in succeeds, `clerk.user` and `clerk.session` will have values
+                if let user = clerk.user {
+                    print(user.id)
+                }
+            } catch {
+                print(error.localizedDescription)
+            }
+        }
+    }
+}
+```
+
+To initiate an OAuth flow for a user that is already signed in, where `user` is a reference to the currently signed in user, first create the new external account by calling `user.createExternalAccount(provider)`, and then call `.reauthorize()` on the new external account.
+
+```swift
+let newExternalAccount = try await user.createExternalAccount(.google)
+try await newExternalAccount.reauthorize()
+```
+
+## Add your redirect url to the allowlist
+
+Clerk ensures that security critical nonces will be passed only to allowlisted URLs when the OAuth flow is complete in native browsers or webviews.
+
+So for maximum security in your production instances, you need to allowlist your redirect URLs via the [Clerk Dashboard](https://dashboard.clerk.com/) or the [Clerk Backend API](https://clerk.com/docs/reference/backend-api/tag/Redirect-URLs).
+
+To allowlist a redirect URL via the Clerk Dashboard, go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)**. On the **Social Connections** page, click on the **Settings* tab and add `{your_bundle_id}://callback` to the **Redirect URLs** list.
+
+<Callout>
+By default, the Clerk iOS SDK expects a redirect URL of `{your_bundle_id}://callback`.
+</Callout>
+
+<Images
+  width={3024}
+  height={1654}
+  src="/docs/images/custom-flows/mobile-oauth-allowlist.jpg"
+  alt="The 'Social Connections' page of the Clerk Dashboard, with the 'Settings' tab selected. The 'Settings' tab shows a section titled 'allowlist for mobile OAuth redirect' and has an input for redirect URLs."
+/>
+
+#### Custom redirect url
+
+<Callout>
+If you are ok with the default redirect URL of `{your_bundle_id}://callback`, you can ignore the following steps.
+</Callout>
+
+If you prefer to customize the redirect URL expected by your Clerk iOS application, you will need to take the following steps:
+1. Add `{your_custom_redirect_url}` to the allowlist.
+2. Set this url as your `redirectUrl` within your application. 
+```swift
+Clerk.shared.redirectConfig.redirectUrl = "{your_custom_redirect_url}"
+```

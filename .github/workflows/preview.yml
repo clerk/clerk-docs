@@ -1,160 +1,36 @@
-name: Deploy Preview
+name: Pull Request Preview
 
 env:
-  COMMENT_HEADER: clerk-docs-preview
+  API_BASE_URL: https://clerk.com
+  PREVIEW_BASE_URL: https://clerk.com
 
 on:
-  pull_request_target:
-    types: [labeled, synchronize]
+  pull_request:
+    types: [labeled, unlabeled]
 
 jobs:
-  # When a PR is labeled with the `deploy-preview` label, we manually trigger a preview deployment of the site and assign it a stable URL.
-  # A comment is kept up-to-date on the PR as the deployment progresses.
-  #
-  # Forks are handled by using the gh CLI to checkout the forked branch, and then we push up a branch to the origin.
-  # This should be safe as it requires someone with triage permissions on the repository to apply the label.
-  deploy:
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  pr_preview:
+    if: ${{ github.event.label.name == 'deploy-preview' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-    if: ${{ github.event.action == 'labeled' && github.event.label.name == 'deploy-preview' }}
-    runs-on: ubuntu-latest
-
     steps:
-      - name: Get date
+      - name: Revalidate PR preview
         run: |
-          echo "DATE=$(date -u +"%b %d, %Y %I:%M %p")" >> $GITHUB_ENV
-
-      - uses: actions/checkout@v3.5.3
-
-      - name: Checkout fork
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        id: checkout-fork
-        if: ${{ github.event.pull_request.head.repo.fork == true }}
-        run: |
-          gh pr checkout ${{ github.event.pull_request.number }}
-          git_branch=$(git rev-parse --abbrev-ref HEAD)
-          git push origin $git_branch
-          echo "branch=$git_branch" >> $GITHUB_OUTPUT
-
-      - name: Checkout application
-        uses: actions/checkout@v3.5.3
-        with:
-          repository: clerk/clerk-marketing
-          token: ${{ secrets.CLERK_GH_TOKEN }}
-          path: app
-          ref: production
-
-      - run: npm install --global vercel@latest
-
-      - name: Pull Vercel environment information
-        run: |
-          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy to Vercel
-        id: vercel-deploy
-        env:
-          DOCS_BRANCH: ${{ steps.checkout-fork.outputs.branch || github.event.pull_request.head.ref }}
-        run: |
-          cd app
-          git checkout -b preview/$DOCS_BRANCH
-          vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --build-env DOCS_BRANCH=$DOCS_BRANCH --env DOCS_BRANCH=$DOCS_BRANCH --no-wait > deployment_url.txt
-          echo "url=$(cat deployment_url.txt)" >> $GITHUB_OUTPUT
-
-      - name: Create preview comment - baking
-        uses: marocchino/sticky-pull-request-comment@v2.8.0
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          number: ${{ github.event.pull_request.number }}
-          header: ${{ env.COMMENT_HEADER}}
-          message: |
-            Hey @${{ github.event.sender.login }}, your docs preview is currently baking and should be available shortly.
-
-            | Status | Preview | Updated (UTC) |
-            | :-- | :-- | :-- |
-            | :cook: _Baking..._ | [Inspect](${{ steps.vercel-deploy.outputs.url }}) | ${{ env.DATE }} |
-
-      - name: Get date
-        run: |
-          echo "DATE=$(date -u +"%b %d, %Y %I:%M %p")" >> $GITHUB_ENV
-
-      - name: Wait for deployment
-        id: vercel-wait-for-deploy
-        run: |
-          vercel inspect --token=${{ secrets.VERCEL_TOKEN }} --wait ${{ steps.vercel-deploy.outputs.url }} --timeout 10m --scope clerk-production
-          vercel alias set ${{ steps.vercel-deploy.outputs.url }} docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com --token=${{ secrets.VERCEL_TOKEN }} --scope clerk-production
-          echo "stable_url=https://docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com" >> $GITHUB_OUTPUT
-
-      - name: Create preview comment - deployed
-        uses: marocchino/sticky-pull-request-comment@v2.8.0
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          number: ${{ github.event.pull_request.number }}
-          header: ${{ env.COMMENT_HEADER }}
-          message: |
-            Hey @${{ github.event.sender.login }}, your docs preview is available.
-
-            | Status | Preview | Updated (UTC) |
-            | :-- | :-- | :-- |
-            | :cookie: Deployed | [Visit preview](${{ steps.vercel-wait-for-deploy.outputs.stable_url }}/docs) | ${{ env.DATE }} |
-
-            <!-- deployed:true -->
-
-  # On PR sync, trigger a revalidate of the existing deploy preview. This is much faster than a full re-deploy.
-  revalidate:
-    if: ${{ github.event.action == 'synchronize' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    env:
-      CLERK_COM_BASE_URL: https://docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com
-    steps:
-      - name: Find comment
-        uses: peter-evans/find-comment@v2.4.0
-        id: find-comment
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-includes: deployed:true
-
-      - name: Update fork
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        id: checkout-fork
-        if: ${{ github.event.pull_request.head.repo.fork == true && steps.find-comment.outputs.comment-id != 0}}
-        run: |
-          gh pr checkout ${{ github.event.pull_request.number }}
-          git_branch=$(git rev-parse --abbrev-ref HEAD)
-          git push origin $git_branch
-
-      - name: Get date
-        run: |
-          echo "DATE=$(date -u +"%b %d, %Y %I:%M %p")" >> $GITHUB_ENV
-
-      - name: Trigger revalidate
-        if: ${{ steps.find-comment.outputs.comment-id != 0 }}
-        run: |
-          curl -X POST ${{ env.CLERK_COM_BASE_URL }}/api/revalidate-docs \
+          curl -X POST ${{ env.API_BASE_URL }}/docs/revalidate \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.REVALIDATE_DOCS_SECRET }}" \
-            -d "{\"paths\": \"*\"}"
+            -d "{\"tags\": [\"docs:pr:${{ github.event.pull_request.number }}\"]}"
 
-      - name: Create preview comment - updated
-        if: ${{ steps.find-comment.outputs.comment-id != 0 }}
-        uses: marocchino/sticky-pull-request-comment@v2.8.0
+      - name: Share PR preview URL
+        if: ${{ github.event.action == 'labeled' }}
+        uses: actions/github-script@v7
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          number: ${{ github.event.pull_request.number }}
-          header: ${{ env.COMMENT_HEADER }}
-          message: |
-            Hey @${{ github.event.sender.login }}, your docs preview is available.
-
-            | Status | Preview | Updated (UTC) |
-            | :-- | :-- | :-- |
-            | :cookie: Updated | [Visit preview](${{ env.CLERK_COM_BASE_URL }}/docs) | ${{ env.DATE }} |
-
-            <!-- deployed:true -->
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Hey, here’s your docs preview: ' + process.env.PREVIEW_BASE_URL + '/docs/pr/' + context.issue.number,
+            })

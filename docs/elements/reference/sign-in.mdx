@@ -7,24 +7,19 @@ description: Reference documentation for Clerk Elements sign-in components.
 The following components are used when creating sign-in flows. They are imported from `@clerk/elements/sign-in`. It's recommended to import them all under the `SignIn.` namespace to make discovery easier and reduce naming conflicts with other components throughout your application. The code snippets on this page assume you have imported the components this way.
 
 ```tsx filename="Anatomy"
-<SignIn.Root>
-  <SignIn.Step name="start">
-    <SignIn.Action submit>
-  <SignIn.Step>
-  <SignIn.Step name="verifications">
-    <SignIn.Strategy name="email_code">
-      <SignIn.Action submit>
-    </SignIn.Strategy>
-  </SignIn.Step>
-  <SignIn.Step name="choose-strategy">
-    <SignIn.StrategyOption name="email_code">
-  </SignIn.Step>
-  <SignIn.Step name="forgot-password">
-    <SignIn.StrategyOption name="reset_password_email_code">
-  </SignIn.Step>
-  <SignIn.Step name="reset-password">
-  </SignIn.Step>
-</SignIn.Root>
+import * as SignIn from '@clerk/elements/sign-in'
+
+export default function SignInPage() {
+  return (
+    <SignIn.Root>
+      <SignIn.Step name="start" />
+      <SignIn.Step name="verifications" />
+      <SignIn.Step name="choose-strategy" />
+      <SignIn.Step name="forgot-password" />
+      <SignIn.Step name="reset-password" />
+    </SignIn.Root>
+  )
+}
 ```
 
 ## `<Root>`
@@ -36,7 +31,7 @@ The root sign-in component. Sets up providers and state management for the sign-
 | Name | Type                | Description                                                       |
 | ---- | ------------------- | ----------------------------------------------------------------- |
 | `path` | `string` (optional) | The root path the sign-in flow is mounted at. Default: `/sign-in` |
-| `fallback` | `React.ReactNode` (optional) | Fallback markup to render while Clerk is loading. |
+| `fallback` | `React.ReactNode` (optional) | Fallback markup to render while Clerk is loading. Default: `null` |
 
 ## `<Step>`
 
@@ -50,19 +45,74 @@ A step in the sign-in flow. The component conditionally renders its children bas
 
 ### `<Step name="start">`
 
-Used to render the beginning sign-in form. Once a sign-in attempt has been created from this step, `<Step name="verifications">` will be rendered. Typically, this step will contain an `identifier` field and social connection buttons to create a sign-in attempt. The exact fields that should be rendered depends on your instance configuration.
+Render the beginning sign-in form. Once a sign-in attempt has been created from this step, `<Step name="verifications">` will be rendered. Typically, this step will contain an `identifier` field and social connection buttons to create a sign-in attempt. The exact fields that should be rendered depend on your instance configuration.
+
+```tsx filename="page.tsx"
+<SignIn.Step name="start">
+  <Clerk.Field name="identifier">
+    <Clerk.Label>Email</Clerk.Label>
+    <Clerk.Input />
+    <Clerk.FieldError />
+  </Clerk.Field>
+  <SignIn.Action submit>Sign In with Email</SignIn.Action>
+</SignIn.Step>
+```
 
 ### `<Step name="verifications">`
 
 If a sign-in attempt is in progress, `<Step name="verifications">` will render its children. Any nested `<Strategy>` components will conditionally render based on the status of the sign-in attempt.
 
+You typically also want to link to `choose-strategy` to allow for alternative login methods.
+
+#### Example
+
+```tsx filename="page.tsx"
+<SignIn.Step name="verifications">
+  <SignIn.Strategy name="password">
+    <Clerk.Field name="password">
+      <Clerk.Label>password</Clerk.Label>
+      <Clerk.Input />
+      <Clerk.FieldError />
+    </Clerk.Field>
+    <SignIn.Action submit>Sign In</SignIn.Action>
+  </SignIn.Strategy>
+  <SignIn.Action navigate="choose-strategy">
+    Use another method
+  </SignIn.Action>
+</SignIn.Step>
+```
+
 ### `<Step name="choose-strategy">`
 
 Allows a user to pick a new strategy to verify. This step can be rendered by navigating to `choose-strategy` using `<Action>`.
 
+#### Example
+
+```tsx filename="page.tsx"
+<SignIn.Step name="choose-strategy">
+  <SignIn.SupportedStrategy name="phone_code">
+    Send a code to your phone
+  </SignIn.SupportedStrategy>
+</SignIn.Step>
+```
+
 ### `<Step name="forgot-password">`
 
-If the currently requested strategy is `password`, but a user can't remember their password, you can navigate them to the `forgot-password` step to choose a new strategy, or begin the reset password flow. This step can be rendered by navigating to `forgot-password` using `<Action>`.
+If the currently requested strategy is `password`, but a user can't remember their password, you can navigate them to the `forgot-password` step. They can begin the reset password flow or choose a new strategy. This step can be rendered by navigating to `forgot-password` using `<Action>`.
+
+#### Example
+
+```tsx filename="page.tsx"
+<SignIn.Step name="forgot-password">
+  <SignIn.SupportedStrategy name="reset_password_email_code">
+    Reset your password via Email
+  </SignIn.SupportedStrategy>
+  <p>or</p>
+  <SignIn.SupportedStrategy name="google">
+    Sign in with Google
+  </SignIn.SupportedStrategy>
+</SignIn.Step>
+```
 
 ### `<Step name="reset-password">`
 
@@ -70,27 +120,25 @@ If a user has requested a password reset and verified their identity, they will 
 
 #### Example
 
-```tsx
-<Step name="forgot-password">
+```tsx filename="page.tsx"
+<SignIn.Step name="reset-password">
   <Clerk.Field name="password">
     <Clerk.Label>New password</Clerk.Label>
     <Clerk.Input />
     <Clerk.FieldError />
   </Clerk.Field>
-
   <Clerk.Field name="confirmPassword">
     <Clerk.Label>Confirm password</Clerk.Label>
     <Clerk.Input />
     <Clerk.FieldError />
   </Clerk.Field>
-
-  <SignIn.Action submit>Reset password</SignIn.Action>
-</Step>
+  <SignIn.Action submit>Update password</SignIn.Action>
+</SignIn.Step>
 ```
 
 ## `<Strategy>`
 
-Used to conditionally render its children depending on the authentication strategy that needs to be verified. Does not render any markup on its own.
+Conditionally render its children depending on the authentication strategy that needs to be verified. Does not render any markup on its own.
 
 ### Properties
 
@@ -102,37 +150,39 @@ Used to conditionally render its children depending on the authentication strate
 
 #### Basic
 
-```tsx
+```tsx filename="page.tsx"
 <SignIn.Strategy name="email_code">
   <Clerk.Field name="code">
     <Clerk.Label>Code</Clerk.Label>
     <Clerk.Input />
     <Clerk.FieldError />
   </Clerk.Field>
-
   <SignIn.Action submit>Verify</SignIn.Action>
 </SignIn.Strategy>
 ```
 
-## `<StrategyOption>`
+## `<SupportedStrategy>`
 
-When in the `choose-strategy` or `forgot-password` step, `<StrategyOption>` is used to render a button that will change the current strategy that needs to be verified.
+When in the `choose-strategy` or `forgot-password` step, `<SupportedStrategy>` is used to render a button that will change the current strategy that needs to be verified.
 
 ### Properties
 
 | Name | Type     | Description                                                       |
 | ---- | -------- | ----------------------------------------------------------------- |
-| `name` | `email_code` \| `email_link` \| `passkey` \| `password` \| `phone_code` \| `reset_password_email_code` \| `reset_password_phone_code` \| `web3_metamask_signature` | The name of the strategy to switch to. Also accepts social connection names.                           |
+| `name` | `'email_code' \| 'email_link' \| 'passkey' \| 'password' \| 'phone_code' \| 'reset_password_email_code' \| 'reset_password_phone_code' \| 'web3_metamask_signature'` | The name of the strategy to switch to. Also accepts social connection names.                           |
 
 ### Examples
 
 #### Basic
 
-```tsx
+```tsx filename="page.tsx"
 <SignIn.Step name="choose-strategy">
-  <SignIn.StrategyOption name="google">Sign in with Google</SignIn.StrategyOption>
-  <SignIn.StrategyOption name="email_code">Sign in with email code</SignIn.StrategyOption>
-  <SignIn.StrategyOption name="password">Sign in with password</SignIn.StrategyOption>
+  <Clerk.SupportedStrategy name="google">
+    Sign in with Google
+  </Clerk.SupportedStrategy>
+  <SignIn.SupportedStrategy name="password">
+    Sign in with password
+  </SignIn.SupportedStrategy>
 </SignIn.Step>
 ```
 
@@ -144,30 +194,29 @@ The `<Action>` component exposes various flow-related actions. It can be used to
 
 | Name       | Type                 | Description                                                                                               |
 | ---------- | -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `submit`     | `boolean` (optional) | If `true`, the action will submit the form.                                                               |
-| `navigate` | `choose-strategy` \| `forgot-password` \| `previous` \| `start` \| `back` (optional)  | The name of the step to navigate to.                                                                      |
-| `resend`   | `boolean` (optional) | If `true`, the action will resend the verification code for the currently active strategy, if applicable. |
-| `fallback` | `({ resendableAfter: number }) => React.ReactNode` (optional) | Only used when `resend` is `true`. If provided, the fallback markup will be rendered before the resend delay has expired. |
+| `submit`     | `boolean` (optional) | If `true`, the action will submit the form. Default: `false`                                                               |
+| `navigate` | `'choose-strategy' \| 'forgot-password' \| 'previous' \| 'start' \| 'back'` (optional)  | The name of the step to navigate to. Default: `undefined`                                                                      |
+| `resend`   | `boolean` (optional) | If `true`, the action will resend the verification code for the currently active strategy, if applicable. Default: `false` |
+| `fallback` | `({ resendableAfter: number }) => React.ReactNode` (optional) | Only used when `resend` is `true`. If provided, the fallback markup will be rendered before the resend delay has expired. Default: `null` |
 
 ### Examples
 
 #### Submit
 
-```tsx {8}
+```tsx filename="page.tsx" {7}
 <SignIn.Step name="start">
   <Clerk.Field name="identifier">
     <Clerk.Label>Email</Clerk.Label>
     <Clerk.Input />
     <Clerk.FieldError />
   </Clerk.Field>
-
   <SignIn.Action submit>Sign in</SignIn.Action>
 </SignIn.Step>
 ```
 
 #### Navigate
 
-```tsx {10}
+```tsx filename="page.tsx" {9}
 <SignIn.Step name="verifications">
   <SignIn.Strategy name="password">
     <Clerk.Field name="password">
@@ -175,7 +224,6 @@ The `<Action>` component exposes various flow-related actions. It can be used to
       <Clerk.Input />
       <Clerk.FieldError />
     </Clerk.Field>
-
     <SignIn.Action submit>Sign in</SignIn.Action>
     <SignIn.Action navigate="forgot-password">Forgot password?</SignIn.Action>
   </SignIn.Strategy>
@@ -184,7 +232,7 @@ The `<Action>` component exposes various flow-related actions. It can be used to
 
 #### Resend
 
-```tsx {10-15}
+```tsx filename="page.tsx" {9-16}
 <SignIn.Step name="verifications">
   <SignIn.Strategy name="email_code">
     <Clerk.Field name="code">
@@ -192,11 +240,12 @@ The `<Action>` component exposes various flow-related actions. It can be used to
       <Clerk.Input />
       <Clerk.FieldError />
     </Clerk.Field>
-
     <SignIn.Action submit>Verify</SignIn.Action>
     <SignIn.Action
       resend
-      fallback={({ resendableAfter }) => <p>Resend code in {resendableAfter} second(s)</p>}
+      fallback={({ resendableAfter }) => (
+        <p>Resend code in {resendableAfter} second(s)</p>
+      )}
     >
       Resend code
     </SignIn.Action>
@@ -206,23 +255,35 @@ The `<Action>` component exposes various flow-related actions. It can be used to
 
 ## `<SafeIdentifier />`
 
-Used to render an identifier that has been provided by the user during a sign-in attempt. Renders in a `<span>`.
+Render an identifier that has been provided by the user during a sign-in attempt. Renders a `string` (or empty string if it can't find an identifier).
 
 ### Examples
 
 #### Basic
 
-```tsx {3}
+```tsx filename="page.tsx"
 <SignIn.Strategy name="email_code">
   <h1>Check your email</h1>
   <p>We've sent a code to <SignIn.SafeIdentifier />.</p>
+</SignIn.Strategy>
+```
 
-  <Clerk.Field name="code">
-    <Clerk.Label>Code</Clerk.Label>
-    <Clerk.Input />
-    <Clerk.FieldError />
-  </Clerk.Field>
+## `<Salutation />`
 
-  <SignIn.Action submit>Verify</SignIn.Action>
+Render a salutation for the user during a sign-in attempt. It attempts to resolve these values in this specific order:
+
+1. First name
+1. Last name
+1. Identifier
+
+Renders a `string` (or empty string if it can't find an identifier).
+
+### Examples
+
+#### Basic
+
+```tsx filename="page.tsx"
+<SignIn.Strategy name="password">
+  <p>Welcome back <SignIn.Salutation />!</p>
 </SignIn.Strategy>
 ```

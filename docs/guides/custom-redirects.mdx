@@ -1,0 +1,233 @@
+---
+title: Customize your redirect URLs
+description: Customize where your users are redirected to after they sign in or sign up.
+---
+
+# Customize your redirect URLs
+
+To avoid breaking a user's flow through your app, when a user navigates to a Clerk sign up or sign in page via a link or button, Clerk will:
+1. Persist the previous page's URL in a `redirect_url` query string
+2. Navigate back to that page after the sign-up or sign-in is completed
+
+For example, a user selecting a sign-in button on `example.com/foo` will navigate to `example.com/sign-in?redirect_url=example.com/foo`, then navigate back to `example.com/foo` upon completing the sign-in process.
+
+The following guide describes your options for customizing where your users are redirected to after completing a sign-in or sign-up process.
+
+## Environment variables
+
+You can define a fallback redirect URL in the case that there is no `redirect_url` in the path already. This is useful for users who navigate directly to the sign-in or sign-up page.
+
+The following example shows how to define a fallback redirect URL for both sign-in and sign-up pages:
+
+<CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+```sh filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+```
+
+```sh filename=".env"
+CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
+CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/onboarding
+```
+</CodeBlockTabs>
+
+## Force environment variable redirects
+
+If you would like to override the `redirect_url` value and supply a custom redirect URL after sign-in or sign-up, you can use the following environment variables:
+
+<CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+```sh filename=".env.local"
+NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
+```
+
+```sh filename=".env"
+CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
+```
+</CodeBlockTabs>
+
+## Middleware
+
+If you are using Next.js and want a more programmatically generated redirect option, you can use the [`auth().protect()`](/docs/references/nextjs/auth#protect) method in your [Clerk middleware](/docs/references/nextjs/clerk-middleware).
+
+```tsx filename="middleware.ts"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware((auth, req) => {
+  if (req.nextUrl.pathname.startsWith('/dashboard')) auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+## Redirect URL props
+
+You can explicitly define the redirect paths after sign-up or sign-in by using the properties described in this section with Clerk's components. In general, it is recommended to use [environment variables](#environment-variables) instead.
+
+### Fallback redirect URL props
+
+The "fallback redirect url" props will only be used if there is no `redirect_url` value. This can happen if the user has navigated directly to the sign up or sign in page.
+
+- `signInFallbackRedirectUrl`
+- `signUpFallbackRedirectUrl`
+
+### Force redirect URL props
+
+The "force redirect url" props will *always* redirect to the provided url after sign up or sign in, regardless of what page the user was on before, and will override the `redirect_url` value if present.
+
+- `signInForceRedirectUrl`
+- `signUpForceRedirectUrl`
+
+### Control components
+
+<CodeBlockTabs options={['ClerkProvider', 'RedirectToSignIn', 'RedirectToSignUp']}>
+
+```javascript filename="example.js"
+function App() {
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/onboarding"
+    >
+      <SignedIn>
+        <Welcome />
+      </SignedIn>
+      <SignedOut>
+        <RedirectToSignIn />
+      </SignedOut>
+    </ClerkProvider>
+  );
+}
+```
+
+```javascript filename="example.js"
+function App() {
+  return (
+    <ClerkProvider publishableKey={clerkPubKey}>
+      <SignedIn>
+        <Welcome />
+      </SignedIn>
+      <SignedOut>
+        <RedirectToSignIn
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
+        />
+      </SignedOut>
+    </ClerkProvider>
+  );
+}
+```
+
+```javascript filename="example.js"
+function App() {
+  return (
+    <ClerkProvider publishableKey={clerkPubKey}>
+      <SignedIn>
+        <Welcome />
+      </SignedIn>
+      <SignedOut>
+        <RedirectToSignUp
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
+        />
+      </SignedOut>
+    </ClerkProvider>
+  );
+}
+```
+
+</CodeBlockTabs>
+
+<Callout type="info" emoji="💡">
+  `<RedirectToSignIn />` or `<RedirectToSignUp />` child components will always take precedence over `<ClerkProvider>`.
+</Callout>
+
+### Button components
+
+In the case that you are using a [`<SignInButton>`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton>`](/docs/components/unstyled/sign-up-button), you can also pass the properties into those components. We recommend defining both `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
+
+<CodeBlockTabs type="framework" options={["Next.js", "React", "Remix", "Gatsby"]}>
+```jsx filename="pages/index.js"
+import { SignInButton, SignUpButton } from "@clerk/nextjs";
+
+export default function Home() {
+return (
+  <div>
+    <h1>Welcome!</h1>
+
+    <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      Sign in
+    </SignInButton>
+
+    <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      Sign up
+    </SignUpButton>
+  </div>
+);
+}
+```
+
+```jsx filename="example.js"
+import { SignInButton, SignUpButton } from "@clerk/clerk-react";
+
+export default function Example() {
+  return (
+    <div>
+      <h1>Welcome!</h1>
+
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign in
+      </SignInButton>
+
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign up
+      </SignUpButton>
+    </div>
+  );
+}
+```
+
+```jsx filename="pages/index.js"
+import { SignInButton, SignUpButton } from "@clerk/remix";
+
+export default function Home() {
+  return (
+    <div>
+      <h1>Welcome!</h1>
+
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign in
+      </SignInButton>
+
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign up
+      </SignUpButton>
+    </div>
+  );
+}
+```
+
+```jsx filename="pages/index.js"
+import { SignInButton, SignUpButton } from "gatsby-plugin-clerk";
+
+export default function Home() {
+  return (
+    <div>
+      <h1>Welcome!</h1>
+
+      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign in
+      </SignInButton>
+
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+        Sign up
+      </SignUpButton>
+    </div>
+  );
+}
+```
+</CodeBlockTabs>

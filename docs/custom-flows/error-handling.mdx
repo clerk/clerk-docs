@@ -15,29 +15,76 @@ A user is attempting to sign up with your application, but they are attempting t
 ```jsx
 import { useState } from "react";
 import { useSignUp } from "@clerk/clerk-react";
+import { ClerkAPIError } from "@clerk/types";
+import { isClerkAPIResponseError } from "@clerk/clerk-react/errors";
 
 function Example() {
-  const [error, setError] = useState(null);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<ClerkAPIError[]>();
 
-  const { signUp } = useSignUp();
+  const { isLoaded, signUp, setActive } = useSignUp();
 
-  const signUpUser = async () => {
-    const response = await signUp
-      ?.create({
-        identifier: "example@email.com",
-        password: "Tester01!",
-      })
-      .then((res) => console.log("response", res))
-      .catch((err) => setError(err.errors[0].message));
+  const attemptSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // clear any errors that may have occured during previous form submission
+    setErrors(undefined);
+
+    if (!isLoaded || !signUp) return;
+
+    try {
+      const result = await signUp.create({ emailAddress, password});
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        return;
+      }
+      if (result.status === 'abandoned') {
+        const error = { code: result.status, message: "The sign-up attempt will be abandoned if it was started more than 24 hours previously." }
+        setErrors([error]);
+        return;
+      }
+      if (result.status === 'missing_requirements') {
+        const error = { code: result.status, message: "A requirement from the email, phone, username settings is missing." }
+        setErrors([error]);
+        return;
+      }
+    } catch(err: unknown) {
+      if (isClerkAPIResponseError(err)) setErrors(err.errors);
+      return; 
+    }
   };
 
   return (
-    <div>
-      <button onClick={signUpUser}>Sign Up</button>
+    <form onSubmit={attemptSignUp}>
       <div>
-        <error>{error}</error>
+        <label htmlFor="email">Email address</label>
+        <input 
+          id="email" 
+          type="email" 
+          value={emailAddress} 
+          onChange={(e) => {setEmailAddress(e.target.value)}} 
+        />
       </div>
-    </div>
+
+      <div>
+        <label htmlFor="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          value={password} 
+          onChange={(e) => {setPassword(e.target.value)}} 
+        />
+      </div>
+
+      {errors &&
+        <ul>
+          {errors.map((el, index) => <li key={index}>{el.message}</li>)}
+        </ul>
+      }
+
+      <button type="submit">Sign Up</button>
+    </form>
   );
 }
 ```
@@ -51,7 +98,6 @@ const signUp = await client.signUp.create({
 })
   .then((res) => console.log("response", res))
   .catch((err) => setError(err.errors[0].message));
-
 ```
 </CodeBlockTabs>
 
@@ -61,28 +107,86 @@ Errors returned from the [`signIn()`](/docs/references/react/use-sign-in) functi
 ```jsx
 import { useState } from "react";
 import { useSignIn } from "@clerk/clerk-react";
+import { ClerkAPIError } from "@clerk/types";
+import { isClerkAPIResponseError } from "@clerk/clerk-react/errors";
 
 function Example() {
-  const [error, setError] = useState(null);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<ClerkAPIError[]>();
 
-  const { signIn } = useSignIn();
+  const { isLoaded, signIn, setActive } = useSignIn();
 
-  const signInUser = async () => {
-    const response = await signIn.create({
-      identifier: emailAddress,
-      password,
-    })    
-    .then((result) => console.log("result", result))
-    .catch((err) => setError("error", err.errors[0].message));
+  const attemptSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // clear any errors that may have occured during previous form submission
+    setErrors(undefined);
+
+    if (!isLoaded || !signIn) return;
+
+    try {
+      const result = await signIn.create({ identifier: emailAddress, password});
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        return;
+      }
+      if (result.status === 'needs_identifier')  {
+        const error = { code: result.status, message: "The authentication identifier hasn't been provided." }
+        setErrors([error]);
+        return;
+      }
+      if (result.status === 'needs_first_factor')  {
+        const error = { code: result.status, message: "First factor verification for the provided identifier needs to be prepared and verified." }
+        setErrors([error]);
+        return;
+      }
+      if (result.status === 'needs_second_factor')  {
+        const error = { code: result.status, message: "Second factor verification (2FA) for the provided identifier needs to be prepared and verified." }
+        setErrors([error]);
+        return;
+      }
+      if (result.status === 'needs_new_password')  {
+        const error = { code: result.status, message: "New password hasn't been provided." }
+        setErrors([error]);
+        return;
+      }
+    } catch(err: unknown) {
+      if (isClerkAPIResponseError(err)) setErrors(err.errors);
+      return;
+    }
   };
 
   return (
-    <div>
-      <button onClick={signInUser}>Sign In</button>
+    <form onSubmit={attemptSignIn}>
       <div>
-        <error>{error}</error>
+        <label htmlFor="email">Email address</label>
+        <input 
+          id="email" 
+          type="email" 
+          value={emailAddress} 
+          onChange={(e) => {setEmailAddress(e.target.value)}} 
+        />
       </div>
-    </div>
+
+      <div>
+        <label htmlFor="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          value={password} 
+          onChange={(e) => {setPassword(e.target.value)}} 
+        />
+      </div>
+
+      {errors &&
+        <ul>
+          {errors.map((el, index) => <li key={index}>{el.message}</li>)}
+        </ul>
+      }
+
+      <button type="submit">Sign In</button>
+    </form>
   );
 }
 ```

@@ -14,6 +14,10 @@ description: Clerk's <SignIn /> component renders a UI for signing in users.
 
 The `<SignIn />` component renders a UI for signing in users. The functionality of the `<SignIn />` component is controlled by the instance settings you specify in your [Clerk Dashboard](https://dashboard.clerk.com), such as [sign-in and sign-up options](/docs/authentication/configuration/sign-up-sign-in-options) and [social connections](/docs/authentication/social-connections/overview). You can further customize your `<SignIn />` component by passing additional [properties](#properties) at the time of rendering.
 
+<Callout type="info">
+  The `<SignUp/>` and `<SignIn/>` components cannot render when a user is already signed in, unless the application allows multiple sessions. If a user is already signed in and the application only allows a single session, Clerk will redirect the user to the Home URL instead.
+</Callout>
+
 ## Properties
 
 All props are optional.
@@ -21,12 +25,11 @@ All props are optional.
 | Name | Type | Description |
 | --- | --- | --- |
 | `appearance` | <code>[Appearance](/docs/components/customization/overview) \| undefined</code> | Optional object to style your components. Will only affect [Clerk Components](/docs/components/overview) and not [Account Portal](/docs/account-portal/overview) pages. |
-| `routing` | `'hash' \| 'path' \| 'virtual'` | The routing strategy for your pages.<br />Note: If you are using environment variables for Next.js or Remix to specify your routes, such as `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, this will be set to `path`. |
-| `path` | `string` | The path where the component is mounted on when path-based routing is used.<br />For example: `/sign-in`<br />This prop is ignored in hash- and virtual-based routing. |
-| `redirectUrl` | `string` | Full URL or path to navigate to after successful sign in or sign up.<br /> The same as setting `afterSignInUrl` and `afterSignUpUrl` to the same value. |
-| `afterSignInUrl` | `string` | The full URL or path to navigate to after a successful sign in. |
-| `signUpUrl` | `string` | Full URL or path to the sign up page. Use this property to provide the target of the 'Sign Up' link that's rendered. |
-| `afterSignUpUrl` | `string` | The full URL or path to navigate to after a successful sign up. |
+| `routing` | `'hash' \| 'path' \| 'virtual'` | The routing strategy for your pages. Defaults to `'path'`. |
+| `path` | `string` | The path where the component is mounted on when path-based routing is used. This prop will be required for Next.js and Remix applications that do not set the appropriate environment variables, and is required for all other SDK's.<br />This prop is ignored in hash- and virtual-based routing. |
+| `signUpUrl` | `string` | Full URL or path to the sign up page. Use this property to provide the target of the 'Sign Up' link that's rendered. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead. |
+| `signInFallbackRedirectUrl?`         | `string`                                                                              | The fallback URL to redirect to after the user signs in, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
+| `signInForceRedirectUrl?`         | `string`                                                                              | If provided, this URL will always be redirected to after the user signs in. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
 | `initialValues` | [`SignInInitialValues`](/docs/references/javascript/types/sign-in-initial-values) | The values used to prefill the sign-in fields with. |
 
 ## Usage with frameworks
@@ -34,26 +37,38 @@ All props are optional.
 The following example includes basic implementation of the `<SignIn />` component. You can use this as a starting point for your own implementation.
 
 <Tabs type="framework" items={["Next.js", "React", "Remix", "Gatsby"]}>
-  <Tab>
-    You can embed the `<SignIn />` component using the [Next.js optional catch-all route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes#optional-catch-all-routes). This allows you to redirect the user inside your application. The `<SignIn />` component should be mounted on a public page.
+<Tab>
+The following example demonstrates how you can use the `<SignIn />` component on a public page.
 
-    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-      ```jsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
+    ```jsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
       import { SignIn } from "@clerk/nextjs";
 
       export default function Page() {
-        return <SignIn />;
-      }
-      ```
+        return <SignIn path="/sign-in" signUpUrl="/sign-up" />
+      };
+    ```
 
-      ```jsx filename="/pages/sign-in/[[...index]].tsx"
+    You will notice a `path` prop is being passed to the `SignIn />` component. This is because, by default, the `routing` strategy is set to `path`, requiring the `path` prop to be passed. In Next.js applications, you can either pass the `path` prop to the `<SignIn />` component, or you can define the `NEXT_PUBLIC_CLERK_SIGN_IN_URL` and `NEXT_PUBLIC_CLERK_SIGN_UP_URL` environment variables.
+
+    The example below shows how to mount the `<SignIn />` component on a page without a `path` prop. Select the `.env.local` tab to see an example of how to define the appropriate environment variables.
+
+    <CodeBlockTabs options={["<SignIn /> without path prop", ".env.local"]}>
+      ```jsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
       import { SignIn } from "@clerk/nextjs";
 
-      const SignInPage = () => (
-        <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
-      );
+    ```tsx filename="app/page.tsx"
+    import { SignIn, useUser } from "@clerk/nextjs";
 
-      export default SignInPage;
+    export default function Home() {
+      const { user } = useUser();
+
+      if (!user) {
+        return <SignIn />;
+      }
+
+      ```env filename=".env.local"
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
       ```
     </CodeBlockTabs>
   </Tab>
@@ -63,11 +78,12 @@ The following example includes basic implementation of the `<SignIn />` componen
     import { SignIn } from "@clerk/clerk-react";
 
     const SignInPage = () => (
-      <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
+      <SignIn path="/sign-in" />
     );
 
     export default SignInPage;
     ```
+
   </Tab>
 
   <Tab>
@@ -78,11 +94,12 @@ The following example includes basic implementation of the `<SignIn />` componen
       return (
         <div style={{ border: "2px solid blue", padding: "2rem" }}>
           <h1>Sign In route</h1>
-          <SignIn routing={"path"} path={"/sign-in"} />
+          <SignIn path="/sign-in" />
         </div>
       );
     }
     ```
+
   </Tab>
 
   <Tab>
@@ -93,11 +110,12 @@ The following example includes basic implementation of the `<SignIn />` componen
       return (
         <div style={{ border: "2px solid blue", padding: "2rem" }}>
           <h1>Sign In Up route</h1>
-          <SignIn routing={"path"} path={"/sign-in"} />
+          <SignIn path="/sign-in" />
         </div>
       );
     }
     ```
+
   </Tab>
 </Tabs>
 
@@ -122,58 +140,58 @@ function mountSignIn(node: HTMLDivElement, props?: SignInProps): void;
 
 #### `mountSignIn()` params
 
-| Name | Type | Description |
-| --- | --- | --- |
-| `node` | [`HTMLDivElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDivElement) | The container `<div>` element used to render in the `<SignIn />` component |
-| `props?` | [`SignInProps`](#properties) | The properties to pass to the `<SignIn />` component |
+| Name     | Type                                                                                | Description                                                                |
+| -------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `node`   | [`HTMLDivElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDivElement) | The container `<div>` element used to render in the `<SignIn />` component |
+| `props?` | [`SignInProps`](#properties)                                                        | The properties to pass to the `<SignIn />` component                       |
 
 #### `mountSignIn()` usage
 
 <InjectKeys>
 
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {14}
-  import Clerk from '@clerk/clerk-js';
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}');
-  await clerk.load();
+```js filename="index.js" {14}
+import Clerk from "@clerk/clerk-js";
 
-  document.getElementById("app").innerHTML = `
-    <div id="sign-in"></div>
-  `;
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk("{{pub_key}}");
+await clerk.load();
 
-  const signInDiv =
-    document.getElementById("sign-in");
-
-  clerk.mountSignIn(signInDiv);
-  ```
-
-  ```html filename="index.html" {21}
-  <!-- Add a <div id="sign-in"> element to your HTML -->
+document.getElementById("app").innerHTML = `
   <div id="sign-in"></div>
+`;
 
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
+const signInDiv = document.getElementById("sign-in");
 
-  <script>
-    window.addEventListener("load", async function () {
-      await Clerk.load();
+clerk.mountSignIn(signInDiv);
+```
 
-      const signInDiv =
-        document.getElementById('sign-in');
+```html filename="index.html" {21}
+<!-- Add a <div id="sign-in"> element to your HTML -->
+<div id="sign-in"></div>
 
-      Clerk.mountSignIn(signInDiv);
-    });
-  </script>
-  ```
+<!-- Initialize Clerk with your
+Clerk Publishable key and Frontend API URL -->
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="{{pub_key}}"
+  src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
+
+<script>
+  window.addEventListener("load", async function () {
+    await Clerk.load();
+
+    const signInDiv = document.getElementById("sign-in");
+
+    Clerk.mountSignIn(signInDiv);
+  });
+</script>
+```
+
 </CodeBlockTabs>
 
 </InjectKeys>
@@ -188,8 +206,8 @@ function unmountSignIn(node: HTMLDivElement): void;
 
 #### `unmountSignIn()` params
 
-| Name | Type | Description |
-| --- | --- | --- |
+| Name   | Type                                                                                | Description                                                                   |
+| ------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `node` | [`HTMLDivElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDivElement) | The container `<div>` element with a rendered `<SignIn />` component instance |
 
 #### `unmountSignIn()` usage
@@ -197,56 +215,56 @@ function unmountSignIn(node: HTMLDivElement): void;
 <InjectKeys>
 
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {18}
-  import Clerk from '@clerk/clerk-js';
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}');
-  await clerk.load();
+```js filename="index.js" {18}
+import Clerk from "@clerk/clerk-js";
 
-  document.getElementById('app').innerHTML = `
-    <div id="sign-in"></div>
-  `
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk("{{pub_key}}");
+await clerk.load();
 
-  const signInDiv =
-    document.getElementById('sign-in');
-
-  clerk.mountSignIn(signInDiv);
-
-  // ...
-
-  clerk.unmountSignIn(signInDiv);
-  ```
-
-  ```html filename="index.html" {25}
-  <!-- Add a <div id="sign-in"> element to your HTML -->
+document.getElementById("app").innerHTML = `
   <div id="sign-in"></div>
+`;
 
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
+const signInDiv = document.getElementById("sign-in");
 
-  <script>
-    window.addEventListener("load", async function () {
-      await Clerk.load();
+clerk.mountSignIn(signInDiv);
 
-      const signInDiv =
-        document.getElementById('sign-in');
+// ...
 
-      Clerk.mountSignIn(signInDiv);
+clerk.unmountSignIn(signInDiv);
+```
 
-      // ...
+```html filename="index.html" {25}
+<!-- Add a <div id="sign-in"> element to your HTML -->
+<div id="sign-in"></div>
 
-      Clerk.unmountSignIn(signInDiv);
-    });
-  </script>
-  ```
+<!-- Initialize Clerk with your
+Clerk Publishable key and Frontend API URL -->
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="{{pub_key}}"
+  src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
+
+<script>
+  window.addEventListener("load", async function () {
+    await Clerk.load();
+
+    const signInDiv = document.getElementById("sign-in");
+
+    Clerk.mountSignIn(signInDiv);
+
+    // ...
+
+    Clerk.unmountSignIn(signInDiv);
+  });
+</script>
+```
+
 </CodeBlockTabs>
 
 </InjectKeys>
@@ -261,8 +279,8 @@ function openSignIn(props?: SignInProps): void;
 
 #### `openSignIn()` params
 
-| Name | Type | Desciption |
-| --- | --- | --- |
+| Name     | Type                         | Desciption                                           |
+| -------- | ---------------------------- | ---------------------------------------------------- |
 | `props?` | [`SignInProps`](#properties) | The properties to pass to the `<SignIn />` component |
 
 #### `openSignIn()` usage
@@ -270,35 +288,37 @@ function openSignIn(props?: SignInProps): void;
 <InjectKeys>
 
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {7}
-  import Clerk from '@clerk/clerk-js';
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}');
-  await clerk.load();
+```js filename="index.js" {7}
+import Clerk from "@clerk/clerk-js";
 
-  clerk.openSignIn();
-  ```
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk("{{pub_key}}");
+await clerk.load();
 
-  ```html filename="index.html" {15}
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
+clerk.openSignIn();
+```
 
-  <script>
-    window.addEventListener("load", async function () {
-      await Clerk.load();
+```html filename="index.html" {15}
+<!-- Initialize Clerk with your
+Clerk Publishable key and Frontend API URL -->
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="{{pub_key}}"
+  src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
 
-      Clerk.openSignIn();
-    });
-  </script>
-  ```
+<script>
+  window.addEventListener("load", async function () {
+    await Clerk.load();
+
+    Clerk.openSignIn();
+  });
+</script>
+```
+
 </CodeBlockTabs>
 
 </InjectKeys>
@@ -316,43 +336,45 @@ function closeSignIn(): void;
 <InjectKeys>
 
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {11}
-  import Clerk from '@clerk/clerk-js';
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}');
-  await clerk.load();
+```js filename="index.js" {11}
+import Clerk from "@clerk/clerk-js";
 
-  clerk.openSignIn();
+// Initialize Clerk with your Clerk publishable key
+const clerk = new Clerk("{{pub_key}}");
+await clerk.load();
 
-  // ...
+clerk.openSignIn();
 
-  clerk.closeSignIn();
-  ```
+// ...
 
-  ```html filename="index.html" {19}
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
+clerk.closeSignIn();
+```
 
-  <script>
-    window.addEventListener("load", async function () {
-      await Clerk.load();
+```html filename="index.html" {19}
+<!-- Initialize Clerk with your
+Clerk Publishable key and Frontend API URL -->
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="{{pub_key}}"
+  src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
 
-      Clerk.openSignIn();
+<script>
+  window.addEventListener("load", async function () {
+    await Clerk.load();
 
-      // ...
+    Clerk.openSignIn();
 
-      Clerk.closeSignIn();
-    });
-  </script>
-  ```
+    // ...
+
+    Clerk.closeSignIn();
+  });
+</script>
+```
+
 </CodeBlockTabs>
 
 </InjectKeys>

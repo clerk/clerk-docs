@@ -69,7 +69,7 @@ In the following example:
 - If the user does not have the permission, `null` is returned and the "Team Settings" component is not rendered.
 
 ```tsx filename="app/page.tsx"
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 
 export default async function Page() {
   const { has } = auth();
@@ -84,7 +84,9 @@ export default async function Page() {
 
 ### `getToken()`
 
-You can use `getToken()` on an `Auth` object to retrieve the current user's session token. You can also use this method to retrieve a custom JWT template. It has the type `ServerGetToken`.
+You can use `getToken()` on an `Auth` object to retrieve the user's session token. You can also use this method to retrieve a custom JWT template.
+
+Tokens can only be generated if the user is signed in.
 
 #### `ServerGetToken`
 
@@ -99,6 +101,94 @@ type ServerGetToken = (options?: ServerGetTokenOptions) => Promise<string | null
 | Name | Type | Description |
 | --- | --- | --- |
 | `template?` | `string` | The name of the custom JWT template to retrieve. |
+
+#### Use `getToken()` in the frontend
+
+The `Auth` object is not available in the frontend. To use the `getToken()` method in the frontend:
+
+- For React-based applications, you can use the `useAuth()` hook. See the [reference documentation](/docs/references/react/use-auth#how-to-use-the-use-auth-hook) for example usage.
+- For JavaScript applications, see the [reference documentation](/docs/references/javascript/session#get-token) for example usage.
+
+#### Use `getToken()` in the backend
+
+<Tabs type="framework" items={["Next.js", "Node", "Remix"]}>
+<Tab>
+To use the `getToken()` method in the backend:
+- In App Router applications, use the [`auth()`](/docs/references/nextjs/auth) helper.
+- In Pages Router applications, use the [`getAuth()`](/docs/references/nextjs/get-auth) helper.
+
+<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+```js filename="app/api/get-token-example/route.ts"
+import { auth } from "@clerk/nextjs/server";
+
+export async function GET() {
+  const { getToken } = auth();
+
+  const template = 'test';
+
+  const token = await getToken({ template })
+
+  return Response.json({ token })
+}
+```
+
+```js filename="pages/api/getToken.ts"
+import { getAuth } from '@clerk/nextjs/server';
+import type { NextApiRequest, NextApiResponse } from 'next';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { getToken } = getAuth(req);
+
+  const template = 'test';
+
+  const token = await getToken({ template });
+
+  return res.json({token});
+}
+```
+</CodeBlockTabs>
+</Tab>
+
+<Tab>
+To use the `getToken()` method in the backend, you can acccess it using the `Auth` object returned by the request.
+```js filename="getToken.ts"
+app.post('/api/get-token',
+  // ClerkExpressRequireAuth returns an error for unauthorized requests
+  ClerkExpressRequireAuth(),
+
+  // Optionally ClerkExpressWithAuth returns an empty user with no error
+  // ClerkExpressWithAuth(),
+
+  async (req, res) => {
+    const getToken = req.auth.getToken
+
+    const template = 'test'
+
+    const token = await getToken({ template })
+
+    res.json({ token })
+  })
+```
+</Tab>
+
+<Tab>
+To use the `getToken()` method in the backend, you can access it using the [`getAuth()`](/docs/references/nextjs/get-auth) function.
+```js filename="app/routes/get-token.ts"
+import { getAuth } from "@clerk/remix/ssr.server"
+import { ActionFunction, json } from "@remix-run/node"
+
+export const action: ActionFunction = async (req) => {
+  const { getToken } = await getAuth(req)
+
+  const template = 'test';
+
+  const token = await getToken({ template });
+
+  return json({ token })
+}
+```
+</Tab>
+</Tabs>
 
 ## `Auth` object example without active organization
 

@@ -3,9 +3,9 @@ title: Implement basic Role Based Access Control with metadata
 description: Learn how to leverage Clerk's publicMetadata to implement your own basic Role Based Access Controls.
 ---
 
-# Implement basic Role Based Access Control (RBAC) with metadata 
+# Implement basic Role Based Access Control (RBAC) with metadata
 
-To control which users can access certain parts of your application, you can leverage Clerk's [roles](/docs/organizations/roles-permissions#roles) feature. Although Clerk offers a roles feature as part of the feature set for [organizations](/docs/organizations/overview), not every app implements organizations. This guide will cover a workaround for setting up a basic Role Based Access Control (RBAC) system for products that don't use Clerk's organizations or roles. 
+To control which users can access certain parts of your application, you can leverage Clerk's [roles](/docs/organizations/roles-permissions#roles) feature. Although Clerk offers a roles feature as part of the feature set for [organizations](/docs/organizations/overview), not every app implements organizations. This guide will cover a workaround for setting up a basic Role Based Access Control (RBAC) system for products that don't use Clerk's organizations or roles.
 
 This guide assumes that you are using Next.js App Router. The concepts here can be adapted to Next.js Pages Router and Remix.
 
@@ -13,9 +13,9 @@ This guide assumes that you are using Next.js App Router. The concepts here can 
 
 Clerk provides [user metadata](/docs/users/metadata#user-metadata), which is a tool that can be leveraged to build flexible custom logic into your application. Metadata can be used to store information, and in this case, it can be used to store a user's role.
 
-`unsafeMetadata` can be read and updated in the browser, and because the use could modify this metadata it should be treated as unsafe and validated by your application before trusting it. `privateMetadata` can not be read or modified in the browser. `publicMetadata` can be read by the browser and can only be updated server-side or in the Clerk Dashboard, making it the safest and best choice for this use case.
+`unsafeMetadata` can be read and updated in the browser, and because the user could modify this metadata it should be treated as unsafe and validated by your application before trusting it. `privateMetadata` can not be read or modified in the browser. `publicMetadata` can be read by the browser and can only be updated server-side or in the Clerk Dashboard, making it the safest and best choice for this use case.
 
-To build a basic RBAC system, first you need to make `publicMetadata` available to the application directly from the session token. With `publicMetadata` attached directly to the user's session, a fetch and network request isn't required every time you need to access the data.
+To build a basic RBAC system, first, you need to make `publicMetadata` available to the application directly from the session token. With `publicMetadata` attached directly to the user's session, a fetch and network request isn't required every time you need to access the data.
 
 In the Clerk Dashboard, navigate to [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions). In the **Customize session token** section, select **Edit**. In the modal that opens, enter the following JSON. If you have already customized your session token, you may need to merge this with what you currently have.
 
@@ -25,7 +25,7 @@ In the Clerk Dashboard, navigate to [**Sessions**](https://dashboard.clerk.com/l
 }
 ```
 
-<Images 
+<Images
   width={2494}
   height={1400}
   src="/docs/images/guides/basic-rbac/customize-session-token.webp"
@@ -62,7 +62,7 @@ Later, you will add a basic admin tool to change the user's role, but for now, l
 }
 ```
 
-<Images 
+<Images
   width={2494}
   height={1400}
   src="/docs/images/guides/basic-rbac/edit-public-metadata.webp"
@@ -76,7 +76,7 @@ Now that your user has the `admin` role, let's build an admin dashboard to help 
 You want the dashboard to only be available to users with the `admin` role. [As you configured earlier](#configure-the-session-token), a user's role can be found in the metadata stored in the session token. You can access the session token's claims using Clerk's `auth()` hook.
 
 ```tsx filename="app/admin/dashboard/page.tsx"
-import { auth } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 export default function AdminDashboard() {
@@ -89,14 +89,14 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <h1>This is the admin dashboard</h1>      
+      <h1>This is the admin dashboard</h1>
       <p>This page is restricted to users with the 'admin' role.</p>
     </>
   );
 }
 ```
 
-The `/admin/dashboard` route now requires that the user is signed into the application. It also requires that the user have a `publicMetadata` of `{"role": "admin" }`.
+The `/admin/dashboard` route now requires the user to sign into the application. It also requires that the user have a `publicMetadata` of `{"role": "admin" }`.
 
 ## Create a reusable function to check roles
 
@@ -121,7 +121,7 @@ The next step is creating the helper function. Create the `utils/` directory and
 
 ```ts filename="utils/roles.ts"
 import { Roles } from "@/types/globals"
-import { auth } from "@clerk/nextjs"
+import { auth } from "@clerk/nextjs/server"
 
 export const checkRole = (role: Roles) => {
   const { sessionClaims } = auth()
@@ -227,7 +227,7 @@ With the server action and the search form in place, you'll refactor the server 
 import { redirect } from "next/navigation";
 import { checkRole } from "@/utils/roles";
 import { SearchUsers } from "./_search-users";
-import { clerkClient } from "@clerk/nextjs";
+import { clerkClient } from "@clerk/nextjs/server";
 import { setRole } from "./_actions";
 
 export default async function AdminDashboard(params: {

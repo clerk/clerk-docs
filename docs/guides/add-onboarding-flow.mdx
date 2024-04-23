@@ -69,7 +69,7 @@ Clerk's [`clerkMiddleware()`](https://clerk.com/docs/references/nextjs/clerk-mid
 
 The following example demonstrates how to use Clerk's `clerkMiddleware()` to redirect users based on their onboarding status. If the user is signed in and has not completed onboarding, they will be redirected to the onboarding page.
 
-Note that the following example protects all routes. This is so that any user visiting your application is forced to authenticate, and then forced to onboard. You can customize the `publicRoutes` array to include any routes that should be accessible to all users, even unauthenticated ones.
+Note that the following example protects all routes except one. This is so that any user visiting your application is forced to authenticate, and then forced to onboard. You can customize the array in the `createRouteMatcher()` function assigned to `isPublicRoute` to include any routes that should be accessible to all users, even unauthenticated ones.
 
 ```tsx filename="src/middleware.ts"
 import { clerkMiddleware } from "@clerk/nextjs/server";
@@ -77,7 +77,7 @@ import { redirectToSignIn } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
 const isOnboardingRoute = createRouteMatcher(["/onboarding"])
-const isProtectedRoute = createRouteMatcher(["/protected-route-example"])
+const isPublicRoute = createRouteMatcher(["/public-route-example"])
 
 export default clerkMiddleware((auth, req: NextRequest) => {
     const { userId, sessionClaims } = auth();
@@ -88,7 +88,7 @@ export default clerkMiddleware((auth, req: NextRequest) => {
     }
 
     // If the user isn't signed in and the route is private, redirect to sign-in
-    if (!userId && isProtectedRoute(req))
+    if (!userId && !isPublicRoute(req))
       return redirectToSignIn({ returnBackUrl: req.url });
 
     // Catch users who do not have `onboardingComplete: true` in their publicMetadata
@@ -99,10 +99,10 @@ export default clerkMiddleware((auth, req: NextRequest) => {
     }
 
     // If the user is logged in and the route is protected, let them view.
-    if (userId && isProtectedRoute(req)) return NextResponse.next();
+    if (userId && !isPublicRoute(req)) return NextResponse.next();
 
     // If the route is public, anyone can view it.
-    if (!isProtectedRoute(req)) return NextResponse.next();
+    if (isPublicRoute(req)) return NextResponse.next();
   }
 );
 

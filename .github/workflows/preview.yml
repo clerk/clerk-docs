@@ -20,7 +20,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    if: ${{ github.event.action == 'labeled' && github.event.label.name == 'deploy-preview' }}
+    if:
+      ${{ github.event.action == 'labeled' && github.event.label.name ==
+      'deploy-preview' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -58,7 +60,9 @@ jobs:
       - name: Deploy to Vercel
         id: vercel-deploy
         env:
-          DOCS_BRANCH: ${{ steps.checkout-fork.outputs.branch || github.event.pull_request.head.ref }}
+          DOCS_BRANCH:
+            ${{ steps.checkout-fork.outputs.branch ||
+            github.event.pull_request.head.ref }}
         run: |
           cd app
           git checkout -b preview/$DOCS_BRANCH
@@ -89,18 +93,42 @@ jobs:
           vercel alias set ${{ steps.vercel-deploy.outputs.url }} docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com --token=${{ secrets.VERCEL_TOKEN }} --scope clerk-production
           echo "stable_url=https://docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com" >> $GITHUB_OUTPUT
 
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+      - name: Get changed files
+        id: changed-files
+        run: |
+          if ${{ github.event_name == 'pull_request' }}; then
+              echo "changed_files=$(git diff --name-only -r HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+          else
+              echo "changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
+          fi
+      - name: List changed files
+        id: list-files
+        run: |
+          allFiles=()
+          for file in ${{ steps.changed-files.outputs.changed_files }}; do
+              allFiles+=(${{ steps.vercel-wait-for-deploy.outputs.stable_url }}/${file/.mdx/ }\n)
+          done
+          echo "files=$allFiles" >> $GITHUB_OUTPUT
+
       - name: Create preview comment - deployed
         uses: marocchino/sticky-pull-request-comment@v2.8.0
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           number: ${{ github.event.pull_request.number }}
           header: ${{ env.COMMENT_HEADER }}
+          files: |
           message: |
             Hey @${{ github.event.sender.login }}, your docs preview is available.
 
             | Status | Preview | Updated (UTC) |
             | :-- | :-- | :-- |
             | :cookie: Deployed | [Visit preview](${{ steps.vercel-wait-for-deploy.outputs.stable_url }}/docs) | ${{ env.DATE }} |
+
+            Changed pages:
+            ${{steps.list-files.outputs.allFiles}}
 
             <!-- deployed:true -->
 
@@ -112,7 +140,9 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      CLERK_COM_BASE_URL: https://docs-preview-${{ github.event.pull_request.number }}.clerkpreview.com
+      CLERK_COM_BASE_URL:
+        https://docs-preview-${{ github.event.pull_request.number
+        }}.clerkpreview.com
     steps:
       - name: Find comment
         uses: peter-evans/find-comment@v2.4.0
@@ -125,7 +155,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         id: checkout-fork
-        if: ${{ github.event.pull_request.head.repo.fork == true && steps.find-comment.outputs.comment-id != 0}}
+        if:
+          ${{ github.event.pull_request.head.repo.fork == true &&
+          steps.find-comment.outputs.comment-id != 0}}
         run: |
           gh pr checkout ${{ github.event.pull_request.number }}
           git_branch=$(git rev-parse --abbrev-ref HEAD)

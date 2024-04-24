@@ -29,13 +29,13 @@ Once you have a Remix application ready, you need to install Clerk's Remix SDK. 
 
 ### Set environment variables
 
-Below is an example of an `.env.local` file.
+Below is an example of an `.env` file.
 
 **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
 <InjectKeys>
 
-```sh filename=".env.local"
+```sh filename=".env"
 CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```
@@ -50,13 +50,13 @@ To configure Clerk in your Remix application, you will need to update your root 
 import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
 
+// Import rootAuthLoader
 import { rootAuthLoader } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => ([{
@@ -65,23 +65,29 @@ export const meta: MetaFunction = () => ([{
   viewport: "width=device-width,initial-scale=1",
 }]);
 
+// Export as the root route loader
 export const loader: LoaderFunction = (args) => rootAuthLoader(args);
 
-export default function App() {
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
       </head>
       <body>
-        <Outlet />
+        {children}
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );
+}
+
+export default function App() {
+  return <Outlet />;
 }
 ```
 
@@ -111,7 +117,6 @@ import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
@@ -122,32 +127,36 @@ import { rootAuthLoader } from "@clerk/remix/ssr.server";
 // Import ClerkApp
 import { ClerkApp } from "@clerk/remix";
 
-export const meta: MetaFunction = () => ({
+export const meta: MetaFunction = () => ([{
   charset: "utf-8",
   title: "New Remix App",
   viewport: "width=device-width,initial-scale=1",
-});
+}]);
 
 export const loader: LoaderFunction = (args) => rootAuthLoader(args);
 
-function App() {
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
       </head>
       <body>
-        <Outlet />
+        {children}
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );
 }
 
-// Wrap your app in ClerkApp(app)
+function App() {
+  return <Outlet />;
+}
+
 export default ClerkApp(App);
 ```
 
@@ -194,8 +203,8 @@ Next, add environment variables for the `signIn`, `signUp`, `afterSignUp`, and `
 ```sh filename=".env"
 CLERK_SIGN_IN_URL=/sign-in
 CLERK_SIGN_UP_URL=/sign-up
-CLERK_AFTER_SIGN_IN_URL=/
-CLERK_AFTER_SIGN_UP_URL=/
+CLERK_SIGN_IN_FALLBACK_URL=/
+CLERK_SIGN_UP_FALLBACK_URL=/
 ```
 
 These values control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
@@ -208,22 +217,35 @@ Clerk offers [Control Components](/docs/components/overview) that allow you to p
 
 ```tsx filename="routes/index.tsx"
 import {
+  SignOutButton,
   SignedIn,
   SignedOut,
-  RedirectToSignIn,
   UserButton,
 } from "@clerk/remix";
+import { Link } from "@remix-run/react";
 
 export default function Index() {
   return (
     <div>
+      <h1>Index Route</h1>
       <SignedIn>
-        <h1>Index route</h1>
         <p>You are signed in!</p>
-        <UserButton />
+        <div>
+          <p>View your profile here 👇</p>
+          <UserButton />
+        </div>
+        <div>
+          <SignOutButton />
+        </div>
       </SignedIn>
       <SignedOut>
-        <RedirectToSignIn />
+        <p>You are signed out</p>
+        <div>
+          <Link to="/sign-in">Go to Sign in</Link>
+        </div>
+        <div>
+          <Link to="/sign-up">Go to Sign up</Link>
+        </div>
       </SignedOut>
     </div>
   );

@@ -37,12 +37,12 @@ If you would like to override the `redirect_url` value and supply a custom redir
 
 <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
 ```sh filename=".env.local"
-NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
 NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
 ```
 
 ```sh filename=".env"
-CLERK_SIGN_IN_FORCE_REDIRECT_URL=/dashboard
+CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/dashboard
 CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
 ```
 </CodeBlockTabs>
@@ -52,10 +52,14 @@ CLERK_SIGN_UP_FORCE_REDIRECT_URL=/onboarding
 If you are using Next.js and want a more programmatically generated redirect option, you can use the [`auth().protect()`](/docs/references/nextjs/auth#protect) method in your [Clerk middleware](/docs/references/nextjs/clerk-middleware).
 
 ```tsx filename="middleware.ts"
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)'
+]);
 
 export default clerkMiddleware((auth, req) => {
-  if (req.nextUrl.pathname.startsWith('/dashboard')) auth().protect();
+  if (isProtectedRoute(req)) auth().protect();
 });
 
 export const config = {
@@ -66,6 +70,10 @@ export const config = {
 ## Redirect URL props
 
 You can explicitly define the redirect paths after sign-up or sign-in by using the properties described in this section with Clerk's components. In general, it is recommended to use [environment variables](#environment-variables) instead.
+
+<Callout type="info">
+  The `afterSignIn`, `afterSignUp`, and `redirectUrl` props are deprecated. If you're still using them, the props described in this section will override them.
+</Callout>
 
 ### Fallback redirect URL props
 
@@ -148,7 +156,11 @@ function App() {
 
 ### Button components
 
-In the case that you are using a [`<SignInButton>`](/docs/components/unstyled/sign-in-button) or [`<SignUpButton>`](/docs/components/unstyled/sign-up-button), you can also pass the properties into those components. We recommend defining both `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
+[`<SignInButton>`](/docs/components/unstyled/sign-in-button) and [`<SignUpButton>`](/docs/components/unstyled/sign-up-button) also take these properties.
+
+<Callout type="info">
+It is recommended to define both `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` redirects in each button as some users may choose to sign up instead after attempting to sign in.
+</Callout>
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "Remix", "Gatsby"]}>
 ```jsx filename="pages/index.js"
@@ -159,11 +171,11 @@ return (
   <div>
     <h1>Welcome!</h1>
 
-    <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+    <SignInButton fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
       Sign in
     </SignInButton>
 
-    <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+    <SignUpButton signInFallbackRedirectUrl="/dashboard" fallbackRedirectUrl="/onboarding">
       Sign up
     </SignUpButton>
   </div>
@@ -179,11 +191,11 @@ export default function Example() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignInButton fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" fallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>
@@ -199,11 +211,11 @@ export default function Home() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignInButton fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" fallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>
@@ -219,11 +231,11 @@ export default function Home() {
     <div>
       <h1>Welcome!</h1>
 
-      <SignInButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignInButton fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
         Sign in
       </SignInButton>
 
-      <SignUpButton signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <SignUpButton signInFallbackRedirectUrl="/dashboard" fallbackRedirectUrl="/onboarding">
         Sign up
       </SignUpButton>
     </div>
@@ -231,3 +243,91 @@ export default function Home() {
 }
 ```
 </CodeBlockTabs>
+
+### UI Components
+
+[`<SignIn>`](/docs/components/authentication/sign-in) and [`<SignUp>`](/docs/components/authentication/sign-up) also take these properties.
+
+<Callout type="info">
+It is recommended to define both `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` redirects in each component as some users may choose to sign up instead after attempting to sign in.
+</Callout>
+
+<Tabs type="framework" items={["Next.js", "React", "Remix", "Gatsby"]}>
+  <Tab>
+    ```tsx filename="app/page.tsx"
+    import { SignIn, SignUp, useUser } from "@clerk/nextjs";
+
+    export default function Home() {
+      const { user } = useUser();
+
+      if (!user) {
+        return (
+          <>
+            <h1>Sign in or sign up</h1>
+            <div>
+              <SignIn fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding" />
+              <SignUp fallbackRedirectUrl="/onboarding" signInFallbackRedirectUrl="/dashboard" />
+            </div>
+          </>
+        );
+      }
+
+      return <div>Welcome!</div>;
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```jsx filename="/src/sign-in-sign-up/[[...index]].tsx"
+    import { SignIn, SignUp } from "@clerk/clerk-react";
+
+    const SignInPage = () => (
+      <>
+        <h1>Sign in or sign up</h1>
+        <div>
+          <SignIn fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding" />
+          <SignUp fallbackRedirectUrl="/onboarding" signInFallbackRedirectUrl="/dashboard" />
+        </div>
+      </>
+    );
+
+    export default SignInSignUpPage;
+    ```
+  </Tab>
+
+  <Tab>
+    ```jsx filename="app/routes/sign-in-sign-up/$.tsx"
+    import { SignIn, SignUp } from "@clerk/remix";
+
+    export default function SignInPage() {
+      return (
+        <>
+          <h1>Sign in or sign up</h1>
+          <div>
+            <SignIn fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding" />
+            <SignUp fallbackRedirectUrl="/onboarding" signInFallbackRedirectUrl="/dashboard" />
+          </div>
+        </>
+      );
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```jsx filename="/pages/sign-in-sign-up.js"
+    import { SignIn, SignUp } from "gatsby-plugin-clerk";
+
+    export default function SignInPage() {
+      return (
+        <>
+          <h1>Sign in or sign up</h1>
+          <div>
+            <SignIn fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding" />
+            <SignUp fallbackRedirectUrl="/onboarding" signInFallbackRedirectUrl="/dashboard" />
+          </div>
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>

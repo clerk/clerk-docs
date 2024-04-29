@@ -131,31 +131,31 @@ Headings should be written in sentence-casing, where only the first word of the 
 
 Syntax-highlighted code blocks are rendered wherever markdown code blocks are used. To add syntax highlighting, specify a language next to the backticks before the fenced code block.
 
-```
+````
 ​```typescript
 function add(a: number, b: number) {
   a + b
 }
 ​```
-```
+````
 
 You can also specify a filename by passing the `filename` prop.
 
-```
+````
 ​```typescript filename="add.ts"
 function add(a: number, b: number) {
   a + b
 }
 ​```
-```
+````
 
 If the code should run in a terminal, you can set the syntax highlighting to something like `sh` (shell) or `bash`. The file name should be set to `terminal`.
 
-```
+````
 ​```sh filename="terminal"
 npm i @clerk/nextjs
 ​```
-```
+````
 
 #### `<Steps />`
 
@@ -190,9 +190,7 @@ The `<Callout />` component draws attention to something learners should slow do
 The `<Callout />` component accepts an optional `type` property which accepts the following strings: `'Danger' | 'Info' | 'Success' | 'Warning';`.
 
 ```mdx
-<Callout type="danger">
-  Don't do this in production!
-</Callout>
+<Callout type="danger">Don't do this in production!</Callout>
 ```
 
 The image below shows what this example looks like once rendered.
@@ -205,17 +203,19 @@ The `<CodeBlockTabs />` component renders multiple variations of a code block. I
 
 ````mdx
 <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/nextjs
-  ```
 
-  ```sh filename="terminal"
-  yarn add @clerk/nextjs
-  ```
+```sh filename="terminal"
+npm i @clerk/nextjs
+```
 
-  ```sh filename="terminal"
-  pnpm add @clerk/nextjs
-  ```
+```sh filename="terminal"
+yarn add @clerk/nextjs
+```
+
+```sh filename="terminal"
+pnpm add @clerk/nextjs
+```
+
 </CodeBlockTabs>
 ````
 
@@ -229,33 +229,37 @@ For example, in the example below, if the user were to choose `"yarn"` as the ta
 
 ````mdx
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/nextjs
-  ```
 
-  ```sh filename="terminal"
-  yarn add @clerk/nextjs
-  ```
+```sh filename="terminal"
+npm i @clerk/nextjs
+```
 
-  ```sh filename="terminal"
-  pnpm add @clerk/nextjs
-  ```
+```sh filename="terminal"
+yarn add @clerk/nextjs
+```
+
+```sh filename="terminal"
+pnpm add @clerk/nextjs
+```
+
 </CodeBlockTabs>
 
 You can also install the install the Clerk React package by running the following command in your terminal:
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/clerk-react
-  ```
 
-  ```sh filename="terminal"
-  yarn add @clerk/clerk-react
-  ```
+```sh filename="terminal"
+npm i @clerk/clerk-react
+```
 
-  ```sh filename="terminal"
-  pnpm add @clerk/clerk-react
-  ```
+```sh filename="terminal"
+yarn add @clerk/clerk-react
+```
+
+```sh filename="terminal"
+pnpm add @clerk/clerk-react
+```
+
 </CodeBlockTabs>
 ````
 
@@ -269,17 +273,21 @@ The `<Tabs />` component structures content in a tabular format. It accepts an `
 
 ```mdx
 <Tabs items={["React", "JavaScript"]}>
-<Tab>
-# React
+  <Tab>
 
-Here is some example text about React.
-</Tab>
+    # React
 
-<Tab>
-# JavaScript
+    Here is some example text about React.
 
-Here is some example text about JavaScript.
-</Tab>
+  </Tab>
+
+  <Tab>
+
+    # JavaScript
+
+    Here is some example text about JavaScript.
+
+  </Tab>
 </Tabs>
 ```
 
@@ -293,29 +301,38 @@ For example, in the example below, if the user were to choose "JavaScript" as th
 
 ```mdx
 <Tabs type="framework" items={["React", "JavaScript"]}>
-<Tab>
-# React
+  <Tab>
 
-Here is some example text about React.
-</Tab>
-<Tab>
-# JavaScript
+    # React
 
-Here is some example text about JavaScript.
-</Tab>
+    Here is some example text about React.
+
+  </Tab>
+
+  <Tab>
+
+    # JavaScript
+
+    Here is some example text about JavaScript.
+
+  </Tab>
 </Tabs>
 
 <Tabs type="framework" items={["React", "JavaScript"]}>
-<Tab>
-# React
+  <Tab>
 
-Here is another example about React.
-</Tab>
-<Tab>
-# JavaScript
+    # React
 
-Here is another example about JavaScript.
-</Tab>
+    Here is another example about React.
+
+  </Tab>
+  <Tab>
+
+    # JavaScript
+
+    Here is another example about JavaScript.
+
+  </Tab>
 </Tabs>
 ```
 
@@ -341,23 +358,23 @@ The Pages Router information is here.
 </Tabs>
 
 <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+
 ```tsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
-import { SignIn } from "@clerk/nextjs";
+import { SignIn } from '@clerk/nextjs'
 
 export default function Page() {
-  return <SignIn />;
+  return <SignIn />
 }
 ```
 
 ```tsx filename="/pages/sign-in/[[...index]].tsx"
-import { SignIn } from "@clerk/nextjs";
+import { SignIn } from '@clerk/nextjs'
 
-const SignInPage = () => (
-  <SignIn />
-);
+const SignInPage = () => <SignIn />
 
-export default SignInPage;
+export default SignInPage
 ```
+
 </CodeBlockTabs>
 ````
 
@@ -384,7 +401,7 @@ The image below shows what this example would look like once rendered.
 
 #### `<Tables />`
 
-If you have more complex content that you need inside a table, such as embedding JSX elements, you can use the `<Tables />` component. While you *can* embed JSX elements in a markdown table, embedding JSX elements in a JSX component is the *better* option for formatting and readability purposes.
+If you have more complex content that you need inside a table, such as embedding JSX elements, you can use the `<Tables />` component. While you _can_ embed JSX elements in a markdown table, embedding JSX elements in a JSX component is the _better_ option for formatting and readability purposes.
 
 For example, one of these cells has content that would best formatted in an unordered list. Thus, a `<Tables />` component is used instead of a markdown table.
 
@@ -425,18 +442,18 @@ The image below shows what this example would look like once rendered.
 The `<InjectKeys />` component is used to inject the user's current Clerk instance's publishable and secret keys. It should wrap around a code block, which will render an eye icon for users to click on in order to reveal their secret keys.
 
 ````mdx
-  Add the following code to your `.env.local` file to set your public and secret keys.
+Add the following code to your `.env.local` file to set your public and secret keys.
 
-  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+**Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
-  <InjectKeys>
+<InjectKeys>
 
-  ```sh filename=".env.local"
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_SECRET_KEY={{secret}}
-  ```
+```sh filename=".env.local"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+```
 
-  </InjectKeys>
+</InjectKeys>
 ````
 
 The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
@@ -447,12 +464,12 @@ The video below shows what this example looks like once rendered. Notice the eye
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property | Type | Description |
-| --- | --- | --- |
-| `framework` | string | Denotes the framework or platform the tutorial is for. |
-| `beforeYouStart` | { title: string; link: string }[] | Links to things that learners should complete before the tutorial. |
-| `exampleRepo` (optional) | { title: string; link: string }[] | Links to example repositories. |
-| `exampleRepoTitle` (optional) | string | The title for the example repository/repositories. Defaults to `'Example repository'`. |
+| Property                      | Type                              | Description                                                                            |
+| ----------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
+| `framework`                   | string                            | Denotes the framework or platform the tutorial is for.                                 |
+| `beforeYouStart`              | { title: string; link: string }[] | Links to things that learners should complete before the tutorial.                     |
+| `exampleRepo` (optional)      | { title: string; link: string }[] | Links to example repositories.                                                         |
+| `exampleRepoTitle` (optional) | string                            | The title for the example repository/repositories. Defaults to `'Example repository'`. |
 
 ```mdx
 <TutorialHero
@@ -492,7 +509,6 @@ When rendering images, make sure that you provide appropriate alternate text. Re
 
 > **Note**
 > Is the image you're adding optimized? If not, consider running it through an optimizer, like [Squoosh](https://squoosh.app/).
-
 
 ## Help wanted!
 

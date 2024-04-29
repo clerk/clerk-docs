@@ -56,7 +56,7 @@ When you open a pull request, a member of the Clerk team can add the `deploy-pre
 
 ### Previewing changes locally (for Clerk employees)
 
-Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the clerk-marketing README](https://github.com/clerk/clerk-marketing#previewing-local-documentation-changes).
+Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the `clerk` README](https://github.com/clerk/clerk/tree/main?tab=readme-ov-file#running-the-app-locally).
 
 ## Validating your changes
 

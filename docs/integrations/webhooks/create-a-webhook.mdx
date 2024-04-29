@@ -38,7 +38,7 @@ To test a webhook locally, you will need to expose your local server to the inte
 
 This command will start a tunnel from `https://fawn-one-nominally.ngrok-free.app` to your local server on port 80.
 5. Change the port number to whatever your server is running on. For this guide, change it to 3000 and then run the command in your terminal.
-6. Copy your "forwarding" URL. It should look something like `https://fawn-one-nominally.ngrok-free.app`.
+6. Copy your "forwarding" URL. It should look something like `https://fawn-two-nominally.ngrok-free.app`.
 
 ## Create an endpoint in the Clerk Dashboard
 
@@ -47,16 +47,16 @@ To create a webhook endpoint, you must provide the **Endpoint URL** and then cho
 1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=webhooks).
 2. In the navigation sidenav, select **Webhooks**.
 3. Select the **Add Endpoint** button.
-4. In the **Endpoint URL** field, paste the ngrok URL you copied earlier followed by `/api/webhooks`. This is the endpoint that you will later create, that Svix will send the webhook payload to. The full URL should look something like `https://fb3f-2603-1700-2458-3410-a006-dc38-e9d6-1275.ngrok-free.app/api/webhooks`.
+4. In the **Endpoint URL** field, paste the ngrok URL you copied earlier followed by `/api/webhooks`. This is the endpoint that you will later create, that Svix will send the webhook payload to. The full URL should look something like `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
 5. In the **Message Filtering** section, select the `user.updated` event.
 6. Select the **Create** button.
 7. You will be redirected to your endpoint's settings page. Leave this page open.
 
-## Add your signing secret to your `.env` file
+## Add your signing secret to your `.env.local` file
 
-To verify the webhook payload, you will need your endpoint's signing secret. However, you do not want to expose this secret in your codebase, so you will store it in a `.env` file.
+To verify the webhook payload, you will need your endpoint's signing secret. However, you do not want to expose this secret in your codebase, so you will want to provide it as an environment variable. In local development, this can be done by storing the secret in the `.env.local` file.
 
-1. On the endpoint's settings page, copy the **Signing Secret**. It should be on the right hand side of the page with an eye icon next to it.
+1. On the endpoint's settings page, copy the **Signing Secret**. It should be on the right side of the page with an eye icon next to it.
 2. In your project's root directory, you should have an `.env.local` file that includes your Clerk API keys. Here, assign your signing secret to `WEBHOOK_SECRET`. Your file should look something like this:
 
 <InjectKeys>
@@ -92,7 +92,7 @@ pnpm add svix
 
 Create a Route Handler that uses `svix` to verify the webhook signature and that receives the webhook's payload.
 
-For the sake of this guide, you will only log the payload to the console. In a real world application, you would use the payload to trigger some action. For example, you are listening for the `user.updated` event, so you could display a notification to all users in the application that a user was just updated.
+For the sake of this guide, you will only log the payload to the console. In a real world application, you would use the payload to trigger some action. For example, you are listening for the `user.updated` event, so you could perform a database `update` or `upsert` to update the user's details.
 
 <Callout type="info">
   This Route Handler is not specific to the `user.updated` event and can be used for any webhook event you choose to listen to.
@@ -154,7 +154,9 @@ export async function POST(req: Request) {
   const { id } = evt.data;
   const eventType = evt.type;
   console.log(`Webhook with and ID of ${id} and type of ${eventType}`)
-  console.log('Webhook body:', body)
+  if (evt.type === 'user.updated') {
+    console.log('Data from user.updated webhook:', evt.data)
+  }
 
   return new Response('', { status: 200 })
 }
@@ -244,104 +246,15 @@ If the message failed:
 2. Scroll down to the **Webhook Attempts** section.
 3. Select the arrow icon the left side.
 4. Investigate the error. Your solution is going to depend on the error message.
-
-## Add logic for updating a user
-
-Before, you were using the Clerk Dashboard to *test* what would happen if a `user.updated` event occurred.
-
-Now, you can add logic to your application for this event to actually be able to occur.
-
-<Callout type="warning">
-  For this example to work correctly, you may need to enable the **Name** setting. It can be found in the the Clerk Dashboard under User & Authentication > Email, Phone, Username > [Personal information](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
-</Callout>
-
-In the file for your homepage, add the following code:
-
-<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-```jsx filename="app/page.tsx"
-"use client";
-
-import { UserButton, useUser } from "@clerk/nextjs";
-
-export default function Home() {
-  const { user, isLoaded } = useUser();
-
-  if (!isLoaded) {
-    // Handle loading state however you like
-    return null;
-  }
-
-  if (!user) return null;
-
-  const updateUser = async () => {
-    await user
-      .update({
-        firstName: "Test",
-      })
-      .then(() => {
-        console.log(user.firstName);
-      })
-      .catch((error) => console.log(error.errors));
-  };
-
-  return (
-    <div className="h-screen">
-      <UserButton afterSignOutUrl="/" />
-
-      <p>user.firstName: {user?.firstName}</p>
-
-      <button onClick={updateUser}>Update user</button>
-    </div>
-  );
-}
-```
-
-```jsx filename="/src/pages/index.tsx"
-import { UserButton, useUser } from "@clerk/nextjs";
-
-export default function Home() {
-  const { user, isLoaded } = useUser();
-
-  if (!isLoaded) {
-    // Handle loading state however you like
-    return null;
-  }
-
-  if (!user) return null;
-
-  const updateUser = async () => {
-    await user
-      .update({
-        firstName: "Test",
-      })
-      .then(() => {
-        console.log(user.firstName);
-      })
-      .catch((error) => console.log(error.errors));
-  };
-
-  return (
-    <div className="h-screen">
-      <header>
-        <UserButton afterSignOutUrl="/" />
-      </header>
-
-      <p>user.firstName: {user?.firstName}</p>
-
-      <button onClick={updateUser}>Update user</button>
-    </div>
-  )
-}
-```
-</CodeBlockTabs>
+{/* TODO: link to debug your webhook guide when its ready */}
 
 ## Trigger your webhook
 
-To trigger the `user.updated` event, navigate to your application's homepage and select the **Update user** button. This will update the user's first name to `Test` and trigger the webhook.
+To trigger the `user.updated` event, you can do one of the following:
+1. You can edit your user in the Dashboard.
+2. You can use the `<UserProfile />` component in your application to edit your profile.
 
-You should be able to see the webhook's payload logged to your terminal. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-your-webhook).
-
-If the webhook failed, check the console of your application to see if the `updateUser()` method failed. If it did, you can debug the error message to see what went wrong. If it succeeded, you can [check the Clerk Dashboard to investigate why the webhook attempt failed](#message-failed).
+Once you have updated a user, you should be able to see the webhook's payload logged to your terminal. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-your-webhook).
 
 ## Wrap up
 

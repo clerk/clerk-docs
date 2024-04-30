@@ -87,6 +87,24 @@ pnpm add svix
 
 </CodeBlockTabs>
 
+### Add your endpoint to Middleware
+
+Your Route Handler or API Route must be made `public` or `ignored` by Middleware to allow the request to succeed. The following example will result in any webhooks in `app/api/webhooks/` or in `pages/api/webhooks.ts` being ignored my Middleware. See [authMiddleware](/docs/references/nextjs/auth-middleware) for more information.
+
+```tsx filename="middleware.tsx" {4}
+import { authMiddleware } from "@clerk/nextjs";
+
+export default authMiddleware({
+  ignoredRoutes: ["/api/webhooks(.*)"],
+});
+
+export const config = {
+  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+};
+```
+
+
+
 ### Create the endpoint in your application
 
 <Tabs type="framework" items={["Next.js", "Node"]}>
@@ -122,7 +140,7 @@ pnpm add svix
       }
 
       // Get the body
-      const payload = await req.json()
+      const payload: unknown = await req.json()
       const body = JSON.stringify(payload);
 
       // Create a new Svix instance with your secret.
@@ -244,7 +262,7 @@ app.post(
 
     // Grab the headers and body
     const headers = req.headers;
-    const payload = req.body;
+    const payload: unknown = req.body;
 
     // Get the Svix headers for verification
     const svix_id = headers["svix-id"] as string;
@@ -299,6 +317,31 @@ app.post(
 
   </Tab>
 </Tabs>
+
+### Narrow the Event to get typing
+
+The `WebhookEvent` reflects all possible webhook types. You can narrow down the event to get the types inferred correctly for the event type you are working with. In the following example, the `if` statement will narrow the type to the `user.created` type and using `evt.data` will give you autocompletion and type safety for that event.
+
+```ts filename="app/api/webhooks/route.ts" {16-18}
+
+   // verify the payload with the headers
+   try {
+      evt = wh.verify(body, {
+         'svix-id': svix_id,
+         'svix-timestamp': svix_timestamp,
+         'svix-signature': svix_signature,
+      }) as WebhookEvent;
+   } catch (err) {
+      console.error('Error verifying webhook:', err);
+      return new Response('Error occurred', {
+         status: 400,
+      });
+   }
+
+   if (evt.type === 'user.created') {
+      console.log('userId:', evt.data.id)
+   }
+```
 
 ### Test the webhook
 

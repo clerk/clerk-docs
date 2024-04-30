@@ -5,7 +5,27 @@ description: Add authentication and user management to your Next.js app with Cle
 
 # Next.js Quickstart
 
-Protect your Next.js application with Clerk auth in less than ten minutes. This guide will show you how to install Clerk, add middleware to protect specific routes, and embed the `<UserButton />` component for account management.
+<TutorialHero
+  framework="nextjs"
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "https://clerk.com/docs/quickstarts/setup-clerk",
+    },
+    {
+      title: "Create a Next.js application",
+      link: "https://nextjs.org/docs/getting-started/installation",
+    },
+  ]}
+>
+
+- Install `@clerk/nextjs`
+- Set up your environment keys to test your app locally
+- Add `<ClerkProvider />` to your application
+- Use Clerk middleware to implement route-specific authentication
+- Create a header with Clerk components for users to sign in and out
+
+</TutorialHero>
 
 <Steps>
 
@@ -58,137 +78,118 @@ The final result should resemble the following:
 
   </InjectKeys>
 
-### Add `<ClerkProvider>` to your app
+### Add Middleware to your application
+
+[`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware#clerk-middleware) grants you access to user authentication state throughout your application, on any route or page. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your application, follow these steps:
+
+
+1. Create a `middleware.ts` file. Your `middleware.ts` file should be placed inside the root directory alongside `.env.local`, or inside the `src/` directory if you are using it.
+2. In your middleware.ts, export Clerk's `clerkMiddleware()` helper:
+  ```tsx filename="middleware.ts"
+  import { clerkMiddleware } from "@clerk/nextjs/server";
+
+  export default clerkMiddleware();
+
+  export const config = {
+    matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  };
+  ```
+3. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
+
+### Add `<ClerkProvider>` and components to your app
 
 All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context.
+
+You can control which content signed in and signed out users can see with Clerk's [prebuilt components](/docs/components/overview). To get started, create a header for your users to sign in or out. To do this, you will use:
+
+- [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+- [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+- [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out of the box to show the avatar from the account the user is signed in with.
+- [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page or displays the sign-in modal.
 
 Select your preferred router to learn how to make this data available across your entire app:
 
 <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-  ```tsx filename="/src/app/layout.tsx" {1,10-14}
-  import { ClerkProvider } from '@clerk/nextjs'
-  import './globals.css'
+```tsx filename="app/layout.tsx" {10,13-20}
+import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+import './globals.css';
 
-  export default function RootLayout({
-    children,
-  }: {
-    children: React.ReactNode
-  }) {
-    return (
-      <ClerkProvider>
-        <html lang="en">
-          <body>{children}</body>
-        </html>
-      </ClerkProvider>
-    )
-  }
-  ```
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <header>
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main>
+            {children}
+          </main>
+        </body>
+      </html>
+    </ClerkProvider>
+  )
+}
+```
+```tsx filename="pages/_app.tsx" {7-15}
+import '@/styles/globals.css'
+import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+import type { AppProps } from 'next/app'
 
-  ```tsx filename="_app.tsx" {2,6-8}
-    import '@/styles/globals.css'
-    import { ClerkProvider } from "@clerk/nextjs";
-    import type { AppProps } from "next/app";
-    function MyApp({ Component, pageProps }: AppProps) {
-      return (
-        <ClerkProvider {...pageProps}>
-          <Component {...pageProps} />
-        </ClerkProvider>
-      );
-    }
-    export default MyApp;
-    ```
+function MyApp({ Component, pageProps }: AppProps) {
+  return (
+    <ClerkProvider {...pageProps}>
+      <header>
+        <SignedOut>
+          <SignInButton />
+        </SignedOut>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </header>
+      <Component {...pageProps} />
+    </ClerkProvider>
+  )
+}
 
+export default MyApp;
+```
 </CodeBlockTabs>
 
-### Add authentication to your app
+### Create a home page
 
-Now that Clerk is installed and mounted in your application, you can decide which pages are public and which should require authentication to access:
-
-1. Create a `middleware.ts` file at the root of your project, or in your `src/` directory if you have one.
-2. In your `middleware.ts` file, export Clerk's [`authMiddleware()`](https://clerk.com/docs/references/nextjs/auth-middleware) helper. This helper enables authentication and blocks access for signed out visitors on routes that your middleware runs on.
-
-  Next.js middleware only runs on routes specified with [`matcher`](https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher). Add the following code to your `middleware.ts` to protect your routes:
-
-  ```tsx filename="middleware.ts"
-  import { authMiddleware } from "@clerk/nextjs";
-
-  // See https://clerk.com/docs/references/nextjs/auth-middleware
-  // for more information about configuring your Middleware
-  export default authMiddleware({
-    // Allow signed out users to access the specified routes:
-    // publicRoutes: ['/anyone-can-visit-this-route'],
-  });
-
-  export const config = {
-    matcher: [
-      // Exclude files with a "." followed by an extension, which are typically static files.
-      // Exclude files in the _next directory, which are Next.js internals.
-      "/((?!.+\\.[\\w]+$|_next).*)",
-      // Re-include any files in the api or trpc folders that might have an extension
-      "/(api|trpc)(.*)"
-    ]
-  };
-  ```
-
-### Try accessing your app
-
-Access your app to verify that authentication is enabled:
-
-1. Run your project with the following terminal command from the root directory of your project:
-  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-    ```bash filename="terminal"
-    npm run dev
-    ```
-
-    ```bash filename="terminal"
-    yarn dev
-    ```
-
-    ```bash filename="terminal"
-    pnpm dev
-    ```
-
-  </CodeBlockTabs>
-2. Visit [`http://localhost:3000`](http://localhost:3000) to access your app. The Middleware will redirect you to your Sign Up page, provided by Clerk's [Account Portal](/docs/account-portal/overview) feature.
-3. Sign up to gain access to your application.
-
-### Embed the `<UserButton />`
-
-[`<UserButton />`](/docs/components/user/user-button) is a [prebuilt component](/docs/components/overview) that allows users to sign in, log out, and manage their account information.
-
-Use the following code to add a `<UserButton />` to your app:
+To render the header you just created, create a simple homepage.
 
 <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-```tsx filename="app/page.tsx" {1,6}
-import { UserButton } from "@clerk/nextjs";
+```tsx filename="app/page.tsx"
 
 export default function Home() {
   return (
-    <div className="h-screen">
-      <UserButton />
-    </div>
+    <h1>Home Page</h1>
   )
 }
 ```
 
-```tsx filename="pages/index.tsx" {1,7}
-import { UserButton } from "@clerk/nextjs";
+```tsx filename="pages/index.tsx"
 
 export default function Home() {
   return (
-    <>
-      <header>
-        <UserButton />
-      </header>
-      <div>Your home page's content can go here.</div>
-    </>
-  );
+    <h1>Home Page</h1>
+  )
 }
 ```
-
 </CodeBlockTabs>
 
-Then, visit your app's homepage at [`localhost:3000`](http://localhost:3000) to see the `<UserButton />` in action. It should show your avatar from the account you signed in with.
+Then, visit your app's homepage at [`localhost:3000`](http://localhost:3000) while signed out to see the sign-in button. Once signed in, your app will render the user button.
 
 </Steps>
 

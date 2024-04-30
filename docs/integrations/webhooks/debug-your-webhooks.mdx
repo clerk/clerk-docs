@@ -13,23 +13,31 @@ When you or a user of your application performs certain actions, a webhook can b
 
 When you are developing on your localhost, your application is not internet facing and can't receive the webhook request. You will need to use a tool that creates a tunnel from the internet to your localhost. These tools will provide temporary or permanant URLs depending on the tool and the plan you subscribe to. Popular tools include `ngrok`, `localtunnel` and `Cloudflare Tunnel`.
 
-Below is an image demonstrating the flow from when you perform an action that triggers a webhook through until the webhook is received by your application. This flow chart will show the role of the tunnel.
-
-FLOW CHART IMAGE HERE
-
 With the Webhook flow in mind, the following areas could cause problems when trying to develop with webhooks:
 
-1. Middleware is not configured correctly for webhooks
-2. The webhook route is not correctly configured
-3. Configuration in your dashboard
-4. The tunnel configuration
-5. Verification of the webhook
-6. The logic you created to process the webhook
+1. [Middleware is not configured correctly for webhooks](#check-your-middleware-configuration)
+2. [The webhook route is not correctly configured](#test-the-route-handler-or-api-route)
+3. [Configuration in your dashboard](#check-your-configuration-in-the-clerk-dashboard)
+4. [The tunnel configuration](#debug-your-tunnel-and-webhook-delivery)
+5. [Verification of the webhook](#debug-webhook-verification)
+6. [The logic you created to process the webhook](#check-your-logic)
 
 
 ##  Check your Middleware configuration
 
-Incoming webhook events will never be signed in -- they are coming from a source outside of your application. Since they will be in a signed out state, the simplest configuration is to use `ignoredRoutes` for your webhook routes. Below is an example of making all webhook routes ignored.
+Incoming webhook events will never be signed in -- they are coming from a source outside of your application. Since they will be in a signed out state, the route should be public. The simplest configuration is to use `ignoredRoutes` for your webhook routes when using `authMiddleware` and applying no protection to the route with `clerkMiddleware`. Below is an example of making all webhook routes ignored.
+
+<CodeBlockTabs options={["clerkMiddleware", "authMiddleware"]}>
+```tsx filename="middleware.tsx"
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+// Make sure that the `/api/webhooks/(.*)` route is not protected here
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [ '/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
 
 ```tsx filename="middleware.tsx" {4}
 import { authMiddleware } from "@clerk/nextjs";
@@ -42,6 +50,7 @@ export const config = {
   matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
 };
 ```
+</CodeBlockTabs>
 
 ## Test the Route Handler or API Route
 
@@ -63,7 +72,7 @@ curl -H 'Content-Type: application/json' \
 If you see the `{"message":"The route is working"}` then the basic Route Handler is working, and ready to build on.
 
 
-## Check your dashboard configuration
+## Check your configuration in the Clerk Dashboard
 
 Whether you are developing locally or deploying to production, the webhook URL provided in your [webhook endpoint](https://dashboard.clerk.com/last-active?path=webhooks) must be exact and correct. The URL breaks down into three parts -- the protocol (`http` vs `https`), the domain (`domain.com`) and the path (`/api/webhooks/user`).
 - Whether in development using a tunnel or in production, the URL will almost always use `https`.
@@ -91,7 +100,7 @@ Below is a table with some of the common response codes you might see, and what 
 You may run into other errors. See [HTTP response status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status) from MDN for reference.
 
 
-## Debug webhook verfication
+## Debug webhook verification
 
 To verify the webhook, your webhook route will need the Signing Secret from the Webhook section of the dashboard.  It will also need the Svix headers which are included in the request. Please see [Create the endpoint in your application](/docs/integrations/webhooks/sync-data#create-the-endpoint-in-your-application) for a detailed code example. You can also visit the [guide](https://docs.svix.com/receiving/verifying-payloads/how) on verifying webhooks with the Svix library.
 

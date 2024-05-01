@@ -29,6 +29,5 @@ module.exports = {
   rules: {
     indent: ["off", "tab"],
     "react/jsx-no-undef": "off",
-    "remark-lint-ordered-list-marker-value": "off",
   },
 };

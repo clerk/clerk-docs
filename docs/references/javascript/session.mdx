@@ -11,12 +11,11 @@ The `Session` object includes methods for recording session activity and ending 
 
 As soon as a [`User`](/docs/references/javascript/user/user) signs in, Clerk creates a `Session` for the current [`Client`][client-ref]. Clients can have more than one sessions at any point in time, but only one of those sessions will be **active**.
 
-In certain scenarios, a session might be replaced by another one. This is often the case with [mutli-session applications](/docs/custom-flows/multi-session-applications).
+In certain scenarios, a session might be replaced by another one. This is often the case with [multi-session applications](/docs/custom-flows/multi-session-applications).
 
 All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
 
 > For more details regarding the different session states, see our documentation on [session management](/docs/authentication/configuration/session-options).
-
 
 ## Properties
 
@@ -39,54 +38,39 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
 
 ### `end()`
 
+Marks the session as ended. The session will no longer be active for this `Client` and its status will become **ended**.
+
 ```typescript
 function end(): Promise<Session>;
 ```
 
-Marks the session as ended. The session will no longer be active for this Client and its status will become **ended**.
-
-#### Returns
-
-| Type | Description |
-| --- | --- |
-| `Promise<Session>` | The session that was just ended. |
-
 ### `remove()`
+
+Marks the session as removed. The session will no longer be active for this Client and its status will become **removed**.
 
 ```typescript
 function remove(): Promise<Session>;
 ```
 
-Marks the session as removed. The session will no longer be active for this Client and its status will become **removed**.
-
-#### Returns
-
-| Type | Description |
-| --- | --- |
-| `Promise<Session>` | The session that was just removed. |
-
 ### `touch()`
+
+Touches the session, signifying some kind of user activity. Use this method to record any updates to user activity.
 
 ```typescript
 function touch(): Promise<Session>;
 ```
 
-Touches the session, signifying some kind of user activity. Use this method to record any updates to user activity.
-
-
-#### Returns
-
-| Type | Description |
-| --- | --- |
-| `Promise<Session>` | The session that was just touched. |
-
 ### `getToken()`
+
+Retrieves the user's session token for the default Clerk token or the given template.
+
+This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute.
+
+Tokens can only be generated if the user is signed in.
 
 ```typescript
 function getToken(options?: GetTokenOptions): Promise<string | null>;
 ```
-
-Retrieves the user's session token for the given template or the default clerk token. This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for clerk token is one minute.
 
 #### `GetTokenOptions`
 
@@ -97,14 +81,81 @@ Retrieves the user's session token for the given template or the default clerk t
 | `throwOnError?` | `boolean` | Whether to throw an error or return an empty string, if an error occurs. |
 | `skipCache?` | `boolean` | Whether to skip the cache lookup and force a call to the server instead, even within the TTL. Useful if the token claims are time-sensitive or depend on data that can be updated (e.g. user fields).<br />Defaults to `false`. |
 
+#### `getToken()` example
 
-#### Returns
+<InjectKeys>
 
-| Type | Description |
-| --- | --- |
-| `Promise<string \| null>` | The requested token. |
+<CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
+  ```js filename="main.js" {8}
+  import Clerk from '@clerk/clerk-js';
+
+  // Initialize Clerk with your Clerk publishable key
+  const clerk = new Clerk('{{pub_key}}');
+  await clerk.load();
+
+  if (clerk.user) {
+    await clerk.session.getToken({ template: "Test" })
+      .then((res) => console.log(res))
+      .catch((error) => console.log("An error occurred:", error.errors));
+  } else {
+    document.getElementById("app").innerHTML = `
+      <div id="sign-in"></div>
+    `;
+
+    const signInDiv = document.getElementById("sign-in");
+
+    clerk.mountSignIn(signInDiv);
+  }
+  ```
+
+  ```html filename="index.html" {18}
+  <div id="app"></div>
+
+  <!-- Initialize Clerk with your
+  Clerk Publishable key and Frontend API URL -->
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="{{pub_key}}"
+    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+    type="text/javascript"
+  ></script>
+
+  <script>
+    window.addEventListener('load', async function () {
+      await Clerk.load();
+
+      if (Clerk.user) {
+        await Clerk.session.getToken({ template: "Test" })
+          .then((res) => console.log(res))
+          .catch((error) => console.log("An error occurred:", error.errors));
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        Clerk.mountSignIn(signInDiv);
+      }
+    });
+  </script>
+  ```
+</CodeBlockTabs>
+
+</InjectKeys>
+
+```js
+try {
+  await Clerk.session.getToken({ template: 'my-template-1' }) // => "eyJhbGciOiJSUzI1NiIsImtpZC..."
+} catch(e) {
+    // handle error
+}
+```
 
 ### `checkAuthorization()`
+
+Checks if the user is authorized for the specified role or permission.
 
 ```typescript
 function checkAuthorization(param: CheckAuthorizationParams) => boolean;
@@ -127,11 +178,5 @@ type CheckAuthorizationParams =
 | --- | --- | --- |
 | `role` | `string` | Accepts [role](/docs/organizations/roles-permissions#roles) key |
 | `permission` | `string` | Accepts [permission](/docs/organizations/roles-permissions#permissions) key |
-
-#### Returns
-
-| Type | Description |
-| --- | --- |
-| `boolean` | A boolean that indicates if a user is authorized for the specified role or permission. |
 
 [client-ref]: /docs/references/javascript/client

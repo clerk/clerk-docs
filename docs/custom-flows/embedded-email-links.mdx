@@ -1,0 +1,124 @@
+---
+title: Embeddable email links
+description: Learn how to build custom email link flows to increase user engagement and reduce drop off in transactional emails, SMS's, and anywhere else you can imagine.
+---
+
+# Embeddable email links
+
+An "email link" is a link, that when pressed, will automatically authenticate your user, so that they can quickly perform some action on your site with less friction than if they had to sign in manually.
+
+Common use cases include:
+
+- Welcome emails, when users are added off a waitlist
+- Promotional emails for users
+- Recovering abandoned carts
+- Surveys or questionnaires
+
+## Creating email links
+
+Embeddable email links leverage [sign-in tokens](https://clerk.com/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken) which can be created from your backend.
+
+```bash
+curl --request POST \
+  --url 'https://api.clerk.com/v1/sign_in_tokens' \
+  -H 'Authorization: Bearer {{bapi}}' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "user_28dVmJleKwFWrefTJN7skmrbtJi",
+  }'
+```
+
+This will return a token, which can then be embedded as a query param in any link, something like:
+
+`https://your-site.com/welcome?token=THE_TOKEN`
+
+Once you have the link, this can be embedded anywhere, such as an email.
+
+## Accepting email links
+
+Now that you have a way to process a token, you'll need to setup a page on your frontend to get the token from the query string, call the sign in function, then perform whatever action you originally had in mind.
+
+Signing a user in with a token is very similar to all of our other custom flows.
+
+<CodeBlockTabs type="framework" options={["Next.js", "React"]}>
+```jsx filename="pages/accept-token.jsx"
+import { InferGetServerSidePropsType, GetServerSideProps } from "next";
+import { useUser, useSignIn } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+
+// Grab the query param server side, and pass through props
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  return {
+    props: { signInToken: context.query.token ? context.query.token : null },
+  };
+};
+
+const AcceptToken = ({
+  signInToken,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+  const { signIn, setActive } = useSignIn();
+  const { user } = useUser();
+  const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!signIn || !setActive || !signInToken) {
+      return;
+    }
+
+    const aFunc = async () => {
+      try {
+        // Create a signIn with the token, note that you need to use the "ticket" strategy.
+        const res = await signIn.create({
+          strategy: "ticket",
+          ticket: signInToken as string,
+        });
+        setActive({
+          session: res.createdSessionId,
+          beforeEmit: () => setSignInProcessed(true)
+        });
+      } catch (err) {
+        setSignInProcessed(true);
+      }
+    };
+
+    aFunc();
+  }, [signIn, setActive]);
+
+  if (!signInToken) {
+    return <div>no token provided</div>;
+  }
+
+  if (!signInProcessed) {
+    return <div>loading</div>;
+  }
+
+  if (!user) {
+    return <div>error invalid token</div>;
+  }
+
+  return <div>Signed in as {user.id}</div>;
+};
+
+export default AcceptToken;
+```
+
+```jsx filename="accept-token.js"
+// Grab the sign in token from the query string
+const queryParams = new URLSearchParams(window.location.search);
+const signInToken = queryParams.get('token');
+
+const { signIn, setActive } = useSignIn();
+
+// Create a sign in with the ticket strategy, and the sign-in-token
+const res = await signIn.create({
+  strategy: "ticket",
+  ticket: "signInToken",
+});
+
+// Set the session as active, and then do whatever you need to!
+setActive({
+  session: res.createdSessionId,
+  beforeEmit: () => console.log("SignedIn!")
+});
+```
+</CodeBlockTabs>

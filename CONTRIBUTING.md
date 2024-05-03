@@ -90,7 +90,7 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
 
-[Manifest JSON schema →](https://github.com/clerk/clerk-docs/blob/main/docs/manifest.schema.json)
+[Manifest JSON schema →](./docs/manifest.schema.json)
 
 <details>
 <summary>Equivalent TypeScript types and descriptions</summary>

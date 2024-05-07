@@ -15,35 +15,9 @@ jobs:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'deploy-preview') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 10 # Fetch more than just the latest commit so we can accurately compare
-
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: docs/**
-          json: true
-
-      - name: Get files to revalidate
-        id: files-to-revalidate
-        run: |
-          files_to_revalidate=$(echo ${{ toJSON(steps.changed-files.outputs.all_changed_files) }})
-          pr_number=$(echo ${{ toJSON(github.event.number) }})
-          echo "files=$files_to_revalidate" >> "$GITHUB_OUTPUT"
-          echo "pr_number=$pr_number"       >> "$GITHUB_OUTPUT"
-          echo "### PR number"           >> $GITHUB_STEP_SUMMARY
-          echo ""                        >> $GITHUB_STEP_SUMMARY
-          echo "$pr_number"              >> $GITHUB_STEP_SUMMARY
-          echo "### Files to revalidate" >> $GITHUB_STEP_SUMMARY
-          echo ""                        >> $GITHUB_STEP_SUMMARY
-          echo "$files_to_revalidate"    >> $GITHUB_STEP_SUMMARY
-
       - name: Trigger revalidate
         run: |
           curl -X POST ${{ env.API_BASE_URL }}/docs/revalidate \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.REVALIDATE_DOCS_SECRET }}" \
-            -d "{\"files\": ${{ steps.files-to-revalidate.outputs.files }}, \"pr\": ${{ steps.files-to-revalidate.outputs.pr_number }}}"
+            -d "{\"paths\": [[\"/(website)/docs/pr/[number]\", \"layout\"]]}"

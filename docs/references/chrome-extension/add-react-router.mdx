@@ -1,5 +1,5 @@
 ---
-title: Add React Router to your Clerk-powered React application
+title: Add React Router to your Clerk-powered Chrome Extension
 description: Learn how to add React Router to your React application using their Data API router.
 ---
 
@@ -7,8 +7,8 @@ description: Learn how to add React Router to your React application using their
   framework="reactrouter"
   exampleRepo={[
     {
-      title: "React Quickstart Repo",
-      link: "https://github.com/clerk/clerk-react-quickstart"
+      title: "Clerk Chrome Extension Repo",
+      link: "https://github.com/clerk/clerk-chrome-extension-quickstart"
 
     }
   ]}
@@ -19,8 +19,8 @@ description: Learn how to add React Router to your React application using their
       icon: "clerk"
     },
     {
-      title: "Add authentication and user management to your React app with Clerk",
-      link: "https://clerk.com/docs/quickstarts/react",
+      title: "Add authentication and user management to your Chrome Extension with Clerk",
+      link: "https://clerk.com/docs/quickstarts/chrome-extension",
       icon: "react"
     },
   ]}
@@ -31,12 +31,164 @@ description: Learn how to add React Router to your React application using their
 - Wire layouts and routes up with `createBrowserRouter`
 </TutorialHero>
 
-# Add React Router to your Clerk-powered React application
+# Add React Router to your Clerk-powered Chrome Extension
 
 Learn how to add React Router to your application using React Router's new Data API router. This tutorial will cover configuring layouts and setting up protected routes.
 
 <Steps>
 
 ### Install `react-router-dom`
+
+```
+pnpm add react-router-dom
+```
+
+### Create components for your routes
+
+<CodeBlockTabs options={["Index", "Sign-in", "Sign-up", "Settings"]}>
+
+```tsx filename="src/routes/index.tsx"
+import { Link } from "react-router-dom";
+
+export const Index = () => {
+  return (
+    <>
+      <h1>Clerk + React + React Router App</h1>
+      <p>
+        Please <Link to="/sign-in">sign-in</Link> or{" "}
+        <Link to="/sign-up">sign-up</Link>.
+      </p>
+    </>
+  );
+};
+```
+
+```tsx filename="src/routes/sign-in.tsx"
+import { SignIn } from "@clerk/chrome-extension";
+
+export const SignInPage = () => {
+  return (
+    <>
+      <p>Sign In</p>
+      <SignIn routing="virtual" />
+    </>
+  );
+};
+```
+
+```tsx filename="src/routes/sign-up.tsx"
+import { SignUp } from "@clerk/chrome-extension";
+
+export const SignUpPage = () => {
+  return (
+    <>
+      <p>Sign Up</p>
+      <SignUp routing="virtual" />
+    </>
+  );
+};
+```
+
+```tsx filename="src/routes/settings.tsx"
+import { UserProfile } from "@clerk/chrome-extension";
+
+export const Settings = () => {
+  return (
+    <>
+      <h1>Settings</h1>
+      <UserProfile routing="virtual" />
+    </>
+  );
+};
+```
+</CodeBlockTabs>
+
+### Create layouts
+
+<CodeBlockTabs options={["Root Layout"]}>
+
+```tsx filename="src/layouts/root-layout.tsx"
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  ClerkProvider,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/chrome-extension";
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing Publishable Key");
+}
+
+export const RootLayout = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  console.log("location", location);
+  return (
+    <ClerkProvider
+      routerPush={(to) => navigate(to)}
+      routerReplace={(to) => navigate(to, { replace: true })}
+      publishableKey={PUBLISHABLE_KEY}
+    >
+      <main className="main">
+        <Outlet />
+      </main>
+      <footer className="footer">
+        <SignedIn>
+          <Link to="/settings">Settings</Link>
+          <UserButton afterSignOutUrl="/" />
+        </SignedIn>
+        <SignedOut>
+          <Link to="/">Home</Link>
+          <Link to="/sign-in">Sign In</Link>
+          <Link to="/sign-up">Sign Up</Link>
+        </SignedOut>
+      </footer>
+    </ClerkProvider>
+  );
+};
+```
+</CodeBlockTabs>
+
+### Wire layouts and routes up with createMemoryBrowser
+
+```ts filename="src/main.tsx"
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "./index.css";
+import { RouterProvider, createMemoryRouter } from "react-router-dom";
+
+// Import the layouts
+import { RootLayout } from "./layouts/root-layout";
+
+// Import the components
+import { SignInPage } from "./routes/sign-in";
+import { SignUpPage } from "./routes/sign-up";
+import { Index } from "./routes";
+import { Settings } from "./routes/settings";
+
+// Create the router
+// This removes the need for an App.tsx file
+const router = createMemoryRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { path: "/", element: <Index /> },
+      { path: "/sign-in", element: <SignInPage /> },
+      { path: "/sign-up", element: <SignUpPage /> },
+      { path: "/settings", element: <Settings /> },
+    ],
+  },
+]);
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <RouterProvider router={router} />
+  </React.StrictMode>,
+);
+```
 
 </Steps>

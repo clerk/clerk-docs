@@ -154,7 +154,7 @@ Syntax-highlighted code blocks are rendered wherever markdown code blocks are us
 ````
 ​```typescript
 function add(a: number, b: number) {
-  a + b
+  return a + b
 }
 ​```
 ````
@@ -164,7 +164,7 @@ You can also specify a filename by passing the `filename` prop.
 ````
 ​```typescript {{ filename: 'add.ts' }}
 function add(a: number, b: number) {
-  a + b
+  return a + b
 }
 ​```
 ````

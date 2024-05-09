@@ -248,7 +248,7 @@ CLERK_SECRET_KEY={{secret}}
 
 The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
 
-/.github/media/code-block-keys.mp4
+https://github.com/clerk/clerk-docs/raw/redesign-contributing/.github/media/code-block-keys.mp4
 
 ### `<Steps />`
 
@@ -351,7 +351,7 @@ The `<Tabs />` component structures content in a tabular format. It accepts an `
 
 The video below shows what this example looks like once rendered.
 
-/.github/media/tabs.mp4
+https://github.com/clerk/clerk-docs/raw/redesign-contributing/.github/media/tabs.mp4
 
 ### `<TutorialHero />`
 

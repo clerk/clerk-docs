@@ -1,0 +1,119 @@
+---
+title: Error handling
+description: Provide your users with useful information about the errors being returned from Sign In and Sign Up requests.
+---
+
+# Error handling
+
+Proper error handling can help you provide your users with useful feedback.
+
+## Example
+
+A user is attempting to sign up with your application, but they are attempting to use a password that has been found in an online data breach. This will return a 422 error code with the message: "Password has been found in an online data breach. For account safety, please use a different password."
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignUpErrorView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    @State private var error: Error?
+    
+    var body: some View {
+        Button("Sign Up", action: signUp)
+        if let error {
+            Text(error.localizedDescription)
+            // "Password has been found in an online data breach. 
+            // For account safety, please use a different password."
+        }
+    }
+    
+    private func signUp() {
+        Task {
+            do {
+                try await clerk.client?.createSignUp(strategy: .standard(emailAddress: "example@email.com", password: "Tester01!"))
+            } catch {
+                self.error = error
+            }
+        }
+    }
+}
+```
+
+Errors returned from `SignIn` are handled in a similar way:
+
+```swift
+import SwiftUI
+import ClerkSDK
+
+struct SignInErrorView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    @State private var error: Error?
+    
+    var body: some View {
+        Button("Sign In", action: signIn)
+        if let error {
+            Text(error.localizedDescription)
+        }
+    }
+    
+    private func signIn() {
+        Task {
+            do {
+                try await clerk.client?.createSignIn(strategy: .identifier("example@email.com", password: "Tester01!"))
+            } catch {
+                self.error = error
+            }
+        }
+    }
+}
+```
+
+## Special error cases
+
+### User locked
+
+If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/security/user-lock-guide#related-actions)), you will receive an HTTP status of 403 (Forbidden) and the following error payload:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Account locked",
+      "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, please contact support.",
+      "code": "user_locked",
+      "meta": {
+        "lockout_expires_in_seconds": 1800
+      }
+    }
+  ]
+}
+```
+
+`lockout_expires_in_seconds` represents the time remaining until the user is able to attempt authentication again.
+In the above example, 1800 seconds (or 30 minutes) are left until they are able to retry, as of the current moment.
+
+The admin might have [configured](/docs/security/customize-user-lockout) e.g. a 45-minute lockout duration.
+Thus, 15 minutes after one has been locked, 30 minutes will still remain until the lockout lapses.
+
+You can opt to render the error message returned as-is or format the supplied `lockout_expires_in_seconds` value as per your liking in your own custom error message.
+
+<Callout>
+In order to access the custom properties of the clerk error payload (`code`, `meta`, etc.), you will need to cast your error to the `ClerkAPIError` type.
+</Callout>
+
+```swift
+Task {
+    do {
+        try await clerk.client?.createSignIn(strategy: .identifier("example@email.com", password: "********"))
+        
+    } catch let error as ClerkAPIError {
+        if let lockoutDuration = error.meta?["lockout_expires_in_seconds"]?.doubleValue {
+            print(lockoutDuration)
+        }
+        
+    } catch {
+        print(error.localizedDescription)
+    }
+}
+```

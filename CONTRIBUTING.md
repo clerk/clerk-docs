@@ -248,7 +248,7 @@ CLERK_SECRET_KEY={{secret}}
 
 The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
 
-![Clicking on the eye icon on a code block will show the user their secret key.](/.github/media/code-block-keys.mp4)
+/.github/media/code-block-keys.mp4
 
 ### `<Steps />`
 
@@ -351,7 +351,7 @@ The `<Tabs />` component structures content in a tabular format. It accepts an `
 
 The video below shows what this example looks like once rendered.
 
-![An example of a <Tabs /> component. There are two tab options: 'React' and 'JavaScript'.](/.github/media/tabs.mp4)
+/.github/media/tabs.mp4
 
 ### `<TutorialHero />`
 

@@ -146,6 +146,10 @@ type LinkItem = {
    * @default true
    */
   wrap?: boolean
+  /**
+   * Set to "_blank" to open link in a new tab
+   */
+  target?: '_blank'
 }
 type SubNavItem = {
   /**

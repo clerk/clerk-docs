@@ -151,31 +151,31 @@ Headings are automatically assigned an `id` attribute which is a slugified versi
 
 Syntax-highlighted code blocks are rendered wherever markdown code blocks are used. To add syntax highlighting, specify a language next to the backticks before the fenced code block.
 
-```mdx
-​`typescript
+````
+​```typescript
 function add(a: number, b: number) {
   a + b
 }
-​`
-```
+​```
+````
 
 You can also specify a filename by passing the `filename` prop.
 
-```mdx
-​`typescript {{ filename: 'add.ts' }}
+````
+​```typescript {{ filename: 'add.ts' }}
 function add(a: number, b: number) {
   a + b
 }
-​`
-```
+​```
+````
 
 If the code should run in a terminal, you can set the syntax highlighting to something like `sh` (shell) or `bash`. The file name should be set to `terminal`.
 
-```mdx
-​`sh {{ filename: 'terminal' }}
+````
+​```sh {{ filename: 'terminal' }}
 npm i @clerk/nextjs
-​`
-```
+​```
+````
 
 You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
 

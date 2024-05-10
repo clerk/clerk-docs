@@ -13,7 +13,8 @@ const EXCLUDE_LIST = [
   "/pricing",
   "/docs/reference/backend-api",
   "/docs/reference/frontend-api",
-  "/support"
+  "/support",
+  "/discord",
 ];
 
 const ERRORS = {

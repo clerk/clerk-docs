@@ -6,6 +6,8 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
+Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
+
 ## Project setup
 
 1.  Fork and clone the repo
@@ -176,6 +178,8 @@ If the code should run in a terminal, you can set the syntax highlighting to som
 npm i @clerk/nextjs
 ​```
 ````
+
+#### Highlighting
 
 You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
 

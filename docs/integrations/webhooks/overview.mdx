@@ -1,11 +1,19 @@
 ---
 title: Webhooks overview
-description: Clerk webhooks allow you to receive event notifications from Clerk. Clerk will send a POST request to a URL you specify when certain events happen in your Clerk account.
+description: Clerk webhooks allow you to receive event notifications from Clerk.
 ---
 
 # Webhooks overview
 
-Clerk webhooks allow you to receive event notifications from Clerk. Clerk will send a `POST` request to a URL you specify when certain events happen in your Clerk account.
+A webhook is an *event-driven* method of communication between applications.
+
+Unlike typical APIs where you would need to poll for data very frequently to get it "real-time", webhooks only send data when there is an event to trigger the webhook. This makes webhooks seem "real-time", but it's important to note that they are asynchronous.
+
+For example, if you are onboarding a new user, you can't rely on the webhook delivery as part of that flow. Typically the delivery will happen quickly, but it's not guaranteed to be delivered immediately or at all. Webhooks are best used for things like sending a notification or updating a database, but not for synchronous flows where you need to know the webhook was delivered before moving on to the next step. If you need a synchronous flow, please see our Onboarding Guide as one example of implementing that.
+
+## Clerk webhooks
+
+Clerk webhooks allow you to receive event notifications from Clerk, such as when a user is created or updated. When an event occurs, Clerk will send a `POST` request to your webhook endpoint configured for the event type. You can then use the information from the webhook's request payload to trigger actions in your app, such as sending a notification or updating a database.
 
 Clerk uses [Svix](https://svix.com/) to send our webhooks.
 
@@ -13,58 +21,21 @@ You can find the Webhook signing secret when you click on the endpoint you creat
 
 ## Supported webhook events
 
-### Emails
+To find a list of all the events Clerk supports:
 
-- `email.created`
-
-### Organization
-
-- `organization.created`
-- `organization.deleted`
-- `organization.updated`
-
-### Organization Invitation
-
-- `organizationInvitation.accepted`
-- `organizationInvitation.created`
-- `organizationInvitation.revoked`
-
-### Organization Membership
-
-- `organizationMembership.created`
-- `organizationMembership.deleted`
-- `organizationMembership.updated`
-
-### Organization Domains
-
-- `organizationDomain.created`
-- `organizationDomain.deleted`
-- `organizationDomain.updated`
-
-### Session
-
-- `session.created`
-- `session.ended`
-- `session.removed`
-- `session.revoked`
-
-### SMS
-
-- `sms.created`
-
-### User
-
-- `user.created`
-- `user.deleted`
-- `user.updated`
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=webhooks).
+2. In the navigation sidenav, select **Webhooks**.
+3. Select the **Event Catalog** tab.
 
 ## Payload structure
 
-The payload of the message includes the type of the event in the type property.
+The payload of a webhook is a JSON object that contains the following properties:
 
-The `data` property contains the actual payload sent by Clerk. The payload can be a different object depending on the `event` type. For example, for `user.*` events, the payload will always be the User object . For `organization.*` event type, the payload will always be an organization (except for when it is deleted).
+- `data`: contains the actual payload sent by Clerk. The payload can be a different object depending on the `event` type. For example, for `user.*` events, the payload will always be the [User](/docs/references/javascript/user/user) object.
+- `object`: always set to `event`.
+- `type`: the type of event that triggered the webhook.
 
-Below is an example of a webhook payload for a `user.created` event:
+The following example shows the payload of a `user.created` event:
 
 ```json
 {
@@ -88,8 +59,8 @@ Below is an example of a webhook payload for a `user.created` event:
     "first_name": "Example",
     "gender": "",
     "id": "user_29w83sxmDNGwOuEthce5gg56FcC",
+    "image_url": "https://img.clerk.com/xxxxxx",
     "last_name": "Example",
-    "locked": false,
     "last_sign_in_at": 1654012591514,
     "object": "user",
     "password_enabled": true,
@@ -111,28 +82,9 @@ Below is an example of a webhook payload for a `user.created` event:
 }
 ```
 
-## TypeScript support
+The payload should always be treated as unsafe until you validate the incoming webhook. Webhooks will originate from another server and be sent to your application as a POST request. A bad actor would fake a webhook event to try and gain access to your application or data.
 
-Clerk provides the types as part of our SDK offering. Below is an example of type usage in a webhook handler:
-
-```tsx
-import type { WebhookEvent } from "@clerk/nextjs/server"
-
-const handler = req => {
-  const evt = req.body.evt as WebhookEvent;
-  switch (evt.type) {
-    case 'user.created':
-      // UserJSON.first_name is a string
-      const firstName = evt.data.first_name
-      // UserJSON.last_name is a string
-      const lastName = evt.data.last_name
-      // UserJSON.email_addresses is an array of EmailAddressJSON
-      const emails = evt.data.email_addresses;
-  }
-}
-```
-
-## Handling delivery issues
+## How Clerk handles delivery issues
 
 ### Retry
 
@@ -142,36 +94,26 @@ If Svix is attempting and failing to send a webhook, and that endpoint is remove
 
 ### Replay
 
-If a webhook message or multiple webhook messages fail to send, you have an option to reply the webhook messages. This protects against your service having downtime or against a misconfigured endpoint. To replay webhook messages, in the Clerk Dashboard, go to the **[Webhooks](https://dashboard.clerk.com/last-active?path=webhooks)** page. Select the affected Endpoint. From the **Attempted Messages** section, locate a message you want to reply  to, click the menu icon on the right side, and then select **Replay**.
+If a webhook message or multiple webhook messages fail to send, you have an option to replay the webhook messages. This protects against your service having downtime or against a misconfigured endpoint.
 
-<Images
-  src="/docs/images/integrations/webhooks/replay-button.webp"
-  width={1640}
-  height={1144}
-  alt="The Webhooks page of the Clerk Dashboard. There is a red arrow pointing to the Replay option for a failed webhook message. There is a red box around the 'Replay' button."
-/>
+To replay webhook messages:
 
-#### Replay options
-
-From the Replay Messages menu, you will have 3 options.
-1. Resend the specific message you selected.
-2. Resend all failed messages since the first failed message in that date range.
-3. Resend all missing messages since the first failed message in that date range.
-
-<Images
-  src="/docs/images/integrations/webhooks/replay-options.webp"
-  width={1420}
-  height={779}
-  alt="The Webhooks page of the Clerk Dashboard. The Replay menu, for replaying failling or missing webhook messages, is open and showing three options."
-/>
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=webhooks).
+2. In the navigation sidenav, select **Webhooks**.
+3. Select the affected endpoint.
+4. In the **Message Attempts** section, next to the message you want to replay, select the menu icon on the right side, and then select **Replay**.
+5. The **Replay Messages** menu will appear. You can choose to:
+- Resend the specific message you selected.
+- Resend all failed messages since the first failed message in that date range.
+- Resend all missing messages since the first failed message in that date range.
 
 ## Sync data to your database
 
 You can find a guide on how to use webhooks to sync your data to your database [here](/docs/integrations/webhooks/sync-data).
 
-## Protecting your webhooks from abuse
+## Protect your webhooks from abuse
 
-To ensure that the api route receiving the webhook can only be hit by your app, there are a few protections you can put in place:
+To ensure that the API route receiving the webhook can only be hit by your app, there are a few protections you can put in place:
 
 - **Verify the request signature**: Svix webhook requests are [signed](https://www.wikiwand.com/en/Digital_signature) and can be verified to ensure the request is not malicious. To learn more, check out Svix's guide on [how to verify webhooks with the svix libraries](https://docs.svix.com/receiving/verifying-payloads/how) or [how to verify webooks manually](https://docs.svix.com/receiving/verifying-payloads/how-manual).
 

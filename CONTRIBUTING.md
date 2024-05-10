@@ -92,16 +92,114 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
 
-#### Navigation constructs
+[Manifest JSON schema →](./docs/manifest.schema.json)
 
-The navigation is built from a small number of primitive constructs:
+<details>
+<summary>Equivalent TypeScript types and descriptions</summary>
 
-- **Link** (`["Title", "/path/to/page"]`) - Renders a link. The path should be a full path relative to the documentation root (`https://clerk.com/docs/`)
-- **Separator** (`"---"`) - Renders a visual separator for grouping
-- **Heading** (`"# Heading"`) - Renders a heading
-- **Section** (`["Title", [elements]]`) - Renders a collapsible section
-- **Page** (`[{ title: "Title", root: "/root/path" }, [elements]]`) - Indicates a new navigation page. When viewing a page under the provided `root`, The navigation data associated with the matching navigation page will be rendered
-- **Text Config** (`{ title: "Tite", icon: "nextjs", tag: "coming soon" }`) - Can be used in place of a construct's title string to render additional elements
+```typescript
+export type Nav = Array<NavGroup>
+
+/**
+ * Nav groups are separated by horizontal rules
+ */
+type NavGroup = Array<NavItem>
+
+/**
+ * A nav item is either a link, or a sub-list with nested `items`
+ */
+type NavItem = LinkItem | SubNavItem
+
+/**
+ * A link to an internal or external page
+ */
+type LinkItem = {
+  /**
+   * The visible item text. May contain backticks (`) to render `<code>`
+   * 
+   * @example 'Next.js Quickstart'
+   * @example '`<SignIn>` and `<SignUp>`'
+   */
+  title: string
+  /**
+   * The item link. Internal links should be relative
+   * 
+   * @example '/docs/quickstarts/nextjs'
+   * @example 'https://example.com'
+   */
+  href: string
+  /**
+   * Muted text to display next to the item text
+   * 
+   * @example 'Community'
+   * @example 'Beta'
+   */
+  tag?: string
+  /**
+   * Icon to display next to the item text
+   * 
+   * @example 'globe'
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   */
+  icon?: string
+  /**
+   * Whether to enable text wrapping for the item text
+   * 
+   * @default true
+   */
+  wrap?: boolean
+  /**
+   * Set to "_blank" to open link in a new tab
+   */
+  target?: '_blank'
+}
+type SubNavItem = {
+  /**
+   * The visible item text. May contain backticks (`) to render `<code>`
+   * 
+   * @example 'Next.js Quickstart'
+   * @example '`<SignIn>` and `<SignUp>`'
+   */
+  title: string
+  /**
+   * The nested sub-items
+   */
+  items: Nav
+  /**
+   * Muted text to display next to the item text
+   * 
+   * @example 'Community'
+   * @example 'Beta'
+   */
+  tag?: string
+  /**
+   * Icon to display next to the item text
+   * 
+   * @example 'globe'
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   */
+  icon?: string
+  /**
+   * Whether to enable text wrapping for the item text
+   * 
+   * @default true
+   */
+  wrap?: boolean
+  /**
+   * Whether to collapse the sub-nav
+   * 
+   * @default false
+   */
+  collapse?: boolean
+}
+```
+</details>
+
+<details>
+<summary>Visual representation of the manifest TypeScript types</summary>
+
+![](/public/images/styleguide/manifest.png)
+</details>
 
 ## Editing content
 

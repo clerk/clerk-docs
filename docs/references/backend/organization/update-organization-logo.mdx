@@ -1,0 +1,106 @@
+---
+title: updateOrganizationLogo()
+description: Use Clerk's Backend SDK to update an organization's logo.
+---
+
+# `updateOrganizationLogo()`
+
+Updates the organization's logo.
+
+```tsx
+function updateOrganizationLogo: (organizationId: string, params: UpdateLogoParams) => Promise<Organization>;
+```
+
+## `UpdateLogoParams`
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `file` | `Blob \| File` | The file to upload as the organization's logo. |
+| `uploaderUserId` | `string` | The ID of the user uploading the logo. |
+
+## Example
+
+The following example shows two files: the first is a Next.js [Server Action](https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations) and the second is a Next.js [Client Component](https://nextjs.org/docs/app/building-your-application/rendering/client-components). The Server Action is used to update the organization's logo, and the Client Component is used to upload the file.
+
+<CodeBlockTabs options={["app/actions/update-org-logo.ts", "app/update-org-logo/page.tsx"]}>
+```tsx filename="app/actions/update-org-logo.ts" {}
+'use server';
+
+import { clerkClient, auth } from '@clerk/nextjs/server';
+
+export async function updateOrgLogo(formData: FormData) {
+  const { userId, orgId } = auth();
+
+  if (!userId) {
+    return Response.json(
+      { message: 'No user found. Please sign in.' },
+      { status: 401 }
+    );
+  }
+
+  if (!orgId) {
+    return Response.json(
+      {
+        message:
+          'No active organization found. Please set an organization as active.',
+      },
+      { status: 403 }
+    );
+  }
+
+  const organizationId = orgId;
+  const uploaderUserId = userId;
+
+  const params = {
+    file: formData.get('file') as File,
+    uploaderUserId,
+  };
+
+  const response = await clerkClient.organizations.updateOrganizationLogo(
+    organizationId,
+    params
+  );
+
+  console.log(response);
+}
+/*
+_Organization {
+  id: 'org_123',
+  name: 'test',
+  slug: 'test',
+  imageUrl: 'https://img.clerk.com/eyJ...',
+  hasImage: true,
+  createdBy: 'user_123',
+  createdAt: 1714572514789,
+  updatedAt: 1715633676620,
+  publicMetadata: {},
+  privateMetadata: {},
+  maxAllowedMemberships: 1,
+  adminDeleteEnabled: true,
+  membersCount: undefined
+}
+*/
+```
+
+```jsx filename="app/update-org-logo/page.tsx"
+'use client';
+import { updateOrgLogo } from '../utils/updateOrgLogo';
+
+export default function Page() {
+  return (
+    <div className="flex justify-center py-24">
+      <h1>Update Org Logo</h1>
+      <form action={updateOrgLogo}>
+        <input type="file" name="file" />
+        <button>Upload</button>
+      </form>
+    </div>
+  );
+}
+
+```
+</CodeBlockTabs>
+
+## Backend API (BAPI) endpoint
+
+This method in the SDK is a wrapper around the BAPI endpoint `PUT/organizations/{organization_id}/logo`. See the [BAPI reference](https://clerk.com/docs/reference/backend-api/tag/Organizations#operation/UploadOrganizationLogo) for more details.

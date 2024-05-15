@@ -1,0 +1,551 @@
+### Build your sign up
+
+The examples below use email and password to sign a user up. You will notice that there is a conditonal flow in the sign up page for verifying a code called `pendingVerification`. This is an important step, as it verifies that the user owns their email.
+
+```tsx filename="components/SignUpScreen.tsx"
+import * as React from "react";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useSignUp } from "@clerk/clerk-expo";
+
+export default function SignUpScreen() {
+  const { isLoaded, signUp, setActive } = useSignUp();
+
+  const [firstName, setFirstName] = React.useState("");
+  const [lastName, setLastName] = React.useState("");
+  const [emailAddress, setEmailAddress] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [pendingVerification, setPendingVerification] = React.useState(false);
+  const [code, setCode] = React.useState("");
+
+  // start the sign up process.
+  const onSignUpPress = async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    try {
+      await signUp.create({
+        firstName,
+        lastName,
+        emailAddress,
+        password,
+      });
+
+      // send the email.
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+
+      // change the UI to our pending section.
+      setPendingVerification(true);
+    } catch (err: any) {
+      console.error(JSON.stringify(err, null, 2));
+    }
+  };
+
+  // This verifies the user using email code that is delivered.
+  const onPressVerify = async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    try {
+      const completeSignUp = await signUp.attemptEmailAddressVerification({
+        code,
+      });
+
+      await setActive({ session: completeSignUp.createdSessionId });
+    } catch (err: any) {
+      console.error(JSON.stringify(err, null, 2));
+    }
+  };
+
+  return (
+    <View>
+      {!pendingVerification && (
+        <View>
+        <View>
+            <TextInput
+              autoCapitalize="none"
+              value={firstName}
+              placeholder="First Name..."
+              onChangeText={(firstName) => setFirstName(firstName)}
+            />
+          </View>
+          <View>
+            <TextInput
+              autoCapitalize="none"
+              value={lastName}
+              placeholder="Last Name..."
+              onChangeText={(lastName) => setLastName(lastName)}
+            />
+          </View>
+          <View>
+            <TextInput
+              autoCapitalize="none"
+              value={emailAddress}
+              placeholder="Email..."
+              onChangeText={(email) => setEmailAddress(email)}
+            />
+          </View>
+
+          <View>
+            <TextInput
+              value={password}
+              placeholder="Password..."
+              placeholderTextColor="#000"
+              secureTextEntry={true}
+              onChangeText={(password) => setPassword(password)}
+            />
+          </View>
+
+          <TouchableOpacity onPress={onSignUpPress}>
+            <Text>Sign up</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {pendingVerification && (
+        <View>
+          <View>
+            <TextInput
+              value={code}
+              placeholder="Code..."
+              onChangeText={(code) => setCode(code)}
+            />
+          </View>
+          <TouchableOpacity onPress={onPressVerify}>
+            <Text>Verify Email</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+```
+
+<Callout type="info">
+  Now would be good a time to test your sign up flow.
+</Callout>
+
+Make sure you update your `app` file to use the component that you have created. To keep it simple, this example adds the `<SignUpScreen />` to the `<SignedOut>` component.
+
+```tsx filename="app.tsx"
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import Constants from "expo-constants"
+import SignUpScreen from "./components/SignUpScreen";
+
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={Constants.expoConfig.extra.clerkPublishableKey}>
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignUpScreen />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+```
+
+### Build your sign in
+
+```tsx filename="components/SignInScreen.tsx"
+import React from "react";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useSignIn } from "@clerk/clerk-expo";
+
+export default function SignInScreen() {
+  const { signIn, setActive, isLoaded } = useSignIn();
+
+  const [emailAddress, setEmailAddress] = React.useState("");
+  const [password, setPassword] = React.useState("");
+
+  const onSignInPress = async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    try {
+      const completeSignIn = await signIn.create({
+        identifier: emailAddress,
+        password,
+      });
+      // This is an important step,
+      // This indicates the user is signed in
+      await setActive({ session: completeSignIn.createdSessionId });
+    } catch (err: any) {
+      console.log(err);
+    }
+  };
+  return (
+    <View>
+      <View>
+        <TextInput
+          autoCapitalize="none"
+          value={emailAddress}
+          placeholder="Email..."
+          onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+        />
+      </View>
+
+      <View>
+        <TextInput
+          value={password}
+          placeholder="Password..."
+          secureTextEntry={true}
+          onChangeText={(password) => setPassword(password)}
+        />
+      </View>
+
+      <TouchableOpacity onPress={onSignInPress}>
+        <Text>Sign in</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```
+
+<Callout type="info">
+  Now would be good a time to test your sign in flow. Restart your server to remove the session.
+</Callout>
+
+Make sure you update your `app` file to use the component that you have created. In the `<SignedOut>` component, replace the `<SignUpScreen />` with the `<SignInScreen />`.
+
+```tsx filename="app.tsx"
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import Constants from "expo-constants"
+import SignInScreen from "./components/SignInScreen";
+
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={Constants.expoConfig.extra.clerkPublishableKey}>
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignInScreen />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+```
+
+### OAuth sign-in
+
+If you want to add OAuth sign-in flows to your Expo application, Clerk's OAuth hook allows you to handle both sign in and sign up in a single flow.
+
+```tsx filename="hooks/useWarmUpBrowser.tsx"
+import React from "react";
+import * as WebBrowser from "expo-web-browser";
+
+export const useWarmUpBrowser = () => {
+  React.useEffect(() => {
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+};
+```
+
+```tsx filename="components/SignInWithOAuth.tsx"
+import React from "react";
+import * as WebBrowser from "expo-web-browser";
+import { Button } from "react-native";
+import { useOAuth } from "@clerk/clerk-expo";
+import { useWarmUpBrowser } from "../hooks/useWarmUpBrowser";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const SignInWithOAuth = () => {
+  // Warm up the android browser to improve UX
+  // https://docs.expo.dev/guides/authentication/#improving-user-experience
+  useWarmUpBrowser();
+
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+
+  const onPress = React.useCallback(async () => {
+    try {
+      const { createdSessionId, signIn, signUp, setActive } =
+        await startOAuthFlow();
+
+      if (createdSessionId) {
+        setActive({ session: createdSessionId });
+      } else {
+        // Use signIn or signUp for next steps such as MFA
+      }
+    } catch (err) {
+      console.error("OAuth error", err);
+    }
+  }, []);
+
+  return (
+    <Button
+      title="Sign in with Google"
+      onPress={onPress}
+    />
+  );
+}
+export default SignInWithOAuth;
+```
+
+<Callout type="info">
+  Now would be a good time to test your OAuth flow. Restart your server to remove the session.
+</Callout>
+
+Make sure you update your `app` file to use the component that you have created. Replace the `<SignInScreen />` with the `<SignInWithOAuth />` to the `<SignedOut>` component.
+
+```tsx filename="app.tsx"
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import Constants from "expo-constants"
+import SignInWithOAuth from "./components/SignInWithOAuth";
+
+export default function App() {
+  return (
+    <ClerkProvider publishableKey={Constants.expoConfig.extra.clerkPublishableKey}>
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignInWithOAuth />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+```
+
+### Adding a token cache
+
+A token cache is important for persisting your JWT. By default, Clerk holds it in memory. However, this method shouldn't be used for Production applications.
+
+Expo provides a way to encrypt and securely store key–value pairs locally on the device via [`expo-secure-store`](https://docs.expo.dev/versions/latest/sdk/securestore).
+
+You can use it as your client JWT storage by setting the `tokenCache` prop in your `<ClerkProvider>` as shown below.
+
+#### Install expo-secure-store
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npm install expo-secure-store
+  ```
+
+  ```bash filename="terminal"
+  yarn add expo-secure-store
+  ```
+
+  ```bash filename="terminal"
+  pnpm add install expo-secure-store
+  ```
+</CodeBlockTabs>
+
+***
+
+```tsx filename="app.tsx"
+import React from "react";
+import { SafeAreaView, Text, StyleSheet } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
+import { SignInWithOAuth } from "./components/SignInWithOAuth";
+import Constants from "expo-constants"
+import * as SecureStore from "expo-secure-store";
+
+const tokenCache = {
+  async getToken(key: string) {
+    try {
+      return SecureStore.getItemAsync(key);
+    } catch (err) {
+      return null;
+    }
+  },
+  async saveToken(key: string, value: string) {
+    try {
+      return SecureStore.setItemAsync(key, value);
+    } catch (err) {
+      return;
+    }
+  },
+};
+
+export default function App() {
+  return (
+    <ClerkProvider
+      tokenCache={tokenCache}
+      publishableKey={Constants.expoConfig.extra.clerkPublishableKey}
+    >
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+        </SignedIn>
+        <SignedOut>
+          <SignInWithOAuth />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  }
+});
+```
+
+### Signing a user out
+
+To sign a user out, you can use the `signOut` method from the `useAuth` hook. This will remove the JWT from the token cache and remove the session.
+
+```tsx filename="app.tsx"
+import React from "react";
+import { SafeAreaView, Text, StyleSheet, View, Button } from "react-native";
+import { ClerkProvider, SignedIn, SignedOut,useAuth } from "@clerk/clerk-expo";
+import { SignInWithOAuth } from "./components/SignInWithOAuth";
+import Constants from "expo-constants"
+import * as SecureStore from "expo-secure-store";
+
+const tokenCache = {
+  getToken(key: string) {
+    try {
+      return SecureStore.getItemAsync(key);
+    } catch (err) {
+      return null;
+    }
+  },
+  saveToken(key: string, value: string) {
+    try {
+      return SecureStore.setItemAsync(key, value);
+    } catch (err) {
+      return null;
+    }
+  },
+};
+
+const SignOut = () => {
+  const { isLoaded,signOut } = useAuth();
+  if (!isLoaded) {
+    return null;
+  }
+  return (
+    <View>
+      <Button
+        title="Sign Out"
+        onPress={() => {
+          signOut();
+        }}
+      />
+    </View>
+  );
+};
+
+export default function App() {
+  return (
+    <ClerkProvider
+      tokenCache={tokenCache}
+      publishableKey={Constants.expoConfig.extra.clerkPublishableKey}
+    >
+      <SafeAreaView styles={styles.container}>
+        <SignedIn>
+          <Text>You are Signed in</Text>
+          <SignOut/>
+        </SignedIn>
+        <SignedOut>
+          <SignInWithOAuth />
+        </SignedOut>
+      </SafeAreaView>
+    </ClerkProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  }
+});
+```
+
+### Read session & user data
+
+Clerk provides a set of [hooks and helpers](/docs/references/react/use-user) that you can use to access the active session and user data in your Expo application. Here are examples of how to use these helpers.
+
+#### `useAuth`
+
+The `useAuth` hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
+
+```tsx filename="components/UseAuthExample.tsx"
+import { useAuth } from "@clerk/clerk-expo";
+import { Text } from "react-native";
+
+export default function UseAuthExample() {
+  const { isLoaded, userId, sessionId, getToken } = useAuth();
+
+  // In case the user signs out while on the page.
+  if (!isLoaded || !userId) {
+    return null;
+  }
+
+  return (
+    <Text>
+      Hello, {userId} your current active session is {sessionId}
+    </Text>
+  );
+}
+```
+
+#### `useUser`
+
+The `useUser` hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
+
+```tsx filename="components/UseUserExample.tsx"
+import { useUser } from "@clerk/clerk-expo";
+import { Text } from "react-native";
+
+export default function UseUserExample() {
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  if (!isLoaded || !isSignedIn) {
+    return null;
+  }
+
+  return <Text>Hello, {user.firstName} welcome to Clerk</Text>;
+}
+```

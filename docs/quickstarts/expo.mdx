@@ -126,50 +126,133 @@ You can control which content signed-in and signed-out users can see with Clerk'
 - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
 - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
 
-To get started, create a route 
+To get started, create a `(home)` route group with the following layout file:
+
+```tsx filename="/app/(home)/_layout.tsx"
+import { Stack } from 'expo-router/stack';
+
+export default function Layout() {
+  return <Stack />;
+}
+```
+
+Then, in an `index.tsx` file in the same folder add the following code. It displays the user's name if they're signed in, or a sign-in link if not:
+
+```tsx filename="/app/(home)/index.tsx"
+import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
+import { Link } from "expo-router";
+import { Text, View } from "react-native";
+
+export default function Page() {
+  const user = useUser();
+
+  return (
+    <View>
+      <SignedIn>
+        Hello {user.user?.firstName}
+      </SignedIn>
+      <SignedOut>
+        <Link href="/sign-in">
+          <Text>Sign In</Text>
+        </Link>
+      </SignedOut>
+    </View>
+  );
+}
+```
 
 ### Protect your app's pages
 
-{/* Use the code from "Create a dashboard  for when you're authenticated" */}
+The final thing to do is protect pages by checking if a user is authenticated before rendering their content. In this example, you'll create a dashboard that can only be accessed when signed in.
 
-Clerk offers Control Components that allow you to protect your pages. In the example below, [`<SignedIn>`](/docs/components/control/signed-in) and [`<SignedOut>`](/docs/components/control/signed-out) control components are used.
+To get started, create a `(dashboard)` route group and add the following code to the layout:
 
-```tsx filename="app.tsx"
+```tsx filename="/app/(home)/_layout.tsx"
+import { Redirect, Stack } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+
+export default function AuthenticatedLayout() {
+  const { isSignedIn } = useAuth();
+
+  if (!isSignedIn) {
+    return <Redirect href={"/sign-in"} />;
+  }
+
+  return <Stack />;
+}
+```
+
+Then, create a `dashboard.tsx` file in the same folder. It will use Clerk's [`useAuth`](/docs/references/react/use-auth) and [`useUser`](/docs/references/react/use-user) hooks to get the session token and user data, as shown in the following example:
+
+```tsx filename="/app/(home)/dashboard.tsx"
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import React from "react";
-import { SafeAreaView, Text, StyleSheet } from "react-native";
-import { ClerkProvider, SignedIn, SignedOut } from "@clerk/clerk-expo";
-import Constants from "expo-constants"
 
-export default function App() {
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Stack } from "expo-router";
+
+export default function Page() {
+  const { getToken, signOut, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const [sessionToken, setSessionToken] = React.useState("");
+
+  React.useEffect(() => {
+    const scheduler = setInterval(async () => {
+      const token = await getToken();
+      setSessionToken(token as string);
+    }, 1000);
+
+    return () => clearInterval(scheduler);
+  }, []);
+
+  const onSignOutPress = async () => {
+    try {
+      await signOut();
+    } catch (err: any) {}
+  };
+
   return (
-    <ClerkProvider publishableKey={Constants.expoConfig.extra.clerkPublishableKey}>
-      <SafeAreaView style={styles.container}>
-        <SignedIn>
-          <Text>You are Signed in</Text>
-        </SignedIn>
-        <SignedOut>
-          <Text>You are Signed out</Text>
-        </SignedOut>
-      </SafeAreaView>
-    </ClerkProvider>
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          title: "Profile",
+        }}
+      />
+      <Text style={styles.title}>Hello {user?.firstName}</Text>
+      <TouchableOpacity onPress={onSignOutPress} style={styles.link}>
+        <Text style={styles.linkText}>Sign out</Text>
+      </TouchableOpacity>
+      <Text style={styles.token}>{sessionToken}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
+    padding: 20,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  link: {
+    marginTop: 15,
+    paddingVertical: 15,
+  },
+  linkText: {
+    fontSize: 14,
+    color: "#2e78b7",
+  },
+  token: {
+    marginTop: 15,
+    paddingVertical: 15,
+    fontSize: 15,
   },
 });
 ```
-
-Using expo requires you to create custom flows. Our quickstart guide shows you how to create a sign in and sign up flow using the `useSignIn` and `useSignUp` hooks.
-
-<Callout type="warning">
-  The following flows are built on the default instance settings for Clerk. If you have changed your instance settings, you may need to make changes to the following code.
-</Callout>
 
 </Steps>
 
@@ -181,12 +264,16 @@ See the [`expo-updates`](https://docs.expo.dev/versions/latest/sdk/updates) libr
 
 ## Next steps
 
+You must create custom authentication flows to use Clerk with Expo. See the following guides to take the next steps toward fleshing out your app.
+
 <div className="container mx-auto my-4">
   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-    <Cards title="Customization & Localization" description="Learn how to customize and localize the Clerk components." link="/docs/components/customization/overview" cta="Learn More" />
+    <Cards title="Sign-in and Sign-up" description="Learn how to create a custom sign-in and sign-up authentication flow." link="/docs/references/expo/expo-sign-in-sign-up" cta="Learn More" />
 
-    <Cards title="Authentication Components" description="Learn more about all our authentication components." link="/docs/components/authentication/sign-in" cta="Learn More" />
+    <Cards title="OAuth with Expo" description="Learn more how to create a custom OAuth flow with Expo." link="/docs/references/expo/expo-oauth" cta="Learn More" />
 
-    <Cards title="Client Side Helpers" description="Learn more about our client side helpers and how to use them." link="/docs/references/react/use-user" cta="Learn More" />
+    <Cards title="MFA with Expo" description="Learn more how to create a custom Multifactor Authentication flow with Expo." link="/docs/references/expo/expo-mfa" cta="Learn More" />
+
+    <Cards title="Read Session and User Data" description="Learn how to read session and user data with Expo." link="/docs/references/expo/expo-read-session-user-data" cta="Learn More" />
   </div>
 </div>

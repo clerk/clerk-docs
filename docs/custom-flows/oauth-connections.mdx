@@ -6,7 +6,7 @@ description: Learn how to leverage the Clerk SDK to build completely custom OAut
 # OAuth connections
 
 <Callout type="danger">
-  This guide is for users who want to build a *custom* user interface using the Clerk API. To sign in users with multi-factor authentication (MFA) using a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To authenticate users with OAuth connections using a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 </Callout>
 
 ## Before you start
@@ -49,7 +49,7 @@ The following example shows two files:
       };
 
       // Render a button for each supported OAuth provider
-      // you want to add to your app
+    // you want to add to your app. This example uses only Google.
       return (
         <div>
           <button onClick={() => signInWith('oauth_google')}>
@@ -67,7 +67,7 @@ The following example shows two files:
       console.log('testing');
       // Handle the redirect flow by rendering the
       // prebuilt AuthenticateWithRedirectCallback component.
-      // This is the final step in the custom OAuth flow
+      // This is the final step in the custom OAuth flow.
       return <AuthenticateWithRedirectCallback />;
     }
     ```
@@ -88,51 +88,132 @@ To allowlist a redirect URL via the Clerk Dashboard:
 2. In the navigation sidebar, select **User & Authentication > Social Connections**.
 3. Select the **Setting** tab and add your redirect URL to the **Redirect URLs** list.
 
-## OAuth account transfer flow
+## OAuth account transfer flows
 
-When a user initiates an OAuth verification during sign-in or sign-up, it may sometimes be necessary to move the verification between the two flows.
+In some cases, a user may be trying to sign in with an OAuth account, but they don't have an account in your application yet. Or a user may be trying to sign up with an OAuth account, but they already have an account in your application. In these cases, Clerk provides "account transfers" which allow you to forward the user's information to the appropriate flow.
 
-For example, if someone already has an account, and tries to go through the sign up flow with the same OAuth account, they can't perform a successful sign-up again. Or, if someone attempts to sign in with their OAuth credentials but does not yet have an account, they won't be signed in to the account. For these scenarios, Clerk provides "account transfers."
+The following example shows how to handle these cases in your sign-in flow. The same logic can be applied to the sign-up flow.
 
-<CodeBlockTabs type="framework" options={["JavaScript"]}>
-```js
-// Get sign-in and sign-up objects in the OAuth callback page
-const { signIn, signUp } = window.Clerk.client;
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+  ```jsx filename="app/sign-in/[[...sign-in]]/page.tsx"
+  'use client';
 
-// If the user has an account in your application, but does not yet
-// have an oauth account connected, you can use the transfer method to
-// forward that information.
+  import * as React from 'react';
+  import { OAuthStrategy } from '@clerk/types';
+  import { SignInButton, useSignIn, useSignUp } from '@clerk/nextjs';
 
-const userExistsButNeedsToSignIn =
-  signUp.verifications.externalAccount.status === "transferable" &&
-  signUp.verifications.externalAccount.error?.code ===
-    "external_account_exists";
+  export default function OauthSignIn() {
+    const { signIn } = useSignIn();
+    const { signUp, setActive } = useSignUp();
 
-if (userExistsButNeedsToSignIn) {
-  const res = await signIn.create({ transfer: true });
-  if (res.status === "complete") {
-    window.Clerk.setActive({
-      session: res.createdSessionId,
-    });
+    if (!signIn || !signUp) return null;
+
+    async function handleSignIn(strategy: OAuthStrategy) {
+      if (!signIn || !signUp) return null;
+
+      // If the user has an account in your application, but does not yet
+      // have an OAuth account connected to it, you can transfer the OAuth
+      // account to the existing user account.
+      const userExistsButNeedsToSignIn =
+        signUp.verifications.externalAccount.status === 'transferable' &&
+        signUp.verifications.externalAccount.error?.code ===
+          'external_account_exists';
+
+      if (userExistsButNeedsToSignIn) {
+        const res = await signIn.create({ transfer: true });
+
+        if (res.status === 'complete') {
+          setActive({
+            session: res.createdSessionId,
+          });
+        }
+      }
+
+      // If the user has an OAuth account but does not yet
+      // have an account in your app, you can create an account
+      // for them using the OAuth information.
+      const userNeedsToBeCreated =
+        signIn.firstFactorVerification.status === 'transferable';
+
+      if (userNeedsToBeCreated) {
+        const res = await signUp.create({
+          transfer: true,
+        });
+
+        if (res.status === 'complete') {
+          setActive({
+            session: res.createdSessionId,
+          });
+        }
+      } else {
+        // If the user has an account in your application
+        // and has an OAuth account connected to it, you can sign them in.
+        signInWith(strategy);
+      }
+    }
+
+    const signInWith = (strategy: OAuthStrategy) => {
+      return signIn.authenticateWithRedirect({
+        strategy,
+        redirectUrl: '/sign-up/sso-callback',
+        redirectUrlComplete: '/',
+      });
+    };
+
+    // Render a button for each supported OAuth provider
+    // you want to add to your app. This example uses only Google.
+    return (
+      <div>
+        <button onClick={() => handleSignIn('oauth_google')}>
+          Sign in with Google
+        </button>
+      </div>
+    );
   }
-}
+  ```
+  </Tab>
 
-// If the user has an existing oauth account but does not yet exist as
-// a user in your app, you can use the transfer method to forward that
-// information.
+  <Tab>
+  ```js
+  // Get sign-in and sign-up objects in the OAuth callback page
+  const { signIn, signUp } = window.Clerk.client;
 
-const userNeedsToBeCreated =
-  signIn.firstFactorVerification.status === "transferable";
+  // If the user has an account in your application, but does not yet
+  // have an oauth account connected, you can use the transfer method to
+  // forward that information.
 
-if (userNeedsToBeCreated) {
-  const res = await signUp.create({
-    transfer: true,
-  });
-  if (res.status === "complete") {
-    window.Clerk.setActive({
-      session: res.createdSessionId,
-    });
+  const userExistsButNeedsToSignIn =
+    signUp.verifications.externalAccount.status === "transferable" &&
+    signUp.verifications.externalAccount.error?.code ===
+      "external_account_exists";
+
+  if (userExistsButNeedsToSignIn) {
+    const res = await signIn.create({ transfer: true });
+    if (res.status === "complete") {
+      window.Clerk.setActive({
+        session: res.createdSessionId,
+      });
+    }
   }
-}
-```
-</CodeBlockTabs>
+
+  // If the user has an existing oauth account but does not yet exist as
+  // a user in your app, you can use the transfer method to forward that
+  // information.
+
+  const userNeedsToBeCreated =
+    signIn.firstFactorVerification.status === "transferable";
+
+  if (userNeedsToBeCreated) {
+    const res = await signUp.create({
+      transfer: true,
+    });
+    if (res.status === "complete") {
+      window.Clerk.setActive({
+        session: res.createdSessionId,
+      });
+    }
+  }
+  ```
+  </Tab>
+</Tabs>

@@ -1,0 +1,152 @@
+---
+description: Learn how to create a custom MFA flow in Expo with Clerk.
+---
+
+# OAuth with Expo
+
+<Callout type="warning">
+  The following flow is built assuming your Clerk app is using the default instance settings. If you have changed your instance settings, you may need to make changes to the example.
+</Callout>
+
+The examples in this guide demonstrate how to build a custom OAuth authentication flow in Expo with Clerk.
+
+## Before you start
+
+To use this example, you must configure your Clerk instance to enable email and password authentication as well as MFA:
+
+1. Enable email and password authentication:
+    1. Navigate to the Clerk Dashboard and go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)** in the sidebar menu.
+    1. Ensure that **Email address** is required, and **Username** is not required.
+    1. Select the settings cog icon to ensure that the email address [verification method](/docs/authentication/configuration/sign-up-sign-in-options#verification-methods) is set to **Email code**.
+    1. In the **Authentication strategies** section of this page, ensure **Password** is enabled.
+1. Enable MFA authentication:
+    1. Navigate to your Clerk Dashboard and select your application.
+    1. In the sidebar menu, select **[User & Authentication > Multi-factor](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)**.
+    1. For this example, toggle on the **Authenticator application** and **Backup codes** strategy.
+1. Install the `expo-checkbox` package for the UI:
+    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+      ```bash filename="terminal"
+      npm install expo-checkbox
+      ```
+      ```bash filename="terminal"
+      yarn add expo-checkbox
+      ```
+      ```bash filename="terminal"
+      pnpm add expo-checkbox
+      ```
+    </CodeBlockTabs>
+
+## Create an MFA component
+
+The following example demonstrates a component that creates a custom MFA sign-in form.
+
+> You can render this component in a custom sign-in or sign-up flow, which you can find examples of in [the Expo custom sign-in and sign-up flow guide](/docs/references/expo/custom-auth-flows/expo-sign-in-sign-up).
+
+```tsx filename="components/SignInMFAForm.tsx"
+import React from "react";
+import { useSignIn } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import Checkbox from "expo-checkbox";
+
+export default function SignInMFAForm() {
+  const { signIn, setActive, isLoaded } = useSignIn();
+
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [code, setCode] = React.useState("");
+  const [useBackupCode, setUseBackupCode] = React.useState(false);
+  const [displayTOTP, setDisplayTOTP] = React.useState(false);
+  const router = useRouter();
+
+  const handleFirstStage = () => setDisplayTOTP(true);
+
+  const onPressTOTP = React.useCallback(async () => {
+    if (!isLoaded) return;
+
+    // Start the sign-in process
+    try {
+      await signIn.create({
+        identifier: email,
+        password,
+      });
+
+      // Attempt the TOTP or backup code verification
+      const signInAttempt = await signIn.attemptSecondFactor({
+        strategy: useBackupCode ? "backup_code" : "totp",
+        code: code,
+      });
+
+      // If verification was completed, set the session to active
+      // and redirect the user
+      if (signInAttempt.status === "complete") {
+        await setActive({ session: signInAttempt.createdSessionId });
+
+        router.replace("/dashboard");
+      } else {
+        // If the status is not complete, check why. User may need to
+        // complete further steps.
+        console.log(signInAttempt);
+      }
+    } catch (err: any) {
+      // See https://clerk.com/docs/custom-flows/error-handling
+      // for more info on error handling
+      console.log(err);
+    }
+  }, [isLoaded, email, password, code, useBackupCode]);
+
+  if (displayTOTP) {
+    return (
+      <View>
+        <Text>Verify your account</Text>
+
+        <View>
+          <Text>Code</Text>
+          <TextInput
+            value={code}
+            placeholder="OTP or Backup Code"
+            onChangeText={(c) => setCode(c)}
+          />
+        </View>
+        <View>
+          <Text>This code is a backup code</Text>
+          <Checkbox
+            value={useBackupCode}
+            onValueChange={() => setUseBackupCode((prev) => !prev)}
+          />
+        </View>
+        <TouchableOpacity onPress={onPressTOTP}>
+          <Text>Verify</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Text>Sign In</Text>
+      <View>
+        <TextInput
+          value={email}
+          placeholder="Email..."
+          placeholderTextColor="#000"
+          onChangeText={(email) => setEmail(email)}
+        />
+      </View>
+
+      <View>
+        <TextInput
+          value={password}
+          placeholder="Password..."
+          placeholderTextColor="#000"
+          onChangeText={(password) => setPassword(password)}
+        />
+      </View>
+
+      <TouchableOpacity onPress={handleFirstStage}>
+        <Text>Sign In</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+```

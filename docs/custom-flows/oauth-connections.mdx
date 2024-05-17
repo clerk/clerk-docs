@@ -88,6 +88,62 @@ To allowlist a redirect URL via the Clerk Dashboard:
 2. In the navigation sidebar, select **User & Authentication > Social Connections**.
 3. Scroll to the **Allowlist for mobile OAuth redirect** section and add your redirect URLs.
 
+The following example demonstrates a component that creates a custom OAuth flow for [Google accounts](/docs/authentication/social-connections/google).
+
+> You can render this component in a custom sign-in or sign-up flow, which you can find examples of in [the Expo custom sign-in and sign-up flow guide](/docs/references/expo/custom-auth-flows/expo-sign-in-sign-up).
+
+```tsx filename="components/SignInWithOAuth.tsx"
+import React from "react";
+import * as WebBrowser from "expo-web-browser";
+import { Text, View, Button } from "react-native";
+import { Link } from "expo-router";
+import { useOAuth } from "@clerk/clerk-expo";
+
+export const useWarmUpBrowser = () => {
+  React.useEffect(() => {
+    // Warm up the android browser to improve UX
+    // https://docs.expo.dev/guides/authentication/#improving-user-experience
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+};
+
+WebBrowser.maybeCompleteAuthSession();
+
+const SignInWithOAuth = () => {
+  useWarmUpBrowser();
+
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+
+  const onPress = React.useCallback(async () => {
+    try {
+      const { createdSessionId, signIn, signUp, setActive } =
+        await startOAuthFlow();
+
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId });
+      } else {
+        // Use signIn or signUp for next steps such as MFA
+      }
+    } catch (err) {
+      console.error("OAuth error", err);
+    }
+  }, []);
+
+  return (
+    <View>
+      <Link href="/">
+        <Text>Home</Text>
+      </Link>
+      <Button title="Sign in with Google" onPress={onPress} />
+    </View>
+  );
+};
+export default SignInWithOAuth;
+```
+
 ## OAuth account transfer flows
 
 In some cases, a user may be trying to sign in with an OAuth account, but they don't have an account in your application yet. Or a user may be trying to sign up with an OAuth account, but they already have an account in your application. In these cases, Clerk provides "account transfers" which allow you to forward the user's information to the appropriate flow.

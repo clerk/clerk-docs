@@ -6,6 +6,8 @@ Thanks for being willing to contribute to [Clerk's documentation](https://clerk.
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
+Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
+
 ## Project setup
 
 1.  Fork and clone the repo
@@ -56,7 +58,7 @@ When you open a pull request, a member of the Clerk team can add the `deploy-pre
 
 ### Previewing changes locally (for Clerk employees)
 
-Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the clerk-marketing README](https://github.com/clerk/clerk-marketing#previewing-local-documentation-changes).
+Clerk employees can run the application and preview their documentation changes locally. To do this, follow the [instructions in the `clerk` README](https://github.com/clerk/clerk/tree/main?tab=readme-ov-file#running-the-app-locally).
 
 ## Validating your changes
 
@@ -90,16 +92,114 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
 
-#### Navigation constructs
+[Manifest JSON schema →](./docs/manifest.schema.json)
 
-The navigation is built from a small number of primitive constructs:
+<details>
+<summary>Equivalent TypeScript types and descriptions</summary>
 
-- **Link** (`["Title", "/path/to/page"]`) - Renders a link. The path should be a full path relative to the documentation root (`https://clerk.com/docs/`)
-- **Separator** (`"---"`) - Renders a visual separator for grouping
-- **Heading** (`"# Heading"`) - Renders a heading
-- **Section** (`["Title", [elements]]`) - Renders a collapsible section
-- **Page** (`[{ title: "Title", root: "/root/path" }, [elements]]`) - Indicates a new navigation page. When viewing a page under the provided `root`, The navigation data associated with the matching navigation page will be rendered
-- **Text Config** (`{ title: "Tite", icon: "nextjs", tag: "coming soon" }`) - Can be used in place of a construct's title string to render additional elements
+```typescript
+export type Nav = Array<NavGroup>
+
+/**
+ * Nav groups are separated by horizontal rules
+ */
+type NavGroup = Array<NavItem>
+
+/**
+ * A nav item is either a link, or a sub-list with nested `items`
+ */
+type NavItem = LinkItem | SubNavItem
+
+/**
+ * A link to an internal or external page
+ */
+type LinkItem = {
+  /**
+   * The visible item text. May contain backticks (`) to render `<code>`
+   * 
+   * @example 'Next.js Quickstart'
+   * @example '`<SignIn>` and `<SignUp>`'
+   */
+  title: string
+  /**
+   * The item link. Internal links should be relative
+   * 
+   * @example '/docs/quickstarts/nextjs'
+   * @example 'https://example.com'
+   */
+  href: string
+  /**
+   * Muted text to display next to the item text
+   * 
+   * @example 'Community'
+   * @example 'Beta'
+   */
+  tag?: string
+  /**
+   * Icon to display next to the item text
+   * 
+   * @example 'globe'
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   */
+  icon?: string
+  /**
+   * Whether to enable text wrapping for the item text
+   * 
+   * @default true
+   */
+  wrap?: boolean
+  /**
+   * Set to "_blank" to open link in a new tab
+   */
+  target?: '_blank'
+}
+type SubNavItem = {
+  /**
+   * The visible item text. May contain backticks (`) to render `<code>`
+   * 
+   * @example 'Next.js Quickstart'
+   * @example '`<SignIn>` and `<SignUp>`'
+   */
+  title: string
+  /**
+   * The nested sub-items
+   */
+  items: Nav
+  /**
+   * Muted text to display next to the item text
+   * 
+   * @example 'Community'
+   * @example 'Beta'
+   */
+  tag?: string
+  /**
+   * Icon to display next to the item text
+   * 
+   * @example 'globe'
+   * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
+   */
+  icon?: string
+  /**
+   * Whether to enable text wrapping for the item text
+   * 
+   * @default true
+   */
+  wrap?: boolean
+  /**
+   * Whether to collapse the sub-nav
+   * 
+   * @default false
+   */
+  collapse?: boolean
+}
+```
+</details>
+
+<details>
+<summary>Visual representation of the manifest TypeScript types</summary>
+
+![](/public/images/styleguide/manifest.png)
+</details>
 
 ## Editing content
 
@@ -127,39 +227,134 @@ Headings should be nested by their rank. Headings with an equal or higher rank s
 
 Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading".
 
+`h2` and `h3` headings are automatically included in the table of contents. You can control this behaviour by using the `toc` prop:
+
+```mdx
+{/* Replace the text for this heading in the table of contents */}
+
+## Lorem ipsum {{ toc: 'Hello world' }}
+
+{/* Exclude heading from table of contents */}
+
+## Lorem ipsum {{ toc: false }}
+```
+
+Headings are automatically assigned an `id` attribute which is a slugified version of the text content. You can optionally override this by providing an `id` prop:
+
+```mdx
+{/* Replace the generated ID (`lorem-ipsum`) with `lipsum` */}
+
+## Lorem ipsum {{ id: 'lipsum' }}
+```
+
 ### Code blocks
 
 Syntax-highlighted code blocks are rendered wherever markdown code blocks are used. To add syntax highlighting, specify a language next to the backticks before the fenced code block.
 
-```
+````
 ​```typescript
 function add(a: number, b: number) {
-  a + b
+  return a + b
 }
 ​```
-```
+````
 
 You can also specify a filename by passing the `filename` prop.
 
-```
-​```typescript filename="add.ts"
+````
+​```typescript {{ filename: 'add.ts' }}
 function add(a: number, b: number) {
-  a + b
+  return a + b
 }
 ​```
-```
+````
 
 If the code should run in a terminal, you can set the syntax highlighting to something like `sh` (shell) or `bash`. The file name should be set to `terminal`.
 
-```
-​```sh filename="terminal"
+````
+​```sh {{ filename: 'terminal' }}
 npm i @clerk/nextjs
 ​```
+````
+
+#### Highlighting
+
+You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
+
+````mdx
+```tsx {{ mark: [2, [5, 7]] }}
+export function Page() {
+  return null
+}
+
+export function Layout() {
+  return null
+}
+```
+````
+
+![](/.github/media/code-block-mark.png)
+
+The `ins` (insert) and `del` (delete) props work in the same way as the `mark` prop but apply "diff" style highlighting with prepended `+` and `-` signs.
+
+<details>
+<summary><code>ins</code> and <code>del</code> example</summary>
+
+````mdx
+```tsx {{ ins: [2], del: [[5, 7]] }}
+export function Page() {
+  return null
+}
+
+export function Layout() {
+  return null
+}
+```
+````
+
+![](/.github/media/code-block-diff.png)
+
+</details>
+
+<details>
+<summary>TypeScript type for code block props</summary>
+
+```tsx
+type LineNumber = number
+type Mark = LineNumber | [start: LineNumber, end: LineNumber]
+
+interface CodeBlockProps {
+  filename?: string
+  mark?: Array<Mark>
+  ins?: Array<Mark>
+  del?: Array<Mark>
+}
 ```
 
-#### `<Steps />`
+</details>
 
-The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with H3 headings.
+#### Code block shortcodes
+
+You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
+
+- `{{pub_key}}` – Publishable key
+- `{{secret}}` – Secret key
+- `{{fapi_url}}` – Frontend API URL
+
+````mdx
+```sh {{ filename: '.env.local' }}
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
+```
+````
+
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+
+https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
+
+### `<Steps />`
+
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h3` headings.
 
 ```mdx
 <Steps>
@@ -179,320 +374,349 @@ Do these actions to complete Step 2.
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <Steps /> component](/public/images/styleguide/steps.png)
+![An example of a <Steps /> component](/.github/media/steps.png)
 
-#### `<Callout />`
+### Callouts
 
-The `<Callout />` component draws attention to something learners should slow down and read.
+A callout draws attention to something learners should slow down and read.
 
+> [!NOTE]
 > Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed!
 
-The `<Callout />` component accepts an optional `type` property which accepts the following strings: `'Danger' | 'Info' | 'Success' | 'Warning';`.
+Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. Five types of callouts are available:
 
 ```mdx
-<Callout type="danger">
-  Don't do this in production!
-</Callout>
+> [!NOTE]
+> Useful information that users should know, even when skimming content.
+
+> [!TIP]
+> Helpful advice for doing things better or more easily.
+
+> [!IMPORTANT]
+> Key information users need to know to achieve their goal.
+
+> [!WARNING]
+> Urgent info that needs immediate user attention to avoid problems.
+
+> [!CAUTION]
+> Advises about risks or negative outcomes of certain actions.
 ```
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <Callout /> component with the type set to danger.](/public/images/styleguide/callout.png)
+![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION](/.github/media/callouts.png)
 
-#### `<CodeBlockTabs />`
+### `<CodeBlockTabs />`
 
 The `<CodeBlockTabs />` component renders multiple variations of a code block. It accepts an `options` property, which is an array of strings. For each option provided, it renders a code block.
 
 ````mdx
-<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/nextjs
-  ```
+<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
 
-  ```sh filename="terminal"
-  yarn add @clerk/nextjs
-  ```
+```sh {{ filename: 'terminal' }}
+npm i @clerk/nextjs
+```
 
-  ```sh filename="terminal"
-  pnpm add @clerk/nextjs
-  ```
+```sh {{ filename: 'terminal' }}
+yarn add @clerk/nextjs
+```
+
+```sh {{ filename: 'terminal' }}
+pnpm add @clerk/nextjs
+```
+
 </CodeBlockTabs>
 ````
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/public/images/styleguide/codeblocktabs.png)
+![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)
 
-The `<CodeBlockTabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property.
-
-For example, in the example below, if the user were to choose `"yarn"` as the tab they want to see, both `<CodeBlockTabs />` components would change their active tab to `"yarn"` because both components were passed `"installer"` as their `type`.
-
-````mdx
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/nextjs
-  ```
-
-  ```sh filename="terminal"
-  yarn add @clerk/nextjs
-  ```
-
-  ```sh filename="terminal"
-  pnpm add @clerk/nextjs
-  ```
-</CodeBlockTabs>
-
-You can also install the install the Clerk React package by running the following command in your terminal:
-
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```sh filename="terminal"
-  npm i @clerk/clerk-react
-  ```
-
-  ```sh filename="terminal"
-  yarn add @clerk/clerk-react
-  ```
-
-  ```sh filename="terminal"
-  pnpm add @clerk/clerk-react
-  ```
-</CodeBlockTabs>
-````
-
-The video below shows what this example looks like once rendered. Notice that changing the tab of one `<CodeBlockTabs />` instance changes the tab of the other, because both instances have matching `type` values.
-
-![An example of two <CodeBlockTabs /> elements where both were passed the same the value of "installer" to their 'type' prop, causing their active tabs to be synced.](/public/images/styleguide/codeblocktabs-synced.mov)
-
-#### `<Tabs />`
+### `<Tabs />`
 
 The `<Tabs />` component structures content in a tabular format. It accepts an `items` property, which is an array of strings. For each option provided, it renders a `<Tab />` component, as shown in the example below.
 
 ```mdx
-<Tabs items={["React", "JavaScript"]}>
-<Tab>
-# React
+<Tabs items={['React', 'JavaScript']}>
+  <Tab>
 
-Here is some example text about React.
-</Tab>
+    Here is some example text about React.
 
-<Tab>
-# JavaScript
+  </Tab>
 
-Here is some example text about JavaScript.
-</Tab>
+  <Tab>
+
+    Here is some example text about JavaScript.
+
+  </Tab>
 </Tabs>
 ```
 
 The video below shows what this example looks like once rendered.
 
-![An example of a <Tabs /> component. There are two tab options: 'react' and 'javascript'.](/public/images/styleguide/tabs.mov)
+https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2d047ab6
 
-The `<Tabs />` component also accepts an optional `type` property, which is used to sync the active tab across multiple instances by passing each instance the same exact `string` to the `type` property.
-
-For example, in the example below, if the user were to choose "JavaScript" as the tab they want to see, both `<Tabs />` components would change their active tab to "JavaScript" because both components were passed `"framework"` as their `type`.
-
-```mdx
-<Tabs type="framework" items={["React", "JavaScript"]}>
-<Tab>
-# React
-
-Here is some example text about React.
-</Tab>
-<Tab>
-# JavaScript
-
-Here is some example text about JavaScript.
-</Tab>
-</Tabs>
-
-<Tabs type="framework" items={["React", "JavaScript"]}>
-<Tab>
-# React
-
-Here is another example about React.
-</Tab>
-<Tab>
-# JavaScript
-
-Here is another example about JavaScript.
-</Tab>
-</Tabs>
-```
-
-The video below shows what this example would like once rendered. Notice that changing the tab of one `<Tabs />` instance changes the tab of the other, because both have matching `type` values.
-
-![An example of two <Tabs /> elements where both were passed the same the value of "installer" to their 'type' prop, causing their active tabs to be synced.](/public/images/styleguide/tabs-synced.mov)
-
-#### Sync `<CodeBlockTabs />` and `<Tabs />`
-
-The `type` property can be used on both `<CodeBlockTabs />` and `<Tabs />` to sync instances of these components together.
-
-For example, in the example below, if the user were working with Next.js Pages Router and chose the "Pages Router" as the tab they want to see, both the `<Tabs />` and the `<CodeBlockTabs />` components would change their active tab to "Pages Router" because both components were passed `"router"` as their `type`.
-
-````mdx
-<Tabs type="router" items={["App Router", "Pages Router"]}>
-<Tab>
-The App Router information is here.
-</Tab>
-
-<Tab>
-The Pages Router information is here.
-</Tab>
-</Tabs>
-
-<CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-```tsx filename="/app/sign-in/[[...sign-in]]/page.tsx"
-import { SignIn } from "@clerk/nextjs";
-
-export default function Page() {
-  return <SignIn />;
-}
-```
-
-```tsx filename="/pages/sign-in/[[...index]].tsx"
-import { SignIn } from "@clerk/nextjs";
-
-const SignInPage = () => (
-  <SignIn />
-);
-
-export default SignInPage;
-```
-</CodeBlockTabs>
-````
-
-The video below shows what this example would like once rendered. Notice that changing the active tab of the `<Tabs />` component also changes the active tab of the `<CodeBlockTabs />` component, and vice versa. This is because both instances were passed the same `type` value of `"router"`.
-
-![An example of a <Tabs /> and <CodeBlockTabs /> element where both were passed the same the value of "router" to their 'type' prop, causing their active tabs to be synced.](/public/images/styleguide/codeblocktabs-and-tabs-synced.mov)
-
-### Tables
-
-Tables can be formatted using markdown, like so:
-
-```
-| Heading1 | Heading2 |
-| --- | --- |
-| Cell1A | Cell2A |
-| Cell1B | Cell2B |
-| `code1` | `code2` |
-| [Link1](https://link1.com) | [Link2](https://link2.com) |
-```
-
-The image below shows what this example would look like once rendered.
-
-![An example of a markdown table.](/public/images/styleguide/markdown-table.png)
-
-#### `<Tables />`
-
-If you have more complex content that you need inside a table, such as embedding JSX elements, you can use the `<Tables />` component. While you *can* embed JSX elements in a markdown table, embedding JSX elements in a JSX component is the *better* option for formatting and readability purposes.
-
-For example, one of these cells has content that would best formatted in an unordered list. Thus, a `<Tables />` component is used instead of a markdown table.
-
-```
-<Tables
-  headings={["Name", "Type", "Description"]}
-  rows={[
-    {
-      cells: [
-        <code>cell1A</code>,
-        <code>cell2A</code>,
-        <>This is cell3A which would be filled under the description heading.</>,
-      ]
-    },
-    {
-      cells: [
-        <code>cell2A</code>,
-        <code>cell2B</code>,
-        <>This is cell3B, and it renders components:
-          <ul>
-            <li>listitem1 inside cell3B</li>
-            <li>listitem2 inside cell3B</li>
-            <li>listitem3 inside cell3B</li>
-          </ul>
-        </>,
-      ],
-    },
-  ]}
-/>
-```
-
-The image below shows what this example would look like once rendered.
-
-![An example of a <Table /> component.](/public/images/styleguide/table.png)
-
-#### `<InjectKeys />`
-
-The `<InjectKeys />` component is used to inject the user's current Clerk instance's publishable and secret keys. It should wrap around a code block, which will render an eye icon for users to click on in order to reveal their secret keys.
-
-````mdx
-  Add the following code to your `.env.local` file to set your public and secret keys.
-
-  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
-
-  <InjectKeys>
-
-  ```sh filename=".env.local"
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_SECRET_KEY={{secret}}
-  ```
-
-  </InjectKeys>
-````
-
-The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
-
-![Clicking on the eye icon on a code block that is wrapped in <InjectKeys /> will show the user their secret key.](/public/images/styleguide/inject-keys.mov)
-
-#### `<TutorialHero />`
+### `<TutorialHero />`
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property | Type | Description |
-| --- | --- | --- |
-| `framework` | string | Denotes the framework or platform the tutorial is for. |
-| `beforeYouStart` | { title: string; link: string }[] | Links to things that learners should complete before the tutorial. |
-| `exampleRepo` (optional) | { title: string; link: string }[] | Links to example repositories. |
-| `exampleRepoTitle` (optional) | string | The title for the example repository/repositories. Defaults to `'Example repository'`. |
+| Property                      | Type                                                                                                                           | Description                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                     |
+| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                         |
+| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'`. |
 
 ```mdx
 <TutorialHero
-  framework="react"
   beforeYouStart={[
     {
-      title: "Set up a Clerk application",
-      link: "https://clerk.com/docs/quickstarts/setup-clerk"
+      title: 'Set up a Clerk application',
+      link: '/docs/quickstarts/setup-clerk',
+      icon: 'clerk',
     },
     {
-      title: "Create a react application",
-      link: "https://react.dev/learn"
+      title: 'Create a Next.js application',
+      link: 'https://nextjs.org/docs/getting-started/installation',
+      icon: 'nextjs',
     }
   ]}
   exampleRepo={[
     {
-      title: "React JS app",
-      link: "https://github.com/clerk/clerk-react-starter"
+      title: 'App router',
+      link: 'https://github.com/clerk/clerk-nextjs-app-quickstart',
     }
   ]}
 >
 
-- Install `@clerk/clerk-react`
-- Set up your environment variables
-- Wrap your React app in `<ClerkProvider/>`
-- Limit access to authenticated users
-- Embed the `<UserButton/>`
+- Install `@clerk/nextjs`
+- Set up your environment keys to test your app locally
+- Add `<ClerkProvider />` to your application
+- Use Clerk middleware to implement route-specific authentication
+- Create a header with Clerk components for users to sign in and out
 
 </TutorialHero>
 ```
+
+### `<Cards>`
+
+The `<Cards>` component can be used to display a grid of cards in various styles.
+
+`Cards` uses Markdown list syntax with each card separated by three dashes `---`.
+
+```mdx
+<Cards>
+
+- [title](href)
+- description
+
+---
+
+- [title](href)
+- description
+- ![alt text](/image.png)
+
+---
+
+- [title](href)
+- description
+- {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+
+</Cards>
+```
+
+#### Properties
+
+| Property  | Type                                        | Description                                                              |
+| --------- | ------------------------------------------- | ------------------------------------------------------------------------ |
+| `variant` | `'default'  \| 'plain' \| 'cta' \| 'image'` | The visual style of the cards, default: `'default'` (see examples below) |
+| `cols`    | `2 \| 3 \| 4`                               | The number of columns in the card grid, default: `2`                     |
+| `level`   | `2 \| 3 \| 4`                               | The level to use for the card headings, default: `3`                     |
+
+#### Examples
+
+<details>
+<summary><code>default</code> variant</summary>
+
+![](/.github/media/cards-default.png)
+
+```mdx
+<Cards>
+
+- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
+
+---
+
+- [UI Components](/docs/components/overview)
+- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+
+</Cards>
+```
+
+</details>
+
+<details>
+<summary><code>default</code> variant with icons</summary>
+
+![](/.github/media/cards-default-icons.png)
+
+```mdx
+<Cards>
+
+- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+---
+
+- [UI Components](/docs/components/overview)
+- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+</Cards>
+```
+
+</details>
+
+<details>
+<summary><code>plain</code> variant with icons</summary>
+
+![](/.github/media/cards-plain-icons.png)
+
+```mdx
+<Cards variant="plain">
+
+- [Quickstarts & Tutorials](/docs/quickstarts/overview)
+- Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+---
+
+- [UI Components](/docs/components/overview)
+- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+</Cards>
+```
+
+</details>
+
+<details>
+<summary><code>image</code> variant</summary>
+
+![](/.github/media/cards-image.png)
+
+```mdx
+<Cards variant="image">
+
+- [What is Clerk authentication?](/docs/authentication/overview)
+- Clerk offers multiple authentication strategies to identify legitimate users of your appication, and to allow them to make authenticated requests to your backend.
+- ![](/what-is-clerk.png)
+
+---
+
+- [What is the “User” object?](/docs/users/overview)
+- The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
+- ![](/user-object.png)
+
+</Cards>
+```
+
+</details>
+
+<details>
+<summary><code>cta</code> variant</summary>
+
+![](/.github/media/cards-cta.png)
+
+```mdx
+<Cards variant="cta">
+
+- [Join our Discord](/discord 'Join Discord')
+- Join our official Discord server to chat with us directly and become a part of the Clerk community.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+---
+
+- [Need help?](/support 'Get help')
+- Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
+- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+
+</Cards>
+```
+
+</details>
+
+### `<Properties>`
+
+The `<Properties>` component can be used to display a list of properties.
+
+`Properties` uses Markdown list syntax with each property separated by three dashes `---`.
+
+```mdx
+<Properties>
+
+- `name`
+
+description
+
+---
+
+- `name`
+- `type`
+
+description
+
+description continued…
+
+</Properties>
+```
+
+> [!NOTE]
+> Typically `name` and `type` would make use of inline code (`` ` ``) but this not required
+
+<details>
+<summary>Example</summary>
+
+![](/.github/media/properties.png)
+
+```mdx
+<Properties>
+
+- `path`
+- `string`
+
+The root path the sign-in flow is mounted at. Default: `/sign-in`
+
+---
+
+- `fallback`
+- `React.ReactNode`
+
+Fallback markup to render while Clerk is loading. Default: `null`
+
+</Properties>
+```
+
+</details>
 
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.
 
+Use the `dark` prop to specify a different image to use in dark mode:
+
+```mdx
+![Logo](/docs/images/logo.png){{ dark: '/docs/images/logo-dark.png' }}
+```
+
+You may also optionally provide the following [`next/image`](https://nextjs.org/docs/pages/api-reference/components/image) props: [`quality`](https://nextjs.org/docs/pages/api-reference/components/image#quality), [`priority`](https://nextjs.org/docs/pages/api-reference/components/image#priority)
+
+```mdx
+![Image](/docs/images/my-image.png){{ quality: 90, priority: true }}
+```
+
 When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
-
-> **Note**
-> Is the image you're adding optimized? If not, consider running it through an optimizer, like [Squoosh](https://squoosh.app/).
-
 
 ## Help wanted!
 

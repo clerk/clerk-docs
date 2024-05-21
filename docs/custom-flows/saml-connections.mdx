@@ -28,7 +28,7 @@ The following example shows two files:
 <Tabs items={["Next.js"]}>
   <Tab>
     <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
-    ```jsx filename="app/sign-in/[[...sign-in]]/page.tsx"
+    ```jsx filename="app/sign-in/page.tsx"
     'use client';
 
     import * as React from 'react';
@@ -89,7 +89,9 @@ The following example shows two files:
 
 ## SAML account transfer flows
 
-In some cases, a user may be trying to sign in with a SAML account, but they don't have an account in your application yet. Or a user may be trying to sign up with a SAML account, but they already have an account in your application. In these cases, Clerk provides account transfers, which allow you to forward the user's information to the appropriate flow.
+It is common for users who are authenticating with OAuth to use a sign-in button when they mean to sign-up, and vice versa. For those cases, the `SignIn` and `SignUp` objects have a `transferable` status that indicates whether the user can be transferred to the other flow.
+
+If you would like to keep your sign-in and sign-up flows completely separate, then you can skip this section.
 
 The following example shows how to handle these cases in your sign-in flow. The same logic can be applied to the sign-up flow; change the `signIn.AuthenticateWithRedirect()` to `signUp.authenticateWithRedirect()`.
 
@@ -106,6 +108,27 @@ The following example shows how to handle these cases in your sign-in flow. The 
     const { signUp, setActive } = useSignUp();
 
     if (!signIn || !signUp) return null;
+
+    const signInWith = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      const email = (e.target as HTMLFormElement).email.value;
+
+      signIn
+        .authenticateWithRedirect({
+          identifier: email,
+          strategy: 'saml',
+          redirectUrl: '/sso-callback',
+          redirectUrlComplete: '/',
+        })
+        .then((res) => {
+          console.log(res);
+        })
+        .catch((err: any) => {
+          console.log(err.errors);
+          console.error(err, null, 2);
+        });
+    };
 
     async function handleSignIn(e: React.FormEvent) {
       if (!signIn || !signUp) return null;
@@ -150,27 +173,6 @@ The following example shows how to handle these cases in your sign-in flow. The 
         signInWith(e);
       }
     }
-
-    const signInWith = (e: React.FormEvent) => {
-      e.preventDefault();
-
-      const email = (e.target as HTMLFormElement).email.value;
-
-      signIn
-        .authenticateWithRedirect({
-          identifier: email,
-          strategy: 'saml',
-          redirectUrl: '/sso-callback',
-          redirectUrlComplete: '/',
-        })
-        .then((res) => {
-          console.log(res);
-        })
-        .catch((err: any) => {
-          console.log(err.errors);
-          console.error(err, null, 2);
-        });
-    };
 
     // Render a button for each supported OAuth provider
     // you want to add to your app

@@ -25,7 +25,7 @@ Both middleware functions support header based authentication with a bearer toke
 
 The claims will then be made available in the `http.Request.Context` for the next handler in the chain. Clerk Go SDK provides the [`SessionClaimsFromContext()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) helper for accessing the claims from the context.
 
-The following example demonstrates how to use the `WithHeaderAuthorization()` middleware to protect a route. If the user tries accessing the route and their session token is valid, the user's ID will be returned in the response.
+The following example demonstrates how to use the `WithHeaderAuthorization()` middleware to protect a route. If the user tries accessing the route and their session token is valid, the user's ID and banned status will be returned in the response.
 
 <Callout type="info">
 Your Clerk secret key is required. If you are signed in to your Clerk Dashboard, your secret key should become visible by selecting the eye icon. Otherwise, you can retrieve your Clerk secret key from the Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
@@ -41,6 +41,7 @@ import (
 
   "github.com/clerk/clerk-sdk-go/v2"
   clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+  "github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
@@ -68,7 +69,12 @@ func protectedRoute(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte(`{"access": "unauthorized"}`))
     return
   }
-  fmt.Fprintf(w, `{"user_id": "%s"}`, claims.Subject)
+  
+  usr, err := user.Get(r.Context(), claims.Subject)
+  if err != nil {
+    // handle the error
+  }
+  fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
 }
 ```
 </InjectKeys>
@@ -81,7 +87,7 @@ Verifying a session token requires providing a JSON Web Key. When using Clerk mi
 
 Clerk Go SDK provides a set of functions for decoding and verifying JWTs, as well as fetching JSON Web Keys. It is recommended to cache your JSON Web Key and invalidate the cache only when a replacement key is generated.
 
-The following example demonstrates how to manually verify a session token. If the user tries accessing the route and their session token is valid, the user's ID will be returned in the response.
+The following example demonstrates how to manually verify a session token. If the user tries accessing the route and their session token is valid, the user's ID and banned status will be returned in the response.
 
 <InjectKeys>
 ```go filename="main.go"
@@ -94,6 +100,7 @@ import (
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
@@ -124,7 +131,12 @@ func protectedRoute(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"access": "unauthorized"}`))
 		return
 	}
-	fmt.Fprintf(w, `{"user_id": "%s"}`, claims.Subject)
+
+	usr, err := user.Get(r.Context(), claims.Subject)
+	if err != nil {
+		// handle the error
+	}
+	fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
 }
 ```
 </InjectKeys>
@@ -144,6 +156,7 @@ import (
   "github.com/clerk/clerk-sdk-go/v2"
   "github.com/clerk/clerk-sdk-go/v2/jwks"
   "github.com/clerk/clerk-sdk-go/v2/jwt"
+  "github.com/clerk/clerk-sdk-go/v2/user"
 )
 
 func main() {
@@ -216,7 +229,12 @@ func protectedRoute(jwksClient *jwks.Client, store JWKStore) func(http.ResponseW
       w.Write([]byte(`{"access": "unauthorized"}`))
       return
     }
-    fmt.Fprintf(w, `{"user_id": "%s"}`, claims.Subject)
+
+    usr, err := user.Get(r.Context(), claims.Subject)
+    if err != nil {
+      // handle the error
+    }
+    fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
   }
 }
 

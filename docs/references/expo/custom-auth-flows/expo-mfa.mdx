@@ -38,9 +38,15 @@ To use this example, you must configure your Clerk instance to enable email and 
 
 ## Create an MFA component
 
-The following example demonstrates a component that creates a custom MFA sign-in form.
+The following example demonstrates a full MFA sign-in flow that enables users to generate QR codes which can be used with an authenticator app.
 
 > You can render this component in a custom sign-in or sign-up flow, which you can find examples of in [the Expo custom sign-in and sign-up flow guide](/docs/references/expo/custom-auth-flows/expo-sign-up-sign-in).
+
+<Steps>
+
+### Create the sign-in form
+
+In your components directory, create the MFA sign-in form.
 
 ```tsx filename="components/SignInMFAForm.tsx"
 import React from "react";
@@ -150,3 +156,244 @@ export default function SignInMFAForm() {
   );
 }
 ```
+
+### Create a `(dashboard)` route
+
+For this example, to let users configure MFA, create a basic dashboard. Start by creating the `(dashboard)` route group and adding the following code to the layout:
+
+```tsx filename="app/(dashboard)/_layout.tsx"
+import { Redirect, Stack } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+
+export default function AuthenticatedLayout() {
+  const { isSignedIn } = useAuth();
+
+  if (!isSignedIn) {
+    return <Redirect href={"/sign-in"} />;
+  }
+
+  return <Stack />;
+}
+```
+
+### Create an account page
+
+Next, add a basic account page to the `(dashboard)` route group that shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
+
+```tsx filename="app/(dashboard)/account.tsx"
+import React from "react";
+import { useUser } from "@clerk/clerk-expo";
+import { Link } from "expo-router";
+import { View, Text, Button, TouchableOpacity } from "react-native";
+
+export default function ManageTOTPMfa() {
+  const { isLoaded, user } = useUser();
+
+  if (!isLoaded || !user) return null;
+
+  const disableTOTP = async () => {
+    await user.disableTOTP();
+  };
+
+  const MFAEnabled = () => {
+    return (
+      <View>
+        <Text>TOTP via authentication app enabled - </Text>
+        <Button onPress={() => disableTOTP()} title="Remove" />
+      </View>
+    );
+  };
+
+  const MFADisabled = () => {
+    return (
+      <View>
+        <Text>Add TOTP via authentication app - </Text>
+        <TouchableOpacity>
+          <Link href="/add-mfa">
+            <Text>Add</Text>
+          </Link>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  return (
+    <>
+      <Text>Current MFA Settings</Text>
+
+      <Text>Authenticator App</Text>
+
+      {user.totpEnabled ? <MFAEnabled /> : <MFADisabled />}
+
+      {user.backupCodeEnabled && (
+        <View>
+          <Text>Backup codes</Text>
+          <Button title="Regenerate" />
+        </View>
+      )}
+    </>
+  );
+}
+```
+
+### Create the QR code generator
+
+Finally, create a page that adds the functionality for generating the QR code and back up codes.
+
+```tsx filename="app/(dashboard)/add-mfa.tsx"
+import React from "react";
+import { useUser } from "@clerk/clerk-expo";
+import { Link } from "expo-router";
+import { QrCodeSvg } from "react-native-qr-svg";
+import { FlatList, Button, Text, TextInput, View } from "react-native";
+
+import { BackupCodeResource, TOTPResource } from "@clerk/types";
+
+type AddTotpSteps = "add" | "verify" | "backupcodes" | "success";
+type DisplayFormat = "qr" | "uri";
+
+function AddTOTPMfa({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+}) {
+  const [totp, setTotp] = React.useState<TOTPResource | undefined>(undefined);
+  const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>("qr");
+  const { user } = useUser();
+
+  React.useEffect(() => {
+    void user
+      ?.createTOTP()
+      .then((totp: TOTPResource) => setTotp(totp))
+      .catch((error) => console.log("error", error));
+  }, []);
+
+  return (
+    <View>
+      <Text>Add TOTP MFA</Text>
+
+      {totp && displayFormat === "qr" && (
+        <>
+          <View>
+            <QrCodeSvg value={totp?.uri || ""} frameSize={200} />
+          </View>
+          <Button title="Use URI" onPress={() => setDisplayFormat("uri")} />
+        </>
+      )}
+
+      {totp && displayFormat === "uri" && (
+        <>
+          <View>
+            <Text>{totp.uri}</Text>
+          </View>
+          <Button title="Use QR Code" onPress={() => setDisplayFormat("qr")} />
+        </>
+      )}
+
+      <Button title="Verify" onPress={() => setStep("verify")} />
+      <Button title="Reset" onPress={() => setStep("add")} />
+    </View>
+  );
+}
+
+function VerifyMFA({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+}) {
+  const [code, setCode] = React.useState("");
+
+  const { user } = useUser();
+
+  const verifyTotp = async (e: any) => {
+    await user
+      ?.verifyTOTP({ code })
+      .then(() => setStep("backupcodes"))
+      .catch((error) => console.log("Error", error));
+  };
+
+  return (
+    <>
+      <Text>Verify MFA</Text>
+      <TextInput value={code} onChangeText={(c) => setCode(c)} />
+      <Button onPress={verifyTotp} title="Verify Code" />
+      <Button onPress={() => setStep("add")} title="Reset" />
+    </>
+  );
+}
+
+function BackupCodes({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+}) {
+  const { user } = useUser();
+  const [backupCode, setBackupCode] = React.useState<
+    BackupCodeResource | undefined
+  >(undefined);
+
+  React.useEffect(() => {
+    if (backupCode) {
+      return;
+    }
+
+    void user
+      ?.createBackupCode()
+      .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
+      .catch((error) => console.log("Error", error));
+  }, []);
+
+  return (
+    <>
+      <Text>Save Backup Codes</Text>
+      {backupCode && (
+        <View>
+          <Text>
+            Save this list of backup codes somewhere safe in case you need to
+            access your account in an emergency
+          </Text>
+
+          <FlatList
+            data={backupCode.codes.map((code) => ({
+              key: code,
+            }))}
+            renderItem={({ item }) => <Text>{item.key}</Text>}
+          />
+
+          <Button title="Finish" onPress={() => setStep("success")} />
+        </View>
+      )}
+    </>
+  );
+}
+
+function Success() {
+  return (
+    <>
+      <Text>Success</Text>
+      <Text>
+        You successfully added TOTP Mfa via an authentication application
+      </Text>
+    </>
+  );
+}
+
+export default function AddMfaScreen() {
+  const [step, setStep] = React.useState<AddTotpSteps>("add");
+
+  return (
+    <>
+      {step === "add" && <AddTOTPMfa setStep={setStep} />}
+      {step === "verify" && <VerifyMFA setStep={setStep} />}
+      {step === "backupcodes" && <BackupCodes setStep={setStep} />}
+      {step === "success" && <Success />}
+
+      <Link href="/account">
+        <Text>Manage MFA</Text>
+      </Link>
+    </>
+  );
+}
+```
+
+</Steps>

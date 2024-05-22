@@ -5,11 +5,9 @@ description: Clerk's <GoogleOneTap /> component renders a UI for authenticating 
 
 # `<GoogleOneTap />` component
 
-The `<GoogleOneTap />` component renders a UI for signing in users. The functionality of the `<GoogleOneTap />` component is controlled by the instance settings you specify in your [Clerk Dashboard](https://dashboard.clerk.com), such as [sign-in and sign-up options](/docs/authentication/configuration/sign-up-sign-in-options) and [social connections](/docs/authentication/social-connections/overview). You can further customize your `<GoogleOneTap />` component by passing additional [properties](#properties) at the time of rendering.
+The `<GoogleOneTap />` component renders the [Google One Tap](https://developers.google.com/identity/gsi/web/guides/features) UI so that users can use a single button to sign-up or sign-in to your Clerk application with their Google accounts.
 
-<Callout type="info">
-  The `<SignUp/>` and `<SignIn/>` components cannot render when a user is already signed in, unless the application allows multiple sessions. If a user is already signed in and the application only allows a single session, Clerk will redirect the user to the Home URL instead.
-</Callout>
+By default, this component will redirect users back to the page where the authentication flow started, however you can override this with [force redirect URL props](#google-one-tap-props) or [force redirect URL environment variables](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects).
 
 ## `GoogleOneTapProps`
 
@@ -18,8 +16,8 @@ The `<GoogleOneTap />` component renders a UI for signing in users. The function
 | `cancelOnTapOutside?` | boolean | If true, the One Tap prompt closes automatically if the user clicks outside of the prompt. Default: `true`. |
 | `itpSupport?` | boolean | If true, enables the [ITP-specific UX](https://developers.google.com/identity/gsi/web/guides/itp) when One Tap is rednered on ITP browsers such as Chrome on iOS, Safari, and FireFox. Default: `true`. |
 | `fedCmSupport?` | boolean | If true, enables Google One Tap to use [the FedCM API](https://developers.google.com/privacy-sandbox/3pcd/fedcm) to sign users in. See Google's docs on [best practices when disabling FedCM support](https://developers.google.com/identity/gsi/web/guides/display-google-one-tap#do_not_cover_google_one_tap). Default: `true` |
-| `signInForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs in. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
-| `signUpForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs up. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
+| `signInForceRedirectUrl?` | `string` | Useful if you want to redirect to a path specific to Google One Tap users. If provided, this URL will **always** be redirected to after the user signs in, overriding any [`ClerkProvider` redirect URL props](/docs/components/clerk-provider#properties) or [redirect URL environment variables](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects). |
+| `signUpForceRedirectUrl?` | `string` | Useful if you want to redirect to a path specific to Google One Tap users. If provided, this URL will **always** be redirected to after the user signs up, overriding any [`ClerkProvider` redirect URL props](/docs/components/clerk-provider#properties) or [redirect URL environment variables](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects). |
 
 ## Usage with frameworks
 
@@ -28,17 +26,26 @@ The following example includes basic implementation of the `<GoogleOneTap />` co
 <Tabs type="framework" items={["Next.js"]}>
   <Tab>
 
-    ```tsx filename="app/page.tsx"
-    import { SignIn, useUser } from "@clerk/nextjs";
+    ```tsx filename="app/page.tsx" {2, 15}
+    import React from "react";
+    import { ClerkProvider, GoogleOneTap } from "@clerk/nextjs";
 
-    export default function Home() {
-      const { user } = useUser();
-
-      if (!user) {
-        return <GoogleOneTap />;
-      }
-
-      return <div>Welcome!</div>;
+    export default function RootLayout({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) {
+      return (
+        <html lang="en">
+          <head>
+            <title>Next.js with Clerk</title>
+          </head>
+          <ClerkProvider>
+            <GoogleOneTap />
+            <body>{children}</body>
+          </ClerkProvider>
+        </html>
+      );
     }
     ```
   </Tab>
@@ -52,38 +59,32 @@ The methods in this section are available on instances of the [`Clerk`](/docs/re
 
 ### `openGoogleOneTap()`
 
-Render the `<GoogleOneTap />` component to an HTML `<div>` element.
+Opens the Google One Tap component.
 
 ```typescript
 function openGoogleOneTap(params: GoogleOneTapProps): void;
 ```
+- See [`GoogleOneTapProps`](#google-one-tap-props)
 
 #### `openGoogleOneTap()` usage
 
-<InjectKeys>
-
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {14}
+  ```js filename="index.js" {7-12}
   import { Clerk } from '@clerk/clerk-js';
 
   // Initialize Clerk with your Clerk publishable key
   const clerk = new Clerk('{{pub_key}}');
   await clerk.load();
-
-  document.getElementById("app").innerHTML = `
-    <div id="sign-in"></div>
-  `;
-
-  const signInDiv =
-    document.getElementById("sign-in");
-
-  clerk.mountSignIn(signInDiv);
+  
+  const params = {
+    cancelOnTapOutside: false,
+    itpSupport: false,
+    fedCmSupport: false,
+  };
+  clerk.openGoogleOneTap(params);
   ```
 
-  ```html filename="index.html" {21}
-  <!-- Add a <div id="sign-in"> element to your HTML -->
-  <div id="sign-in"></div>
-
+  ```html filename="index.html" {14-19}
   <!-- Initialize Clerk with your
   Clerk Publishable key and Frontend API URL -->
   <script
@@ -97,21 +98,21 @@ function openGoogleOneTap(params: GoogleOneTapProps): void;
   <script>
     window.addEventListener("load", async function () {
       await Clerk.load();
-
-      const signInDiv =
-        document.getElementById('sign-in');
-
-      Clerk.mountSignIn(signInDiv);
+      const params = {
+        cancelOnTapOutside: false,
+        itpSupport: false,
+        fedCmSupport: false,
+      };
+      Clerk.openGoogleOneTap(params);
     });
   </script>
   ```
 </CodeBlockTabs>
 
-</InjectKeys>
 
 ### `closeGoogleOneTap()`
 
-Unmount and run cleanup on an existing `<GoogleOneTap />` component instance.
+Closes the Google One Tap component.
 
 ```typescript
 function closeGoogleOneTap(): void;
@@ -120,28 +121,26 @@ function closeGoogleOneTap(): void;
 #### `closeGoogleOneTap()` usage
 
 <CodeBlockTabs type="npm-script" options={['NPM module', '<script>']}>
-  ```js filename="index.js" {18}
+  ```js filename="index.js" {7-16}
   import { Clerk } from '@clerk/clerk-js';
 
   // Initialize Clerk with your Clerk publishable key
   const clerk = new Clerk('{{pub_key}}');
   await clerk.load();
+  
+  const params = {
+    cancelOnTapOutside: false,
+    itpSupport: false,
+    fedCmSupport: false,
+  };
+  clerk.openGoogleOneTap(params);
 
-  document.getElementById('app').innerHTML = `
-    <div id="sign-in"></div>
-  `
+  // Do something else
 
-  const signInDiv =
-    document.getElementById('sign-in');
-
-  clerk.mountSignIn(signInDiv);
-
-  // ...
-
-  clerk.unmountSignIn(signInDiv);
+  clerk.closeGoogleOneTap();
   ```
 
-  ```html filename="index.html" {25}
+  ```html filename="index.html" {16-26}
   <!-- Add a <div id="sign-in"> element to your HTML -->
   <div id="sign-in"></div>
 
@@ -158,15 +157,16 @@ function closeGoogleOneTap(): void;
   <script>
     window.addEventListener("load", async function () {
       await Clerk.load();
+      const params = {
+        cancelOnTapOutside: false,
+        itpSupport: false,
+        fedCmSupport: false,
+      };
+      Clerk.openGoogleOneTap(params);
 
-      const signInDiv =
-        document.getElementById('sign-in');
+      // Do something else
 
-      Clerk.mountSignIn(signInDiv);
-
-      // ...
-
-      Clerk.unmountSignIn(signInDiv);
+      Clerk.closeGoogleOneTap();
     });
   </script>
   ```
@@ -174,7 +174,7 @@ function closeGoogleOneTap(): void;
 
 ### `authenticateWithGoogleOneTap()`
 
-Opens the `<GoogleOneTap />` component as an overlay at the root of your HTML `body` element.
+Authenticates the user using a Google token generated from Google identity services.
 
 ```typescript
 function authenticateWithGoogleOneTap(props?: AuthenticateWithGoogleOneTapParams): Promise<SignInResource | SignUpResource>;
@@ -184,7 +184,7 @@ function authenticateWithGoogleOneTap(props?: AuthenticateWithGoogleOneTapParams
 
 | Name | Type | Desciption |
 | --- | --- | --- |
-| `token?` | string | A Google authentication token. |
+| `token?` | string | A Google authentication token from Google identity services. |
 
 #### `authenticateWithGoogleOneTap()` usage
 
@@ -236,7 +236,7 @@ function authenticateWithGoogleOneTap(props?: AuthenticateWithGoogleOneTapParams
 </CodeBlockTabs>
 
 ### `handleGoogleOneTapCallback()`
-Completes a Google One Tap redirection flow started by [`authenticateWithGoogleOneTap()`](#authenticate-with-google-one-tap). Also calls `Clerk.setActive()` and performs a custom navigation if given a custom navigation function.
+Completes a Google One Tap redirection flow started by [`authenticateWithGoogleOneTap()`](#authenticate-with-google-one-tap). Also calls [`Clerk.setActive()`](/docs/references/javascript/clerk/session-methods#set-active) and performs a custom navigation if given a custom navigation function.
 
 ```typescript
 function handleGoogleOneTapCallback(
@@ -246,7 +246,7 @@ function handleGoogleOneTapCallback(
 ): Promise<unknown>;
 ```
 
-> See [`authenticateWithGoogleOneTap()` usage](#authenticate-with-google-one-tap-usage) for an example of how to use `handleGoogleOneTapCallback()`.
+See [`authenticateWithGoogleOneTap()` usage](#authenticate-with-google-one-tap-usage) for an example of how to use `handleGoogleOneTapCallback()`.
 
 #### `handleGoogleOneTapCallback()` params
 

@@ -3,68 +3,106 @@ title: Integrate Neon Postgres with Clerk
 description: Learn how to integrate Clerk into your Neon application.
 ---
 
-# Integrate Neon with Clerk 
+# Integrate Neon with Clerk
 
-## Set up a Clerk application
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Set up a Neon project in the Neon console",
+      link: "(https://console.neon.tech/)",
+      icon: "cog-6-teeth",
+    }
+  ]}
+>
 
-The first step is to create a new Clerk application from your [Clerk Dashboard](https://dashboard.clerk.com/) if you haven't done so already. You can choose whichever authentication strategy and social sign-in providers you prefer. For more information, check out the [Set up your application](/docs/quickstarts/setup-clerk) guide.
+- Use Clerk to authenticate access to your Firebase data.
+- Configure your Firebase Clerk integration.
 
-After your Clerk application has been created, in the Clerk Dashboard, navigate to the **[API keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. From the `Quick Copy` section, select the framework as `Next.js` and copy both the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` values.
-You'll need this to configure Clerk in your Next.js application.
+</TutorialHero>
 
-<Images
-  width={3024}
-  height={1648} 
-  src="/docs/images/integrations/frontend-api.webp"
-  alt="The API keys page in the Clerk Dashboard. There is a Quick Copy section to copy the relevant Clerk keys as environment variables to your project."
-/>
+This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.js application, using `drizzle-orm` for interacting with the database. The tutorial guides you through setting up a simple application that enables users to add, view, and delete messages. If a user has an existing message, they can view and delete it; otherwise, they can add a new message.
 
-## Set up your Neon database 
+<Steps>
 
-Log in to the [Neon console](https://console.neon.tech/) and create a new project or select an existing one. Navigate to the **Connection Details** section to find your Neon database connection string. Keep this connection string handy for later use. 
+### Create a new Next.js project
 
-<Images
-    width={3024}
-    height={1648} 
-    src="/docs/images/integrations/neon-connection-string.png"
-    alt="The connection details page in the Neon console. The connection string is highlighted."
-/>
+1. Create a new Next.js project using the following command:
+    ```sh {{ filename: 'terminal' }}
+    npx create-next-app clerk-neon-example --typescript --eslint --tailwind --use-npm --no-src-dir --app --import-alias "@/*"
+    ```
+1. Navigate to the project directory and install the required dependencie s:
+    ```sh {{ filename: 'terminal' }}
+    cd clerk-neon-example
+    npm install @neondatabase/serverless drizzle-orm dotenv
+    npm install -D drizzle-kit
+    ```
 
-## Create a new Next.js project
+### Integrate the Next.js Clerk SDK
 
-Create a new Next.js project using the following command:
+Follow the [Next.js quickstart](/docs/quickstarts/nextjs) to integrate the Next.js Clerk SDK into your application.
 
-```sh {{ filename: 'terminal' }}
-npx create-next-app example-neon-clerk --typescript --eslint --tailwind --use-npm --no-src-dir --app --import-alias "@/*"
+### Configure the Clerk middleware
+
+By default, [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) will not protect any routes. All routes are public and you must opt-in to protection for routes. For this tutorial, protect your entire application and ensure that only authenticated users can it.
+
+In your `middleware.ts` file, update the code with the following configuration:
+
+```typescript {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server';
+
+export default clerkMiddleware((auth) => {
+  auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
 ```
 
-Navigate to the project directory and install the required dependencies:
+### Set your environment variables
 
-```sh {{ filename: 'terminal' }}
-npm install @clerk/nextjs
-npm install @neondatabase/serverless drizzle-orm dotenv
-npm install -D drizzle-kit
-```
+You must add the Neon connection string to your project's environment variables.
 
-Create a `.env.local` file in the project root to store the Neon connection string and the Clerk API keys you fetched earlier:
+1. Navigate to the [Neon console](https://console.neon.tech/).
+1. In the navigation sidebar, select **Dashboard**.
+1. In the **Connection Details** section, find your Neon database connection string.
+1. Add the connection string to your `.env.local` file.
+
+The final result should resemble the following:
 
 ```sh {{ filename: '.env.local' }}
 DATABASE_URL=NEON_DB_CONNECTION_STRING
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=**************  
-CLERK_SECRET_KEY=**************
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_SECRET_KEY={{secret}}
 ```
-
-## Implement your application
-
-We create a simple application that allows users to add and delete quotes. If the user already has a quote, they can view it (and choose to remove it); if not, they can add a new one.
 
 ### Set up the application schema
 
-Create a `db` folder inside the `app/` directory with the following files to define your database connection and schema:
+Create a schema for the database. The schema will include a table called `user_messages` with the colomns `user_id`, `create_ts`, and `message`.
+
+1. Inside the `app/` directory, create a `db` folder.
+1. Inside the `db/` folder, create a `schema.ts` file and an `index.ts` file.
+1. Use the tabs below to find the example code for the schema and index files.
+
+<CodeBlockTabs options={["Schema", "Index"]}>
+```typescript {{ filename: 'app/db/schema.ts' }}
+import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+
+export const UserMessages = pgTable("user_messages", {
+  user_id: text("user_id").primaryKey().notNull(),
+  createTs: timestamp("create_ts").defaultNow().notNull(),
+  message: text("message").notNull(),
+});
+```
 
 ```typescript {{ filename: 'app/db/index.ts' }}
 import "dotenv/config";
-import { neon } from "@neondatabase/serverless";  
+import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { UserMessages } from "./schema";
 
@@ -73,132 +111,41 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sql = neon(process.env.DATABASE_URL);
-export const db = drizzle(sql, {  
+export const db = drizzle(sql, {
   schema: { UserMessages },
 });
 ```
+</CodeBlockTabs>
 
-```typescript {{ filename: 'app/db/schema.ts' }}
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+### Generate and run database migrations
 
-export const UserMessages = pgTable("user_messages", {
-  user_id: text("user_id").primaryKey().notNull(),
-  createTs: timestamp("create_ts").defaultNow().notNull(), 
-  message: text("message").notNull(),
-});
-```
+Use the `drizzle-kit` package to generate and run database migrations.
 
-Also, create a `drizzle.config.ts` file in the root of your project and add the following content:
+1. At the root of your project, create a `drizzle.config.ts` and add the following configuration:
+    ```typescript {{ filename: 'drizzle.config.ts' }}
+    import { defineConfig } from "drizzle-kit";
+    import * as dotenv from "dotenv";
 
-```typescript {{ filename: 'drizzle.config.ts' }}
-import { defineConfig } from "drizzle-kit";
-import * as dotenv from "dotenv";
+    dotenv.config({ path: ".env.local" });
 
-dotenv.config({ path: ".env.local" });
+    export default defineConfig({
+      dialect: "postgresql",
+      dbCredentials: {
+        url: process.env.DATABASE_URL!,
+      },
+      schema: "./app/db/schema.ts",
+      out: "./migrations",
+    });
+    ```
+1. Generate and run the database migrations by running the following commands:
+    ```sh {{ filename: 'terminal' }}
+    npx drizzle-kit generate
+    npx drizzle-kit migrate
+    ```
 
-export default defineConfig({
-  dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL!,
-  },
-  schema: "./app/db/schema.ts",
-  out: "./migrations",
-});
-```
+### Create the UI of the home page
 
-Generate and run the database migrations by running the following commands:
-
-```sh {{ filename: 'terminal' }}
-npx drizzle-kit generate
-npx drizzle-kit migrate
-```
-
-### Configure Clerk authentication 
-
-Wrap your Next.js app with the `ClerkProvider` component in `app/layout.tsx`:  
-
-```tsx {{ filename: 'app/layout.tsx' }}
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { ClerkProvider, UserButton } from "@clerk/nextjs";
-
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Neon-Clerk guide",
-  description: "Generated by create next app",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className={inter.className}>
-          <div className="p-4 bg-white">
-            <UserButton showName={true}></UserButton>
-          </div>
-          {children}
-        </body>
-      </html>
-    </ClerkProvider>
-  );
-}
-```
-
-Add the Clerk authentication middleware in `middleware.ts`:
-
-```typescript {{ filename: 'app/middleware.ts' }}
-import { clerkMiddleware } from "@clerk/nextjs/server";
-
-export default clerkMiddleware((auth, _req) => {
-    auth().protect();
-});
-
-export const config = {
-  matcher: [ '/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};  
-```
-
-### Implement your application
-
-Create server actions to handle form submissions and database interactions:
-
-```typescript {{ filename: 'app/actions.ts' }}
-"use server";
-
-import { currentUser } from "@clerk/nextjs/server";
-import { UserMessages } from "./db/schema"; 
-import { db } from "./db";
-import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-
-export async function createUserMessage(formData: FormData) {
-  const user = await currentUser();
-  if (!user) throw new Error("User not found");
-  
-  const message = formData.get("message") as string;
-  await db.insert(UserMessages).values({
-    user_id: user.id,
-    message,  
-  });
-  redirect("/");
-}
-
-export async function deleteUserMessage() {
-  const user = await currentUser();
-  if (!user) throw new Error("User not found");
-
-  await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
-  redirect("/");
-}
-```
-
-Implement the UI in `app/page.tsx`:
+Add the following code to the `app/page.tsx` file to create the UI of the home page:
 
 ```tsx {{ filename: 'app/page.tsx' }}
 import { createUserMessage, deleteUserMessage } from "./actions";
@@ -241,17 +188,44 @@ export default async function Home() {
 }
 ```
 
-## Run the application 
+### Handle user interactions
 
-Start the Next.js development server:
+Create server actions to handle the form submissions and database interactions.
 
-```sh {{ filename: 'terminal' }}
-npx next dev
-```
+1. At the root of your project, create an `actions.ts` file.
+1. Paste the following code example:
+    ```typescript {{ filename: 'app/actions.ts' }}
+    "use server";
 
-Open `http://localhost:3000` in your browser. Sign in with Clerk and interact with the application to add and delete user messages.
+    import { currentUser } from "@clerk/nextjs/server";
+    import { UserMessages } from "./db/schema";
+    import { db } from "./db";
+    import { redirect } from "next/navigation";
+    import { eq } from "drizzle-orm";
 
-## Next steps
+    export async function createUserMessage(formData: FormData) {
+      const user = await currentUser();
+      if (!user) throw new Error("User not found");
 
-- Add more routes and features to your application. The Clerk middleware ensures only authenticated users can access protected routes.
-- Manage your application's users from the [Clerk Dashboard](https://dashboard.clerk.com/).
+      const message = formData.get("message") as string;
+      await db.insert(UserMessages).values({
+        user_id: user.id,
+        message,
+      });
+      redirect("/");
+    }
+
+    export async function deleteUserMessage() {
+      const user = await currentUser();
+      if (!user) throw new Error("User not found");
+
+      await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
+      redirect("/");
+    }
+    ```
+
+### Run the application
+
+Run your application and open `http://localhost:3000` in your browser. Sign in with Clerk and interact with the application to add and delete user messages.
+
+</Steps>

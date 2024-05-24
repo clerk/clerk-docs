@@ -30,92 +30,188 @@ The following example includes an `InviteMember()` component that allows adminis
 "use client"
 
 import { useOrganization } from '@clerk/nextjs';
-import { useState } from 'react';
+import { OrganizationCustomRoleKey } from '@clerk/types';
+import { ChangeEventHandler, useEffect, useRef, useState } from 'react';
 
-function InviteMember() {
-  const { organization, isLoaded } = useOrganization();
-  const [emailAddress, setEmailAddress] = useState('');
-  const [role, setRole] = useState<'org:member' | 'admin'>('org:member');
-  const [disabled, setDisabled] = useState(false);
+export const OrgMembersParams = {
+  memberships: {
+    pageSize: 5,
+    keepPreviousData: true,
+  },
+};
 
-  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    if (!organization || !isLoaded) {
-      return <>Loading</>;
+export const OrgInvitationsParams = {
+  invitations: {
+    pageSize: 5,
+    keepPreviousData: true,
+  },
+};
+
+// Form to invite a new member to the organization.
+export const InviteMember = () => {
+  const { isLoaded, organization, invitations } = useOrganization(OrgInvitationsParams)
+  const [emailAddress, setEmailAddress] = useState("")
+  const [disabled, setDisabled] = useState(false)
+
+  if (!isLoaded || !organization) {
+    return <>Loading</>
+  }
+
+  const onSubmit = async (e) => {
+    e.preventDefault()
+
+    const submittedData = Object.fromEntries(
+      new FormData(e.currentTarget).entries()
+    ) as {
+      email: string | undefined
+      role: OrganizationCustomRoleKey | undefined
     }
 
-    e.preventDefault();
-    setDisabled(true);
-    try {
-    await organization.inviteMember({ emailAddress, role });
-    setEmailAddress('');
-    setRole('org:member');
-    setDisabled(false);
-    } catch (error) {
-      // Handle error if one if returned
-      console.log('Error:', error)
+    if (!submittedData.email || !submittedData.role) {
+      return
     }
-  };
+
+    setDisabled(true)
+    await organization.inviteMember({
+      emailAddress: submittedData.email,
+      role: submittedData.role,
+    })
+    await invitations?.revalidate?.()
+    setEmailAddress("")
+    setDisabled(false)
+  }
 
   return (
     <form onSubmit={onSubmit}>
       <input
+        name="email"
         type="text"
         placeholder="Email address"
         value={emailAddress}
-        onChange={e => setEmailAddress(e.target.value)}
+        onChange={(e) => setEmailAddress(e.target.value)}
       />
-      <label>
-        <input
-          type="radio"
-          checked={role === 'admin'}
-          onChange={() => {
-            setRole('admin');
-          }}
-        />{' '}
-        Admin
-      </label>
-      <label>
-        <input
-          type="radio"
-          checked={role === 'org:member'}
-          onChange={() => {
-            setRole('org:member');
-          }}
-        />{' '}
-        Member
-      </label>{' '}
+      <label>Role</label>
+      <SelectRole fieldName={"role"} />
       <button type="submit" disabled={disabled}>
         Invite
       </button>
     </form>
-  );
+  )
 }
 
-export default function InvitationList() {
-  const { invitations, isLoaded } = useOrganization({ invitations: {} });
+type SelectRoleProps = {
+  fieldName?: string
+  isDisabled?: boolean
+  onChange?: ChangeEventHandler<HTMLSelectElement>
+  defaultRole?: string
+}
 
-  if (!invitations || !isLoaded) {
+const SelectRole = (props: SelectRoleProps) => {
+  const { fieldName, isDisabled = false, onChange, defaultRole } = props
+  const { organization } = useOrganization()
+  const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([])
+  const isPopulated = useRef(false)
+
+  useEffect(() => {
+    if (isPopulated.current) return
+    organization
+      ?.getRoles({
+        pageSize: 20,
+        initialPage: 1,
+      })
+      .then((res) => {
+        isPopulated.current = true
+        setRoles(
+          res.data.map((roles) => roles.key as OrganizationCustomRoleKey)
+        )
+      })
+  }, [organization?.id])
+
+  if (fetchedRoles.length === 0) return null
+
+  return (
+    <select
+      name={fieldName}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      onChange={onChange}
+      defaultValue={defaultRole}
+    >
+      {fetchedRoles?.map((roleKey) => (
+        <option key={roleKey} value={roleKey}>
+          {roleKey}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+// List of pending invitations to an organization.
+// You can invite new organization members and
+// revoke already sent invitations.
+export const InvitationList = () => {
+  const { isLoaded, invitations, memberships } = useOrganization({
+    ...OrgInvitationsParams,
+    ...OrgMembersParams,
+  });
+
+  if (!isLoaded) {
     return <>Loading</>;
   }
 
   return (
-    <div>
-      <h2>Invite member</h2>
-      <InviteMember />
+    <>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Invited</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invitations?.data?.map((inv) => (
+            <tr key={inv.id}>
+              <td>{inv.emailAddress}</td>
+              <td>{inv.createdAt.toLocaleDateString()}</td>
+              <td>{inv.role}</td>
+              <td>
+                <button
+                  onClick={async () => {
+                    await inv.revoke();
+                    await Promise.all([
+                      memberships?.revalidate,
+                      invitations?.revalidate,
+                    ]);
+                  }}
+                >
+                  Revoke
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <h2>Pending invitations</h2>
-        {invitations.data && invitations.data.length ? invitations.data?.map(i => (
-          <ul>
-          <li key={i.id}>
-            {i.emailAddress} <button onClick={() => i.revoke()}>Revoke</button>
-          </li>
-          </ul>
-        )) : (
-          <p>No pending invitations</p>
-        )}
-    </div>
+      <div>
+        <button
+          disabled={!invitations?.hasPreviousPage || invitations?.isFetching}
+          onClick={() => invitations?.fetchPrevious?.()}
+        >
+          Previous
+        </button>
+
+        <button
+          disabled={!invitations?.hasNextPage || invitations?.isFetching}
+          onClick={() => invitations?.fetchNext?.()}
+        >
+          Next
+        </button>
+      </div>
+    </>
   );
-}
+};
 ```
 </Tab>
 

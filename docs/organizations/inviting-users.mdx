@@ -1,23 +1,32 @@
 ---
-title: Invite users to an organization
-description: Learn how to invite new users to an organization.
+description: Learn how to build a custom flow for inviting users to an organization using Clerk's API.
 ---
 
-# Invite users to an organization
+# Build a custom flow for inviting users to an organization
+
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To invite users to an organization using a *prebuilt* UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
 
 Organization members with appropriate [permissions](/docs/organizations/roles-permissions) can invite new users to their organization and manage those invitations. When an administrator invites a new member, an invitation email is sent out. The invitation recipient can be either an existing user of your application or a new user. If the latter is true, the user will need to register in order to accept the invitation.
 
-In React and Next.js applications, the [`useOrganization()`](/docs/references/react/use-organization) hook returns the `organization` property, which is then used to call [`organization.inviteMember()`](/docs/references/javascript/organization/invitations#invite-member) passing in the recipient's email address and desired role.
+Users with the appropriate permissions can also revoke organization invitations for users that have not yet joined, which will prevent the user from becoming an organization member.
 
-Administrators are also able to revoke organization invitations for users that have not yet joined, which will prevent the user from becoming an organization member. This is done by calling the [`revoke()`](/docs/references/javascript/organization-invitation#revoke) method on the invitations in the `invitationList` returned by the [`useOrganization()`](/docs/references/react/use-organization) hook.
+## Create the invite user flow
 
-## Usage
+<Tabs items={["Next.js", "JavaScript"]}>
+<Tab>
+To invite a user:
+1. Use the [`useOrganization()`](/docs/references/react/use-organization) hook to get `organization`, which is the active organization.
+2. Use `organization` to call the [`inviteMember()`](/docs/references/javascript/organization/invitations#invite-member) method, with the recipient's email address and desired role passed as arguments.
 
-{/* TODO (DOCS-316): Should have only App Router and JavaScript examples. Update and validate these code examples. */}
+To revoke an invitation:
+1. Use the `useOrganization()` hook to get `invitations`, which is a list of invitations for the active organization.
+1. `invitations` is an array of [`OrganizationInvitation`](/docs/references/javascript/organization-invitation) objects. Each `OrganizationInvitation` object has a [`revoke()`](/docs/references/javascript/organization-invitation#revoke) method that can be called to revoke the invitation.
 
-The example below includes an `InviteMember()` component that allows administrators to invite new members to their organization. It also includes an `InvitationList()` component that lists all pending invitations and allows administrators to revoke them. This example is written for Next.js App Router but is supported by any React meta framework, such as Remix or Gatsby.
+The example below includes an `InviteMember()` component that allows administrators to invite new members to their organization. It also includes an `InvitationList()` component that lists all pending invitations and allows administrators to revoke them. This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
 
-```tsx
+```jsx filename="app/components/InvitationList.tsx"
 "use client"
 
 import { useOrganization } from '@clerk/nextjs';
@@ -108,6 +117,164 @@ export default function InvitationList() {
   );
 }
 ```
+</Tab>
+
+<Tab>
+To check if the current user is an organization admin:
+1. Get the active organization's ID from the `clerk` object.
+1. Use the [`getOrganizationMemberships()`](/docs/references/javascript/user/organization-memberships#get-organization-memberships) method to get an array of `OrganizationMembership` objects, which is a list of organizations that the current user is a member of.
+1. In the list of organizations that the user is a member of, find the `OrganizationMembership` object that has an ID that matches the active organization's ID.
+1. Check the `role` property of the `OrganizationMembership` object to see if the user is an admin.
+
+To invite a user:
+1. Use the active `organization` object to call the [`inviteMember()`](/docs/references/javascript/organization/invitations#invite-member) method, with the recipient's email address and desired role passed as arguments.
+
+To revoke an invitation:
+1. Use the active `organization` object to call the [`getInvitations()`](/docs/references/javascript/organization/invitations#get-invitations) method to get an array of `OrganizationInvitation` objects.
+1. Each `OrganizationInvitation` object has a [`revoke()`](/docs/references/javascript/organization-invitation#revoke) method that can be called to revoke the invitation.
+
+The example below includes a `renderInvitations()` function that lists all invitations and allows administrators to revoke them. It includes an `init()` function that gets the current organization, checks if the current user is an admin, renders invitations, and sets up a form that allows administrators to invite new members to their organization.
+
+<CodeBlockTabs options={["index.html", "main.js"]}>
+```html filename="index.html"
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clerk + JavaScript App</title>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <h2>Invitations List</h2>
+    <ul id="invitations_list"></ul>
+
+    <h2>Send a new invitation</h2>
+    <form id="new_invitation">
+      <div>
+        <label>Email address</label>
+        <br />
+        <input type="email" id="email_address" name="email_address" />
+      </div>
+      <button>Invite</button>
+    </form>
+
+    <script
+      type="module"
+      src="/src/main.js"
+      async
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>
+```
+
+```js filename="main.js"
+import { Clerk } from '@clerk/clerk-js';
+
+const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!pubKey) {
+  throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
+}
+
+const clerk = new Clerk('{{pub_key}}');
+await clerk.load();
+
+if (clerk.user) {
+  // Render list of organization invitations
+  async function renderInvitations(organization, isAdmin) {
+    const list = document.getElementById('invitations_list');
+    try {
+      const { data } = await organization.getInvitations();
+
+      const invitations = data;
+
+      if (invitations.length === 0) {
+        list.textContent = 'No invitations';
+      }
+
+      invitations.map((invitation) => {
+        const li = document.createElement('li');
+        li.textContent = `${invitation.emailAddress} - ${invitation.role}`;
+
+        // Add administrative actions; revoke invitation
+        if (isAdmin) {
+          const revokeBtn = document.createElement('button');
+          revokeBtn.textContent = 'Revoke';
+          revokeBtn.addEventListener('click', async function (e) {
+            e.preventDefault();
+            await invitation.revoke();
+          });
+          li.appendChild(revokeBtn);
+        }
+        // Add the entry to the list
+        list.appendChild(li);
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // Gets the current org, checks if the current user is an admin,
+  // renders invitations, and sets up the new invitation form.
+  async function init() {
+    // This is the current organization ID.
+    const organizationId = clerk.organization.id;
+
+    const { data } = await clerk.user.getOrganizationMemberships();
+    const organizationMemberships = data;
+
+    const currentMembership = organizationMemberships.find(
+      (membership) => membership.organization.id === organizationId
+    );
+    const currentOrganization = currentMembership.organization;
+
+    if (!currentOrganization) {
+      return;
+    }
+    const isAdmin = currentMembership.role === 'org:admin';
+
+    renderInvitations(currentOrganization, isAdmin);
+
+    if (isAdmin) {
+      const form = document.getElementById('new_invitation');
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const inputEl = document.getElementById('email_address');
+        if (!inputEl) {
+          return;
+        }
+
+        try {
+          console.log(inputEl.value);
+          await currentOrganization.inviteMember({
+            emailAddress: inputEl.value,
+            role: 'org:member',
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    }
+  }
+
+  init();
+} else {
+  // Mount sign in component
+  document.getElementById('app').innerHTML = `
+    <div id="sign-in"></div>
+  `;
+
+  const signInDiv = document.getElementById('sign-in');
+
+  clerk.mountSignIn(signInDiv);
+}
+```
+</CodeBlockTabs>
+</Tab>
+</Tabs>
 
 ### Custom redirect URL
 

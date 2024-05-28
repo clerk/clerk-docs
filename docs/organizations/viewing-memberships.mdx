@@ -1,129 +1,191 @@
 ---
-title: View current organization memberships
-description: Learn how to view organization memberships for the currently signed-in user.
+description: Learn how to use Clerk's API to build a custom flow for viewing a user's organization memberships.
 ---
 
-# View current organization memberships
+# Build a custom flow for viewing a user's organization memberships
 
-Clerk provides the ability for the currently signed-in user to view all the organizations they are members of.
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To view a user's organization memberships using a *prebuilt* UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
 
-In React and Next.js applications, the [`useOrganizationList()`](/docs/references/react/use-organization-list) hook can be used to return the list of invitations or memberships for the currently active user. In JavaScript applications, the [`getOrganizationMemberships()`](/docs/references/javascript/user/user#get-organization-memberships) method is used to retrieve the list of organizations the current user is a part of and can be accessed through the [`User` object](/docs/references/javascript/user/user).
+This guide will walk you through how to use Clerk's API to build a custom flow for viewing a list of a user's organization memberships.
 
-{/* TODO (DOCS-316): Add a section about viewing all memberships for an organization.
+## Create a list of a user's organization memberships
 
-In addition to viewing the current users memberships, you can also view all of the memberships for an organization.
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+  The following example:
+  1. Uses the [`useOrganizationList()`](/docs/references/react/use-organization-list) hook to get `memberships`, which is a list of the current user's organization memberships.
+  `memberships` returns `data`, which is an array of [`OrganizationMembership`](/docs/references/javascript/organization-membership) objects.
+  1. Maps over the `data` array to display the user's organization memberships in a table.
 
-You can use the `getOrganizationMembershipList()` method to retrieve a list of memberships for an organization by passing in an organization ID. This method can be accessed through the [Backend API](/docs/references/backend/organization/get-organization-membership-list). */}
+  This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
 
-## Usage
+  ```jsx filename="app/components/JoinedOrganizations.tsx"
+  'use client';
 
-{/* TODO (DOCS-316): Update and validate these code examples. Should have Nextjs App Router and JavaScript only. */}
+  import { useOrganization, useUser } from '@clerk/nextjs';
 
-<CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```tsx filename="pages/joined-organizations.tsx"
-import { useOrganizationList } from "@clerk/nextjs";
-import React from "react";
- 
-const JoinedOrganizationList = () => {
-  const { isLoaded, setActive, userMemberships } = useOrganizationList({
-    userMemberships: {
-      infinite: true,
+  export const OrgMembersParams = {
+    memberships: {
+      pageSize: 5,
+      keepPreviousData: true,
     },
-  });
- 
-  if (!isLoaded) {
-    return <>Loading</>;
-  }
- 
-  return (
-    <>
-      <ul>
-        {userMemberships.data?.map((mem) => (
-          <li key={mem.id}>
-            <span>{mem.organization.name}</span>
-            <button
-              onClick={() => setActive({ organization: mem.organization.id })}
-            >
-              Select
-            </button>
-          </li>
-        ))}
-      </ul>
- 
-      <button
-        disabled={!userMemberships.hasNextPage}
-        onClick={() => userMemberships.fetchNext()}
-      >
-        Load more
-      </button>
-    </>
-  );
-};
- 
-export default JoinedOrganizationList;
-```
+  };
 
-```tsx filename="joined-organizations.tsx"
-import { useOrganizationList } from "@clerk/nextjs";
-import React from "react";
- 
-const JoinedOrganizationList = () => {
-  const { isLoaded, setActive, userMemberships } = useOrganizationList({
-    userMemberships: {
-      infinite: true,
-    },
-  });
- 
-  if (!isLoaded) {
-    return <>Loading</>;
-  }
- 
-  return (
-    <>
-      <ul>
-        {userMemberships.data?.map((mem) => (
-          <li key={mem.id}>
-            <span>{mem.organization.name}</span>
-            <button
-              onClick={() => setActive({ organization: mem.organization.id })}
-            >
-              Select
-            </button>
-          </li>
-        ))}
-      </ul>
- 
-      <button
-        disabled={!userMemberships.hasNextPage}
-        onClick={() => userMemberships.fetchNext()}
-      >
-        Load more
-      </button>
-    </>
-  );
-};
- 
-export default JoinedOrganizationList;
-```
+  // List of organization memberships. Administrators can
+  // change member roles or remove members from the organization.
+  export const OrganizationMemberships = () => {
+    const { user } = useUser();
+    const { isLoaded, memberships } = useOrganization(OrgMembersParams);
 
-```js filename="joined-organizations.js"
-<ul id="organizations_list"></ul>
+    if (!isLoaded) {
+      return <>Loading</>;
+    }
 
-<script>
-  const list = document.getElementById("organizations_list");
-  try {
-    const organizationMemberships = await window.Clerk.user.getOrganizationMemberships();
+    return (
+      <>
+        <h1>Joined organizations</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Organization</th>
+              <th>Joined</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {memberships?.data?.map((mem) => (
+              <tr key={mem.id}>
+                <td>
+                  {mem.publicUserData.identifier}{' '}
+                  {mem.publicUserData.userId === user?.id && '(You)'}
+                </td>
+                <td>{mem.organization.name}</td>
+                <td>{mem.createdAt.toLocaleDateString()}</td>
+                <td>{mem.role}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-    organizationMemberships.map((membership) => {
-      const li = document.createElement("li");
+        <div className="flex">
+          <button
+            className="inline-block"
+            disabled={!memberships?.hasPreviousPage || memberships?.isFetching}
+            onClick={() => memberships?.fetchPrevious?.()}
+          >
+            Previous
+          </button>
 
-      li.textContent = `${membership.organization.name} - ${membership.role}`;
+          <button
+            className="inline-block"
+            disabled={!memberships?.hasNextPage || memberships?.isFetching}
+            onClick={() => memberships?.fetchNext?.()}
+          >
+            Next
+          </button>
+        </div>
+      </>
+    );
+  };
+  ```
+  </Tab>
 
-      list.appendChild(li);
-    });
-  } catch (err) {
-    console.error(err);
-  }
-</script>
-```
-</CodeBlockTabs>
+  <Tab>
+    The following example:
+    1. Calls the `getOrganizationMemberships()` method to retrieve the list of organizations the current user is a part of. This method returns `data`, which is an array of `OrganizationMembership` objects.
+    1. Maps over the `data` array to display the user's organization memberships in a table.
+
+    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
+
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html filename="index.html"
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h2>Joined organizations</h2>
+        <table id="memberships_table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Organization</th>
+              <th>Joined</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody id="memberships_table_body"></tbody>
+        </table>
+
+        <script
+          type="module"
+          src="/src/main.js"
+          async
+          crossorigin="anonymous"
+        ></script>
+      </body>
+    </html>
+    ```
+
+    ```js filename="main.js"
+    import { Clerk } from '@clerk/clerk-js';
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
+    }
+
+    const clerk = new Clerk('{{pub_key}}');
+    await clerk.load();
+
+    if (clerk.user) {
+      // Check for an active organization
+      if (clerk.organization) {
+        const { data } = await clerk.user.getOrganizationMemberships();
+
+        const memberships = data;
+
+        memberships.map((membership) => {
+          const membershipTable = document.getElementById('memberships_table');
+          const row = membershipTable.insertRow();
+          row.insertCell().textContent = membership.publicUserData.identifier;
+          row.insertCell().textContent = membership.organization.name;
+          row.insertCell().textContent = membership.createdAt.toLocaleDateString();
+          row.insertCell().textContent = membership.role;
+        });
+      } else {
+        // If there is no active organization,
+        // mount Clerk's <OrganizationSwitcher />
+        // to allow the user to set an organization as active
+        document.getElementById('app').innerHTML = `
+          <h2>Select an organization to set it as active</h2>
+          <div id="org-switcher"></div>
+        `;
+
+        const orgSwitcherDiv = document.getElementById('org-switcher');
+
+        clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+      }
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `;
+
+      const signInDiv = document.getElementById('sign-in');
+
+      clerk.mountSignIn(signInDiv);
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

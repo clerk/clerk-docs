@@ -46,6 +46,7 @@ This guide will walk you through how to build a custom flow for managing member 
 
     return (
       <>
+        <h1>Memberships List</h1>
         <table>
           <thead>
             <tr>
@@ -89,9 +90,8 @@ This guide will walk you through how to build a custom flow for managing member 
           </tbody>
         </table>
 
-        <div className="flex">
+        <div>
           <button
-            className="inline-block"
             disabled={!memberships?.hasPreviousPage || memberships?.isFetching}
             onClick={() => memberships?.fetchPrevious?.()}
           >
@@ -99,7 +99,6 @@ This guide will walk you through how to build a custom flow for managing member 
           </button>
 
           <button
-            className="inline-block"
             disabled={!memberships?.hasNextPage || memberships?.isFetching}
             onClick={() => memberships?.fetchNext?.()}
           >
@@ -176,19 +175,20 @@ This guide will walk you through how to build a custom flow for managing member 
       <body>
         <div id="app"></div>
 
-        <h2>Memberships List</h2>
-        <table id="memberships_table">
-          <thead>
-            <tr>
-              <th>User ID</th>
-              <th>Identifier</th>
-              <th>Role</th>
-              <th id="update-role-head" hidden>Update role</th>
-              <th id="remove-member-head" hidden>Remove member</th>
-            </tr>
-          </thead>
-          <tbody id="memberships_table_body"></tbody>
-        </table>
+        <h1>Memberships List</h1>
+        <table>
+        <thead>
+          <tr>
+            <th>User ID</th>
+            <th>User identifier</th>
+            <th>Joined</th>
+            <th>Role</th>
+            <th id="update-role-head" hidden>Update role</th>
+            <th id="remove-member-head" hidden>Remove member</th>
+          </tr>
+        </thead>
+        <tbody id="memberships-table-body"></tbody>
+      </table>
 
         <script
           type="module"
@@ -219,25 +219,24 @@ This guide will walk you through how to build a custom flow for managing member 
         async function renderMemberships(organization, isAdmin) {
           try {
             const { data } = await organization.getMemberships();
-
             const memberships = data;
             console.log(`getMemberships:`, memberships);
 
             memberships.map((membership) => {
-              const membershipTable = document.getElementById('memberships_table');
+              const membershipTable = document.getElementById('memberships-table-body');
               const row = membershipTable.insertRow();
               row.insertCell().textContent = membership.publicUserData.userId;
               row.insertCell().textContent = membership.publicUserData.identifier;
+              row.insertCell().textContent =
+                membership.createdAt.toLocaleDateString();
               row.insertCell().textContent = membership.role;
 
               // Add administrative actions:
               // Add and remove a member, and update a member's role.
               if (isAdmin) {
                 // Show update and remove member buttons
-                document.getElementById('update-role-head')
-                  .removeAttribute('hidden');
-                document.getElementById('remove-member-head')
-                  .removeAttribute('hidden');
+                document.getElementById('update-role-head').removeAttribute('hidden');
+                document.getElementById('remove-member-head').removeAttribute('hidden');
 
                 // Get the user ID of the member
                 const userId = membership.publicUserData.userId;
@@ -251,14 +250,10 @@ This guide will walk you through how to build a custom flow for managing member 
                   const role =
                     membership.role === 'org:admin' ? 'org:member' : 'org:admin';
 
-                  await organization.updateMember({ userId, role })
-                    .then((res) => {
-                      document.getElementById('response').innerHTML =
-                        JSON.stringify(res);
-                    })
-                    .catch((error) => {
-                      console.log('An error occurred:', error);
-                    });
+                  await organization
+                    .updateMember({ userId, role })
+                    .then((res) => console.log(`updateMember response:`, res))
+                    .catch((error) => console.log('An error occurred:', error));
                 });
                 row.insertCell().appendChild(updateBtn);
 
@@ -268,14 +263,10 @@ This guide will walk you through how to build a custom flow for managing member 
                 removeBtn.addEventListener('click', async function (e) {
                   e.preventDefault();
 
-                  await organization.removeMember(userId)
-                    .then((res) => {
-                      document.getElementById('response').innerHTML =
-                        JSON.stringify(res);
-                    })
-                    .catch((error) => {
-                      console.log('An error occurred:', error);
-                    });
+                  await organization
+                    .removeMember(userId)
+                    .then((res) => console.log(`removeMember response:`, res))
+                    .catch((error) => console.log('An error occurred:', error));
                 });
                 row.insertCell().appendChild(removeBtn);
               }
@@ -306,7 +297,7 @@ This guide will walk you through how to build a custom flow for managing member 
 
           const isAdmin = currentMembership.role === 'org:admin';
 
-          console.log(`Organization:`, currentOrganization);
+          console.log(`Current organization:`, currentOrganization);
 
           renderMemberships(currentOrganization, isAdmin);
         }
@@ -326,6 +317,7 @@ This guide will walk you through how to build a custom flow for managing member 
         clerk.mountOrganizationSwitcher(orgSwitcherDiv);
       }
     } else {
+      // If there is no active user, mount Clerk's <SignIn />
       document.getElementById('app').innerHTML = `
         <div id="sign-in"></div>
       `;

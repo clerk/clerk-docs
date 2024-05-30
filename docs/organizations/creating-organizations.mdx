@@ -1,115 +1,129 @@
 ---
-title: Create an organization
-description: Learn how to create an organization in your Clerk instance.
+description: Learn how to use Clerk's API to build a custom flow for creating organizations.
 ---
 
-# Create an organization
+# Build a custom flow for creating organizations
 
-Organizations are created by your end users. Whichever signed-in user creates an organization takes on the [**Creator** role](/docs/organizations/roles-permissions#the-creator-role) for that organization.
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To create organizations using a *prebuilt* UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
 
-There are two ways to create an organization:
-- Using the `<CreateOrganization />` component
-- Using the `createOrganization()` method
+[Organizations](/docs/organizations/overview) are a powerful feature in Clerk that allow you to group users together and manage their permissions. Organizations can be created and managed using the [Clerk Dashboard](https://dashboard.clerk.dev/), but you can also allow users within your application to create organizations.
 
-## Create an organization using the `<CreateOrganization />` component
+This guide will demonstrate how to build a custom flow for creating organizations using Clerk's API.
 
-The simplest way to create an organization is to use Clerk's `<CreateOrganization />` component. The `<CreateOrganization />` component is used to render an organization creation UI that allows users to create brand new organizations within your application. See the [component reference](/docs/components/organization/create-organization) for more information.
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+  The following example uses the [`useOrganizationList()`](/docs/references/react/use-organization-list) hook to get the `createOrganization()` method. This method is used to create a new organization with the provided name.
 
-## Create an organization using the `createOrganization()` method
+  This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
 
-If you would like to create an organization programmatically, you can use the `createOrganization()` method. In React and Next.js applications, you can access the `createOrganization()` method via the [`useOrganizationList()`](/docs/references/react/use-organization-list) hook. In JavaScript applications, the same method is available directly on the [`Clerk` object](/docs/references/javascript/clerk/organization-methods#create-organization). The `createOrganization` method can also be accessed through the [Backend SDK](/docs/references/backend/organization/create-organization).
+  ```jsx {{ filename: 'app/components/CreateOrganization' }}
+  'use client';
 
-The only required parameter when creating a new organization is the organization name, which can be any string. You can also specify an optional slug for the new organization. If provided, the organization slug can contain only lowercase alphanumeric characters (letters and digits) and the dash "-". Organization slugs must be unique for the instance.
+  import { useOrganizationList } from "@clerk/nextjs";
+  import { FormEventHandler, useState } from "react";
 
-{/* TODO (DOCS-316): Update and validate these code examples. */}
+  export default function CreateOrganization() {
+    const { createOrganization } = useOrganizationList();
+    const [organizationName, setOrganizationName] = useState("");
 
-<CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```jsx
-// Form to create a new organization. The current user
-// will be given the Creator role.
-import { useOrganizationList } from "@clerk/nextjs";
-import { FormEventHandler, useState } from "react";
+    const handleSubmit: FormEventHandler<HTMLFormElement> = (e) => {
+      e.preventDefault();
+      createOrganization({ name: organizationName });
+      setOrganizationName("");
+    };
 
-export default function CreateOrganization() {
-  const { createOrganization } = useOrganizationList();
-  const [organizationName, setOrganizationName] = useState("");
+    return (
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          name="organizationName"
+          value={organizationName}
+          onChange={(e) => setOrganizationName(e.currentTarget.value)}
+        />
+        <button type="submit">Create organization</button>
+      </form>
+    );
+  }
+  ```
+  </Tab>
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (e) => {
-    e.preventDefault();
-    createOrganization({ name: organizationName });
-    setOrganizationName("");
-  };
+  <Tab>
+    The following example uses the [`clerk.createOrganization()`](/docs/references/javascript/clerk/organization-methods#create-organization) method to create a new organization with the provided name.
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="text"
-        name="organizationName"
-        value={organizationName}
-        onChange={(e) => setOrganizationName(e.currentTarget.value)}
-      />
-      <button type="submit">Create organization</button>
-    </form>
-  );
-}
-```
+    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
 
-```jsx
-// Form to create a new organization. The current user
-// will receive the Creator role.
-import { useOrganizationList } from "@clerk/clerk-react";
-import { FormEventHandler, useState } from "react";
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```js {{ filename: 'index.html' }}
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
 
-export default function CreateOrganization() {
-  const { createOrganization } = useOrganizationList();
-  const [organizationName, setOrganizationName] = useState("");
+        <h1>Create an organization</h1>
+        <form id="create-organization">
+          <label for="name">Name</label>
+          <input id="name" name="name" />
+          <button>Create organization</button>
+        </form>
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (e) => {
-    e.preventDefault();
-    createOrganization({ name: organizationName });
-    setOrganizationName("");
-  };
+        <script
+          type="module"
+          src="/src/main.js"
+          async
+          crossorigin="anonymous"
+        ></script>
+      </body>
+    </html>
+    ```
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="text"
-        name="organizationName"
-        value={organizationName}
-        onChange={(e) => setOrganizationName(e.currentTarget.value)}
-      />
-      <button type="submit">Create organization</button>
-    </form>
-  );
-}
-```
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js';
 
-```js
-<!-- Form to create an organization -->
-<form id="new_organization">
-  <div>
-    <label>Name</label>
-    <br />
-    <input name="name" />
-  </div>
-  <button>Create organization</button>
-</form>
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-<script>
-  const form = document.getElementById("new_organization");
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const inputEl = form.getElementsByTagName("input")[0];
-    if (!inputEl) {
-      return;
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
     }
-    try {
-      await window.Clerk.createOrganization({ name: inputEl.value });
-    } catch (err) {
-      console.error(err);
-    }
-  });
-</script>
 
-```
-</CodeBlockTabs>
+    const clerk = new Clerk('{{pub_key}}');
+    await clerk.load();
+
+    if (clerk.user) {
+      const form = document.getElementById('create-organization');
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const inputEl = document.getElementById('name');
+
+        if (!inputEl) {
+          // ... handle empty input
+          return;
+        }
+
+        clerk
+          .createOrganization({ name: inputEl.value })
+          .then((res) => console.log(res))
+          .catch((error) => console.log('An error occurred:', error));
+      });
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `;
+
+      const signInDiv = document.getElementById('sign-in');
+
+      clerk.mountSignIn(signInDiv);
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

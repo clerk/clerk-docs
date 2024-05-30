@@ -1,0 +1,491 @@
+---
+description: Learn how to build custom Impersonation into your Expo application
+---
+
+# Impersonation in Expo
+
+<Callout type="warning">
+The following flows are built assuming your Clerk app is using the default instance settings. If you have changed your instance settings, you may need to make changes to the examples.
+</Callout>
+
+User Impersonation is a powerful feature to support your customers with. Currently, from the Clerk Dashboard, [you can impersonate your users](https://clerk.com/docs/custom-flows/user-impersonation#impersonate-a-user-from-the-clerk-dashboard) and see through their eyes inside of your web applications. In this example, we’ll learn how to build impersonation into your mobile application through [Clerk’s custom flows](https://clerk.com/docs/custom-flows/overview). 
+
+The example we’ll build will still need some work before it goes into your app. For example, we will build impersonation directly into the dashboard, whereas you should build your impersonation into an admin only dashboard, where all of your users are listed & can be interacted with. You will want to restrict this so **only employees of your company or those who should have access to other user's information** can use this implementation.
+
+## Before you start
+
+Before continuing, please go through the [Expo Quickstart](https://clerk.com/docs/quickstarts/expo) and utilize the repo as a starting point for this example.
+
+```bash
+git clone https://github.com/clerk/clerk-expo-quickstart
+```
+
+Since we will be using `expo-router`'s experimental API routes, you will need to follow the [Expo docs](https://docs.expo.dev/router/reference/api-routes/#deployment) to deploy your routes to a domain. This is so we have access to our `CLERK_SECRET_KEY` that we need to pass to our impersonation endpoint. 
+
+For this project, you need to configure a few settings from the Clerk dashboard. 
+
+1. Configure your Clerk instance to enable Email and Password 
+    1. Navigate to the Clerk Dashboard and go to **User & Authentication > [Email, Phone, and Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username)** in the sidebar menu.
+    2. Ensure that **Email address** is required, and **Username** is not required
+    3. Ensure that **Password** is required
+
+## Setup and protect your Dashboard route
+
+To start things off, let’s install some dependencies we’ll need:
+
+```bash
+npm i expo-linking && npm i -D @clerk/types
+```
+
+Inside of your app directory create a new directory `dashboard` with two new files; `index.tsx` & `_layout.tsx`. Now,  setup your route protection in the `_layout` file. This will make sure only signed in users are able to get to the dashboard. 
+
+```tsx
+// app/dashboard/_layout.tsx
+
+import { Redirect, Stack } from "expo-router"
+import { useAuth } from "@clerk/clerk-expo"
+
+export default function AuthenticatedLayout() {
+	const { isSignedIn } = useAuth();
+	
+	if (!isSignedIn) {
+		<Redirect href="/sign-in" />
+	}
+	
+	return <Stack />
+
+}
+```
+
+Now we will create our dashboard page, which will hold most of the rest of our impersonation code. First, we’ll setup the base of the page, with some empty functions that we’ll fil out one by one as we explain why they are important.
+
+```tsx
+// app/dashboard/index.tsx
+
+import React from "react";
+import { Button, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { useAuth, useUser, useSignIn, useSessionList } from "@clerk/clerk-expo";
+import { UserDataJSON } from "@clerk/types";
+import * as Linking from "expo-linking";
+import useImpersonation from "@/hooks/useImpersonation";
+
+// this hook will return all of the user data for our impersonator, using an API route
+function useImpersonatedUser() {}
+
+// this hook will generate the token needed to create an impersonated session, also using an API route
+function userImpersonation() {}
+
+export default function Dashboard() {
+	// this state will allow us to display some information about the current impersonator
+	const [impersonator, setImpersonator] = React.useState<UserDataJSON | string>("");
+	// our custom Clerk hooks provide us with variables and functions to handle our authentication flows
+  const { signOut, actor } = useAuth();
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const { user } = useUser();
+  const { sessions } = useSessionList();
+  
+  // using expo's router will allow us to navigate properly once we've newly authenticated
+  const router = useRouter();
+
+  const actorRes = useImpersonation(actor?.sub || undefined, user?.id);  
+  const actorUserData = useImpersonatedUser(actor?.sub || "", setImpersonator);
+  
+  function extractTicketValue(input: string): string | undefined {}
+  
+	async function onSignoutPress(sessionId: string) => {}
+	
+	return (
+		<View>
+      <Link href="/account">
+        <Text>Account</Text>
+      </Link>
+      <Text>Hello {user?.firstName}</Text>
+
+      {sessions?.map((sesh) => (
+        <TouchableOpacity
+          onPress={() => onSignOutPress(sesh.id)}          
+          key={sesh.id}
+        >
+          <Text>
+            Sign out of {sesh?.user?.primaryEmailAddress?.emailAddress}
+          </Text>
+        </TouchableOpacity>
+      ))}
+
+      {actorRes && (
+        <Button
+          title="Impersonate"
+          onPress={async () => await impersonateUser()}
+        />
+      )}
+    </View>
+	)
+}
+```
+
+Now that we have a skeleton UI, let’s fill in the functionality. We can fill out our custom hooks and create our API routes. 
+
+## Generate an actor token
+
+Our `useImpersonation` hook will make a call to an API route to generate and return the response from generating an actor token from Clerk. 
+
+```tsx
+// useImpersonation
+
+import { useState, useEffect } from "react";
+
+export type Actor = {
+  object: string;
+  id: string;
+  status: "pending" | "accepted" | "revoked";
+  user_id: string;
+  actor: object;
+  token: string | null;
+  url: string | null;
+  created_at: Number;
+  updated_at: Number;
+};
+
+export default function useImpersonation(
+  actorId: string | undefined,
+  userId: string | undefined
+) {
+  const [actor, setActor] = useState<Actor>();
+  
+  useEffect(() => {
+    async function generateAndSetToken() {
+      if (typeof actorId !== "string") {
+        const res = await fetch("/generateActorToken", {
+          method: "POST",
+          body: JSON.stringify({
+            user_id: userId, // this is the user ID of the use you're going to impersonate,
+            actor: {
+              sub: actorId, // this is the ID of the impersonator,
+            },
+          }),
+        });
+
+        const data = await res.json();
+
+        setActor(data);
+      }
+    }
+
+    generateAndSetToken();
+  }, []);
+
+  return actor;
+}
+```
+
+Now our endpoint will call Clerk’s [create actor token](https://clerk.com/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken) endpoint at `/actor_tokens` and pass in the Clerk secret key for authorization.
+
+```tsx
+// generateActorToken+api.tsx
+
+export async function POST(request: Request) {
+  const body: { user_id: string; actor: { sub: string } } =
+    await request.json();
+
+  const { user_id, actor } = body;
+
+  const res = await fetch("https://api.clerk.com/v1/actor_tokens", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+      "Content-type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id,
+      actor: {
+        sub: actor.sub,
+      },
+    }),
+  });
+
+  const data = await res.json();
+
+  return Response.json(data);
+}
+```
+
+## Get the Impersonated user’s data
+
+The second hook will get back user data on the impersonator. You can use this to display UI only the impersonator will see for specific actions, like showing who is currently impersonating and matching the session to the right user for logout. 
+
+```tsx
+// useImpersonatedUser
+
+function useImpersonatedUser(
+  actorSub: string,
+  setImpersonator: React.Dispatch<React.SetStateAction<string | UserDataJSON>>
+) {
+  React.useEffect(() => {
+    const getImpersonatedUser = async () => {
+      const res = await fetch(`/getImpersonatedUser`, {
+        method: "POST",
+        body: JSON.stringify({
+          impersonator_id: actorSub,
+        }),
+      });
+
+      const data = await res.json();
+
+      setImpersonator(data);
+
+      getImpersonatedUser();
+    };
+  }, [actorSub]);
+}
+```
+
+With our hook setup we now can create our API route that will call Clerk’s retrieve user endpoint, `/users`, and get back the Impersonated user’s full `User` object.
+
+```tsx
+// getImpersonatedUser+api.tsx
+
+export async function POST(request: Request) {
+  const body: { impersonator_id: string } = await request.json();
+
+  const { impersonator_id } = body;
+  const res = await fetch(`https://api.clerk.com/v1/users/${impersonator_id}`, {
+    headers: {
+      Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+    },
+  });
+  const data = await res.json();
+
+  return Response.json(data);
+}
+```
+
+Now that we have the functionality for generating an impersonation session & getting their user data, we have a few more functions to complete that will get the `ticket` from the URL generated by our `useImpersonation` hook, pass that to our `signIn` function to create a new impersonated session, and allow for logout of the impersonated or the impersonator. 
+
+## Generate an impersonation session
+
+Let’s create our functions that work together to generate a new impersonate session, `extractTicket` and `impersonateUser`
+
+```tsx
+  // use this function to get the ticket ID from the response of our generateActorToken API
+  function extractTicketValue(input: string): string | undefined {
+    const index = input.indexOf("ticket=");
+    if (index !== -1) {
+      return input.slice(index + 7);
+    }
+    return undefined;
+  }
+	
+	// passing the ticket ID to our `signIn.create` function will create a new impersonated session that we can set to the active session
+  async function impersonateUser() {
+    if (!isLoaded) return;
+
+    if (typeof actorRes?.url === "string") {
+      const ticket = extractTicketValue(actorRes.url);
+
+      if (ticket) {
+        try {
+          const { createdSessionId } = await signIn.create({
+            strategy: "ticket",
+            ticket,
+          });
+
+          await setActive({ session: createdSessionId });
+          await user?.reload();
+
+          router.replace("/dashboard");
+        } catch (err) {
+          console.log(err);
+        }
+      }
+    }
+  }
+```
+
+Finally, we have our functionality used to signout. Usually this can be as simple as calling Clerk’s `signOut` function, but since we’re handling multiple sessions we’ll need to add some checks to make sure we’re signing out of the right session. 
+
+```tsx
+  const onSignOutPress = async (sessionId: string) => {
+    try {
+      if (isLoaded && sessions && sessions?.length > 0) {
+        const noActiveSessions = sessions.filter(
+          (session) => session.user?.id !== user?.id
+        );
+        await setActive({ session: noActiveSessions[0].id });
+      }
+      const redirectUrl = Linking.createURL("/dashboard", { scheme: "myapp" });
+      await signOut({
+        sessionId,
+      });
+      router.replace(redirectUrl);
+    } catch (err: any) {}
+  };
+```
+
+## Bringing it all together
+
+The Dashboard page will now look like this, excluding the API routes;
+
+```tsx
+import React from "react";
+
+import { Button, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Link, useRouter } from "expo-router";
+
+import { useAuth, useUser, useSignIn, useSessionList } from "@clerk/clerk-expo";
+import { UserDataJSON } from "@clerk/types";
+import * as Linking from "expo-linking";
+
+export type Actor = {
+  object: string;
+  id: string;
+  status: "pending" | "accepted" | "revoked";
+  user_id: string;
+  actor: object;
+  token: string | null;
+  url: string | null;
+  created_at: Number;
+  updated_at: Number;
+};
+
+function useImpersonation(
+  actorId: string | undefined,
+  userId: string | undefined
+) {
+  const [actor, setActor] = React.useState<Actor>();
+  React.useEffect(() => {
+    async function generateAndSetToken() {
+      if (typeof actorId !== "string") {
+        const res = await fetch("/generateActorToken", {
+          method: "POST",
+          body: JSON.stringify({
+            user_id: userId, // this is the user ID of the use you're going to impersonate,
+            actor: {
+              sub: actorId, // this is the ID of the impersonator,
+            },
+          }),
+        });
+
+        const data = await res.json();
+
+        setActor(data);
+      }
+    }
+
+    generateAndSetToken();
+  }, []);
+
+  return actor;
+}
+
+function useImpersonatedUser(
+  actorSub: string,
+  setImpersonator: React.Dispatch<React.SetStateAction<string | UserDataJSON>>
+) {
+  React.useEffect(() => {
+    const getImpersonatedUser = async () => {
+      const res = await fetch(`/getImpersonatedUser`, {
+        method: "POST",
+        body: JSON.stringify({
+          impersonator_id: actorSub,
+        }),
+      });
+
+      const data = await res.json();
+
+      setImpersonator(data);
+
+      getImpersonatedUser();
+    };
+  }, [actorSub]);
+}
+
+export default function Page() {
+  const [impersonator, setImpersonator] = React.useState<UserDataJSON | string>(
+    ""
+  );
+  const { signOut, actor } = useAuth();
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const { user } = useUser();
+  const router = useRouter();
+  const { sessions } = useSessionList();
+
+  const actorRes = useImpersonation(actor?.sub || undefined, user?.id);
+  const actorUserData = useImpersonatedUser(actor?.sub || "", setImpersonator);
+
+  function extractTicketValue(input: string): string | undefined {
+    const index = input.indexOf("ticket=");
+    if (index !== -1) {
+      return input.slice(index + 7);
+    }
+    return undefined;
+  }
+
+  async function impersonateUser() {
+    if (!isLoaded) return;
+
+    if (typeof actorRes?.url === "string") {
+      const ticket = extractTicketValue(actorRes.url);
+
+      if (ticket) {
+        try {
+          const { createdSessionId } = await signIn.create({
+            strategy: "ticket",
+            ticket,
+          });
+
+          await setActive({ session: createdSessionId });
+          await user?.reload();
+
+          router.replace("/dashboard");
+        } catch (err) {
+          console.log(err);
+        }
+      }
+    }
+  }
+
+  const onSignOutPress = async (sessionId: string) => {
+    try {
+      if (isLoaded && sessions && sessions?.length > 0) {
+        const noActiveSessions = sessions.filter(
+          (session) => session.user?.id !== user?.id
+        );
+        await setActive({ session: noActiveSessions[0].id });
+      }
+      const redirectUrl = Linking.createURL("/dashboard", { scheme: "myapp" });
+      await signOut({
+        sessionId,
+      });
+      router.replace(redirectUrl);
+    } catch (err: any) {}
+  };
+
+  return (
+    <View>
+      <Link href="/account">
+        <Text>Account</Text>
+      </Link>
+      <Text>Hello {user?.firstName}</Text>
+
+      {sessions?.map((sesh) => (
+        <TouchableOpacity
+          onPress={() => onSignOutPress(sesh.id)}         
+          key={sesh.id}
+        >
+          <Text>
+            Sign out of {sesh?.user?.primaryEmailAddress?.emailAddress}
+          </Text>
+        </TouchableOpacity>
+      ))}
+
+      {actorRes && (
+        <Button
+          title="Impersonate"
+          onPress={async () => await impersonateUser()}
+        />
+      )}
+    </View>
+  );
+}
+```

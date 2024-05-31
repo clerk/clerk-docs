@@ -84,14 +84,10 @@ async function formatAnnotations(text, prettierOptions) {
 
 function remarkFormatCodeBlocks(prettierOptions) {
   return async function traverse(tree) {
-    if (!prettierOptions.mdxFormatCodeBlocks) {
-      return
-    }
-
     let promises = []
 
     visit(tree, 'code', (node) => {
-      let prettierDisabled = DISABLE_PRETTIER_RE.test(node.meta ?? '')
+      let prettierDisabled = !prettierOptions.mdxFormatCodeBlocks || DISABLE_PRETTIER_RE.test(node.meta ?? '')
       let prettierEnabled = !prettierDisabled
 
       if (prettierEnabled) {

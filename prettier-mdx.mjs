@@ -14,6 +14,7 @@ const processor = remark()
     rule: '-',
     emphasis: '_',
     quote: "'",
+    incrementListMarker: false,
   })
   .use(remarkFrontmatter)
   .use(remarkMdx, { printWidth: 120 })

@@ -99,7 +99,7 @@ function remarkFormatCodeBlocks(prettierOptions) {
               .format(node.value, {
                 ...prettierOptions,
                 parser,
-                printWidth: 80,
+                printWidth: 100,
               })
               .then((formatted) => {
                 let newValue = formatted.trimEnd()

@@ -35,6 +35,9 @@ export interface TokenCache {
 
 The following example demonstrates an Expo layout that defines a custom token cache to securely store the user's session JWT using `expo-secure-store`:
 
+> [!IMPORTANT]
+> Data stored with `expo-secure-store` may not persist between new builds of your application unless you [clear the app data of the previously installed build](https://github.com/expo/expo/issues/23426#issuecomment-1642246470).
+
 ```tsx filename="app/_layout.tsx"
 import * as SecureStore from 'expo-secure-store';
 import { ClerkProvider, ClerkLoaded } from "@clerk/clerk-expo"
@@ -43,8 +46,16 @@ import { Slot } from "expo-navigation"
 const tokenCache = {
   async getToken(key: string) {
     try {
-      return SecureStore.getItemAsync(key);
-    } catch (err) {
+      const item = await SecureStore.getItemAsync(key);
+      if (item) {
+        console.log(`${key} was used 🔐 \n`);
+      } else {
+        console.log("No values stored under key: " + key);
+      }
+      return item;
+    } catch (error) {
+      console.error("SecureStore get item error: ", error);
+      await SecureStore.deleteItemAsync(key);
       return null;
     }
   },
@@ -70,4 +81,5 @@ function RootLayoutNav() {
 }
 ```
 
+> [!TIP]
 > When you sign a user out with [`signOut()`](/docs/references/react/use-auth#use-auth-returns), Clerk will remove the user's session JWT from the token cache.

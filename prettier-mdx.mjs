@@ -1,6 +1,7 @@
 import * as prettier from 'prettier'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkGfm from 'remark-gfm'
 import remarkMdx from 'remark-mdx'
 import { visit } from 'unist-util-visit'
 
@@ -17,6 +18,7 @@ const processor = remark()
     incrementListMarker: false,
   })
   .use(remarkFrontmatter)
+  .use(remarkGfm, { tablePipeAlign: false })
   .use(remarkMdx, { printWidth: 120 })
 
 function formatAnnotation(annotation, prettierOptions) {

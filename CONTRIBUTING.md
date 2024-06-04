@@ -700,6 +700,15 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 </details>
 
+### `<Include />`
+
+The `<Include />` component can be used to inject the contents of another MDX file:
+
+```mdx
+{/* Render `docs/_partials/oauth-instructions.mdx` */}
+<Include src="_partials/oauth-instructions" />
+```
+
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.

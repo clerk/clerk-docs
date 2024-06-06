@@ -20,6 +20,7 @@ description: Learn how to set up social connection with Microsoft.
 >
 
 - Use Microsoft Azure Entra ID to authenticate users with OAuth.
+- Protect your application form [the nOAuth exploit](https://www.descope.com/blog/post/noauth).
 
 </TutorialHero>
 
@@ -75,54 +76,46 @@ For OAuth to function, Clerk requires an `id_token` from Microsoft Entra ID.
 
 1. Return to the tab where your Microsoft Entra ID application dashboard is open.
 1. In the sidebar, select **Authentication**, then select **Add a platform**.
-1. In the **Redirect URIs** field of the modal that appears, add your Clerk application's authorized redirect URI.
+1. In the **Redirect URIs** field of the modal that appears, add your Clerk application's authorized redirect URI. Do the same in the **Front-channel logout URL** field.
+
+### Test your OAuth
+
+The simplest way to test your OAuth is to visit your Clerk application's account portal, which Clerk creates for all applications.
+
+1. In the Clerk Dashboard, in the sidebar, go to **Account Portal**, then open the **Sign-in** page. The URL should resemble:
+    - **For development** – `https://your-domain.accounts.dev/sign-in`
+    - **For production** – `https://accounts.your-domain.com/sign-in`
+1. On the sign-in page, you should see **Continue with Microsoft** as an option. Use it to sign in with your Microsoft account.
+
+### Secure your app against the nOAuth vulnerability
+
+[nOAuth](https://www.descope.com/blog/post/noauth) is an exploit in Microsoft Entra ID OAuth applications that can lead to full account takeovers via email address spoofing. To protect users, Clerk enforces stricter checks on verified email addresses.
+
+For further security, Microsoft has an optional `xms_edov` claim, which provides additional context to that can be used to determine whether the returned email is verified.
+
+To enable this optional claim, you must:
+
+1. Navigate to your Azure application in the Microsoft Entra ID dashboard, In the sidebar, select **Token configuration**. On this page, select **Add optional claim**.
+1. Select **ID**, then in the checklist that appears enable the `email` and `xms_pdl` claims. When you select **Add**, a modal will appear asking you to **Turn on the Microsoft Graph email permission**. Enable it, then select **Add** to complete the form.
+    > [!NOTE]
+    > At the time of writing, the `xms_edov` claim is still in preview, and may not be available for all applications. So we'll choose another one from the list and we'll rename it later on in the manifest.
+1. Do the same as the previous step, selecting **Access** instead. When you're done, the list of **Optional claims** on this page should have 4 items: both the `email` and `xms_pdl` permissions twice, once for **ID** and once for **Access**.
+1. In the sidebar, go to **Manifest**. On this page, search for `"acceptMappedClaims"` and change its value from `null` to `true`.
+1. On the same page, search for `"optionalClaims"` where you'll find the `idToken` and `accessToken` arrays. Each array has an object with the name `xms_pdl`. Change the name to `xms_edov`. Finally, select **Save**.
+1. In the sidebar, navigate back to **Token configuration** and confirm that the list of **Optional claims** includes 2 for `email` and 2 for `xms_edov`, one each for **ID** and **Access**.
+
+With these steps complete, Microsoft will send the `xms_edov` claim in the token, and Clerk will use it to determine whether the email is verified or not, even if it is used with Microsoft Entra ID.
 
 </Steps>
 
-### Stay secure against the nOAuth vulnerability
-
-A vulnerability called [nOAuth](https://www.descope.com/blog/post/noauth) has been recently discovered in Microsoft's Azure AD OAuth applications. This vulnerability can lead to full account takeovers, as attackers can spoof the provided email and potentially gain full control of a victim's account.
-
-To protect users, Clerk has implemented stringent measures against the Microsoft OAuth provider, enforcing stricter checks on verified email addresses. However, this has impacted the functionality of users using Azure AD.
-
-Microsoft has introduced an optional claim, `xms_edov`, that can be added to your Azure application. This claim provides additional context to determine whether the returned email is verified.
-
-To enable this optional claim, you'll need to follow these steps:
-
-Navigate to your Azure application's **Token configuration** page, and click on **Add optional claim**.
-
-![Add optional claims](/docs/images/authentication-providers/microsoft/noauth-optional-claims-init.png)
-
-Select the `email` and `xms_pdl` claims for both **ID** and **Access**, and click on **Add**.
-
-<Callout type="info">
-    At the time of writing, the `xms_edov` claim is still in preview, and may not be available for all applications. So we'll choose another one from the list and we'll rename it later on in the manifest.
-</Callout>
-
-![Select claims](/docs/images/authentication-providers/microsoft/noauth-optional-claims-select.png)
-
-Accept the permission changes. This will add `email` in your API permissions.
-
-![Accept permissions](/docs/images/authentication-providers/microsoft/noauth-optional-claims-permissions.png)
-
-Navigate to the **Manifest** page, and update the `idToken` and `accessToken` values names from `xms_pdl` to `xms_edov`.
-
-![Update manifest](/docs/images/authentication-providers/microsoft/noauth-optional-claims-manifest.png)
-
-Navigate back to the **Token configuration** page, and check the `xms_edov` claim for both **ID** and **Access**.
-
-![Check claims](/docs/images/authentication-providers/microsoft/noauth-optional-claims-check.png)
-
-Now you're all set! Microsoft will send the `xms_edov` claim in the token, and Clerk will use it to determine whether the email is verified or not, even if it is used with Azure AD.
-
 ## Limitations
 
-- Currently Clerk supports only the `common` tenant type, which is intended for allowing sign-ins both from organization members and public Microsoft users.
+- Currently Clerk supports only the `common` tenant type, which is intended for allowing sign-ins both from organization members and public Microsoft users
+    - Selecting the desired tenant type (`common`, `organizations`, `consumers` or specific tenant ID) will become available in an upcoming version of Clerk.
 - Only credentials of type `secret` are currently supported (not the `certificate` type).
 
-Selecting the desired tenant type (`common`, `organizations`, `consumers` or specific tenant ID) will become available in an upcoming version of Clerk.
-
-If you are using SAML with Microsoft, the different tenant types *are* supported and you can disregard these limitations.
+> [!TIP]
+> If you are using SAML with Microsoft, the different tenant types *are* supported and you can disregard these limitations.
 
 ## Next steps
 

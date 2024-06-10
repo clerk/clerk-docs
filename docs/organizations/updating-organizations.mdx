@@ -1,174 +1,168 @@
 ---
-title: Update an organization
-description: Learn how to update an organization in your Clerk instance.
+description: Learn how to use Clerk's API to build a custom flow for updating an organization in your application.
 ---
 
-# Update an organization
+# Build a custom flow for updating an organization
 
-Administrators have the ability to update an organization. Currently, Clerk supports updating an organization name. 
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To update organizations using a *prebuilt* UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
 
-The organization name can be updated by calling the [`update`](/docs/references/javascript/organization/organization#update) method on the `Organization` object. In React and Next.js applications, you can use the [`useOrganization()`](/docs/references/react/use-organization) hook to directly access and update the `Organization` object.
+Organization members with appropriate [permissions](/docs/organizations/roles-permissions) can update an organization. Currently, only the organization name can be updated.
 
-You can also use the `updateOrganization` method, which can be accessed from the [Backend API](/docs/references/backend/organization/update-organization).
+This guide will demonstrate how to use Clerk's API to build a custom flow for updating an organization.
 
-## Usage
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+  The following example:
+  1. Uses the [`useOrganization()`](/docs/references/react/use-organization) hook to fetch the active `organization`.
+  1. Uses `organization` to call the [`update()`](/docs/references/javascript/organization/organization#update) method with the desired name to update the organization.
 
-This example uses the [`useOrganization()`](/docs/references/react/use-organization) hook to update the organization name.
+  This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
 
-{/* TODO (DOCS-316): Update and validate these code examples. */}
+  ```jsx {{ filename: 'app/components/UpdateOrganization.tsx' }}
+  'use client';
 
-<CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```jsx
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { useOrganization } from '@clerk/nextjs';
+  import { useState, useEffect } from 'react';
+  import { useRouter } from 'next/navigation';
+  import { useOrganization } from '@clerk/nextjs';
 
-export default function EditOrganization() {
-  const [name, setName] = useState('');
+  export default function UpdateOrganization() {
+    const [name, setName] = useState('');
+    const router = useRouter();
+    const { organization } = useOrganization();
 
-  const router = useRouter();
-
-  const { organization } = useOrganization();
-
-  useEffect(() => {
-    if (!organization) {
-      return;
-    }
-    setName(organization.name);
-  }, [organization]);
-
-  async function submit(e) {
-    e.preventDefault();
-    try {
-      await organization.update({ name });
-      router.push(`/organizations/${organization.id}`);
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  if (!organization) {
-    return null;
-  }
-
-  return (
-    <div>
-      <h2>Edit organization</h2>
-      <form onSubmit={submit}>
-        <div>
-          <label>Name</label>
-          <br />
-          <input
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <button>Save</button>
-      </form>
-    </div>
-  );
-}
-```
-
-```jsx
-import { useState, useEffect } from 'react';
-import { useOrganization } from '@clerk/react';
-
-export default function EditOrganization({ organizationId }) {
-  const [name, setName] = useState('');
-
-  const { organization } = useOrganization();
-
-  useEffect(() => {
-    if (!organization) {
-      return;
-    }
-    setName(organization.name);
-  }, [organization]);
-
-  async function submit(e) {
-    e.preventDefault();
-    try {
-      await organization.update({ name });
-      router.push(`/organizations/${organization.id}`);
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  if (!organization) {
-    return null;
-  }
-
-  return (
-    <div>
-      <h2>Edit organization</h2>
-      <form onSubmit={submit}>
-        <div>
-          <label>Name</label>
-          <br />
-          <input
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <button>Save</button>
-      </form>
-    </div>
-  );
-}
-```
-
-```jsx
-<form id="edit_organization">
-  <div>
-    <label>Name</label>
-    <br />
-    <input name="name" />
-  </div>
-  <button>Save</button>
-</form>
-
-<script>
-  async function init() {
-    // This is the current organization ID.
-    const organizationId = "org_XXXXXXX";
-    const organizationMemberships = await window.Clerk.user.getOrganizationMemberships()
-    const currentMembership = organizationMemberships.find(membership 
-      => membership.organization.id === organizationId);
-    const currentOrganization = currentMembership.organization;
-    
-    if (!currentOrganization) {
-      return;
-    }
-    
-    editOrganization(currentOrganization);
-  }
-  
-  async function editOrganization(organization) {
-    const form = document.getElementById("edit_organization");
-    const inputEl = form.getElementsByTagName("input")[0];
-    if (inputEl) {
-      inputEl.value = organization.name;
-    }
-    
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const inputEl = form.getElementsByTagName("input")[0];
-      if (!inputEl) {
+    useEffect(() => {
+      if (!organization) {
         return;
       }
+      setName(organization.name);
+    }, [organization]);
+
+    if (!organization) {
+      return null;
+    }
+
+    async function submit(e: React.FormEvent<HTMLFormElement>) {
+      e.preventDefault();
       try {
-        await organization.update({ name: inputEl.value });
+        await organization?.update({ name });
+        router.push(`/organizations/${organization?.id}`);
       } catch (err) {
         console.error(err);
       }
-    });
+    }
+
+    return (
+      <div>
+        <h1>Update the current organization</h1>
+        <form onSubmit={submit}>
+          <div>
+            <label htmlFor="name">Name</label>
+            <input
+              id="name"
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <button>Update</button>
+        </form>
+      </div>
+    );
   }
-  
-  init();
-</script>
-```
-</CodeBlockTabs>
+  ```
+  </Tab>
+
+  <Tab>
+    The following example uses the [`organization.update()`](/docs/references/javascript/organization/organization#update) method to update the active organization's name.
+
+    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
+
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html' }}
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h1>Update the current organization</h1>
+        <form id="update-organization">
+          <label for="name">Name</label>
+          <input id="name" name="name" />
+          <button>Update</button>
+        </form>
+
+        <script
+          type="module"
+          src="/src/main.js"
+          async
+          crossorigin="anonymous"
+        ></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js';
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
+    }
+
+    const clerk = new Clerk('{{pub_key}}');
+    await clerk.load();
+
+    if (clerk.user) {
+      // Check for an active organization
+      if (clerk.organization) {
+        const form = document.getElementById('update-organization');
+
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          const inputEl = document.getElementById('name');
+
+          if (!inputEl) {
+            // ... handle empty input
+            return;
+          }
+
+          clerk.organization.update({ name: inputEl.value })
+            .then((res) => console.log(`Updated org:`, res))
+            .catch((error) => console.log('An error occurred:', error));
+        });
+      } else {
+        // If there is no active organization,
+        // mount Clerk's <OrganizationSwitcher />
+        // to allow the user to set an organization as active
+        document.getElementById('app').innerHTML = `
+          <h2>Select an organization to set it as active</h2>
+          <div id="org-switcher"></div>
+        `;
+
+        const orgSwitcherDiv = document.getElementById('org-switcher');
+
+        clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+      }
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `;
+
+      const signInDiv = document.getElementById('sign-in');
+
+      clerk.mountSignIn(signInDiv);
+    }
+    ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

@@ -1,46 +1,106 @@
 ---
-title: Embeddable email links
-description: Learn how to build custom email link flows to increase user engagement and reduce drop off in transactional emails, SMS's, and anywhere else you can imagine.
+description: Learn how to build custom embeddable email link sign-in flows to increase user engagement and reduce drop off in transactional emails, SMS's, and more.
 ---
 
-# Embeddable email links
+# Embeddable email links with sign-in tokens
 
-An "email link" is a link, that when pressed, will automatically authenticate your user, so that they can quickly perform some action on your site with less friction than if they had to sign in manually.
+An "email link" is a link that, when visited, will automatically authenticate your user so that they can perform some action on your site with less friction than if they had to sign in manually. You can create email links with Clerk by generating a sign-in token, which you can detect and take action on in your frontend.
 
 Common use cases include:
 
-- Welcome emails, when users are added off a waitlist
+- Welcome emails when users are added off a waitlist
 - Promotional emails for users
 - Recovering abandoned carts
 - Surveys or questionnaires
 
-## Creating email links
+This guide will teach you how to set this flow up.
 
-Embeddable email links leverage [sign-in tokens](https://clerk.com/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken) which can be created from your backend.
+<Steps>
+
+### Generate a sign-in token
+
+Embeddable email links leverage [sign-in tokens](https://clerk.com/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken), which are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used at most once, and can be consumed from the Frontend API using the [`ticket`](/docs/references/javascript/sign-in/sign-in#sign-in-create-params) strategy.
+
+> [!NOTE]
+> By default, sign-in tokens expire in 30 days. You can optionally supply a different duration in seconds using the `expires_in_seconds` property.
+
+The following example demonstrates a cURL request that fetches a valid sign-in token: 
 
 ```bash
-curl --request POST \
-  --url 'https://api.clerk.com/v1/sign_in_tokens' \
-  -H 'Authorization: Bearer {{bapi}}' \
+curl 'https://api.clerk.com/v1/sign_in_tokens' \
+  -X POST \
+  -H 'Authorization: Bearer {{secret}}' \
   -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "user_28dVmJleKwFWrefTJN7skmrbtJi",
-  }'
+  -d '{ "user_id": "user_123" }'
 ```
 
-This will return a token, which can then be embedded as a query param in any link, something like:
+This will return a token, which can then be embedded as a query param in any link, such as the following example:
 
 `https://your-site.com/welcome?token=THE_TOKEN`
 
-Once you have the link, this can be embedded anywhere, such as an email.
+You can embedded this link anywhere, such as an email.
 
-## Accepting email links
+### Build a custom flow for signing in with a sign-in token
 
-Now that you have a way to process a token, you'll need to setup a page on your frontend to get the token from the query string, call the sign in function, then perform whatever action you originally had in mind.
+To do something with the email links you generate, you must setup a page in your frontend that detects the sign-in token, signs the user in, then performs whatever actions you want.
 
-Signing a user in with a token is very similar to all of our other custom flows.
+The following example demonstrates basic code that detects a token and uses it to initiate a sign-in with Clerk:
 
-<CodeBlockTabs type="framework" options={["Next.js", "React"]}>
+<Tabs items={["Next.js"]}>
+<Tab>
+<CodeBlockTabs options={["App Router", "Pages Router"]}>
+```jsx filename="app/accept-token/page.jsx"
+"use client";
+import { useUser, useSignIn } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
+export default function AcceptToken() {
+  const { signIn, setActive } = useSignIn();
+  const { user } = useUser();
+  const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
+  const signInToken = useSearchParams().get("token");
+
+  useEffect(() => {
+    if (!signIn || !setActive || !signInToken) {
+      return;
+    }
+
+    const createSignIn = async () => {
+      try {
+        // Create a signIn with the token.
+        // Note that you need to use the "ticket" strategy.
+        const res = await signIn.create({
+          strategy: "ticket",
+          ticket: signInToken as string,
+        });
+        setActive({
+          session: res.createdSessionId,
+          beforeEmit: () => setSignInProcessed(true),
+        });
+      } catch (err) {
+        setSignInProcessed(true);
+      }
+    };
+
+    createSignIn();
+  }, [signIn, setActive]);
+
+  if (!signInToken) {
+    return <div>no token provided</div>;
+  }
+
+  if (!signInProcessed) {
+    return <div>loading</div>;
+  }
+
+  if (!user) {
+    return <div>error invalid token</div>;
+  }
+
+  return <div>Signed in as {user.id}</div>;
+}
+```
 ```jsx filename="pages/accept-token.jsx"
 import { InferGetServerSidePropsType, GetServerSideProps } from "next";
 import { useUser, useSignIn } from "@clerk/nextjs";
@@ -65,9 +125,10 @@ const AcceptToken = ({
       return;
     }
 
-    const aFunc = async () => {
+    const createSignIn = async () => {
       try {
-        // Create a signIn with the token, note that you need to use the "ticket" strategy.
+        // Create a signIn with the token.
+        // Note that you need to use the "ticket" strategy.
         const res = await signIn.create({
           strategy: "ticket",
           ticket: signInToken as string,
@@ -81,7 +142,7 @@ const AcceptToken = ({
       }
     };
 
-    aFunc();
+    createSignIn();
   }, [signIn, setActive]);
 
   if (!signInToken) {
@@ -101,24 +162,8 @@ const AcceptToken = ({
 
 export default AcceptToken;
 ```
-
-```jsx filename="accept-token.js"
-// Grab the sign in token from the query string
-const queryParams = new URLSearchParams(window.location.search);
-const signInToken = queryParams.get('token');
-
-const { signIn, setActive } = useSignIn();
-
-// Create a sign in with the ticket strategy, and the sign-in-token
-const res = await signIn.create({
-  strategy: "ticket",
-  ticket: signInToken,
-});
-
-// Set the session as active, and then do whatever you need to!
-setActive({
-  session: res.createdSessionId,
-  beforeEmit: () => console.log("SignedIn!")
-});
-```
 </CodeBlockTabs>
+</Tab>
+</Tabs>
+
+</Steps>

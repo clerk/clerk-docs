@@ -1,856 +1,333 @@
 ---
-title: Manage member roles in an organization
-description: Learn how to manage member roles in an organization.
+description: Learn how to use Clerk's API build a custom flow for managing member roles in an organization.
 ---
 
-{/* TODO: Either change path name, title, and sidenav title to something like "Build a custom flow for managing organization memberships" or this guide needs to be broken into multiple guides, because its a lot of code. It includes code for updating and deleting a user's membership, for inviting a user, and for creating a custom list of memberships, invitations, and requests. These could honestly all be separate guides.*/}
+# Build a custom flow for managing member roles in an organization
 
-# Manage member roles in an organization
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To manage member roles in an organization using a *prebuilt* UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
 
-Organization members with appropriate [permissions](/docs/organizations/roles-permissions#permissions) can manage member [roles](/docs/organizations/roles-permissions#roles) within an organization, including changing a member's role, removing them from an organization, and revoking organization invitations.
+Organization members with appropriate [permissions](/docs/organizations/roles-permissions#permissions) can manage a member's [role](/docs/organizations/roles-permissions#roles) and remove members within an organization.
 
-The [`useOrganization()`](/docs/references/react/use-organization) hook can be used to retrieve the current user's membership or the list of memberships for the currently active organization. The [`destroy`](/docs/references/javascript/organization-membership#destroy) and [`update`](/docs/references/javascript/organization-membership#update) methods can be called on the membership object to remove a member or change their role.
+This guide will demonstrate how to use Clerk's API to build a custom flow for managing member roles in an organization.
 
-The [`useOrganization()`](/docs/references/react/use-organization) hook can also be used to retrieve the list of invitations for the currently active organization. The [`revoke`](/docs/references/javascript/organization-invitation#revoke) method can be called on the invitation object to revoke the invitation.
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
 
-Methods for [changing a member's role](/docs/references/backend/organization/update-organization-membership), [removing a member](/docs/references/backend/organization/delete-organization-membership), and [revoking an invitation](/docs/references/backend/organization/revoke-organization-invitation) are also available on the [Backend API](/docs/references/backend/overview).
+  The following example uses the [`useOrganization()`](/docs/references/react/use-organization) hook to get `memberships`, which is a list of the active organization's memberships.
 
-## Usage
+  `memberships` is an object with `data` that contains an array of [`OrganizationMembership`](/docs/references/javascript/organization-membership) objects.
 
-<CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```tsx filename="pages/organizations/[id].tsx"
-import { useState, useEffect, ChangeEventHandler, useRef } from "react"
-import { useOrganization, useUser } from "@clerk/nextjs"
-import type { OrganizationCustomRoleKey } from "@clerk/types"
+  Each `OrganizationMembership` object has an [`update()`](/docs/references/javascript/organization-membership#update) and [`destroy()`](/docs/references/javascript/organization-membership#destroy) method to update the member's role and remove the member from the organization, respectively.
 
-export const OrgMembersParams = {
-  memberships: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
+  This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
 
-export const OrgInvitationsParams = {
-  invitations: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
-export const OrgMembershipRequestsParams = {
-  membershipRequests: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
+  ```jsx {{ filename: 'app/components/ManageRoles.tsx' }}
+  'use client';
 
-// View and manage active organization members,
-// along with any pending invitations.
-// Invite new members.
-export default function Organization() {
-  const {
-    organization: currentOrganization,
-    isLoaded,
-  } = useOrganization();
+  import { useState, useEffect, ChangeEventHandler, useRef } from 'react';
+  import { useOrganization, useUser } from '@clerk/nextjs';
+  import type { OrganizationCustomRoleKey } from '@clerk/types';
 
-  if (!isLoaded || !currentOrganization) {
-    return null;
-  }
+  export const OrgMembersParams = {
+    memberships: {
+      pageSize: 5,
+      keepPreviousData: true,
+    },
+  };
 
-  return (
-    <>
-      <h1>Organization: {currentOrganization.name}</h1>
-      <h2 className="mb-6 mt-12">Custom List Invitations</h2>
-      <OrgInvitations />
-      <h2 className="mb-6 mt-12">Custom List Membership Requests</h2>
-      <OrgMembershipRequests />
-      <h2 className="mb-6 mt-12">Custom List Memberships</h2>
-      <OrgMembers />
-      <h2 className="mb-6 mt-12">Custom Invite Form</h2>
-      <OrgInviteMemberForm />
-    </>
-  );
-}
+  // List of organization memberships. Administrators can
+  // change member roles or remove members from the organization.
+  export const ManageRoles = () => {
+    const { user } = useUser();
+    const { isLoaded, memberships } = useOrganization(OrgMembersParams);
 
-// List of organization memberships. Administrators can
-// change member roles or remove members from the organization.
-export const OrgMembers = () => {
-  const { user } = useUser()
-  const { isLoaded, memberships } = useOrganization(OrgMembersParams)
+    if (!isLoaded) {
+      return <>Loading</>;
+    }
 
-  if (!isLoaded) {
-    return <>Loading</>
-  }
+    return (
+      <>
+        <h1>Memberships List</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Joined</th>
+              <th>Role</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {memberships?.data?.map((mem) => (
+              <tr key={mem.id}>
+                <td>
+                  {mem.publicUserData.identifier}{' '}
+                  {mem.publicUserData.userId === user?.id && '(You)'}
+                </td>
+                <td>{mem.createdAt.toLocaleDateString()}</td>
+                <td>
+                  <SelectRole
+                    defaultRole={mem.role}
+                    onChange={async (e) => {
+                      await mem.update({
+                        role: e.target.value as OrganizationCustomRoleKey,
+                      });
+                      await memberships?.revalidate();
+                    }}
+                  />
+                </td>
+                <td>
+                  <button
+                    onClick={async () => {
+                      await mem.destroy();
+                      await memberships?.revalidate();
+                    }}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-  return (
-    <>
-      <table>
+        <div>
+          <button
+            disabled={!memberships?.hasPreviousPage || memberships?.isFetching}
+            onClick={() => memberships?.fetchPrevious?.()}
+          >
+            Previous
+          </button>
+
+          <button
+            disabled={!memberships?.hasNextPage || memberships?.isFetching}
+            onClick={() => memberships?.fetchNext?.()}
+          >
+            Next
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  type SelectRoleProps = {
+    fieldName?: string;
+    isDisabled?: boolean;
+    onChange?: ChangeEventHandler<HTMLSelectElement>;
+    defaultRole?: string;
+  };
+
+  const SelectRole = (props: SelectRoleProps) => {
+    const { fieldName, isDisabled = false, onChange, defaultRole } = props;
+    const { organization } = useOrganization();
+    const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([]);
+    const isPopulated = useRef(false);
+
+    useEffect(() => {
+      if (isPopulated.current) return;
+      organization
+        ?.getRoles({
+          pageSize: 20,
+          initialPage: 1,
+        })
+        .then((res) => {
+          isPopulated.current = true;
+          setRoles(
+            res.data.map((roles) => roles.key as OrganizationCustomRoleKey)
+          );
+        });
+    }, [organization?.id]);
+
+    if (fetchedRoles.length === 0) return null;
+
+    return (
+      <select
+        name={fieldName}
+        disabled={isDisabled}
+        aria-disabled={isDisabled}
+        onChange={onChange}
+        defaultValue={defaultRole}
+      >
+        {fetchedRoles?.map((roleKey) => (
+          <option key={roleKey} value={roleKey}>
+            {roleKey}
+          </option>
+        ))}
+      </select>
+    );
+  };
+  ```
+  </Tab>
+
+  <Tab>
+    The following example includes a `checkAdminAndRenderMemberships()` function that checks if the user is an admin of the currently active organization and calls `renderMemberships()`. The `renderMemberships()` function lists the organization's memberships and allows administrators to update a member's role and remove a member from the organization.
+
+    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
+
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html' }}
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h1>Memberships List</h1>
+        <table>
         <thead>
           <tr>
-            <th>User</th>
+            <th>User ID</th>
+            <th>User identifier</th>
             <th>Joined</th>
             <th>Role</th>
-            <th>Actions</th>
+            <th id="update-role-head" hidden>Update role</th>
+            <th id="remove-member-head" hidden>Remove member</th>
           </tr>
         </thead>
-        <tbody>
-          {memberships?.data?.map((mem) => (
-            <tr key={mem.id}>
-              <td>
-                {mem.publicUserData.identifier}{" "}
-                {mem.publicUserData.userId === user?.id && "(You)"}
-              </td>
-              <td>{mem.createdAt.toLocaleDateString()}</td>
-              <td>
-                <SelectRole
-                  defaultRole={mem.role}
-                  onChange={async (e) => {
-                    await mem.update({
-                      role: e.target.value as OrganizationCustomRoleKey,
-                    })
-                    await memberships?.revalidate()
-                  }}
-                />
-              </td>
-              <td>
-                <button
-                  onClick={async () => {
-                    await mem.destroy()
-                    await memberships?.revalidate()
-                  }}
-                >
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
+        <tbody id="memberships-table-body"></tbody>
       </table>
 
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={!memberships?.hasPreviousPage || memberships?.isFetching}
-          onClick={() => memberships?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
+        <script
+          type="module"
+          src="/src/main.js"
+          async
+          crossorigin="anonymous"
+        ></script>
+      </body>
+    </html>
+    ```
 
-        <button
-          className="inline-block"
-          disabled={!memberships?.hasNextPage || memberships?.isFetching}
-          onClick={() => memberships?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js';
 
-// List of pending invitations to an organization.
-// You can invite new organization members and
-// revoke already sent invitations.
-export const OrgInvitations = () => {
-  const { isLoaded, invitations, memberships } = useOrganization({
-    ...OrgInvitationsParams,
-    ...OrgMembersParams,
-  })
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-  if (!isLoaded) {
-    return <>Loading</>
-  }
-
-  return (
-    <>
-      <table>
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Invited</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invitations?.data?.map((inv) => (
-            <tr key={inv.id}>
-              <td>{inv.emailAddress}</td>
-              <td>{inv.createdAt.toLocaleDateString()}</td>
-              <td>{inv.role}</td>
-              <td>
-                <button
-                  onClick={async () => {
-                    await inv.revoke()
-                    await Promise.all([
-                      memberships?.revalidate,
-                      invitations?.revalidate,
-                    ])
-                  }}
-                >
-                  Revoke
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={!invitations?.hasPreviousPage || invitations?.isFetching}
-          onClick={() => invitations?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
-
-        <button
-          className="inline-block"
-          disabled={!invitations?.hasNextPage || invitations?.isFetching}
-          onClick={() => invitations?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
-
-export const OrgMembershipRequests = () => {
-  const { isLoaded, membershipRequests } = useOrganization(
-    OrgMembershipRequestsParams
-  )
-
-  if (!isLoaded) {
-    return <>Loading</>
-  }
-
-  return (
-    <>
-      <table>
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Requested Access</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {membershipRequests?.data?.map((mem) => (
-            <tr key={mem.id}>
-              <td>{mem.publicUserData.identifier}</td>
-              <td>{mem.createdAt.toLocaleDateString()}</td>
-              <td></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={
-            !membershipRequests?.hasPreviousPage ||
-            membershipRequests?.isFetching
-          }
-          onClick={() => membershipRequests?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
-
-        <button
-          className="inline-block"
-          disabled={
-            !membershipRequests?.hasNextPage || membershipRequests?.isFetching
-          }
-          onClick={() => membershipRequests?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
-
-export const OrgInviteMemberForm = () => {
-  const { isLoaded, organization, invitations } = useOrganization(OrgInvitationsParams)
-  const [emailAddress, setEmailAddress] = useState("")
-  const [disabled, setDisabled] = useState(false)
-
-  if (!isLoaded || !organization) {
-    return <>Loading</>
-  }
-
-  const onSubmit = async (e) => {
-    e.preventDefault()
-
-    const submittedData = Object.fromEntries(
-      new FormData(e.currentTarget).entries()
-    ) as {
-      email: string | undefined
-      role: OrganizationCustomRoleKey | undefined
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
     }
 
-    if (!submittedData.email || !submittedData.role) {
-      return
-    }
+    const clerk = new Clerk('{{pub_key}}');
+    await clerk.load();
 
-    setDisabled(true)
-    await organization.inviteMember({
-      emailAddress: submittedData.email,
-      role: submittedData.role,
-    })
-    await invitations?.revalidate?.()
-    setEmailAddress("")
-    setDisabled(false)
-  }
+    if (clerk.user) {
+      // Check for an active organization
+      if (clerk.organization) {
+        // Render list of organization memberships
+        async function renderMemberships(organization, isAdmin) {
+          try {
+            const { data } = await organization.getMemberships();
+            const memberships = data;
+            console.log(`getMemberships:`, memberships);
 
-  return (
-    <form onSubmit={onSubmit}>
-      <input
-        name="email"
-        type="text"
-        placeholder="Email address"
-        value={emailAddress}
-        onChange={(e) => setEmailAddress(e.target.value)}
-      />
-      <label>Role</label>
-      <SelectRole fieldName={"role"} />
-      <button type="submit" disabled={disabled}>
-        Invite
-      </button>
-    </form>
-  )
-}
+            memberships.map((membership) => {
+              const membershipTable = document.getElementById('memberships-table-body');
+              const row = membershipTable.insertRow();
+              row.insertCell().textContent = membership.publicUserData.userId;
+              row.insertCell().textContent = membership.publicUserData.identifier;
+              row.insertCell().textContent =
+                membership.createdAt.toLocaleDateString();
+              row.insertCell().textContent = membership.role;
 
-type SelectRoleProps = {
-  fieldName?: string
-  isDisabled?: boolean
-  onChange?: ChangeEventHandler<HTMLSelectElement>
-  defaultRole?: string
-}
+              // Add administrative actions:
+              // Add and remove a member, and update a member's role.
+              if (isAdmin) {
+                // Show update and remove member buttons
+                document.getElementById('update-role-head').removeAttribute('hidden');
+                document.getElementById('remove-member-head').removeAttribute('hidden');
 
-const SelectRole = (props: SelectRoleProps) => {
-  const { fieldName, isDisabled = false, onChange, defaultRole } = props
-  const { organization } = useOrganization()
-  const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([])
-  const isPopulated = useRef(false)
+                // Get the user ID of the member
+                const userId = membership.publicUserData.userId;
 
-  useEffect(() => {
-    if (isPopulated.current) return
-    organization
-      ?.getRoles({
-        pageSize: 20,
-        initialPage: 1,
-      })
-      .then((res) => {
-        isPopulated.current = true
-        setRoles(
-          res.data.map((roles) => roles.key as OrganizationCustomRoleKey)
-        )
-      })
-  }, [organization?.id])
+                // Update a member's role
+                const updateBtn = document.createElement('button');
+                updateBtn.textContent = 'Change role';
+                updateBtn.addEventListener('click', async function (e) {
+                  e.preventDefault();
 
-  if (fetchedRoles.length === 0) return null
+                  const role =
+                    membership.role === 'org:admin' ? 'org:member' : 'org:admin';
 
-  return (
-    <select
-      name={fieldName}
-      disabled={isDisabled}
-      aria-disabled={isDisabled}
-      onChange={onChange}
-      defaultValue={defaultRole}
-    >
-      {fetchedRoles?.map((roleKey) => (
-        <option key={roleKey} value={roleKey}>
-          {roleKey}
-        </option>
-      ))}
-    </select>
-  )
-}
-```
+                  await organization.updateMember({ userId, role })
+                    .then((res) => console.log(`updateMember response:`, res))
+                    .catch((error) => console.log('An error occurred:', error));
+                });
+                row.insertCell().appendChild(updateBtn);
 
-```tsx
-import { useState, useEffect, ChangeEventHandler, useRef } from "react"
-import { useOrganization, useUser } from "@clerk/clerk-react"
-import type { OrganizationCustomRoleKey } from "@clerk/types"
+                // Remove a member
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', async function (e) {
+                  e.preventDefault();
 
-export const OrgMembersParams = {
-  memberships: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
-
-export const OrgInvitationsParams = {
-  invitations: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
-export const OrgMembershipRequestsParams = {
-  membershipRequests: {
-    pageSize: 5,
-    keepPreviousData: true,
-  },
-}
-
-// View and manage active organization members,
-// along with any pending invitations.
-// Invite new members.
-export default function Organization() {
-  const {
-    organization: currentOrganization,
-    isLoaded,
-  } = useOrganization();
-
-  if (!isLoaded || !currentOrganization) {
-    return null;
-  }
-
-  return (
-    <>
-      <h1>Organization: {currentOrganization.name}</h1>
-      <h2 className="mb-6 mt-12">Custom List Invitations</h2>
-      <OrgInvitations />
-      <h2 className="mb-6 mt-12">Custom List Membership Requests</h2>
-      <OrgMembershipRequests />
-      <h2 className="mb-6 mt-12">Custom List Memberships</h2>
-      <OrgMembers />
-      <h2 className="mb-6 mt-12">Custom Invite Form</h2>
-      <OrgInviteMemberForm />
-    </>
-  );
-}
-
-// List of organization memberships. Administrators can
-// change member roles or remove members from the organization.
-export const OrgMembers = () => {
-  const { user } = useUser()
-  const { isLoaded, memberships } = useOrganization(OrgMembersParams)
-
-  if (!isLoaded) {
-    return <>Loading</>
-  }
-
-  return (
-    <>
-      <table>
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Joined</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {memberships?.data?.map((mem) => (
-            <tr key={mem.id}>
-              <td>
-                {mem.publicUserData.identifier}{" "}
-                {mem.publicUserData.userId === user?.id && "(You)"}
-              </td>
-              <td>{mem.createdAt.toLocaleDateString()}</td>
-              <td>
-                <SelectRole
-                  defaultRole={mem.role}
-                  onChange={async (e) => {
-                    await mem.update({
-                      role: e.target.value as OrganizationCustomRoleKey,
-                    })
-                    await memberships?.revalidate()
-                  }}
-                />
-              </td>
-              <td>
-                <button
-                  onClick={async () => {
-                    await mem.destroy()
-                    await memberships?.revalidate()
-                  }}
-                >
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={!memberships?.hasPreviousPage || memberships?.isFetching}
-          onClick={() => memberships?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
-
-        <button
-          className="inline-block"
-          disabled={!memberships?.hasNextPage || memberships?.isFetching}
-          onClick={() => memberships?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
-
-// List of pending invitations to an organization.
-// You can invite new organization members and
-// revoke already sent invitations.
-export const OrgInvitations = () => {
-  const { isLoaded, invitations, memberships } = useOrganization({
-    ...OrgInvitationsParams,
-    ...OrgMembersParams,
-  })
-
-  if (!isLoaded) {
-    return <>Loading</>
-  }
-
-  return (
-    <>
-      <table>
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Invited</th>
-            <th>Role</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invitations?.data?.map((inv) => (
-            <tr key={inv.id}>
-              <td>{inv.emailAddress}</td>
-              <td>{inv.createdAt.toLocaleDateString()}</td>
-              <td>{inv.role}</td>
-              <td>
-                <button
-                  onClick={async () => {
-                    await inv.revoke()
-                    await Promise.all([
-                      memberships?.revalidate,
-                      invitations?.revalidate,
-                    ])
-                  }}
-                >
-                  Revoke
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={!invitations?.hasPreviousPage || invitations?.isFetching}
-          onClick={() => invitations?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
-
-        <button
-          className="inline-block"
-          disabled={!invitations?.hasNextPage || invitations?.isFetching}
-          onClick={() => invitations?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
-
-export const OrgMembershipRequests = () => {
-  const { isLoaded, membershipRequests } = useOrganization(
-    OrgMembershipRequestsParams
-  )
-
-  if (!isLoaded) {
-    return <>Loading</>
-  }
-
-  return (
-    <>
-      <table>
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Requested Access</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {membershipRequests?.data?.map((mem) => (
-            <tr key={mem.id}>
-              <td>{mem.publicUserData.identifier}</td>
-              <td>{mem.createdAt.toLocaleDateString()}</td>
-              <td></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex">
-        <button
-          className="inline-block"
-          disabled={
-            !membershipRequests?.hasPreviousPage ||
-            membershipRequests?.isFetching
+                  await organization.removeMember(userId)
+                    .then((res) => console.log(`removeMember response:`, res))
+                    .catch((error) => console.log('An error occurred:', error));
+                });
+                row.insertCell().appendChild(removeBtn);
+              }
+            });
+          } catch (error) {
+            console.log('An error occurred:', error);
           }
-          onClick={() => membershipRequests?.fetchPrevious?.()}
-        >
-          Previous
-        </button>
-
-        <button
-          className="inline-block"
-          disabled={
-            !membershipRequests?.hasNextPage || membershipRequests?.isFetching
-          }
-          onClick={() => membershipRequests?.fetchNext?.()}
-        >
-          Next
-        </button>
-      </div>
-    </>
-  )
-}
-
-export const OrgInviteMemberForm = () => {
-  const { isLoaded, organization, invitations } = useOrganization(OrgInvitationsParams)
-  const [emailAddress, setEmailAddress] = useState("")
-  const [disabled, setDisabled] = useState(false)
-
-  if (!isLoaded || !organization) {
-    return <>Loading</>
-  }
-
-  const onSubmit = async (e) => {
-    e.preventDefault()
-
-    const submittedData = Object.fromEntries(
-      new FormData(e.currentTarget).entries()
-    ) as {
-      email: string | undefined
-      role: OrganizationCustomRoleKey | undefined
-    }
-
-    if (!submittedData.email || !submittedData.role) {
-      return
-    }
-
-    setDisabled(true)
-    await organization.inviteMember({
-      emailAddress: submittedData.email,
-      role: submittedData.role,
-    })
-    await invitations?.revalidate?.()
-    setEmailAddress("")
-    setDisabled(false)
-  }
-
-  return (
-    <form onSubmit={onSubmit}>
-      <input
-        name="email"
-        type="text"
-        placeholder="Email address"
-        value={emailAddress}
-        onChange={(e) => setEmailAddress(e.target.value)}
-      />
-      <label>Role</label>
-      <SelectRole fieldName={"role"} />
-      <button type="submit" disabled={disabled}>
-        Invite
-      </button>
-    </form>
-  )
-}
-
-type SelectRoleProps = {
-  fieldName?: string
-  isDisabled?: boolean
-  onChange?: ChangeEventHandler<HTMLSelectElement>
-  defaultRole?: string
-}
-
-const SelectRole = (props: SelectRoleProps) => {
-  const { fieldName, isDisabled = false, onChange, defaultRole } = props
-  const { organization } = useOrganization()
-  const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([])
-  const isPopulated = useRef(false)
-
-  useEffect(() => {
-    if (isPopulated.current) return
-    organization
-      ?.getRoles({
-        pageSize: 20,
-        initialPage: 1,
-      })
-      .then((res) => {
-        isPopulated.current = true
-        setRoles(
-          res.data.map((roles) => roles.key as OrganizationCustomRoleKey)
-        )
-      })
-  }, [organization?.id])
-
-  if (fetchedRoles.length === 0) return null
-
-  return (
-    <select
-      name={fieldName}
-      disabled={isDisabled}
-      aria-disabled={isDisabled}
-      onChange={onChange}
-      defaultValue={defaultRole}
-    >
-      {fetchedRoles?.map((roleKey) => (
-        <option key={roleKey} value={roleKey}>
-          {roleKey}
-        </option>
-      ))}
-    </select>
-  )
-}
-```
-
-```js
-<p>List of memberships:</p>
-<ul id="memberships_list"></ul>
-
-<p>List of invitations:</p>
-<ul id="invitations_list"></ul>
-
-<p>Send a new invitation:</p>
-<form id="new_invitation">
-  <div>
-    <label>Email address</div>
-    <br />
-    <input type="email" id="email_address" name="email_address" />
-  </div>
-  <button>Invite</button>
-</form>
-
-<script>
-  async function renderMemberships(organization, isAdmin) {
-    const list = document.getElementById("memberships_list");
-    try {
-      const { data: memberships } = await organization.getMemberships();
-
-      memberships.map((membership) => {
-        const li = document.createElement("li");
-        li.textContent = `${membership.publicUserData.identifier} - ${membership.role}`;
-
-        // Add administrative actions; update role and remove member.
-        if (isAdmin) {
-          const updateBtn = document.createElement("button");
-          updateBtn.textContent = "Change role";
-          updateBtn.addEventListener("click", async function(e) {
-            e.preventDefault();
-            const role = membership.role === "admin" ?
-              "org:member" :
-              "admin";
-            await membership.update({ role });
-          });
-          li.appendChild(updateBtn);
-
-          const removeBtn = document.createElement("button");
-          removeBtn.textContent = "Remove";
-          removeBtn.addEventListener("click", async function(e) {
-            e.preventDefault();
-            await currentOrganization.removeMember(membership.userId);
-          });
-          li.appendChild(removeBtn);
         }
 
-        // Add the entry to the list
-        list.appendChild(li);
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  }
+        /**
+         * Checks if a user is an admin of the
+         * currently active organization and
+         * renders the organization's memberships.
+         */
+        async function checkAdminAndRenderMemberships() {
+          const organizationId = clerk.organization.id;
 
-  async function renderInvitations(organization, isAdmin) {
-    const list = document.getElementById("invitations_list");
-    try {
-      const { data: invitations } = await organization.getInvitations();
+          const { data } = await clerk.user.getOrganizationMemberships();
 
-      invitations.map((invitation) => {
-        const li = document.createElement("li");
-        li.textContent = `${invitation.emailAddress} - ${invitation.role}`;
+          const organizationMemberships = data;
 
-        // Add administrative actions; revoke invitation
-        if (isAdmin) {
-          const revokeBtn = document.createElement("button");
-          revokeBtn.textContent = "Revoke";
-          revokeBtn.addEventListener("click", async function(e) {
-            e.preventDefault();
-            await invitation.revoke();
-          });
-          li.appendChild(revokeBtn);
-        }
-        // Add the entry to the list
-        list.appendChild(li);
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  }
+          const currentMembership = organizationMemberships.find(
+            (membership) => membership.organization.id === organizationId
+          );
+          const currentOrganization = currentMembership.organization;
 
-  async function init() {
-    // This is the current organization ID.
-    const organizationId = "org_XXXXXXX";
-    const { data: organizationMemberships } = await window.Clerk.user.getOrganizationMemberships();
+          if (!currentOrganization) return;
 
-    const currentMembership = organizationMemberships.find(membership
-      => membership.organization.id === organizationId);
-    const currentOrganization = currentMembership.organization;
+          const isAdmin = currentMembership.role === 'org:admin';
 
-    if (!currentOrganization) {
-      return;
-    }
-    const isAdmin = currentMembership.role === "admin";
+          console.log(`Current organization:`, currentOrganization);
 
-    renderMemberships(currentOrganization, isAdmin);
-    renderInvitations(currentOrganization, isAdmin);
-
-    if (isAdmin) {
-      const form = document.getElementById("new_invitation");
-      form.addEventListener("submit", async function(e) {
-        e.preventDefault();
-        const inputEl = document.getElementById("email_address");
-        if (!inputEl) {
-          return;
+          renderMemberships(currentOrganization, isAdmin);
         }
 
-        try {
-          await currentOrganization.inviteMember({
-            emailAddress: inputEl.value,
-            role: "org:member",
-          });
-        } catch (err) {
-          console.error(err);
-        }
-      });
+        checkAdminAndRenderMemberships();
+      } else {
+        // If there is no active organization,
+        // mount Clerk's <OrganizationSwitcher />
+        // to allow the user to set an organization as active
+        document.getElementById('app').innerHTML = `
+          <h2>Select an organization to set it as active</h2>
+          <div id="org-switcher"></div>
+        `;
+
+        const orgSwitcherDiv = document.getElementById('org-switcher');
+
+        clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+      }
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `;
+
+      const signInDiv = document.getElementById('sign-in');
+
+      clerk.mountSignIn(signInDiv);
     }
-  }
-
-  init();
-</script>
-```
-</CodeBlockTabs>
-
-{/* TODO: Should we mention the update method on the OrganizationMembership object? Or the updateMember method on the Organization object? Or the updateOrganizationMembership method from the Backend API? */}
-
-{/* TODO: Add section for ## Remove members , and add appropriate examples ? */}
+    ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

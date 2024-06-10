@@ -190,55 +190,30 @@ export default function AuthenticatedLayout() {
 }
 ```
 
-Then, create a `dashboard.tsx` file in the same folder. It will use Clerk's [`useAuth`](/docs/references/react/use-auth) and [`useUser`](/docs/references/react/use-user) hooks to get the session token and user data, as shown in the following example:
 
-```tsx filename="app/(dashboard)/dashboard.tsx"
-import { useAuth, useUser } from "@clerk/clerk-expo";
-import React from "react";
 
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Stack } from "expo-router";
-
-export default function Page() {
-  const { getToken, signOut, isSignedIn } = useAuth();
-  const { user } = useUser();
-  const [sessionToken, setSessionToken] = React.useState("");
-
-  React.useEffect(() => {
-    const scheduler = setInterval(async () => {
-      const token = await getToken();
-      setSessionToken(token as string);
-    }, 1000);
-
-    return () => clearInterval(scheduler);
-  }, []);
-
-  const onSignOutPress = async () => {
-    try {
-      await signOut();
-    } catch (err: any) {}
-  };
-
-  return (
-    <View>
-      <Stack.Screen
-        options={{
-          title: "Profile",
-        }}
-      />
-      <Text>Hello {user?.firstName}</Text>
-      <TouchableOpacity onPress={onSignOutPress}>
-        <Text>Sign out</Text>
-      </TouchableOpacity>
-      <Text>{sessionToken}</Text>
-    </View>
-  );
-}
-```
 
 ### Add `sign-in` and `sign-up` pages
 
 Finally, add pages for signing in and signing up.
+
+First, we'll protect our `auth` routes in the `layout`. Create a new route group `(auth)` with `_layout.tsx` file. 
+
+```tsx filename="/app/(auth)/_layout.tsx"
+
+import { Redirect, Stack } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+
+export default function UnAuthenticatedLayout() {
+  const { isSignedIn } = useAuth();
+
+  if (isSignedIn) {
+    return <Redirect href={"/"} />;
+  }
+
+  return <Stack />;
+}
+```
 
 #### `sign-in`
 
@@ -278,20 +253,16 @@ export default function Page() {
         value={emailAddress}
         placeholder="Email..."
         onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
-      />
-        
+      />        
       <TextInput
         value={password}
         placeholder="Password..."
         secureTextEntry={true}
         onChangeText={(password) => setPassword(password)}
       />
-
       <Button title="Sign In" onPress={onSignInPress} />
-
       <View>
         <Text>Don't have an account?</Text>
-
         <Link href="/sign-up">          
           <Text>Sign up</Text>          
         </Link>
@@ -371,41 +342,35 @@ export default function SignUpScreen() {
             value={firstName}
             placeholder="First Name..."
             onChangeText={(firstName) => setFirstName(firstName)}
-          />
-                    
+          />                    
           <TextInput
             autoCapitalize="none"
             value={lastName}
             placeholder="Last Name..."
             onChangeText={(lastName) => setLastName(lastName)}
           />
-
           <TextInput
             autoCapitalize="none"
             value={emailAddress}
             placeholder="Email..."
             onChangeText={(email) => setEmailAddress(email)}
-          />
-                  
+          />                  
           <TextInput
             value={password}
             placeholder="Password..."
             secureTextEntry={true}
             onChangeText={(password) => setPassword(password)}
           />
-
           <Button title="Sign Up" onPress={onSignUpPress} />          
         </>
       )}
       {pendingVerification && (
-        <>
-         
+        <>         
           <TextInput
             value={code}
             placeholder="Code..."
             onChangeText={(code) => setCode(code)}
-          />
-          
+          />          
           <Button title="Verify Email" onPress={onPressVerify} />          
         </>        
       )}

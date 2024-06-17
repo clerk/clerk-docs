@@ -35,7 +35,6 @@ description: Add authentication and user management to your Expo app with Clerk.
 
 </TutorialHero>
 
-
 <Steps>
 
 ### Install `@clerk/clerk-expo`
@@ -132,7 +131,7 @@ export default function Layout() {
 }
 ```
 
-Then, in an `index.tsx` file in the same folder add the following code. It displays the user's name if they're signed in, or a sign-in link if not:
+Then, in the same folder, create an `index.tsx` file and add the following code. It displays the user's name if they're signed in, or sign-in and sign-up links if they're not:
 
 ```tsx filename="app/(home)/index.tsx"
 import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
@@ -164,7 +163,7 @@ export default function Page() {
 
 Finally, add pages for signing in and signing up.
 
-First, we'll protect our `auth` routes in the `layout`. Create a new route group `(auth)` with `_layout.tsx` file. 
+First, protect your `auth` routes in the `layout`. Create a new route group `(auth)` with a `_layout.tsx` file. This layout will redirect users to the home page if they're already signed in:
 
 ```tsx filename="/app/(auth)/_layout.tsx"
 
@@ -184,7 +183,7 @@ export default function UnAuthenticatedLayout() {
 
 #### `sign-in`
 
-The following example creates a sign-in page that allows users to sign in or navigate to the sign-up page.
+The following example creates a sign-in page that allows users to sign in using email address and password, or navigate to the sign-up page.
 
 ```tsx filename="/app/(auth)/sign-in.tsx"
 import { useClerk, useSignIn } from "@clerk/clerk-expo";
@@ -209,18 +208,23 @@ export default function Page() {
         password,
       });
 
-      await setActive({ session: completeSignIn.createdSessionId });
+      if (signInAttempt.status === 'complete') {
+        await setActive({ session: signInAttempt.createdSessionId });
+        router.push('/');
+      } else {
+        console.error(JSON.stringify(signInAttempt, null, 2));
+      }
     } catch (err: any) {}
   }, [isLoaded, emailAddress, password]);
 
   return (
-    <View>      
+    <View>
       <TextInput
         autoCapitalize="none"
         value={emailAddress}
         placeholder="Email..."
         onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
-      />        
+      />
       <TextInput
         value={password}
         placeholder="Password..."
@@ -230,8 +234,8 @@ export default function Page() {
       <Button title="Sign In" onPress={onSignInPress} />
       <View>
         <Text>Don't have an account?</Text>
-        <Link href="/sign-up">          
-          <Text>Sign up</Text>          
+        <Link href="/sign-up">
+          <Text>Sign up</Text>
         </Link>
       </View>
     </View>
@@ -241,10 +245,9 @@ export default function Page() {
 
 #### `sign-up`
 
-The following example creates a sign-up page that sends users an email verification code to create an account.
+The following example creates a sign-up page that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
 
 ```tsx filename="/app/(auth)/sign-up.tsx"
-
 import * as React from "react";
 import { Text, TextInput, Button, View } from "react-native";
 import { useSignUp } from "@clerk/clerk-expo";
@@ -259,7 +262,6 @@ export default function SignUpScreen() {
   const [pendingVerification, setPendingVerification] = React.useState(false);
   const [code, setCode] = React.useState("");
 
-  // Start the sign up process.
   const onSignUpPress = async () => {
     if (!isLoaded) {
       return;
@@ -273,17 +275,14 @@ export default function SignUpScreen() {
         password,
       });
 
-      // send the email.
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
 
-      // change the UI to our pending section.
       setPendingVerification(true);
     } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
     }
   };
 
-  // Try to verify the user with the provided email code.
   const onPressVerify = async () => {
     if (!isLoaded) {
       return;
@@ -294,7 +293,12 @@ export default function SignUpScreen() {
         code,
       });
 
-      await setActive({ session: completeSignUp.createdSessionId });
+      if (completeSignUp.status === 'complete') {
+        await setActive({ session: completeSignUp.createdSessionId });
+        router.push('/');
+      } else {
+        console.error(JSON.stringify(completeSignUp, null, 2));
+      }
     } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
     }
@@ -303,13 +307,13 @@ export default function SignUpScreen() {
   return (
     <View>
       {!pendingVerification && (
-        <>          
+        <>
           <TextInput
             autoCapitalize="none"
             value={firstName}
             placeholder="First Name..."
             onChangeText={(firstName) => setFirstName(firstName)}
-          />                    
+          />
           <TextInput
             autoCapitalize="none"
             value={lastName}
@@ -321,30 +325,32 @@ export default function SignUpScreen() {
             value={emailAddress}
             placeholder="Email..."
             onChangeText={(email) => setEmailAddress(email)}
-          />                  
+          />
           <TextInput
             value={password}
             placeholder="Password..."
             secureTextEntry={true}
             onChangeText={(password) => setPassword(password)}
           />
-          <Button title="Sign Up" onPress={onSignUpPress} />          
+          <Button title="Sign Up" onPress={onSignUpPress} />
         </>
       )}
       {pendingVerification && (
-        <>         
+        <>
           <TextInput
             value={code}
             placeholder="Code..."
             onChangeText={(code) => setCode(code)}
-          />          
-          <Button title="Verify Email" onPress={onPressVerify} />          
-        </>        
+          />
+          <Button title="Verify Email" onPress={onPressVerify} />
+        </>
       )}
     </View>
   );
 }
 ```
+
+For more information about building these _custom flows_, including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/custom-flows/email-password) guide.
 
 </Steps>
 
@@ -356,17 +362,16 @@ See the [`expo-updates`](https://docs.expo.dev/versions/latest/sdk/updates) libr
 
 ## Next steps
 
-You must create custom authentication flows to use Clerk with Expo. See the following guides to take the next steps toward fleshing out your app.
+See the following guides to take the next steps toward fleshing out your Expo app.
 
 <div className="container mx-auto my-4">
   <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <Cards title="OAuth with Expo" description="Learn more how to build a custom OAuth flow with Expo." link="/docs/references/expo/expo-oauth" cta="Learn More" />
 
-    <Cards title="OAuth with Expo" description="Learn more how to create a custom OAuth flow with Expo." link="docs/references/expo/expo-oauth" cta="Learn More" />
+    <Cards title="MFA with Expo" description="Learn more how to build a custom multi-factor authentication flow with Expo." link="/docs/references/expo/expo-mfa" cta="Learn More" />
 
-    <Cards title="MFA with Expo" description="Learn more how to create a custom Multifactor Authentication flow with Expo." link="docs/references/expo/expo-mfa" cta="Learn More" />
+    <Cards title="Read session and user data" description="Learn how to read session and user data with Expo." link="/docs/references/expo/expo-read-session-user-data" cta="Learn More" />
 
-    <Cards title="Read Session and User Data" description="Learn how to read session and user data with Expo." link="docs/references/expo/expo-read-session-user-data" cta="Learn More" />
-
-    <Cards title="Sign-in and Sign-up" description="Learn how to create a custom sign-in and sign-up authentication flow." link="docs/references/expo/expo-sign-in-sign-up" cta="Learn More" />
+    <Cards title="Sign-up and sign-in flow" description="Learn how to build a custom sign-up and sign-in authentication flow." link="/docs/references/custom-flows/email-password" cta="Learn More" />
   </div>
 </div>

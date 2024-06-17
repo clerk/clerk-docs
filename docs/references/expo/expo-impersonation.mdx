@@ -7,7 +7,7 @@ description: Learn how to build custom Impersonation into your Expo application
 > [!WARNING]
 > The following flow is built assuming your Clerk app is using the default instance settings. If you have changed your instance settings, you may need to make changes to the examples.
 
-[User Impersonation](/docs/custom-flows/user-impersonation#impersonate-a-user-from-the-clerk-dashboard) is a way to offer customer support by logging into your applications from their accounts. Doing so enables you to directly reproduce and remedy any issues they're experiencing. In this example, you’ll learn how to build Clerk's user impersonation into your Expo application.
+[User Impersonation](/docs/custom-flows/user-impersonation#impersonate-a-user-from-the-clerk-dashboard) is a way to offer customer support by logging into your applications from their accounts. Doing so enables you to directly reproduce and remedy any issues they're experiencing. In this example, you'll learn how to build Clerk's user impersonation into your Expo application.
 
 ## Before you start
 
@@ -18,29 +18,27 @@ description: Learn how to build custom Impersonation into your Expo application
     1. Ensure that **Email address** is required, and **Username** is not required.
     1. Ensure that **Password** is required.
 1. Install the following dependencies:
-<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
-```bash {{ filename: "terminal" }}
-npm i expo-linking && npm i @clerk/types
-```
+    <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: "terminal" }}
+    npm i expo-linking && npm i @clerk/types
+    ```
 
-```bash {{ filename: "terminal" }}
-yarn add expo-linking && yarn add @clerk/types
-```
+    ```bash {{ filename: "terminal" }}
+    yarn add expo-linking && yarn add @clerk/types
+    ```
 
-```bash {{ filename: "terminal" }}
-pnpm add expo-linking && pnpm add @clerk/types
-```
-</CodeBlockTabs>
-
-Now that Clerk is configured, we'll need to setup Expo's experimental [API Routes](https://docs.expo.dev/router/reference/api-routes/) and [deploy to Vercel](https://docs.expo.dev/router/reference/api-routes/#vercel). We need these API routes to be able to hit two of Clerk's backend endpoints using the Clerk Secret Key.
-Once you've deployed to Vercel, you can move on to creating your impersonation.
+    ```bash {{ filename: "terminal" }}
+    pnpm add expo-linking && pnpm add @clerk/types
+    ```
+    </CodeBlockTabs>
+1. Now that Clerk is configured, you'll need to [deploy to Vercel](https://docs.expo.dev/router/reference/api-routes/#vercel).
 
 <Steps>
 
 ### Create a `(dashboard)` route
 
 > [!WARNING]
-> This is a basic example that foregoes best practices for the sake of brevity and shouldn't be copied one-for-one into a production Expo application. For example, you should build impersonation into an admin-only dashboard that **only authorized users** can access.
+> This is a basic example that foregoes best practices for the sake of brevity and shouldn't be copied one-for-one into a _production_ Expo application. For example, you should build impersonation into an admin-only dashboard that **only authorized users** can access.
 
 For this example, create a basic dashboard for impersonating users.
 
@@ -132,7 +130,7 @@ export default function Dashboard() {
 
 ### Create a hook to generate an actor token
 
-Next, create a custom `useImpersonation()` hook, which will call an API route to generate and return an actor token from Clerk.
+Create a custom hook called `useImpersonation()` that will call an API route to generate and return an actor token from Clerk.
 
 ```tsx {{ filename: "app/(dashboard)/index.tsx" }}
 
@@ -186,9 +184,9 @@ export default function useImpersonation(
 
 ### Create an API route to generate actor tokens
 
-Now create an endpoint that will call Clerk’s [create actor token](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken) endpoint at `/actor_tokens` and pass in the Clerk secret key for authorization.
+Now create an endpoint that will call Clerk's [create actor token](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken) endpoint at `/actor_tokens` and pass in the Clerk secret key for authorization.
 
-```tsx {{ filename: "app/api/generateActorToken.tsx" }}
+```tsx {{ filename: "app/generateActorToken+api.tsx" }}
 export async function POST(request: Request) {
   const body: { user_id: string; actor: { sub: string } } =
     await request.json();
@@ -217,7 +215,7 @@ export async function POST(request: Request) {
 
 ### Create a hook to get impersonated user data
 
-Next, create a second custom hook called `useImpersonatedUser()` that will fetch data about the impersonator. You can use this to display UI only the impersonator will see for specific actions, like showing who is currently impersonating and matching the session to the right user for logout.
+Create a second custom hook called `useImpersonatedUser()` that will fetch data about the impersonator. You can use this to display UI only the impersonator will see for specific actions, like showing who is currently impersonating and matching the session to the right user for logout.
 
 ```tsx {{ filename: "app/(dashboard)/index.tsx" }}
 function useImpersonatedUser(
@@ -245,7 +243,7 @@ function useImpersonatedUser(
 
 ### Create an API route to retrieve user data
 
-With your hook setup you can now create an API route that will call Clerk's [retrieve user endpoint](https://clerk.com/docs/reference/backend-api/tag/Users#operation/GetUserList) at `/users` and get back the Impersonated user’s full [`User` object](/docs/references/javascript/user/user#user-object).
+With your hook setup you can now create an API route that will call Clerk's [retrieve user endpoint](https://clerk.com/docs/reference/backend-api/tag/Users#operation/GetUserList) at `/users` and get back the Impersonated user's full [`User` object](/docs/references/javascript/user/user#user-object).
 
 ```tsx {{ filename: "app/getImpersonatedUser+api.tsx" }}
 export async function POST(request: Request) {
@@ -267,7 +265,7 @@ export async function POST(request: Request) {
 
 Now that you have the functionality for generating an impersonated session & getting the impersonated user's data, there are a few more functions to complete that will:
 
-1. Get the `ticket` from the URL generated by your `useImpersonation()` hook
+1. Get the `ticket` from the URL generated by your `useImpersonation()` hook.
 1. Pass the `ticket` to Clerk's `signIn()` function to create a new impersonated session, allowing you to sign in the impersonated user or impersonator.
 
 The following code should be placed in the `Page` component of your `app/(dashboard)/index.tsx` file:
@@ -301,7 +299,9 @@ The following code should be placed in the `Page` component of your `app/(dashbo
 
           router.replace("/dashboard");
         } catch (err) {
-          console.log(err);
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2));
         }
       }
     }
@@ -310,7 +310,7 @@ The following code should be placed in the `Page` component of your `app/(dashbo
 
 ### Create a hook for signing out
 
-Finally, create a hook for signing out. Usually this can be as simple as calling Clerk’s [`signOut()`](https://clerk.com/docs/pr/1038/references/javascript/clerk/clerk#sign-out) function, but since to handling multiple sessions you must add some checks to ensure you're signing out of the right session.
+Finally, create a helper function for signing out. Usually this can be as simple as calling Clerk's [`signOut()`](https://clerk.com/docs/pr/1038/references/javascript/clerk/clerk#sign-out) function, but since you're handling multiple sessions, you must add some checks to ensure you're signing out of the right session.
 
 ```tsx {{ filename: "app/(dashboard)/index.tsx" }}
   const onSignOutPress = async (sessionId: string) => {
@@ -326,7 +326,11 @@ Finally, create a hook for signing out. Usually this can be as simple as calling
         sessionId,
       });
       router.replace(redirectUrl);
-    } catch (err: any) {}
+    } catch (err: any) {
+      // See https://clerk.com/docs/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2));
+    }
   };
 ```
 
@@ -445,7 +449,9 @@ export default function Page() {
 
           router.replace("/dashboard");
         } catch (err) {
-          console.log(err);
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2));
         }
       }
     }
@@ -464,7 +470,11 @@ export default function Page() {
         sessionId,
       });
       router.replace(redirectUrl);
-    } catch (err: any) {}
+    } catch (err: any) {
+      // See https://clerk.com/docs/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2));
+    }
   };
 
   return (

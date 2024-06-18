@@ -70,21 +70,30 @@ export default function SignInMFAForm() {
 
     // Start the sign-in process
     try {
-      await signIn.create({
+      const attemptFirstFactor = await signIn.create({
         identifier: email,
         password,
       });
 
+      // Attempt to sign in the user with email / password incase they haven't yet activated TOTP & Backup codes
+      if (attemptFirstFactor.status === "complete") {
+
+        // If the attempt is successful, re-route them past the MFA step to the dashboard
+        await setActive({ session: attemptFirstFactor.createdSessionId })
+
+        router.replace("/dashboard")
+      }
+
       // Attempt the TOTP or backup code verification
-      const signInAttempt = await signIn.attemptSecondFactor({
+      const attemptSecondFactor = await signIn.attemptSecondFactor({
         strategy: useBackupCode ? "backup_code" : "totp",
         code: code,
       });
 
       // If verification was completed, set the session to active
       // and redirect the user
-      if (signInAttempt.status === "complete") {
-        await setActive({ session: signInAttempt.createdSessionId });
+      if (attemptSecondFactor.status === "complete") {
+        await setActive({ session: attemptSecondFactor.createdSessionId });
 
         router.replace("/dashboard");
       } else {

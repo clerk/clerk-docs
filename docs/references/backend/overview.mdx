@@ -24,6 +24,62 @@ Clerk SDKs expose an instance of the Clerk Backend SDK for use in server environ
   ```jsx
   import { createClerkClient } from '@clerk/remix/api.server';
   ```
+
+  Use the following tabs to see examples of how to use the Backend SDK in Remix Loader and Action functions.
+
+    <Tabs items={["Loader Function", "Action Function"]}>
+      <Tab>
+      ```tsx filename="routes/profile.tsx"
+      import { LoaderFunction, redirect } from "@remix-run/node";
+      import { getAuth } from "@clerk/remix/ssr.server";
+      import { createClerkClient } from '@clerk/remix/api.server';
+
+      export const loader: LoaderFunction = async (args) => {
+        // Use getAuth to retrieve user data
+        const { userId } = await getAuth(args);
+
+        // If there is no userId, then redirect to sign-in route
+        if (!userId) {
+          return redirect("/sign-in?redirect_url=" + args.request.url);
+        }
+
+        // Initialize clerkClient and perform the action,
+        // which in this case is to get the user
+        const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
+
+        // Return the user
+        return { serialisedUser: JSON.stringify(user) };
+      };
+      ```
+      </Tab>
+
+      <Tab>
+      ```tsx filename="routes/profile.tsx"
+      import { ActionFunction, redirect } from "@remix-run/node";
+      import { getAuth } from "@clerk/remix/ssr.server";
+      import { createClerkClient } from '@clerk/remix/api.server';
+
+      export const action: ActionFunction = async (args) => {
+        // Use getAuth to retrieve user data
+        const { userId } = await getAuth(args)
+
+        // If there is no userId, then redirect to sign-in route
+        if (!userId) {
+          return redirect("/sign-in?redirect_url=" + args.request.url);
+        }
+
+        // Prepare the data for the mutation
+        const params = { firstName: 'John', lastName: 'Wicker' };
+
+        // Initialize clerkClient and perform the mutations
+        const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
+
+        // Return the updated user
+        return { serialisedUser: JSON.stringify(updatedUser) };
+      };
+      ```
+      </Tab>
+    </Tabs>
   </Tab>
 
   <Tab>
@@ -42,7 +98,7 @@ Clerk SDKs expose an instance of the Clerk Backend SDK for use in server environ
   ```
   </Tab>
 </Tabs>
- 
+
 ## Error handling
 
 Backend SDK functions do not throw errors when something goes wrong. Instead, they return a [`ClerkBackendApiResponse`](/docs/references/javascript/types/clerk-backend-api-response) object, just as they would if there were no errors. You can check for errors on the `.errors` property of the response. For example:

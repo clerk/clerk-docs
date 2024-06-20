@@ -21,16 +21,16 @@ description: Learn how to create a custom MFA flow in Expo with Clerk.
 1. You must also configure your Clerk instance to enable multi-factor authentication:
     1. Navigate to your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor) and in the navigation sidebar, select **User & Authentication > Multi-factor**.
     1. For this example, enable the **Authenticator application** and **Backup codes** strategies.
-1. Install the `expo-checkbox` package for the UI:
+1. Install the `expo-checkbox` package for the UI & Clerk types lib:
     <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
       ```bash {{ filename: "terminal" }}
-      npm install expo-checkbox
+      npm install expo-checkbox @clerk/types
       ```
       ```bash {{ filename: "terminal" }}
-      yarn add expo-checkbox
+      yarn add expo-checkbox @clerk/types
       ```
       ```bash {{ filename: "terminal" }}
-      pnpm add expo-checkbox
+      pnpm add expo-checkbox @clerk/types
       ```
     </CodeBlockTabs>
 
@@ -191,12 +191,32 @@ Next, add a basic account page to the `(dashboard)` route group that shows users
 import React from "react";
 import { useUser } from "@clerk/clerk-expo";
 import { Link } from "expo-router";
-import { View, Text, Button } from "react-native";
+import { View, Text, Button, TouchableOpacity, FlatList } from "react-native";
+import { BackupCodeResource } from "@clerk/types";
 
 export default function ManageTOTPMfa() {
+  const [backupCodes, setBackupCodes] = React.useState<
+    BackupCodeResource | undefined
+  >(undefined);
+  const [loading, setLoading] = React.useState(false);
+
   const { isLoaded, user } = useUser();
 
   if (!isLoaded || !user) return null;
+
+  const generateBackupCodes = () => {
+    setLoading(true);
+    void user
+      ?.createBackupCode()
+      .then((backupCodes: BackupCodeResource) => {
+        setBackupCodes(backupCodes);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.log("Error:", error);
+        setLoading(false);
+      });
+  };
 
   const disableTOTP = async () => {
     await user.disableTOTP();
@@ -215,10 +235,11 @@ export default function ManageTOTPMfa() {
     return (
       <View>
         <Text>Add TOTP via authentication app - </Text>
-
-        <Link href="/add-mfa">
-          <Text>Add</Text>
-        </Link>
+        <TouchableOpacity>
+          <Link href="/add-mfa">
+            <Text>Add</Text>
+          </Link>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -230,9 +251,28 @@ export default function ManageTOTPMfa() {
       <Text>Authenticator App</Text>
 
       {user.totpEnabled ? <MFAEnabled /> : <MFADisabled />}
+
+      {user.backupCodeEnabled && (
+        <View>
+          <Text>Backup Codes</Text>
+          {loading && <Text>Loading...</Text>}
+          {backupCodes && !loading && (
+            <FlatList
+              data={backupCodes.codes}
+              renderItem={(code) => <Text>{code.item}</Text>}
+              keyExtractor={(item) => item}
+            />
+          )}
+          <Button
+            onPress={() => generateBackupCodes()}
+            title="Regenerate Codes"
+          />
+        </View>
+      )}
     </>
   );
 }
+=
 ```
 
 ### Create the QR code generator

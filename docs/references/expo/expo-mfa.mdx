@@ -63,27 +63,32 @@ export default function SignInMFAForm() {
   const [displayTOTP, setDisplayTOTP] = React.useState(false);
   const router = useRouter();
 
-  const handleFirstStage = () => setDisplayTOTP(true);
-
-  const onPressTOTP = React.useCallback(async () => {
+    const handleFirstStage = async () => {
     if (!isLoaded) return;
 
-    // Start the sign-in process
     try {
       const attemptFirstFactor = await signIn.create({
         identifier: email,
         password,
       });
 
-      // Attempt to sign in the user with email / password incase they haven't yet activated TOTP & Backup codes
       if (attemptFirstFactor.status === "complete") {
-
-        // If the attempt is successful, re-route them past the MFA step to the dashboard
-        await setActive({ session: attemptFirstFactor.createdSessionId })
-
-        router.replace("/dashboard")
+        await setActive({ session: attemptFirstFactor.createdSessionId });
+        router.replace("/dashboard");
+      } else if (attemptFirstFactor.status === "needs_second_factor") {
+        setDisplayTOTP(true);
+      } else {
+        console.error(JSON.stringify(attemptFirstFactor, null, 2));
       }
+    } catch (err) {
+      console.error(JSON.stringify(err, null, 2));
+    }
+  };
 
+  const onPressTOTP = React.useCallback(async () => {
+    if (!isLoaded) return;
+    
+    try {      
       // Attempt the TOTP or backup code verification
       const attemptSecondFactor = await signIn.attemptSecondFactor({
         strategy: useBackupCode ? "backup_code" : "totp",

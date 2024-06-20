@@ -41,34 +41,57 @@ If the above process is successful, it means that the user is signed in to your 
 
 The following example demonstrates how to use the [JavaScript Backend SDK](/docs/references/backend/overview) to verify the token signature. Although this example uses Next.js Route Handlers, you can use `verifyToken` with any JS framework or no framework at all.
 
-```tsx filename="app/api/route.ts"
-import { verifyToken } from '@clerk/backend';
-import { cookies } from 'next/headers';
+In the following example:
 
-export async function GET(request: Request) {
-  const cookieStore = cookies()
-  const sessToken = cookieStore.get('__session')?.value
-  const bearerToken = request.headers.get('Authorization')?.replace('Bearer ', '');
-  const token = sessToken || bearerToken;
+1. The JWT Public Key is set in the environment variable `CLERK_JWT_KEY`.
+1. The session token is retrieved from the `__session` cookie or the `Authorization` header.
+1. The token is verified using the `verifyToken` function.
+1. The token's `exp` and `nbf` claims are checked.
+1. The token's `azp` claim is checked against the permitted origins.
 
-  if (!token) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+<Tabs items={["Next.js"]}>
+  <Tab>
+  ```tsx filename="app/api/route.ts"
+  import { verifyToken } from '@clerk/backend';
+  import { cookies } from 'next/headers';
+
+  export async function GET(request: Request) {
+    const cookieStore = cookies()
+    const sessToken = cookieStore.get('__session')?.value
+    const bearerToken = request.headers.get('Authorization')?.replace('Bearer ', '');
+    const token = sessToken || bearerToken;
+
+    if (!token) {
+      return Response.json({ error: 'Token not found. User must sign in.' }, { status: 401 });
+    }
+
+    try {
+      const verifiedSession = await verifyToken(token, {
+        jwtKey: process.env.CLERK_JWT_KEY,
+      });
+
+      // Check if the token is expired or not yet valid
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (verifiedSession.exp < currentTime || verifiedSession.nbf > currentTime) {
+        throw new Error("Token is expired or not yet valid");
+      }
+
+      // Check if the token is issued by a permitted origin
+      const permittedOrigins = ["http://localhost:3000", "https://example.com"]; // Replace with your permitted origins
+      if (verifiedSession.azp && !permittedOrigins.includes(verifiedSession.azp)) {
+        throw new Error("Invalid 'azp' claim");
+      }
+
+      return Response.json({ verifiedSession });
+    } catch (error) {
+      return Response.json({ error: 'Token not verified.' }, { status: 401 });
+    }
   }
+  ```
+  </Tab>
+</Tabs>
 
-  try {
-    const verifiedSession = await verifyToken(token, {
-      jwtKey: process.env.CLERK_JWT_KEY,
-    });
-
-    return Response.json({ verifiedSession });
-  } catch (error) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-}
-```
-
-{/* TODO: add code examples of how to validate the exp and azp claims ?? */}
-If the token is valid, the response will return a JSON object that looks similar to the one below. You can use this to validate the `exp` and `azp` claims, as mentioned in the [steps above](#verify-the-token-signature). Once the token is completely validated, you then have a valid session ID (`sid`) and user ID (`sub`) that you can use in your application.
+If the token is valid, the response will return a JSON object that looks something like this:
 
 ```json
 {

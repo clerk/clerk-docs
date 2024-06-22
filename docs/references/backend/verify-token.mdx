@@ -35,7 +35,7 @@ function verifyToken: (token: string, options: VerifyTokenOptions) => Promise<Jw
 
 The following example demonstrates how to use `verifyToken()` in a Next.js application.
 
-```js
+```ts title="app/api/verify-token/route.ts"
 import { verifyToken } from '@clerk/backend';
 import { cookies } from 'next/headers';
 
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   const token = sessToken || bearerToken;
 
   if (!token) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Token not found. User must sign in.' }, { status: 401 });
   }
 
   try {
@@ -54,9 +54,21 @@ export async function GET(request: Request) {
       jwtKey: process.env.CLERK_JWT_KEY,
     });
 
+    // Check if the token is expired or not yet valid
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (verifiedSession.exp < currentTime || verifiedSession.nbf > currentTime) {
+      throw new Error("Token is expired or not yet valid");
+    }
+
+    // Check if the token is issued by a permitted origin
+    const permittedOrigins = ["http://localhost:3000", "https://example.com"]; // Replace with your permitted origins
+    if (verifiedSession.azp && !permittedOrigins.includes(verifiedSession.azp)) {
+      throw new Error("Invalid 'azp' claim");
+    }
+
     return Response.json({ verifiedSession });
   } catch (error) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    return Response.json({ error: 'Token not verified.' }, { status: 401 });
   }
 }
 ```

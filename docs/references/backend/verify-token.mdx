@@ -3,6 +3,8 @@ title: verifyToken()
 description: Use Clerk's Backend SDK to verify a token signature.
 ---
 
+{/* JS page: https://github.com/clerk/javascript/blob/843e96e505cd91d676f0736e24465726b55014a7/packages/backend/src/tokens/verify.ts#L13 */}
+
 # `verifyToken()`
 
 Verifies a token signature.
@@ -19,6 +21,9 @@ function verifyToken: (token: string, options: VerifyTokenOptions) => Promise<Jw
 | `options` | `VerifyTokenOptions` | Options for verifying the token. |
 
 ### `VerifyTokenOptions`
+
+> [!WARNING]
+> You must provide either `jwtKey` or `secretKey`.
 
 | Name | Type | Description |
 | --- | --- | --- |
@@ -42,6 +47,7 @@ In the following example:
 1. The token is verified using the `verifyToken()` method.
 1. The token's `exp` and `nbf` claims are checked.
 1. The token's `azp` claim is checked against the permitted origins. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from http://localhost:3000, then the `azp` claim should equal http://localhost:3000.
+1. If the token is valid, the response contains the verified token.
 
 <Tabs items={["Next.js"]}>
   <Tab>
@@ -60,23 +66,23 @@ In the following example:
     }
 
     try {
-      const verifiedSession = await verifyToken(token, {
+      const verifiedToken = await verifyToken(token, {
         jwtKey: process.env.CLERK_JWT_KEY,
       });
 
       // Check if the token is expired or not yet valid
       const currentTime = Math.floor(Date.now() / 1000);
-      if (verifiedSession.exp < currentTime || verifiedSession.nbf > currentTime) {
+      if (verifiedToken.exp < currentTime || verifiedToken.nbf > currentTime) {
         throw new Error("Token is expired or not yet valid");
       }
 
       // Check if the token is issued by a permitted origin
       const permittedOrigins = ["http://localhost:3000", "https://example.com"]; // Replace with your permitted origins
-      if (verifiedSession.azp && !permittedOrigins.includes(verifiedSession.azp)) {
+      if (verifiedToken.azp && !permittedOrigins.includes(verifiedToken.azp)) {
         throw new Error("Invalid 'azp' claim");
       }
 
-      return Response.json({ verifiedSession });
+      return Response.json({ verifiedToken });
     } catch (error) {
       return Response.json({ error: 'Token not verified.' }, { status: 401 });
     }
@@ -89,7 +95,7 @@ If the token is valid, the response will contain a JSON object that looks someth
 
 ```json
 {
-  "verifiedSession": {
+  "verifiedToken": {
     "azp": "http://localhost:3000",
     "exp": 1687906422,
     "iat": 1687906362,

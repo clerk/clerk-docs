@@ -1,0 +1,113 @@
+---
+title: Add phone to account
+description: Learn how to create a UI component for users to add phone number to their account
+---
+
+# Add phone to account
+
+```typescript {{ filename: 'app/account/add-phone/page.tsx' }}
+'use client';
+
+import * as React from 'react';
+import { useUser } from '@clerk/nextjs';
+import { PhoneNumberResource } from '@clerk/types';
+import { Title } from '@/components/ui/title';
+
+export default function Page() {
+  const { isLoaded, user } = useUser();
+  const [phone, setPhone] = React.useState('');
+  const [code, setCode] = React.useState('');
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [successful, setSuccessful] = React.useState(false);
+  const [phoneObj, setPhoneObj] = React.useState<
+    PhoneNumberResource | undefined
+  >();
+
+  if (!isLoaded) return null;
+
+  if (isLoaded && !user?.id) {
+    return <p>You must be logged in to access this page</p>;
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const res = await user.createPhoneNumber({ phoneNumber: phone });
+      await user.reload();
+      const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
+      setPhoneObj(phoneNumber);
+      phoneNumber?.prepareVerification();
+      setIsVerifying(true);
+    } catch (error: any) {
+      console.log(error);
+    }
+  };
+
+  const verifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await phoneObj?.attemptVerification({ code });
+      setSuccessful(true);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  if (successful) {
+    return (
+      <>
+        <Title variant="h1">Phone Added</Title>
+      </>
+    );
+  }
+
+  if (isVerifying) {
+    return (
+      <>
+        <Title variant="h1">Verify Phone</Title>
+        <div>
+          <form onSubmit={(e) => verifyCode(e)}>
+            <div>
+              <label htmlFor="code">Enter Code</label>
+              <input
+                onChange={(e) => setCode(e.target.value)}
+                id="code"
+                name="code"
+                type="text"
+                value={code}
+              />
+            </div>
+            <div>
+              <button type="submit">Verify</button>
+            </div>
+          </form>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Title variant="h1">Add Phone</Title>
+      <div>
+        <form onSubmit={(e) => handleSubmit(e)}>
+          <div>
+            <label htmlFor="phone">Add Phone</label>
+            <input
+              onChange={(e) => setPhone(e.target.value)}
+              id="phone"
+              name="phone"
+              type="phone"
+              value={phone}
+            />
+          </div>
+          <div>
+            <button type="submit">Continue</button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+```

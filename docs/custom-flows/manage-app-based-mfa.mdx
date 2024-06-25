@@ -20,6 +20,7 @@ const TotpEnabled = () => {
   if (!user) return null;
 
   // Check if TOTP is enabled
+  // This is not checking for MFA via SMS
   const disableTOTP = async () => {
     await user.disableTOTP();
   };
@@ -34,7 +35,7 @@ const TotpEnabled = () => {
   );
 };
 
-// If TOTP is not enabled, provide the option to enable it
+// if TOTP is not enabled, provide the option to enable it
 const TotpDisabled = () => {
   return (
     <div>
@@ -65,21 +66,23 @@ export default function ManageTOTP() {
         setBackupCodes(backupCodes);
         setLoading(false);
       })
-      .catch((error) => {
-        console.log('Error:', error);
+      .catch((err) => {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2));
         setLoading(false);
       });
   };
 
   return (
     <>
-      <h1>User Authentication Settings</h1>
+      <h1>Current Authentication App Settings</h1>
 
       {user.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
 
       {user.backupCodeEnabled && (
         <div>
-          <p>Backup codes</p>
+          <p>Backup Codes</p>
           {loading && <p>Loading...</p>}
           {backupCodes && !loading && (
             <ol>
@@ -126,7 +129,11 @@ function AddTotpScreen({
       .then((totp: TOTPResource) => {
         setTOTP(totp);
       })
-      .catch((error) => console.log('Error', error));
+      .catch((err) =>
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+      );
   }, []);
 
   return (
@@ -175,8 +182,6 @@ function VerifyTotpScreen({
       await user?.verifyTOTP({ code });
       setStep('backupcodes');
     } catch (err) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
       console.error(JSON.stringify(err, null, 2));
     }
   };
@@ -214,7 +219,7 @@ function DisplayBackupCodes() {
     void user
       ?.createBackupCode()
       .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
-      .catch((error) => console.log('Error:', error));
+      .catch((err) => console.error(JSON.stringify(err, null, 2)));
   }, []);
 
   if (!backupCode) {

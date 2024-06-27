@@ -22,14 +22,14 @@ For your users to be able to enable MFA for their account, you need to enable MF
 
 1. Navigate to your Clerk Dashboard.
 2. Select your application, then select **User & Authentication > [Multi-factor](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)** in the sidebar menu.
-3. For the sake of this guide, toggle on the **Authenticator application** and **Backup codes** strategy.
+3. Enable the MFA options you want to support. This guide demonstrates how to support all MFA options. Note that for a user to enable **Backup codes** on their account, they must have one other MFA strategy enabled.
 
 ### Create the multi-factor management flow
 
 <Tabs items={["Next.js"]}>
   <Tab>
 
-    <Tabs items={["Manage MFA page", "Add MFA page"]}>
+    <Tabs items={["Manage MFA page", "Add TOTP page", "Add phone page"]}>
       <Tab>
         ```jsx {{ filename: 'app/account/manage-mfa/page.tsx' }}
         'use client';
@@ -37,14 +37,122 @@ For your users to be able to enable MFA for their account, you need to enable MF
         import * as React from 'react';
         import { useUser } from '@clerk/nextjs';
         import Link from 'next/link';
-        import { BackupCodeResource } from '@clerk/types';
+        import {
+          BackupCodeResource,
+          PhoneNumberResource,
+          UserResource,
+        } from '@clerk/types';
 
-        // If TOTP is enabled, show its enabled and provide the option to disable
-        const TotpEnabled = () => {
-          const { user } = useUser();
-          if (!user) return null;
+        // Display phone numbers reserved for MFA
+        const ManageMfaPhoneNumbers = ({ user }: { user: UserResource }) => {
+          // Check if any phone numbers are reserved for MFA
+          const mfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => ph.reservedForSecondFactor)
+            .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1));
 
-          // Check if TOTP is enabled
+          return (
+            <>
+              <h2>Phone numbers reserved for MFA</h2>
+              {mfaPhones.length === 0 && <p>No phone numbers reserved for MFA</p>}
+              <table>
+                <tr>
+                  <th>Phone number</th>
+                  <th>Actions</th>
+                </tr>
+                {mfaPhones.map((phone) => {
+                  return (
+                    <tr key={phone.id}>
+                      <td>
+                        {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
+                      </td>
+                      <td>
+                        <div>
+                          <button
+                            onClick={() =>
+                              phone.setReservedForSecondFactor({ reserved: false })
+                            }
+                          >
+                            Disable for MFA
+                          </button>
+                        </div>
+
+                        {!phone.defaultSecondFactor && (
+                          <div>
+                            <button onClick={() => phone.makeDefaultSecondFactor()}>
+                              Make default
+                            </button>
+                          </div>
+                        )}
+
+                        <div>
+                          <button onClick={() => phone.destroy()}>
+                            Remove from account
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </table>
+            </>
+          );
+        };
+
+        // Display phone numbers that are not reserved for MFA
+        const ManageAvailablePhoneNumbers = ({ user }: { user: UserResource }) => {
+          // Check if any phone numbers aren't reserved for MFA
+          const availalableForMfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => !ph.reservedForSecondFactor);
+
+          // Reserve a phone number for MFA
+          const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
+            // Set the phone number as reserved for MFA
+            await phone.setReservedForSecondFactor({ reserved: true });
+            // Refresh the user information to reflect changes
+            await user.reload();
+          };
+
+          return (
+            <>
+              <h2>Phone numbers that are not reserved for MFA</h2>
+              {availalableForMfaPhones.length === 0 ? (
+                <p>
+                  None -{' '}
+                  <Link href="/account/add-phone">
+                    Add a new phone number
+                  </Link>
+                </p>
+              ) : (
+                <table>
+                  <tr>
+                    <th>Phone number</th>
+                    <th>Actions</th>
+                  </tr>
+                  {availalableForMfaPhones.map((phone) => {
+                    return (
+                      <tr key={phone.id}>
+                        <td>{phone.phoneNumber}</td>
+                        <td>
+                          <button onClick={() => reservePhoneForMfa(phone)}>
+                            Use for MFA
+                          </button>
+                          <button onClick={() => phone.destroy()}>
+                            Remove from account
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </table>
+              )}
+            </>
+          );
+        };
+
+        // If TOTP is enabled, provide the option to disable it
+        const TotpEnabled = ({ user }: { user: UserResource }) => {
           const disableTOTP = async () => {
             await user.disableTOTP();
           };
@@ -59,13 +167,13 @@ For your users to be able to enable MFA for their account, you need to enable MF
           );
         };
 
-        // If TOTP is not enabled, provide the option to enable it
+        // If TOTP is disabled, provide the option to enable it
         const TotpDisabled = () => {
           return (
             <div>
               <p>
                 Add TOTP via authentication app -{' '}
-                <Link href="/account/manage-mfa/add">
+                <Link href="/account/manage-mfa/add-totp">
                   <button>Add</button>
                 </Link>
               </p>
@@ -73,50 +181,84 @@ For your users to be able to enable MFA for their account, you need to enable MF
           );
         };
 
-        export default function ManageTOTP() {
+        // Generate and display backup codes
+        function GenerateBackupCodes() {
+          const { user } = useUser();
           const [backupCodes, setBackupCodes] = React.useState<
             BackupCodeResource | undefined
           >(undefined);
+
           const [loading, setLoading] = React.useState(false);
-          const { isLoaded, user } = useUser();
 
-          if (!isLoaded || !user) return null;
+          React.useEffect(() => {
+            if (backupCodes) {
+              return;
+            }
 
-          const generateBackupCodes = () => {
             setLoading(true);
             void user
               ?.createBackupCode()
-              .then((backupCodes: BackupCodeResource) => {
-                setBackupCodes(backupCodes);
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode);
                 setLoading(false);
               })
               .catch((err) => {
-                // See https://clerk.com/docs/custom-flows/error-handling
-                // for more info on error handling
                 console.error(JSON.stringify(err, null, 2));
                 setLoading(false);
               });
-          };
+          }, []);
+
+          if (loading) {
+            return <p>Loading...</p>;
+          }
+
+          if (!backupCodes) {
+            return <p>There was a problem generating backup codes</p>;
+          }
+
+          return (
+            <ol>
+              {!loading &&
+                backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+            </ol>
+          );
+        }
+
+        export default function ManageMFA() {
+          const { isLoaded, user } = useUser();
+          const [showNewCodes, setShowNewCodes] = React.useState(false);
+
+          if (!isLoaded) return null;
+
+          if (isLoaded && !user) {
+            return <p>You must be logged in to access this page</p>;
+          }
 
           return (
             <>
-              <h1>User Authentication Settings</h1>
+              <h1>User MFA Settings</h1>
 
-              {user.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
+              {/* Manage SMS MFA */}
+              <ManageMfaPhoneNumbers user={user} />
+              <ManageAvailablePhoneNumbers user={user} />
 
+              {/* Manage TOTP MFA */}
+              {user.totpEnabled ? <TotpEnabled user={user} /> : <TotpDisabled />}
+
+              {/* Manage backup codes */}
               {user.backupCodeEnabled && (
                 <div>
-                  <p>Backup codes</p>
-                  {loading && <p>Loading...</p>}
-                  {backupCodes && !loading && (
-                    <ol>
-                      {backupCodes.codes.map((code, index) => (
-                        <li key={index}>{code}</li>
-                      ))}
-                    </ol>
-                  )}
-                  <button onClick={() => generateBackupCodes()}>Regenerate</button>
+                  <p>
+                    Generate new codes? -{' '}
+                    <button onClick={() => setShowNewCodes(true)}>Generate</button>
+                  </p>
                 </div>
+              )}
+              {showNewCodes && (
+                <>
+                  <GenerateBackupCodes />
+                  <button onClick={() => setShowNewCodes(false)}>Done</button>
+                </>
               )}
             </>
           );
@@ -125,11 +267,11 @@ For your users to be able to enable MFA for their account, you need to enable MF
       </Tab>
 
       <Tab>
-        ```jsx {{ filename: 'app/account/manage-mfa/add/page.tsx' }}
+        ```jsx {{ filename: 'app/account/manage-mfa/add-totp/page.tsx' }}
         'use client';
 
         import { useUser } from '@clerk/nextjs';
-        import { BackupCodeResource, TOTPResource } from '@clerk/types';
+        import { BackupCodeResource, TOTPResource, UserResource } from '@clerk/types';
         import Link from 'next/link';
         import * as React from 'react';
         import { QRCodeSVG } from 'qrcode.react';
@@ -140,16 +282,17 @@ For your users to be able to enable MFA for their account, you need to enable MF
 
         function AddTotpScreen({
           setStep,
+          user,
         }: {
           setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+          user: UserResource;
         }) {
           const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined);
           const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr');
-          const { user } = useUser();
 
           React.useEffect(() => {
             void user
-              ?.createTOTP()
+              .createTOTP()
               .then((totp: TOTPResource) => {
                 setTOTP(totp);
               })
@@ -194,16 +337,17 @@ For your users to be able to enable MFA for their account, you need to enable MF
 
         function VerifyTotpScreen({
           setStep,
+          user,
         }: {
           setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+          user: UserResource;
         }) {
           const [code, setCode] = React.useState('');
-          const { user } = useUser();
 
           const verifyTotp = async (e: React.FormEvent) => {
             e.preventDefault();
             try {
-              await user?.verifyTOTP({ code });
+              await user.verifyTOTP({ code });
               setStep('backupcodes');
             } catch (err) {
               console.error(JSON.stringify(err, null, 2));
@@ -229,41 +373,45 @@ For your users to be able to enable MFA for their account, you need to enable MF
           );
         }
 
-        function DisplayBackupCodes() {
-          const { user } = useUser();
-          const [backupCode, setBackupCode] = React.useState<
+        // Generate and display backup codes
+        function GenerateBackupCodes({
+          setStep,
+          user,
+        }: {
+          setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+          user: UserResource;
+        }) {
+          const [backupCodes, setBackupCodes] = React.useState<
             BackupCodeResource | undefined
           >(undefined);
 
+          const [loading, setLoading] = React.useState(false);
+
           React.useEffect(() => {
-            if (backupCode) {
-              return;
-            }
+            if (backupCodes) return;
+
+            setLoading(true);
 
             void user
-              ?.createBackupCode()
-              .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
-              .catch((err) => console.error(JSON.stringify(err, null, 2)));
+              .createBackupCode()
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode);
+                setLoading(false);
+              })
+              .catch((err) => {
+                console.error(JSON.stringify(err, null, 2));
+                setLoading(false);
+              });
           }, []);
 
-          if (!backupCode) {
+          if (loading) {
+            return <p>Loading...</p>;
+          }
+
+          if (!backupCodes) {
             return <p>There was a problem generating backup codes</p>;
           }
 
-          return (
-            <ol>
-              {backupCode.codes.map((code, index) => (
-                <li key={index}>{code}</li>
-              ))}
-            </ol>
-          );
-        }
-
-        function BackupCodeScreen({
-          setStep,
-        }: {
-          setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
-        }) {
           return (
             <>
               <h1>Backup codes</h1>
@@ -272,7 +420,10 @@ For your users to be able to enable MFA for their account, you need to enable MF
                   Save this list of backup codes somewhere safe in case you need to
                   access your account in an emergency
                 </p>
-                <DisplayBackupCodes />
+                <ol>
+                  {!loading &&
+                    backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+                </ol>
                 <button onClick={() => setStep('success')}>Finish</button>
               </div>
             </>
@@ -284,26 +435,39 @@ For your users to be able to enable MFA for their account, you need to enable MF
             <>
               <h1>Success!</h1>
               <p>
-                You have successfully added TOTP MFA via an authentication application
+                You have successfully added TOTP MFA via an authentication application.
               </p>
             </>
           );
         }
 
-        export default function AddMfaScreen() {
+        export default function AddTOTP() {
           const [step, setStep] = React.useState<AddTotpSteps>('add');
+          const { isLoaded, user } = useUser();
+
+          if (!isLoaded) return null;
+
+          if (isLoaded && !user?.id) {
+            return <p>You must be logged in to access this page</p>;
+          }
 
           return (
             <>
-              {step === 'add' && <AddTotpScreen setStep={setStep} />}
-              {step === 'verify' && <VerifyTotpScreen setStep={setStep} />}
-              {step === 'backupcodes' && <BackupCodeScreen setStep={setStep} />}
+              {step === 'add' && <AddTotpScreen user={user} setStep={setStep} />}
+              {step === 'verify' && <VerifyTotpScreen user={user} setStep={setStep} />}
+              {step === 'backupcodes' && (
+                <GenerateBackupCodes user={user} setStep={setStep} />
+              )}
               {step === 'success' && <SuccessScreen />}
               <Link href="/account/manage-mfa">Manage MFA</Link>
             </>
           );
         }
         ```
+      </Tab>
+
+      <Tab>
+        {/* add phone custom flow example from other PR? */}
       </Tab>
     </Tabs>
   </Tab>

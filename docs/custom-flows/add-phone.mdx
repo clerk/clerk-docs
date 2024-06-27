@@ -1,113 +1,154 @@
 ---
-title: Add phone to account
-description: Learn how to create a UI component for users to add phone number to their account
+description: Learn how to use Clerk's API to build a custom flow for adding a phone number to a user's account.
 ---
 
-# Add phone to account
+# Build a custom flow for adding a phone number to a user's account
 
-```typescript {{ filename: 'app/account/add-phone/page.tsx' }}
-'use client';
+<Callout type="danger">
+  This guide is for users who want to build a *custom* user interface using the Clerk API. To use a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
+</Callout>
 
-import * as React from 'react';
-import { useUser } from '@clerk/nextjs';
-import { PhoneNumberResource } from '@clerk/types';
-import { Title } from '@/components/ui/title';
+Users are able to add multiple phone numbers to their account.
 
-export default function Page() {
-  const { isLoaded, user } = useUser();
-  const [phone, setPhone] = React.useState('');
-  const [code, setCode] = React.useState('');
-  const [isVerifying, setIsVerifying] = React.useState(false);
-  const [successful, setSuccessful] = React.useState(false);
-  const [phoneObj, setPhoneObj] = React.useState<
-    PhoneNumberResource | undefined
-  >();
+Every user has a [`User`](/docs/references/javascript/user/user) object that represents their account. The `User` object has a `phoneNumbers` property that contains all the phone numbers associated with the user.
 
-  if (!isLoaded) return null;
+The following example demonstrates how to build a custom user interface that allows users to add a phone number to their account. The example:
+1. Uses the [`useUser()`](/docs/references/react/use-user) hook to get the `User` object.
+1. Uses the [`createPhoneNumber()`](/docs/references/javascript/user/create-metadata#create-phone-number) method on the `User` object to add the phone number to the user's account.
+  - A new [`PhoneNumber`](/docs/references/javascript/phone-number) object is created and stored in the `phoneNumbers` property of the `User` object.
+1. Uses the `prepareVerification()` method on the newly created `PhoneNumber` object to send a verification code to the user.
+1. Uses the `attemptVerification()` method on the `PhoneNumber` object with the verification code provided by the user to verify the phone number.
 
-  if (isLoaded && !user?.id) {
-    return <p>You must be logged in to access this page</p>;
-  }
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```jsx {{ filename: 'app/account/add-phone/page.tsx' }}
+    'use client';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    import * as React from 'react';
+    import { useUser } from '@clerk/nextjs';
+    import { PhoneNumberResource } from '@clerk/types';
 
-    try {
-      const res = await user.createPhoneNumber({ phoneNumber: phone });
-      await user.reload();
-      const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
-      setPhoneObj(phoneNumber);
-      phoneNumber?.prepareVerification();
-      setIsVerifying(true);
-    } catch (error: any) {
-      console.log(error);
-    }
-  };
+    export default function Page() {
+      const { isLoaded, user } = useUser();
+      const [phone, setPhone] = React.useState('');
+      const [code, setCode] = React.useState('');
+      const [isVerifying, setIsVerifying] = React.useState(false);
+      const [successful, setSuccessful] = React.useState(false);
+      const [phoneObj, setPhoneObj] = React.useState<
+        PhoneNumberResource | undefined
+      >();
 
-  const verifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await phoneObj?.attemptVerification({ code });
-      setSuccessful(true);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+      if (!isLoaded) return null;
 
-  if (successful) {
-    return (
-      <>
-        <Title variant="h1">Phone Added</Title>
-      </>
-    );
-  }
+      if (isLoaded && !user?.id) {
+        return <p>You must be logged in to access this page</p>;
+      }
 
-  if (isVerifying) {
-    return (
-      <>
-        <Title variant="h1">Verify Phone</Title>
-        <div>
-          <form onSubmit={(e) => verifyCode(e)}>
+      // Handle addition of the phone number
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        try {
+          // Add phone number to user
+          const res = await user.createPhoneNumber({ phoneNumber: phone });
+          // Reload user to get updated user info
+          await user.reload();
+
+          // Find the phone number that was just added
+          const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
+          setPhoneObj(phoneNumber);
+
+          // Send the user an SMS with the verification code
+          phoneNumber?.prepareVerification();
+
+          // Set to true to display second form
+          // and capture the OTP code
+          setIsVerifying(true);
+        } catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2));
+        }
+      };
+
+      // Handle the submission of the verification form
+      const verifyCode = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+          // Use the code the user provided to attempt verification
+          const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code });
+
+          if (phoneVerifyAttempt?.verification.status === 'verified') {
+            setSuccessful(true);
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(phoneVerifyAttempt, null, 2));
+          }
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2));
+        }
+      };
+
+      // Display a success message if the phone number was added successfully
+      if (successful) {
+        return (
+          <>
+            <h1>Phone added</h1>
+          </>
+        );
+      }
+
+      // Display the verification form to capture the OTP code
+      if (isVerifying) {
+        return (
+          <>
+            <h1>Verify phone</h1>
             <div>
-              <label htmlFor="code">Enter Code</label>
-              <input
-                onChange={(e) => setCode(e.target.value)}
-                id="code"
-                name="code"
-                type="text"
-                value={code}
-              />
+              <form onSubmit={(e) => verifyCode(e)}>
+                <div>
+                  <label htmlFor="code">Enter code</label>
+                  <input
+                    onChange={(e) => setCode(e.target.value)}
+                    id="code"
+                    name="code"
+                    type="text"
+                    value={code}
+                  />
+                </div>
+                <div>
+                  <button type="submit">Verify</button>
+                </div>
+              </form>
             </div>
-            <div>
-              <button type="submit">Verify</button>
-            </div>
-          </form>
-        </div>
-      </>
-    );
-  }
+          </>
+        );
+      }
 
-  return (
-    <>
-      <Title variant="h1">Add Phone</Title>
-      <div>
-        <form onSubmit={(e) => handleSubmit(e)}>
+      // Display the initial form to capture the phone number
+      return (
+        <>
+          <h1>Add phone</h1>
           <div>
-            <label htmlFor="phone">Add Phone</label>
-            <input
-              onChange={(e) => setPhone(e.target.value)}
-              id="phone"
-              name="phone"
-              type="phone"
-              value={phone}
-            />
+            <form onSubmit={(e) => handleSubmit(e)}>
+              <div>
+                <label htmlFor="phone">Enter phone number</label>
+                <input
+                  onChange={(e) => setPhone(e.target.value)}
+                  id="phone"
+                  name="phone"
+                  type="phone"
+                  value={phone}
+                />
+              </div>
+              <div>
+                <button type="submit">Continue</button>
+              </div>
+            </form>
           </div>
-          <div>
-            <button type="submit">Continue</button>
-          </div>
-        </form>
-      </div>
-    </>
-  );
-}
-```
+        </>
+      );
+    }
+    ```
+</Tab>
+</Tabs>

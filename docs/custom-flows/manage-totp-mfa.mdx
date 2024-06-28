@@ -26,306 +26,330 @@ For your users to be able to enable MFA for their account, you need to enable MF
 
 ### Create the multi-factor management flow
 
-```jsx {{ filename: 'app/account/manage-mfa/page.tsx' }}
-'use client';
+This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
 
-import * as React from 'react';
-import { useUser } from '@clerk/nextjs';
-import Link from 'next/link';
-import { BackupCodeResource, UserResource } from '@clerk/types';
+This example consists of two pages:
+- The main page where users can manage their MFA settings
+- The page where users can add TOTP MFA.
 
-// If TOTP is enabled, provide the option to disable it
-const TotpEnabled = ({ user }: { user: UserResource }) => {
-  const disableTOTP = async () => {
-    await user.disableTOTP();
-  };
+Use the following tabs to view the code necessary for each page.
 
-  return (
-    <div>
-      <p>
-        TOTP via authenication app enabled -{' '}
-        <button onClick={() => disableTOTP()}>Remove</button>
-      </p>
-    </div>
-  );
-};
+<Tabs items={["Manage MFA page", "Add TOTP page"]}>
+  <Tab>
+    ```jsx {{ filename: '/app/account/manage-mfa/page.tsx' }}
+    'use client';
 
-// If TOTP is disabled, provide the option to enable it
-const TotpDisabled = () => {
-  return (
-    <div>
-      <p>
-        Add TOTP via authentication app -{' '}
-        <Link href="/account/manage-mfa/add">
-          <button>Add</button>
-        </Link>
-      </p>
-    </div>
-  );
-};
+    import * as React from 'react';
+    import { useUser } from '@clerk/nextjs';
+    import Link from 'next/link';
+    import { BackupCodeResource, UserResource } from '@clerk/types';
 
-// Generate and display backup codes
-function GenerateBackupCodes() {
-  const { user } = useUser();
-  const [backupCodes, setBackupCodes] = React.useState<
-    BackupCodeResource | undefined
-  >(undefined);
+    // If TOTP is enabled, provide the option to disable it
+    const TotpEnabled = ({ user }: { user: UserResource }) => {
+      const disableTOTP = async () => {
+        await user.disableTOTP();
+      };
 
-  const [loading, setLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (backupCodes) {
-      return;
-    }
-
-    setLoading(true);
-    void user
-      ?.createBackupCode()
-      .then((backupCode: BackupCodeResource) => {
-        setBackupCodes(backupCode);
-        setLoading(false);
-      })
-      .catch((err) => {
-        // See https://clerk.com/docs/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2));
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return <p>Loading...</p>;
-  }
-
-  if (!backupCodes) {
-    return <p>There was a problem generating backup codes</p>;
-  }
-
-  return (
-    <ol>
-      {!loading &&
-        backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
-    </ol>
-  );
-}
-
-export default function ManageMFA() {
-  const { isLoaded, user } = useUser();
-  const [showNewCodes, setShowNewCodes] = React.useState(false);
-
-  if (!isLoaded) return null;
-
-  if (isLoaded && !user) {
-    return <p>You must be logged in to access this page</p>;
-  }
-
-  return (
-    <>
-      <h1>User MFA Settings</h1>
-
-      {/* Manage TOTP MFA */}
-      {user.totpEnabled ? <TotpEnabled user={user} /> : <TotpDisabled />}
-
-      {/* Manage backup codes */}
-      {user.backupCodeEnabled && (
+      return (
         <div>
           <p>
-            Generate new codes? -{' '}
-            <button onClick={() => setShowNewCodes(true)}>Generate</button>
+            TOTP via authenication app enabled -{' '}
+            <button onClick={() => disableTOTP()}>Remove</button>
           </p>
         </div>
-      )}
-      {showNewCodes && (
-        <>
-          <GenerateBackupCodes />
-          <button onClick={() => setShowNewCodes(false)}>Done</button>
-        </>
-      )}
-    </>
-  );
-}
-```
-
-
-
-```jsx {{ filename: 'app/account/manage-mfa/add/page.tsx' }}
-'use client';
-
-import { useUser } from '@clerk/nextjs';
-import { BackupCodeResource, TOTPResource } from '@clerk/types';
-import Link from 'next/link';
-import * as React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-
-type AddTotpSteps = 'add' | 'verify' | 'backupcodes' | 'success';
-
-type DisplayFormat = 'qr' | 'uri';
-
-function AddTotpScreen({
-  setStep,
-}: {
-  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
-}) {
-  const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined);
-  const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr');
-  const { user } = useUser();
-
-  React.useEffect(() => {
-    void user
-      ?.createTOTP()
-      .then((totp: TOTPResource) => {
-        setTOTP(totp);
-      })
-      .catch((err) =>
-        // See https://clerk.com/docs/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
       );
-  }, []);
+    };
 
-  return (
-    <>
-      <h1>Add TOTP MFA</h1>
+    // If TOTP is disabled, provide the option to enable it
+    const TotpDisabled = () => {
+      return (
+        <div>
+          <p>
+            Add TOTP via authentication app -{' '}
+            <Link href="/account/manage-mfa/add">
+              <button>Add</button>
+            </Link>
+          </p>
+        </div>
+      );
+    };
 
-      {totp && displayFormat === 'qr' && (
-        <>
-          <div>
-            <QRCodeSVG value={totp?.uri || ''} size={200} />
-          </div>
-          <button onClick={() => setDisplayFormat('uri')}>
-            Use URI instead
-          </button>
-        </>
-      )}
-      {totp && displayFormat === 'uri' && (
-        <>
-          <div>
-            <p>{totp.uri}</p>
-          </div>
-          <button onClick={() => setDisplayFormat('qr')}>
-            Use QR Code instead
-          </button>
-        </>
-      )}
-      <button onClick={() => setStep('add')}>Reset</button>
+    // Generate and display backup codes
+    function GenerateBackupCodes() {
+      const { user } = useUser();
+      const [backupCodes, setBackupCodes] = React.useState<
+        BackupCodeResource | undefined
+      >(undefined);
 
-      <p>Once you have set up your authentication app, verify your code</p>
-      <button onClick={() => setStep('verify')}>Verify</button>
-    </>
-  );
-}
+      const [loading, setLoading] = React.useState(false);
 
-function VerifyTotpScreen({
-  setStep,
-}: {
-  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
-}) {
-  const [code, setCode] = React.useState('');
-  const { user } = useUser();
+      React.useEffect(() => {
+        if (backupCodes) {
+          return;
+        }
 
-  const verifyTotp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await user?.verifyTOTP({ code });
-      setStep('backupcodes');
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
-    }
-  };
+        setLoading(true);
+        void user
+          ?.createBackupCode()
+          .then((backupCode: BackupCodeResource) => {
+            setBackupCodes(backupCode);
+            setLoading(false);
+          })
+          .catch((err) => {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2));
+            setLoading(false);
+          });
+      }, []);
 
-  return (
-    <>
-      <h1>Verify TOTP</h1>
-      <form onSubmit={(e) => verifyTotp(e)}>
-        <label htmlFor="totp-code">
-          Enter the code from your authentication app
-        </label>
-        <input
-          type="text"
-          id="totp-code"
-          onChange={(e) => setCode(e.currentTarget.value)}
-        />
-        <button type="submit">Verify code</button>
-        <button onClick={() => setStep('add')}>Reset</button>
-      </form>
-    </>
-  );
-}
+      if (loading) {
+        return <p>Loading...</p>;
+      }
 
-function DisplayBackupCodes() {
-  const { user } = useUser();
-  const [backupCode, setBackupCode] = React.useState<
-    BackupCodeResource | undefined
-  >(undefined);
+      if (!backupCodes) {
+        return <p>There was a problem generating backup codes</p>;
+      }
 
-  React.useEffect(() => {
-    if (backupCode) {
-      return;
+      return (
+        <ol>
+          {!loading &&
+            backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+        </ol>
+      );
     }
 
-    void user
-      ?.createBackupCode()
-      .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
-      .catch((err) => console.error(JSON.stringify(err, null, 2)));
-  }, []);
+    export default function ManageMFA() {
+      const { isLoaded, user } = useUser();
+      const [showNewCodes, setShowNewCodes] = React.useState(false);
 
-  if (!backupCode) {
-    return <p>There was a problem generating backup codes</p>;
-  }
+      if (!isLoaded) return null;
 
-  return (
-    <ol>
-      {backupCode.codes.map((code, index) => (
-        <li key={index}>{code}</li>
-      ))}
-    </ol>
-  );
-}
+      if (isLoaded && !user) {
+        return <p>You must be logged in to access this page</p>;
+      }
 
-function BackupCodeScreen({
-  setStep,
-}: {
-  setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
-}) {
-  return (
-    <>
-      <h1>Backup codes</h1>
-      <div>
-        <p>
-          Save this list of backup codes somewhere safe in case you need to
-          access your account in an emergency
-        </p>
-        <DisplayBackupCodes />
-        <button onClick={() => setStep('success')}>Finish</button>
-      </div>
-    </>
-  );
-}
+      return (
+        <>
+          <h1>User MFA Settings</h1>
 
-function SuccessScreen() {
-  return (
-    <>
-      <h1>Success!</h1>
-      <p>
-        You have successfully added TOTP MFA via an authentication application
-      </p>
-    </>
-  );
-}
+          {/* Manage TOTP MFA */}
+          {user.totpEnabled ? <TotpEnabled user={user} /> : <TotpDisabled />}
 
-export default function AddMfaScreen() {
-  const [step, setStep] = React.useState<AddTotpSteps>('add');
+          {/* Manage backup codes */}
+          {user.backupCodeEnabled && (
+            <div>
+              <p>
+                Generate new codes? -{' '}
+                <button onClick={() => setShowNewCodes(true)}>Generate</button>
+              </p>
+            </div>
+          )}
+          {showNewCodes && (
+            <>
+              <GenerateBackupCodes />
+              <button onClick={() => setShowNewCodes(false)}>Done</button>
+            </>
+          )}
+        </>
+      );
+    }
+  ```
+  </Tab>
 
-  return (
-    <>
-      {step === 'add' && <AddTotpScreen setStep={setStep} />}
-      {step === 'verify' && <VerifyTotpScreen setStep={setStep} />}
-      {step === 'backupcodes' && <BackupCodeScreen setStep={setStep} />}
-      {step === 'success' && <SuccessScreen />}
-      <Link href="/account/manage-mfa">Manage MFA</Link>
-    </>
-  );
-}
-```
+  <Tab>
+    ```jsx {{ filename: '/app/account/manage-mfa/add/page.tsx' }}
+    'use client';
+
+    import { useUser } from '@clerk/nextjs';
+    import { BackupCodeResource, TOTPResource, UserResource } from '@clerk/types';
+    import Link from 'next/link';
+    import * as React from 'react';
+    import { QRCodeSVG } from 'qrcode.react';
+
+    type AddTotpSteps = 'add' | 'verify' | 'backupcodes' | 'success';
+
+    type DisplayFormat = 'qr' | 'uri';
+
+    function AddTotpScreen({
+      setStep,
+      user,
+    }: {
+      setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
+    }) {
+      const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined);
+      const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr');
+
+      React.useEffect(() => {
+        void user
+          .createTOTP()
+          .then((totp: TOTPResource) => {
+            setTOTP(totp);
+          })
+          .catch((err) =>
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          );
+      }, []);
+
+      return (
+        <>
+          <h1>Add TOTP MFA</h1>
+
+          {totp && displayFormat === 'qr' && (
+            <>
+              <div>
+                <QRCodeSVG value={totp?.uri || ''} size={200} />
+              </div>
+              <button onClick={() => setDisplayFormat('uri')}>
+                Use URI instead
+              </button>
+            </>
+          )}
+          {totp && displayFormat === 'uri' && (
+            <>
+              <div>
+                <p>{totp.uri}</p>
+              </div>
+              <button onClick={() => setDisplayFormat('qr')}>
+                Use QR Code instead
+              </button>
+            </>
+          )}
+          <button onClick={() => setStep('add')}>Reset</button>
+
+          <p>Once you have set up your authentication app, verify your code</p>
+          <button onClick={() => setStep('verify')}>Verify</button>
+        </>
+      );
+    }
+
+    function VerifyTotpScreen({
+      setStep,
+      user,
+    }: {
+      setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
+    }) {
+      const [code, setCode] = React.useState('');
+
+      const verifyTotp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+          await user.verifyTOTP({ code });
+          setStep('backupcodes');
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2));
+        }
+      };
+
+      return (
+        <>
+          <h1>Verify TOTP</h1>
+          <form onSubmit={(e) => verifyTotp(e)}>
+            <label htmlFor="totp-code">
+              Enter the code from your authentication app
+            </label>
+            <input
+              type="text"
+              id="totp-code"
+              onChange={(e) => setCode(e.currentTarget.value)}
+            />
+            <button type="submit">Verify code</button>
+            <button onClick={() => setStep('add')}>Reset</button>
+          </form>
+        </>
+      );
+    }
+
+    function DisplayBackupCodes({ user }: { user: UserResource }) {
+      const [backupCode, setBackupCode] = React.useState<
+        BackupCodeResource | undefined
+      >(undefined);
+
+      React.useEffect(() => {
+        if (backupCode) {
+          return;
+        }
+
+        void user
+          .createBackupCode()
+          .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
+          .catch((err) => console.error(JSON.stringify(err, null, 2)));
+      }, []);
+
+      if (!backupCode) {
+        return <p>There was a problem generating backup codes</p>;
+      }
+
+      return (
+        <ol>
+          {backupCode.codes.map((code, index) => (
+            <li key={index}>{code}</li>
+          ))}
+        </ol>
+      );
+    }
+
+    function BackupCodeScreen({
+      setStep,
+      user,
+    }: {
+      setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
+    }) {
+      return (
+        <>
+          <h1>Backup codes</h1>
+          <div>
+            <p>
+              Save this list of backup codes somewhere safe in case you need to
+              access your account in an emergency
+            </p>
+            <DisplayBackupCodes user={user} />
+            <button onClick={() => setStep('success')}>Finish</button>
+          </div>
+        </>
+      );
+    }
+
+    function SuccessScreen() {
+      return (
+        <>
+          <h1>Success!</h1>
+          <p>
+            You have successfully added TOTP MFA via an authentication application.
+          </p>
+        </>
+      );
+    }
+
+    export default function AddMFaScreen() {
+      const [step, setStep] = React.useState<AddTotpSteps>('add');
+      const { isLoaded, user } = useUser();
+
+      if (!isLoaded) return null;
+
+      if (isLoaded && !user) {
+        return <p>You must be logged in to access this page</p>;
+      }
+
+      return (
+        <>
+          {step === 'add' && <AddTotpScreen user={user} setStep={setStep} />}
+          {step === 'verify' && <VerifyTotpScreen user={user} setStep={setStep} />}
+          {step === 'backupcodes' && (
+            <BackupCodeScreen user={user} setStep={setStep} />
+          )}
+          {step === 'success' && <SuccessScreen />}
+          <Link href="/account/manage-mfa">Return to Manage MFA</Link>
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
 
 </Steps>

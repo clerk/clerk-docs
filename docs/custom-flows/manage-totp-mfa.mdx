@@ -75,8 +75,7 @@ Use the following tabs to view the code necessary for each page.
     };
 
     // Generate and display backup codes
-    function GenerateBackupCodes() {
-      const { user } = useUser();
+    function GenerateBackupCodes({ user }: { user: UserResource }) {
       const [backupCodes, setBackupCodes] = React.useState<
         BackupCodeResource | undefined
       >(undefined);
@@ -90,7 +89,7 @@ Use the following tabs to view the code necessary for each page.
 
         setLoading(true);
         void user
-          ?.createBackupCode()
+          .createBackupCode()
           .then((backupCode: BackupCodeResource) => {
             setBackupCodes(backupCode);
             setLoading(false);
@@ -113,8 +112,7 @@ Use the following tabs to view the code necessary for each page.
 
       return (
         <ol>
-          {!loading &&
-            backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+          {backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
         </ol>
       );
     }
@@ -147,14 +145,14 @@ Use the following tabs to view the code necessary for each page.
           )}
           {showNewCodes && (
             <>
-              <GenerateBackupCodes />
+              <GenerateBackupCodes user={user} />
               <button onClick={() => setShowNewCodes(false)}>Done</button>
             </>
           )}
         </>
       );
     }
-  ```
+    ```
   </Tab>
 
   <Tab>
@@ -162,7 +160,7 @@ Use the following tabs to view the code necessary for each page.
     'use client';
 
     import { useUser } from '@clerk/nextjs';
-    import { BackupCodeResource, TOTPResource } from '@clerk/types';
+    import { BackupCodeResource, TOTPResource, UserResource } from '@clerk/types';
     import Link from 'next/link';
     import * as React from 'react';
     import { QRCodeSVG } from 'qrcode.react';
@@ -173,16 +171,17 @@ Use the following tabs to view the code necessary for each page.
 
     function AddTotpScreen({
       setStep,
+      user,
     }: {
       setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
     }) {
       const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined);
       const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr');
-      const { user } = useUser();
 
       React.useEffect(() => {
         void user
-          ?.createTOTP()
+          .createTOTP()
           .then((totp: TOTPResource) => {
             setTOTP(totp);
           })
@@ -227,16 +226,17 @@ Use the following tabs to view the code necessary for each page.
 
     function VerifyTotpScreen({
       setStep,
+      user,
     }: {
       setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
     }) {
       const [code, setCode] = React.useState('');
-      const { user } = useUser();
 
       const verifyTotp = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-          await user?.verifyTOTP({ code });
+          await user.verifyTOTP({ code });
           setStep('backupcodes');
         } catch (err) {
           console.error(JSON.stringify(err, null, 2));
@@ -262,8 +262,7 @@ Use the following tabs to view the code necessary for each page.
       );
     }
 
-    function DisplayBackupCodes() {
-      const { user } = useUser();
+    function DisplayBackupCodes({ user }: { user: UserResource }) {
       const [backupCode, setBackupCode] = React.useState<
         BackupCodeResource | undefined
       >(undefined);
@@ -274,7 +273,7 @@ Use the following tabs to view the code necessary for each page.
         }
 
         void user
-          ?.createBackupCode()
+          .createBackupCode()
           .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
           .catch((err) => console.error(JSON.stringify(err, null, 2)));
       }, []);
@@ -294,8 +293,10 @@ Use the following tabs to view the code necessary for each page.
 
     function BackupCodeScreen({
       setStep,
+      user,
     }: {
       setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>;
+      user: UserResource;
     }) {
       return (
         <>
@@ -305,7 +306,7 @@ Use the following tabs to view the code necessary for each page.
               Save this list of backup codes somewhere safe in case you need to
               access your account in an emergency
             </p>
-            <DisplayBackupCodes />
+            <DisplayBackupCodes user={user} />
             <button onClick={() => setStep('success')}>Finish</button>
           </div>
         </>
@@ -317,20 +318,29 @@ Use the following tabs to view the code necessary for each page.
         <>
           <h1>Success!</h1>
           <p>
-            You have successfully added TOTP MFA via an authentication application
+            You have successfully added TOTP MFA via an authentication application.
           </p>
         </>
       );
     }
 
-    export default function AddMfaScreen() {
+    export default function AddMFaScreen() {
       const [step, setStep] = React.useState<AddTotpSteps>('add');
+      const { isLoaded, user } = useUser();
+
+      if (!isLoaded) return null;
+
+      if (isLoaded && !user) {
+        return <p>You must be logged in to access this page</p>;
+      }
 
       return (
         <>
-          {step === 'add' && <AddTotpScreen setStep={setStep} />}
-          {step === 'verify' && <VerifyTotpScreen setStep={setStep} />}
-          {step === 'backupcodes' && <BackupCodeScreen setStep={setStep} />}
+          {step === 'add' && <AddTotpScreen user={user} setStep={setStep} />}
+          {step === 'verify' && <VerifyTotpScreen user={user} setStep={setStep} />}
+          {step === 'backupcodes' && (
+            <BackupCodeScreen user={user} setStep={setStep} />
+          )}
           {step === 'success' && <SuccessScreen />}
           <Link href="/account/manage-mfa">Manage MFA</Link>
         </>

@@ -1,10 +1,30 @@
 ---
-title: Manage application based Multi-factor Authentication
-description: Learn how to manage application based multi-factor authentication, to enable the same features as in the User Profile component.
+description: Learn how to use Clerk's API to build a custom flow for managing TOTP-based multi-factor authentication.
 ---
 
-# Manage application based Multi-factor Authentication
+# Build a custom flow for managing TOTP-based multi-factor authentication
 
+> [!WARNING]
+> This guide is for users who want to build a *custom* user interface using the Clerk API. To use a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
+
+[Multi-factor verification (MFA)](/docs/authentication/configuration/sign-up-sign-in-options) is an added layer of security that requires users to provide a second verification factor to access an account.
+
+One of the options that Clerk supports for MFA is **Authenticator applications (also known as TOTP - Time-based One-time Password)**. This guide will walk you through how to build a custom flow that allows users to manage their TOTP settings.
+
+> [!TIP]
+> To learn how to build a custom flow for managing SMS MFA, see the [dedicated guide](/docs/custom-flows/manage-sms-mfa).
+
+<Steps>
+
+### Enable multi-factor authentication
+
+For your users to be able to enable MFA for their account, you need to enable MFA as an MFA authentication strategy in your Clerk application.
+
+1. Navigate to the [Clerk Dashboard.](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)
+2. In the navigation sidebar, select **User & Authentication > Multi-factor**.
+3. Enable **Authenticator application** and **Backup codes** and select **Save**.
+
+### Create the multi-factor management flow
 
 ```jsx {{ filename: 'app/account/manage-mfa/page.tsx' }}
 'use client';
@@ -12,14 +32,10 @@ description: Learn how to manage application based multi-factor authentication, 
 import * as React from 'react';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
-import { BackupCodeResource } from '@clerk/types';
+import { BackupCodeResource, UserResource } from '@clerk/types';
 
-// If TOTP is enabled, show its enabled and provide the option to disable
-const TotpEnabled = () => {
-  const { user } = useUser();
-  if (!user) return null;
-
-  // Check if TOTP is enabled
+// If TOTP is enabled, provide the option to disable it
+const TotpEnabled = ({ user }: { user: UserResource }) => {
   const disableTOTP = async () => {
     await user.disableTOTP();
   };
@@ -34,7 +50,7 @@ const TotpEnabled = () => {
   );
 };
 
-// If TOTP is not enabled, provide the option to enable it
+// If TOTP is disabled, provide the option to enable it
 const TotpDisabled = () => {
   return (
     <div>
@@ -48,21 +64,25 @@ const TotpDisabled = () => {
   );
 };
 
-export default function ManageTOTP() {
+// Generate and display backup codes
+function GenerateBackupCodes() {
+  const { user } = useUser();
   const [backupCodes, setBackupCodes] = React.useState<
     BackupCodeResource | undefined
   >(undefined);
+
   const [loading, setLoading] = React.useState(false);
-  const { isLoaded, user } = useUser();
 
-  if (!isLoaded || !user) return null;
+  React.useEffect(() => {
+    if (backupCodes) {
+      return;
+    }
 
-  const generateBackupCodes = () => {
     setLoading(true);
     void user
       ?.createBackupCode()
-      .then((backupCodes: BackupCodeResource) => {
-        setBackupCodes(backupCodes);
+      .then((backupCode: BackupCodeResource) => {
+        setBackupCodes(backupCode);
         setLoading(false);
       })
       .catch((err) => {
@@ -71,27 +91,55 @@ export default function ManageTOTP() {
         console.error(JSON.stringify(err, null, 2));
         setLoading(false);
       });
-  };
+  }, []);
+
+  if (loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!backupCodes) {
+    return <p>There was a problem generating backup codes</p>;
+  }
+
+  return (
+    <ol>
+      {!loading &&
+        backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+    </ol>
+  );
+}
+
+export default function ManageMFA() {
+  const { isLoaded, user } = useUser();
+  const [showNewCodes, setShowNewCodes] = React.useState(false);
+
+  if (!isLoaded) return null;
+
+  if (isLoaded && !user) {
+    return <p>You must be logged in to access this page</p>;
+  }
 
   return (
     <>
-      <h1>User Authentication Settings</h1>
+      <h1>User MFA Settings</h1>
 
-      {user.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
+      {/* Manage TOTP MFA */}
+      {user.totpEnabled ? <TotpEnabled user={user} /> : <TotpDisabled />}
 
+      {/* Manage backup codes */}
       {user.backupCodeEnabled && (
         <div>
-          <p>Backup codes</p>
-          {loading && <p>Loading...</p>}
-          {backupCodes && !loading && (
-            <ol>
-              {backupCodes.codes.map((code, index) => (
-                <li key={index}>{code}</li>
-              ))}
-            </ol>
-          )}
-          <button onClick={() => generateBackupCodes()}>Regenerate</button>
+          <p>
+            Generate new codes? -{' '}
+            <button onClick={() => setShowNewCodes(true)}>Generate</button>
+          </p>
         </div>
+      )}
+      {showNewCodes && (
+        <>
+          <GenerateBackupCodes />
+          <button onClick={() => setShowNewCodes(false)}>Done</button>
+        </>
       )}
     </>
   );
@@ -279,3 +327,5 @@ export default function AddMfaScreen() {
   );
 }
 ```
+
+</Steps>

@@ -106,7 +106,7 @@ Use the following tabs to view the code necessary for each page.
   };
 
   // Generate and display backup codes
-  function DisplayBackupCodes() {
+  function GenerateBackupCodes() {
     const { user } = useUser();
     const [backupCodes, setBackupCodes] = React.useState<
       BackupCodeResource | undefined
@@ -126,8 +126,10 @@ Use the following tabs to view the code necessary for each page.
           setBackupCodes(backupCode);
           setLoading(false);
         })
-        .catch((error) => {
-          console.log('Error:', error);
+        .catch((err) => {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2));
           setLoading(false);
         });
     }, []);
@@ -142,32 +144,12 @@ Use the following tabs to view the code necessary for each page.
 
     return (
       <ol>
-        {!loading &&
-          backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+        {backupCodes.codes.map((code, index) => (
+          <li key={index}>{code}</li>
+        ))}
       </ol>
     );
   }
-
-  // Main component for displaying backup codes
-  const BackupCodeScreen = ({
-    setShowBackupCodes,
-  }: {
-    setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
-  }) => {
-    return (
-      <>
-        <h1>Save Backup Codes</h1>
-        <div>
-          <DisplayBackupCodes />
-          <p>
-            Save this list of backup codes somewhere safe in case you need to
-            access your account in an emergency
-          </p>
-          <button onClick={() => setShowBackupCodes(false)}>Saved</button>
-        </div>
-      </>
-    );
-  };
 
   const ManageAvailablePhoneNumbers = ({
     setShowBackupCodes,
@@ -238,12 +220,17 @@ Use the following tabs to view the code necessary for each page.
     const [showBackupCodes, setShowBackupCodes] = React.useState(false);
     const { isLoaded, user } = useUser();
 
-    if (!isLoaded || !user) return null;
+    if (!isLoaded) return null;
 
-    if (!isLoaded || !user) return null;
+    if (isLoaded && !user) {
+      return <p>You must be logged in to access this page</p>;
+    }
+
     return (
       <>
-        <h1>Current MFA Settings</h1>
+        <h1>User MFA Settings</h1>
+
+        {/* Manage SMS MFA */}
         <div>
           <ManageMfaPhoneNumbers />
           <ManageAvailablePhoneNumbers setShowBackupCodes={setShowBackupCodes} />
@@ -251,13 +238,21 @@ Use the following tabs to view the code necessary for each page.
             Add new phone number
           </Link>
         </div>
-        {showBackupCodes && (
-          <BackupCodeScreen setShowBackupCodes={setShowBackupCodes} />
-        )}
-        {user.backupCodeEnabled && (
+
+        {/* Manage backup codes */}
+        {user.backupCodeEnabled && user.twoFactorEnabled && (
           <div>
-            <button onClick={() => setShowBackupCodes(true)}>Regenerate</button>
+            <p>
+              Generate new backup codes? -{' '}
+              <button onClick={() => setShowBackupCodes(true)}>Generate</button>
+            </p>
           </div>
+        )}
+        {showBackupCodes && (
+          <>
+            <GenerateBackupCodes />
+            <button onClick={() => setShowBackupCodes(false)}>Done</button>
+          </>
         )}
       </>
     );

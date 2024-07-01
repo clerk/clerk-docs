@@ -50,13 +50,13 @@ To configure Clerk in your Remix application, you will need to update your root 
 import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
 
+// Import rootAuthLoader
 import { rootAuthLoader } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => ([{
@@ -65,9 +65,10 @@ export const meta: MetaFunction = () => ([{
   viewport: "width=device-width,initial-scale=1",
 }]);
 
+// Export as the root route loader
 export const loader: LoaderFunction = (args) => rootAuthLoader(args);
 
-export default function App() {
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -75,13 +76,16 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <Outlet />
+        {children}
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );
+}
+
+export default function App() {
+  return <Outlet />;
 }
 ```
 
@@ -111,7 +115,6 @@ import type { MetaFunction, LoaderFunction } from "@remix-run/node";
 
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   Scripts,
@@ -122,15 +125,15 @@ import { rootAuthLoader } from "@clerk/remix/ssr.server";
 // Import ClerkApp
 import { ClerkApp } from "@clerk/remix";
 
-export const meta: MetaFunction = () => ({
+export const meta: MetaFunction = () => ([{
   charset: "utf-8",
   title: "New Remix App",
   viewport: "width=device-width,initial-scale=1",
-});
+}]);
 
 export const loader: LoaderFunction = (args) => rootAuthLoader(args);
 
-function App() {
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -138,16 +141,18 @@ function App() {
         <Links />
       </head>
       <body>
-        <Outlet />
+        {children}
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );
 }
 
-// Wrap your app in ClerkApp(app)
+function App() {
+  return <Outlet />;
+}
+
 export default ClerkApp(App);
 ```
 
@@ -206,24 +211,37 @@ These values control the behavior of the components when you sign in or sign up 
 
 Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
 
-```tsx filename="routes/index.tsx"
+```tsx filename="routes/_index.tsx"
 import {
+  SignOutButton,
   SignedIn,
   SignedOut,
-  RedirectToSignIn,
   UserButton,
 } from "@clerk/remix";
+import { Link } from "@remix-run/react";
 
 export default function Index() {
   return (
     <div>
+      <h1>Index Route</h1>
       <SignedIn>
-        <h1>Index route</h1>
         <p>You are signed in!</p>
-        <UserButton />
+        <div>
+          <p>View your profile here 👇</p>
+          <UserButton />
+        </div>
+        <div>
+          <SignOutButton />
+        </div>
       </SignedIn>
       <SignedOut>
-        <RedirectToSignIn />
+        <p>You are signed out</p>
+        <div>
+          <Link to="/sign-in">Go to Sign in</Link>
+        </div>
+        <div>
+          <Link to="/sign-up">Go to Sign up</Link>
+        </div>
       </SignedOut>
     </div>
   );
@@ -234,7 +252,7 @@ export default function Index() {
 
 To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
 
-```tsx filename="routes/index.tsx"
+```tsx filename="routes/_index.tsx"
 import { UserButton } from "@clerk/remix";
 import { getAuth } from "@clerk/remix/ssr.server";
 import { LoaderFunction, redirect } from "@remix-run/node";
@@ -350,8 +368,6 @@ export default function Example() {
 </Tabs>
 
 #### Examples of fetching and mutating user data
-
-
 
 <Tabs type="function" items={["Loader Function", "Action Function"]}>
   <Tab>

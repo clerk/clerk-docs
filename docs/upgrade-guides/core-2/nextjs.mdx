@@ -144,10 +144,10 @@ The most basic migration will be updating the import and changing out the defaul
 - import { authMiddleware } from "@clerk/nextjs/server"
 + import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-+ const isPublicRoute = createRouteMatcher(['/sign-in', '/sign-up']);
++ const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
 
 - export default authMiddleware()
-+ export default clerkMiddleware((auth, request) =>{ 
++ export default clerkMiddleware((auth, request) =>{
 +   if(!isPublicRoute(request)){
 +     auth().protect();
 +   }
@@ -174,8 +174,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
     After:
@@ -186,7 +186,7 @@ Of course, in most cases you'll have a more complicated setup than this. You can
       createRouteMatcher
     } from "@clerk/nextjs/server"
 
-    const isPublicRoute = createRouteMatcher(["/", "/contact"])
+    const isPublicRoute = createRouteMatcher(["/", "/contact(.*)"])
 
     export default clerkMiddleware((auth, req) => {
       if (isPublicRoute(req)) return // if it's a public route, do nothing
@@ -194,8 +194,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
   </AccordionPanel>
@@ -212,8 +212,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
     After:
@@ -231,8 +231,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
   </AccordionPanel>
@@ -258,8 +258,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
     After:
@@ -285,8 +285,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
   </AccordionPanel>
@@ -303,8 +303,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
     After:
@@ -317,8 +317,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+    };
     ```
 
   </AccordionPanel>
@@ -436,18 +436,20 @@ As part of this change, the default redirect URL for each of these props has bee
 
 ### `afterSignXUrl` changes
 
-Some changes are being made to the way that "after sign up/in url"s and redirect url props are handled as part of this new version, in order to make behavior more clear and predictable.
+> This section refers to `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
 
-> We will refer to these urls as `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
+All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been deprecated, and should be replaced by one of the following options:
 
-Previously, setting `afterSignInUrl` or `afterSignOutUrl` would only actually redirect some of the time. If the user clicks on any form of link that takes them to a sign up/in page, Clerk automatically sets `redirect_url` in the querystring such that after the sign up or in, the user is returned back to the page they were on before. This is a common pattern for sign up/in flows, as it leads to the least interruption of the user's navigation through your app. When a `redirect_url` is present, any value passed to `afterSignInUrl` or `afterSignUpUrl` is ignored. However, if the user navigates directly to a sign up/in page, there’s no redirect url in the querystring and in this case the `afterSignInUrl` or `afterSignOutUrl` would take effect. This behavior was not intuitive and didn't give a way to force a redirect after sign up/in, so the behavior is changing to address both of these issues.
+- `CLERK_SIGN_X_FORCE_REDIRECT_URL` / `signXForceRedirectUrl` – If set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user's flow by taking them away from the page they were on before.
+- `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` / `signXFallbackRedirectUrl` – If set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
 
-All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been removed, and should be replaced by one of the following options:
+In general, use the environment variables over the props.
 
-- `signXForceRedirectUrl` / `CLERK_SIGN_X_FORCE_REDIRECT_URL` - if set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user’s flow by taking them away from the page they were on before.
-- `signXFallbackRedirectUrl` / `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` - if set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
+<Callout type="warning">
+If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`.
+</Callout>
 
-If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`. If you'd like to retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
+To retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
 
 ```diff
 - <SignIn afterSignInUrl='/foo' />

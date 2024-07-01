@@ -59,7 +59,7 @@ There are two methods that you can use:
 - Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
 - Use [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
+<CodeBlockTabs options={["auth().protect()", "auth().userId()"]}>
 ```tsx filename="middleware.ts"
 import {
   clerkMiddleware,
@@ -97,7 +97,9 @@ export default clerkMiddleware((auth, req) => {
   }
 });
 
-export const config = { matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)']};
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
 ```
 </CodeBlockTabs>
 
@@ -143,15 +145,16 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware((auth, req) => {
+  const { has, redirectToSignIn } = auth()
   // Restrict admin routes to users with specific permissions
   if (isProtectedRoute(req) &&
-    !auth().has({ permission: 'org:sys_memberships:manage' }) ||
-    !auth().has({ permission: 'org:sys_domains_manage' })
+    !has({ permission: 'org:sys_memberships:manage' }) ||
+    !has({ permission: 'org:sys_domains_manage' })
   ){
 
     // Add logic to run if the user does not have the required permissions
 
-    return auth.redirectToSignIn();
+    return redirectToSignIn();
   }
 });
 
@@ -174,7 +177,7 @@ import {
 } from '@clerk/nextjs/server';
 
 const isTenantRoute = createRouteMatcher([
-  '/organization-selector',
+  '/organization-selector(.*)',
   '/orgid/(.*)'
 ])
 
@@ -196,6 +199,26 @@ export default clerkMiddleware((auth, req) => {
   }
   // Restrict organization routes to signed in users
   if (isTenantRoute(req)) auth().protect();
+});
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+};
+```
+
+## Protect all routes
+
+To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
+
+```jsx filename="middleware.ts"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
+
+export default clerkMiddleware((auth, request) => {
+  if(!isPublicRoute(request)) {
+    auth().protect();
+  }
 });
 
 export const config = {
@@ -252,7 +275,7 @@ export default clerkMiddleware((auth, req) => {
 });
 
 export const config = {
-  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
 ```
 
@@ -270,5 +293,6 @@ The `clerkMiddleware()` function accepts an optional object. The following optio
 | `jwtKey?`                          | `string`             | An optional [custom JWT key](/docs/references/nodejs/token-verification#networkless-token-verification-using-the-jwt-verification-key) to use for session token validation.                                                                                                                                                                     |
 | `proxyUrl?`                        | `string`             | Specify the URL of the proxy, if using a proxy.                                                                                                                                                                                                                                                                                                 |
 | `signInUrl?`                       | `string`             | An alternative sign in URL.                                                                                                                                                                                                                                                                                                                     |
+| `signUpUrl?`                       | `string`             | An alternative sign up URL.                                                                                                                                                                                                                                                                                                                     |
 | `publishableKey` | `string` | The Clerk publishable key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.|
 | `secretKey?` | `string` | The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.  |

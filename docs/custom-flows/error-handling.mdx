@@ -1,213 +1,356 @@
 ---
 title: Error handling
-description: Provide your users with useful information about the errors being returned from Sign In and Sign Up requests.
+description: Provide your users with useful information about the errors being returned from sign-up and sign-in requests.
 ---
 
 # Error handling
 
-When using the [`signUp()`](/docs/references/react/use-sign-up) or [`signIn()`](/docs/references/react/use-sign-in) functions, proper error handling can help you provide your users with useful feedback.
+Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/references/javascript/types/clerk-api-error) objects. These errors contain a `code`, `message`, `longMessage` and `meta` property. These properties can be used to provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+
+This guide demonstrates how to handle Clerk-related errors when building custom flows.
+
+> [!TIP]
+> To see a list of all possible errors, refer to the [Errors](/docs/errors/overview) documentation.
 
 ## Example
 
-A user is attempting to sign up with your application, but they are attempting to use a password that has been found in an online data breach. This will return a 422 error code with the message: "Password has been found in an online data breach. For account safety, please use a different password."
+The following example uses the [email & password sign-in custom flow](/docs/custom-flows/email-password) to demonstrate how to handle errors returned during the sign-in process.
 
-<CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
-```jsx
-import { useState } from "react";
-import { useSignUp } from "@clerk/clerk-react";
-import { ClerkAPIError } from "@clerk/types";
-import { isClerkAPIResponseError } from "@clerk/clerk-react/errors";
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+    This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
 
-function Example() {
-  const [emailAddress, setEmailAddress] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<ClerkAPIError[]>();
+    ```jsx filename="app/sign-in/[[...sign-in]]/page.tsx"
+    'use client';
 
-  const { isLoaded, signUp, setActive } = useSignUp();
+    import * as React from 'react';
+    import { useSignIn } from '@clerk/nextjs';
+    import { useRouter } from 'next/navigation';
+    import { ClerkAPIError } from '@clerk/types';
+    import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 
-  const attemptSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+    export default function SignInForm() {
+      const { isLoaded, signIn, setActive } = useSignIn();
+      const [email, setEmail] = React.useState('');
+      const [password, setPassword] = React.useState('');
+      const [errors, setErrors] = React.useState<ClerkAPIError[]>();
 
-    // clear any errors that may have occured during previous form submission
-    setErrors(undefined);
+      const router = useRouter();
 
-    if (!isLoaded || !signUp) return;
+      // Handle the submission of the sign-in form
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-    try {
-      const result = await signUp.create({ emailAddress, password});
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        return;
-      }
-      if (result.status === 'abandoned') {
-        const error = { code: result.status, message: "The sign-up attempt will be abandoned if it was started more than 24 hours previously." }
-        setErrors([error]);
-        return;
-      }
-      if (result.status === 'missing_requirements') {
-        const error = { code: result.status, message: "A requirement from the email, phone, username settings is missing." }
-        setErrors([error]);
-        return;
-      }
-    } catch(err: unknown) {
-      if (isClerkAPIResponseError(err)) setErrors(err.errors);
-      return; 
+        // clear any errors that may have occured during previous form submission
+        setErrors(undefined);
+
+        if (!isLoaded) {
+          return;
+        }
+
+        // Start the sign-in process using the email and password provided
+        try {
+          const completeSignIn = await signIn.create({
+            identifier: email,
+            password,
+          });
+
+          // This is mainly for debugging while developing.
+          if (completeSignIn.status !== 'complete') {
+            console.log(JSON.stringify(completeSignIn, null, 2));
+          }
+
+          // If sign-in process is complete, set the created session as active
+          // and redirect the user
+          if (completeSignIn.status === 'complete') {
+            await setActive({ session: completeSignIn.createdSessionId });
+            router.push('/');
+          }
+        } catch (err) {
+          if (isClerkAPIResponseError(err)) setErrors(err.errors);
+          console.error(JSON.stringify(err, null, 2));
+        }
+      };
+
+      // Display a form to capture the user's email and password
+      return (
+        <>
+          <h1>Sign in</h1>
+          <form onSubmit={(e) => handleSubmit(e)}>
+            <div>
+              <label htmlFor="email">Enter email address</label>
+              <input
+                onChange={(e) => setEmail(e.target.value)}
+                id="email"
+                name="email"
+                type="email"
+                value={email}
+              />
+            </div>
+            <div>
+              <label htmlFor="password">Enter password</label>
+              <input
+                onChange={(e) => setPassword(e.target.value)}
+                id="password"
+                name="password"
+                type="password"
+                value={password}
+              />
+            </div>
+            <button type="submit">Sign in</button>
+          </form>
+
+          {errors && (
+            <ul>
+              {errors.map((el, index) => (
+                <li key={index}>{el.longMessage}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      );
     }
-  };
+    ```
+  </Tab>
 
-  return (
-    <form onSubmit={attemptSignUp}>
-      <div>
-        <label htmlFor="email">Email address</label>
-        <input 
-          id="email" 
-          type="email" 
-          value={emailAddress} 
-          onChange={(e) => {setEmailAddress(e.target.value)}} 
-        />
-      </div>
+  <Tab>
+    <Tabs items={["NPM module", "<script>"]}>
+      <Tab>
+      For the following example, your HTML file should look like this:
 
-      <div>
-        <label htmlFor="password">Password</label>
-        <input 
-          id="password" 
-          type="password" 
-          value={password} 
-          onChange={(e) => {setPassword(e.target.value)}} 
-        />
-      </div>
+      ```html filename="index.html"
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="signed-in"></div>
 
-      {errors &&
-        <ul>
-          {errors.map((el, index) => <li key={index}>{el.message}</li>)}
-        </ul>
+          <div id="sign-up">
+            <h2>Sign up</h2>
+            <form id="sign-up-form">
+              <label for="email">Enter email address</label>
+              <input type="email" name="email" id="sign-up-email" />
+              <label for="password">Enter password</label>
+              <input type="password" name="password" id="sign-up-password" />
+              <button type="submit">Continue</button>
+            </form>
+          </div>
+
+          <form id="verifying" hidden>
+            <h2>Verify your email</h2>
+            <label for="code">Enter your verification code</label>
+            <input id="code" name="code" />
+            <button type="submit" id="verify-button">Verify</button>
+          </form>
+
+          <p id="error"></p>
+
+          <script
+            type="module"
+            src="/src/main.js"
+            async
+            crossorigin="anonymous"
+          ></script>
+        </body>
+      </html>
+      ```
+
+      And your JavaScript file should look like this:
+
+      ```js filename="main.js"
+      import Clerk from '@clerk/clerk-js';
+
+      // Initialize Clerk with your Clerk publishable key
+      const clerk = new Clerk('{{pub_key}}');
+      await clerk.load();
+
+      if (clerk.user) {
+        // Mount user button component
+        document.getElementById('signed-in').innerHTML = `
+          <div id="user-button"></div>
+        `;
+
+        const userbuttonDiv = document.getElementById('user-button');
+
+        clerk.mountUserButton(userbuttonDiv);
+      } else {
+        // Handle the sign-up form
+        document
+          .getElementById('sign-up-form')
+          .addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(e.target);
+            const emailAddress = formData.get('email');
+            const password = formData.get('password');
+
+            try {
+              // Start the sign-up process using the phone number method
+              await clerk.client.signUp.create({ emailAddress, password });
+              await clerk.client.signUp.prepareEmailAddressVerification();
+              // Hide sign-up form
+              document.getElementById('sign-up').setAttribute('hidden', '');
+              // Show verification form
+              document.getElementById('verifying').removeAttribute('hidden');
+            } catch (err) {
+              if (isClerkAPIResponseError(err)) {
+                const errors = err.errors;
+                document.getElementById('error').textContent = errors[0].longMessage;
+              }
+              console.error(JSON.stringify(err, null, 2));
+            }
+          });
+
+        // Handle the verification form
+        document.getElementById('verifying').addEventListener('submit', async (e) => {
+          const formData = new FormData(e.target);
+          const code = formData.get('code');
+
+          try {
+            // Verify the phone number
+            const verify = await clerk.client.signUp.attemptEmailAddressVerification({
+              code,
+            });
+
+            // Now that the user is created, set the session to active.
+            await clerk.setActive({ session: verify.createdSessionId });
+          } catch (err) {
+            if (isClerkAPIResponseError(err)) {
+                const errors = err.errors;
+                document.getElementById('error').textContent = errors[0].longMessage;
+              }
+            console.error(JSON.stringify(err, null, 2));
+          }
+        });
       }
+      ```
+      </Tab>
 
-      <button type="submit">Sign Up</button>
-    </form>
-  );
-}
-```
+      <Tab>
+      ```html filename="index.html"
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="signed-in"></div>
 
-```js
-const { client } = window.Clerk;
+          <div id="sign-up">
+            <h2>Sign up</h2>
+            <form id="sign-up-form">
+              <label for="email">Enter email address</label>
+              <input type="email" name="email" id="sign-up-email" />
+              <label for="password">Enter password</label>
+              <input type="password" name="password" id="sign-up-password" />
+              <button type="submit">Continue</button>
+            </form>
+          </div>
 
-const signUp = await client.signUp.create({
-  identifier: "example@email.com",
-  password: "Tester01!",
-})
-  .then((res) => console.log("response", res))
-  .catch((err) => setError(err.errors[0].message));
-```
-</CodeBlockTabs>
+          <form id="verifying" hidden>
+            <h2>Verify your email</h2>
+            <label for="code">Enter your verification code</label>
+            <input id="code" name="code" />
+            <button type="submit" id="verify-button">Verify</button>
+          </form>
 
-Errors returned from the [`signIn()`](/docs/references/react/use-sign-in) function are handled in a similar way:
+          <p id="error"></p>
 
-<CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
-```jsx
-import { useState } from "react";
-import { useSignIn } from "@clerk/clerk-react";
-import { ClerkAPIError } from "@clerk/types";
-import { isClerkAPIResponseError } from "@clerk/clerk-react/errors";
+          <script
+            async
+            crossorigin="anonymous"
+            data-clerk-publishable-key="{{pub_key}}"
+            src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+            type="text/javascript"
+          ></script>
 
-function Example() {
-  const [emailAddress, setEmailAddress] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<ClerkAPIError[]>();
+          <script>
+            window.addEventListener('load', async function () {
+              await Clerk.load();
 
-  const { isLoaded, signIn, setActive } = useSignIn();
+              if (Clerk.user) {
+                // Mount user button component
+                document.getElementById('signed-in').innerHTML = `
+                  <div id="user-button"></div>
+                `;
 
-  const attemptSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
+                const userbuttonDiv = document.getElementById('user-button');
 
-    // clear any errors that may have occured during previous form submission
-    setErrors(undefined);
+                Clerk.mountUserButton(userbuttonDiv);
+              } else {
+                // Handle the sign-up form
+                document
+                  .getElementById('sign-up-form')
+                  .addEventListener('submit', async (e) => {
+                    e.preventDefault();
 
-    if (!isLoaded || !signIn) return;
+                    const formData = new FormData(e.target);
+                    const emailAddress = formData.get('email');
+                    const password = formData.get('password');
 
-    try {
-      const result = await signIn.create({ identifier: emailAddress, password});
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        return;
-      }
-      if (result.status === 'needs_identifier')  {
-        const error = { code: result.status, message: "The authentication identifier hasn't been provided." }
-        setErrors([error]);
-        return;
-      }
-      if (result.status === 'needs_first_factor')  {
-        const error = { code: result.status, message: "First factor verification for the provided identifier needs to be prepared and verified." }
-        setErrors([error]);
-        return;
-      }
-      if (result.status === 'needs_second_factor')  {
-        const error = { code: result.status, message: "Second factor verification (2FA) for the provided identifier needs to be prepared and verified." }
-        setErrors([error]);
-        return;
-      }
-      if (result.status === 'needs_new_password')  {
-        const error = { code: result.status, message: "New password hasn't been provided." }
-        setErrors([error]);
-        return;
-      }
-    } catch(err: unknown) {
-      if (isClerkAPIResponseError(err)) setErrors(err.errors);
-      return;
-    }
-  };
+                    try {
+                      // Start the sign-up process using the phone number method
+                      await Clerk.client.signUp.create({ emailAddress, password });
+                      await Clerk.client.signUp.prepareEmailAddressVerification();
+                      // Hide sign-up form
+                      document.getElementById('sign-up').setAttribute('hidden', '');
+                      // Show verification form
+                      document.getElementById('verifying').removeAttribute('hidden');
+                    } catch (error) {
+                      if (isClerkAPIResponseError(err)) {
+                        const errors = err.errors;
+                        document.getElementById('error').textContent = errors[0].longMessage;
+                      }
+                      console.error(JSON.stringify(err, null, 2));
+                    }
+                  });
 
-  return (
-    <form onSubmit={attemptSignIn}>
-      <div>
-        <label htmlFor="email">Email address</label>
-        <input 
-          id="email" 
-          type="email" 
-          value={emailAddress} 
-          onChange={(e) => {setEmailAddress(e.target.value)}} 
-        />
-      </div>
+                // Handle the verification form
+                document
+                  .getElementById('verifying')
+                  .addEventListener('submit', async (e) => {
+                    const formData = new FormData(e.target);
+                    const code = formData.get('code');
 
-      <div>
-        <label htmlFor="password">Password</label>
-        <input 
-          id="password" 
-          type="password" 
-          value={password} 
-          onChange={(e) => {setPassword(e.target.value)}} 
-        />
-      </div>
+                    try {
+                      // Verify the phone number
+                      const verify =
+                        await Clerk.client.signUp.attemptEmailAddressVerification({
+                          code,
+                        });
 
-      {errors &&
-        <ul>
-          {errors.map((el, index) => <li key={index}>{el.message}</li>)}
-        </ul>
-      }
-
-      <button type="submit">Sign In</button>
-    </form>
-  );
-}
-```
-
-```js
-const { client } = window.Clerk;
-
-const signIn = await client.signIn.create({
-  identifier: emailAddress,
-  password,
-  })    
-  .then((result) => console.log("result", result))
-  .catch((err) => console.error("error", err.errors[0].message));
-```
-</CodeBlockTabs>
+                      // Now that the user is created, set the session to active.
+                      await Clerk.setActive({ session: verify.createdSessionId });
+                    } catch (error) {
+                      if (isClerkAPIResponseError(err)) {
+                        const errors = err.errors;
+                        document.getElementById('error').textContent = errors[0].longMessage;
+                      }
+                      console.error(JSON.stringify(err, null, 2));
+                    }
+                  });
+              }
+            });
+          </script>
+        </body>
+      </html>
+      ```
+      </Tab>
+    </Tabs>
+  </Tab>
+</Tabs>
 
 ## Special error cases
 
 ### User locked
 
-If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/security/user-lock-guide#related-actions)), you will receive an HTTP status of 403 (Forbidden) and the following error payload:
+If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/security/user-lock-guide#related-actions)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
 
 ```json
 {
@@ -234,18 +377,22 @@ You can opt to render the error message returned as-is or format the supplied `l
 
 For instance, if you wish to inform a user at which absolute time they will be able to try again, you could add the remaining seconds to the current time and format the resulting timestamp.
 
-```js
-if (errors[0].code === 'user_locked') {
-    // Get the current date and time
-    let currentDate = new Date();
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```js filename="app/sign-in/[[...sign-in]]/page.tsx"
+    if (errors[0].code === 'user_locked') {
+      // Get the current date and time
+      let currentDate = new Date();
 
-    // Add the remaining seconds until lockout expires
-    currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds);
+      // Add the remaining seconds until lockout expires
+      currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds);
 
-    // Format the resulting date and time into a human-readable string
-    const lockoutExpiresAt = currentDate.toLocaleString();
+      // Format the resulting date and time into a human-readable string
+      const lockoutExpiresAt = currentDate.toLocaleString();
 
-    // Do something with lockoutExpiresAt
-    console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt);
-}
-```
+      // Do something with lockoutExpiresAt
+      console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt);
+    }
+    ```
+  </Tab>
+</Tabs>

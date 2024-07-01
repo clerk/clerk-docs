@@ -1,385 +1,421 @@
 ---
-title: Manage SMS based Multi-factor Authentication
-description: Learn how to manage SMS based multi-factor authentication, to enable the same features as in the User Profile component.
+description: Learn how to use Clerk's API to build a custom flow for managing SMS-based multi-factor authentication.
 ---
 
-# Manage SMS based Multi-factor Authentication
+# Build a custom flow for managing SMS-based multi-factor authentication
 
+> [!WARNING]
+> This guide is for users who want to build a *custom* user interface using the Clerk API. To use a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
-```typescript {{ filename: 'app/account/manage-mfa/page.tsx' }}
-'use client';
+[Multi-factor verification (MFA)](/docs/authentication/configuration/sign-up-sign-in-options) is an added layer of security that requires users to provide a second verification factor to access an account.
 
-import * as React from 'react';
-import { useUser } from '@clerk/nextjs';
-import { BackupCodeResource, PhoneNumberResource } from '@clerk/types';
-import Link from 'next/link';
+One of the options that Clerk supports for MFA is **SMS verification codes**. This guide will walk you through how to build a custom flow that allows users to manage their TOTP settings.
 
-const ManageMfaPhoneNumbers = () => {
-  const { user } = useUser();
-  if (!user) return null;
+> [!TIP]
+> To learn how to build a custom flow for managing authenticator app (TOTP) MFA, see the [dedicated guide](/docs/custom-flows/manage-totp-mfa).
 
-  // Check is for any phone numbers are reserved for second factor (2fa)
-  const mfaPhones = user.phoneNumbers
-    .filter((ph) => ph.verification.status === 'verified')
-    .filter((ph) => ph.reservedForSecondFactor)
-    .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1));
+<Steps>
 
-  // If the array is a length of 0, then no phone numbers have been reserved for 2fa
-  if (mfaPhones.length === 0) {
-    return <p>No phone numbers configured for MFA</p>;
-  }
+### Enable multi-factor authentication
 
-  // Render a table of 2fa phone numbers, with buttons to make default and remove
-  // Also show an indicator of which number is the default
-  return (
-    <>
-      <h2>2fa Number</h2>
-      <ul>
-        {mfaPhones.map((phone) => {
-          return (
-            <li
-              key={phone.id}
-              className="flex flex-row space-x-4"
-            >
-              <div>{phone.phoneNumber}</div>
-              <div>{phone.defaultSecondFactor && 'Default'}</div>
-              <div>
-                <button
-                  onClick={() =>
-                    phone.setReservedForSecondFactor({ reserved: false })
-                  }
-                >
-                  Disable number for 2fa
-                </button>
-              </div>
+For your users to be able to enable MFA for their account, you need to enable MFA as an MFA authentication strategy in your Clerk application.
 
-              {!phone.defaultSecondFactor && (
+1. Navigate to the [Clerk Dashboard.](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)
+2. In the navigation sidebar, select **User & Authentication > Multi-factor**.
+3. Enable **SMS verification code** and **Backup codes** and select **Save**.
+
+### Create the multi-factor management flow
+
+This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
+
+This example consists of two pages:
+- The main page where users can manage their MFA settings
+- The page where users can add SMS MFA.
+
+Use the following tabs to view the code necessary for each page.
+
+<Tabs items={["Manage MFA page", "Add SMS page"]}>
+  <Tab>
+  ```typescript {{ filename: 'app/account/manage-mfa/page.tsx' }}
+  'use client';
+
+  import * as React from 'react';
+  import { useUser } from '@clerk/nextjs';
+  import { BackupCodeResource, PhoneNumberResource } from '@clerk/types';
+  import Link from 'next/link';
+
+  const ManageMfaPhoneNumbers = () => {
+    const { user } = useUser();
+    if (!user) return null;
+
+    // Check is for any phone numbers are reserved for second factor (2fa)
+    const mfaPhones = user.phoneNumbers
+      .filter((ph) => ph.verification.status === 'verified')
+      .filter((ph) => ph.reservedForSecondFactor)
+      .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1));
+
+    // If the array is a length of 0, then no phone numbers have been reserved for 2fa
+    if (mfaPhones.length === 0) {
+      return <p>No phone numbers configured for MFA</p>;
+    }
+
+    // Render a table of 2fa phone numbers, with buttons to make default and remove
+    // Also show an indicator of which number is the default
+    return (
+      <>
+        <h2>2fa Number</h2>
+        <ul>
+          {mfaPhones.map((phone) => {
+            return (
+              <li
+                key={phone.id}
+                className="flex flex-row space-x-4"
+              >
+                <div>{phone.phoneNumber}</div>
+                <div>{phone.defaultSecondFactor && 'Default'}</div>
                 <div>
-                  <button onClick={() => phone.makeDefaultSecondFactor()}>
-                    Make 2fa Default
+                  <button
+                    onClick={() =>
+                      phone.setReservedForSecondFactor({ reserved: false })
+                    }
+                  >
+                    Disable number for 2fa
                   </button>
                 </div>
-              )}
-              {/* This button is not strictly needed here -- this could be part of the user profile */}
-              <div>
-                <button onClick={() => phone.destroy()}>Remove Number</button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
-};
 
-// Generate and display backup codes
-function DisplayBackupCodes() {
-  const { user } = useUser();
-  const [backupCodes, setBackupCodes] = React.useState<
-    BackupCodeResource | undefined
-  >(undefined);
-
-  const [loading, setLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (backupCodes) {
-      return;
-    }
-
-    setLoading(true);
-    void user
-      ?.createBackupCode()
-      .then((backupCode: BackupCodeResource) => {
-        setBackupCodes(backupCode);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.log('Error:', error);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return <p>Loading...</p>;
-  }
-
-  if (!backupCodes) {
-    return <p>There was a problem generating backup codes</p>;
-  }
-
-  return (
-    <ol>
-      {!loading &&
-        backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
-    </ol>
-  );
-}
-
-// Main component for displaying backup codes
-const BackupCodeScreen = ({
-  setShowBackupCodes,
-}: {
-  setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
-}) => {
-  return (
-    <>
-      <h1>Save Backup Codes</h1>
-      <div>
-        <DisplayBackupCodes />
-        <p>
-          Save this list of backup codes somewhere safe in case you need to
-          access your account in an emergency
-        </p>
-        <button onClick={() => setShowBackupCodes(false)}>Saved</button>
-      </div>
-    </>
-  );
-};
-
-const ManageAvailablePhoneNumbers = ({
-  setShowBackupCodes,
-}: {
-  setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
-}) => {
-  const { user } = useUser();
-  if (!user) return null;
-
-  // Check if any phone numbers that could be used for 2fa
-  const availaForMfaPhones = user.phoneNumbers
-    .filter((ph) => ph.verification.status === 'verified')
-    .filter((ph) => !ph.reservedForSecondFactor);
-
-  // Check if the user have any phone numbers reserved for 2fa
-  const isFirstMfaPhoneNumber =
-    user.phoneNumbers
-      .filter((ph) => ph.verification.status === 'verified')
-      .filter((ph) => ph.reservedForSecondFactor).length === 0
-      ? true
-      : false;
-
-  // If the array is 0 length, then there are no numbers available for 2fa
-  if (availaForMfaPhones.length === 0) {
-    return <p>No phone number available for MFA. You can add a new number</p>;
-  }
-
-  const enablePhoneForMfa = async (phone: PhoneNumberResource) => {
-    // Enable number for 2fa
-    await phone.setReservedForSecondFactor({ reserved: true });
-    // Refresh teh user object to reflect changes
-    await user.reload();
-    // If this is the first number for 2fa, then generate and display backup codes
-    if (isFirstMfaPhoneNumber) {
-      setShowBackupCodes(true);
-    }
+                {!phone.defaultSecondFactor && (
+                  <div>
+                    <button onClick={() => phone.makeDefaultSecondFactor()}>
+                      Make 2fa Default
+                    </button>
+                  </div>
+                )}
+                {/* This button is not strictly needed here -- this could be part of the user profile */}
+                <div>
+                  <button onClick={() => phone.destroy()}>Remove Number</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    );
   };
 
-  // Render numbers available for 2fa, and a button to enable the number for 2fa
-  return (
-    <>
-      <h2>Available Numbers</h2>
-      <ul>
-        {availaForMfaPhones.map((phone) => {
-          return (
-            <li
-              key={phone.id}
-              className="flex flex-row space-x-4"
-            >
-              <div>{phone.phoneNumber}</div>
-              <div>
-                <button onClick={() => enablePhoneForMfa(phone)}>
-                  Use for Mfa
-                </button>
-              </div>
-              <div>
-                <button onClick={() => phone.destroy()}>Remove Number</button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
-};
+  // Generate and display backup codes
+  function DisplayBackupCodes() {
+    const { user } = useUser();
+    const [backupCodes, setBackupCodes] = React.useState<
+      BackupCodeResource | undefined
+    >(undefined);
 
-export default function ManageSmsMFA() {
-  const [showBackupCodes, setShowBackupCodes] = React.useState(false);
-  const { isLoaded, user } = useUser();
+    const [loading, setLoading] = React.useState(false);
 
-  if (!isLoaded || !user) return null;
+    React.useEffect(() => {
+      if (backupCodes) {
+        return;
+      }
 
-  if (!isLoaded || !user) return null;
-  return (
-    <>
-      <h1>Current MFA Settings</h1>
-      <div>
-        <ManageMfaPhoneNumbers />
-        <ManageAvailablePhoneNumbers setShowBackupCodes={setShowBackupCodes} />
-        <Link href="/custom-flows/account/manage-sms-mfa/add">
-          Add new phone number
-        </Link>
-      </div>
-      {showBackupCodes && (
-        <BackupCodeScreen setShowBackupCodes={setShowBackupCodes} />
-      )}
-      {user.backupCodeEnabled && (
+      setLoading(true);
+      void user
+        ?.createBackupCode()
+        .then((backupCode: BackupCodeResource) => {
+          setBackupCodes(backupCode);
+          setLoading(false);
+        })
+        .catch((error) => {
+          console.log('Error:', error);
+          setLoading(false);
+        });
+    }, []);
+
+    if (loading) {
+      return <p>Loading...</p>;
+    }
+
+    if (!backupCodes) {
+      return <p>There was a problem generating backup codes</p>;
+    }
+
+    return (
+      <ol>
+        {!loading &&
+          backupCodes.codes.map((code, index) => <li key={index}>{code}</li>)}
+      </ol>
+    );
+  }
+
+  // Main component for displaying backup codes
+  const BackupCodeScreen = ({
+    setShowBackupCodes,
+  }: {
+    setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
+  }) => {
+    return (
+      <>
+        <h1>Save Backup Codes</h1>
         <div>
-          <button onClick={() => setShowBackupCodes(true)}>Regenerate</button>
+          <DisplayBackupCodes />
+          <p>
+            Save this list of backup codes somewhere safe in case you need to
+            access your account in an emergency
+          </p>
+          <button onClick={() => setShowBackupCodes(false)}>Saved</button>
         </div>
-      )}
-    </>
-  );
-}
-```
+      </>
+    );
+  };
 
-```typescript {{ filename: 'app/account/manage-mfa/add/page.tsx' }}
-'use client';
+  const ManageAvailablePhoneNumbers = ({
+    setShowBackupCodes,
+  }: {
+    setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
+  }) => {
+    const { user } = useUser();
+    if (!user) return null;
 
-import * as React from 'react';
-import { useUser } from '@clerk/nextjs';
-import { PhoneNumberResource } from '@clerk/types';
-import Link from 'next/link';
+    // Check if any phone numbers that could be used for 2fa
+    const availaForMfaPhones = user.phoneNumbers
+      .filter((ph) => ph.verification.status === 'verified')
+      .filter((ph) => !ph.reservedForSecondFactor);
 
-type AddMfaSteps = 'add' | 'verify' | 'success';
+    // Check if the user have any phone numbers reserved for 2fa
+    const isFirstMfaPhoneNumber =
+      user.phoneNumbers
+        .filter((ph) => ph.verification.status === 'verified')
+        .filter((ph) => ph.reservedForSecondFactor).length === 0
+        ? true
+        : false;
 
-const AddPhoneScreen = ({
-  setStep,
-  setPhoneObj,
-}: {
-  setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
-  setPhoneObj: React.Dispatch<
-    React.SetStateAction<PhoneNumberResource | undefined>
-  >;
-}) => {
-  const [phone, setPhone] = React.useState('');
+    // If the array is 0 length, then there are no numbers available for 2fa
+    if (availaForMfaPhones.length === 0) {
+      return <p>No phone number available for MFA. You can add a new number</p>;
+    }
 
-  const { isLoaded, user } = useUser();
+    const enablePhoneForMfa = async (phone: PhoneNumberResource) => {
+      // Enable number for 2fa
+      await phone.setReservedForSecondFactor({ reserved: true });
+      // Refresh teh user object to reflect changes
+      await user.reload();
+      // If this is the first number for 2fa, then generate and display backup codes
+      if (isFirstMfaPhoneNumber) {
+        setShowBackupCodes(true);
+      }
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    // Render numbers available for 2fa, and a button to enable the number for 2fa
+    return (
+      <>
+        <h2>Available Numbers</h2>
+        <ul>
+          {availaForMfaPhones.map((phone) => {
+            return (
+              <li
+                key={phone.id}
+                className="flex flex-row space-x-4"
+              >
+                <div>{phone.phoneNumber}</div>
+                <div>
+                  <button onClick={() => enablePhoneForMfa(phone)}>
+                    Use for Mfa
+                  </button>
+                </div>
+                <div>
+                  <button onClick={() => phone.destroy()}>Remove Number</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    );
+  };
 
-    // Confirm that Clerk and the user have loaded.
-    // This could be handled earlier and include a redirect to /sign-in
+  export default function ManageSmsMFA() {
+    const [showBackupCodes, setShowBackupCodes] = React.useState(false);
+    const { isLoaded, user } = useUser();
+
     if (!isLoaded || !user) return null;
 
-    try {
-      // Add an unverified phone number to the user's account
-      const res = await user?.createPhoneNumber({ phoneNumber: phone });
-      // Refresh the user so the new number is available
-      await user.reload();
-      // Select the newly added number from the `phoneNumbers` array
-      const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
-      // Save this to the `phoneObj` state
-      setPhoneObj(phoneNumber);
-      // Send a code to the new number for verification
-      phoneNumber?.prepareVerification();
-      // Set the step to `verify` so the verification form is rendered
-      setStep('verify');
-    } catch (error: any) {
-      console.log(error);
-    }
+    if (!isLoaded || !user) return null;
+    return (
+      <>
+        <h1>Current MFA Settings</h1>
+        <div>
+          <ManageMfaPhoneNumbers />
+          <ManageAvailablePhoneNumbers setShowBackupCodes={setShowBackupCodes} />
+          <Link href="/custom-flows/account/manage-sms-mfa/add">
+            Add new phone number
+          </Link>
+        </div>
+        {showBackupCodes && (
+          <BackupCodeScreen setShowBackupCodes={setShowBackupCodes} />
+        )}
+        {user.backupCodeEnabled && (
+          <div>
+            <button onClick={() => setShowBackupCodes(true)}>Regenerate</button>
+          </div>
+        )}
+      </>
+    );
+  }
+  ```
+  </Tab>
+
+  <Tab>
+  ```typescript {{ filename: 'app/account/manage-mfa/add/page.tsx' }}
+  'use client';
+
+  import * as React from 'react';
+  import { useUser } from '@clerk/nextjs';
+  import { PhoneNumberResource } from '@clerk/types';
+  import Link from 'next/link';
+
+  type AddMfaSteps = 'add' | 'verify' | 'success';
+
+  const AddPhoneScreen = ({
+    setStep,
+    setPhoneObj,
+  }: {
+    setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
+    setPhoneObj: React.Dispatch<
+      React.SetStateAction<PhoneNumberResource | undefined>
+    >;
+  }) => {
+    const [phone, setPhone] = React.useState('');
+
+    const { isLoaded, user } = useUser();
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      // Confirm that Clerk and the user have loaded.
+      // This could be handled earlier and include a redirect to /sign-in
+      if (!isLoaded || !user) return null;
+
+      try {
+        // Add an unverified phone number to the user's account
+        const res = await user?.createPhoneNumber({ phoneNumber: phone });
+        // Refresh the user so the new number is available
+        await user.reload();
+        // Select the newly added number from the `phoneNumbers` array
+        const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
+        // Save this to the `phoneObj` state
+        setPhoneObj(phoneNumber);
+        // Send a code to the new number for verification
+        phoneNumber?.prepareVerification();
+        // Set the step to `verify` so the verification form is rendered
+        setStep('verify');
+      } catch (error: any) {
+        console.log(error);
+      }
+    };
+
+    return (
+      <>
+        <div>
+          <form onSubmit={(e) => handleSubmit(e)}>
+            <div>
+              <label htmlFor="phone">Add Phone</label>
+              <input
+                onChange={(e) => setPhone(e.target.value)}
+                id="phone"
+                name="phone"
+                type="phone"
+                value={phone}
+              />
+            </div>
+            <div>
+              <button type="submit">Continue</button>
+            </div>
+          </form>
+        </div>
+      </>
+    );
   };
 
-  return (
-    <>
+  const VerifyPhoneScreen = ({
+    setStep,
+    phoneObj,
+  }: {
+    setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
+    phoneObj: PhoneNumberResource | undefined;
+  }) => {
+    const [code, setCode] = React.useState('');
+
+    const verifyCode = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+        // Attempt to verify the code that the user provided
+        // If successful, the user's number will be marked as verified
+        await phoneObj?.attemptVerification({ code });
+
+        // Display the success component
+        setStep('success');
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    return (
       <div>
-        <form onSubmit={(e) => handleSubmit(e)}>
+        <form onSubmit={(e) => verifyCode(e)}>
           <div>
-            <label htmlFor="phone">Add Phone</label>
+            <label htmlFor="code">Enter Code</label>
             <input
-              onChange={(e) => setPhone(e.target.value)}
-              id="phone"
-              name="phone"
-              type="phone"
-              value={phone}
+              onChange={(e) => setCode(e.target.value)}
+              id="code"
+              name="code"
+              type="text"
+              value={code}
             />
           </div>
           <div>
-            <button type="submit">Continue</button>
+            <button type="submit">Verify</button>
           </div>
         </form>
       </div>
-    </>
-  );
-};
-
-const VerifyPhoneScreen = ({
-  setStep,
-  phoneObj,
-}: {
-  setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
-  phoneObj: PhoneNumberResource | undefined;
-}) => {
-  const [code, setCode] = React.useState('');
-
-  const verifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      // Attempt to verify the code that the user provided
-      // If successful, the user's number will be marked as verified
-      await phoneObj?.attemptVerification({ code });
-
-      // Display the success component
-      setStep('success');
-    } catch (error) {
-      console.log(error);
-    }
+    );
   };
 
-  return (
-    <div>
-      <form onSubmit={(e) => verifyCode(e)}>
-        <div>
-          <label htmlFor="code">Enter Code</label>
-          <input
-            onChange={(e) => setCode(e.target.value)}
-            id="code"
-            name="code"
-            type="text"
-            value={code}
+  function SuccessScreen() {
+    // This could be modified to show the newly added number and allow it to be selected for 2fa
+    // For this custom flow we will keep that logic in the main MFA management route
+    return (
+      <>
+        <h1>Success Screen</h1>
+        <p>You successfully added phone number</p>
+      </>
+    );
+  }
+
+  export default function AddMfaScreen() {
+    const [step, setStep] = React.useState<AddMfaSteps>('add');
+    const [phoneObj, setPhoneObj] = React.useState<
+      PhoneNumberResource | undefined
+    >();
+
+    return (
+      <>
+        {step === 'add' && (
+          <AddPhoneScreen
+            setStep={setStep}
+            setPhoneObj={setPhoneObj}
           />
-        </div>
-        <div>
-          <button type="submit">Verify</button>
-        </div>
-      </form>
-    </div>
-  );
-};
+        )}
+        {step === 'verify' && (
+          <VerifyPhoneScreen
+            setStep={setStep}
+            phoneObj={phoneObj}
+          />
+        )}
+        {step === 'success' && <SuccessScreen />}
+        <Link href="/custom-flows/account/manage-sms-mfa">Manage MFA</Link>
+      </>
+    );
+  }
+  ```
+  </Tab>
+</Tabs>
 
-function SuccessScreen() {
-  // This could be modified to show the newly added number and allow it to be selected for 2fa
-  // For this custom flow we will keep that logic in the main MFA management route
-  return (
-    <>
-      <h1>Success Screen</h1>
-      <p>You successfully added phone number</p>
-    </>
-  );
-}
-
-export default function AddMfaScreen() {
-  const [step, setStep] = React.useState<AddMfaSteps>('add');
-  const [phoneObj, setPhoneObj] = React.useState<
-    PhoneNumberResource | undefined
-  >();
-
-  return (
-    <>
-      {step === 'add' && (
-        <AddPhoneScreen
-          setStep={setStep}
-          setPhoneObj={setPhoneObj}
-        />
-      )}
-      {step === 'verify' && (
-        <VerifyPhoneScreen
-          setStep={setStep}
-          phoneObj={phoneObj}
-        />
-      )}
-      {step === 'success' && <SuccessScreen />}
-      <Link href="/custom-flows/account/manage-sms-mfa">Manage MFA</Link>
-    </>
-  );
-}
-```
+</Steps>

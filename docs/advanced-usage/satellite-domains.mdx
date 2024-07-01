@@ -17,6 +17,9 @@ To access authentication state from a satellite domain, users will be transparen
 
 ## How to add satellite domains
 
+> [!WARNING]
+> This feature is not available in production for free plans, though you can try it out free in development to see if it works for you. See the [pricing](https://clerk.com/pricing) page for more information.
+
 <Steps>
 
 ### Create your application and install Clerk
@@ -54,83 +57,180 @@ There are two ways that you can configure your Clerk satellite application to wo
 - Using environment variables
 - Using properties
 
-#### Configure your satellite app with environment variables
+Use the following tabs to select your preferred method. Clerk recommends using environment variables.
 
+<Tabs items={["Environment variables", "Properties"]}>
+
+<Tab>
 You can configure your satellite application by setting the following environment variables:
 
 > In development, your publishable and secret keys will start with `pk_test_` and `sk_test` respectively.
 
-<CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
-```env filename=".env.local"
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-CLERK_SECRET_KEY={{secret}}
+- In the `.env` file associated with your primary domain:
+    <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+    ```env filename=".env.local"
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+    ```
+    ```env filename=".env"
+    CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    CLERK_SIGN_IN_URL=/sign-in
+    ```
+    </CodeBlockTabs>
+- In the `.env` file associated with your other (satellite) domain:
+    <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+    ```env filename=".env.local"
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    NEXT_PUBLIC_CLERK_IS_SATELLITE=true
+    # Production example:
+    NEXT_PUBLIC_CLERK_DOMAIN=satellite.dev
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL=https://primary.dev/sign-in
 
-NEXT_PUBLIC_CLERK_DOMAIN=satellite.dev
-# Or, in development:
-# NEXT_PUBLIC_CLERK_DOMAIN=http://localhost:3001
-NEXT_PUBLIC_CLERK_IS_SATELLITE=true
+    # Development example:
+    # NEXT_PUBLIC_CLERK_DOMAIN=http://localhost:3001
+    # NEXT_PUBLIC_CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
+    ```
+    ```env filename=".env"
+    CLERK_PUBLISHABLE_KEY={{pub_key}}
+    CLERK_SECRET_KEY={{secret}}
+    CLERK_IS_SATELLITE=true
+    # Production example:
+    CLERK_DOMAIN=satellite.dev
+    CLERK_SIGN_IN_URL=https://primary.dev/sign-in
 
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=https://primary.dev/sign-in
-# Or, in development:
-# NEXT_PUBLIC_CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
-```
-```env filename=".env"
-CLERK_PUBLISHABLE_KEY={{pub_key}}
-CLERK_SECRET_KEY={{secret}}
+    # Development example:
+    # CLERK_DOMAIN=http://localhost:3001
+    # CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
+    ```
+    </CodeBlockTabs>
+</Tab>
+<Tab>
 
-CLERK_SIGN_IN_URL=http://primary.dev/sign-in
-# Or, in development:
-# CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
-CLERK_DOMAIN=satellite.dev
-# Or, in development:
-# CLERK_DOMAIN=http://localhost:3001
-CLERK_IS_SATELLITE=true
-```
-</CodeBlockTabs>
+You can configure your satellite application by setting the following properties:
 
-#### Configure your satellite app with properties
+- `isSatellite` - Defines the app as a satellite app when `true`.
+- `domain` - Sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
+- `signInUrl` - This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
 
-You can configure your satellite application as a satellite application by setting the `isSatellite`, `domain`, and `signInUrl` properties.
-
-The properties related to the multi-domain setup are:
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `isSatellite` | `boolean` or `(url: URL) => boolean` | This option defines that the application is a satellite application. |
-| `domain` | `string` or `(url: URL) => boolean` | This option sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps. |
-| `signInUrl` | `string` | This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances. |
-
-The `URL` parameter that can be passed to `isSatellite` and `domain` is the request url for server side usage or the current location for client usage.
+> [!TIP]
+> The `URL` parameter that can be passed to `isSatellite` and `domain` is the request url for server-side usage or the current location for client usage.
 
 <Tabs type="framework" items={["Next.js", "Remix"]}>
   <Tab>
-    In a Next.js application, you must set the properties in the [`<ClerkProvider>`](/docs/components/clerk-provider) component *and* in your [`authMiddleware()`](/docs/references/nextjs/auth-middleware).
+    In a Next.js application, you must set the properties in the [`<ClerkProvider>`](/docs/components/clerk-provider) component *and* in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware#clerk-middleware).
 
-    Configuring your `<ClerkProvider>` component should look like this:
+    - In the Next project associated with your primary domain, only the `signInUrl` prop needs to be configured as shown in the following example:
 
-    ```jsx filename="_app.tsx"
-    import { ClerkProvider } from "@clerk/nextjs";
-    import Head from "next/head";
+      > [!IMPORTANT]
+      > You should set your `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in your environment variables even if you're using props to configure satellite domains.
 
-    export default function App({ Component, pageProps }) {
-      const primarySignInUrl = 'https://primary.dev/sign-in';
-      // Or, in development:
-      // const primarySignInUrl = 'http:localhost:3000/sign-in';
-      return (
-        <ClerkProvider isSatellite domain={(url) => url.host} signInUrl={primarySignInUrl} {...pageProps}>
-          <Head>
-            <title>Satellite Next.js app</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          </Head>
-          <Component {...pageProps} />
-        </ClerkProvider>
-      );
-    }
-    ```
+      <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```jsx filename="app/layout.tsx"
+      import { ClerkProvider } from "@clerk/nextjs";
 
-    And your middleware should look like this:
+      export default function RootLayout({
+        children,
+      }: {
+        children: React.ReactNode;
+      }) {
+        const primarySignInUrl = "/sign-in";
+        return (
+          <html lang="en">
+            <body>
+              <ClerkProvider signInUrl={primarySignInUrl}>
+                <title>Satellite Next.js app</title>
+                <meta
+                  name="viewport"
+                  content="width=device-width, initial-scale=1.0"
+                />
+                {children}
+              </ClerkProvider>
+            </body>
+          </html>
+        );
+      }
+      ```
+      ```jsx filename="_app.tsx"
+      import { ClerkProvider } from "@clerk/nextjs";
+      import Head from "next/head";
 
-    ```js filename="middleware.ts"
+      export default function App({ Component, pageProps }) {
+        const primarySignInUrl = '/sign-in';
+        return (
+          <ClerkProvider signInUrl={primarySignInUrl} {...pageProps}>
+            <Head>
+              <title>Satellite Next.js app</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            </Head>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        );
+      }
+      ```
+      </CodeBlockTabs>
+
+
+    - In the Next project associated with your satellite domain, configure your `<ClerkProvider>` as shown in the following example:
+
+      <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```jsx filename="app/layout.tsx"
+      import { ClerkProvider } from "@clerk/nextjs";
+
+      export default function RootLayout({
+        children,
+      }: {
+        children: React.ReactNode;
+      }) {
+        const primarySignInUrl = "https://primary.dev/sign-in";
+        // Or, in development:
+        // const primarySignInUrl = 'http:localhost:3000/sign-in';
+        return (
+          <html lang="en">
+            <body>
+              <ClerkProvider
+                isSatellite
+                domain={(url) => url.host}
+                signInUrl={primarySignInUrl}
+              >
+                <title>Satellite Next.js app</title>
+                <meta
+                  name="viewport"
+                  content="width=device-width, initial-scale=1.0"
+                />
+                {children}
+              </ClerkProvider>
+            </body>
+          </html>
+        );
+      }
+      ```
+      ```jsx filename="_app.tsx"
+      import { ClerkProvider } from "@clerk/nextjs";
+      import Head from "next/head";
+
+      export default function App({ Component, pageProps }) {
+        const primarySignInUrl = 'https://primary.dev/sign-in';
+        // Or, in development:
+        // const primarySignInUrl = 'http:localhost:3000/sign-in';
+        return (
+          <ClerkProvider isSatellite domain={(url) => url.host} signInUrl={primarySignInUrl} {...pageProps}>
+            <Head>
+              <title>Satellite Next.js app</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            </Head>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        );
+      }
+      ```
+      </CodeBlockTabs>
+
+    And the middleware associated with your satellite domain should look like this:
+
+    ```ts filename="middleware.ts"
     import {
       clerkMiddleware,
       createRouteMatcher
@@ -164,40 +264,68 @@ The `URL` parameter that can be passed to `isSatellite` and `domain` is the requ
   <Tab>
     In a Remix application, you must set the properties in the [`ClerkApp`](/docs/references/remix/clerk-app) wrapper.
 
-    ```js filename="root.tsx"
-    export const loader = (args) => {
-      return rootAuthLoader(
-        args,
-        ({ request }) => {
-          const { userId, sessionId, getToken } = request.auth;
-          return json({
-              message: `Hello from the root loader :)`,
-              ENV: getBrowserEnvironment(),
-          });
-        },
-        {
-          loadUser: true,
-          signInUrl: 'https://primary.dev/sign-in',
-          // Or, in development:
-          // signInUrl: 'http:localhost:3000/sign-in',
-          isSatellite: true,
-          domain: (url) => url.host
-        } as const
-      );
-    };
+    - In the root file associated with your primary domain, you only need to configure the `signInUrl` prop:
 
-    export default ClerkApp(App, {
-      isSatellite: true,
-      domain: (url) => url.host,
-      signInUrl: 'https://primary.dev/sign-in',
-      // Or, in development:
-      // signInUrl: 'http:localhost:3000/sign-in',
-    });
-    ```
+      ```js filename="root.tsx"
+      export const loader = (args) => {
+        return rootAuthLoader(
+          args,
+          ({ request }) => {
+            const { userId, sessionId, getToken } = request.auth;
+            return json({
+                message: `Hello from the root loader :)`,
+                ENV: getBrowserEnvironment(),
+            });
+          },
+          {
+            loadUser: true,
+            signInUrl: '/sign-in',
+          } as const
+        );
+      };
+
+      export default ClerkApp(App, {
+        signInUrl: '/sign-in',
+      });
+      ```
+
+    - In the root file associated with your satellite domain, configure `ClerkApp` as shown in the following example:
+
+      ```js filename="root.tsx"
+      export const loader = (args) => {
+        return rootAuthLoader(
+          args,
+          ({ request }) => {
+            const { userId, sessionId, getToken } = request.auth;
+            return json({
+                message: `Hello from the root loader :)`,
+                ENV: getBrowserEnvironment(),
+            });
+          },
+          {
+            loadUser: true,
+            signInUrl: 'https://primary.dev/sign-in',
+            // Or, in development:
+            // signInUrl: 'http:localhost:3000/sign-in',
+            isSatellite: true,
+            domain: (url) => url.host
+          } as const
+        );
+      };
+
+      export default ClerkApp(App, {
+        isSatellite: true,
+        domain: (url) => url.host,
+        signInUrl: 'https://primary.dev/sign-in',
+        // Or, in development:
+        // signInUrl: 'http:localhost:3000/sign-in',
+      });
+      ```
   </Tab>
 
 </Tabs>
-
+</Tab>
+</Tabs>
 ### Ready to go 🎉
 
 Your satellite application should now be able to access the authentication state from your satellite domain!
@@ -210,7 +338,5 @@ You can see it in action by:
 You can repeat this process and create as many satellite applications as you need.
 
 </Steps>
-
-You can also check out the [example repository](https://github.com/clerk/clerk-nextjs-multi-domain-example) with a primary and a satellite Next.js application.
 
 If you have any questions about satellite domains, or you're having any trouble setting this up, please contact support@clerk.com

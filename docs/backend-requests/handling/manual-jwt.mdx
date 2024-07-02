@@ -9,85 +9,26 @@ Your Clerk-generated [session tokens](/docs/backend-requests/resources/session-t
 
 For every request, you must validate its token to make sure it hasn't expired and it is authentic (i.e. no malicious user tried to tamper with it). If these validations pass, then it means that the user is authenticated to your application and you should consider them signed in.
 
-<Steps>
+The `authenticateRequest()` method from Clerk's JavaScript Backend SDK does all of this for you. It accepts the request object and authenticates the session token in it. See the [reference page](/docs/references/backend/authenticate-request) for more information.
 
-### Retrieve the session token
+The following example uses the `authenticateRequest()` method to verify the token passed by the frontend, and performs a networkless authentication. This will verify if the user is signed into the application or not.
 
-Retrieve the session token from either `__session` cookie for a same origin request or from the Authorization header for cross origin requests.
+```tsx
+import { createClerkClient } from '@clerk/backend';
 
-### Get your instance's public key
+export async function GET(req: Request) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  });
 
-There are three ways to obtain your public key:
+  const { isSignedIn } = await clerkClient.authenticateRequest(req);
 
-1. Using the Backend API in JSON Web Key Set (JWKS) format at the following endpoint [https://api.clerk.com/v1/jwks](https://clerk.com/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
-1. Using the Frontend API in JSON Web Key Set (JWKS) format at the following endpoint `https://<YOUR_FRONTEND_API>/.well-known/jwks.json`. This can be obtained from the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. In the left sidebar, select **Show JWT public key** and copy the **JWKS URL**.
-1. Using the PEM public key provided in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page. In the left sidebar, select **Show JWT public key** and copy the **PEM Public Key**.
-
-### Verify the token signature
-
-To verify the token signature, you should:
-
-1. Use the above Public Key to verify the token's signature.
-2. Validate that the token is not expired by checking the `exp` ([Expiration time](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4)) and `nbf` ([Not before](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5)) claims.
-3. The `azp` claim in the Clerk Session JWT stands for authorized parties. If the `azp` claim exists, validate that it equals any of your known origins that are permitted to generate those tokens. This is an extra security check that we highly recommend that you do. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from `http://localhost:3000`, then the `azp` claim should equal `http://localhost:3000`. You can also pass an array of strings like so: `['http://localhost:4003', 'https://clerk.dev']`. If the `azp` claim does not exist, then you can skip this step.
-
-If the above process is successful, it means that the user is signed in to your application and you can consider them authenticated. You can also retrieve the session ID and user ID out of the token's claims.
-
-</Steps>
-
-## Example usage
-
-In the example below, the [jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken) library is used to verify the token signature. The [cookies](https://www.npmjs.com/package/cookies) library is used to retrieve the `__session` cookie.
-
-```tsx filename="pages/api/token-example.ts"
-import type { NextApiRequest, NextApiResponse } from "next";
-import Cookies from "cookies";
-import jwt from "jsonwebtoken";
-
-export default async function (req: NextApiRequest, res: NextApiResponse) {
-  const publicKey = process.env.CLERK_PEM_PUBLIC_KEY;
-  const cookies = new Cookies(req, res);
-  const sessToken = cookies.get("__session");
-  const token = req.headers.authorization;
-
-  if (sessToken === undefined && token === undefined) {
-    res.status(401).json({ error: "not signed in" });
-    return;
+  if (!isSignedIn) {
+    return Response.json({ status: 401 });
   }
 
-  try {
-    let decoded = "";
-    if (token) {
-      decoded = jwt.verify(token, publicKey);
-      res.status(200).json({ sessToken: decoded });
-      return;
-    } else {
-      decoded = jwt.verify(sessToken, publicKey);
-      res.status(200).json({ sessToken: decoded });
-      return;
-    }
-  } catch (error) {
-    res.status(400).json({
-      error: "Invalid Token",
-    });
-    return;
-  }
-}
-```
+  // Perform protected actions
 
-{/* TODO: add code examples of how to validate the exp and azp claims ?? */}
-If the token is valid, the response will return a JSON object that looks similar to the one below. You can use this to validate the `exp` and `azp` claims, as mentioned in the [steps above](#verify-the-token-signature). Once the token is completely validated, you then have a valid session ID (`sid`) and user ID (`sub`) that you can use in your application.
-
-```json
-{
-  "sessToken": {
-    "azp": "http://localhost:3000",
-    "exp": 1687906422,
-    "iat": 1687906362,
-    "iss": "https://magical-marmoset-51.clerk.accounts.dev",
-    "nbf": 1687906352,
-    "sid": "sess_2Ro7e2IxrffdqBboq8KfB6eGbIy",
-    "sub": "user_2RfWKJREkjKbHZy0Wqa5qrHeAnb"
-  }
+  return Response.json({ message: 'This is a reply' });
 }
 ```

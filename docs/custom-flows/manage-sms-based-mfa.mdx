@@ -101,6 +101,57 @@ Use the following tabs to view the code necessary for each page.
     );
   };
 
+  // Display phone numbers that are not reserved for MFA
+  const ManageAvailablePhoneNumbers = () => {
+    const { user } = useUser();
+
+    if (!user) return null;
+
+    // Check if any phone numbers aren't reserved for MFA
+    const availalableForMfaPhones = user.phoneNumbers
+      .filter((ph) => ph.verification.status === 'verified')
+      .filter((ph) => !ph.reservedForSecondFactor);
+
+    // Reserve a phone number for MFA
+    const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
+      // Set the phone number as reserved for MFA
+      await phone.setReservedForSecondFactor({ reserved: true });
+      // Refresh the user information to reflect changes
+      await user.reload();
+    };
+
+    return (
+      <>
+        <h2>Phone numbers that are not reserved for MFA</h2>
+        {availalableForMfaPhones.length === 0 ? (
+          <p>
+            None - <Link href="/account/add-phone">Add a new phone number</Link>
+          </p>
+        ) : (
+          <ul>
+            {availalableForMfaPhones.map((phone) => {
+              return (
+                <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
+                  <p>{phone.phoneNumber}</p>
+                  <div>
+                    <button onClick={() => reservePhoneForMfa(phone)}>
+                      Use for MFA
+                    </button>
+                  </div>
+                  <div>
+                    <button onClick={() => phone.destroy()}>
+                      Remove from account
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </>
+    );
+  };
+
   // Generate and display backup codes
   function GenerateBackupCodes() {
     const { user } = useUser();
@@ -147,72 +198,9 @@ Use the following tabs to view the code necessary for each page.
     );
   }
 
-  const ManageAvailablePhoneNumbers = ({
-    setShowBackupCodes,
-  }: {
-    setShowBackupCodes: React.Dispatch<React.SetStateAction<boolean>>;
-  }) => {
-    const { user } = useUser();
-    if (!user) return null;
-
-    // Check if any phone numbers that could be used for 2fa
-    const availaForMfaPhones = user.phoneNumbers
-      .filter((ph) => ph.verification.status === 'verified')
-      .filter((ph) => !ph.reservedForSecondFactor);
-
-    // Check if the user have any phone numbers reserved for 2fa
-    const isFirstMfaPhoneNumber =
-      user.phoneNumbers
-        .filter((ph) => ph.verification.status === 'verified')
-        .filter((ph) => ph.reservedForSecondFactor).length === 0
-        ? true
-        : false;
-
-    // If the array is 0 length, then there are no numbers available for 2fa
-    if (availaForMfaPhones.length === 0) {
-      return <p>No phone number available for MFA. You can add a new number</p>;
-    }
-
-    const enablePhoneForMfa = async (phone: PhoneNumberResource) => {
-      // Enable number for 2fa
-      await phone.setReservedForSecondFactor({ reserved: true });
-      // Refresh teh user object to reflect changes
-      await user.reload();
-      // If this is the first number for 2fa, then generate and display backup codes
-      if (isFirstMfaPhoneNumber) {
-        setShowBackupCodes(true);
-      }
-    };
-
-    // Render numbers available for 2fa, and a button to enable the number for 2fa
-    return (
-      <>
-        <h2>Available Numbers</h2>
-        <ul>
-          {availaForMfaPhones.map((phone) => {
-            return (
-              <li
-                key={phone.id}
-              >
-                <p>{phone.phoneNumber}</p>
-                <p>
-                  <button onClick={() => enablePhoneForMfa(phone)}>
-                    Use for Mfa
-                  </button>
-                </p>
-                <p>
-                  <button onClick={() => phone.destroy()}>Remove Number</button>
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      </>
-    );
-  };
-
   export default function ManageSmsMFA() {
     const [showBackupCodes, setShowBackupCodes] = React.useState(false);
+
     const { isLoaded, user } = useUser();
 
     if (!isLoaded) return null;
@@ -226,16 +214,11 @@ Use the following tabs to view the code necessary for each page.
         <h1>User MFA Settings</h1>
 
         {/* Manage SMS MFA */}
-        <div>
-          <ManageMfaPhoneNumbers />
-          <ManageAvailablePhoneNumbers setShowBackupCodes={setShowBackupCodes} />
-          <Link href="/custom-flows/account/manage-sms-mfa/add">
-            Add new phone number
-          </Link>
-        </div>
+        <ManageMfaPhoneNumbers />
+        <ManageAvailablePhoneNumbers />
 
         {/* Manage backup codes */}
-        {user.backupCodeEnabled && user.twoFactorEnabled && (
+        {user.twoFactorEnabled && (
           <div>
             <p>
               Generate new backup codes? -{' '}

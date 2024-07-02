@@ -29,12 +29,12 @@ For your users to be able to enable MFA for their account, you need to enable MF
 This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
 
 This example consists of two pages:
-- The main page where users can manage their MFA settings
-- The page where users can add SMS MFA.
+- The main page where users can manage their SMS MFA settings.
+- The page where users can add a phone number to their account.
 
 Use the following tabs to view the code necessary for each page.
 
-<Tabs items={["Manage MFA page", "Add SMS page"]}>
+<Tabs items={["Manage MFA page", "Add phone number page"]}>
   <Tab>
   ```jsx {{ filename: '/app/account/manage-mfa/page.tsx' }}
   'use client';
@@ -198,7 +198,7 @@ Use the following tabs to view the code necessary for each page.
     );
   }
 
-  export default function ManageSmsMFA() {
+  export default function ManageSMSMFA() {
     const [showBackupCodes, setShowBackupCodes] = React.useState(false);
 
     const { isLoaded, user } = useUser();
@@ -245,54 +245,112 @@ Use the following tabs to view the code necessary for each page.
   import * as React from 'react';
   import { useUser } from '@clerk/nextjs';
   import { PhoneNumberResource } from '@clerk/types';
-  import Link from 'next/link';
 
-  type AddMfaSteps = 'add' | 'verify' | 'success';
-
-  const AddPhoneScreen = ({
-    setStep,
-    setPhoneObj,
-  }: {
-    setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
-    setPhoneObj: React.Dispatch<
-      React.SetStateAction<PhoneNumberResource | undefined>
-    >;
-  }) => {
-    const [phone, setPhone] = React.useState('');
-
+  export default function Page() {
     const { isLoaded, user } = useUser();
+    const [phone, setPhone] = React.useState('');
+    const [code, setCode] = React.useState('');
+    const [isVerifying, setIsVerifying] = React.useState(false);
+    const [successful, setSuccessful] = React.useState(false);
+    const [phoneObj, setPhoneObj] = React.useState<
+      PhoneNumberResource | undefined
+    >();
 
+    if (!isLoaded) return null;
+
+    if (isLoaded && !user?.id) {
+      return <p>You must be logged in to access this page</p>;
+    }
+
+    // Handle addition of the phone number
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
 
-      // Confirm that Clerk and the user have loaded.
-      // This could be handled earlier and include a redirect to /sign-in
-      if (!isLoaded || !user) return null;
-
       try {
-        // Add an unverified phone number to the user's account
-        const res = await user?.createPhoneNumber({ phoneNumber: phone });
-        // Refresh the user so the new number is available
+        // Add unverified phone number to user
+        const res = await user.createPhoneNumber({ phoneNumber: phone });
+        // Reload user to get updated User object
         await user.reload();
-        // Select the newly added number from the `phoneNumbers` array
+
+        // Create a reference to the new phone number to use related methods
         const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
-        // Save this to the `phoneObj` state
         setPhoneObj(phoneNumber);
-        // Send a code to the new number for verification
+
+        // Send the user an SMS with the verification code
         phoneNumber?.prepareVerification();
-        // Set the step to `verify` so the verification form is rendered
-        setStep('verify');
-      } catch (error: any) {
-        console.log(error);
+
+        // Set to true to display second form
+        // and capture the OTP code
+        setIsVerifying(true);
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2));
       }
     };
 
+    // Handle the submission of the verification form
+    const verifyCode = async (e: React.FormEvent) => {
+      e.preventDefault();
+      try {
+        // Verify that the provided code matches the code sent to the user
+        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code });
+
+        if (phoneVerifyAttempt?.verification.status === 'verified') {
+          setSuccessful(true);
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(phoneVerifyAttempt, null, 2));
+        }
+      } catch (err) {
+        console.error(JSON.stringify(err, null, 2));
+      }
+    };
+
+    // Display a success message if the phone number was added successfully
+    if (successful) {
+      return (
+        <>
+          <h1>Phone added</h1>
+        </>
+      );
+    }
+
+    // Display the verification form to capture the OTP code
+    if (isVerifying) {
+      return (
+        <>
+          <h1>Verify phone</h1>
+          <div>
+            <form onSubmit={(e) => verifyCode(e)}>
+              <div>
+                <label htmlFor="code">Enter code</label>
+                <input
+                  onChange={(e) => setCode(e.target.value)}
+                  id="code"
+                  name="code"
+                  type="text"
+                  value={code}
+                />
+              </div>
+              <div>
+                <button type="submit">Verify</button>
+              </div>
+            </form>
+          </div>
+        </>
+      );
+    }
+
+    // Display the initial form to capture the phone number
     return (
       <>
+        <h1>Add phone</h1>
         <div>
           <form onSubmit={(e) => handleSubmit(e)}>
             <div>
-              <label htmlFor="phone">Add Phone</label>
+              <label htmlFor="phone">Enter phone number</label>
               <input
                 onChange={(e) => setPhone(e.target.value)}
                 id="phone"
@@ -306,87 +364,6 @@ Use the following tabs to view the code necessary for each page.
             </div>
           </form>
         </div>
-      </>
-    );
-  };
-
-  const VerifyPhoneScreen = ({
-    setStep,
-    phoneObj,
-  }: {
-    setStep: React.Dispatch<React.SetStateAction<AddMfaSteps>>;
-    phoneObj: PhoneNumberResource | undefined;
-  }) => {
-    const [code, setCode] = React.useState('');
-
-    const verifyCode = async (e: React.FormEvent) => {
-      e.preventDefault();
-      try {
-        // Attempt to verify the code that the user provided
-        // If successful, the user's number will be marked as verified
-        await phoneObj?.attemptVerification({ code });
-
-        // Display the success component
-        setStep('success');
-      } catch (error) {
-        console.log(error);
-      }
-    };
-
-    return (
-      <div>
-        <form onSubmit={(e) => verifyCode(e)}>
-          <div>
-            <label htmlFor="code">Enter Code</label>
-            <input
-              onChange={(e) => setCode(e.target.value)}
-              id="code"
-              name="code"
-              type="text"
-              value={code}
-            />
-          </div>
-          <div>
-            <button type="submit">Verify</button>
-          </div>
-        </form>
-      </div>
-    );
-  };
-
-  function SuccessScreen() {
-    // This could be modified to show the newly added number and allow it to be selected for 2fa
-    // For this custom flow we will keep that logic in the main MFA management route
-    return (
-      <>
-        <h1>Success Screen</h1>
-        <p>You successfully added phone number</p>
-      </>
-    );
-  }
-
-  export default function AddMfaScreen() {
-    const [step, setStep] = React.useState<AddMfaSteps>('add');
-    const [phoneObj, setPhoneObj] = React.useState<
-      PhoneNumberResource | undefined
-    >();
-
-    return (
-      <>
-        {step === 'add' && (
-          <AddPhoneScreen
-            setStep={setStep}
-            setPhoneObj={setPhoneObj}
-          />
-        )}
-        {step === 'verify' && (
-          <VerifyPhoneScreen
-            setStep={setStep}
-            phoneObj={phoneObj}
-          />
-        )}
-        {step === 'success' && <SuccessScreen />}
-        <Link href="/custom-flows/account/manage-sms-mfa">Manage MFA</Link>
       </>
     );
   }

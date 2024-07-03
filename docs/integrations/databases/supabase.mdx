@@ -30,7 +30,16 @@ Integrating Supabase with Clerk gives you the benefits of using a Supabase datab
 
 ## Tutorial
 
-This tutorial will teach you how to integrate Supabase with Clerk by creating RLS policies that show users content associated with their account.
+Row Level Security works by validating database queries according to the restrictions defined in the RLS policies applied to the table. This guide will walk you through:
+
+- Creating a function to parse the Clerk user ID from the authentication token.
+- Creating a `user_id` column that defaults to the Clerk user's ID when new records are created.
+- Creating policies to restrict what data can be read and inserted.
+- Using the Clerk Supabase integration helper in your code to authenticate with Supabase and execute queries.
+
+This integration restricts what data authenticated users can access in the database, but does not synchronize user records between Clerk and Supabase.
+
+To send additional data from Clerk to your Supabase database, we recommend using [webhooks](/docs/integrations/webhooks/overview).
 
 <Callout type="info">
   You must have a local project with Clerk set up already to follow this tutorial. See [the quickstart docs](/docs/quickstarts/overview) to get started.
@@ -38,21 +47,9 @@ This tutorial will teach you how to integrate Supabase with Clerk by creating RL
 
 <Steps>
 
-### Add a column for user IDs to your Supabase tables
-
-To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
-
-- In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
-    - Name the column `user_id`.
-    - **This column's data type must be `text`**.
-    - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
-<Callout type="info">
-  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
-</Callout>
-
 ### Create a SQL query that checks the user ID
 
-Create a `requesting_user_id()` function, which will get the Clerk user ID of the requesting user from the request headers. This will allow you to access the user ID in your RLS policies.
+The first step is to create a function named `requesting_user_id()` that will parse the Clerk user ID from the authentication token. This function will be used to set the default value of `user_id` in a table and in the RLS policies to ensure the user can only access their data.
     1. In the sidebar of your Supabase dashboard, navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
         ```sql
         CREATE OR REPLACE FUNCTION requesting_user_id()
@@ -65,29 +62,87 @@ Create a `requesting_user_id()` function, which will get the Clerk user ID of th
         ```
     1. Select **Run** to execute the query and create the `requesting_user_id` function.
 
+### Add a column for user IDs to your Supabase tables
+
+To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
+
+#### Using the Table Editor
+
+- In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
+    - Name the column `user_id`.
+    - **This column's data type must be `text`**.
+    - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
+
+#### Using the SQL Editor
+
+From the sidebar, select **SQL Editor** and run the following query, replacing `%TABLE_NAME%` with the name of the table you wish to add `user_id` to:
+
+```sql
+alter table %TABLE_NAME% add user_id text not null default (requesting_user_id());
+```
+
+<Callout type="info">
+  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
+</Callout>
+
+### Enable RLS on the table
+
+Before you can create RLS policies, the feature must be enabled per table.
+
+#### Using the Table Editor
+
+In the left navigation, select **Table Editor** and select the desired table. Click the **RLS disabled** button in the top navigation, then **Enable RLS for this table** in the menu that appears.
+
+#### Using the SQL Editor
+
+To enable RLS on a table using the SQL editor, run the following query, replacing `%TABLE_NAME%` with the name of your table.
+
+```sql
+alter table %TABLE_NAME% enable row level security;
+```
+
 ### Create ID-based RLS policies
 
 Create RLS policies that allow users to modify and read content associated with their user IDs. This example will use an `Addresses` table, but you can replace `Addresses` with whatever table you're using.
-1. Create an RLS policy for inserting content:
-    - In your Supabase dashboard, in the sidebar, navigate to **Authentication** > **Policies**. Under the name of the table you want users to have access to, select **New Policy**.
-    - If you're using the policy editor, paste the following snippet, replacing `address` and `"Addresses"` with whatever you want:
-        ```sql filename="Supabase policy editor"
-        CREATE POLICY "create user address" ON "public"."Addresses"
-        AS PERMISSIVE FOR INSERT
-        TO authenticated
 
-        WITH CHECK (requesting_user_id() = user_id)
-        ```
-    - If you're using the policy creator instead of the editor:
-        - Name the policy whatever you want.
-        - For **Allowed operation**, select **INSERT**.
-        - For **Target roles**, select **authenticated**.
-        - For the **USING** expression, paste the following:
-        ```sql filename="Supabase policy editor"
-        requesting_user_id() = user_id
-        ```
-1. Create another RLS policy to allow users to read content from the same table they can modify. Follow the same instructions as the previous step, but the **Allowed operation** must be **SELECT** instead of **INSERT**.
-    - If you're using the editor, copy the same snippet from the previous step, replacing `FOR INSERT` with `FOR SELECT`.
+#### Using the Policy editor
+
+Use the sidebar to navigate to **Authentication** > **Policies**.
+
+1. Click the **New Policy** button next to the table you are working with to create an RLS policy for inserting content:
+    - Name the policy whatever you want.
+    - For **Allowed operation**, select **INSERT**.
+    - For **Target roles**, select **authenticated**.
+    - For the **WITH CHECK** expression, paste the following:
+    ```sql filename="Supabase policy editor"
+    requesting_user_id() = user_id
+    ```
+1. Click **New Policy** again to create an RLS policy for reading content:
+    - Name the policy whatever you want.
+    - For **Allowed operation**, select **SELECT**.
+    - For **Target roles**, select **authenticated**.
+    - For the **USING** expression, paste the following:
+    ```sql filename="Supabase policy editor"
+    requesting_user_id() = user_id
+    ```
+
+#### Using the SQL Editor
+
+In the sidebar, navigate to **SQL Editor**. Run the following two queries to add a policy for `SELECT` and `INSERT` operations. Replace `%POLICY_NAME%` for each with a unique name. Replace `%TABLE_NAME%` with the name of the desired table.
+
+```sql
+-- This policy will enforce the user_id field on INSERT statements matches the Clerk user ID.
+CREATE POLICY "%POLICY_NAME%" ON "public"."%TABLE_NAME%"
+AS PERMISSIVE FOR INSERT
+TO authenticated
+WITH CHECK (requesting_user_id() = user_id)
+
+-- This policy will restrict SELECT statements only to records where user_id matches the Clerk user ID.
+CREATE POLICY "%POLICY_NAME%" ON "public"."%TABLE_NAME%"
+AS PERMISSIVE FOR SELECT
+TO authenticated
+USING (requesting_user_id() = user_id)
+```
 
 ### Get your Supabase JWT secret key
 
@@ -122,30 +177,30 @@ To use Clerk with Supabase in your code, first install the necessary SDKs by run
   <Tab>
     <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
       ```bash filename="terminal"
-      npm install @clerk/nextjs @supabase/supabase-js
+      npm install @supabase/supabase-js
       ```
 
       ```bash filename="terminal"
-      yarn add @clerk/nextjs @supabase/supabase-js
+      yarn add @supabase/supabase-js
       ```
 
       ```bash filename="terminal"
-      pnpm add @clerk/nextjs @supabase/supabase-js
+      pnpm add @supabase/supabase-js
       ```
     </CodeBlockTabs>
   </Tab>
   <Tab>
     <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
       ```bash filename="terminal"
-      npm install @clerk/clerk-react @supabase/supabase-js
+      npm install @supabase/supabase-js
       ```
 
       ```bash filename="terminal"
-      yarn add @clerk/clerk-react @supabase/supabase-js
+      yarn add @supabase/supabase-js
       ```
 
       ```bash filename="terminal"
-      pnpm add @clerk/clerk-react @supabase/supabase-js
+      pnpm add @supabase/supabase-js
       ```
     </CodeBlockTabs>
   </Tab>

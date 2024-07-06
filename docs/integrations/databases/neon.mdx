@@ -24,7 +24,7 @@ description: Learn how to integrate Clerk into your Neon application.
 
 </TutorialHero>
 
-This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.js application, using `drizzle-orm` for interacting with the database. The tutorial guides you through setting up a simple application that enables users to add, view, and delete messages. If a user has an existing message, they can view and delete it; otherwise, they can add a new message.
+This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.js application, using `drizzle-orm` and `drizzle-kit` to interact with the database. This demo app will be able to create a user message and delete it based on the user ID using Clerk and server actions.
 
 <Steps>
 
@@ -44,36 +44,25 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
 
 ### Integrate the Next.js Clerk SDK
 
-Follow the [Next.js quickstart](/docs/quickstarts/nextjs) to integrate the Next.js Clerk SDK into your application.
+Follow the [Next.js quickstart](/docs/quickstarts/nextjs) to integrate the Next.js and Clerk into your application.
 
-### Configure the Clerk middleware
+### Protect your application routes
 
-By default, [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) will not protect any routes. All routes are public and you must opt-in to protection for routes. For this tutorial, protect your entire application and ensure that only authenticated users can it.
+To ensure that only authenticated users can access your application, protect your application routes by adding the following configuration:
 
-In your `middleware.ts` file, update the code with the following configuration:
-
-```typescript {{ filename: 'middleware.ts' }}
+```typescript {{ filename: 'middleware.ts', ins: [3] }} 
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
-export default clerkMiddleware((auth) => {
-  auth().protect();
-});
+export default clerkMiddleware((auth) => { auth().protect() });
 
 export const config = {
   matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };
 ```
 
-### Set your environment variables
+### Set your neon connection string
 
-You must add the Neon connection string to your project's environment variables.
-
-1. Navigate to the [Neon console](https://console.neon.tech/).
-1. In the navigation sidebar, select **Dashboard**.
-1. In the **Connection Details** section, find your Neon database connection string.
-1. Add the connection string to your `.env.local` file.
-
-The final result should resemble the following:
+Add the Neon connection string to your project's environment variables. You can find the connection string in the [Neon console](https://console.neon.tech/). Your environment variable file should have the following values:
 
 ```sh {{ filename: '.env.local' }}
 DATABASE_URL=NEON_DB_CONNECTION_STRING
@@ -81,16 +70,12 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```
 
-### Set up the application schema
+### Set up the application schema and database connection
 
-Create a schema for the database. The schema will include a table called `user_messages` with the colomns `user_id`, `create_ts`, and `message`.
-
-1. Inside the `app/` directory, create a `db` folder.
-1. Inside the `db/` folder, create a `schema.ts` file and an `index.ts` file.
-1. Use the tabs below to find the example code for the schema and index files.
+To define the database schema and set up the database connection, create a `schema.ts` and a `index.ts` file in the `app/db` directory. In this example, `user_id` will be used to store the user's Clerk ID in the database.
 
 <CodeBlockTabs options={["Schema", "Index"]}>
-```typescript {{ filename: 'app/db/schema.ts' }}
+```typescript {{ filename: 'app/db/schema.ts', mark: [4] }}
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const UserMessages = pgTable("user_messages", {
@@ -119,72 +104,100 @@ export const db = drizzle(sql, {
 ```
 </CodeBlockTabs>
 
-### Generate and run database migrations
+### Push the schema to the database
 
-Use the `drizzle-kit` package to generate and run database migrations.
+To load the schema into the database, create a `drizzle.config.ts` file at the root of your project and add the following configuration:
 
-1. At the root of your project, create a `drizzle.config.ts` and add the following configuration:
-    ```typescript {{ filename: 'drizzle.config.ts' }}
-    import { defineConfig } from "drizzle-kit";
-    import { loadEnvConfig } from "@next/env";
+```typescript {{ filename: 'drizzle.config.ts' }}
+import { defineConfig } from "drizzle-kit";
+import { loadEnvConfig } from "@next/env";
 
-    loadEnvConfig(process.cwd());
+loadEnvConfig(process.cwd());
 
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL must be a Neon postgres connection string");
-    }
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be a Neon postgres connection string");
+}
 
-    export default defineConfig({
-      dialect: "postgresql",
-      dbCredentials: {
-        url: process.env.DATABASE_URL,
-      },
-      schema: "./app/db/schema.ts",
-      out: "./migrations",
-    });
-    ```
-1. Generate and run the database migrations by running the following commands:
-    ```sh {{ filename: 'terminal' }}
-    npx drizzle-kit generate
-    npx drizzle-kit migrate
-    ```
+export default defineConfig({
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL,
+  },
+  schema: "./app/db/schema.ts",
+});
+```
 
-### Create the UI of the home page
+Run the following command to push the schema to the database:
+```sh {{ filename: 'terminal' }}
+npx drizzle-kit push
+```
 
-Add the following code to the `app/page.tsx` file to create the UI of the home page:
+### Creating server actions with Clerk
+
+To add and delete user messages from the database, create an `actions.ts` file in the `app` directory. You can get the user ID using the `currentUser` function from the Clerk SDK.
+
+```typescript {{ filename: 'app/actions.ts' }}
+"use server";
+
+import { currentUser } from "@clerk/nextjs/server";
+import { UserMessages } from "./db/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+
+export async function createUserMessage(formData: FormData) {
+  const user = await currentUser();
+  if (!user) throw new Error("User not found");
+
+  const message = formData.get("message") as string;
+  await db.insert(UserMessages).values({
+    user_id: user.id,
+    message,
+  });
+}
+
+export async function deleteUserMessage() {
+  const user = await currentUser();
+  if (!user) throw new Error("User not found");
+
+  await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
+}
+```
+
+### Render the UI based on the user ID
+
+To conditionally render the page based on the user ID, create a `page.tsx` file in the `app` directory. Use the `currentUser` function from the Clerk to get the user ID and query the database for existing messages. 
+
+If a message exists, display the message and a button to delete it. If no message exists, display a form to create a new message.
 
 ```tsx {{ filename: 'app/page.tsx' }}
 import { createUserMessage, deleteUserMessage } from "./actions";
 import { db } from "./db";
 import { currentUser } from "@clerk/nextjs/server";
 
-async function getUserMessage() {
+export default async function Home() {
+
   const user = await currentUser();
   if (!user) throw new Error("User not found");
-  return db.query.UserMessages.findFirst({
+  const existingMessage = db.query.UserMessages.findFirst({
     where: (messages, { eq }) => eq(messages.user_id, user.id),
   });
-}
-
-export default async function Home() {
-  const existingMessage = await getUserMessage();
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen">
-      <h1 className="text-3xl font-bold mb-8">Neon + Clerk Example</h1>
+    <main>
+      <h1>Neon + Clerk Example</h1>
       {existingMessage ? (
-        <div className="text-center">
-          <p className="text-xl mb-4">{existingMessage.message}</p>
+        <div>
+          <p>{existingMessage.message}</p>
           <form action={deleteUserMessage}>
-            <button type="submit" className="bg-red-500 text-white px-4 py-2 rounded">
+            <button>
               Delete Message
             </button>
           </form>
         </div>
       ) : (
-        <form action={createUserMessage} className="flex flex-col items-center">
-          <input type="text" name="message" placeholder="Enter a message" className="border border-gray-300 rounded px-4 py-2 mb-4 w-64" />
-          <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
+        <form action={createUserMessage}>
+          <input type="text" name="message" placeholder="Enter a message" />
+          <button>
             Save Message
           </button>
         </form>
@@ -193,42 +206,6 @@ export default async function Home() {
   );
 }
 ```
-
-### Handle user interactions
-
-Create server actions to handle the form submissions and database interactions.
-
-1. At the root of your project, create an `actions.ts` file.
-1. Paste the following code example:
-    ```typescript {{ filename: 'app/actions.ts' }}
-    "use server";
-
-    import { currentUser } from "@clerk/nextjs/server";
-    import { UserMessages } from "./db/schema";
-    import { db } from "./db";
-    import { redirect } from "next/navigation";
-    import { eq } from "drizzle-orm";
-
-    export async function createUserMessage(formData: FormData) {
-      const user = await currentUser();
-      if (!user) throw new Error("User not found");
-
-      const message = formData.get("message") as string;
-      await db.insert(UserMessages).values({
-        user_id: user.id,
-        message,
-      });
-      redirect("/");
-    }
-
-    export async function deleteUserMessage() {
-      const user = await currentUser();
-      if (!user) throw new Error("User not found");
-
-      await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
-      redirect("/");
-    }
-    ```
 
 ### Run the application
 

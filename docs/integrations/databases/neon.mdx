@@ -48,7 +48,7 @@ Follow the [Next.js quickstart](/docs/quickstarts/nextjs) to integrate the Clerk
 
 ### Protect your application routes
 
-To ensure that only authenticated users can access your application, protect your application routes by adding the following configuration:
+To ensure that only authenticated users can access your application, modify [clerkMiddleware](/docs/references/nextjs/clerk-middleware) to require authentication for every route.
 
 ```typescript {{ filename: 'middleware.ts', mark: [3] }} 
 import { clerkMiddleware } from '@clerk/nextjs/server';
@@ -136,19 +136,19 @@ npx drizzle-kit push
 
 ### Create Server Actions to handle user interactions
 
-To handle form submissions for adding and deleting user messages, create two Server Actions in `app/actions.ts`. Use the `auth()` function from Clerk to obtain the user ID, which will be used to interact with the database.
+To handle form submissions for adding and deleting user messages, create two Server Actions in `app/actions.ts`. Use the [`auth()`](/docs/references/nextjs/auth) function from Clerk to obtain the user ID, which will be used to interact with the database.
 
 ```typescript {{ filename: 'app/actions.ts' }}
 "use server";
 
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { UserMessages } from "./db/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
 export async function createUserMessage(formData: FormData) {
-  const user = await currentUser();
-  if (!user) throw new Error("User not found");
+  const { userId } = auth();
+  if (!userId) throw new Error("User not found");
 
   const message = formData.get("message") as string;
   await db.insert(UserMessages).values({
@@ -158,8 +158,8 @@ export async function createUserMessage(formData: FormData) {
 }
 
 export async function deleteUserMessage() {
-  const user = await currentUser();
-  if (!user) throw new Error("User not found");
+  const { userId } = auth();
+  if (!userId) throw new Error("User not found");
 
   await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
 }
@@ -169,21 +169,20 @@ export async function deleteUserMessage() {
 
 In your `app/page.tsx` file, add the following code to create the UI for the home page. If a message exists, the user can view and delete it; otherwise, they can add a new message.
 
-To retrieve the user's messages, use Clerk's [`currentUser()`](/docs/references/nextjs/current-user) to obtain the current user's ID. Then, use this ID to query the database for the user's messages.
+To retrieve the user's messages, use Clerk's [`auth()`](/docs/references/nextjs/auth) to obtain the user's ID. Then, use this ID to query the database for the user's messages.
 
 To enable the user to delete or add a message, use the `deleteUserMessage()` and `createUserMessage()` actions created in the previous step.
 
 ```tsx {{ filename: 'app/page.tsx' }}
 import { createUserMessage, deleteUserMessage } from "./actions";
 import { db } from "./db";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 
 export default async function Home() {
-
-  const user = await currentUser();
-  if (!user) throw new Error("User not found");
+  const { userId } = auth();
+  if (!userId) throw new Error("User not found");
   const existingMessage = db.query.UserMessages.findFirst({
-    where: (messages, { eq }) => eq(messages.user_id, user.id),
+    where: (messages, { eq }) => eq(messages.user_id, userId),
   });
 
   return (

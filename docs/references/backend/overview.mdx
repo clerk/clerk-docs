@@ -4,97 +4,196 @@ description: The JavaScript Backend SDK exposes Clerk's backend API resources an
 
 # JavaScript Backend SDK
 
-The [JavaScript Backend SDK](https://github.com/clerk/javascript/tree/main/packages/backend) exposes Clerk's backend API resources and low-level authentication utilities **for JavaScript environments**. While the backend SDK is mainly used as a building block for Clerk's higher-level SDKs, it can also be used on its own for advanced flows and custom integrations.
+Clerk's JavaScript Backend SDK exposes [Clerk's Backend API](https://clerk.com/docs/reference/backend-api) resources and low-level authentication utilities **for JavaScript environments**.
 
-Clerk SDKs expose an instance of the Backend SDK for use in server environments.
+For example, if you wanted to get a list of all users in your application, instead of creating a fetch to Clerk's [`https://api.clerk.com/v1/users`](https://clerk.com/docs/reference/backend-api/tag/Users#operation/GetUserList) endpoint, you can use the [`users.getUserList()`](/docs/references/backend/user/get-user-list) method provided by the JavaScript Backend SDK.
 
-<Tabs type="framework" items={["Next.js", "Remix", "Fastify", "Node"]}>
-  <Tab>
-  The Backend SDK is accessible via the `clerkClient` object if you are using Next.js.
+While the backend SDK is mainly used as a building block for Clerk's higher-level SDKs, it can also be used on its own for advanced flows and custom integrations. Select the **Backend SDK** tab if you want to use it directly, or select the **With other SDKs** tab if you want to use it through one of Clerk's higher-level SDKs, such as the Next.js SDK.
 
-  ```jsx
-  import { clerkClient } from '@clerk/nextjs/server';
+## Installation
+
+<Tabs items={["Backend SDK", "With other SDKs"]}>
+<Tab>
+  If you are using the JavaScript Backend SDK on its own, you can install it using the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash filename="terminal"
+    npm install @clerk/backend
+    ```
+
+  ```bash filename="terminal"
+  yarn add @clerk/backend
   ```
+
+  ```bash filename="terminal"
+  pnpm add @clerk/backend
+  ```
+  </CodeBlockTabs>
+</Tab>
+<Tab>
+  Clerk SDKs expose an instance of the JavaScript Backend SDK for use in server environments, so there is no need to install it separately.
+</Tab>
+</Tabs>
+
+## Usage
+
+All resource operations are mounted as sub-APIs on the `clerkClient` object. For example, if you would like to get a list of all of your application's users, you can use the `getUserList()` method on the `users` sub-API. You can find the full list of available sub-APIs and their methods in the sidebar.
+
+To access a resource, you must first instantiate a `clerkClient` instance.
+
+<Tabs items={["Backend SDK", "With other SDKs"]}>
+  <Tab>
+    To instantiate a `clerkClient` instance, you must call `createClerkClient()` and pass in [`options`](#create-clerk-client-options).
+
+    ```ts
+    import { createClerkClient } from '@clerk/backend';
+
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+    ```
   </Tab>
-
   <Tab>
-  The Backend SDK is accessible via the `createClerkClient` function if you are using Remix.
+    ### Instantiate a default `clerkClient` instance
 
-  ```jsx
-  import { createClerkClient } from '@clerk/remix/api.server';
-  ```
+    Unless you are using Remix, you can use the default instance of `clerkClient` provided by whichever SDK you are using, and skip the need to pass [configuration options](#create-clerk-client-options). For Remix, see the following section.
 
-  Use the following tabs to see examples of how to use the Backend SDK in Remix Loader and Action functions.
+    To use the default `clerkClient` instance, set your `CLERK_SECRET_KEY` [environment variable](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) and then import the `clerkClient` instance from the SDK as shown in the following example:
 
-    <Tabs items={["Loader Function", "Action Function"]}>
+    <Tabs type="framework" items={["Next.js", "Remix", "Fastify", "Node"]}>
       <Tab>
-      ```tsx filename="routes/profile.tsx"
-      import { LoaderFunction, redirect } from "@remix-run/node";
-      import { getAuth } from "@clerk/remix/ssr.server";
-      import { createClerkClient } from '@clerk/remix/api.server';
-
-      export const loader: LoaderFunction = async (args) => {
-        // Use getAuth to retrieve user data
-        const { userId } = await getAuth(args);
-
-        // If there is no userId, then redirect to sign-in route
-        if (!userId) {
-          return redirect("/sign-in?redirect_url=" + args.request.url);
-        }
-
-        // Initialize clerkClient and perform the action,
-        // which in this case is to get the user
-        const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
-
-        // Return the user
-        return { serialisedUser: JSON.stringify(user) };
-      };
+      ```jsx
+      import { clerkClient } from '@clerk/nextjs/server';
       ```
       </Tab>
 
       <Tab>
-      ```tsx filename="routes/profile.tsx"
-      import { ActionFunction, redirect } from "@remix-run/node";
-      import { getAuth } from "@clerk/remix/ssr.server";
-      import { createClerkClient } from '@clerk/remix/api.server';
+        If you are using Remix, please see the following section for how to instantiate `clerkClient`.
+      </Tab>
 
-      export const action: ActionFunction = async (args) => {
-        // Use getAuth to retrieve user data
-        const { userId } = await getAuth(args)
+      <Tab>
+      ```jsx
+      import { clerkClient } from "@clerk/fastify";
+      ```
+      </Tab>
 
-        // If there is no userId, then redirect to sign-in route
-        if (!userId) {
-          return redirect("/sign-in?redirect_url=" + args.request.url);
-        }
-
-        // Prepare the data for the mutation
-        const params = { firstName: 'John', lastName: 'Wicker' };
-
-        // Initialize clerkClient and perform the mutations
-        const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
-
-        // Return the updated user
-        return { serialisedUser: JSON.stringify(updatedUser) };
-      };
+      <Tab>
+      ```js
+      import { clerkClient } from '@clerk/clerk-sdk-node';
       ```
       </Tab>
     </Tabs>
-  </Tab>
 
-  <Tab>
-  The Backend SDK is accessible via the `clerkClient` object if you are using Fastify.
+    ### Instantiate a custom `clerkClient` instance
 
-  ```jsx
-  import { clerkClient } from "@clerk/fastify";
-  ```
-  </Tab>
+    If you would like to customize the behavior of the JavaScript Backend SDK, you can instantiate a `clerkClient` instance yourself by calling `createClerkClient()` and passing in [`options`](#create-clerk-client-options).
 
-  <Tab>
-  The Backend SDK is accessible via the `clerkClient` object if you are using Node.
+    <Tabs type="framework" items={["Next.js", "Remix", "Fastify", "Node"]}>
+      <Tab>
+      ```jsx
+      import { createClerkClient } from '@clerk/nextjs/server';
 
-  ```js
-  import { clerkClient } from '@clerk/clerk-sdk-node';
-  ```
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+      const userList = await clerkClient.users.getUserList();
+      ```
+      </Tab>
+
+      <Tab>
+      If you are using Remix, you must instantiate `clerkClient` by calling the `createClerkClient()` function and passing in [`options`](#create-clerk-client-options).
+
+      ```jsx
+      import { createClerkClient } from '@clerk/remix/api.server';
+      ```
+
+      Use the following tabs to see examples of how to use the Backend SDK in Remix Loader and Action functions.
+
+        <Tabs items={["Loader Function", "Action Function"]}>
+          <Tab>
+          ```tsx filename="routes/profile.tsx"
+          import { LoaderFunction, redirect } from "@remix-run/node";
+          import { getAuth } from "@clerk/remix/ssr.server";
+          import { createClerkClient } from '@clerk/remix/api.server';
+
+          export const loader: LoaderFunction = async (args) => {
+            // Use getAuth to retrieve user data
+            const { userId } = await getAuth(args);
+
+            // If there is no userId, then redirect to sign-in route
+            if (!userId) {
+              return redirect("/sign-in?redirect_url=" + args.request.url);
+            }
+
+            // Initialize clerkClient and perform the action,
+            // which in this case is to get the user
+            const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
+
+            // Return the user
+            return { serialisedUser: JSON.stringify(user) };
+          };
+          ```
+          </Tab>
+
+          <Tab>
+          ```tsx filename="routes/profile.tsx"
+          import { ActionFunction, redirect } from "@remix-run/node";
+          import { getAuth } from "@clerk/remix/ssr.server";
+          import { createClerkClient } from '@clerk/remix/api.server';
+
+          export const action: ActionFunction = async (args) => {
+            // Use getAuth to retrieve user data
+            const { userId } = await getAuth(args)
+
+            // If there is no userId, then redirect to sign-in route
+            if (!userId) {
+              return redirect("/sign-in?redirect_url=" + args.request.url);
+            }
+
+            // Prepare the data for the mutation
+            const params = { firstName: 'John', lastName: 'Wicker' };
+
+            // Initialize clerkClient and perform the mutations
+            const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
+
+            // Return the updated user
+            return { serialisedUser: JSON.stringify(updatedUser) };
+          };
+          ```
+          </Tab>
+        </Tabs>
+      </Tab>
+
+      <Tab>
+      ```jsx
+      import { createClerkClient } from "@clerk/fastify";
+
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+      const userList = await clerkClient.users.getUserList();
+      ```
+      </Tab>
+
+      <Tab>
+        <CodeBlockTabs options={["ESM", "CJS"]}>
+        ```js
+        import { createClerkClient } from '@clerk/clerk-sdk-node';
+
+        const clerkClient = createClerkClient({ secretKey: '{{secret}}' });
+
+        const userList = await clerkClient.users.getUserList();
+        ```
+
+        ```js
+        const Clerk = require('@clerk/clerk-sdk-node/cjs/instance').default;
+
+        const clerkClient = Clerk({ secretKey: '{{secret}}' });
+
+        clerkClient.sessions
+          .getSessionList()
+          .then((sessions) => console.log(sessions))
+          .catch((error) => console.error(error));
+        ```
+        </CodeBlockTabs>
+      </Tab>
+    </Tabs>
   </Tab>
 </Tabs>
 
@@ -109,3 +208,22 @@ try {
   // Error handling
 }
 ```
+
+## `createClerkClient({ options })`
+
+The `createClerkClient()` function requires an `options` object. The following options are available:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `secretKey?` | `string` | The Clerk secret key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. |
+| `jwtKey?`  | `string` | The PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt). |
+| `publishableKey?` | `string` | The Clerk publishable key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. |
+| `domain?` | `string` | The domain for the application. For development, you can pass the `localhost` your application is running on. For example: `localhost:3001` |
+| `isSatellite?` | `boolean` | Whether the instance is a satellite domain in a multi-domain setup. Defaults to `false`. |
+| `proxyUrl?` | `string` | The proxy URL from a multi-domain setup. |
+| `sdkMetadata?` | `{ name: string, version: string }` | Metadata about the SDK. |
+| `telemetry?` | `{ disabled: boolean, debug: boolean }` | [Telemetry](/docs/telemetry) configuration. |
+| `userAgent?` | `string` |  |
+| `apiUrl?` | `string` | The Clerk [Backend API](/docs/reference/backend-api) endpoint. Defaults to `'https://api.clerk.com'`. |
+| `apiVersion?` | `string` | The version passed to the Clerk API. Defaults to `'v1'`. |
+| `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). |

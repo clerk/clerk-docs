@@ -24,9 +24,6 @@ function authenticateRequest: (request: Request, options: AuthenticateRequestOpt
 
 It is recommended to set these options as [environment variables](/docs/deployments/clerk-environment-variables#api-and-sdk-configuration) where possible, and then pass them to the function. For example, you can set the `secretKey` option using the `CLERK_SECRET_KEY` environment variable, and then pass it to the function like this: `createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })`.
 
-> [!WARNING]
-> You must provide either `jwtKey` or `secretKey`.
-
 | Name | Type | Description |
 | --- | --- | --- |
 | `secretKey?` | `string` | Used to verify the session token in a networkless manner. Supply the Clerk secret key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. |
@@ -36,10 +33,8 @@ It is recommended to set these options as [environment variables](/docs/deployme
 | `proxyUrl?` | `string` | The proxy URL from a multi-domain setup. |
 | `signInUrl?` | `string` | The sign-in URL from a multi-domain setup. |
 | `signUpUrl?` | `string` | It's recommended to use sign-up URL from a multi-domain setup. |
-| `signInForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs in. |
-| `signUpForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs up. |
-| `signInFallbackRedirectUrl?` | `string` | The fallback URL to redirect to after the user signs in, if there's no `redirect_url` in the path already. Defaults to `/`. |
-| `signUpFallbackRedirectUrl?` | `string` | The fallback URL to redirect to after the user signs up, if there's no `redirect_url` in the path already. Defaults to `/`. |
+| `afterSignInUrl?` | `string` | Full URL or path to navigate to after successful sign in. Defaults to `/`. |
+| `afterSignUpUrl?` | `string` | Full URL or path to navigate to after successful sign up. Defaults to `/`. |
 | `jwtKey` | `string` | Used to verify the session token in a networkless manner. Supply the PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt). |
 | `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). |
 | `authorizedParties?` | `string[]` | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br/>For example: `['http://localhost:3000', 'https://example.com']` |
@@ -47,9 +42,32 @@ It is recommended to set these options as [environment variables](/docs/deployme
 | `jwksCacheTtlInMs?` (deprecated) | `number` | Deprecated. Specifying a cache TTL is now a no-op. |
 | `skipJwksCache?` | `boolean` | A flag to skip ignore cache and always fetch JWKS before each jwt verification. |
 
-## Example
+## Examples
 
-The following example takes the token passed by the frontend as a Bearer token in the Authorization header, and performs a networkless authentication by passing `secretKey` to `createClerkClient()`. This will verify if the user is signed into the application or not.
+### With a higher-level SDK
+
+`authenticateRequest()` requires `publishableKey` to be set. If you are importing `clerkClient` from a higher-level SDK, such as Next.js, then `clerkClient` infers the `publishableKey` from your [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys).
+
+```tsx
+import { clerkClient } from '@clerk/nextjs/server';
+
+export async function GET(req: Request) {
+  const { isSignedIn } = await clerkClient.authenticateRequest(req);
+
+  if (!isSignedIn) {
+    return Response.json({ status: 401 });
+  }
+
+  // Perform protected actions
+  // Add logic to perform protected actions
+
+  return Response.json({ message: 'This is a reply' });
+}
+```
+
+### With the Backend SDK on its own
+
+If you are using the [JavaScript Backend SDK](/docs/references/backend/overview) on its own, you need to provide the `secretKey` and `publishableKey` to `createClerkClient()` so that it is passed to `authenticateRequest()`. You can set these values as [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass them to the function.
 
 ```tsx
 import { createClerkClient } from '@clerk/backend';
@@ -57,6 +75,7 @@ import { createClerkClient } from '@clerk/backend';
 export async function GET(req: Request) {
   const clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
   });
 
   const { isSignedIn } = await clerkClient.authenticateRequest(req);
@@ -70,3 +89,5 @@ export async function GET(req: Request) {
   return Response.json({ message: 'This is a reply' });
 }
 ```
+
+### Networkless token verification

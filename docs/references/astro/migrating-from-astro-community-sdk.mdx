@@ -1,5 +1,125 @@
 ---
+title: 'Migrating from the Astro community SDK'
 description: Learn how to migrate from the Astro community SDK to the Clerk Astro SDK.
 ---
 
 # Migrating from the Astro community SDK
+
+## Why should I migrate ?
+TODO
+
+
+Overview:
+- Install @clerk/astro, uninstall astro-clerk-auth
+- Replace all import paths
+- Dropped deprecations
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash filename="terminal"
+    npm uninstall astro-clerk-auth
+    npm install @clerk/astro
+    ```
+
+    ```bash filename="terminal"
+    yarn remove astro-clerk-auth
+    yarn add @clerk/astro
+    ```
+
+    ```bash filename="terminal"
+    pnpm remove astro-clerk-auth
+    pnpm add @clerk/astro
+    ```
+
+</CodeBlockTabs>
+
+
+As a quick solution find all the usages of `astro-clerk-auth/` and replace them `@clerk/astro/`
+
+```diff
+- import { clerkMiddleware } from "astro-clerk-auth/server"
++ import { clerkMiddleware } from "@clerk/astro/server"
+
+- import { SignIn } from "astro-clerk-auth/components/interactive"
++ import { SignIn } from "@clerk/astro/components/interactive"
+
+```
+
+
+### Replace deprecation from the community SDK
+
+Submodule `/stores` was replaced with `/client/stores`. For the full list of the stores see [here](TODO: add reference)
+
+```diff
+- import { $clerk } from "astro-clerk-auth/stores"
++ import { $clerkStore } from "@clerk/astro/client/stores"
+
+
+- import { $csrState } from "astro-clerk-auth/stores"
+- import { $initialState } from "astro-clerk-auth/stores"
++ import { $userStore } from "@clerk/astro/client/stores"
++ import { $sessionStore } from "@clerk/astro/client/stores"
+```
+
+
+Submodule `/v0` was dropped completely and the previously exported constants are no longer available.
+
+```diff
+- import { apiKey, secretKey, signInUrl, DOMAIN, IS_SATELLITE } from "astro-clerk-auth/v0"
+```
+
+`clerkClient` is a now a function.
+
+```diff
+- import { clerkClient } from "astro-clerk-auth/v0"
+- clerkClient.users.getUser(...)
+
++ import { clerkClient } from "@clerk/astro/server"
++ clerkClient(context).users.getUser(...)
+```
+
+
+Hotloading is now the default strategy. 
+
+```diff
+import { defineConfig } from "astro/config";
+import node from "@astrojs/node";
+- import clerk from "astro-clerk-auth/hotload"
++ import clerk from "@clerk/astro";
+
+export default defineConfig({
+  integrations: [clerk()],
+  output: "server",
+  adapter: node({ mode: "standalone" }),
+});
+```
+
+And in order to opt-in to the bundled clerk-js strategy you can do the following
+
+```diff
+import { defineConfig } from "astro/config";
+import node from "@astrojs/node";
+- import clerk from "astro-clerk-auth"
++ import clerk from "@clerk/astro/bundled";
+
+export default defineConfig({
+  integrations: [clerk()],
+  output: "server",
+  adapter: node({ mode: "standalone" }),
+});
+```
+
+
+
+Submodule `components/react` has been removed.
+
+```diff
+---
+- import { SignedIn } from "@clerk/astro/components/react";
++ import { SignedIn } from "@clerk/astro/client/react";
+---
+
+- <SignedIn>
++ <SignedIn client:load>
+  {...}
+</SignedIn>
+```

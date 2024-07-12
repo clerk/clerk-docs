@@ -60,46 +60,15 @@ The first step is to create a function named `requesting_user_id()` that will pa
   </Tab>
 </Tabs>
 
-### Add a column for user IDs to your Supabase tables
-
-To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. For this guide, the column will be named `user_id`, but you can use any name you'd like.
-
-By setting the default value of this column to execute the `requesting_user_id()` function, records inserted by the Supabase API will be populated with the requesting user's ID available to Supabase from the request headers.
-
-<Callout type="info">
-  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
-</Callout>
-
-<Tabs items={["Supabase interface", "SQL Editor"]}>
-<Tab>
-In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
-1. Name the column `user_id`.
-1. This column's data type must be `text`.
-1. In the **Default Value** field, add `(requesting_user_id())`.
-</Tab>
-<Tab>
-From the sidebar, select **SQL Editor** and run the following query, replacing `tasks` with the name of the table you wish to add `user_id` to:
-
-```sql
-alter table tasks add user_id text not null default (requesting_user_id());
-```
-
-<Callout type="info">
-  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
-</Callout>
-</Tab>
-</Tabs>
-
 ### Create a table and enable RLS on it
 
-Next, you'll create a `tasks` table and enable RLS on that table.
+Next, you'll create a `tasks` table and enable RLS on that table. The `tasks` table will also contain a `user_id` column that will use the `requesting_user_id()` function as it's default value. This colume will be used in the RLS policies to only return or modify records scoped to the user's account.
 
 > [!WARNING]
 > This step will fail if you are using a pre-existing project and the database already has a `tasks` table.
 
 <Tabs items={["Supabase interface", "SQL Editor"]}>
 <Tab>
-
 
 In the left navigation, select **Table Editor** and select **Create a table**. In the sheet that appears in the right, configure the following settings:
   - Name: `tasks`.
@@ -114,7 +83,6 @@ In the left navigation, select **Table Editor** and select **Create a table**. I
   - Select **Save**.
 
 
-and select the desired table. Click the **RLS disabled** button in the top navigation, then **Enable RLS for this table** in the menu that appears.
 </Tab>
 <Tab>
 To create the `tasks` table and enable RLS on it, run the following two queries:
@@ -136,7 +104,7 @@ alter table `tasks` enable row level security;
 
 ### Create ID-based RLS policies
 
-Create RLS policies that allow users to modify and read content associated with their user IDs.
+Create RLS policies that permit users to modify and read content associated with their user IDs only.
 
 <Tabs items={["Supabase interface", "SQL Editor"]}>
 <Tab>
@@ -166,7 +134,7 @@ Use the sidebar to navigate to **Authentication** > **Policies**. You'll create 
     ```sql filename="Supabase policy editor"
     requesting_user_id() = user_id
     ```
-1. Select **New Policy** to create the `UPDATE` policy:
+1. Select **New Policy** to create the `DELETE` policy:
     - Name: "Delete task policy".
     - For **Allowed operation**, select **DELETE**.
     - For **Target roles**, select **authenticated**.
@@ -416,5 +384,5 @@ If you analyze the table in the Supabase dashboard, you should see all tasks bet
 
 ## Next steps
 
-- Try integrating Supabase into your own application by implementing RLS and leveraging the sample code shown in this guide.
+- Try integrating Supabase into your own application by implementing RLS and leveraging the `createClerkSupabaseClient()` function and related code shown in this guide.
 - Try adding some [custom claims](/docs/backend-requests/making/jwt-templates) to the JWT template in `app_metadata` or `user_metadata`.

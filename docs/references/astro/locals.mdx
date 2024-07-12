@@ -1,0 +1,82 @@
+---
+title: Locals
+description: Learn how to use Clerk with Server Actions.
+---
+
+# Locals
+
+Through Astro [`locals`](https://docs.astro.build/en/guides/middleware/#storing-data-in-contextlocals), the [`Auth`](https://clerk.com/docs/references/nextjs/auth-object) and current user objects can be accessed between middlewares and pages. These locals are injected when you install the provided [middleware](/docs/references/astro/clerk-middleware).
+
+The following guide provides examples of using the `auth()` local to validate an authenticated user and the `currentUser()` local to access the `Backend API User` object for the authenticated user.
+
+## Protect your pages
+
+You can use the `auth()` local to protect your pages. This local will return the current user's ID if they are signed in, or `null` if they are not.
+
+```astro filename="src/pages/protected.astro"
+---
+if (!Astro.locals.auth().userId) {
+  return Astro.redirect('/login');
+}
+---
+
+<div>Protected page</div>
+```
+
+## Protect your forms
+
+```astro filename="src/pages/form.astro"
+---
+if (Astro.request.method === "POST") {
+  if (!Astro.locals.auth().userId) {
+    throw new Error('You must be signed in to add an item to your cart');
+  }
+
+  const data = await Astro.request.formData();
+  console.log('add item action', data);
+}
+---
+
+<form method="POST">
+  <input
+    value="test"
+    type="text"
+    name="name"
+  />
+  <button type="submit">Add to Cart</button>
+</form>
+```
+
+## Accessing the current user
+
+Current user data is important for data enrichment. You can use the `currentUser()` local to fetch the current user's data in your pages.
+
+```astro filename="src/pages/form.astro"
+---
+if (Astro.request.method === "POST") {
+  const user = await Astro.locals.currentUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to use this feature');
+  }
+
+  const data = await Astro.request.formData();
+  const serverData = {
+    usersHobby: data.get("hobby"),
+    userId: user.id,
+    profileImage: user.imageUrl
+  };
+
+  console.log('add item action completed with user details ', serverData);
+}
+---
+
+<form method="POST">
+  <input
+    value="soccer"
+    type="text"
+    name="hobby"
+  />
+  <button type="submit">Submit your hobby</button>
+</form>
+```

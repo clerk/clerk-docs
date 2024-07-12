@@ -49,9 +49,8 @@ In the following example:
 
 1. The PEM public key from the Clerk Dashboard is set in the environment variable `CLERK_JWT_KEY`.
 1. The session token is retrieved from the `__session` cookie or the Authorization header.
-1. The token is verified in a networkless manner by passing the `jwtKey` to the `verifyToken()` method.
-1. The token's `exp` and `nbf` claims are checked.
-1. The token's `azp` claim is checked against the permitted origins. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from http://localhost:3000, then the `azp` claim should equal http://localhost:3000.
+1. The token is verified in a networkless manner by passing the `jwtKey` prop.
+1. The `authorizedParties` prop is passed to verify that the session token is generated from the expected frontend application.
 1. If the token is valid, the response contains the verified token.
 
 ```ts
@@ -59,31 +58,25 @@ import { verifyToken } from '@clerk/backend';
 import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
-  const cookieStore = cookies()
-  const sessToken = cookieStore.get('__session')?.value
-  const bearerToken = request.headers.get('Authorization')?.replace('Bearer ', '');
+  const cookieStore = cookies();
+  const sessToken = cookieStore.get('__session')?.value;
+  const bearerToken = request.headers
+    .get('Authorization')
+    ?.replace('Bearer ', '');
   const token = sessToken || bearerToken;
 
   if (!token) {
-    return Response.json({ error: 'Token not found. User must sign in.' }, { status: 401 });
+    return Response.json(
+      { error: 'Token not found. User must sign in.' },
+      { status: 401 }
+    );
   }
 
   try {
     const verifiedToken = await verifyToken(token, {
       jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['http://localhost:3001', 'api.example.com'], // Replace with your authorized parties
     });
-
-    // Check if the token is expired or not yet valid
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (verifiedToken.exp < currentTime || verifiedToken.nbf > currentTime) {
-      throw new Error("Token is expired or not yet valid");
-    }
-
-    // Check if the token is issued by a permitted origin
-    const permittedOrigins = ["http://localhost:3000", "https://example.com"]; // Replace with your permitted origins
-    if (verifiedToken.azp && !permittedOrigins.includes(verifiedToken.azp)) {
-      throw new Error("Invalid 'azp' claim");
-    }
 
     return Response.json({ verifiedToken });
   } catch (error) {

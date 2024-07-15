@@ -1,19 +1,44 @@
 ---
-title: SPA Mode
+title: Remix SPA Mode
 description: Clerk supports Remix SPA mode out-of-the-box.
 ---
 
-# SPA Mode
+# Remix SPA Mode
 
-After implementing the [Remix SPA Mode changes](https://remix.run/docs/en/main/guides/spa-mode), you need to make the following changes to your Remix app to use Clerk in SPA mode:
+<Callout type="info">
+This guide explains how to use Clerk with [Remix in SPA mode](https://remix.run/docs/en/main/guides/spa-mode). 
+If you are using Remix with SSR, follow the [Remix quickstart](/docs/quickstarts/remix).
+</Callout>
 
-1. Remove the `rootAuthLoader()` from your `app/root.tsx` file.
-2. Pass the publishable key and any other environment variables to the [`ClerkApp`](/docs/references/remix/clerk-app) component (except the secret key, which should never be used on the client side).
-3. Remove all usages of server-side Clerk functions (for example, all the imported functions coming from `@clerk/remix/ssr.server`)
+<Steps>
 
-## Example `root.tsx` page
+### Install `@clerk/remix`
 
-The following example demonstrates an `app/root.tsx` file that uses SPA mode. Notice the absence of the `rootAuthLoader()`.
+Once you have a Remix application ready, you need to install Clerk's Remix SDK. This gives you access to our prebuilt components and hooks for Remix applications.
+
+<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+  ```bash filename="terminal"
+  npm install @clerk/remix
+  ```
+
+  ```bash filename="terminal"
+  yarn add @clerk/remix
+  ```
+
+  ```bash filename="terminal"
+  pnpm add @clerk/remix
+  ```
+</CodeBlockTabs>
+
+### Configure `ClerkApp` with your publishable key and options
+
+Clerk provides a `ClerkApp` wrapper to provide the authentication state to your React tree.
+
+Also, you will need your publishable key which can be found in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+
+<Callout type="warning">
+You will not need the secret key in Remix SPA mode, as it should never be used on the client side.
+</Callout>
 
 ```tsx {{ filename: 'app/root.tsx' }}
 import { ClerkApp } from "@clerk/remix";
@@ -45,6 +70,46 @@ function App() {
 
 export default ClerkApp(App, {
   publishableKey: 'pk_test_XYZ',
+});
+```
+
+#### Build your sign-up page
+
+```tsx filename="app/routes/sign-up.$.tsx"
+import { SignUp } from "@clerk/remix";
+
+export default function SignUpPage() {
+  return (
+    <div>
+      <h1>Sign Up route</h1>
+      <SignUp />
+    </div>
+  );
+}
+```
+
+#### Build your sign-in page
+
+```tsx filename="app/routes/sign-in.$.tsx"
+import { SignIn } from "@clerk/remix";
+
+export default function SignInPage() {
+  return (
+    <div>
+      <h1>Sign In route</h1>
+      <SignIn />
+    </div>
+  );
+}
+```
+
+### Update your paths through ClerkApp options
+
+Next, add paths to your `ClerkApp` options to control the behavior of the components when you sign in or sign up and when you click on the respective links at the bottom of each component.
+
+```ts {{ filename: 'app/root.tsx' }}
+export default ClerkApp(App, {
+  publishableKey: 'pk_test_XYZ',
   signInUrl: '/sign-in',
   signUpUrl: '/sign-up',
   signInFallbackRedirectUrl: '/',
@@ -52,28 +117,90 @@ export default ClerkApp(App, {
 });
 ```
 
+### Protecting your pages
 
-## Example protected route
+Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
 
-The following example demonstrates how to use Clerk's [control components](/docs/components/overview) in order to protect a route that uses SPA mode. 
+```tsx filename="routes/_index.tsx"
+import {
+  SignOutButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/remix";
+import { Link } from "@remix-run/react";
 
-```tsx
-import { SignedIn, RedirectToSignIn, useUser, SignedOut } from "@clerk/remix";
-
-export default function ProtectedRoute() {
-  const { user } = useUser();
+export default function Index() {
   return (
-    <>
+    <div>
+      <h1>Index Route</h1>
       <SignedIn>
+        <p>You are signed in!</p>
         <div>
-          <h1>Protected Page</h1>
-          <div>Hello, {user?.id}</div>
+          <p>View your profile here 👇</p>
+          <UserButton />
+        </div>
+        <div>
+          <SignOutButton />
         </div>
       </SignedIn>
       <SignedOut>
-        <RedirectToSignIn />
+        <p>You are signed out</p>
+        <div>
+          <Link to="/sign-in">Go to Sign in</Link>
+        </div>
+        <div>
+          <Link to="/sign-up">Go to Sign up</Link>
+        </div>
       </SignedOut>
-    </>
+    </div>
   );
 }
 ```
+
+### Read session and user data
+
+Clerk provides a set of [hooks and helpers](/docs/references/react/use-user) that you can use to access the active session and user data in your Remix application. Here are examples of how to use these helpers.
+
+#### `useAuth()`
+
+The `useAuth` hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
+
+```tsx filename="routes/example.tsx"
+import { useAuth } from "@clerk/remix";
+
+export default function Example() {
+  const { isLoaded, userId, sessionId, getToken } = useAuth();
+
+  // In case the user signs out while on the page.
+  if (!isLoaded || !userId) {
+    return null;
+  }
+
+  return (
+    <div>
+      Hello, {userId} your current active session is {sessionId}
+    </div>
+  );
+}
+```
+
+#### `useUser()`
+
+The `useUser` hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
+
+```tsx filename="routes/example.tsx"
+import { useUser } from "@clerk/remix";
+
+export default function Example() {
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  if (!isLoaded || !isSignedIn) {
+    return null;
+  }
+
+  return <div>Hello, {user.firstName} welcome to Clerk</div>;
+}
+```
+
+</Steps>

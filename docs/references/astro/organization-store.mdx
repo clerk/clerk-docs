@@ -34,3 +34,73 @@ export default function Home() {
     </div>
   )
 }
+```
+
+## Paginating data
+
+The following example demonstrates how to implement pagination for organization memberships. The `memberships` state will be populated with the first page of the organization's memberships. When the "Previous page" or "Next page" button is clicked, the `fetchMemberships` function will be called to fetch the previous or next page of memberships.
+
+You can implement this pattern to any Clerk function that returns a [`ClerkPaginatedResponse`](/docs/references/javascript/types/clerk-paginated-response#clerk-paginated-response) object.
+
+```tsx filename="organization-members.tsx"
+export default function OrganizationMembers() {
+  const [memberships, setMemberships] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const organization = useStore($organizationStore);
+
+  const pageSize = 10;
+
+  useEffect(() => {
+    fetchMemberships();
+  }, [currentPage, organization]);
+
+  const fetchMemberships = async () => {
+    if (!organization) {
+      return;
+    }
+
+    try {
+      const { data } = await organization.getMemberships({
+        initialPage: currentPage,
+        pageSize: pageSize
+      });
+      setMemberships(data);
+    } catch (error) {
+      console.error("Error fetching memberships:", error);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNext = () => {
+    setCurrentPage(currentPage + 1);
+  };
+
+  if (!organization) {
+    // Handle loading state
+    return null;
+  }
+
+  return (
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {memberships.map((membership) => (
+          <li key={membership.id}>
+            {membership.publicUserData.firstName} {membership.publicUserData.lastName} &lt;
+            {membership.publicUserData.identifier}&gt; :: {membership.role}
+          </li>
+        ))}
+      </ul>
+      <div>
+        <button onClick={handlePrevious} disabled={currentPage === 1}>Previous page</button>
+        <button onClick={handleNext}>Next page</button>
+      </div>
+    </div>
+  );
+};
+```

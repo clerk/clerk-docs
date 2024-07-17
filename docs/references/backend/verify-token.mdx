@@ -10,7 +10,7 @@ description: Use Clerk's Backend SDK to verify a token signature.
 
 # `verifyToken()`
 
-Verifies a Clerk-generated token signature.
+Verifies a Clerk-generated token signature. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from [Clerk's Backend API](/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
 
 ```js
 function verifyToken: (token: string, options: VerifyTokenOptions) => Promise<JwtReturnType<JwtPayload, TokenVerificationError>>;
@@ -25,15 +25,17 @@ function verifyToken: (token: string, options: VerifyTokenOptions) => Promise<Jw
 
 ### `VerifyTokenOptions`
 
+It is recommended to set these options as [environment variables](/docs/deployments/clerk-environment-variables#api-and-sdk-configuration) where possible, and then pass them to the function. For example, you can set the `secretKey` option using the `CLERK_SECRET_KEY` environment variable, and then pass it to the function like this: `createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })`.
+
 > [!WARNING]
 > You must provide either `jwtKey` or `secretKey`.
 
 | Name | Type | Description |
 | --- | --- | --- |
 | `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). |
-| `authorizedParties?`| `string[]` | | A list of authorized parties. For example, `['http://localhost:4003', 'https://clerk.com']` |
+| `authorizedParties`| `string[]` | Can be used to validate that the `azp` claim equals any of your known origins that are permitted to generate those tokens. For example: `['http://localhost:4003', 'https://clerk.dev']` |
 | `clockSkewInMs?` | `number` | Specifies the allowed time difference (in milliseconds) between the Clerk server (which generates the token) and the clock of the user's application server when validating a token. Defaults to 5000 ms (5 seconds).|
-| `jwtKey?` | `string` | The PEM Public Key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables) instead. |
+| `jwtKey?` | `string` | Used to verify the session token in a networkless manner. Supply the PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt). |
 | `secretKey?` | `string` | The Clerk secret key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.  |
 | `skipJwksCache?` | `boolean` | A flag to ignore the JWKS cache and always fetch JWKS before each JWT verification. |
 | `apiUrl?` | `string` | The Clerk [Backend API](/docs/reference/backend-api) endpoint. Defaults to `'https://api.clerk.com'`. |
@@ -41,58 +43,47 @@ function verifyToken: (token: string, options: VerifyTokenOptions) => Promise<Jw
 
 ## Example
 
-The following example demonstrates how to use the [JavaScript Backend SDK](/docs/references/backend/overview) to verify the token signature. Although this example uses Next.js Route Handlers, you can use `verifyToken()` with any JS framework or no framework at all.
+The following example demonstrates how to use the [JavaScript Backend SDK](/docs/references/backend/overview) to verify the token signature.
 
 In the following example:
 
-1. The JWT Public Key is set in the environment variable `CLERK_JWT_KEY`.
+1. The PEM public key from the Clerk Dashboard is set in the environment variable `CLERK_JWT_KEY`.
 1. The session token is retrieved from the `__session` cookie or the Authorization header.
-1. The token is verified using the `verifyToken()` method.
-1. The token's `exp` and `nbf` claims are checked.
-1. The token's `azp` claim is checked against the permitted origins. Verifying the `azp` claim on the server side ensures that the session token is generated from the expected frontend application. For example, if you are permitting tokens retrieved from http://localhost:3000, then the `azp` claim should equal http://localhost:3000.
+1. The token is verified in a networkless manner by passing the `jwtKey` prop.
+1. The `authorizedParties` prop is passed to verify that the session token is generated from the expected frontend application.
 1. If the token is valid, the response contains the verified token.
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-  ```ts title="app/api/verify-token/route.ts"
-  import { verifyToken } from '@clerk/backend';
-  import { cookies } from 'next/headers';
+```ts
+import { verifyToken } from '@clerk/backend';
+import { cookies } from 'next/headers';
 
-  export async function GET(request: Request) {
-    const cookieStore = cookies()
-    const sessToken = cookieStore.get('__session')?.value
-    const bearerToken = request.headers.get('Authorization')?.replace('Bearer ', '');
-    const token = sessToken || bearerToken;
+export async function GET(request: Request) {
+  const cookieStore = cookies();
+  const sessToken = cookieStore.get('__session')?.value;
+  const bearerToken = request.headers
+    .get('Authorization')
+    ?.replace('Bearer ', '');
+  const token = sessToken || bearerToken;
 
-    if (!token) {
-      return Response.json({ error: 'Token not found. User must sign in.' }, { status: 401 });
-    }
-
-    try {
-      const verifiedToken = await verifyToken(token, {
-        jwtKey: process.env.CLERK_JWT_KEY,
-      });
-
-      // Check if the token is expired or not yet valid
-      const currentTime = Math.floor(Date.now() / 1000);
-      if (verifiedToken.exp < currentTime || verifiedToken.nbf > currentTime) {
-        throw new Error("Token is expired or not yet valid");
-      }
-
-      // Check if the token is issued by a permitted origin
-      const permittedOrigins = ["http://localhost:3000", "https://example.com"]; // Replace with your permitted origins
-      if (verifiedToken.azp && !permittedOrigins.includes(verifiedToken.azp)) {
-        throw new Error("Invalid 'azp' claim");
-      }
-
-      return Response.json({ verifiedToken });
-    } catch (error) {
-      return Response.json({ error: 'Token not verified.' }, { status: 401 });
-    }
+  if (!token) {
+    return Response.json(
+      { error: 'Token not found. User must sign in.' },
+      { status: 401 }
+    );
   }
-  ```
-  </Tab>
-</Tabs>
+
+  try {
+    const verifiedToken = await verifyToken(token, {
+      jwtKey: process.env.CLERK_JWT_KEY,
+      authorizedParties: ['http://localhost:3001', 'api.example.com'], // Replace with your authorized parties
+    });
+
+    return Response.json({ verifiedToken });
+  } catch (error) {
+    return Response.json({ error: 'Token not verified.' }, { status: 401 });
+  }
+}
+```
 
 If the token is valid, the response will contain a JSON object that looks something like this:
 

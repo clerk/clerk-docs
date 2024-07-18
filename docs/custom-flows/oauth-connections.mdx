@@ -25,7 +25,7 @@ The following example shows two files:
 1. The sign-in page where the user can start the OAuth flow.
 1. The SSO callback page where the OAuth flow is completed.
 
-<Tabs items={["Next.js"]}>
+<Tabs items={["Next.js", "iOS (Beta)"]}>
   <Tab>
     <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
       ```jsx {{ prettier: false, filename: 'app/sign-in/page.tsx' }}
@@ -73,6 +73,73 @@ The following example shows two files:
       ```
     </CodeBlockTabs>
   </Tab>
+  <Tab>
+  ```swift filename="OAuthView.swift"
+  import SwiftUI
+  import ClerkSDK
+
+  struct OAuthView: View {
+      
+    var body: some View {
+      // Render a button for each supported OAuth provider
+      // you want to add to your app. This example uses only Google.
+      Button("Sign In with Google") {
+        Task { await signInWithOAuth(provider: .google) }
+      }
+    }
+      
+  }
+
+  extension OAuthView {
+      
+    func signInWithOAuth(provider: ExternalProvider) async {
+      do {
+        // Start the sign-in process using the selected OAuth provider.
+        let signIn = try await SignIn.create(strategy: .externalProvider(provider))
+        
+        // Start the OAuth process
+        let oauthResult = try await signIn.authenticateWithRedirect()
+
+        // It is common for users who are authenticating with OAuth to use
+        // a sign-in button when they mean to sign-up, and vice versa.
+        // Clerk will handle this transfer for you if possible.
+        // Therefore, an OAuthResult can contain either a SignIn or SignUp.
+        
+        // Check if the result of the OAuth was a sign in
+        if let signIn = oauthResult?.signIn {
+          switch signIn.status {
+          case .complete:
+            // If sign-in process is complete, navigate the user as needed.
+            dump(Clerk.shared.session)
+          default:
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            dump(signIn.status)
+          }
+        }
+        
+        // Check if the result of the OAuth was a sign up
+        if let signUp = oauthResult?.signUp {
+            switch signUp.status {
+            case .complete:
+              // If sign-up process is complete, navigate the user as needed.
+              dump(Clerk.shared.session)
+            default:
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              dump(signUp.status)
+            }
+        }
+      } catch {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+      
+  }
+  ```
+  </Tab>
 </Tabs>
 
 ## OAuth account transfer flows
@@ -83,7 +150,7 @@ If you would like to keep your sign-in and sign-up flows completely separate, th
 
 The following example shows how to handle these cases in your sign-in flow. The same logic can be applied to the sign-up flow; change the `signIn.AuthenticateWithRedirect()` to `signUp.authenticateWithRedirect()`.
 
-<Tabs items={["Next.js"]}>
+<Tabs items={["Next.js", "iOS (Beta)"]}>
   <Tab>
     ```jsx {{ prettier: false, filename: 'app/sign-in/page.tsx' }}
     'use client';
@@ -161,5 +228,24 @@ The following example shows how to handle these cases in your sign-in flow. The 
       );
     }
     ```
+  </Tab>
+  <Tab>
+  ```swift filename="OAuthView.swift"
+  // If a user attempted to sign in but doesn't have an account,
+  // Clerk will try to handle the transfer to sign up for you.
+  // If that's not possible (i.e. maybe signing up requires a CAPTCHA Token), 
+  // authenticateWithRedirect() will return the orginal sign in to you 
+  // so you can manually perform the transfer to sign up.
+
+  // Check if the sign in needs to be transferred to a sign up
+  if let signIn = oauthResult?.signIn,
+    signIn.firstFactorVerification?.status == .transferable {
+      // Create a new sign up with the strategy `.transfer`
+      let signUp = try await SignUp.create(
+        strategy: .transfer, 
+        captchaToken: "TOKEN"
+      )
+  }
+  ```
   </Tab>
 </Tabs>

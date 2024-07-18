@@ -13,7 +13,187 @@ This guide will walk you through how to build a custom flow that handles user im
 
 <Tabs items={["Next.js", "Expo"]}>
 <Tab>
-Content for Next.js
+The following example builds a dashboard that is only accessible to users with the `admin:impersonate` [permission](/docs/organizations/roles-permissions#custom-permissions). You can modify the [authorization checks](/docs/organizations/verify-user-permissions) to fit your use case.
+
+In the dashboard, the user will see a list of the application's users. When the user chooses to impersonate a user, they will be signed in as that user and redirected to the homepage.
+
+Use the following tabs to view the code for:
+- The main page that gets the list of the application's users
+- The client component that has the UI for displaying the users and the ability to impersonate them
+- The server action that generates the actor token
+
+<CodeBlockTabs options={["Main page", "Client Component", "Server Action"]}>
+```jsx {{ filename: 'app/dashboard/page.tsx' }}
+import { auth, clerkClient } from '@clerk/nextjs/server';
+import ImpersonateUsers from './_components';
+
+export default async function AccountPage() {
+  const { has } = auth();
+
+  // Protect the page
+  if (!has({ permission: 'org:admin:impersonate' })) {
+    return <p>You do not have permission to access this page.</p>;
+  }
+
+  // Fetch list of application's users using Clerk's Backend SDK
+  const users = await clerkClient.users.getUserList();
+
+  // This page needs to be a server component to use clerkClient.users.getUserList()
+  // You must pass the list of users to the client for the rest of the logic
+  // But you cannot pass the entire User object to the client,
+  // because its too complex. So grab the data you need, like so:
+  const parsedUsers = [];
+  for (const user of users.data) {
+    parsedUsers.push({
+      id: user.id,
+      email: user.primaryEmailAddress?.emailAddress,
+    });
+  }
+
+  // Pass the parsed users to the Client Component
+  return <ImpersonateUsers users={parsedUsers} />;
+}
+```
+
+```jsx {{ filename: 'app/dashboard/_components.tsx' }}
+'use client';
+
+import React from 'react';
+import { useUser, useSignIn } from '@clerk/nextjs';
+import { generateActorToken } from './_actions';
+import { useRouter } from 'next/navigation';
+
+type ParsedUser = {
+  id: string;
+  email: string | undefined;
+};
+
+export type Actor = {
+  object: string;
+  id: string;
+  status: 'pending' | 'accepted' | 'revoked';
+  user_id: string;
+  actor: object;
+  token: string | null;
+  url: string | null;
+  created_at: Number;
+  updated_at: Number;
+};
+
+// Create an actor token for the impersonation
+async function createActorToken(actorId: string, userId: string) {
+  const res = await generateActorToken(actorId, userId); // The Server Action to generate the actor token
+
+  if (!res.ok) console.log('Error', res.message);
+
+  return res.token;
+}
+
+export default function ImpersonateUsers({ users }: { users: ParsedUser[] }) {
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const router = useRouter();
+  const { user } = useUser();
+
+  if (!user?.id) return null;
+
+  // Handle "Impersonate" button click
+  async function impersonateUser(actorId: string, userId: string) {
+    if (!isLoaded) return;
+
+    const actorToken = await createActorToken(actorId, userId);
+
+    // Sign in as the impersonated user
+    if (actorToken) {
+      try {
+        const { createdSessionId } = await signIn.create({
+          strategy: 'ticket',
+          ticket: actorToken,
+        });
+
+        await setActive({ session: createdSessionId });
+
+        router.push('/');
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2));
+      }
+    }
+  }
+
+  return (
+    <>
+      <p>Hello {user?.primaryEmailAddress?.emailAddress}</p>
+
+      <h1>Users</h1>
+      <ul>
+        {users?.map((userFromUserList) => {
+          return (
+            <li
+              key={userFromUserList.id}
+              style={{ display: 'flex', gap: '4px' }}
+            >
+              <p>
+                {userFromUserList?.email
+                  ? userFromUserList.email
+                  : userFromUserList.id}
+              </p>
+              <button
+                onClick={async () =>
+                  await impersonateUser(user.id, userFromUserList.id)
+                }
+              >
+                Impersonate
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+```
+
+```jsx {{ filename: 'app/dashboard/_actions.ts' }}
+'use server';
+
+import { auth } from '@clerk/nextjs/server';
+
+export async function generateActorToken(actorId: string, userId: string) {
+  // Check if the user has the permission to impersonate
+  if (!auth().has({ permission: 'org:admin:impersonate' })) {
+    return {
+      ok: false,
+      message: 'You do not have permission to access this page.',
+    };
+  }
+
+  const params = JSON.stringify({
+    user_id: userId,
+    actor: {
+      sub: actorId,
+    },
+  });
+
+  // Create an actor token using Clerk's Backend API
+  const res = await fetch('https://api.clerk.com/v1/actor_tokens', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+      'Content-type': 'application/json',
+    },
+    body: params,
+  });
+
+  if (!res.ok) {
+    return { ok: false, message: 'Failed to generate actor token' };
+  }
+  const data = await res.json();
+
+  return { ok: true, token: data.token };
+}
+```
+</CodeBlockTabs>
 </Tab>
 
 <Tab>

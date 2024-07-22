@@ -6,7 +6,6 @@ import remarkMdx from 'remark-mdx'
 import { visit } from 'unist-util-visit'
 
 const DISABLE_PRETTIER_RE = /[{,\s]prettier\s*:\s*false[},\s]/
-const JS_META_RE = /^{\s*{.*?}\s*}$/
 
 const processor = remark()
   .data('settings', {
@@ -50,16 +49,32 @@ function formatAnnotation(annotation, prettierOptions) {
           beforeNewline === afterNewline ? '' : ' ',
         )
         .slice(prefix.length)
-        .trimEnd()}`
+        .trimEnd()
+        .replaceAll('\\', '/*__ANNOTATION_ESCAPE__*/')}`
     })
+}
+function replaceAnnotationMarkers(text) {
+  return text.replaceAll('/*__ANNOTATION_ESCAPE__*/', '\\')
 }
 
 function remarkCollectAnnotations(annotations) {
-  return function traverse(tree) {
-    visit(tree, 'mdxTextExpression', (node) => {
-      let value = node.value.trim()
-      if (value.startsWith('{') && value.endsWith('}')) {
-        annotations.push([node.value, node.position.start.offset, node.position.end.offset])
+  return function traverse(tree, vfile) {
+    visit(tree, (node) => {
+      if (node.type === 'mdxTextExpression') {
+        let value = node.value.trim()
+        if (value.startsWith('{') && value.endsWith('}')) {
+          annotations.push([node.value, node.position.start.offset, node.position.end.offset])
+        }
+      } else if (node.type === 'code' && node.position) {
+        let blockText = vfile.value.slice(node.position.start.offset, node.position.end.offset)
+        let [, prefix, annotation] = blockText.match(/^(```\S+\s+)({\s*{.*?}\s*})\n/) ?? []
+        if (annotation) {
+          annotations.push([
+            annotation.slice(1, -1),
+            node.position.start.offset + prefix.length,
+            node.position.start.offset + prefix.length + annotation.length,
+          ])
+        }
       }
     })
   }
@@ -121,18 +136,6 @@ function remarkFormatCodeBlocks(prettierOptions) {
               }),
           )
         }
-      }
-
-      // Format JS-style meta text, e.g. {{ filename: '.env.local' }}
-      let meta = node.meta?.trim()
-      let isJS = meta && JS_META_RE.test(meta)
-
-      if (isJS) {
-        promises.push(
-          formatAnnotation(meta.slice(1, -1), prettierOptions).then((formatted) => {
-            node.meta = `{${formatted}}`
-          }),
-        )
       }
     })
 
@@ -200,6 +203,7 @@ export const printers = {
         await processor().use(remarkFormatCodeBlocks, prettierOptions).use(remarkAddCalloutMarkers).process(text),
       )
       text = replaceCalloutMarkers(text)
+      text = replaceAnnotationMarkers(text)
 
       return text
     },

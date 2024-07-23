@@ -24,11 +24,11 @@ Your users will still be able to choose an alternative authentication (or verifi
 Email links can be used to easily authenticate users or verify their email addresses. Clerk will take care of the plumbing and allow you to offer a seamless experience to your users. The email link flow looks like this:
 
 1. The user enters their email address and asks for an email link.
-2. Your application waits for the verification result.
-3. Clerk sends an email to the user, containing a link to the verification URL.
-4. The user clicks the email link. This can happen on a different device from where they entered their email address if the [**Require the same device or browser**](/docs/security/email-link-protection) setting is _off_.
-5. Clerk will verify the user's identity and advance any sign-in or sign-up attempt that might be in progress. In case the verification fails, Clerk will inform the user.
-6. Your user will now be signed in on the device that initiated the sign in.
+1. Your application waits for the verification result.
+1. Clerk sends an email to the user, containing a link to the verification URL.
+1. The user clicks the email link. This can happen on a different device from where they entered their email address if the [**Require the same device or browser**](/docs/security/email-link-protection) setting is _off_.
+1. Clerk will verify the user's identity and advance any sign-in or sign-up attempt that might be in progress. In case the verification fails, Clerk will inform the user.
+1. Your user will now be signed in on the device that initiated the sign in.
 
 If you would like email links work on any device, make sure the [**Require the same device or browser**](/docs/security/email-link-protection) setting is _off_. When this setting is disabled, there's no constraint on where the link can be opened. For example, a user could try to sign in from their desktop browser, but open the link from their mobile phone. In this scenario, _the user's sign in would be completed on the desktop browser from which it was initiated, not the mobile phone where it was verified_. As a result, the user would be signed in on their desktop, not their phone.
 
@@ -74,394 +74,397 @@ If you would like to allow the sign-up process to be completed on a different de
 Let's see all the steps involved in more detail.
 
 1. Initiate the sign-up process by collecting the user's identifier. It must be their email address.
-2. Start the email link verification flow. There are two parts to the flow:
-  - Prepare a verification for the email address by sending an email with an email link to the user.
-  - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+1. Start the email link verification flow. There are two parts to the flow:
+
+- Prepare a verification for the email address by sending an email with an email link to the user.
+- Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+
 3. Handle the email link verification result accordingly. Note that even if the email link is clicked on a different device/browser than the one which initiated the flow, the session will be created only on the original device.
-  - The verification was successful so you need to continue with the sign-up flow.
-  - The verification failed or the email link has expired.
+
+- The verification was successful so you need to continue with the sign-up flow.
+- The verification failed or the email link has expired.
 
 Clerk provides a highly flexible API that allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based sign-up flow.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```jsx
-import React from "react";
-import { useRouter } from "next/router";
-import {
-  EmailLinkErrorCode,
-  isEmailLinkError,
-  useClerk,
-  useSignUp
-} from "@clerk/nextjs";
+  ```jsx
+  import React from "react";
+  import { useRouter } from "next/router";
+  import {
+    EmailLinkErrorCode,
+    isEmailLinkError,
+    useClerk,
+    useSignUp
+  } from "@clerk/nextjs";
 
-// pages/sign-up.jsx
-// Render the sign up form.
-// Collect user's email address and send an email link with which
-// they can sign up.
-function SignUp() {
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [expired, setExpired] = React.useState(false);
-  const [verified, setVerified] = React.useState(false);
-  const router = useRouter();
-  const { signUp, isLoaded, setActive } = useSignUp();
+  // pages/sign-up.jsx
+  // Render the sign up form.
+  // Collect user's email address and send an email link with which
+  // they can sign up.
+  function SignUp() {
+    const [emailAddress, setEmailAddress] = React.useState("");
+    const [expired, setExpired] = React.useState(false);
+    const [verified, setVerified] = React.useState(false);
+    const router = useRouter();
+    const { signUp, isLoaded, setActive } = useSignUp();
 
-  if (!isLoaded) {
-    return null;
+    if (!isLoaded) {
+      return null;
+    }
+
+    const { startEmailLinkFlow, cancelEmailLinkFlow } =
+      signUp.createEmailLinkFlow();
+
+    async function submit(e) {
+      e.preventDefault();
+      setExpired(false);
+      setVerified(false);
+
+      // Start the sign up flow, by collecting
+      // the user's email address.
+      await signUp.create({ emailAddress });
+
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // when they click the email link from their
+      // email inbox.
+      // su will hold the updated sign up object.
+      const su = await startEmailLinkFlow({
+        redirectUrl: "https://your-app.domain.com/verification",
+      });
+
+      // Check the verification result.
+      const verification = su.verifications.emailAddress;
+      if (verification.verifiedFromTheSameClient()) {
+        setVerified(true);
+        // If you're handling the verification result from
+        // another route/component, you should return here.
+        // See the <EmailLinkVerification/> component as an
+        // example below.
+        // If you want to complete the flow on this tab,
+        // don't return. Check the sign up status instead.
+        return;
+      } else if (verification.status === "expired") {
+        setExpired(true);
+      }
+
+      if (su.status === "complete") {
+        // Sign up is complete, we have a session.
+        // Navigate to the after sign up URL.
+        setActive({
+          session: su.createdSessionId,
+          beforeEmit: () => router.push("/after-sign-up-path"),
+        });
+        return;
+      }
+    }
+
+    if (expired) {
+      return (
+        <div>Email link has expired</div>
+      );
+    }
+
+    if (verified) {
+      return (
+        <div>Signed in on other tab</div>
+      );
+    }
+
+    return (
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={emailAddress}
+          onChange={e => setEmailAddress(e.target.value)}
+        />
+        <button type="submit">
+          Sign up with email link
+        </button>
+      </form>
+    );
   }
 
-  const { startEmailLinkFlow, cancelEmailLinkFlow } =
-    signUp.createEmailLinkFlow();
+  // pages/verification.jsx
+  // Handle email link verification results. This is
+  // the final step in the email link flow.
+  function Verification() {
+    const [
+      verificationStatus,
+      setVerificationStatus,
+    ] = React.useState("loading");
 
-  async function submit(e) {
-    e.preventDefault();
-    setExpired(false);
-    setVerified(false);
+    const { handleEmailLinkVerification } = useClerk();
 
-    // Start the sign up flow, by collecting
-    // the user's email address.
-    await signUp.create({ emailAddress });
+    React.useEffect(() => {
+      async function verify() {
+        try {
+          await handleEmailLinkVerification({
+            redirectUrl: "https://redirect-to-pending-sign-up",
+            redirectUrlComplete: "https://redirect-when-sign-up-complete",
+          });
+          // If we're not redirected at this point, it means
+          // that the flow has completed on another device.
+          setVerificationStatus("verified");
+        } catch (err) {
+          // Verification has failed.
+          let status = "failed";
+          if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
+            status = "expired";
+          }
+          setVerificationStatus(status);
+        }
+      }
+      verify();
+    }, []);
 
-    // Start the email link flow.
+    if (verificationStatus === "loading") {
+      return <div>Loading...</div>
+    }
+
+    if (verificationStatus === "failed") {
+      return (
+        <div>Email link verification failed</div>
+      );
+    }
+
+    if (verificationStatus === "expired") {
+      return (
+        <div>Email link expired</div>
+      );
+    }
+
+    return (
+      <div>
+        Successfully signed up. Return to the original tab to continue.
+      </div>
+    );
+  }
+  ```
+
+  ```jsx
+  import React from "react";
+  import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    useNavigate,
+  } from 'react-router-dom';
+  import {
+    ClerkProvider,
+    ClerkLoaded,
+    EmailLinkErrorCode,
+    isEmailLinkError,
+    UserButton,
+    useClerk,
+    useSignUp,
+    SignedOut,
+    SignedIn,
+  } from '@clerk/clerk-react';
+
+  const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
+
+  function App() {
+    return (
+      <Router>
+        <ClerkProvider publishableKey={publishableKey}>
+          <Switch>
+            {/* Root path shows sign up page. */}
+            <Route
+              path="/"
+              element={
+                <>
+                  <SignedOut>
+                    <SignUpEmailLink />
+                  </SignedOut>
+                  <SignedIn>
+                    <UserButton />
+                  </SignedIn>
+                </>
+              }
+            />
+
+            {/* Define a /verification route that handles email link result */}
+            <Route
+              path="/verification"
+              element={
+                <ClerkLoaded>
+                  <EmailLinkVerification />
+                </ClerkLoaded>
+              }
+            />
+          </Routes>
+        </ClerkProvider>
+      </Router>
+    );
+  }
+
+  // Render the sign up form.
+  // Collect user's email address and send an email link with which
+  // they can sign up.
+  function SignUpEmailLink() {
+    const [emailAddress, setEmailAddress] = React.useState("");
+    const [expired, setExpired] = React.useState(false);
+    const [verified, setVerified] = React.useState(false);
+    const navigate = useNavigate();
+    const { signUp, isLoaded, setActive } = useSignUp();
+
+    if (!isLoaded) {
+      return null;
+    }
+
+    const { startEmailLinkFlow, cancelEmailLinkFlow } =
+      signUp.createEmailLinkFlow();
+
+    async function submit(e) {
+      e.preventDefault();
+      setExpired(false);
+      setVerified(false);
+
+      // Start the sign up flow, by collecting
+      // the user's email address.
+      await signUp.create({ emailAddress });
+
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // when they click the email link from their
+      // email inbox.
+      // su will hold the updated sign up object.
+      const su = await startEmailLinkFlow({
+        redirectUrl: "https://your-app.domain.com/verification",
+      });
+
+      // Check the verification result.
+      const verification = su.verifications.emailAddress;
+      if (verification.verifiedFromTheSameClient()) {
+        setVerified(true);
+        // If you're handling the verification result from
+        // another route/component, you should return here.
+        // See the <EmailLinkVerification/> component as an
+        // example below.
+        // If you want to complete the flow on this tab,
+        // don't return. Check the sign up status instead.
+        return;
+      } else if (verification.status === "expired") {
+        setExpired(true);
+      }
+
+      if (su.status === "complete") {
+        // Sign up is complete, we have a session.
+        // Navigate to the after sign up URL.
+        setActive({
+          session: su.createdSessionId,
+          beforeEmit: () => navigate("/after-sign-up-path"),
+        });
+        return;
+      }
+    }
+
+    if (expired) {
+      return (
+        <div>Email link has expired</div>
+      );
+    }
+
+    if (verified) {
+      return (
+        <div>Signed in on other tab</div>
+      );
+    }
+
+    return (
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={emailAddress}
+          onChange={e => setEmailAddress(e.target.value)}
+        />
+        <button type="submit">
+          Sign up with email link
+        </button>
+      </form>
+    );
+  }
+
+  // Handle email link verification results. This is
+  // the final step in the email link flow.
+  function EmailLinkVerification() {
+    const [
+      verificationStatus,
+      setVerificationStatus,
+    ] = React.useState("loading");
+
+    const { handleEmailLinkVerification } = useClerk();
+
+    React.useEffect(() => {
+      async function verify() {
+        try {
+          await handleEmailLinkVerification({
+            redirectUrl: "https://redirect-to-pending-sign-up",
+            redirectUrlComplete: "https://redirect-when-sign-up-complete",
+          });
+          // If we're not redirected at this point, it means
+          // that the flow has completed on another device.
+          setVerificationStatus("verified");
+        } catch (err) {
+          // Verification has failed.
+          let status = "failed";
+          if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
+            status = "expired";
+          }
+          setVerificationStatus(status);
+        }
+      }
+      verify();
+    }, []);
+
+    if (verificationStatus === "loading") {
+      return <div>Loading...</div>
+    }
+
+    if (verificationStatus === "failed") {
+      return (
+        <div>Email link verification failed</div>
+      );
+    }
+
+    if (verificationStatus === "expired") {
+      return (
+        <div>Email link expired</div>
+      );
+    }
+
+    return (
+      <div>
+        Successfully signed up. Return to the original tab to continue.
+      </div>
+    );
+  }
+
+  export default App;
+  ```
+
+  ```js
+  const signUp = window.Clerk.client.signUp;
+  const {
+      startEmailLinkFlow,
+      cancelEmailLinkFlow,
+  } = signUp.createEmailLinkFlow();
+
+  const res = await startEmailLinkFlow({
     // Pass your app URL that users will be navigated
     // when they click the email link from their
     // email inbox.
-    // su will hold the updated sign up object.
-    const su = await startEmailLinkFlow({
-      redirectUrl: "https://your-app.domain.com/verification",
-    });
-
-    // Check the verification result.
-    const verification = su.verifications.emailAddress;
-    if (verification.verifiedFromTheSameClient()) {
-      setVerified(true);
-      // If you're handling the verification result from
-      // another route/component, you should return here.
-      // See the <EmailLinkVerification/> component as an
-      // example below.
-      // If you want to complete the flow on this tab,
-      // don't return. Check the sign up status instead.
-      return;
-    } else if (verification.status === "expired") {
-      setExpired(true);
-    }
-
-    if (su.status === "complete") {
-      // Sign up is complete, we have a session.
-      // Navigate to the after sign up URL.
-      setActive({
-        session: su.createdSessionId,
-        beforeEmit: () => router.push("/after-sign-up-path"),
-      });
-      return;
-    }
+    redirectUrl: "https://redirect-from-email-email-link"
+  });
+  if (res.status === "completed") {
+    // sign up completed
+  } else {
+    // sign up still pending
   }
-
-  if (expired) {
-    return (
-      <div>Email link has expired</div>
-    );
-  }
-
-  if (verified) {
-    return (
-      <div>Signed in on other tab</div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={emailAddress}
-        onChange={e => setEmailAddress(e.target.value)}
-      />
-      <button type="submit">
-        Sign up with email link
-      </button>
-    </form>
-  );
-}
-
-// pages/verification.jsx
-// Handle email link verification results. This is
-// the final step in the email link flow.
-function Verification() {
-  const [
-    verificationStatus,
-    setVerificationStatus,
-  ] = React.useState("loading");
-
-  const { handleEmailLinkVerification } = useClerk();
-
-  React.useEffect(() => {
-    async function verify() {
-      try {
-        await handleEmailLinkVerification({
-          redirectUrl: "https://redirect-to-pending-sign-up",
-          redirectUrlComplete: "https://redirect-when-sign-up-complete",
-        });
-        // If we're not redirected at this point, it means
-        // that the flow has completed on another device.
-        setVerificationStatus("verified");
-      } catch (err) {
-        // Verification has failed.
-        let status = "failed";
-        if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
-          status = "expired";
-        }
-        setVerificationStatus(status);
-      }
-    }
-    verify();
-  }, []);
-
-  if (verificationStatus === "loading") {
-    return <div>Loading...</div>
-  }
-
-  if (verificationStatus === "failed") {
-    return (
-      <div>Email link verification failed</div>
-    );
-  }
-
-  if (verificationStatus === "expired") {
-    return (
-      <div>Email link expired</div>
-    );
-  }
-
-  return (
-    <div>
-      Successfully signed up. Return to the original tab to continue.
-    </div>
-  );
-}
-```
-
-```jsx
-import React from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  useNavigate,
-} from 'react-router-dom';
-import {
-  ClerkProvider,
-  ClerkLoaded,
-  EmailLinkErrorCode,
-  isEmailLinkError,
-  UserButton,
-  useClerk,
-  useSignUp,
-  SignedOut,
-  SignedIn,
-} from '@clerk/clerk-react';
-
-const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
-
-function App() {
-  return (
-    <Router>
-      <ClerkProvider publishableKey={publishableKey}>
-        <Switch>
-          {/* Root path shows sign up page. */}
-          <Route
-            path="/"
-            element={
-              <>
-                <SignedOut>
-                  <SignUpEmailLink />
-                </SignedOut>
-                <SignedIn>
-                  <UserButton />
-                </SignedIn>
-              </>
-            }
-          />
-
-          {/* Define a /verification route that handles email link result */}
-          <Route
-            path="/verification"
-            element={
-              <ClerkLoaded>
-                <EmailLinkVerification />
-              </ClerkLoaded>
-            }
-          />
-        </Routes>
-      </ClerkProvider>
-    </Router>
-  );
-}
-
-// Render the sign up form.
-// Collect user's email address and send an email link with which
-// they can sign up.
-function SignUpEmailLink() {
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [expired, setExpired] = React.useState(false);
-  const [verified, setVerified] = React.useState(false);
-  const navigate = useNavigate();
-  const { signUp, isLoaded, setActive } = useSignUp();
-
-  if (!isLoaded) {
-    return null;
-  }
-
-  const { startEmailLinkFlow, cancelEmailLinkFlow } =
-    signUp.createEmailLinkFlow();
-
-  async function submit(e) {
-    e.preventDefault();
-    setExpired(false);
-    setVerified(false);
-
-    // Start the sign up flow, by collecting
-    // the user's email address.
-    await signUp.create({ emailAddress });
-
-    // Start the email link flow.
-    // Pass your app URL that users will be navigated
-    // when they click the email link from their
-    // email inbox.
-    // su will hold the updated sign up object.
-    const su = await startEmailLinkFlow({
-      redirectUrl: "https://your-app.domain.com/verification",
-    });
-
-    // Check the verification result.
-    const verification = su.verifications.emailAddress;
-    if (verification.verifiedFromTheSameClient()) {
-      setVerified(true);
-      // If you're handling the verification result from
-      // another route/component, you should return here.
-      // See the <EmailLinkVerification/> component as an
-      // example below.
-      // If you want to complete the flow on this tab,
-      // don't return. Check the sign up status instead.
-      return;
-    } else if (verification.status === "expired") {
-      setExpired(true);
-    }
-
-    if (su.status === "complete") {
-      // Sign up is complete, we have a session.
-      // Navigate to the after sign up URL.
-      setActive({
-        session: su.createdSessionId,
-        beforeEmit: () => navigate("/after-sign-up-path"),
-      });
-      return;
-    }
-  }
-
-  if (expired) {
-    return (
-      <div>Email link has expired</div>
-    );
-  }
-
-  if (verified) {
-    return (
-      <div>Signed in on other tab</div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={emailAddress}
-        onChange={e => setEmailAddress(e.target.value)}
-      />
-      <button type="submit">
-        Sign up with email link
-      </button>
-    </form>
-  );
-}
-
-// Handle email link verification results. This is
-// the final step in the email link flow.
-function EmailLinkVerification() {
-  const [
-    verificationStatus,
-    setVerificationStatus,
-  ] = React.useState("loading");
-
-  const { handleEmailLinkVerification } = useClerk();
-
-  React.useEffect(() => {
-    async function verify() {
-      try {
-        await handleEmailLinkVerification({
-          redirectUrl: "https://redirect-to-pending-sign-up",
-          redirectUrlComplete: "https://redirect-when-sign-up-complete",
-        });
-        // If we're not redirected at this point, it means
-        // that the flow has completed on another device.
-        setVerificationStatus("verified");
-      } catch (err) {
-        // Verification has failed.
-        let status = "failed";
-        if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
-          status = "expired";
-        }
-        setVerificationStatus(status);
-      }
-    }
-    verify();
-  }, []);
-
-  if (verificationStatus === "loading") {
-    return <div>Loading...</div>
-  }
-
-  if (verificationStatus === "failed") {
-    return (
-      <div>Email link verification failed</div>
-    );
-  }
-
-  if (verificationStatus === "expired") {
-    return (
-      <div>Email link expired</div>
-    );
-  }
-
-  return (
-    <div>
-      Successfully signed up. Return to the original tab to continue.
-    </div>
-  );
-}
-
-export default App;
-```
-
-```js
-const signUp = window.Clerk.client.signUp;
-const {
-    startEmailLinkFlow,
-    cancelEmailLinkFlow,
-} = signUp.createEmailLinkFlow();
-
-const res = await startEmailLinkFlow({
-  // Pass your app URL that users will be navigated
-  // when they click the email link from their
-  // email inbox.
-  redirectUrl: "https://redirect-from-email-email-link"
-});
-if (res.status === "completed") {
-  // sign up completed
-} else {
-  // sign up still pending
-}
-// Cleanup
-cancelEmailLinkFlow();
-```
+  // Cleanup
+  cancelEmailLinkFlow();
+  ```
 </CodeBlockTabs>
 
 #### Sign in using a custom flow (Clerk API)
@@ -473,393 +476,396 @@ If you would like to allow the sign-in process to be completed on a different de
 Let's see all the steps involved in more detail.
 
 1. Initiate the sign-in process, by collecting the user's authentication identifier. It must be their email address.
-2. Start the email link verification flow. There are two parts to the flow:
-  - Prepare a verification for the email address by sending an email with an email link to the user.
-  - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+1. Start the email link verification flow. There are two parts to the flow:
+
+- Prepare a verification for the email address by sending an email with an email link to the user.
+- Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+
 3. Handle the email link verification result accordingly. Note that even if the email link is clicked on a different device/browser than the one which initiated the flow, the session will be created only on the original device.
-  - The verification was successful so you need to continue with the sign-in flow.
-  - The verification failed or the email link has expired.
+
+- The verification was successful so you need to continue with the sign-in flow.
+- The verification failed or the email link has expired.
 
 Clerk provides a highly flexible API that allows you to hook into any of the above steps, while abstracting away all the complexities of an email link based sign-in flow.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```jsx
-import React from "react";
-import { useRouter } from "next/router";
-import {
-  EmailLinkErrorCode,
-  isEmailLinkError,
-  useClerk,
-  useSignIn,
-} from "@clerk/nextjs";
+  ```jsx
+  import React from "react";
+  import { useRouter } from "next/router";
+  import {
+    EmailLinkErrorCode,
+    isEmailLinkError,
+    useClerk,
+    useSignIn,
+  } from "@clerk/nextjs";
 
-// pages/sign-in.jsx
-// Render the sign in form.
-// Collect user's email address and send an email link with which
-// they can sign in.
-function SignIn() {
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [expired, setExpired] = React.useState(false);
-  const [verified, setVerified] = React.useState(false);
-  const router = useRouter();
-  const { signIn, isLoaded, setActive }  = useSignIn();
+  // pages/sign-in.jsx
+  // Render the sign in form.
+  // Collect user's email address and send an email link with which
+  // they can sign in.
+  function SignIn() {
+    const [emailAddress, setEmailAddress] = React.useState("");
+    const [expired, setExpired] = React.useState(false);
+    const [verified, setVerified] = React.useState(false);
+    const router = useRouter();
+    const { signIn, isLoaded, setActive }  = useSignIn();
 
-  if (!isLoaded) {
-    return null;
-  }
-
-  const { startEmailLinkFlow, cancelEmailLinkFlow } = signIn.createEmailLinkFlow();
-
-  async function submit(e) {
-    e.preventDefault();
-    setExpired(false);
-    setVerified(false);
-
-    // Start the sign in flow, by collecting
-    // the user's email address.
-    const si = await signIn.create({ identifier: emailAddress });
-    const { emailAddressId } = si.supportedFirstFactors.find(
-      ff => ff.strategy === "email_link" && ff.safeIdentifier === emailAddress
-    );
-
-    // Start the email link flow.
-    // Pass your app URL that users will be navigated
-    // res will hold the updated sign in object.
-    const res = await startEmailLinkFlow({
-      emailAddressId: emailAddressId,
-      redirectUrl: "https://your-app.domain.com/verification",
-    });
-
-    // Check the verification result.
-    const verification = res.firstFactorVerification;
-    if (verification.verifiedFromTheSameClient()) {
-      setVerified(true);
-      // If you're handling the verification result from
-      // another route/component, you should return here.
-      // See the <Verification/> component as an
-      // example below.
-      // If you want to complete the flow on this tab,
-      // don't return. Simply check the sign in status.
-      return;
-    } else if (verification.status === "expired") {
-      setExpired(true);
+    if (!isLoaded) {
+      return null;
     }
-    if (res.status === "complete") {
-      setActive({ session: res.createdSessionId })
-      //Handle redirect
-      return;
-    }
-  }
 
-  if (expired) {
-    return (
-      <div>Email link has expired</div>
-    );
-  }
+    const { startEmailLinkFlow, cancelEmailLinkFlow } = signIn.createEmailLinkFlow();
 
-  if (verified) {
-    return (
-      <div>Signed in on other tab</div>
-    );
-  }
+    async function submit(e) {
+      e.preventDefault();
+      setExpired(false);
+      setVerified(false);
 
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={emailAddress}
-        onChange={e => setEmailAddress(e.target.value)}
-      />
-      <button type="submit">
-        Sign in with email link
-      </button>
-    </form>
-  );
-}
+      // Start the sign in flow, by collecting
+      // the user's email address.
+      const si = await signIn.create({ identifier: emailAddress });
+      const { emailAddressId } = si.supportedFirstFactors.find(
+        ff => ff.strategy === "email_link" && ff.safeIdentifier === emailAddress
+      );
 
-// pages/verification.jsx
-// Handle email link verification results. This is
-// the final step in the email link flow.
-function Verification() {
-  const [
-    verificationStatus,
-    setVerificationStatus,
-  ] = React.useState("loading");
-
-  const { handleEmailLinkVerification } = useClerk();
-
-  React.useEffect(() => {
-    async function verify() {
-      try {
-        await handleEmailLinkVerification({
-          redirectUrl: "https://redirect-to-pending-sign-in-like-2fa",
-          redirectUrlComplete: "https://redirect-when-sign-in-complete",
-        });
-        // If we're not redirected at this point, it means
-        // that the flow has completed on another device.
-        setVerificationStatus("verified");
-      } catch (err) {
-        // Verification has failed.
-        let status = "failed";
-        if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
-          status = "expired";
-        }
-        setVerificationStatus(status);
-      }
-    }
-    verify();
-  }, []);
-
-  if (verificationStatus === "loading") {
-    return <div>Loading...</div>
-  }
-
-  if (verificationStatus === "failed") {
-    return (
-      <div>Email link verification failed</div>
-    );
-  }
-
-  if (verificationStatus === "expired") {
-    return (
-      <div>Email link expired</div>
-    );
-  }
-
-  return (
-    <div>
-      Successfully signed in. Return to the original tab to continue.
-    </div>
-  );
-}
-```
-
-```jsx
-import React from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  useNavigate,
-} from "react-router-dom";
-import {
-  ClerkProvider,
-  ClerkLoaded,
-  EmailLinkErrorCode,
-  isEmailLinkError,
-  UserButton,
-  useClerk,
-  useSignIn,
-} from "@clerk/clerk-react";
-
-const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
-
-function App() {
-  return (
-    <Router>
-      <ClerkProvider publishableKey={publishableKey}>
-        <Routes>
-          {/* Root path shows sign in page. */}
-          <Route
-            path="/"
-            element={
-              <>
-                <SignedOut>
-                  <SignInEmailLink />
-                </SignedOut>
-                <SignedIn>
-                  <UserButton />
-                </SignedIn>
-              </>
-            }
-          />
-
-          {/* Define a /verification route that handles email link result */}
-          <Route
-            path="/verification"
-            element={
-              <ClerkLoaded>
-                <EmailLinkVerification />
-              </ClerkLoaded>
-            } />
-        </Routes>
-      </ClerkProvider>
-    </Router>
-  );
-}
-
-// Render the sign in form.
-// Collect user's email address and send an email link with which
-// they can sign in.
-function SignInEmailLink() {
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [expired, setExpired] = React.useState(false);
-  const [verified, setVerified] = React.useState(false);
-  const navigate = useNavigate();
-  const { signIn, isLoaded, setActive } = useSignIn();
-
-  if (!isLoaded) {
-    return null;
-  }
-
-  const { startEmailLinkFlow, cancelEmailLinkFlow } = signIn.createEmailLinkFlow();
-
-  async function submit(e) {
-    e.preventDefault();
-    setExpired(false);
-    setVerified(false);
-
-    // Start the sign in flow, by collecting
-    // the user's email address.
-    const si = await signIn.create({ identifier: emailAddress });
-    const { emailAddressId } = si.supportedFirstFactors.find(
-      ff => ff.strategy === "email_link" && ff.safeIdentifier === emailAddress
-    );
-
-    // Start the email link flow.
-    // Pass your app URL that users will be navigated
-    // res will hold the updated sign in object.
-    const res = await startEmailLinkFlow({
-      emailAddressId: emailAddressId,
-      redirectUrl: "https://your-app.domain.com/verification",
-    });
-
-    // Check the verification result.
-    const verification = res.firstFactorVerification;
-    if (verification.verifiedFromTheSameClient()) {
-      setVerified(true);
-      // If you're handling the verification result from
-      // another route/component, you should return here.
-      // See the <EmailLinkVerification/> component as an
-      // example below.
-      // If you want to complete the flow on this tab,
-      // don't return. Simply check the sign in status.
-      return;
-    } else if (verification.status === "expired") {
-      setExpired(true);
-    }
-    if (res.status === "complete") {
-      // Sign in is complete, we have a session.
-      // Navigate to the after sign in URL.
-      setActive({
-        session: res.createdSessionId,
-        beforeEmit: () => navigate("/after-sign-in-path"),
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // res will hold the updated sign in object.
+      const res = await startEmailLinkFlow({
+        emailAddressId: emailAddressId,
+        redirectUrl: "https://your-app.domain.com/verification",
       });
-      return;
-    }
-  }
 
-  if (expired) {
-    return (
-      <div>Email link has expired</div>
-    );
-  }
-
-  if (verified) {
-    return (
-      <div>Signed in on other tab</div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={emailAddress}
-        onChange={e => setEmailAddress(e.target.value)}
-      />
-      <button type="submit">
-        Sign in with email link
-      </button>
-    </form>
-  );
-}
-
-// Handle email link verification results. This is
-// the final step in the email link flow.
-function EmailLinkVerification() {
-  const [
-    verificationStatus,
-    setVerificationStatus,
-  ] = React.useState("loading");
-
-  const { handleEmailLinkVerification } = useClerk();
-
-  React.useEffect(() => {
-    async function verify() {
-      try {
-        await handleEmailLinkVerification({
-          redirectUrl: "https://redirect-to-pending-sign-in-like-2fa",
-          redirectUrlComplete: "https://redirect-when-sign-in-complete",
-        });
-        // If we're not redirected at this point, it means
-        // that the flow has completed on another device.
-        setVerificationStatus("verified");
-      } catch (err) {
-        // Verification has failed.
-        let status = "failed";
-        if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
-          status = "expired";
-        }
-        setVerificationStatus(status);
+      // Check the verification result.
+      const verification = res.firstFactorVerification;
+      if (verification.verifiedFromTheSameClient()) {
+        setVerified(true);
+        // If you're handling the verification result from
+        // another route/component, you should return here.
+        // See the <Verification/> component as an
+        // example below.
+        // If you want to complete the flow on this tab,
+        // don't return. Simply check the sign in status.
+        return;
+      } else if (verification.status === "expired") {
+        setExpired(true);
+      }
+      if (res.status === "complete") {
+        setActive({ session: res.createdSessionId })
+        //Handle redirect
+        return;
       }
     }
-    verify();
-  }, []);
 
-  if (verificationStatus === "loading") {
-    return <div>Loading...</div>
-  }
+    if (expired) {
+      return (
+        <div>Email link has expired</div>
+      );
+    }
 
-  if (verificationStatus === "failed") {
+    if (verified) {
+      return (
+        <div>Signed in on other tab</div>
+      );
+    }
+
     return (
-      <div>Email link verification failed</div>
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={emailAddress}
+          onChange={e => setEmailAddress(e.target.value)}
+        />
+        <button type="submit">
+          Sign in with email link
+        </button>
+      </form>
     );
   }
 
-  if (verificationStatus === "expired") {
+  // pages/verification.jsx
+  // Handle email link verification results. This is
+  // the final step in the email link flow.
+  function Verification() {
+    const [
+      verificationStatus,
+      setVerificationStatus,
+    ] = React.useState("loading");
+
+    const { handleEmailLinkVerification } = useClerk();
+
+    React.useEffect(() => {
+      async function verify() {
+        try {
+          await handleEmailLinkVerification({
+            redirectUrl: "https://redirect-to-pending-sign-in-like-2fa",
+            redirectUrlComplete: "https://redirect-when-sign-in-complete",
+          });
+          // If we're not redirected at this point, it means
+          // that the flow has completed on another device.
+          setVerificationStatus("verified");
+        } catch (err) {
+          // Verification has failed.
+          let status = "failed";
+          if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
+            status = "expired";
+          }
+          setVerificationStatus(status);
+        }
+      }
+      verify();
+    }, []);
+
+    if (verificationStatus === "loading") {
+      return <div>Loading...</div>
+    }
+
+    if (verificationStatus === "failed") {
+      return (
+        <div>Email link verification failed</div>
+      );
+    }
+
+    if (verificationStatus === "expired") {
+      return (
+        <div>Email link expired</div>
+      );
+    }
+
     return (
-      <div>Email link expired</div>
+      <div>
+        Successfully signed in. Return to the original tab to continue.
+      </div>
+    );
+  }
+  ```
+
+  ```jsx
+  import React from "react";
+  import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    useNavigate,
+  } from "react-router-dom";
+  import {
+    ClerkProvider,
+    ClerkLoaded,
+    EmailLinkErrorCode,
+    isEmailLinkError,
+    UserButton,
+    useClerk,
+    useSignIn,
+  } from "@clerk/clerk-react";
+
+  const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
+
+  function App() {
+    return (
+      <Router>
+        <ClerkProvider publishableKey={publishableKey}>
+          <Routes>
+            {/* Root path shows sign in page. */}
+            <Route
+              path="/"
+              element={
+                <>
+                  <SignedOut>
+                    <SignInEmailLink />
+                  </SignedOut>
+                  <SignedIn>
+                    <UserButton />
+                  </SignedIn>
+                </>
+              }
+            />
+
+            {/* Define a /verification route that handles email link result */}
+            <Route
+              path="/verification"
+              element={
+                <ClerkLoaded>
+                  <EmailLinkVerification />
+                </ClerkLoaded>
+              } />
+          </Routes>
+        </ClerkProvider>
+      </Router>
     );
   }
 
-  return (
-    <div>
-      Successfully signed in. Return to the original tab to continue.
-    </div>
+  // Render the sign in form.
+  // Collect user's email address and send an email link with which
+  // they can sign in.
+  function SignInEmailLink() {
+    const [emailAddress, setEmailAddress] = React.useState("");
+    const [expired, setExpired] = React.useState(false);
+    const [verified, setVerified] = React.useState(false);
+    const navigate = useNavigate();
+    const { signIn, isLoaded, setActive } = useSignIn();
+
+    if (!isLoaded) {
+      return null;
+    }
+
+    const { startEmailLinkFlow, cancelEmailLinkFlow } = signIn.createEmailLinkFlow();
+
+    async function submit(e) {
+      e.preventDefault();
+      setExpired(false);
+      setVerified(false);
+
+      // Start the sign in flow, by collecting
+      // the user's email address.
+      const si = await signIn.create({ identifier: emailAddress });
+      const { emailAddressId } = si.supportedFirstFactors.find(
+        ff => ff.strategy === "email_link" && ff.safeIdentifier === emailAddress
+      );
+
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // res will hold the updated sign in object.
+      const res = await startEmailLinkFlow({
+        emailAddressId: emailAddressId,
+        redirectUrl: "https://your-app.domain.com/verification",
+      });
+
+      // Check the verification result.
+      const verification = res.firstFactorVerification;
+      if (verification.verifiedFromTheSameClient()) {
+        setVerified(true);
+        // If you're handling the verification result from
+        // another route/component, you should return here.
+        // See the <EmailLinkVerification/> component as an
+        // example below.
+        // If you want to complete the flow on this tab,
+        // don't return. Simply check the sign in status.
+        return;
+      } else if (verification.status === "expired") {
+        setExpired(true);
+      }
+      if (res.status === "complete") {
+        // Sign in is complete, we have a session.
+        // Navigate to the after sign in URL.
+        setActive({
+          session: res.createdSessionId,
+          beforeEmit: () => navigate("/after-sign-in-path"),
+        });
+        return;
+      }
+    }
+
+    if (expired) {
+      return (
+        <div>Email link has expired</div>
+      );
+    }
+
+    if (verified) {
+      return (
+        <div>Signed in on other tab</div>
+      );
+    }
+
+    return (
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={emailAddress}
+          onChange={e => setEmailAddress(e.target.value)}
+        />
+        <button type="submit">
+          Sign in with email link
+        </button>
+      </form>
+    );
+  }
+
+  // Handle email link verification results. This is
+  // the final step in the email link flow.
+  function EmailLinkVerification() {
+    const [
+      verificationStatus,
+      setVerificationStatus,
+    ] = React.useState("loading");
+
+    const { handleEmailLinkVerification } = useClerk();
+
+    React.useEffect(() => {
+      async function verify() {
+        try {
+          await handleEmailLinkVerification({
+            redirectUrl: "https://redirect-to-pending-sign-in-like-2fa",
+            redirectUrlComplete: "https://redirect-when-sign-in-complete",
+          });
+          // If we're not redirected at this point, it means
+          // that the flow has completed on another device.
+          setVerificationStatus("verified");
+        } catch (err) {
+          // Verification has failed.
+          let status = "failed";
+          if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
+            status = "expired";
+          }
+          setVerificationStatus(status);
+        }
+      }
+      verify();
+    }, []);
+
+    if (verificationStatus === "loading") {
+      return <div>Loading...</div>
+    }
+
+    if (verificationStatus === "failed") {
+      return (
+        <div>Email link verification failed</div>
+      );
+    }
+
+    if (verificationStatus === "expired") {
+      return (
+        <div>Email link expired</div>
+      );
+    }
+
+    return (
+      <div>
+        Successfully signed in. Return to the original tab to continue.
+      </div>
+    );
+  }
+
+  export default App;
+  ```
+
+  ```js
+  const signIn = window.Clerk.client.signIn;
+  const {
+      startEmailLinkFlow,
+      cancelEmailLinkFlow,
+  } = signIn.createEmailLinkFlow();
+
+  const { email_address_id } = signIn.supportedFirstFactors.find(
+    ff => ff.strategy === "email_link"
+            && ff.safe_identifier === "your-users-email"
   );
-}
 
-export default App;
-```
-
-```js
-const signIn = window.Clerk.client.signIn;
-const {
-    startEmailLinkFlow,
-    cancelEmailLinkFlow,
-} = signIn.createEmailLinkFlow();
-
-const { email_address_id } = signIn.supportedFirstFactors.find(
-  ff => ff.strategy === "email_link"
-          && ff.safe_identifier === "your-users-email"
-);
-
-// Pass your app URL that users will be navigated
-// when they click the email link from their
-// email inbox.
-const res = await startEmailLinkFlow({
-  emailAddressId,
-  redirectUrl: "https://redirect-from-email-email-link",
-});
-if (res.status === "completed") {
-  // sign in completed
-} else {
-  // sign in still pending
-}
-// Cleanup
-cancelEmailLinkFlow();
-```
+  // Pass your app URL that users will be navigated
+  // when they click the email link from their
+  // email inbox.
+  const res = await startEmailLinkFlow({
+    emailAddressId,
+    redirectUrl: "https://redirect-from-email-email-link",
+  });
+  if (res.status === "completed") {
+    // sign in completed
+  } else {
+    // sign in still pending
+  }
+  // Cleanup
+  cancelEmailLinkFlow();
+  ```
 </CodeBlockTabs>
 
 #### Set up email address verification using a custom flow (Clerk API)
@@ -867,184 +873,187 @@ cancelEmailLinkFlow();
 Email links can also provide a nice user experience for verifying email addresses that users add when updating their profiles. The flow is similar to one-time code verification, but users need only click on the email link; there's no need to return to your app.
 
 1. Collect the user's email address.
-2. Start the email link verification flow. There are two parts to the flow:
-  - Prepare a verification for the email address by sending an email with an email link to the user.
-  - Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+1. Start the email link verification flow. There are two parts to the flow:
+
+- Prepare a verification for the email address by sending an email with an email link to the user.
+- Wait until the email link is clicked. This is a polling behavior that can be canceled at any time.
+
 3. Handle the email link verification result accordingly. Note that even if the email link is clicked on a different device/browser than the one which initiated the flow, the session will be created only on the original device.
-  - The verification was successful.
-  - The verification failed or the email link has expired.
+
+- The verification was successful.
+- The verification failed or the email link has expired.
 
 Clerk provides a highly flexible API that allows you to hook into any of the above steps while abstracting away all the complexities of an email link-based email address verification.
 
 <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
-```jsx
-import React from "react";
-import { useUser, useEmailLink } from "@clerk/nextjs";
+  ```jsx
+  import React from "react";
+  import { useUser, useEmailLink } from "@clerk/nextjs";
 
-// A page where users can add a new email address.
-function NewEmailPage() {
-  const [email, setEmail] = React.useState('');
-  const [emailAddress, setEmailAddress] = React.useState(null);
-  const [verified, setVerified] = React.useState(false);
+  // A page where users can add a new email address.
+  function NewEmailPage() {
+    const [email, setEmail] = React.useState('');
+    const [emailAddress, setEmailAddress] = React.useState(null);
+    const [verified, setVerified] = React.useState(false);
 
-  const { user } = useUser();
+    const { user } = useUser();
 
-  async function submit(e) {
-    e.preventDefault();
-    const res = await user.createEmailAddress({ email });
-    setEmailAddress(res);
-  }
+    async function submit(e) {
+      e.preventDefault();
+      const res = await user.createEmailAddress({ email });
+      setEmailAddress(res);
+    }
 
-  if (emailAddress && !verified) {
+    if (emailAddress && !verified) {
+      return (
+        <VerifyWithEmailLink
+          emailAddress={emailAddress}
+          onVerify={() => setVerified(true)}
+        />
+      );
+    }
+
     return (
-      <VerifyWithEmailLink
-        emailAddress={emailAddress}
-        onVerify={() => setVerified(true)}
-      />
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+      </form>
     );
   }
 
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={email}
-        onChange={e => setEmail(e.target.value)}
-      />
-    </form>
-  );
-}
+  // A page which verifies email addresses with email links.
+  function VerifyWithEmailLink({
+    emailAddress,
+    onVerify,
+  }) {
+    const { startEmailLinkFlow } = useEmailLink(emailAddress);
 
-// A page which verifies email addresses with email links.
-function VerifyWithEmailLink({
-  emailAddress,
-  onVerify,
-}) {
-  const { startEmailLinkFlow } = useEmailLink(emailAddress);
+    React.useEffect(() => {
+      verify();
+    }, []);
 
-  React.useEffect(() => {
-    verify();
-  }, []);
+    async function verify() {
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // when they click the email link from their
+      // email inbox.
+      const res = await startEmailLinkFlow({
+        redirectUrl: "https://redirect-from-email-email-link",
+      });
 
-  async function verify() {
-    // Start the email link flow.
-    // Pass your app URL that users will be navigated
-    // when they click the email link from their
-    // email inbox.
-    const res = await startEmailLinkFlow({
-      redirectUrl: "https://redirect-from-email-email-link",
-    });
-
-    // res will hold the updated EmailAddress object.
-    if (res.verification.status === "verified") {
-      onVerify();
-    } else {
-      // act accordingly
+      // res will hold the updated EmailAddress object.
+      if (res.verification.status === "verified") {
+        onVerify();
+      } else {
+        // act accordingly
+      }
     }
-  }
 
-  return (
-    <div>
-      Waiting for verification...
-    </div>
-  );
-}
-```
-
-```jsx
-import React from "react";
-import { useUser, useEmailLink } from "@clerk/clerk-react";
-
-// A page where users can add a new email address.
-function NewEmailPage() {
-  const [email, setEmail] = React.useState('');
-  const [emailAddress, setEmailAddress] = React.useState(null);
-  const [verified, setVerified] = React.useState(false);
-
-  const { user } = useUser();
-
-  async function submit(e) {
-    e.preventDefault();
-    const res = await user.createEmailAddress({ email });
-    setEmailAddress(res);
-  }
-
-  if (emailAddress && !verified) {
     return (
-      <VerifyWithEmailLink
-        emailAddress={emailAddress}
-        onVerify={() => setVerified(true)}
-      />
+      <div>
+        Waiting for verification...
+      </div>
+    );
+  }
+  ```
+
+  ```jsx
+  import React from "react";
+  import { useUser, useEmailLink } from "@clerk/clerk-react";
+
+  // A page where users can add a new email address.
+  function NewEmailPage() {
+    const [email, setEmail] = React.useState('');
+    const [emailAddress, setEmailAddress] = React.useState(null);
+    const [verified, setVerified] = React.useState(false);
+
+    const { user } = useUser();
+
+    async function submit(e) {
+      e.preventDefault();
+      const res = await user.createEmailAddress({ email });
+      setEmailAddress(res);
+    }
+
+    if (emailAddress && !verified) {
+      return (
+        <VerifyWithEmailLink
+          emailAddress={emailAddress}
+          onVerify={() => setVerified(true)}
+        />
+      );
+    }
+
+    return (
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+      </form>
     );
   }
 
-  return (
-    <form onSubmit={submit}>
-      <input
-        type="email"
-        value={email}
-        onChange={e => setEmail(e.target.value)}
-      />
-    </form>
-  );
-}
+  // A page which verifies email addresses with email links.
+  function VerifyWithEmailLink({
+    emailAddress,
+    onVerify,
+  }) {
+    const { startEmailLinkFlow } = useEmailLink(emailAddress);
 
-// A page which verifies email addresses with email links.
-function VerifyWithEmailLink({
-  emailAddress,
-  onVerify,
-}) {
-  const { startEmailLinkFlow } = useEmailLink(emailAddress);
+    React.useEffect(() => {
+      verify();
+    }, []);
 
-  React.useEffect(() => {
-    verify();
-  }, []);
+    async function verify() {
+      // Start the email link flow.
+      // Pass your app URL that users will be navigated
+      // when they click the email link from their
+      // email inbox.
+      const res = await startEmailLinkFlow({
+        redirectUrl: "https://redirect-from-email-email-link",
+      });
 
-  async function verify() {
-    // Start the email link flow.
-    // Pass your app URL that users will be navigated
-    // when they click the email link from their
-    // email inbox.
-    const res = await startEmailLinkFlow({
-      redirectUrl: "https://redirect-from-email-email-link",
-    });
-
-    // res will hold the updated EmailAddress object.
-    if (res.verification.status === "verified") {
-      onVerify();
-    } else {
-      // act accordingly
+      // res will hold the updated EmailAddress object.
+      if (res.verification.status === "verified") {
+        onVerify();
+      } else {
+        // act accordingly
+      }
     }
+
+    return (
+      <div>
+        Waiting for verification...
+      </div>
+    );
   }
+  ```
 
-  return (
-    <div>
-      Waiting for verification...
-    </div>
-  );
-}
-```
+  ```js
+  const user = window.Clerk.user;
+  const emailAddress = user.emailAddresses[0];
+  const {
+      startEmailLinkFlow,
+      cancelEmailLinkFlow,
+  } = emailAddress.createEmailLinkFlow();
 
-```js
-const user = window.Clerk.user;
-const emailAddress = user.emailAddresses[0];
-const {
-    startEmailLinkFlow,
-    cancelEmailLinkFlow,
-} = emailAddress.createEmailLinkFlow();
-
-// Pass your app URL that users will be navigated
-// when they click the email link from their
-// email inbox.
-const res = await startEmailLinkFlow({
-  redirectUrl: "https://redirect-from-email-email-link",
-});
-if (res.verification.status === "verified") {
-  // email address was verified
-} else {
-  // email address wasn't verified
-}
-// Cleanup
-cancelEmailLinkFlow();
-```
+  // Pass your app URL that users will be navigated
+  // when they click the email link from their
+  // email inbox.
+  const res = await startEmailLinkFlow({
+    redirectUrl: "https://redirect-from-email-email-link",
+  });
+  if (res.verification.status === "verified") {
+    // email address was verified
+  } else {
+    // email address wasn't verified
+  }
+  // Cleanup
+  cancelEmailLinkFlow();
+  ```
 </CodeBlockTabs>

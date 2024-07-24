@@ -16,75 +16,71 @@ This guide aims to help you set up your environment for creating Clerk-authentic
 > Check out the [demo repo](https://github.com/clerk/example-cypress-nextjs) that tests a Clerk-powered application using [Testing Tokens](/docs/testing/overview#testing-tokens).
 
 <Steps>
-### Install `@clerk/testing`
+  ### Install `@clerk/testing`
 
-Clerk's testing package provides integration helpers for popular testing frameworks. Install it by running the following command:
+  Clerk's testing package provides integration helpers for popular testing frameworks. Install it by running the following command:
 
-<CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+  <CodeBlockTabs options={['npm', 'yarn', 'pnpm']}>
+    ```sh {{ filename: 'terminal' }}
+    npm i @clerk/testing --save-dev
+    ```
 
-```sh {{ filename: 'terminal' }}
-npm i @clerk/testing --save-dev
-```
+    ```sh {{ filename: 'terminal' }}
+    yarn add -D @clerk/testing
+    ```
 
-```sh {{ filename: 'terminal' }}
-yarn add -D @clerk/testing
-```
+    ```sh {{ filename: 'terminal' }}
+    pnpm add @clerk/testing -D
+    ```
+  </CodeBlockTabs>
 
-```sh {{ filename: 'terminal' }}
-pnpm add @clerk/testing -D
-```
+  ### Set your API keys
 
-</CodeBlockTabs>
+  In your test runner, set your publishable and secret key as the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` environment variables, respectively.
 
+  To find your keys:
 
-### Set your API keys
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
+  1. In the navigation sidebar, select **API Keys**.
+  1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
 
-In your test runner, set your publishable and secret key as the `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` environment variables, respectively.
+  > [!WARNING]
+  > Ensure you provide the secret key in a secure manner, to avoid leaking it to third parties. For example, if you are using GitHub Actions, refer to [_Using secrets in GitHub Actions_](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions).
 
-To find your keys:
-1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
-2. In the navigation sidebar, select **API Keys**.
-3. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+  ### Global setup
 
-> [!WARNING]
-> Ensure you provide the secret key in a secure manner, to avoid leaking it to third parties. For example, if you are using GitHub Actions, refer to [*Using secrets in GitHub Actions*](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions).
+  To set up Clerk with Cypress, add the following code to your [`cypress.config.ts`](https://docs.cypress.io/guides/references/configuration) file.
 
+  ```tsx filename="cypress.config.ts"
+  import { clerkSetup } from '@clerk/testing/cypress'
+  import { defineConfig } from 'cypress'
 
-### Global setup
-
-To set up Clerk with Cypress, add the following code to your [`cypress.config.ts`](https://docs.cypress.io/guides/references/configuration) file.
-
-```tsx filename="cypress.config.ts"
-import { clerkSetup } from '@clerk/testing/cypress';
-import { defineConfig } from 'cypress';
-
-export default defineConfig({
-  e2e: {
-    setupNodeEvents(on, config) {
-      return clerkSetup({ config });
+  export default defineConfig({
+    e2e: {
+      setupNodeEvents(on, config) {
+        return clerkSetup({ config })
+      },
+      baseUrl: 'http://localhost:3000', // your app's URL
     },
-    baseUrl: 'http://localhost:3000' // your app's URL
-  }
-});
-```
+  })
+  ```
 
-`clerkSetup` will obtain a [Testing Token](/docs/testing/overview#testing-tokens) when your test suite starts, making it available for all subsequent tests to use.
+  `clerkSetup` will obtain a [Testing Token](/docs/testing/overview#testing-tokens) when your test suite starts, making it available for all subsequent tests to use.
 
-### Use Clerk Testing Tokens
+  ### Use Clerk Testing Tokens
 
-Now that Cypress is configured with Clerk, you can use the `setupClerkTestingToken()` function in your tests to augment them with the Testing Token. See the following example:
+  Now that Cypress is configured with Clerk, you can use the `setupClerkTestingToken()` function in your tests to augment them with the Testing Token. See the following example:
 
-```tsx filename="my-test.cy.ts"
-import { setupClerkTestingToken } from "@clerk/testing/cypress";
+  ```tsx filename="my-test.cy.ts"
+  import { setupClerkTestingToken } from '@clerk/testing/cypress'
 
-it("sign up", () => {
-  setupClerkTestingToken();
+  it('sign up', () => {
+    setupClerkTestingToken()
 
-  cy.visit('/sign-up');
-  // ...
-});
-```
-
+    cy.visit('/sign-up')
+    // ...
+  })
+  ```
 </Steps>
 
 ## Custom Commands
@@ -94,10 +90,10 @@ To use these commands, you must import them in your [Cypress E2E support file](h
 
 ```ts {{ filename: 'cypress/support/e2e.ts' }}
 /// <reference types="cypress" />
-import { addClerkCommands } from '@clerk/testing/cypress';
-addClerkCommands({ Cypress, cy });
+import { addClerkCommands } from '@clerk/testing/cypress'
+addClerkCommands({ Cypress, cy })
 
-export {};
+export {}
 ```
 
 ### `cy.clerkSignIn`
@@ -123,23 +119,22 @@ Multi-factor authentication is not supported.
 `cy.clerkSignIn` accepts an object with the following properties:
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `strategy` | `'password' \| 'phone_code' \| 'email_code'` | The sign-in strategy. Supported strategies are: <br /><ul><li>`password`: The command will sign in the user using the provided password and identifier.</li><li>`phone_code`: You must have a user with a test phone number as an identifier (e.g., `+15555550100`).</li><li>`email_code`: You must have a user with a test email as an identifier (e.g., `your_email+clerk_test@example.com`).</li></ul> |
 | `identifier` | `string` | The user's identifier. This could be a username, a phone number, or an email. |
 | `password` | `string` | The user's password. This is required only if the `strategy` is set to `'password'`. |
-
 
 #### Example
 
 The following example demonstrates how to use the `cy.clerkSignIn()` command in a test to sign in a user.
 
-```ts {{ filename: 'cypress/e2e/my-test.cy.ts'}}
+```ts {{ filename: 'cypress/e2e/my-test.cy.ts' }}
 it('sign in', () => {
-  cy.visit(`/`);
-  cy.clerkSignIn({ strategy: 'phone_code', identifier: '+15555550100' });
-  cy.visit('/protected');
+  cy.visit(`/`)
+  cy.clerkSignIn({ strategy: 'phone_code', identifier: '+15555550100' })
+  cy.visit('/protected')
   // user is signed in from here on
-});
+})
 ```
 
 ### `cy.clerkSignOut`
@@ -156,21 +151,22 @@ The `cy.clerkSignOut` command is used to sign out the current user using Clerk.
 `cy.clerkSignOut` accepts an optional parameter `signOutOptions`, which includes the following properties:
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `sessionId?` | `string` | The ID of a specific session to sign out of. Useful for multi-session applications. |
 | `redirectUrl?` | `string` | The redirect URL to navigate to after sign out is complete. |
 
 #### Example
 
 The following example demonstrates how to use the `cy.clerkSignOut()` command in a test to sign a user out.
-```ts {{ filename: 'cypress/e2e/my-test.cy.ts'}}
+
+```ts {{ filename: 'cypress/e2e/my-test.cy.ts' }}
 it('sign out', () => {
-  cy.visit(`/`);
-  cy.clerkSignIn({ strategy: 'phone_code', identifier: '+15555550100' });
-  cy.visit('/protected');
-  cy.clerkSignOut();
+  cy.visit(`/`)
+  cy.clerkSignIn({ strategy: 'phone_code', identifier: '+15555550100' })
+  cy.visit('/protected')
+  cy.clerkSignOut()
   // user is signed out from here on
-});
+})
 ```
 
 ### `cy.clerkLoaded`
@@ -185,12 +181,13 @@ The `cy.clerkLoaded` command asserts that Clerk has been loaded.
 #### Example
 
 The following example demonstrates how to use the `cy.clerkLoaded()` command in a test to assert that Clerk has been loaded.
-```ts {{ filename: 'cypress/e2e/my-test.cy.ts'}}
+
+```ts {{ filename: 'cypress/e2e/my-test.cy.ts' }}
 it('check Clerk loaded', () => {
-  cy.visit(`/`);
-  cy.clerkLoaded();
+  cy.visit(`/`)
+  cy.clerkLoaded()
   // Clerk has been loaded from here on
-});
+})
 ```
 
 For more information, feedback or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

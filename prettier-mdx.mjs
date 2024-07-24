@@ -129,10 +129,15 @@ function remarkFormatCodeBlocks(prettierOptions) {
                 }
                 node.value = newValue
               })
-              .catch(() => {
-                console.warn(
-                  `⚠︎ Error formatting code block in \`${prettierOptions.filepath}\` @ ${node.position.start.line}:${node.position.start.column}`,
-                )
+              .catch((error) => {
+                if (error instanceof SyntaxError) {
+                  error.message = error.message.replace(
+                    /\((\d+):(\d+)\)/,
+                    (_, line, column) =>
+                      `(${parseInt(line, 10) + node.position.start.line}:${parseInt(column, 10) + node.position.start.column - 1})`,
+                  )
+                }
+                throw error
               }),
           )
         }

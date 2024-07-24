@@ -6,7 +6,7 @@ description: Learn how to allow your users authenticate with passkeys with Clerk
 # Build a custom authentication flow using passkeys
 
 <Callout type="warning">
-This guide is for users who want to build a *custom* user interface using the Clerk API. To authenticate users with passkeys using a *prebuilt* UI, you should use Clerk's [`<SignIn />`](/docs/components/authentication/sign-in) and [`<UserProfile />`](/docs/components/user/user-profile) components. See [the sign-in and sign-out options docs](/docs/authentication/configuration/sign-up-sign-in-options#passkeys) to learn more.
+  This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with passkeys using a _prebuilt_ UI, you should use Clerk's [`<SignIn />`](/docs/components/authentication/sign-in) and [`<UserProfile />`](/docs/components/user/user-profile) components. See [the sign-in and sign-out options docs](/docs/authentication/configuration/sign-up-sign-in-options#passkeys) to learn more.
 </Callout>
 
 Clerk supports passwordless authentication via passkeys, enabling users to sign in without having to remember a password. Instead, users select a passkey associated with their device, which they can use to authenticate themselves.
@@ -18,30 +18,30 @@ This guide will teach you how to use Clerk's API to build custom flows for creat
 To create a passkey for a user, you must call [`User.createPasskey()`](/docs/references/javascript/user/user#create-passkey) as shown in the following example:
 
 <CodeBlockTabs options={["Next.js App Router"]}>
-```tsx filename="app/components/CustomCreatePasskeysButton.tsx"
-"use client";
+  ```tsx {{ prettier: false, filename: 'app/components/CustomCreatePasskeysButton.tsx' }}
+  "use client";
 
-import { useUser } from "@clerk/nextjs";
+  import { useUser } from "@clerk/nextjs";
 
-export function CreatePasskeyButton() {
-  const { user } = useUser();
+  export function CreatePasskeyButton() {
+    const { user } = useUser();
 
-  const createClerkPasskey = async () => {
-    try {
-      const response = await user?.createPasskey();
-      console.log(response);
-    } catch (error: ClerkRuntimeError) {
-      console.log(error);
-    }
-  };
+    const createClerkPasskey = async () => {
+      try {
+        const response = await user?.createPasskey();
+        console.log(response);
+      } catch (error: ClerkRuntimeError) {
+        console.log(error);
+      }
+    };
 
-  return (
-    <button onClick={createClerkPasskey}>
-      Create a passkey now
-    </button>
-  );
-}
-```
+    return (
+      <button onClick={createClerkPasskey}>
+        Create a passkey now
+      </button>
+    );
+  }
+  ```
 </CodeBlockTabs>
 
 ## Sign a user in with a passkey
@@ -49,149 +49,148 @@ export function CreatePasskeyButton() {
 To sign a user into your Clerk app with a passkey, you must call [`SignIn.authenticateWithPasskey()`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-passkey). This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
 
 <CodeBlockTabs options={["Next.js App router"]}>
-```tsx filename="components/SignInWithPasskeyButton.tsx"
-"use client";
+  ```tsx {{ prettier: false, filename: 'components/SignInWithPasskeyButton.tsx' }}
+  "use client";
 
-import { useSignIn } from "@clerk/nextjs";
+  import { useSignIn } from "@clerk/nextjs";
 
-export function SignInWithPasskeyButton() {
-  const { signIn } = useSignIn();
+  export function SignInWithPasskeyButton() {
+    const { signIn } = useSignIn();
 
-  const signInWithPasskey = async () => {
-    // 'discoverable' lets the user choose a passkey
-    // without autofilling any of the options
-    try {
-      const response = await signIn?.authenticateWithPasskey();
-      console.log(response);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+    const signInWithPasskey = async () => {
+      // 'discoverable' lets the user choose a passkey
+      // without autofilling any of the options
+      try {
+        const response = await signIn?.authenticateWithPasskey();
+        console.log(response);
+      } catch (error) {
+        console.log(error);
+      }
+    };
 
-  return (
-    <button onClick={signInWithPasskey}>
-      Sign in with a passkey
-    </button>
-  );
-}
-```
+    return (
+      <button onClick={signInWithPasskey}>
+        Sign in with a passkey
+      </button>
+    );
+  }
+  ```
 </CodeBlockTabs>
 
 ## Rename user passkeys
 
 Clerk generates a name based on the device associated with the passkey when it's created. Sometimes users may want to rename a passkey to make it easier to identify.
 
-To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/references/javascript/types/passkey-resource#update) method of the passkey object as shown in the following example: 
+To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/references/javascript/types/passkey-resource#update) method of the passkey object as shown in the following example:
 
 <CodeBlockTabs options={["Next.js App router"]}>
+  ```tsx {{ prettier: false, filename: 'components/RenamePasskeyUI.tsx' }}
+  "use client";
 
-```tsx filename="components/RenamePasskeyUI.tsx"
-"use client";
+  import { useUser } from "@clerk/nextjs";
+  import { useRef, useState } from "react";
 
-import { useUser } from "@clerk/nextjs";
-import { useRef, useState } from "react";
+  export function RenamePasskeyUI() {
+    const { user } = useUser();
+    const passkeyToUpdateId = useRef<HTMLInputElement>(null);
+    const newPasskeyName = useRef<HTMLInputElement>(null);
+    const { passkeys } = user;
+    const [success, setSuccess] = useState(false);
 
-export function RenamePasskeyUI() {
-  const { user } = useUser();
-  const passkeyToUpdateId = useRef<HTMLInputElement>(null);
-  const newPasskeyName = useRef<HTMLInputElement>(null);
-  const { passkeys } = user;
-  const [success, setSuccess] = useState(false);
+    const renamePasskey = async () => {
+      try {
+        const passkeyToUpdate = passkeys?.find(
+          (pk: PasskeyResource) => pk.id === passkeyToUpdateId.current?.value
+        );
+        const response = await passkeyToUpdate?.update({
+          name: newPasskeyName.current?.value,
+        });
+        console.log(response);
+        setSuccess(true);
+      } catch (error) {
+        console.log(error);
+        setSuccess(false);
+      }
+    };
 
-  const renamePasskey = async () => {
-    try {
-      const passkeyToUpdate = passkeys?.find(
-        (pk: PasskeyResource) => pk.id === passkeyToUpdateId.current?.value
-      );
-      const response = await passkeyToUpdate?.update({
-        name: newPasskeyName.current?.value,
-      });
-      console.log(response);
-      setSuccess(true);
-    } catch (error) {
-      console.log(error);
-      setSuccess(false);
-    }
-  };
-
-  return (
-    <>
-      <p>Passkeys:</p>
-      <ul>
-        {passkeys?.map((pk: PasskeyResource) => {
-          return (
-            <li key={pk.id}>
-              Name: {pk.name} | ID: {pk.id}
-            </li>
-          );
-        })}
-      </ul>
-      <input 
-        ref={passkeyToUpdateId}
-        type="text"
-        placeholder="ID of passkey to update"
-      />
-      <input type="text" placeholder="New name" ref={newPasskeyName} />
-      <button onClick={renamePasskey}>Rename your passkey</button>
-      <p>Passkey updated: {success ? "Yes" : "No"}</p>
-    </>
-  );
-}
-```
+    return (
+      <>
+        <p>Passkeys:</p>
+        <ul>
+          {passkeys?.map((pk: PasskeyResource) => {
+            return (
+              <li key={pk.id}>
+                Name: {pk.name} | ID: {pk.id}
+              </li>
+            );
+          })}
+        </ul>
+        <input 
+          ref={passkeyToUpdateId}
+          type="text"
+          placeholder="ID of passkey to update"
+        />
+        <input type="text" placeholder="New name" ref={newPasskeyName} />
+        <button onClick={renamePasskey}>Rename your passkey</button>
+        <p>Passkey updated: {success ? "Yes" : "No"}</p>
+      </>
+    );
+  }
+  ```
 </CodeBlockTabs>
 
 ## Delete user passkeys
 
-To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object as shown in the following example: 
+To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object as shown in the following example:
 
 <CodeBlockTabs options={["Next.js App router"]}>
-```tsx filename="components/DeletePasskeyUI.tsx"
-"use client";
+  ```tsx {{ prettier: false, filename: 'components/DeletePasskeyUI.tsx' }}
+  "use client";
 
-import { useUser } from "@clerk/nextjs";
-import { useRef, useState } from "react";
+  import { useUser } from "@clerk/nextjs";
+  import { useRef, useState } from "react";
 
-export function DeletePasskeyUI() {
-  const { user } = useUser();
-  const passkeyToDeleteId = useRef<HTMLInputElement>(null);
-  const { passkeys } = user;
-  const [success, setSuccess] = useState(false);
+  export function DeletePasskeyUI() {
+    const { user } = useUser();
+    const passkeyToDeleteId = useRef<HTMLInputElement>(null);
+    const { passkeys } = user;
+    const [success, setSuccess] = useState(false);
 
-  const deletePasskey = async () => {
-    const passkeyToDelete = passkeys?.find(
-      (pk: any) => pk.id === passkeyToDeleteId.current?.value
+    const deletePasskey = async () => {
+      const passkeyToDelete = passkeys?.find(
+        (pk: any) => pk.id === passkeyToDeleteId.current?.value
+      );
+      try {
+        const response = await passkeyToDelete?.delete();
+        console.log("Response", response);
+        setSuccess(true);
+      } catch (error) {
+        console.log("Error", error);
+        setSuccess(false);
+      }
+    };
+
+    return (
+      <>
+        <p>Passkeys:</p>
+        <ul>
+          {passkeys?.map((pk: any) => {
+            return (
+              <li key={pk.id}>
+                Name: {pk.name} | ID: {pk.id}
+              </li>
+            );
+          })}
+        </ul>
+        <input
+          ref={passkeyToDeleteId}
+          type="text"
+          placeholder="ID of passkey to delete"
+        />
+        <button onClick={deletePasskey}>Delete passkey</button>
+        <p>Passkey deleted: {success ? "Yes" : "No"}</p>
+      </>
     );
-    try {
-      const response = await passkeyToDelete?.delete();
-      console.log("Response", response);
-      setSuccess(true);
-    } catch (error) {
-      console.log("Error", error);
-      setSuccess(false);
-    }
-  };
-
-  return (
-    <>
-      <p>Passkeys:</p>
-      <ul>
-        {passkeys?.map((pk: any) => {
-          return (
-            <li key={pk.id}>
-              Name: {pk.name} | ID: {pk.id}
-            </li>
-          );
-        })}
-      </ul>
-      <input
-        ref={passkeyToDeleteId}
-        type="text"
-        placeholder="ID of passkey to delete"
-      />
-      <button onClick={deletePasskey}>Delete passkey</button>
-      <p>Passkey deleted: {success ? "Yes" : "No"}</p>
-    </>
-  );
-}
-```
+  }
+  ```
 </CodeBlockTabs>

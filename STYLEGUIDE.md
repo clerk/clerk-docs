@@ -40,7 +40,6 @@ When mentioning a documented component, function, etc, multiple times on a page,
 
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
 
-
 ### 1.4 Write out abbreviations when introducing them
 
 If you want to abbreviate a term in your article, write it out fully first, then put the abbreviation in parentheses. If you want to make an abbreviation plural treat them as regular words, e.g. APIs, IDEs or OSes.
@@ -226,10 +225,10 @@ It's tempting to use things that are familiar to us to explain things to othersâ
 ```js
 const updateUser = async () => {
   await user.update({
-    firstName: "John",
-    lastName: "Doe",
-  });
-};
+    firstName: 'John',
+    lastName: 'Doe',
+  })
+}
 ```
 
 #### Don't
@@ -237,10 +236,10 @@ const updateUser = async () => {
 ```js
 const updateUser = async () => {
   await user.update({
-    firstName: "Twilight",
-    lastName: "Sparkle",
-  });
-};
+    firstName: 'Twilight',
+    lastName: 'Sparkle',
+  })
+}
 ```
 
 This assumes the learner is familiar with the cartoon _My Little Pony: Friendship is Magic,_ which is irrelevant.
@@ -301,14 +300,13 @@ Use carets to nest operations of the same type like menu navigation.
 
 > In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication**, click on **Social Connections**, and open the **Settings tab.**
 
-
 ### 4.3 Write compliant JSON: no single quotes, no comments
 
 Conform to the [JSON standard](https://www.json.org/json-en.html):
 
-* Key names are enclosed in double quotes (`"`)
-* Values are between double quotes (`"`), not single quotes (`'`)
-* No comments, neither `//` nor `/* */`
+- Key names are enclosed in double quotes (`"`)
+- Values are between double quotes (`"`), not single quotes (`'`)
+- No comments, neither `//` nor `/* */`
 
 #### Do
 
@@ -324,8 +322,8 @@ Conform to the [JSON standard](https://www.json.org/json-en.html):
 
 ```json
 {
-	// this is the user's primary email address in the User object
-  email: '{{user.primary_email_address}}'
+  // this is the user's primary email address in the User object
+  "email": "{{user.primary_email_address}}"
 }
 ```
 
@@ -338,15 +336,15 @@ We use 2-space indents to conserve horizontal space in code blocks.
 ```js
 export const config = {
   matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
-};
+}
 ```
 
 #### Don't
 
 ```js
 export const config = {
-    matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
-};
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+}
 ```
 
 ### 4.5 Authentication states should be hyphenated and bold.

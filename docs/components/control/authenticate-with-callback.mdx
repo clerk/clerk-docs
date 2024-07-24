@@ -3,156 +3,153 @@ title: <AuthenticateWithRedirectCallback />
 description: The `<AuthenticateWithRedirectCallback />` is used to complete a custom OAuth flow. Simply render the component under the route you passed as `redirectUrl` to the `authenticateWithRedirect` methods.
 ---
 
-# <code>\<AuthenticateWith<wbr/>RedirectCallback&nbsp;/></code>
+# <code>\<AuthenticateWith<wbr />RedirectCallback /></code>
 
 The `<AuthenticateWithRedirectCallback />` is used to complete a custom OAuth flow. Simply render the component under the route you passed as `redirectUrl` to the `authenticateWithRedirect` methods.
 
 ## Usage
 
 <InjectKeys>
+  <Tabs type="framework" items={["Next.js", "React"]}>
+    <Tab>
+      This example below uses built in Next.js pages, but you could use any routing library you want.
 
-<Tabs type="framework" items={["Next.js", "React"]}>
-  <Tab>
-  This example below uses built in Next.js pages, but you could use any routing library you want.
+      ```tsx {{ prettier: false, filename: 'app.tsx' }}
+      import '@/styles/globals.css';
+      import { ClerkProvider, SignedIn, SignedOut, useSignIn } from '@clerk/nextjs';
+      import { AppProps } from 'next/app';
+      import { useRouter } from 'next/router';
 
-  ```tsx filename="app.tsx"
-  import '@/styles/globals.css';
-  import { ClerkProvider, SignedIn, SignedOut, useSignIn } from '@clerk/nextjs';
-  import { AppProps } from 'next/app';
-  import { useRouter } from 'next/router';
+      const publicPages: Array<string> = [];
 
-  const publicPages: Array<string> = [];
+      const SignInOAuthButtons = () => {
+        const { signIn, isLoaded } = useSignIn();
+        if (!isLoaded) {
+          return null;
+        }
+        const signInWithGoogle = () =>
+          signIn.authenticateWithRedirect({
+            strategy: 'oauth_google',
+            redirectUrl: '/sso-callback',
+            redirectUrlComplete: '/'
+          });
+        return <button onClick={signInWithGoogle}>Sign in with Google</button>;
+      };
+      function MyApp({ Component, pageProps }: AppProps) {
+        const { pathname } = useRouter();
+        const isPublicPage = publicPages.includes(pathname);
 
-  const SignInOAuthButtons = () => {
-    const { signIn, isLoaded } = useSignIn();
-    if (!isLoaded) {
-      return null;
-    }
-    const signInWithGoogle = () =>
-      signIn.authenticateWithRedirect({
-        strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/'
-      });
-    return <button onClick={signInWithGoogle}>Sign in with Google</button>;
-  };
-  function MyApp({ Component, pageProps }: AppProps) {
-    const { pathname } = useRouter();
-    const isPublicPage = publicPages.includes(pathname);
-
-    return (
-      <ClerkProvider {...pageProps}>
-        {isPublicPage ? (
-          <Component {...pageProps} />
-        ) : (
-          <>
-            <SignedIn>
+        return (
+          <ClerkProvider {...pageProps}>
+            {isPublicPage ? (
               <Component {...pageProps} />
-            </SignedIn>
+            ) : (
+              <>
+                <SignedIn>
+                  <Component {...pageProps} />
+                </SignedIn>
+                <SignedOut>
+                  <SignInOAuthButtons />
+                </SignedOut>
+              </>
+            )}
+          </ClerkProvider>
+        );
+      }
+
+      export default MyApp;
+      ```
+
+      Once you have implemented your sign in flow, you can implement the callback page.
+
+      ```tsx {{ prettier: false, filename: '/pages/sso-callback.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs';
+
+      export default function SSOCallBack() {
+        return <AuthenticateWithRedirectCallback />;
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      This example below is using the `react-router-dom` library. You can use any routing library you want.
+
+      ```tsx {{ prettier: false, filename: 'app.tsx' }}
+      import {
+        ClerkProvider,
+        AuthenticateWithRedirectCallback,
+        SignedOut,
+        useSignIn,
+        SignedIn
+      } from '@clerk/clerk-react';
+
+      import { Route, Routes } from 'react-router-dom';
+
+      function App() {
+        return (
+          <ClerkProvider publishableKey={`{{pub_key}}`}>
+            {/* Define a / route that displays the OAuth button */}
+            <Routes>
+              <Route path="/" element={<HomePages />} />
+
+              <Route
+                path="/sso-callback"
+                element={<AuthenticateWithRedirectCallback />}
+              />
+            </Routes>
+          </ClerkProvider>
+        );
+      }
+
+      function HomePages() {
+        return (
+          <>
             <SignedOut>
               <SignInOAuthButtons />
             </SignedOut>
+            <SignedIn>
+              <div>Hello! You are Signed In!</div>
+            </SignedIn>
           </>
-        )}
-      </ClerkProvider>
-    );
-  }
+        );
+      }
 
-  export default MyApp;
-  ```
+      function SignInOAuthButtons() {
+        const { signIn, isLoaded } = useSignIn();
+        if (!isLoaded) {
+          return null;
+        }
+        const signInWithGoogle = () =>
+          signIn.authenticateWithRedirect({
+            strategy: 'oauth_google',
+            redirectUrl: '/sso-callback',
+            redirectUrlComplete: '/'
+          });
+        return <button onClick={signInWithGoogle}>Sign in with Google</button>;
+      }
 
-  Once you have implemented your sign in flow, you can implement the callback page.
-
-  ```tsx filename="/pages/sso-callback.tsx"
-  import { AuthenticateWithRedirectCallback } from '@clerk/nextjs';
-
-  export default function SSOCallBack() {
-    return <AuthenticateWithRedirectCallback />;
-  }
-  ```
-  </Tab>
-
-  <Tab>
-  This example below is using the `react-router-dom` library. You can use any routing library you want.
-
-  ```tsx filename="app.tsx"
-  import {
-    ClerkProvider,
-    AuthenticateWithRedirectCallback,
-    SignedOut,
-    useSignIn,
-    SignedIn
-  } from '@clerk/clerk-react';
-
-  import { Route, Routes } from 'react-router-dom';
-
-  function App() {
-    return (
-      <ClerkProvider publishableKey={`{{pub_key}}`}>
-        {/* Define a / route that displays the OAuth button */}
-        <Routes>
-          <Route path="/" element={<HomePages />} />
-
-          <Route
-            path="/sso-callback"
-            element={<AuthenticateWithRedirectCallback />}
-          />
-        </Routes>
-      </ClerkProvider>
-    );
-  }
-
-  function HomePages() {
-    return (
-      <>
-        <SignedOut>
-          <SignInOAuthButtons />
-        </SignedOut>
-        <SignedIn>
-          <div>Hello! You are Signed In!</div>
-        </SignedIn>
-      </>
-    );
-  }
-
-  function SignInOAuthButtons() {
-    const { signIn, isLoaded } = useSignIn();
-    if (!isLoaded) {
-      return null;
-    }
-    const signInWithGoogle = () =>
-      signIn.authenticateWithRedirect({
-        strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/'
-      });
-    return <button onClick={signInWithGoogle}>Sign in with Google</button>;
-  }
-
-  export default App;
-  ```
-
-  </Tab>
-</Tabs>
-
+      export default App;
+      ```
+    </Tab>
+  </Tabs>
 </InjectKeys>
 
 ## Properties
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `signInUrl?` | `string` | Full URL or path where the SignIn component is mounted. |
 | `signUpUrl?` | `string` | Full URL or path where the SignUp component is mounted. |
-| `signInFallbackRedirectUrl?`         | `string`                                                                              | The fallback URL to redirect to after the user signs in, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
-| `signUpFallbackRedirectUrl?`         | `string`                                                                              | The fallback URL to redirect to after the user signs up, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
-| `signInForceRedirectUrl?`         | `string`                                                                              | If provided, this URL will always be redirected to after the user signs in. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
-| `signUpForceRedirectUrl?`         | `string`                                                                              | If provided, this URL will always be redirected to after the user signs up. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.                                                                                                                                                                            |
+| `signInFallbackRedirectUrl?` | `string` | The fallback URL to redirect to after the user signs in, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead. |
+| `signUpFallbackRedirectUrl?` | `string` | The fallback URL to redirect to after the user signs up, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead. |
+| `signInForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs in. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead. |
+| `signUpForceRedirectUrl?` | `string` | If provided, this URL will always be redirected to after the user signs up. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead. |
 | `firstFactorUrl` | `string \| undefined` | Full URL or path to navigate during sign in, if identifier verification is required. |
 | `secondFactorUrl` | `string \| undefined` | Full URL or path to navigate during sign in, if 2FA is enabled. |
 | `resetPasswordUrl` | `string` | Full URL or path to navigate during sign in, if the user is required to reset their password. |
 | `continueSignUpUrl` | `string \| undefined \| null` | Full URL or path to navigate after an incomplete sign up. |
 | `verifyEmailAddressUrl` | `string \| undefined \| null` | Full URL or path to navigate after requesting email verification. |
 | `verifyPhoneNumberUrl` | `string \| undefined \| null` | Full URL or path to navigate after requesting phone verification. |
-| `afterSignInUrl` (deprecated) | `string` | Full URL or path to navigate to after successful sign in. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#deprecated) instead. **`signInFallbackRedirectUrl` and `signInforceRedirectUrl` have priority and should be used instead.**  |
+| `afterSignInUrl` (deprecated) | `string` | Full URL or path to navigate to after successful sign in. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#deprecated) instead. **`signInFallbackRedirectUrl` and `signInforceRedirectUrl` have priority and should be used instead.** |
 | `afterSignUpUrl` (deprecated) | `string` | Full URL or path to navigate to after successful sign up. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#deprecated) instead. **`signUpFallbackRedirectUrl` and `signUpforceRedirectUrl` have priority and should be used instead.** |
 | `redirectUrl` (deprecated) | `string` | Full URL or path to navigate after successful sign in or sign up. This is the same as setting `afterSignInUrl` and `afterSignUpUrl` to the same value. The **`signXfallbackRedirectUrl` and `signXforceRedirectUrl` props have priority over the deprecated `redirectUrl` and should be used instead.** |

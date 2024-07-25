@@ -16,195 +16,189 @@ Making the user a member of an organization will not make them active in that or
 You can check the `orgId` value on the [Auth](docs/references/nextjs/auth-object#auth-object). If this value is `undefined` then the user is not active in an organization and is instead in their Personal Workspace.
 
 If you check the returned Auth object from [auth()](/docs/references/nextjs/auth) and the user is not active in an organization, it would like this:
-```typescript
+
+```json
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
-  claims: {
-    azp: 'http://localhost:3000',
-    exp: 1666622607,
-    iat: 1666622547,
-    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
-    nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj'
+  "sessionId": "sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy",
+  "userId": "user_2F2u1wtUyUlxKgFkKqtJNtpJJWj",
+  "claims": {
+    "azp": "http://localhost:3000",
+    "exp": 1666622607,
+    "iat": 1666622547,
+    "iss": "https://clerk.quiet.muskox-85.lcl.dev",
+    "nbf": 1666622537,
+    "sid": "sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy",
+    "sub": "user_2F2u1wtUyUlxKgFkKqtJNtpJJWj"
   }
 }
-
 ```
 
 ## Enforcing an active organization
 
 <Steps>
+  ### Configuring Middleware
 
-### Configuring Middleware
+  Let's start with a Middleware and that many applications could use. This example will do the following:
 
-Let's start with a Middleware and that many applications could use. This example will do the following:
-1. Check if the user accessing a private route is signed in. If the user is not, they are redirected to the `/sign-in` page.
-2. Check if the user accessing a private route is signed in and if the user is then allow them to access that route.
-3. Any use who is not accessing a public route will get access to the prublic.
+  1. Check if the user accessing a private route is signed in. If the user is not, they are redirected to the `/sign-in` page.
+  1. Check if the user accessing a private route is signed in and if the user is then allow them to access that route.
+  1. Any use who is not accessing a public route will get access to the prublic.
 
-```typescript {{ filename: "/middleware.ts" }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { NextRequest, NextResponse } from 'next/server';
+  ```typescript {{ filename: '/middleware.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { NextRequest, NextResponse } from 'next/server'
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in", "/sign-up"])
+  const isPublicRoute = createRouteMatcher(['/', '/sign-in', '/sign-up'])
 
-export default clerkMiddleware((auth, req: NextRequest) => {
-  
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!auth().userId && !isPublicRoute(req))
-    return auth().redirectToSignIn({ returnBackUrl: req.url });
+  export default clerkMiddleware((auth, req: NextRequest) => {
+    // If the user isn't signed in and the route is private, redirect to sign-in
+    if (!auth().userId && !isPublicRoute(req))
+      return auth().redirectToSignIn({ returnBackUrl: req.url })
 
-  // If the user is logged in and the route is protected, let them view.
-  if (auth().userId && !isPublicRoute(req)) return NextResponse.next();
-})
+    // If the user is logged in and the route is protected, let them view.
+    if (auth().userId && !isPublicRoute(req)) return NextResponse.next()
+  })
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
-
-The following addition will determine if a user have an active organization or not. This check doesn't determine if the user is accessing a public route or a private route -- it is just checkingi if the user is signed in and is missing an `orgId`. If the user does not have an active organization, then redirect to `/organization-selection`.
-
-
-```typescript {{ filename: "/middleware.ts", mark: [[8,14]]}}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { NextRequest, NextResponse } from 'next/server';
-
-const isPublicRoute = createRouteMatcher(["/", "/sign-in", "/sign-up"])
-
-export default clerkMiddleware((auth, req: NextRequest) => {
-
-  // Check if the user is signed in and does not have an auth().orgId
-  // If true, then redirect them to the organization selection route
-  // Include their current route as a redirect_url, which will be handled on the route
-  if (auth().userId && !auth().orgId && req.nextUrl.pathname !== '/organization-selection') {
-    const orgListUrl = new URL(''/organization-selection', req.url)
-    return NextResponse.redirect(orgListUrl)
+  export const config = {
+    matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
   }
+  ```
 
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!auth().userId && !isPublicRoute(req))
-    return auth().redirectToSignIn({ returnBackUrl: req.url });
+  The following addition will determine if a user have an active organization or not. This check doesn't determine if the user is accessing a public route or a private route -- it is just checkingi if the user is signed in and is missing an `orgId`. If the user does not have an active organization, then redirect to `/organization-selection`.
 
-  // If the user is logged in and the route is protected, let them view.
-  if (auth().userId && !isPublicRoute(req)) return NextResponse.next();
-})
+  ```typescript {{ filename: '/middleware.ts', mark: [[8, 14]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { NextRequest, NextResponse } from 'next/server'
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  const isPublicRoute = createRouteMatcher(['/', '/sign-in', '/sign-up'])
 
-### Setup the `/organization-selection` route 
-
-The `/ogranization-selection` route will render the `<OrganizationList />` component. The `hidePeronsal` prop is passed, which will hide the option for a user to select their Personal Worksapce. This will mean that all users, even new users, will need to either create or join and organization.
-
-The component will also check the `orgId` from `auth()`. This will be falsy when the user is first redirected to the route. When the user creates or joins an organization, the auth object will be refreshed and `orgId` will have a valid organization id. When that happens the user will be redirected to `/dashboard`.
-
-```tsx {{ filename: "/app/organization-selection/page.tsx" }}
-import { OrganizationList } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-
-export default async function OrganizationSelectionPage() {
-  const { orgId } = auth()
-
-  // Once the `orgId` is set, redirect the user. In example the user will be redirected to `/dashboard`
-  if (orgId) {
-    redirect("/dashboard")
-  }
-
-  return (
-    <>
-      <h1>Select an organization</h1>
-      <OrganizationList hidePersonal />
-    </>
-  )
-}
-```
-
-### Improving the user experience with redirects
-
-When a user does not have an active organization and is redirected, we can add a `redirect_url` to the URL and then later handle the direct on the `/organization-selection` route.
-
-### Updating Middleware
-
-Let's start with the changes to Middleware. The Middleware will now read the `req.nextUrl.href` and URL endcode it, and then add that as a `redirect_url` search parameter. 
-
-
-```typescript {{ filename: "/middleware.ts", mark: [[12, 13]]}}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { NextRequest, NextResponse } from 'next/server';
-
-const isPublicRoute = createRouteMatcher(["/", "/sign-in", "/sign-up"])
-
-export default clerkMiddleware((auth, req: NextRequest) => {
-
-  // Check if the user is signed in and does not have an auth().orgId
-  // If true, then redirect them to the organization selection route
-  // Include their current route as a redirect_url, which will be handled on the route
-  if (auth().userId && !auth().orgId && req.nextUrl.pathname !== '/organization-selection') {
-    const redirectUrl = encodeURIComponent(req.nextUrl.href)
-    const orgListUrl = new URL(`/organization-selection?redirect_url=${redirectUrl}`, req.url)
-    return NextResponse.redirect(orgListUrl)
-  }
-
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!auth().userId && !isPublicRoute(req))
-    return auth().redirectToSignIn({ returnBackUrl: req.url });
-
-  // If the user is logged in and the route is protected, let them view.
-  if (auth().userId && !isPublicRoute(req)) return NextResponse.next();
-})
-
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
-
-### Updating `/organization-selection`
-
-With Middleware adding the `redirect_url` search parameter to the URL, the route can then consume that and use it once the user has selected or created an organization.
-
-First, modify the component parameters to ready the search parameters. Additionally indicate that the parameter expected is `redirect_url` with a type of string.
-
-Second, once `orgId` is truthy check `redirect_url` was passed as a search parameter. If a `redirect_url` was passed then use that value, after URL decoding it, for the redirect. If there is no `redirect_url` then use `/dashboard` as a fallback.
-
-``` {{ filename: "/app/organization-selection", mark: [[6, 10], [13,21]]}}
-
-import { OrganizationList } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-
-export default async function OrganizationSelectionPage({
-  searchParams
-}: {
-  searchParams: { redirect_url: string }
-}) {
-  const { orgId } = auth()
-
-  if (orgId) {
-    // If the orgId is truthy, then redirect the user to the redirect_url if present
-    if (searchParams.redirect_url) {
-      redirect(decodeURIComponent(searchParams.redirect_url))
+  export default clerkMiddleware((auth, req: NextRequest) => {
+    // Check if the user is signed in and does not have an auth().orgId
+    // If true, then redirect them to the organization selection route
+    // Include their current route as a redirect_url, which will be handled on the route
+    if (auth().userId && !auth().orgId && req.nextUrl.pathname !== '/organization-selection') {
+      const orgListUrl = new URL('/organization-selection', req.url)
+      return NextResponse.redirect(orgListUrl)
     }
 
-    // If there is no redirect_url, redirect to /dashboard
-    redirect("/dashboard")
+    // If the user isn't signed in and the route is private, redirect to sign-in
+    if (!auth().userId && !isPublicRoute(req))
+      return auth().redirectToSignIn({ returnBackUrl: req.url })
+
+    // If the user is logged in and the route is protected, let them view.
+    if (auth().userId && !isPublicRoute(req)) return NextResponse.next()
+  })
+
+  export const config = {
+    matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
   }
+  ```
 
-  return (
-    <>
-      <h1>Select an organization</h1>
-      <OrganizationList hidePersonal />
-    </>
-  )
+  ### Setup the `/organization-selection` route
 
-}
-```
+  The `/ogranization-selection` route will render the `<OrganizationList />` component. The `hidePeronsal` prop is passed, which will hide the option for a user to select their Personal Worksapce. This will mean that all users, even new users, will need to either create or join and organization.
 
+  The component will also check the `orgId` from `auth()`. This will be falsy when the user is first redirected to the route. When the user creates or joins an organization, the auth object will be refreshed and `orgId` will have a valid organization id. When that happens the user will be redirected to `/dashboard`.
+
+  ```tsx {{ filename: '/app/organization-selection/page.tsx' }}
+  import { OrganizationList } from '@clerk/nextjs'
+  import { auth } from '@clerk/nextjs/server'
+  import { redirect } from 'next/navigation'
+
+  export default async function OrganizationSelectionPage() {
+    const { orgId } = auth()
+
+    // Once the `orgId` is set, redirect the user. In example the user will be redirected to `/dashboard`
+    if (orgId) {
+      redirect('/dashboard')
+    }
+
+    return (
+      <>
+        <h1>Select an organization</h1>
+        <OrganizationList hidePersonal />
+      </>
+    )
+  }
+  ```
+
+  ### Improving the user experience with redirects
+
+  When a user does not have an active organization and is redirected, we can add a `redirect_url` to the URL and then later handle the direct on the `/organization-selection` route.
+
+  ### Updating Middleware
+
+  Let's start with the changes to Middleware. The Middleware will now read the `req.nextUrl.href` and URL endcode it, and then add that as a `redirect_url` search parameter.
+
+  ```typescript {{ filename: '/middleware.ts', mark: [[12, 13]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { NextRequest, NextResponse } from 'next/server'
+
+  const isPublicRoute = createRouteMatcher(['/', '/sign-in', '/sign-up'])
+
+  export default clerkMiddleware((auth, req: NextRequest) => {
+    // Check if the user is signed in and does not have an auth().orgId
+    // If true, then redirect them to the organization selection route
+    // Include their current route as a redirect_url, which will be handled on the route
+    if (auth().userId && !auth().orgId && req.nextUrl.pathname !== '/organization-selection') {
+      const redirectUrl = encodeURIComponent(req.nextUrl.href)
+      const orgListUrl = new URL(`/organization-selection?redirect_url=${redirectUrl}`, req.url)
+      return NextResponse.redirect(orgListUrl)
+    }
+
+    // If the user isn't signed in and the route is private, redirect to sign-in
+    if (!auth().userId && !isPublicRoute(req))
+      return auth().redirectToSignIn({ returnBackUrl: req.url })
+
+    // If the user is logged in and the route is protected, let them view.
+    if (auth().userId && !isPublicRoute(req)) return NextResponse.next()
+  })
+
+  export const config = {
+    matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  }
+  ```
+
+  ### Updating `/organization-selection`
+
+  With Middleware adding the `redirect_url` search parameter to the URL, the route can then consume that and use it once the user has selected or created an organization.
+
+  First, modify the component parameters to ready the search parameters. Additionally indicate that the parameter expected is `redirect_url` with a type of string.
+
+  Second, once `orgId` is truthy check `redirect_url` was passed as a search parameter. If a `redirect_url` was passed then use that value, after URL decoding it, for the redirect. If there is no `redirect_url` then use `/dashboard` as a fallback.
+
+  ```{{ filename: "/app/organization-selection", mark: [[6, 10], [13,21]]}}
+
+  import { OrganizationList } from "@clerk/nextjs";
+  import { auth } from "@clerk/nextjs/server";
+  import { redirect } from "next/navigation";
+
+  export default async function OrganizationSelectionPage({
+    searchParams
+  }: {
+    searchParams: { redirect_url: string }
+  }) {
+    const { orgId } = auth()
+
+    if (orgId) {
+      // If the orgId is truthy, then redirect the user to the redirect_url if present
+      if (searchParams.redirect_url) {
+        redirect(decodeURIComponent(searchParams.redirect_url))
+      }
+
+      // If there is no redirect_url, redirect to /dashboard
+      redirect("/dashboard")
+    }
+
+    return (
+      <>
+        <h1>Select an organization</h1>
+        <OrganizationList hidePersonal />
+      </>
+    )
+
+  }
+  ```
 </Steps>
 
 ## Wrap up

@@ -19,7 +19,7 @@ To see how all these methods work together, check out the [comprehensive example
 
 Generates a TOTP secret for a user that can be used to register the application on the user's authenticator app of choice. Note that if this method is called again (while still unverified), it replaces the previously generated secret.
 
-```typescript
+```typescript {{ prettier: false }}
 function createTOTP(): Promise<TOTPResource>;
 ```
 
@@ -27,21 +27,21 @@ function createTOTP(): Promise<TOTPResource>;
 
 Verifies a TOTP secret after a user has created it. The user must provide a code from their authenticator app that has been generated using the previously created secret. This way, correct set up and ownership of the authenticator app can be validated.
 
-```typescript
+```typescript {{ prettier: false }}
 function verifyTOTP(params: VerifyTOTPParams): Promise<TOTPResource>;
 ```
 
 ### `VerifyTOTPParams`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `code` | `string` | A 6 digit TOTP generated from the user's authenticator app. |
 
 ## `disableTOTP()`
 
 Disables TOTP by deleting the user's TOTP secret.
 
-```typescript
+```typescript {{ prettier: false }}
 function disableTOTP(): Promise<DeletedObject>;
 ```
 
@@ -51,9 +51,9 @@ Generates a fresh new set of backup codes for the user.
 
 Every time the method is called, it will replace the previously generated backup codes.
 
-Can only be created for the user if the user has *another* multi-factor authentication method enabled for their account, as backup codes are a fallback for when the user is unable to use their primary MFA method.
+Can only be created for the user if the user has _another_ multi-factor authentication method enabled for their account, as backup codes are a fallback for when the user is unable to use their primary MFA method.
 
-```typescript
+```typescript {{ prettier: false }}
 function createBackupCode(): Promise<BackupCodeResource>;
 ```
 
@@ -62,7 +62,7 @@ function createBackupCode(): Promise<BackupCodeResource>;
 ## `TOTPResource`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `id` | `string` | A unique identifier for this TOTP secret |
 | `secret?` | `string` | The generated TOTP secret. Note: this is only returned to the client upon creation and cannot be retrieved afterwards. |
 | `uri?` | `string` | A complete TOTP configuration URI including the Issuer, Account, etc that can be pasted to an authenticator app or encoded to a QR code and scanned for convenience. Just like the secret, the URI is exposed to the client only upon creation and cannot be retrieved afterwards. |
@@ -74,7 +74,7 @@ function createBackupCode(): Promise<BackupCodeResource>;
 ## `BackupCodeResource`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `id` | `string` | A unique identifier for this TOTP secret |
 | `codes` | `string[]` | The generated set of backup codes |
 | `createdAt` | `Date` | Creation date of the TOTP secret |
@@ -90,21 +90,141 @@ The following example assumes:
 - you have [enabled **Authenticator application** and **Backup codes** as multi-factor strategies in your Clerk Dashboard](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies)
 
 <InjectKeys>
+  <Tabs type="npm-script" items={['NPM module', '<script>']}>
+    <Tab>
+      For the following example, your HTML file should look like this:
 
-<Tabs type="npm-script" items={['NPM module', '<script>']}>
-  <Tab>
-    For the following example, your HTML file should look like this:
+      ```html {{ prettier: false, filename: 'index.html' }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
 
-    ```html filename="index.html"
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Clerk + JavaScript App</title>
-      </head>
-      <body>
+          <p id="error-container" hidden>
+            Error:
+            <span id="error-message"></span>
+          </p>
+
+          <button id="create-totp">Create TOTP</button>
+          <button id="disable-totp">Disable TOTP</button>
+          <button id="create-backup-codes">Create Backup Codes</button>
+
+          <div id="totp-container" hidden>
+            <p id="enter-totp-secret">
+              Enter the TOTP secret into your authenticator app:
+              <span id="totp-secret"></span>
+            </p>
+
+            <label for="totp-code">
+              Enter the code from your authenticator app
+            </label>
+            <input id="totp-code" type="text" />
+            <button id="verify-totp">Verify TOTP</button>
+          </div>
+
+          <h2>Response:</h2>
+          <pre id="response"></pre>
+
+          <script type="module" src="/main.js"></script>
+        </body>
+      </html>
+      ```
+
+      And your JavaScript file should look like this:
+
+      ```js {{ prettier: false, filename: 'main.js' }}
+      import { Clerk } from '@clerk/clerk-js';
+
+      // Initialize Clerk with your Clerk publishable key
+      const clerk = new Clerk('{{pub_key}}');
+      await clerk.load();
+
+      if (clerk.user) {
+        // Create and verify TOTP
+        document.getElementById("create-totp")
+          .addEventListener("click", async () => {
+            clerk.user.createTOTP()
+              .then((res) => {
+                // Show the TOTP container with the secret and verify button
+                document.getElementById("totp-container").removeAttribute("hidden");
+
+                // Display the secret to the user
+                document.getElementById("totp-secret").innerHTML = res.secret;
+
+                // Add event listener to verify TOTP button
+                document.getElementById("verify-totp")
+                  .addEventListener("click", async () => {
+                    const code = document.getElementById("totp-code").value;
+                    clerk.user.verifyTOTP({ code })
+                      .then((res) => {
+                        document.getElementById("response").innerHTML =
+                          JSON.stringify(res);
+                      })
+                      .catch((error) => {
+                        document.getElementById("error-container").removeAttribute("hidden");
+                        document.getElementById("error-message").innerHTML =
+                          error.errors[0].longMessage;
+                        console.log("An error occurred:", error.errors);
+                      });
+                  });
+              })
+              .catch((error) => {
+                document.getElementById("error-container").removeAttribute("hidden");
+                document.getElementById("error-message").innerHTML =
+                  error.errors[0].longMessage;
+                console.log("An error occurred:", error.errors);
+              });
+        });
+
+        // Disable TOTP
+        document.getElementById("disable-totp")
+          .addEventListener("click", async () => {
+            clerk.user.disableTOTP()
+              .then((res) => {
+                document.getElementById("response").innerHTML = JSON.stringify(res);
+              })
+              .catch((error) => {
+                document.getElementById("error-container").removeAttribute("hidden");
+                document.getElementById("error-message").innerHTML =
+                  error.errors[0].longMessage;
+                console.log("An error occurred:", error.errors);
+              });
+          });
+
+        // Create backup codes
+        document.getElementById("create-backup-codes")
+          .addEventListener("click", async () => {
+            clerk.user.createBackupCode()
+              .then((res) => {
+                document.getElementById("response").innerHTML = JSON.stringify(res);
+              })
+              .catch((error) => {
+                document.getElementById("error-container").removeAttribute("hidden");
+                document.getElementById("error-message").innerHTML =
+                  error.errors[0].longMessage;
+                console.log("An error occurred:", error.errors);
+              });
+          });
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        clerk.mountSignIn(signInDiv);
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```html {{ prettier: false, filename: 'index.html' }}
         <div id="app"></div>
 
         <p id="error-container" hidden>
@@ -132,40 +252,62 @@ The following example assumes:
         <h2>Response:</h2>
         <pre id="response"></pre>
 
-        <script type="module" src="/main.js"></script>
-      </body>
-    </html>
-    ```
+        <!-- Initialize Clerk with your
+        Clerk Publishable key and Frontend API URL -->
+        <script
+          async
+          crossorigin="anonymous"
+          data-clerk-publishable-key="{{pub_key}}"
+          src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+          type="text/javascript"
+        ></script>
 
-    And your JavaScript file should look like this:
-
-    ```js filename="main.js"
-    import { Clerk } from '@clerk/clerk-js';
-
-    // Initialize Clerk with your Clerk publishable key
-    const clerk = new Clerk('{{pub_key}}');
-    await clerk.load();
-
-    if (clerk.user) {
-      // Create and verify TOTP
-      document.getElementById("create-totp")
-        .addEventListener("click", async () => {
-          clerk.user.createTOTP()
-            .then((res) => {
-              // Show the TOTP container with the secret and verify button
-              document.getElementById("totp-container").removeAttribute("hidden");
-
-              // Display the secret to the user
-              document.getElementById("totp-secret").innerHTML = res.secret;
-
-              // Add event listener to verify TOTP button
-              document.getElementById("verify-totp")
+        <script>
+          window.addEventListener("load", async function () {
+            await Clerk.load();
+            if (Clerk.user) {
+              // Create and verify TOTP
+              document.getElementById("create-totp")
                 .addEventListener("click", async () => {
-                  const code = document.getElementById("totp-code").value;
-                  clerk.user.verifyTOTP({ code })
+                  Clerk.user.createTOTP()
                     .then((res) => {
-                      document.getElementById("response").innerHTML =
-                        JSON.stringify(res);
+                      // Show the TOTP container with the secret and verify button
+                      document.getElementById("totp-container").removeAttribute("hidden");
+
+                      // Display the secret to the user
+                      document.getElementById("totp-secret").innerHTML = res.secret;
+
+                      // Add event listener to verify TOTP button
+                      document.getElementById("verify-totp")
+                        .addEventListener("click", async () => {
+                          const code = document.getElementById("totp-code").value;
+                          Clerk.user.verifyTOTP({ code })
+                            .then((res) => {
+                              document.getElementById("response").innerHTML =
+                                JSON.stringify(res);
+                            })
+                            .catch((error) => {
+                              document.getElementById("error-container").removeAttribute("hidden");
+                              document.getElementById("error-message").innerHTML =
+                                error.errors[0].longMessage;
+                              console.log("An error occurred:", error.errors);
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                      document.getElementById("error-container").removeAttribute("hidden");
+                      document.getElementById("error-message").innerHTML =
+                        error.errors[0].longMessage;
+                      console.log("An error occurred:", error.errors);
+                    });
+              });
+
+              // Disable TOTP
+              document.getElementById("disable-totp")
+                .addEventListener("click", async () => {
+                  Clerk.user.disableTOTP()
+                    .then((res) => {
+                      document.getElementById("response").innerHTML = JSON.stringify(res);
                     })
                     .catch((error) => {
                       document.getElementById("error-container").removeAttribute("hidden");
@@ -174,177 +316,33 @@ The following example assumes:
                       console.log("An error occurred:", error.errors);
                     });
                 });
-            })
-            .catch((error) => {
-              document.getElementById("error-container").removeAttribute("hidden");
-              document.getElementById("error-message").innerHTML =
-                error.errors[0].longMessage;
-              console.log("An error occurred:", error.errors);
-            });
-      });
 
-      // Disable TOTP
-      document.getElementById("disable-totp")
-        .addEventListener("click", async () => {
-          clerk.user.disableTOTP()
-            .then((res) => {
-              document.getElementById("response").innerHTML = JSON.stringify(res);
-            })
-            .catch((error) => {
-              document.getElementById("error-container").removeAttribute("hidden");
-              document.getElementById("error-message").innerHTML =
-                error.errors[0].longMessage;
-              console.log("An error occurred:", error.errors);
-            });
-        });
-
-      // Create backup codes
-      document.getElementById("create-backup-codes")
-        .addEventListener("click", async () => {
-          clerk.user.createBackupCode()
-            .then((res) => {
-              document.getElementById("response").innerHTML = JSON.stringify(res);
-            })
-            .catch((error) => {
-              document.getElementById("error-container").removeAttribute("hidden");
-              document.getElementById("error-message").innerHTML =
-                error.errors[0].longMessage;
-              console.log("An error occurred:", error.errors);
-            });
-        });
-    } else {
-      document.getElementById("app").innerHTML = `
-        <div id="sign-in"></div>
-      `;
-
-      const signInDiv = document.getElementById("sign-in");
-
-      clerk.mountSignIn(signInDiv);
-    }
-    ```
-  </Tab>
-
-  <Tab>
-  ```html filename="index.html"
-    <div id="app"></div>
-
-    <p id="error-container" hidden>
-      Error:
-      <span id="error-message"></span>
-    </p>
-
-    <button id="create-totp">Create TOTP</button>
-    <button id="disable-totp">Disable TOTP</button>
-    <button id="create-backup-codes">Create Backup Codes</button>
-
-    <div id="totp-container" hidden>
-      <p id="enter-totp-secret">
-        Enter the TOTP secret into your authenticator app:
-        <span id="totp-secret"></span>
-      </p>
-
-      <label for="totp-code">
-        Enter the code from your authenticator app
-      </label>
-      <input id="totp-code" type="text" />
-      <button id="verify-totp">Verify TOTP</button>
-    </div>
-
-    <h2>Response:</h2>
-    <pre id="response"></pre>
-
-    <!-- Initialize Clerk with your
-    Clerk Publishable key and Frontend API URL -->
-    <script
-      async
-      crossorigin="anonymous"
-      data-clerk-publishable-key="{{pub_key}}"
-      src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-      type="text/javascript"
-    ></script>
-
-    <script>
-      window.addEventListener("load", async function () {
-        await Clerk.load();
-        if (Clerk.user) {
-          // Create and verify TOTP
-          document.getElementById("create-totp")
-            .addEventListener("click", async () => {
-              Clerk.user.createTOTP()
-                .then((res) => {
-                  // Show the TOTP container with the secret and verify button
-                  document.getElementById("totp-container").removeAttribute("hidden");
-
-                  // Display the secret to the user
-                  document.getElementById("totp-secret").innerHTML = res.secret;
-
-                  // Add event listener to verify TOTP button
-                  document.getElementById("verify-totp")
-                    .addEventListener("click", async () => {
-                      const code = document.getElementById("totp-code").value;
-                      Clerk.user.verifyTOTP({ code })
-                        .then((res) => {
-                          document.getElementById("response").innerHTML =
-                            JSON.stringify(res);
-                        })
-                        .catch((error) => {
-                          document.getElementById("error-container").removeAttribute("hidden");
-                          document.getElementById("error-message").innerHTML =
-                            error.errors[0].longMessage;
-                          console.log("An error occurred:", error.errors);
-                        });
+              // Create backup codes
+              document.getElementById("create-backup-codes")
+                .addEventListener("click", async () => {
+                  Clerk.user.createBackupCode()
+                    .then((res) => {
+                      document.getElementById("response").innerHTML = JSON.stringify(res);
+                    })
+                    .catch((error) => {
+                      document.getElementById("error-container").removeAttribute("hidden");
+                      document.getElementById("error-message").innerHTML =
+                        error.errors[0].longMessage;
+                      console.log("An error occurred:", error.errors);
                     });
-                })
-                .catch((error) => {
-                  document.getElementById("error-container").removeAttribute("hidden");
-                  document.getElementById("error-message").innerHTML =
-                    error.errors[0].longMessage;
-                  console.log("An error occurred:", error.errors);
                 });
+            } else {
+              document.getElementById("app").innerHTML = `
+                  <div id="sign-in"></div>
+                `;
+
+              const signInDiv = document.getElementById("sign-in");
+
+              Clerk.mountSignIn(signInDiv);
+            }
           });
-
-          // Disable TOTP
-          document.getElementById("disable-totp")
-            .addEventListener("click", async () => {
-              Clerk.user.disableTOTP()
-                .then((res) => {
-                  document.getElementById("response").innerHTML = JSON.stringify(res);
-                })
-                .catch((error) => {
-                  document.getElementById("error-container").removeAttribute("hidden");
-                  document.getElementById("error-message").innerHTML =
-                    error.errors[0].longMessage;
-                  console.log("An error occurred:", error.errors);
-                });
-            });
-
-          // Create backup codes
-          document.getElementById("create-backup-codes")
-            .addEventListener("click", async () => {
-              Clerk.user.createBackupCode()
-                .then((res) => {
-                  document.getElementById("response").innerHTML = JSON.stringify(res);
-                })
-                .catch((error) => {
-                  document.getElementById("error-container").removeAttribute("hidden");
-                  document.getElementById("error-message").innerHTML =
-                    error.errors[0].longMessage;
-                  console.log("An error occurred:", error.errors);
-                });
-            });
-        } else {
-          document.getElementById("app").innerHTML = `
-              <div id="sign-in"></div>
-            `;
-
-          const signInDiv = document.getElementById("sign-in");
-
-          Clerk.mountSignIn(signInDiv);
-        }
-      });
-    </script>
-  ```
-  </Tab>
-</Tabs>
-
+        </script>
+      ```
+    </Tab>
+  </Tabs>
 </InjectKeys>

@@ -21,35 +21,94 @@ The `$authStore` store provides a convenient way to access the current auth stat
 
 The following example demonstrates how to use the `$authStore` store to access the current auth state. It uses `userId` to detect if the user is signed in and the [`getToken()`](https://clerk.com/docs/references/javascript/session#get-token) method to retrieve a session token for fetching data from an external resource.
 
-```tsx {{ prettier: false, filename: 'components/external-data.tsx' }}
-import { useStore } from '@nanostores/react';
-import { $authStore, $sessionStore } from '@clerk/astro/client';
+<CodeBlockTabs options={['React', 'Vue', 'Svelte']}>
+  ```tsx {{ prettier: false, filename: 'components/external-data.tsx' }}
+  import { useStore } from '@nanostores/react';
+  import { $authStore, $sessionStore } from '@clerk/astro/client';
 
-export default function ExternalData() {
-  const { userId } = useStore($authStore);
+  export default function ExternalData() {
+    const { userId } = useStore($authStore);
+    const session = useStore($sessionStore);
+
+    if (userId === undefined) {
+      // Handle loading state however you like
+      return <div>Loading...</div>;
+    }
+
+    if (userId === null) {
+      // Handle signed out state however you like
+      return <div>Sign in to view this page</div>;
+    }
+
+    const fetchDataFromExternalResource = async () => {
+      if (!session) {
+        // Handle session loading state
+        return;
+      }
+
+      const token = await session.getToken();
+      // Add logic to fetch your data
+      return data;
+    }
+
+    return <div>...</div>;
+  }
+  ```
+
+  ```vue {{ prettier: false, filename: 'components/external-data.vue' }}
+  <script setup>
+  import { useStore } from '@nanostores/vue';
+  import { $authStore, $sessionStore } from '@clerk/astro/client';
+
+  const auth = useStore($authStore);
   const session = useStore($sessionStore);
 
-  if (userId === undefined) {
-    // Handle loading state however you like
-    return <div>Loading...</div>;
-  }
-
-  if (userId === null) {
-    // Handle signed out state however you like
-    return <div>Sign in to view this page</div>;
-  }
-
   const fetchDataFromExternalResource = async () => {
-    if (!session) {
+    if (!session.value) {
       // Handle session loading state
       return;
     }
 
-    const token = await session.getToken();
+    const token = await session.value.getToken();
     // Add logic to fetch your data
-    return data;
-  }
+    // return data;
+  };
+  </script>
 
-  return <div>...</div>;
-}
-```
+  <template>
+    <div v-if="auth.userId === undefined">Loading...</div>
+    <div v-else-if="auth.userId === null">Sign in to view this page</div>
+    <div v-else>...</div>
+  </template>
+  ```
+
+  ```svelte {{ prettier: false, filename: 'components/external-data.svelte' }}
+  <script>
+  // The $ prefix is reserved in Svelte for its own reactivity system.
+  // We're aliasing the imports to avoid conflicts.
+  import {
+    $authStore as auth,
+    $sessionStore as session
+  } from '@clerk/astro/client';
+
+  const fetchDataFromExternalResource = async () => {
+    if (!$session) {
+      // Handle session loading state
+      return;
+    }
+
+    const token = await $session.getToken();
+    // Add logic to fetch your data
+    // return data;
+  };
+  </script>
+
+  {#if $auth.userId === undefined}
+    <div>Loading...</div>
+  {:else if $auth.userId === null}
+    <div>Sign in to view this page</div>
+  {:else}
+    <div>...</div>
+  {/if}
+  ```
+</CodeBlockTabs>

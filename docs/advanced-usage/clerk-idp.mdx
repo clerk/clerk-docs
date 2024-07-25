@@ -5,95 +5,90 @@ description: Learn how to use Clerk to facilitate Single Sign-On (SSO) with othe
 
 # Use Clerk as an OAuth 2 Provider
 
+> [!WARNING]
+> This feature will not return a Clerk JWT and does not provide authentication. Please see the [FAQ](#how-can-the-access-tokens-obtained-from-the-token-url-be-used) below for more information.
+
 Clerk can be configured as an identity provider to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 protocol. With this feature, your users can sign in with your Clerk application on other websites to authorize sharing of their user info.
 
-<Images
-  width={2279}
-  height={1135}
-  src="/docs/images/advance/clerk-idp-flow.svg"
-  alt="Clerk IDP Flow"
-/>
+<Images width={2279} height={1135} src="/docs/images/advance/clerk-idp-flow.svg" alt="Clerk IDP Flow" />
 
 <Steps>
-### Retrieve callback URL from the client application
+  ### Retrieve callback URL from the client application
 
-Retrieve the **Callback URL** for the client application you want to configure. This is where your users will be redirected to after a successful authentication and is required to successfully create your OAuth application in the next step.
+  Retrieve the **Callback URL** for the client application you want to configure. This is where your users will be redirected to after a successful authentication and is required to successfully create your OAuth application in the next step.
 
+  ### Create an OAuth application in Clerk
 
-### Create an OAuth application in Clerk
+  Next, you need to create an OAuth Application in Clerk via the [Backend API](https://clerk.com/docs/reference/backend-api/tag/OAuth-Applications) by providing the Callback URL and a Name. Note that in this context the name is used to help you identify your application and is not displayed anywhere publicly.
 
-Next, you need to create an OAuth Application in Clerk via the [Backend API](https://clerk.com/docs/reference/backend-api/tag/OAuth-Applications) by providing the Callback URL and a Name. Note that in this context the name is used to help you identify your application and is not displayed anywhere publicly.
+  ```sh {{ prettier: false, filename: 'POST /v1/oauth_applications' }}
+  curl
+   -X POST https://api.clerk.com/v1/oauth_applications \
+   -H "Authorization: Bearer <CLERK_SECRET_KEY>"  \
+   -H "Content-Type: application/json" \
+   -d {"callback_url":"https://oauth-client.com/oauth2/callback", "name": "oauth_app_1", "scopes": "profile email"}
+  ```
 
-```sh filename="POST /v1/oauth_applications"
-curl
- -X POST https://api.clerk.com/v1/oauth_applications \
- -H "Authorization: Bearer <CLERK_SECRET_KEY>"  \
- -H "Content-Type: application/json" \
- -d {"callback_url":"https://oauth-client.com/oauth2/callback", "name": "oauth_app_1", "scopes": "profile email"}
-```
+  To create an OAuth Application that uses the authorization code flow with proof of key exchange (PKCE), set `public` to `true` in the POST request body.
 
-To create an OAuth Application that uses the authorization code flow with proof of key exchange (PKCE), set `public` to `true` in the POST request body.
+  ```json {{ prettier: false }}
+  {"callback_url":"https://oauth-public-client.com/oauth2/callback", "name": "oauth_app_pkce", "public": true}
+  ```
 
-```json
-{"callback_url":"https://oauth-public-client.com/oauth2/callback", "name": "oauth_app_pkce", "public": true}
-```
+  Clerk creates an OAuth application and returns it's configurations back to you.
 
-Clerk creates an OAuth application and returns it's configurations back to you.
+  ```json {{ prettier: false, filename: 'RESPONSE' }}
+  {
+      "object":"oauth_application",
+      "id":"oa_2O4BCh3zUONvWlZHtBXv6s6tm7u",
+      "instance_id":"ins_2O4Ak02T4fDmKKv6tK5h0WJ8ou8",
+      "name":"oauth_app_1",
+      "client_id":"d9g4CT4WYiCBm7EU",
+      "client_secret":"VVgbT7i6sPo7sTljq2zj12fjmg0jPL5k",
+      "scopes":"profile email",
+      "callback_url":"https://oauth-client.com/oauth2/callback",
+      "authorize_url":"https://clerk.your-domain.com/oauth/authorize",
+      "token_fetch_url":"https://clerk.your-domain.com/oauth/token",
+      "user_info_url":"https://clerk.your-domain.com/oauth/userinfo",
+      "created_at":1680809847940,
+      "updated_at":1680810135145
+  }
+  ```
 
+  <Callout type="warning" emoji="⚠️">
+    For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so we recommend you download the secret and store it someplace secure.
+  </Callout>
 
-```json filename="RESPONSE"
-{
-    "object":"oauth_application",
-    "id":"oa_2O4BCh3zUONvWlZHtBXv6s6tm7u",
-    "instance_id":"ins_2O4Ak02T4fDmKKv6tK5h0WJ8ou8",
-    "name":"oauth_app_1",
-    "client_id":"d9g4CT4WYiCBm7EU",
-    "client_secret":"VVgbT7i6sPo7sTljq2zj12fjmg0jPL5k",
-    "scopes":"profile email",
-    "callback_url":"https://oauth-client.com/oauth2/callback",
-    "authorize_url":"https://clerk.your-domain.com/oauth/authorize",
-    "token_fetch_url":"https://clerk.your-domain.com/oauth/token",
-    "user_info_url":"https://clerk.your-domain.com/oauth/userinfo",
-    "created_at":1680809847940,
-    "updated_at":1680810135145
-}
-```
+  ### Configure OAuth application in client
 
-<Callout type="warning" emoji="⚠️">
-  For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so we recommend you download the secret and store it someplace secure.
-</Callout>
+  Now that you have set up an OAuth application in Clerk, you will need to configure these settings in your Client.
 
+  - **Client ID**: Public identifier of your OAuth application
+  - **Client Secret**: Confidential secret used to authenticate your OAuth application
+  - **Authorization URL**: Used by the Client to request authorization from your user
+  - **Token URL**: Used by the Client to retrieve access tokens
+  - **Scopes**: OAuth scopes used to grant access to the Client. Clerk supports `profile`, `email`, `public_metadata`, and `private_metadata`. The metadata scopes ensure that the user info endpoint returns the user's public, private and unsafe metadata.
+  - **User Info URL**: Used by the Client to retrieve the email address and profile (username, first and last name) associated to your user
 
-### Configure OAuth application in client
+  Below is an example of a response from `/oauth/userinfo`.
 
-Now that you have set up an OAuth application in Clerk, you will need to configure these settings in your Client.
-
-* **Client ID**: Public identifier of your OAuth application
-* **Client Secret**: Confidential secret used to authenticate your OAuth application
-* **Authorization URL**: Used by the Client to request authorization from your user
-* **Token URL**: Used by the Client to retrieve access tokens
-* **Scopes**: OAuth scopes used to grant access to the Client. Clerk supports `profile`, `email`, `public_metadata`, and `private_metadata`. The metadata scopes ensure that the user info endpoint returns the user's public, private and unsafe metadata.
-* **User Info URL**: Used by the Client to retrieve the email address and profile (username, first and last name) associated to your user
-
-Below is an example of a response from `/oauth/userinfo`.
-
-```json filename="RESPONSE"
-{
-    "object": "oauth_user_info",
-    "instance_id": "ins_2O4Ak02T4fDmKKv6tK5h0WJ8ou8",
-    "email": "me@oauth-client.com",
-    "email_verified": true,
-    "family_name": "first_name",
-    "given_name": "last_name",
-    "name": "first_name last_name",
-    "username": "my_username",
-    "picture": "https://profile_image_public_url/img.png",
-    "user_id": "my_user_id",
-    "public_metadata": {},
-    "private_metadata": {},
-    "unsafe_metadata": {}
-}
-```
+  ```json {{ prettier: false, filename: 'RESPONSE' }}
+  {
+      "object": "oauth_user_info",
+      "instance_id": "ins_2O4Ak02T4fDmKKv6tK5h0WJ8ou8",
+      "email": "me@oauth-client.com",
+      "email_verified": true,
+      "family_name": "first_name",
+      "given_name": "last_name",
+      "name": "first_name last_name",
+      "username": "my_username",
+      "picture": "https://profile_image_public_url/img.png",
+      "user_id": "my_user_id",
+      "public_metadata": {},
+      "private_metadata": {},
+      "unsafe_metadata": {}
+  }
+  ```
 </Steps>
 
 ## Frequently asked questions (FAQ)

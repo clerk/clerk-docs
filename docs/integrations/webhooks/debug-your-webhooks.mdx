@@ -24,28 +24,38 @@ Incoming webhook events will never be signed in -- they are coming from a source
 The following example shows the recommended Middleware configuration for your webhook routes.
 
 <CodeBlockTabs options={["clerkMiddleware", "authMiddleware"]}>
-```tsx filename="middleware.tsx"
-import { clerkMiddleware } from '@clerk/nextjs/server';
+  ```tsx {{ prettier: false, filename: 'middleware.tsx' }}
+  import { clerkMiddleware } from '@clerk/nextjs/server';
 
-// Make sure that the `/api/webhooks/(.*)` route is not protected here
-export default clerkMiddleware()
+  // Make sure that the `/api/webhooks/(.*)` route is not protected here
+  export default clerkMiddleware()
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 
-```tsx filename="middleware.tsx" {4}
-import { authMiddleware } from "@clerk/nextjs/server";
+  ```tsx {{ prettier: false, filename: 'middleware.tsx', mark: [4] }}
+  import { authMiddleware } from "@clerk/nextjs/server";
 
-export default authMiddleware({
-  ignoredRoutes: ["/api/webhooks(.*)"],
-});
+  export default authMiddleware({
+    ignoredRoutes: ["/api/webhooks(.*)"],
+  });
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 </CodeBlockTabs>
 
 ## Test the Route Handler or API Route
@@ -55,19 +65,19 @@ If you are having trouble with your webhook, you can create a basic Route Handle
 If you're having trouble with your webhook, you can create a basic response and then test it locally.
 
 1. Create a test route in your application:
-    <CodeBlockTabs options={["Next.js"]}>
-    ```ts filename="app/webhooks/test/route.ts"
-    export async function POST() {
-        return Response.json({ message: 'The route is working' });
-    }
-    ```
-    </CodeBlockTabs>
+   <CodeBlockTabs options={["Next.js"]}>
+     ```ts {{ prettier: false, filename: 'app/webhooks/test/route.ts' }}
+     export async function POST() {
+         return Response.json({ message: 'The route is working' });
+     }
+     ```
+   </CodeBlockTabs>
 1. Run your application.
 1. Send a request to the test route by running the following command in your terminal:
-    ```bash
-    curl -H 'Content-Type: application/json' \
-        -X POST http://localhost:3000/api/webhooks/test
-    ```
+   ```bash {{ prettier: false }}
+   curl -H 'Content-Type: application/json' \
+       -X POST http://localhost:3000/api/webhooks/test
+   ```
 
 If you see the `{"message":"The route is working"}`, then the basic Route Handler is working and ready to build on.
 
@@ -87,28 +97,29 @@ Whether you are developing locally or deploying to production, the webhook URL p
 If your webhook is still getting errors after testing its route locally and verifying the endpoint's configuration in the Clerk Dashboard, you can further investigate the specific errors returned by the webhook. Depending on the type of error, your approach to fixing the webhook will vary.
 
 1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=webhooks).
-2. In the navigation sidebar, select **Webhooks**.
-3. Select the endpoint for which you want to test.
-4. In the **Message attempts** table, you will likely see that one or more of those attempts have failed. Select the failed attempt to expand it.
-5. In the details for the attempt, there will be a `HTTP RESPONSE CODE`. The code will likely be either a `500` or a `4xx` error, which will indicate there is some misconfiguration.
+1. In the navigation sidebar, select **Webhooks**.
+1. Select the endpoint for which you want to test.
+1. In the **Message attempts** table, you will likely see that one or more of those attempts have failed. Select the failed attempt to expand it.
+1. In the details for the attempt, there will be a `HTTP RESPONSE CODE`. The code will likely be either a `500` or a `4xx` error, which will indicate there is some misconfiguration.
 
 ### Common HTTP response codes
 
 The following table has some of the common response codes you might see and what they indicate. This is not an exhaustive list and you may need to research the code or error you are receiving. See [HTTP response status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status) from MDN for reference.
 
 | Code | Information |
-| ---- | ----------- |
-| `400`  | Usually indicates the verification failed, but could be caused by other issues. |
-| `401`  | The request was not authorized. If your test in the [Test the Route Handler or API Route](#test-the-route-handler-or-api-route) section worked, you should not see this error. If you are seeing it, then you will need to configure your Middleware to accept the request. |
-| `404`  | The URL for the webhook was not found. Check that your application is running and that [the endpoint is correct in the Clerk Dashboard.](/docs/integrations/webhooks/debug-your-webhooks#check-your-configuration-in-the-clerk-dashboard) |
-| `405`  | Your route is not accepting a `POST` request. All webhooks are `POST` requests and the route must accept them. Unless you are using the route for something else, you can restrict the route to `POST` requests only. |
-| `500`  | The request made it to your application, but there is a code-related issue. This is likely a webhook verification issue or something in the webhook logic. Please see the following sections. |
+| - | - |
+| `400` | Usually indicates the verification failed, but could be caused by other issues. |
+| `401` | The request was not authorized. If your test in the [Test the Route Handler or API Route](#test-the-route-handler-or-api-route) section worked, you should not see this error. If you are seeing it, then you will need to configure your Middleware to accept the request. |
+| `404` | The URL for the webhook was not found. Check that your application is running and that [the endpoint is correct in the Clerk Dashboard.](/docs/integrations/webhooks/debug-your-webhooks#check-your-configuration-in-the-clerk-dashboard) |
+| `405` | Your route is not accepting a `POST` request. All webhooks are `POST` requests and the route must accept them. Unless you are using the route for something else, you can restrict the route to `POST` requests only. |
+| `500` | The request made it to your application, but there is a code-related issue. This is likely a webhook verification issue or something in the webhook logic. Please see the following sections. |
 
 ## Debug webhook verification
 
 To verify the webhook, please see the [Create the endpoint in your application](/docs/integrations/webhooks/sync-data#create-the-endpoint-in-your-application) guide for a detailed code example. You can also visit the [guide](https://docs.svix.com/receiving/verifying-payloads/how) on verifying webhooks with the Svix library.
 
 Diagnosing a problem in this part of the webhook can be challenging. Your best bet would be the liberal use of `console.log`. You could log out the following to check if the values are correct:
+
 - the signing secret
 - the headers
 - the `body` before verifying

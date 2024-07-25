@@ -116,35 +116,35 @@ type NavItem = LinkItem | SubNavItem
 type LinkItem = {
   /**
    * The visible item text. May contain backticks (`) to render `<code>`
-   * 
+   *
    * @example 'Next.js Quickstart'
    * @example '`<SignIn>` and `<SignUp>`'
    */
   title: string
   /**
    * The item link. Internal links should be relative
-   * 
+   *
    * @example '/docs/quickstarts/nextjs'
    * @example 'https://example.com'
    */
   href: string
   /**
    * Muted text to display next to the item text
-   * 
+   *
    * @example 'Community'
    * @example 'Beta'
    */
   tag?: string
   /**
    * Icon to display next to the item text
-   * 
+   *
    * @example 'globe'
    * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
    */
   icon?: string
   /**
    * Whether to enable text wrapping for the item text
-   * 
+   *
    * @default true
    */
   wrap?: boolean
@@ -156,7 +156,7 @@ type LinkItem = {
 type SubNavItem = {
   /**
    * The visible item text. May contain backticks (`) to render `<code>`
-   * 
+   *
    * @example 'Next.js Quickstart'
    * @example '`<SignIn>` and `<SignUp>`'
    */
@@ -167,38 +167,40 @@ type SubNavItem = {
   items: Nav
   /**
    * Muted text to display next to the item text
-   * 
+   *
    * @example 'Community'
    * @example 'Beta'
    */
   tag?: string
   /**
    * Icon to display next to the item text
-   * 
+   *
    * @example 'globe'
    * @see [Available icons]{@link https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx}
    */
   icon?: string
   /**
    * Whether to enable text wrapping for the item text
-   * 
+   *
    * @default true
    */
   wrap?: boolean
   /**
    * Whether to collapse the sub-nav
-   * 
+   *
    * @default false
    */
   collapse?: boolean
 }
 ```
+
 </details>
 
 <details>
 <summary>Visual representation of the manifest TypeScript types</summary>
 
 ![](/public/images/styleguide/manifest.png)
+
 </details>
 
 ## Editing content
@@ -351,6 +353,30 @@ CLERK_SECRET_KEY={{secret}}
 The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
 
 https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
+
+#### Prettier integration
+
+Code within code blocks is automatically formatted by Prettier when the containing MDX file is formatted. Formatting can be disabled for a code block by setting the `prettier` prop to `false`:
+
+````mdx
+```tsx {{ prettier: false }}
+// ...
+```
+````
+
+["prettier-ignore" comments](https://prettier.io/docs/en/ignore.html) are also supported to ignore _parts_ of a code block:
+
+````mdx
+```tsx
+console.log('not ignored')
+
+// prettier-ignore
+console.log('ignored')
+```
+````
+
+> [!NOTE]
+> "prettier-ignore" comments are removed when a code block is rendered on the docs site.
 
 ### `<Steps />`
 
@@ -706,6 +732,7 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 ```mdx
 {/* Render `docs/_partials/oauth-instructions.mdx` */}
+
 <Include src="_partials/oauth-instructions" />
 ```
 

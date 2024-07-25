@@ -1,143 +1,304 @@
 ---
-title: Invitations
-description: Learn how to invite users to your Clerk application.
+description: Learn how to use Clerk's API to build a custom sign-up flow for handling application invitations.
 ---
 
-# Invitations
+# Build a custom sign-up flow to handle application invitations
 
-Clerk makes it easy to invite users to your application via the invitations feature. This feature is offered by default to all Clerk applications without any extra configuration. Currently, Clerk supports inviting users via email.
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
-Inviting users to your application begins with creating an invitation for an email address. Once the invitation is created, an email with an invitation link will be sent to the user's email address. When the user visits the invitation link, they will be redirected to the application's sign up page and **their email address will be automatically verified.** At this point, the user will just have to fill in the rest of the details according to the application's settings.
+Inviting users to your Clerk application begins with creating an invitation for an email address. Once the invitation is created, an email with an invitation link will be sent to the user's email address. When the user visits the invitation link, they will be redirected to the application's sign up page and **their email address will be automatically verified.**
 
-Invitations expire after a month. If the user clicks on an expired invitation, they will get redirected to the application's sign-up page and will have to go through the normal sign-up flow. Their email address will not be auto-verified.
+To learn how to create an invitation, see the [Invitations](/docs/users/invitations) guide.
 
-<Callout type="info">
-  Invitations are only used to invite users to your application. The application will still be available to everyone even without an invitation. If you're looking into creating invitation-only applications, please refer to our [restrictions](/docs/authentication/configuration/restrictions) options.
-</Callout>
+This guide will demonstrate how to build a custom sign-up flow to handle application invitations.
 
-## Creating invitations
+## Create the sign-up flow
 
-At the moment, you can only create invitations for email addresses via the [Backend API](https://clerk.com/docs/reference/backend-api/tag/Invitations#operation/CreateInvitation).
+Once the user visits the invitation link and is redirected to the specified URL, an invitation token will be appended to the URL. To create a sign-up flow using the invitation token, you need to extract the token from the URL and pass it to the [`signUp.create`](/docs/references/javascript/sign-up/sign-up#create) method.
 
-You can either use a cURL command or Clerk's JavaScript Backend SDK to create an invitation. Use the tabs to see examples for each method.
+The following example demonstrates how to create a new sign-up using the invitation token. If there is no invitation token in the URL, the user will be shown a message indicating that they need an invitation to sign up for the application.
 
-<Tabs items={["cURL", "Backend SDK"]}>
+<Tabs items={["Next.js", "JavaScript"]}>
   <Tab>
-  The following example demonstrates how to create an invitation using cURL.
+    ```jsx {{ prettier: false, filename: 'app/sign-up/[[...sign-up]]/page.tsx' }}
+    'use client';
 
-  <SignedIn>
-  Replace the email address with the email address you want to invite. Your secret key is already injected into the code snippet.
-  </SignedIn>
+    import * as React from 'react';
+    import { useSignUp } from '@clerk/nextjs';
+    import { useRouter } from 'next/navigation';
 
-  <SignedOut>
-  Replace the email address with the email address you want to invite and replace `YOUR_SECRET_KEY` with your Clerk secret key. You can find your secret key in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
-  </SignedOut>
+    export default function Page() {
+      const { isLoaded, signUp, setActive } = useSignUp();
+      const [firstName, setFirstName] = React.useState('');
+      const [lastName, setLastName] = React.useState('');
+      const router = useRouter();
 
-  ```bash {{ filename: 'terminal' }}
-  curl https://api.clerk.com/v1/invitations -X POST -d '{"email_address": "email@example.com"}' -H "Authorization:Bearer {{secret}}" -H 'Content-Type:application/json'
-  ```
+      // Get the token from the query parameter
+      const param = '__clerk_ticket';
+      const ticket = new URL(window.location.href).searchParams.get(param);
+
+      // If there is no invitation token, restrict access to the sign-up page
+      if (!ticket) {
+        return <p>You need an invitation to sign up for this application.</p>;
+      }
+
+      // Handle submission of the sign-up form
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!isLoaded) return;
+
+        try {
+          if (!ticket) return null;
+
+          // Optional: collect additional user information
+          const firstName = 'John';
+          const lastName = 'Doe';
+
+          // Create a new sign-up with the supplied invitation token.
+          // Make sure you're also passing the ticket strategy.
+          // After the below call, the user's email address will be
+          // automatically verified because of the invitation token.
+          const signUpAttempt = await signUp.create({
+            strategy: 'ticket',
+            ticket,
+            firstName,
+            lastName,
+          });
+
+          // If verification was completed, set the session to active
+          // and redirect the user
+          if (signUpAttempt.status === 'complete') {
+            await setActive({ session: signUpAttempt.createdSessionId });
+            router.push('/');
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(signUpAttempt, null, 2));
+          }
+        } catch (err: any) {
+          console.error(JSON.stringify(err, null, 2));
+        }
+      };
+
+      // Display the initial sign-up form to capture optional sign-up info
+      return (
+        <>
+          <h1>Sign up</h1>
+          <form onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="firstName">Enter first name</label>
+              <input
+                id="firstName"
+                type="text"
+                name="firstName"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="lastName">Enter last name</label>
+              <input
+                id="lastName"
+                type="text"
+                name="lastName"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+            <div>
+              <button type="submit">Next</button>
+            </div>
+          </form>
+        </>
+      );
+    }
+    ```
   </Tab>
 
   <Tab>
-  Clerk's Backend SDK is a wrapper around the Backend API that makes it easier to interact with the API.
+    <Tabs type="npm-script" items={["NPM module", "<script>"]}>
+      <CodeBlockTabs options={["index.html", "main.js"]}>
+        ```html {{ prettier: false, filename: 'index.html' }}
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="signed-in"></div>
 
-  To use the Backend SDK to create an invitation, see the [`createInvitation()`](/docs/references/backend/invitations/create-invitation) reference documentation.
-  </Tab>
-</Tabs>
+            <div id="sign-up">
+              <h2>Sign up</h2>
+              <form id="sign-up-form">
+                <label for="firstName">Enter first name</label>
+                <input name="firstName" id="firstName" />
+                <label for="lastName">Enter last name</label>
+                <input name="lastName" id="lastName" />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
 
-### Invitation metadata
+            <script
+              type="module"
+              src="/src/main.js"
+              async
+              crossorigin="anonymous"
+            ></script>
+          </body>
+        </html>
+        ```
 
-You can also add metadata to an invitation. Once the invited user signs up using the invitation link, the invitation metadata will end up in the user's `public_metadata`.  You can find more information about user metadata in the [metadata](/docs/users/metadata) docs.
+        ```js {{ prettier: false, filename: 'main.js' }}
+        import { Clerk } from '@clerk/clerk-js';
 
-To add metadata to an invitation, you can use the `public_metadata` property when the invitation is created. The following example demonstrates how to create an invitation with metadata using cURL:
+        // Initialize Clerk with your Clerk publishable key
+        const clerk = new Clerk('{{pub_key}}');
+        await clerk.load();
 
-```bash
-curl https://api.clerk.com/v1/invitations -X POST -d '{"email_address": "email@example.com", "public_metadata": {"age": "21"}}' -H "Authorization:Bearer {{secret}}" -H 'Content-Type:application/json'
-```
+        if (clerk.user) {
+          // Mount user button component
+          document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `;
 
-## Revoking invitations
+          const userbuttonDiv = document.getElementById('user-button');
 
-Revoking an invitation prevents the user from using the invitation link that was sent to them.
+          clerk.mountUserButton(userbuttonDiv);
+        } else {
+          // Get the token from the query parameter
+          const param = '__clerk_ticket';
+          const ticket = new URL(window.location.href).searchParams.get(param);
 
-At the moment, you can only revoke invitations via the [Backend API](https://clerk.com/docs/reference/backend-api/tag/Invitations#operation/RevokeInvitation).
+          // Handle the sign-up form
+          document
+            .getElementById('sign-up-form')
+            .addEventListener('submit', async (e) => {
+              e.preventDefault();
 
-You can either use a cURL command or Clerk's JavaScript Backend SDK to create an invitation. Use the tabs to see examples for each method.
+              const formData = new FormData(e.target);
+              const firstName = formData.get('firstName');
+              const lastName = formData.get('lastName');
 
-<Tabs items={["cURL", "Backend SDK"]}>
-  <Tab>
-  The following example demonstrates how to revoke an invitation using cURL.
+              try {
+                // Start the sign-up process using the ticket method
+                const signUpAttempt = await clerk.client.signUp.create({
+                  strategy: 'ticket',
+                  ticket,
+                  firstName,
+                  lastName,
+                });
 
-  <SignedIn>
-  Replace the `<invitation_id>` with the ID of the invitation you want to revoke. Your secret key is already injected into the code snippet.
-  </SignedIn>
+                // If sign-up was successful, set the session to active
+                if (signUpAttempt.status === 'complete') {
+                  await clerk.setActive({ session: signUpAttempt.createdSessionId });
+                } else {
+                  // If the status is not complete, check why. User may need to
+                  // complete further steps.
+                  console.error(JSON.stringify(signUpAttempt, null, 2));
+                }
+              } catch (error) {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+                console.error(JSON.stringify(error, null, 2));
+              }
+            });
+        }
+        ```
+      </CodeBlockTabs>
 
-  <SignedOut>
-  Replace the `<invitation_id>` with the ID of the invitation you want to revoke and replace `YOUR_SECRET_KEY` with your Clerk secret key. You can find your secret key in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
-  </SignedOut>
+      <Tab>
+        ```html {{ prettier: false, filename: 'index.html' }}
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="signed-in"></div>
 
-  ```bash {{ filename: 'terminal' }}
-  curl https://api.clerk.com/v1/invitations/<invitation_id>/revoke -X POST -H "Authorization:Bearer {{secret}}" -H 'Content-Type:application/json'
-  ```
-  </Tab>
+            <div id="sign-up">
+              <h2>Sign up</h2>
+              <form id="sign-up-form">
+                <label for="firstName">Enter first name</label>
+                <input name="firstName" id="firstName" />
+                <label for="lastName">Enter last name</label>
+                <input name="lastName" id="lastName" />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
 
-  <Tab>
-  Clerk's Backend SDK is a wrapper around the Backend API that makes it easier to interact with the API.
+            <script
+              async
+              crossorigin="anonymous"
+              data-clerk-publishable-key="{{pub_key}}"
+              src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+              type="text/javascript"
+            ></script>
 
-  To use the Backend SDK to revoke an invitation, see the [`revokeInvitation()`](/docs/references/backend/invitations/revoke-invitation) reference documentation.
-  </Tab>
-</Tabs>
+            <script>
+              window.addEventListener('load', async function () {
+                await Clerk.load();
 
-<Callout type="warning">
-  Revoking an invitation does **not** prevent the user from signing up on their own. If you're looking for invitation-only applications, please refer to our [allowlist feature](/docs/authentication/configuration/restrictions#allowlist).
-</Callout>
+                if (Clerk.user) {
+                  // Mount user button component
+                  document.getElementById('signed-in').innerHTML = `
+                    <div id="user-button"></div>
+                  `;
 
-## Build a custom flow to handle invitations
+                  const userbuttonDiv = document.getElementById('user-button');
 
-<Callout type="danger">
-  This section is for users who want to build a *custom* user interface using the Clerk API. To handle invitations using a *prebuilt* UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
-</Callout>
+                  Clerk.mountUserButton(userbuttonDiv);
+                } else {
+                  // Get the token from the query parameter
+                  const param = '__clerk_ticket';
+                  const ticket = new URL(window.location.href).searchParams.get(param);
 
-When you create an invitation, you can specify a `redirect_url` parameter. This parameter tells Clerk where to redirect the user when they visit the invitation link.
+                  // Handle the sign-up form
+                  document
+                    .getElementById('sign-up-form')
+                    .addEventListener('submit', async (e) => {
+                      e.preventDefault();
 
-The following example demonstrates how to create an invitation with the `redirect_url` set to `https://www.example.com/my-sign-up`:
+                      const formData = new FormData(e.target);
+                      const firstName = formData.get('firstName');
+                      const lastName = formData.get('lastName');
 
-```bash
-curl https://api.clerk.com/v1/invitations -X POST -d '{"email_address": "email@example.com", "redirect_url": "https://www.example.com/my-sign-up"}' -H "Authorization:Bearer {{bapi}}" -H 'Content-Type:application/json'
-```
+                      try {
+                        // Start the sign-up process using the ticket method
+                        const signUpAttempt = await Clerk.client.signUp.create({
+                          strategy: 'ticket',
+                          ticket,
+                          firstName,
+                          lastName,
+                        });
 
-Once the user visits the invitation link and is redirected to the specified URL, an invitation token will be appended to the URL.
-
-Using the previous example, the URL with the invitation token would look like this:
-
-`https://www.example.com/my-sign-up?__clerk_ticket=.....`
-
-You can then use the invitation token to create a new sign-up. The following example demonstrates how to create a new sign-up using the invitation token:
-
-<Tabs items={["Next.js"]}>
-  <Tab>
-  ```jsx {{ filename: 'app/my-sign-up/page.tsx' }}
-  import { useSignUp } from "@clerk/nextjs";
-
-  const { signUp } = useSignUp();
-
-  // Get the token from the query parameter
-  const param = '__clerk_ticket';
-  const ticket = new URL(window.location.href).searchParams.get(param);
-
-  // Optional: collect additional user information
-  const firstName = "John";
-  const lastName = "Doe";
-
-  // Create a new sign-up with the supplied invitation token.
-  // Make sure you're also passing the ticket strategy.
-  // After the below call, the user's email address will be
-  // automatically verified because of the invitation token.
-  const response = await signUp.create({
-    strategy: "ticket",
-    ticket,
-    firstName,
-    lastName
-  });
-  ```
+                        // If sign-up was successful, set the session to active
+                        if (signUpAttempt.status === 'complete') {
+                          await Clerk.setActive({ session: signUpAttempt.createdSessionId });
+                        } else {
+                          // If the status is not complete, check why. User may need to
+                          // complete further steps.
+                          console.error(JSON.stringify(signUpAttempt, null, 2));
+                        }
+                      } catch (error) {
+                        // See https://clerk.com/docs/custom-flows/error-handling
+                        // for more info on error handling
+                        console.error(JSON.stringify(error, null, 2));
+                      }
+                    });
+                }
+              });
+            </script>
+          </body>
+        </html>
+        ```
+      </Tab>
+    </Tabs>
   </Tab>
 </Tabs>

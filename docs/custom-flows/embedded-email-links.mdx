@@ -16,154 +16,153 @@ Common use cases include:
 This guide will teach you how to set this flow up.
 
 <Steps>
+  ### Generate a sign-in token
 
-### Generate a sign-in token
+  Embeddable email links leverage [sign-in tokens](https://clerk.com/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken), which are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used at most once, and can be consumed from the Frontend API using the [`ticket`](/docs/references/javascript/sign-in/sign-in#sign-in-create-params) strategy.
 
-Embeddable email links leverage [sign-in tokens](https://clerk.com/docs/reference/backend-api/tag/Sign-in-Tokens#operation/CreateSignInToken), which are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used at most once, and can be consumed from the Frontend API using the [`ticket`](/docs/references/javascript/sign-in/sign-in#sign-in-create-params) strategy.
+  > [!NOTE]
+  > By default, sign-in tokens expire in 30 days. You can optionally supply a different duration in seconds using the `expires_in_seconds` property.
 
-> [!NOTE]
-> By default, sign-in tokens expire in 30 days. You can optionally supply a different duration in seconds using the `expires_in_seconds` property.
+  The following example demonstrates a cURL request that fetches a valid sign-in token:
 
-The following example demonstrates a cURL request that fetches a valid sign-in token: 
+  ```bash {{ prettier: false }}
+  curl 'https://api.clerk.com/v1/sign_in_tokens' \
+    -X POST \
+    -H 'Authorization: Bearer {{secret}}' \
+    -H 'Content-Type: application/json' \
+    -d '{ "user_id": "user_123" }'
+  ```
 
-```bash
-curl 'https://api.clerk.com/v1/sign_in_tokens' \
-  -X POST \
-  -H 'Authorization: Bearer {{secret}}' \
-  -H 'Content-Type: application/json' \
-  -d '{ "user_id": "user_123" }'
-```
+  This will return a token, which can then be embedded as a query param in any link, such as the following example:
 
-This will return a token, which can then be embedded as a query param in any link, such as the following example:
+  `https://your-site.com/welcome?token=THE_TOKEN`
 
-`https://your-site.com/welcome?token=THE_TOKEN`
+  You can embedded this link anywhere, such as an email.
 
-You can embedded this link anywhere, such as an email.
+  ### Build a custom flow for signing in with a sign-in token
 
-### Build a custom flow for signing in with a sign-in token
+  To do something with the email links you generate, you must setup a page in your frontend that detects the sign-in token, signs the user in, then performs whatever actions you want.
 
-To do something with the email links you generate, you must setup a page in your frontend that detects the sign-in token, signs the user in, then performs whatever actions you want.
+  The following example demonstrates basic code that detects a token and uses it to initiate a sign-in with Clerk:
 
-The following example demonstrates basic code that detects a token and uses it to initiate a sign-in with Clerk:
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      <CodeBlockTabs options={["App Router", "Pages Router"]}>
+        ```jsx {{ prettier: false, filename: 'app/accept-token/page.jsx' }}
+        "use client";
+        import { useUser, useSignIn } from "@clerk/nextjs";
+        import { useEffect, useState } from "react";
+        import { useSearchParams } from "next/navigation";
 
-<Tabs items={["Next.js"]}>
-<Tab>
-<CodeBlockTabs options={["App Router", "Pages Router"]}>
-```jsx filename="app/accept-token/page.jsx"
-"use client";
-import { useUser, useSignIn } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+        export default function AcceptToken() {
+          const { signIn, setActive } = useSignIn();
+          const { user } = useUser();
+          const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
+          const signInToken = useSearchParams().get("token");
 
-export default function AcceptToken() {
-  const { signIn, setActive } = useSignIn();
-  const { user } = useUser();
-  const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
-  const signInToken = useSearchParams().get("token");
+          useEffect(() => {
+            if (!signIn || !setActive || !signInToken) {
+              return;
+            }
 
-  useEffect(() => {
-    if (!signIn || !setActive || !signInToken) {
-      return;
-    }
+            const createSignIn = async () => {
+              try {
+                // Create a signIn with the token.
+                // Note that you need to use the "ticket" strategy.
+                const res = await signIn.create({
+                  strategy: "ticket",
+                  ticket: signInToken as string,
+                });
+                setActive({
+                  session: res.createdSessionId,
+                  beforeEmit: () => setSignInProcessed(true),
+                });
+              } catch (err) {
+                setSignInProcessed(true);
+              }
+            };
 
-    const createSignIn = async () => {
-      try {
-        // Create a signIn with the token.
-        // Note that you need to use the "ticket" strategy.
-        const res = await signIn.create({
-          strategy: "ticket",
-          ticket: signInToken as string,
-        });
-        setActive({
-          session: res.createdSessionId,
-          beforeEmit: () => setSignInProcessed(true),
-        });
-      } catch (err) {
-        setSignInProcessed(true);
-      }
-    };
+            createSignIn();
+          }, [signIn, setActive]);
 
-    createSignIn();
-  }, [signIn, setActive]);
+          if (!signInToken) {
+            return <div>no token provided</div>;
+          }
 
-  if (!signInToken) {
-    return <div>no token provided</div>;
-  }
+          if (!signInProcessed) {
+            return <div>loading</div>;
+          }
 
-  if (!signInProcessed) {
-    return <div>loading</div>;
-  }
+          if (!user) {
+            return <div>error invalid token</div>;
+          }
 
-  if (!user) {
-    return <div>error invalid token</div>;
-  }
+          return <div>Signed in as {user.id}</div>;
+        }
+        ```
 
-  return <div>Signed in as {user.id}</div>;
-}
-```
-```jsx filename="pages/accept-token.jsx"
-import { InferGetServerSidePropsType, GetServerSideProps } from "next";
-import { useUser, useSignIn } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+        ```jsx {{ prettier: false, filename: 'pages/accept-token.jsx' }}
+        import { InferGetServerSidePropsType, GetServerSideProps } from "next";
+        import { useUser, useSignIn } from "@clerk/nextjs";
+        import { useEffect, useState } from "react";
 
-// Grab the query param server side, and pass through props
-export const getServerSideProps: GetServerSideProps = async (context) => {
-  return {
-    props: { signInToken: context.query.token ? context.query.token : null },
-  };
-};
+        // Grab the query param server side, and pass through props
+        export const getServerSideProps: GetServerSideProps = async (context) => {
+          return {
+            props: { signInToken: context.query.token ? context.query.token : null },
+          };
+        };
 
-const AcceptToken = ({
-  signInToken,
-}: InferGetServerSidePropsType<typeof getServerSideProps>) => {
-  const { signIn, setActive } = useSignIn();
-  const { user } = useUser();
-  const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
+        const AcceptToken = ({
+          signInToken,
+        }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+          const { signIn, setActive } = useSignIn();
+          const { user } = useUser();
+          const [signInProcessed, setSignInProcessed] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!signIn || !setActive || !signInToken) {
-      return;
-    }
+          useEffect(() => {
+            if (!signIn || !setActive || !signInToken) {
+              return;
+            }
 
-    const createSignIn = async () => {
-      try {
-        // Create a signIn with the token.
-        // Note that you need to use the "ticket" strategy.
-        const res = await signIn.create({
-          strategy: "ticket",
-          ticket: signInToken as string,
-        });
-        setActive({
-          session: res.createdSessionId,
-          beforeEmit: () => setSignInProcessed(true)
-        });
-      } catch (err) {
-        setSignInProcessed(true);
-      }
-    };
+            const createSignIn = async () => {
+              try {
+                // Create a signIn with the token.
+                // Note that you need to use the "ticket" strategy.
+                const res = await signIn.create({
+                  strategy: "ticket",
+                  ticket: signInToken as string,
+                });
+                setActive({
+                  session: res.createdSessionId,
+                  beforeEmit: () => setSignInProcessed(true)
+                });
+              } catch (err) {
+                setSignInProcessed(true);
+              }
+            };
 
-    createSignIn();
-  }, [signIn, setActive]);
+            createSignIn();
+          }, [signIn, setActive]);
 
-  if (!signInToken) {
-    return <div>no token provided</div>;
-  }
+          if (!signInToken) {
+            return <div>no token provided</div>;
+          }
 
-  if (!signInProcessed) {
-    return <div>loading</div>;
-  }
+          if (!signInProcessed) {
+            return <div>loading</div>;
+          }
 
-  if (!user) {
-    return <div>error invalid token</div>;
-  }
+          if (!user) {
+            return <div>error invalid token</div>;
+          }
 
-  return <div>Signed in as {user.id}</div>;
-};
+          return <div>Signed in as {user.id}</div>;
+        };
 
-export default AcceptToken;
-```
-</CodeBlockTabs>
-</Tab>
-</Tabs>
-
+        export default AcceptToken;
+        ```
+      </CodeBlockTabs>
+    </Tab>
+  </Tabs>
 </Steps>

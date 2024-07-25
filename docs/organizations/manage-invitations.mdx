@@ -1,0 +1,174 @@
+---
+description: Learn how to use Clerk's API to build a custom flow for managing a user's organization invitations.
+---
+
+# Build a custom flow for managing a user's organization invitations
+
+<Callout type="danger">
+  This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [prebuilt components](/docs/components/overview).
+</Callout>
+
+This guide will demonstrate how to use Clerk's API to build a custom flow for managing a user's [organization invitations](/docs/organizations/overview#organization-invitations).
+
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+    The following example uses the [`useOrganizationList()`](/docs/references/react/use-organization) hook to get `userInvitations`, which is a list of the user's organization invitations.
+
+    `userInvitations` is an object with `data` that contains an array of [`UserOrganizationInvitation`](/docs/references/javascript/types/user-organization-invitation) objects.
+
+    Each `UserOrganizationInvitation` object has an [`accept()`](/docs/references/javascript/organization-membership-request#accept) method that accepts the invitation to the organization.
+
+    This example is written for Next.js App Router but can be adapted for any React meta framework, such as Remix or Gatsby.
+
+    ```jsx {{ prettier: false, filename: 'app/components/UserInvitationsList.tsx' }}
+    'use client';
+
+    import { useOrganizationList } from '@clerk/clerk-react';
+    import React from 'react';
+
+    export default function UserInvitationsList() {
+      const { isLoaded, userInvitations } = useOrganizationList({
+        userInvitations: {
+          infinite: true,
+          keepPreviousData: true,
+        },
+      });
+
+      if (!isLoaded || userInvitations.isLoading) {
+        return <>Loading</>;
+      }
+
+      return (
+        <>
+          <h1>Organization invitations</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Organization name</th>
+                <th>Role</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {userInvitations.data?.map((invitation) => (
+                <tr key={invitation.id}>
+                  <td>{invitation.emailAddress}</td>
+                  <td>{invitation.publicOrganizationData.name}</td>
+                  <td>{invitation.role}</td>
+                  <td>
+                    <button onClick={() => invitation.accept()}>Accept</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button
+            disabled={!userInvitations.hasNextPage}
+            onClick={userInvitations.fetchNext}
+          >
+            Load more
+          </button>
+        </>
+      );
+    };
+    ```
+  </Tab>
+
+  <Tab>
+    The following example:
+
+    1. Calls the [`getOrganizationInvitations()`](/docs/references/javascript/user/user#get-organization-invitations) method to retrieve the list of organization invitations for the active user. This method returns `data`, which is an array of [`UserOrganizationInvitation`](/docs/references/javascript/types/user-organization-invitation) objects.
+    1. Maps over the `data` array to display the invitations in a table.
+    1. Provides an "Accept" button for each invitation that calls the [`accept()`](/docs/references/javascript/types/user-organization-invitation#accept) method.
+
+    Use the following tabs to view the code necessary for the `index.html` and `main.js` files.
+
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+      ```html {{ prettier: false, filename: 'index.html' }}
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+
+          <h1>Organization invitations</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Organization name</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+
+            <tbody id="invitations-table-body"></tbody>
+          </table>
+
+          <script
+            type="module"
+            src="/src/main.js"
+            async
+            crossorigin="anonymous"
+          ></script>
+        </body>
+      </html>
+      ```
+
+      ```js {{ prettier: false, filename: 'main.js' }}
+      import { Clerk } from '@clerk/clerk-js';
+
+      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+      if (!pubKey) {
+        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file');
+      }
+
+      const clerk = new Clerk('{{pub_key}}');
+      await clerk.load();
+
+      if (clerk.user) {
+        const { data } = await clerk.user.getOrganizationInvitations();
+        const invitations = data;
+
+        invitations.map((invitation) => {
+          const tableBody = document.getElementById('invitations-table-body');
+          const row = tableBody.insertRow();
+          row.insertCell().textContent = invitation.emailAddress;
+          row.insertCell().textContent = invitation.publicOrganizationData.name;
+          row.insertCell().textContent = invitation.role;
+          row.insertCell().textContent = invitation.status;
+
+          // Show accept button for pending invitations
+          if (invitation.status === 'pending') {
+            const acceptBtn = document.createElement('button');
+            acceptBtn.textContent = 'Accept';
+            acceptBtn.addEventListener('click', async function (e) {
+              e.preventDefault();
+              await invitation.accept();
+            });
+            row.insertCell().appendChild(acceptBtn);
+          }
+        });
+      } else {
+        // If there is no active user, mount Clerk's <SignIn />
+        document.getElementById('app').innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById('sign-in');
+
+        clerk.mountSignIn(signInDiv);
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

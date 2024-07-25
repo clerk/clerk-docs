@@ -8,25 +8,27 @@ description: Learn how to configure your Content Security Policy to work with Cl
 
 For Clerk to work correctly in your application, you'll need to configure the following CSP directives:
 
-1. `script-src` – This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
-2. `connect-src` – This value should also include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
-3. `img-src` – This value should be `https://img.clerk.com`.
-4. `worker-src` - Use the `'self'` value to indicate that workers can be loaded from first-party scripts. The `blob:` schema value also needs to be included.
-5. `style-src` - Due to Clerk's usage of runtime CSS-in-JS for styling, `'unsafe-inline'` needs to be included.
+1. `script-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`, as well as cloudflare's bot protection host, `https://challenges.cloudflare.com`.
+1. `connect-src` - This value should also include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
+1. `img-src` - This value should be `https://img.clerk.com`.
+1. `worker-src` - Use the `'self'` value to indicate that workers can be loaded from first-party scripts. The `blob:` schema value also needs to be included.
+1. `style-src` - Due to Clerk's usage of runtime CSS-in-JS for styling, `'unsafe-inline'` needs to be included.
+1. `frame-src` - This value should also include cloudflare's bot protection host, `https://challenges.cloudflare.com`.
 
 The following example demonstrates a Next.js config file that sets the necessary directives for your application's assets and Clerk to load and function correctly. The values used apply to your currently selected instance, make sure to handle both your development instance and production instance hosts.
 
 > [!WARNING]
 > You will need to make sure any third-party domains where scripts or assets are loaded from are also specified.
 
-```js {{ filename: "next.config.js" }}
+```js {{ prettier: false, filename: 'next.config.js' }}
 const cspHeader = `
-  default-src: 'self';
-  script-src: 'self' 'unsafe-inline' 'unsafe-eval' https://{{fapi_url}};
-  connect-src: 'self' https://{{fapi_url}};
-  img-src: 'self' https://img.clerk.com;
-  worker-src: 'self' blob:;
-  style-src: 'self' 'unsafe-inline';
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://{{fapi_url}} https://challenges.cloudflare.com;
+  connect-src 'self' https://{{fapi_url}};
+  img-src 'self' https://img.clerk.com;
+  worker-src 'self' blob:;
+  style-src 'self' 'unsafe-inline';
+  frame-src 'self' https://challenges.cloudflare.com;
 `;
 
 /** @type {import('next').NextConfig} */
@@ -48,3 +50,9 @@ const nextConfig = {
 
 module.exports = nextConfig;
 ```
+
+## Usage of `unsafe-eval` and `unsafe-inline` directives in Next.js
+
+- Within `script-src`, `unsafe-eval` is a [requirement for Next.js](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy#without-nonces) to run in development mode. _For production environment CSPs, it should be removed_.
+- Within `script-src`, `unsafe-inline` is a requirement for Next.js in both dev and prod environments if you're using the App Router. If you are using the Pages Router, it should be removed.
+- Within `style-src`, `unsafe-inline` is a requirement for Clerk's components to inject their styles. Removing this requirement is on our roadmap - please [reach out to support](https://clerk.com/support) if you'd like to see this implemented sooner.

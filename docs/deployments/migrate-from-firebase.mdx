@@ -8,143 +8,143 @@ description: Migrating your user base from Firebase to Clerk is a 2-part process
 Migrating your user base from Firebase to Clerk is a 2-part process that can be accomplished with just a few steps.
 
 <Steps>
+  ### Export your Firebase users
 
-### Export your Firebase users
+  #### Install the Firebase CLI
 
-#### Install the Firebase CLI
+  If you haven't already, install the Firebase CLI:
 
-If you haven't already, install the Firebase CLI:
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  npm install -g firebase-tools
+  ```
 
-```bash filename="terminal"
-npm install -g firebase-tools
-```
+  #### Log in to Firebase
 
-#### Log in to Firebase
+  Login to your Firebase account via the CLI.
 
-Login to your Firebase account via the CLI.
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  firebase login
+  ```
 
-```bash filename="terminal"
-firebase login
-```
+  #### Find your Firebase project ID
 
-#### Find your Firebase project ID
+  Use the firebase CLI to list your projects and find the project ID you want to export.
 
-Use the firebase CLI to list your projects and find the project ID you want to export.
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  firebase projects:list
+  ```
 
-```bash filename="terminal"
-firebase projects:list
-```
+  #### Export your Firebase users using the CLI
 
-#### Export your Firebase users using the CLI
+  Use the firebase CLI to export your users to a JSON file.
 
-Use the firebase CLI to export your users to a JSON file.
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  firebase auth:export firebase-users.json --format=json --project <YOUR_PROJECT_ID>
+  ```
 
-```bash filename="terminal"
-firebase auth:export firebase-users.json --format=json --project <YOUR_PROJECT_ID>
-```
+  Here's what this command is doing:
 
-Here's what this command is doing:
+  1. `firebase auth:export`: it tells Firebase you're trying to export the user base.
 
-1. `firebase auth:export`: it tells Firebase you're trying to export the user base.
+  1. `firebase-users.json`: the name of the file you're about to create.
 
-2. `firebase-users.json`: the name of the file you're about to create.
+  1. `--format=json`: make it a JSON file.
 
-3. `--format=json`: make it a JSON file.
+  1. `--project <YOUR_PROJECT_ID>`: it tells Firebase which project you're trying to export from. Don't forget to replace `<YOUR_PROJECT_ID>` with the Project ID you found in the previous step.
 
-4. `--project <YOUR_PROJECT_ID>`: it tells Firebase which project you're trying to export from. Don't forget to replace `<YOUR_PROJECT_ID>` with the Project ID you found in the previous step.
+  You should now have a JSON file called `firebase-users.json` that contains all your Firebase users.
 
-You should now have a JSON file called `firebase-users.json` that contains all your Firebase users.
+  ### Retrieve your password hash parameters
 
-### Retrieve your password hash parameters
+  In your Firebase project’s dashboard, navigate to **Authentication** and click on the 3 vertical dots at the top of the user's list, then click on **Password hash parameters**.
 
-In your Firebase project’s dashboard, navigate to **Authentication** and click on the 3 vertical dots at the top of the user's list, then click on **Password hash parameters**.
+  On the new window that opens, you'll find the following values: `base64_signer_key`, `base64_salt_separator`, `rounds` and `mem_cost`.
 
-On the new window that opens, you'll find the following values: `base64_signer_key`, `base64_salt_separator`, `rounds` and `mem_cost`.
+  You can find more information about this page and the values above on [Firebase's documentation](https://firebaseopensource.com/projects/firebase/scrypt/).
 
-You can find more information about this page and the values above on [Firebase's documentation](https://firebaseopensource.com/projects/firebase/scrypt/).
+  ### Create a Node.js script
 
-### Create a Node.js script
+  Now you have all the information you need to import your Firebase users into Clerk. This example uses Node.js, but you can use any other language or method if you so wish.
 
-Now you have all the information you need to import your Firebase users into Clerk. This example uses Node.js, but you can use any other language or method if you so wish.
+  #### init npm
 
-#### init npm
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  npm init -y
+  ```
 
-```bash filename="terminal"
-npm init -y
-```
+  #### Install dependencies
 
-#### Install dependencies
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  npm i node-fetch@2
+  ```
 
-```bash filename="terminal"
-npm i node-fetch@2
-```
+  #### Create a script
 
-#### Create a script
-```js filename="terminal/migrate-to-clerk.js"
-const fetch = require('node-fetch')
-const firebaseUsers = require('./firebase-users.json')
+  ```js {{ prettier: false, filename: 'terminal/migrate-to-clerk.js' }}
+  const fetch = require('node-fetch')
+  const firebaseUsers = require('./firebase-users.json')
 
-async function migrateToClerk() {
-    // You can find these values on your Firebase project's authentication settings
-    const signerKey = ''
-    const saltSeparator = ''
-    const rounds = ''
-    const memoryCost = ''
+  async function migrateToClerk() {
+      // You can find these values on your Firebase project's authentication settings
+      const signerKey = ''
+      const saltSeparator = ''
+      const rounds = ''
+      const memoryCost = ''
 
-		// You can find this value on your Clerk application's dashboard
-    const clerkBackendApiKey = ''
+  		// You can find this value on your Clerk application's dashboard
+      const clerkBackendApiKey = ''
 
-    for (let user of firebaseUsers.users) {
-        const { email, localId, passwordHash, salt } = user
+      for (let user of firebaseUsers.users) {
+          const { email, localId, passwordHash, salt } = user
 
-        const body = passwordHash
-            ? {
-                  email_address: [email],
-                  external_id: localId,
-                  password_hasher: 'scrypt_firebase',
-                  password_digest: `${passwordHash}$${salt}$${signerKey}$${saltSeparator}$${rounds}$${memoryCost}`,
+          const body = passwordHash
+              ? {
+                    email_address: [email],
+                    external_id: localId,
+                    password_hasher: 'scrypt_firebase',
+                    password_digest: `${passwordHash}$${salt}$${signerKey}$${saltSeparator}$${rounds}$${memoryCost}`,
+                }
+              : {
+                    email_address: [email],
+                    external_id: localId,
+                    skip_password_requirement: true,
+                }
+
+          try {
+              const result = await fetch('https://api.clerk.com/v1/users', {
+                  method: 'POST',
+                  headers: {
+                      Authorization: `Bearer ${clerkBackendApiKey}`,
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(body),
+              })
+
+              if (!result.ok) {
+                  throw Error(result.statusText)
+              } else {
+                  console.log(`${email} added successfully`)
               }
-            : {
-                  email_address: [email],
-                  external_id: localId,
-                  skip_password_requirement: true,
-              }
+          } catch (error) {
+              console.error(`Error migrating ${email}: ${error}`)
+          }
+      }
+  }
 
-        try {
-            const result = await fetch('https://api.clerk.com/v1/users', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${clerkBackendApiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(body),
-            })
+  migrateToClerk()
+  ```
 
-            if (!result.ok) {
-                throw Error(result.statusText)
-            } else {
-                console.log(`${email} added successfully`)
-            }
-        } catch (error) {
-            console.error(`Error migrating ${email}: ${error}`)
-        }
-    }
-}
+  Here, body will either hold the necessary information to migrate a password-based user or in the case of an OAuth-based user, it'll skip the password check. It will also have the previous user ID as `external_id`, so you can link the newly created users with their existing data.
 
-migrateToClerk()
-```
-Here, body will either hold the necessary information to migrate a password-based user or in the case of an OAuth-based user, it'll skip the password check. It will also have the previous user ID as `external_id`, so you can link the newly created users with their existing data.
+  ### Run the script
 
-### Run the script
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  node migrate-to-clerk.js
+  ```
 
-```bash filename="terminal"
-node migrate-to-clerk.js
-```
+  <Callout type="warning">
+    This implementation does not take rate limiting into account. If you have a large user base, you may want to implement a retry mechanism. Clerk will return a `429` status code if you exceed the rate limit. You can find more information about Clerk's rate limits [here](/docs/backend-requests/resources/rate-limits). Keep [Firebase's rate limits](https://firebase.google.com/docs/functions/quotas) in mind as well when exporting your users.
+  </Callout>
 
-<Callout type="warning">
-This implementation does not take rate limiting into account. If you have a large user base, you may want to implement a retry mechanism. Clerk will return a `429` status code if you exceed the rate limit. You can find more information about Clerk's rate limits [here](/docs/backend-requests/resources/rate-limits). Keep [Firebase's rate limits](https://firebase.google.com/docs/functions/quotas) in mind as well when exporting your users.
-</Callout
->
-Once the script has finished running, your user base will be fully migrated to Clerk.
-
+  Once the script has finished running, your user base will be fully migrated to Clerk.
 </Steps>

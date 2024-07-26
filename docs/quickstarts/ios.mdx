@@ -67,7 +67,7 @@ description: Add authentication and user management to your iOS app with Clerk.
     ```
   </InjectKeys>
 
-  ### Conditionally Render Content
+  ### Conditionally render content
 
   Open your `ContentView.swift` file.
 
@@ -91,6 +91,71 @@ description: Add authentication and user management to your iOS app with Clerk.
               }
           }
       }
+  }
+  ```
+
+  ### Create views for sign up and sign in
+
+  #### Sign Up View
+
+  The following example creates a sign-up view that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
+
+  ```swift {{ filename: 'SignUpView.swift' }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct SignUpView: View {
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var isVerifying = false
+    
+    var body: some View {
+        VStack {
+            if isVerifying {
+                TextField("Code", text: $email)
+                Button("Verify") {
+                    Task { await verify(code: code) }
+                }
+            } else {
+                TextField("Email", text: $email)
+                SecureField("Password", text: $password)
+                Button("Continue") {
+                    Task { await signUp(email: email, password: password) }
+                }
+            }
+        }
+        .padding()
+    }
+  }
+
+  extension SignUpView {
+    
+    func signUp(email: String, password: String) async {
+        do {
+            let signUp = try await SignUp.create(
+                strategy: .standard(emailAddress: email, password: password)
+            )
+            
+            try await signUp.prepareVerification(strategy: .emailCode)
+        } catch {
+            dump(error)
+        }
+    }
+    
+    func verify(code: String) async {
+        do {
+            guard let signUp = Clerk.shared.client?.signUp else {
+                isVerifying = false
+                return
+            }
+            
+            try await signUp.attemptVerification(.emailCode(code: code))
+        } catch {
+            dump(error)
+        }
+    }
+    
   }
   ```
 </Steps>

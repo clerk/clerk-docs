@@ -17,17 +17,17 @@ To see how all these methods work together, check out the [comprehensive example
 
 Retrieves the list of memberships for the currently active organization.
 
-```typescript
+```typescript {{ prettier: false }}
 function getMemberships(params?: GetMembersParams): Promise<ClerkPaginatedResponse<OrganizationMembership>>;
 ```
 
 ### `GetMembersParams`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `initialPage?` | `number` | A number that can be used to skip the first n-1 pages. For example, if `initialPage` is set to 10, it is will skip the first 9 pages and will fetch the 10th page. |
 | `pageSize?` | `number` | A number that indicates the maximum number of results that should be returned for a specific page. |
-| `role?` | <code>[OrganizationCustomRoleKey](#organization-custom-role-key)[]</code> | The [roles](/docs/organizations/roles-permissions) of memberships that will be included in the response. |
+| `role?` | <code>[OrganizationCustomRoleKey](#organization-custom-role-key)\[]</code> | The [roles](/docs/organizations/roles-permissions) of memberships that will be included in the response. |
 
 #### `OrganizationCustomRoleKey`
 
@@ -36,7 +36,7 @@ function getMemberships(params?: GetMembersParams): Promise<ClerkPaginatedRespon
 ### Returns
 
 | Type | Description |
-| --- | --- |
+| - | - |
 | `Promise<ClerkPaginatedResponse<OrganizationMembership>>` | This method returns a `Promise` that resolves to a [`ClerkPaginatedResponse`][pag-ref] of [`OrganizationMembership`][org-mem-ref] objects. |
 
 ## `addMember()`
@@ -45,62 +45,62 @@ Adds a user as a member to an organization. A user can only be added to an organ
 
 Only administrators can add members to an organization.
 
-```typescript
+```typescript {{ prettier: false }}
 function addMember(params: AddMemberParams): Promise<OrganizationMembership>;
 ```
 
 ### `AddMemberParams`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `userId` | `string` | The ID of the user that will be added as a member to the organization. |
 | `role` | `string` | The [role](/docs/organizations/roles-permissions) that the user will have in the organization. |
 
 ### Returns
 
 | Type | Description |
-| --- | --- |
+| - | - |
 | `Promise<OrganizationMembership>` | This method returns a `Promise` that resolves to the [`OrganizationMembership`][org-mem-ref] object. |
 
 ## `updateMember()`
 
 Updates a member. Currently, only a user's role can be updated.
 
-```typescript
+```typescript {{ prettier: false }}
 function updateMember(params: UpdateMembershipParams): Promise<OrganizationMembership>;
 ```
 
 ### `UpdateMembershipParams`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `userId` | `string` | The user identifier. |
 | `role` | `string` | The [role](/docs/organizations/roles-permissions) of the new member. |
 
 ### Returns
 
 | Type | Description |
-| --- | --- |
+| - | - |
 | `Promise<OrganizationMembership>` | This method returns a `Promise` that resolves to the updated [`OrganizationMembership`][org-mem-ref] object. |
 
 ## `removeMember()`
 
 Removes a member from the organization based on the `userId`.
 
-```typescript
+```typescript {{ prettier: false }}
 function removeMember(userId: string): Promise<OrganizationMembership>;
 ```
 
 ### Parameters
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `userId` | `string` | The user identifier. |
 
 ### Returns
 
 | Type | Description |
-| --- | --- |
+| - | - |
 | `Promise<OrganizationMembership>` | This method returns a `Promise` that resolves to the removed [`OrganizationMembership`][org-mem-ref] object. |
 
 ## Organization membership methods example
@@ -108,454 +108,453 @@ function removeMember(userId: string): Promise<OrganizationMembership>;
 The following example demonstrates how to use the organization membership methods to manage the members of an organization. To ease the development process, the response or error message of a method will be displayed on the user interface.
 
 <InjectKeys>
+  <Tabs type="npm-script" items={['NPM module', '<script>']}>
+    <Tab>
+      For the following example, your HTML file should look like this:
 
-<Tabs type="npm-script" items={['NPM module', '<script>']}>
-  <Tab>
-  For the following example, your HTML file should look like this:
+      ```html {{ prettier: false, filename: 'index.html' }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+          <style>
+            /* Style for the table */
+            table {
+              border-collapse: collapse; /* Collapse borders into a single border */
+              border: 1px solid black; /* Border for the entire table */
+            }
 
-  ```html filename="index.html"
-  <!doctype html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Clerk + JavaScript App</title>
-      <style>
-        /* Style for the table */
-        table {
-          border-collapse: collapse; /* Collapse borders into a single border */
-          border: 1px solid black; /* Border for the entire table */
-        }
+            /* Style for table cells */
+            td,
+            th {
+              border: 1px solid black; /* Border for each cell */
+              padding: 2px; /* Optional: Add padding to cells */
+            }
+          </style>
+        </head>
+        <body>
+          <div id="app"></div>
 
-        /* Style for table cells */
-        td,
-        th {
-          border: 1px solid black; /* Border for each cell */
-          padding: 2px; /* Optional: Add padding to cells */
-        }
-      </style>
-    </head>
-    <body>
-      <div id="app"></div>
+          <p id="error-container" hidden>
+            Error:
+            <span id="error-message"></span>
+          </p>
 
-      <p id="error-container" hidden>
-        Error:
-        <span id="error-message"></span>
-      </p>
+          <h2>Memberships List</h2>
+          <table id="memberships_table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Identifier</th>
+                <th>Role</th>
+                <th id="update-role-head" hidden>Update role</th>
+                <th id="remove-member-head" hidden>Remove member</th>
+              </tr>
+            </thead>
+            <tbody id="memberships_table_body"></tbody>
+          </table>
 
-      <h2>Memberships List</h2>
-      <table id="memberships_table">
-        <thead>
-          <tr>
-            <th>User ID</th>
-            <th>Identifier</th>
-            <th>Role</th>
-            <th id="update-role-head" hidden>Update role</th>
-            <th id="remove-member-head" hidden>Remove member</th>
-          </tr>
-        </thead>
-        <tbody id="memberships_table_body"></tbody>
-      </table>
+          <div id="add-member-container">
+            <h2>Add member</h2>
+            <input id="member-user-id" placeholder="Enter member's user ID" />
+            <button id="add-member">Add member</button>
+          </div>
 
-      <div id="add-member-container">
-        <h2>Add member</h2>
-        <input id="member-user-id" placeholder="Enter member's user ID" />
-        <button id="add-member">Add member</button>
-      </div>
+          <h2>Response:</p>
+          <pre id="response"></pre>
 
-      <h2>Response:</p>
-      <pre id="response"></pre>
+          <script type="module" src="/main.js"></script>
+        </body>
+      </html>
+      ```
 
-      <script type="module" src="/main.js"></script>
-    </body>
-  </html>
-  ```
+      And your JavaScript file should look like this:
 
-  And your JavaScript file should look like this:
+      ```js {{ prettier: false, filename: 'main.js', mark: [13, 41, 60, 79] }}
+      import { Clerk } from '@clerk/clerk-js';
 
-  ```js filename="main.js" {13,41,60,79}
-  import { Clerk } from '@clerk/clerk-js';
+      // Initialize Clerk with your Clerk publishable key
+      const clerk = new Clerk('{{pub_key}}');
+      await clerk.load();
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}');
-  await clerk.load();
+      if (clerk.user) {
+        // Check for an active organization
+        if (clerk.organization) {
+          // Render list of organization memberships
+          async function renderMemberships(organization, isAdmin) {
+            try {
+              const { data } = await organization.getMemberships();
 
-  if (clerk.user) {
-    // Check for an active organization
-    if (clerk.organization) {
-      // Render list of organization memberships
-      async function renderMemberships(organization, isAdmin) {
-        try {
-          const { data } = await organization.getMemberships();
+              const memberships = data;
+              console.log(`getMemberships:`, memberships);
 
-          const memberships = data;
-          console.log(`getMemberships:`, memberships);
+              memberships.map((membership) => {
+                const membershipTable = document.getElementById("memberships_table");
+                const row = membershipTable.insertRow();
+                row.insertCell().textContent = membership.publicUserData.userId;
+                row.insertCell().textContent = membership.publicUserData.identifier;
+                row.insertCell().textContent = membership.role;
 
-          memberships.map((membership) => {
-            const membershipTable = document.getElementById("memberships_table");
-            const row = membershipTable.insertRow();
-            row.insertCell().textContent = membership.publicUserData.userId;
-            row.insertCell().textContent = membership.publicUserData.identifier;
-            row.insertCell().textContent = membership.role;
+                // Add administrative actions:
+                // Add and remove a member, and update a member's role.
+                if (isAdmin) {
+                  // Show add, update, remove member buttons
+                  document.getElementById("add-member-container").removeAttribute("hidden");
+                  document.getElementById("update-role-head").removeAttribute("hidden");
+                  document.getElementById("remove-member-head").removeAttribute("hidden");
 
-            // Add administrative actions:
-            // Add and remove a member, and update a member's role.
-            if (isAdmin) {
-              // Show add, update, remove member buttons
-              document.getElementById("add-member-container").removeAttribute("hidden");
-              document.getElementById("update-role-head").removeAttribute("hidden");
-              document.getElementById("remove-member-head").removeAttribute("hidden");
+                  // Get the user ID of the member
+                  const userId = membership.publicUserData.userId;
 
-              // Get the user ID of the member
-              const userId = membership.publicUserData.userId;
-
-              // Update a member's role
-              const updateBtn = document.createElement("button");
-              updateBtn.textContent = "Change role";
-              updateBtn.addEventListener("click", async function (e) {
-                e.preventDefault();
-                const role =
-                  membership.role === "org:admin" ? "org:member" : "org:admin";
-                await organization.updateMember({ userId, role })
-                  .then((res) => {
-                    document.getElementById("response").innerHTML =
-                      JSON.stringify(res);
-                  })
-                  .catch((error) => {
-                    document.getElementById("error-container").removeAttribute("hidden");
-                    document.getElementById("error-message").innerHTML =
-                      error.errors[0].longMessage;
-                    console.log("An error occurred:", error.errors);
+                  // Update a member's role
+                  const updateBtn = document.createElement("button");
+                  updateBtn.textContent = "Change role";
+                  updateBtn.addEventListener("click", async function (e) {
+                    e.preventDefault();
+                    const role =
+                      membership.role === "org:admin" ? "org:member" : "org:admin";
+                    await organization.updateMember({ userId, role })
+                      .then((res) => {
+                        document.getElementById("response").innerHTML =
+                          JSON.stringify(res);
+                      })
+                      .catch((error) => {
+                        document.getElementById("error-container").removeAttribute("hidden");
+                        document.getElementById("error-message").innerHTML =
+                          error.errors[0].longMessage;
+                        console.log("An error occurred:", error.errors);
+                      });
                   });
-              });
-              row.insertCell().appendChild(updateBtn);
+                  row.insertCell().appendChild(updateBtn);
 
-              // Remove a member
-              const removeBtn = document.createElement("button");
-              removeBtn.textContent = "Remove";
-              removeBtn.addEventListener("click", async function (e) {
-                e.preventDefault();
-                await organization.removeMember(userId)
-                  .then((res) => {
-                    document.getElementById("response").innerHTML =
-                      JSON.stringify(res);
-                  })
-                  .catch((error) => {
-                    document.getElementById("error-container").removeAttribute("hidden");
-                    document.getElementById("error-message").innerHTML =
-                      error.errors[0].longMessage;
-                    console.log("An error occurred:", error.errors);
+                  // Remove a member
+                  const removeBtn = document.createElement("button");
+                  removeBtn.textContent = "Remove";
+                  removeBtn.addEventListener("click", async function (e) {
+                    e.preventDefault();
+                    await organization.removeMember(userId)
+                      .then((res) => {
+                        document.getElementById("response").innerHTML =
+                          JSON.stringify(res);
+                      })
+                      .catch((error) => {
+                        document.getElementById("error-container").removeAttribute("hidden");
+                        document.getElementById("error-message").innerHTML =
+                          error.errors[0].longMessage;
+                        console.log("An error occurred:", error.errors);
+                      });
                   });
+                  row.insertCell().appendChild(removeBtn);
+
+                  // Add a new member to the organization
+                  document.getElementById("add-member")
+                    .addEventListener("click", () => {
+                      const userId = document.getElementById("member-user-id").value;
+
+                      organization.addMember({ userId, role: "org:member" })
+                        .then((res) => {
+                          document.getElementById("response").innerHTML =
+                            JSON.stringify(res);
+                        })
+                        .catch((error) => {
+                          document.getElementById("error-container").removeAttribute("hidden");
+                          document.getElementById("error-message").innerHTML =
+                            error.errors[0].longMessage;
+                          console.log("An error occurred:", error.errors);
+                        });
+                    });
+                }
               });
-              row.insertCell().appendChild(removeBtn);
+            } catch (error) {
+              document.getElementById("error-container").removeAttribute("hidden");
+              document.getElementById("error-message").innerHTML =
+                error.errors[0].longMessage;
+              console.log("An error occurred:", error.errors);
+            }
+          }
 
-              // Add a new member to the organization
-              document.getElementById("add-member")
-                .addEventListener("click", () => {
-                  const userId = document.getElementById("member-user-id").value;
+          /**
+           * Checks if a user is an admin of the
+           * currently active organization and
+           * renders the organization's memberships.
+           */
+          async function checkAdminAndRenderMemberships() {
+            const organizationId = clerk.organization.id;
 
-                  organization.addMember({ userId, role: "org:member" })
-                    .then((res) => {
-                      document.getElementById("response").innerHTML =
-                        JSON.stringify(res);
-                    })
-                    .catch((error) => {
+            const { data } =
+              await clerk.user.getOrganizationMemberships();
+
+            const organizationMemberships = data;
+
+            const currentMembership = organizationMemberships.find(
+              (membership) => membership.organization.id === organizationId
+            );
+            const currentOrganization = currentMembership.organization;
+
+            if (!currentOrganization) {
+              return;
+            }
+            const isAdmin = currentMembership.role === "org:admin";
+
+            console.log(`Organization:`, currentOrganization);
+
+            renderMemberships(currentOrganization, isAdmin);
+          }
+
+          checkAdminAndRenderMemberships();
+        } else {
+          // If there is no active organization,
+          // mount Clerk's <OrganizationSwitcher />
+          // to allow the user to set an organization as active
+          document.getElementById("app").innerHTML = `
+            <h2>Select an organization to set it as active</h2>
+            <div id="org-switcher"></div>
+          `;
+
+          const orgSwitcherDiv = document.getElementById("org-switcher");
+
+          clerk.mountOrganizationSwitcher(orgSwitcherDiv);
+        }
+      } else {
+        document.getElementById("app").innerHTML = `
+          <div id="sign-in"></div>
+        `;
+
+        const signInDiv = document.getElementById("sign-in");
+
+        clerk.mountSignIn(signInDiv);
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```html {{ prettier: false, filename: 'index.html', mark: [74, 102, 121, 140] }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+          <style>
+            /* Style for the table */
+            table {
+              border-collapse: collapse; /* Collapse borders into a single border */
+              border: 1px solid black; /* Border for the entire table */
+            }
+
+            /* Style for table cells */
+            td,
+            th {
+              border: 1px solid black; /* Border for each cell */
+              padding: 2px; /* Optional: Add padding to cells */
+            }
+          </style>
+        </head>
+        <body>
+          <div id="app"></div>
+
+          <p id="error-container" hidden>
+            Error:
+            <span id="error-message"></span>
+          </p>
+
+          <h2>Memberships List</h2>
+          <table id="memberships_table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Identifier</th>
+                <th>Role</th>
+                <th id="update-role-head" hidden>Update role</th>
+                <th id="remove-member-head" hidden>Remove member</th>
+              </tr>
+            </thead>
+            <tbody id="memberships_table_body"></tbody>
+          </table>
+
+          <div id="add-member-container">
+            <h2>Add member</h2>
+            <input id="member-user-id" placeholder="Enter member's user ID" />
+            <button id="add-member">Add member</button>
+          </div>
+
+          <h2>Response:</p>
+          <pre id="response"></pre>
+
+          <!-- Initialize Clerk with your
+          Clerk Publishable key and Frontend API URL -->
+          <script
+            async
+            crossorigin="anonymous"
+            data-clerk-publishable-key="{{pub_key}}"
+            src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+            type="text/javascript"
+          ></script>
+
+          <script>
+            window.addEventListener("load", async function () {
+              await Clerk.load();
+
+              if (Clerk.user) {
+                // Check for an active organization
+                if (Clerk.organization) {
+                  // Render list of organization memberships
+                  async function renderMemberships(organization, isAdmin) {
+                    try {
+                      const { data } = await organization.getMemberships();
+
+                      const memberships = data;
+                      console.log(`getMemberships:`, memberships);
+
+                      memberships.map((membership) => {
+                        const membershipTable = document.getElementById("memberships_table");
+                        const row = membershipTable.insertRow();
+                        row.insertCell().textContent = membership.publicUserData.userId;
+                        row.insertCell().textContent = membership.publicUserData.identifier;
+                        row.insertCell().textContent = membership.role;
+
+                        // Add administrative actions:
+                        // Add and remove a member, and update a member's role.
+                        if (isAdmin) {
+                          // Show add, update, remove member buttons
+                          document.getElementById("add-member-container").removeAttribute("hidden");
+                          document.getElementById("update-role-head").removeAttribute("hidden");
+                          document.getElementById("remove-member-head").removeAttribute("hidden");
+
+                          // Get the user ID of the member
+                          const userId = membership.publicUserData.userId;
+
+                          // Update a member's role
+                          const updateBtn = document.createElement("button");
+                          updateBtn.textContent = "Change role";
+                          updateBtn.addEventListener("click", async function (e) {
+                            e.preventDefault();
+                            const role =
+                              membership.role === "org:admin" ? "org:member" : "org:admin";
+                            await organization.updateMember({ userId, role })
+                              .then((res) => {
+                                document.getElementById("response").innerHTML =
+                                  JSON.stringify(res);
+                              })
+                              .catch((error) => {
+                                document.getElementById("error-container").removeAttribute("hidden");
+                                document.getElementById("error-message").innerHTML =
+                                  error.errors[0].longMessage;
+                                console.log("An error occurred:", error.errors);
+                              });
+                          });
+                          row.insertCell().appendChild(updateBtn);
+
+                          // Remove a member
+                          const removeBtn = document.createElement("button");
+                          removeBtn.textContent = "Remove";
+                          removeBtn.addEventListener("click", async function (e) {
+                            e.preventDefault();
+                            await organization.removeMember(userId)
+                              .then((res) => {
+                                document.getElementById("response").innerHTML =
+                                  JSON.stringify(res);
+                              })
+                              .catch((error) => {
+                                document.getElementById("error-container").removeAttribute("hidden");
+                                document.getElementById("error-message").innerHTML =
+                                  error.errors[0].longMessage;
+                                console.log("An error occurred:", error.errors);
+                              });
+                          });
+                          row.insertCell().appendChild(removeBtn);
+
+                          // Add a new member to the organization
+                          document.getElementById("add-member")
+                            .addEventListener("click", () => {
+                              const userId = document.getElementById("member-user-id").value;
+
+                              organization.addMember({ userId, role: "org:member" })
+                              .then((res) => {
+                                document.getElementById("response").innerHTML =
+                                  JSON.stringify(res);
+                              })
+                              .catch((error) => {
+                                document.getElementById("error-container").removeAttribute("hidden");
+                                document.getElementById("error-message").innerHTML =
+                                  error.errors[0].longMessage;
+                                console.log("An error occurred:", error.errors);
+                              });
+                            });
+                        }
+                      });
+                    } catch (error) {
                       document.getElementById("error-container").removeAttribute("hidden");
                       document.getElementById("error-message").innerHTML =
                         error.errors[0].longMessage;
                       console.log("An error occurred:", error.errors);
-                    });
-                });
-            }
-          });
-        } catch (error) {
-          document.getElementById("error-container").removeAttribute("hidden");
-          document.getElementById("error-message").innerHTML =
-            error.errors[0].longMessage;
-          console.log("An error occurred:", error.errors);
-        }
-      }
-
-      /**
-       * Checks if a user is an admin of the
-       * currently active organization and
-       * renders the organization's memberships.
-       */
-      async function checkAdminAndRenderMemberships() {
-        const organizationId = clerk.organization.id;
-
-        const { data } =
-          await clerk.user.getOrganizationMemberships();
-
-        const organizationMemberships = data;
-
-        const currentMembership = organizationMemberships.find(
-          (membership) => membership.organization.id === organizationId
-        );
-        const currentOrganization = currentMembership.organization;
-
-        if (!currentOrganization) {
-          return;
-        }
-        const isAdmin = currentMembership.role === "org:admin";
-
-        console.log(`Organization:`, currentOrganization);
-
-        renderMemberships(currentOrganization, isAdmin);
-      }
-
-      checkAdminAndRenderMemberships();
-    } else {
-      // If there is no active organization,
-      // mount Clerk's <OrganizationSwitcher />
-      // to allow the user to set an organization as active
-      document.getElementById("app").innerHTML = `
-        <h2>Select an organization to set it as active</h2>
-        <div id="org-switcher"></div>
-      `;
-
-      const orgSwitcherDiv = document.getElementById("org-switcher");
-
-      clerk.mountOrganizationSwitcher(orgSwitcherDiv);
-    }
-  } else {
-    document.getElementById("app").innerHTML = `
-      <div id="sign-in"></div>
-    `;
-
-    const signInDiv = document.getElementById("sign-in");
-
-    clerk.mountSignIn(signInDiv);
-  }
-  ```
-  </Tab>
-
-  <Tab>
-  ```html filename="index.html" {74,102,121,140}
-  <!doctype html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Clerk + JavaScript App</title>
-      <style>
-        /* Style for the table */
-        table {
-          border-collapse: collapse; /* Collapse borders into a single border */
-          border: 1px solid black; /* Border for the entire table */
-        }
-
-        /* Style for table cells */
-        td,
-        th {
-          border: 1px solid black; /* Border for each cell */
-          padding: 2px; /* Optional: Add padding to cells */
-        }
-      </style>
-    </head>
-    <body>
-      <div id="app"></div>
-
-      <p id="error-container" hidden>
-        Error:
-        <span id="error-message"></span>
-      </p>
-
-      <h2>Memberships List</h2>
-      <table id="memberships_table">
-        <thead>
-          <tr>
-            <th>User ID</th>
-            <th>Identifier</th>
-            <th>Role</th>
-            <th id="update-role-head" hidden>Update role</th>
-            <th id="remove-member-head" hidden>Remove member</th>
-          </tr>
-        </thead>
-        <tbody id="memberships_table_body"></tbody>
-      </table>
-
-      <div id="add-member-container">
-        <h2>Add member</h2>
-        <input id="member-user-id" placeholder="Enter member's user ID" />
-        <button id="add-member">Add member</button>
-      </div>
-
-      <h2>Response:</p>
-      <pre id="response"></pre>
-
-      <!-- Initialize Clerk with your
-      Clerk Publishable key and Frontend API URL -->
-      <script
-        async
-        crossorigin="anonymous"
-        data-clerk-publishable-key="{{pub_key}}"
-        src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-        type="text/javascript"
-      ></script>
-
-      <script>
-        window.addEventListener("load", async function () {
-          await Clerk.load();
-
-          if (Clerk.user) {
-            // Check for an active organization
-            if (Clerk.organization) {
-              // Render list of organization memberships
-              async function renderMemberships(organization, isAdmin) {
-                try {
-                  const { data } = await organization.getMemberships();
-
-                  const memberships = data;
-                  console.log(`getMemberships:`, memberships);
-
-                  memberships.map((membership) => {
-                    const membershipTable = document.getElementById("memberships_table");
-                    const row = membershipTable.insertRow();
-                    row.insertCell().textContent = membership.publicUserData.userId;
-                    row.insertCell().textContent = membership.publicUserData.identifier;
-                    row.insertCell().textContent = membership.role;
-
-                    // Add administrative actions:
-                    // Add and remove a member, and update a member's role.
-                    if (isAdmin) {
-                      // Show add, update, remove member buttons
-                      document.getElementById("add-member-container").removeAttribute("hidden");
-                      document.getElementById("update-role-head").removeAttribute("hidden");
-                      document.getElementById("remove-member-head").removeAttribute("hidden");
-
-                      // Get the user ID of the member
-                      const userId = membership.publicUserData.userId;
-
-                      // Update a member's role
-                      const updateBtn = document.createElement("button");
-                      updateBtn.textContent = "Change role";
-                      updateBtn.addEventListener("click", async function (e) {
-                        e.preventDefault();
-                        const role =
-                          membership.role === "org:admin" ? "org:member" : "org:admin";
-                        await organization.updateMember({ userId, role })
-                          .then((res) => {
-                            document.getElementById("response").innerHTML =
-                              JSON.stringify(res);
-                          })
-                          .catch((error) => {
-                            document.getElementById("error-container").removeAttribute("hidden");
-                            document.getElementById("error-message").innerHTML =
-                              error.errors[0].longMessage;
-                            console.log("An error occurred:", error.errors);
-                          });
-                      });
-                      row.insertCell().appendChild(updateBtn);
-
-                      // Remove a member
-                      const removeBtn = document.createElement("button");
-                      removeBtn.textContent = "Remove";
-                      removeBtn.addEventListener("click", async function (e) {
-                        e.preventDefault();
-                        await organization.removeMember(userId)
-                          .then((res) => {
-                            document.getElementById("response").innerHTML =
-                              JSON.stringify(res);
-                          })
-                          .catch((error) => {
-                            document.getElementById("error-container").removeAttribute("hidden");
-                            document.getElementById("error-message").innerHTML =
-                              error.errors[0].longMessage;
-                            console.log("An error occurred:", error.errors);
-                          });
-                      });
-                      row.insertCell().appendChild(removeBtn);
-
-                      // Add a new member to the organization
-                      document.getElementById("add-member")
-                        .addEventListener("click", () => {
-                          const userId = document.getElementById("member-user-id").value;
-
-                          organization.addMember({ userId, role: "org:member" })
-                          .then((res) => {
-                            document.getElementById("response").innerHTML =
-                              JSON.stringify(res);
-                          })
-                          .catch((error) => {
-                            document.getElementById("error-container").removeAttribute("hidden");
-                            document.getElementById("error-message").innerHTML =
-                              error.errors[0].longMessage;
-                            console.log("An error occurred:", error.errors);
-                          });
-                        });
                     }
-                  });
-                } catch (error) {
-                  document.getElementById("error-container").removeAttribute("hidden");
-                  document.getElementById("error-message").innerHTML =
-                    error.errors[0].longMessage;
-                  console.log("An error occurred:", error.errors);
+                  }
+
+                  /**
+                  * Checks if a user is an admin of the
+                  * currently active organization and
+                  * renders the organization's memberships.
+                  */
+                  async function checkAdminAndRenderMemberships() {
+                    const organizationId = Clerk.organization.id;
+
+                    const { data } =
+                      await Clerk.user.getOrganizationMemberships();
+
+                    const organizationMemberships = data;
+
+                    const currentMembership = organizationMemberships.find(
+                      (membership) => membership.organization.id === organizationId
+                    );
+                    const currentOrganization = currentMembership.organization;
+
+                    if (!currentOrganization) {
+                      return;
+                    }
+                    const isAdmin = currentMembership.role === "org:admin";
+
+                    console.log(`Organization:`, currentOrganization);
+
+                    renderMemberships(currentOrganization, isAdmin);
+                  }
+
+                  checkAdminAndRenderMemberships();
+                } else {
+                  // If there is no active organization,
+                  // mount Clerk's <OrganizationSwitcher />
+                  // to allow the user to set an organization as active
+                  document.getElementById("app").innerHTML = `
+                    <h2>Select an organization to set it as active</h2>
+                    <div id="org-switcher"></div>
+                  `;
+
+                  const orgSwitcherDiv = document.getElementById("org-switcher");
+
+                  Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
                 }
+              } else {
+                document.getElementById("app").innerHTML = `
+                  <div id="sign-in"></div>
+                `;
+
+                const signInDiv = document.getElementById("sign-in");
+
+                Clerk.mountSignIn(signInDiv);
               }
-
-              /**
-              * Checks if a user is an admin of the
-              * currently active organization and
-              * renders the organization's memberships.
-              */
-              async function checkAdminAndRenderMemberships() {
-                const organizationId = Clerk.organization.id;
-
-                const { data } =
-                  await Clerk.user.getOrganizationMemberships();
-
-                const organizationMemberships = data;
-
-                const currentMembership = organizationMemberships.find(
-                  (membership) => membership.organization.id === organizationId
-                );
-                const currentOrganization = currentMembership.organization;
-
-                if (!currentOrganization) {
-                  return;
-                }
-                const isAdmin = currentMembership.role === "org:admin";
-
-                console.log(`Organization:`, currentOrganization);
-
-                renderMemberships(currentOrganization, isAdmin);
-              }
-
-              checkAdminAndRenderMemberships();
-            } else {
-              // If there is no active organization,
-              // mount Clerk's <OrganizationSwitcher />
-              // to allow the user to set an organization as active
-              document.getElementById("app").innerHTML = `
-                <h2>Select an organization to set it as active</h2>
-                <div id="org-switcher"></div>
-              `;
-
-              const orgSwitcherDiv = document.getElementById("org-switcher");
-
-              Clerk.mountOrganizationSwitcher(orgSwitcherDiv);
-            }
-          } else {
-            document.getElementById("app").innerHTML = `
-              <div id="sign-in"></div>
-            `;
-
-            const signInDiv = document.getElementById("sign-in");
-
-            Clerk.mountSignIn(signInDiv);
-          }
-        });
-      </script>
-    </body>
-  </html>
-  ```
-  </Tab>
-</Tabs>
-
+            });
+          </script>
+        </body>
+      </html>
+      ```
+    </Tab>
+  </Tabs>
 </InjectKeys>
 
 [pag-ref]: /docs/references/javascript/types/clerk-paginated-response
+
 [org-mem-ref]: /docs/references/javascript/organization-membership

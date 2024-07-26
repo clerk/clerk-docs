@@ -6,119 +6,111 @@ description: Learn how to integrate Ruby into your Clerk application.
 # Clerk Ruby SDK
 
 <Steps>
+  ### Create a Clerk application
 
-### Create a Clerk application 
+  You need to create a Clerk application in your Clerk Dashboard before you can set up Clerk Ruby. For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
 
-You need to create a Clerk application in your Clerk Dashboard before you can set up Clerk Ruby. For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
+  ### Install Ruby
 
-### Install Ruby
+  Once a Clerk application has been created, you can install and then start using Clerk Ruby in your application.
 
-Once a Clerk application has been created, you can install and then start using Clerk Ruby in your application.
+  Add this line to your application's Gemfile.
 
-Add this line to your application's Gemfile.
+  ```ruby {{ prettier: false }}
+  gem 'clerk-sdk-ruby', require: "clerk"
+  ```
 
-```ruby
-gem 'clerk-sdk-ruby', require: "clerk"
-```
+  And then execute:
 
-And then execute:
+  ```sh {{ prettier: false, filename: 'terminal' }}
+  $ bundle install
+  ```
 
-```sh filename="terminal"
-$ bundle install
-```
+  Or install it yourself as:
 
-Or install it yourself as:
+  ```sh {{ prettier: false, filename: 'terminal' }}
+  $ gem install clerk-sdk-ruby
+  ```
 
-```sh filename="terminal"
-$ gem install clerk-sdk-ruby
-```
+  ### Instantiate a `Clerk::SDK` instance
 
-### Instantiate a `Clerk::SDK` instance
+  To access all [Backend API endpoints](https://clerk.com/docs/reference/backend-api), you need to instantiate a `Clerk::SDK` instance.
 
-To access all [Backend API endpoints](https://clerk.com/docs/reference/backend-api), you need to instantiate a `Clerk::SDK` instance.
+  You will need your Clerk secret key to instantiate an instance. Go to the Clerk Dashboard and navigate to the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page and copy your secret key.
 
-You will need your Clerk secret key to instantiate an instance. Go to the Clerk Dashboard and navigate to the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page and copy your secret key.
+  This examples shows how to instantiate an instance of `Clerk::SDK` with your secret key and then send your first user a welcome email.
 
-This examples shows how to instantiate an instance of `Clerk::SDK` with your secret key and then send your first user a welcome email.
+  <InjectKeys>
+    ```ruby {{ prettier: false }}
+    clerk = Clerk::SDK.new(api_key: `{{secret}}`)
 
-<InjectKeys>
+    # List all users
+    clerk.users.all
 
-```ruby
-clerk = Clerk::SDK.new(api_key: `{{secret}}`)
+    # Get your first user
+    user = clerk.users.all(limit: 1).first
 
-# List all users
-clerk.users.all
+    # Extract their primary email address ID
+    email_id = user["primary_email_address_id"]
 
-# Get your first user
-user = clerk.users.all(limit: 1).first
+    # Send them a welcome email
+    clerk.emails.create(
+        email_address_id: email_id,
+        from_email_name: "welcome",
+        subject: "Welcome to MyApp",
+        body: "Welcome to MyApp, #{user["first_name"]}",
+    )
+    ```
+  </InjectKeys>
 
-# Extract their primary email address ID
-email_id = user["primary_email_address_id"]
+  ### Configuration
 
-# Send them a welcome email
-clerk.emails.create(
-    email_address_id: email_id,
-    from_email_name: "welcome",
-    subject: "Welcome to MyApp",
-    body: "Welcome to MyApp, #{user["first_name"]}",
-)
-```
+  The SDK can be configured in three ways: environment variables, configuration singleton and constructor arguments. The priority goes like this:
 
-</InjectKeys>
+  - Constructor arguments
+  - Configuration object
+  - Environment variables
 
-### Configuration
+  #### Constructor arguments
 
-The SDK can be configured in three ways: environment variables, configuration singleton and constructor arguments. The priority goes like this:
+  You can customize each instance of the `Clerk::SDK` object by passing keyword arguments to the constructor:
 
-- Constructor arguments
-- Configuration object
-- Environment variables
+  <InjectKeys>
+    ```ruby {{ prettier: false }}
+    clerk = Clerk::SDK.new(
+        api_key: `{{secret}}`,
+        base_url: "Y",
+        logger: Logger.new()
+    )
+    ```
+  </InjectKeys>
 
-#### Constructor arguments
+  #### Configuration object
 
-You can customize each instance of the `Clerk::SDK` object by passing keyword arguments to the constructor:
+  If an argument is not provided, the configuration object is looked up, which falls back to the associated environment variable. Here's an example with all supported configuration settings their environment variable equivalents:
 
-<InjectKeys>
+  <InjectKeys>
+    ```ruby {{ prettier: false }}
+    Clerk.configure do |c|
+      c.api_key = `{{secret}}` # if omitted: ENV["CLERK_SECRET_KEY"] - API calls will fail if unset
+      c.base_url = "https://..." # if omitted: "https://api.clerk.com/v1/"
+      c.logger = Logger.new(STDOUT) # if omitted, no logging
+      c.middleware_cache_store = Rails.cache # if omitted: no caching
+    end
+    ```
+  </InjectKeys>
 
-```ruby
-clerk = Clerk::SDK.new(
-    api_key: `{{secret}}`,
-    base_url: "Y",
-    logger: Logger.new()
-)
-```
+  Refer to the [Faraday documentation](https://lostisland.github.io/faraday/#/) for details.
 
-</InjectKeys>
+  #### Environment variables
 
-#### Configuration object
+  Here's a list of all environment variables the SDK uses:
 
-If an argument is not provided, the configuration object is looked up, which falls back to the associated environment variable. Here's an example with all supported configuration settings their environment variable equivalents:
-
-<InjectKeys>
-
-```ruby
-Clerk.configure do |c|
-  c.api_key = `{{secret}}` # if omitted: ENV["CLERK_SECRET_KEY"] - API calls will fail if unset
-  c.base_url = "https://..." # if omitted: "https://api.clerk.com/v1/"
-  c.logger = Logger.new(STDOUT) # if omitted, no logging
-  c.middleware_cache_store = Rails.cache # if omitted: no caching
-end
-```
-
-</InjectKeys>
-
-Refer to the [Faraday documentation](https://lostisland.github.io/faraday/#/) for details.
-
-#### Environment variables
-
-Here's a list of all environment variables the SDK uses:
-
-| Variable name | Usage |
-| --- | --- |
-| `CLERK_API_BASE` | Overrides the default API base URL: `https://api.clerk.com/v1/` |
-| `CLERK_SECRET_KEY` | The Secret key of your instance (required) |
-| `CLERK_SIGN_IN_URL` | Rails view helper: `clerk_sign_in_url` |
-| `CLERK_SIGN_IN_UP` | Rails view helper: `clerk_sign_up_url` |
-| `CLERK_USER_PROFILE_URL` | Rails view helper: `clerk_user_profile_url` |
-
+  | Variable name | Usage |
+  | - | - |
+  | `CLERK_API_BASE` | Overrides the default API base URL: `https://api.clerk.com/v1/` |
+  | `CLERK_SECRET_KEY` | The Secret key of your instance (required) |
+  | `CLERK_SIGN_IN_URL` | Rails view helper: `clerk_sign_in_url` |
+  | `CLERK_SIGN_IN_UP` | Rails view helper: `clerk_sign_up_url` |
+  | `CLERK_USER_PROFILE_URL` | Rails view helper: `clerk_user_profile_url` |
 </Steps>

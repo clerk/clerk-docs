@@ -15,11 +15,6 @@ description: Add authentication and user management to your iOS app with Clerk.
       title: "Set up a Clerk application",
       link: "https://clerk.com/docs/quickstarts/setup-clerk",
       icon: "clerk",
-    },
-    {
-        title: "Install Xcode",
-        link: "https://developer.apple.com/xcode/",
-        icon: "apple"
     }
   ]}
 >
@@ -69,7 +64,7 @@ description: Add authentication and user management to your iOS app with Clerk.
 
   ### Conditionally render content
 
-  Open your `ContentView.swift` file.
+  Open your `ContentView` file.
 
   - Import the ClerkSDK.
   - Add a new variable `clerk` marked with the `@ObservedObject` property wrapper.
@@ -84,10 +79,14 @@ description: Add authentication and user management to your iOS app with Clerk.
 
       var body: some View {
           VStack {
-              if let user = clerk.user {
-                  Text("Hello, \(user.id)")
+              if clerk.loadingState == .notLoaded {
+                  ProgressView()
               } else {
-                  Text("You are signed out.")
+                  if let user = clerk.user {
+                      Text("Hello, \(user.id)")
+                  } else {
+                      Text("You are signed out.")
+                  }
               }
           }
       }
@@ -96,9 +95,9 @@ description: Add authentication and user management to your iOS app with Clerk.
 
   ### Create views for sign up and sign in
 
-  #### Sign Up View
+  #### `SignUpView`
 
-  The following example creates a sign-up view that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
+  The following example creates a `SignUpView` that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
 
   ```swift {{ filename: 'SignUpView.swift' }}
   import SwiftUI
@@ -112,8 +111,9 @@ description: Add authentication and user management to your iOS app with Clerk.
     
     var body: some View {
         VStack {
+            Text("Sign Up")
             if isVerifying {
-                TextField("Code", text: $email)
+                TextField("Code", text: $code)
                 Button("Verify") {
                     Task { await verify(code: code) }
                 }
@@ -138,6 +138,8 @@ description: Add authentication and user management to your iOS app with Clerk.
             )
             
             try await signUp.prepareVerification(strategy: .emailCode)
+
+            isVerifying = true
         } catch {
             dump(error)
         }
@@ -156,6 +158,139 @@ description: Add authentication and user management to your iOS app with Clerk.
         }
     }
     
+  }
+  ```
+
+  #### `SignInView`
+
+  The following example creates a `SignInView` that allows users to sign in using email address and password.
+
+  ```swift {{ filename: 'SignInView.swift' }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct SignInView: View {
+      @State private var email = ""
+      @State private var password = ""
+      
+      var body: some View {
+          VStack {
+              Text("Sign In")
+              TextField("Email", text: $email)
+              SecureField("Password", text: $password)
+              Button("Continue") {
+                  Task { await submit(email: email, password: password) }
+              }
+          }
+          .padding()
+      }
+  }
+
+  extension SignInView {
+      
+      func submit(email: String, password: String) async {
+          do {
+              try await SignIn.create(
+                  strategy: .identifier(email, password: password)
+              )
+          } catch {
+              dump(error)
+          }
+      }
+      
+  }
+  ```
+
+  #### `SignUpOrSignInView`
+
+  Finally, let's create a `SignUpOrSignInView` container view that allows users to switch between sign up and sign in.
+
+  ```swift {{ filename: 'SignUporSignInView.swift' }}
+  import SwiftUI
+
+  struct SignUpOrSignInView: View {
+      @State private var isSignUp = true
+      
+      var body: some View {
+          ScrollView {
+              if isSignUp {
+                  SignUpView()
+              } else {
+                  SignInView()
+              }
+              
+              Button {
+                  isSignUp.toggle()
+              } label: {
+                  if isSignUp {
+                      Text("Already have an account? Sign In")
+                  } else {
+                      Text("Don't have an account? Sign Up")
+                  }
+              }
+              .padding()
+          }
+      }
+  }
+  ```
+
+  ### Allow users to sign up or sign in
+
+  Now go back to your `ContentView` and render your newly created `SignUpOrSignInView` when the user isn't signed in.
+
+  ```swift {{ filename: 'ContentView.swift', mark: [15] }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct ContentView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+        VStack {
+            if clerk.loadingState == .notLoaded {
+                ProgressView()
+            } else {
+                if let user = clerk.user {
+                    Text("Hello, \(user.id)")
+                } else {
+                    SignUpOrSignInView()
+                }
+            }
+        }
+    }
+  }
+  ```
+
+  ### Allow users to sign out
+
+  Next, we'll provide users with a way to sign out of your app.
+
+  - Open your `ContentView`
+  - Add the below sign out button so that users can end their session.
+
+  ```swift {{ filename: 'ContentView.swift', mark: [[14, 16]] }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct ContentView: View {
+      @ObservedObject private var clerk = Clerk.shared
+      
+      var body: some View {
+          VStack {
+              if clerk.loadingState == .notLoaded {
+                  ProgressView()
+              } else {
+                  if let user = clerk.user {
+                      Text("Hello, \(user.id)")
+                      Button("Sign Out") {
+                          Task { try? await clerk.signOut() }
+                      }
+                  } else {
+                      SignUpOrSignInView()
+                  }
+              }
+          }
+    }
   }
   ```
 </Steps>

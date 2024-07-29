@@ -40,22 +40,32 @@ description: Add authentication and user management to your iOS app with Clerk.
   Inside your new project in Xcode, open your `@main` app file.
 
   - Import the ClerkSDK.
-  - Attach a task modifier to `ContentView`. In the body of the task, add the following lines to configure `Clerk` with your publishable key and then load `Clerk`.
+  - Add a new variable `clerk` marked with the `@ObservedObject` property wrapper.
+  - Replace `ContentView()` with the below.
+  - Inside the body of the task, you will configure `Clerk` with your publishable key, and then load `Clerk`.
 
   <InjectKeys>
-    ```swift {{ filename: 'ClerkQuickstartApp.swift' }}
+    ```swift {{ filename: 'ClerkQuickstartApp.swift', mark: [2, 6, [10, 20]] }}
     import SwiftUI
     import ClerkSDK
 
     @main
     struct ClerkQuickstartApp: App {
+        @ObservedObject private var clerk = Clerk.shared
+
         var body: some Scene {
             WindowGroup {
-                ContentView()
-                    .task {
-                        Clerk.shared.configure(publishableKey: {{pub_key}})
-                        try? await Clerk.shared.load()
+                ZStack {
+                    if clerk.loadingState == .notLoaded {
+                        ProgressView()
+                    } else {
+                        ContentView()
                     }
+                }
+                .task {
+                    clerk.configure(publishableKey: "pk_test_YW11c2luZy1iYXJuYWNsZS0yNi5jbGVyay5hY2NvdW50cy5kZXYk")
+                    try? await clerk.load()
+                }
             }
         }
     }
@@ -70,7 +80,7 @@ description: Add authentication and user management to your iOS app with Clerk.
   - Add a new variable `clerk` marked with the `@ObservedObject` property wrapper.
   - Replace the content of the view body with the below.
 
-  ```swift {{ filename: 'ContentView.swift' }}
+  ```swift {{ filename: 'ContentView.swift', mark: [2, 5, [8, 14]] }}
   import SwiftUI
   import ClerkSDK
 
@@ -79,14 +89,10 @@ description: Add authentication and user management to your iOS app with Clerk.
 
       var body: some View {
           VStack {
-              if clerk.loadingState == .notLoaded {
-                  ProgressView()
+              if let user = clerk.user {
+                  Text("Hello, \(user.id)")
               } else {
-                  if let user = clerk.user {
-                      Text("Hello, \(user.id)")
-                  } else {
-                      Text("You are signed out.")
-                  }
+                  Text("You are signed out")
               }
           }
       }
@@ -238,7 +244,7 @@ description: Add authentication and user management to your iOS app with Clerk.
 
   Now go back to your `ContentView` and render your newly created `SignUpOrSignInView` when the user isn't signed in.
 
-  ```swift {{ filename: 'ContentView.swift', mark: [15] }}
+  ```swift {{ filename: 'ContentView.swift', mark: [12] }}
   import SwiftUI
   import ClerkSDK
 
@@ -247,14 +253,10 @@ description: Add authentication and user management to your iOS app with Clerk.
     
     var body: some View {
         VStack {
-            if clerk.loadingState == .notLoaded {
-                ProgressView()
+            if let user = clerk.user {
+                Text("Hello, \(user.id)")
             } else {
-                if let user = clerk.user {
-                    Text("Hello, \(user.id)")
-                } else {
-                    SignUpOrSignInView()
-                }
+                SignUpOrSignInView()
             }
         }
     }
@@ -268,7 +270,7 @@ description: Add authentication and user management to your iOS app with Clerk.
   - Open your `ContentView`
   - Add the below sign out button so that users can end their session.
 
-  ```swift {{ filename: 'ContentView.swift', mark: [[14, 16]] }}
+  ```swift {{ filename: 'ContentView.swift', mark: [[11, 13]] }}
   import SwiftUI
   import ClerkSDK
 
@@ -277,20 +279,16 @@ description: Add authentication and user management to your iOS app with Clerk.
       
       var body: some View {
           VStack {
-              if clerk.loadingState == .notLoaded {
-                  ProgressView()
-              } else {
-                  if let user = clerk.user {
-                      Text("Hello, \(user.id)")
-                      Button("Sign Out") {
-                          Task { try? await clerk.signOut() }
-                      }
-                  } else {
-                      SignUpOrSignInView()
-                  }
-              }
-          }
-    }
+            if let user = clerk.user {
+                Text("Hello, \(user.id)")
+                Button("Sign Out") {
+                    Task { try? await clerk.signOut() }
+                }
+            } else {
+                SignUpOrSignInView()
+            }
+        }
+      }
   }
   ```
 </Steps>

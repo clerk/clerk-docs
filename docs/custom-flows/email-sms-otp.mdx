@@ -5,9 +5,8 @@ description: Learn how build a custom email or SMS one time code (OTP) authentic
 
 # Build a custom email or SMS OTP authentication flow
 
-<Callout type="warning">
-  This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with one-time passwords using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
-</Callout>
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with one-time passwords using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
 Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a one-time password (OTP), also known as a one-time code, via email or SMS, which they can use to authenticate themselves.
 
@@ -35,7 +34,7 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
   1. Attempt to complete the verification by supplying the one-time code.
   1. If the verification is successful, set the newly created session as the active session.
 
-  <Tabs type="framework" items={["Next.js", "JavaScript"]}>
+  <Tabs type="framework" items={["Next.js", "JavaScript", "iOS (Beta)"]}>
     <Tab>
       This example is written for Next.js App Router but can be adapted to any React meta framework, such as Remix or Gatsby.
 
@@ -359,6 +358,78 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
         </Tabs>
       </InjectKeys>
     </Tab>
+
+    <Tab>
+      ```swift {{ filename: 'SMSOTPSignUpView.swift' }}
+      import SwiftUI
+      import ClerkSDK
+
+      struct SMSOTPSignUpView: View {
+          @State private var phoneNumber = ""
+          @State private var code = ""
+          @State private var isVerifying = false
+          
+          var body: some View {
+              if isVerifying {
+                  TextField("Enter your verification code", text: $code)
+                  Button("Verify") {
+                      Task { await verify(code: code) }
+                  }
+              } else {
+                  TextField("Enter phone number", text: $phoneNumber)
+                  Button("Continue") {
+                      Task { await submit(phoneNumber: phoneNumber) }
+                  }
+              }
+          }
+      }
+
+      extension SMSOTPSignUpView {
+          
+          func submit(phoneNumber: String) async {
+              do {
+                  // Start the sign-up process using the phone number method.
+                  let signUp = try await SignUp.create(strategy: .standard(phoneNumber: phoneNumber))
+                  
+                  // Start the verification - a SMS message will be sent to the
+                  // number with a one-time code.
+                  try await signUp.prepareVerification(strategy: .phoneCode)
+                  
+                  // Set isVerifying to true to display second form and capture the OTP code.
+                  isVerifying = true
+              } catch {
+                  // See https://clerk.com/docs/custom-flows/error-handling
+                  // for more info on error handling
+                  dump(error)
+              }
+          }
+          
+          func verify(code: String) async {
+              do {
+                  // Access the in progress sign up stored on the client object.
+                  guard let inProgressSignUp = Clerk.shared.client?.signUp else { return }
+                  
+                  // Use the code provided by the user and attempt verification.
+                  let signUp = try await inProgressSignUp.attemptVerification(.phoneCode(code: code))
+                  
+                  switch signUp.status {
+                  case .complete:
+                      // If verification was completed, navigate the user as needed.
+                      dump(Clerk.shared.session)
+                  default:
+                      // If the status is not complete, check why. User may need to
+                      // complete further steps.
+                      dump(signUp.status)
+                  }
+              } catch {
+                  // See https://clerk.com/docs/custom-flows/error-handling
+                  // for more info on error handling
+                  dump(error)
+              }
+          }
+      }
+      ```
+    </Tab>
   </Tabs>
 
   To create a sign-up flow for email OTP, you can use the [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up/email-verification#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the above example. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in/sign-in) object documentation.
@@ -372,7 +443,7 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
   1. Attempt to complete the first factor verification.
   1. If the verification is successful, set the newly created session as the active session.
 
-  <Tabs type="framework" items={["Next.js","JavaScript"]}>
+  <Tabs type="framework" items={["Next.js","JavaScript", "iOS (Beta)"]}>
     <Tab>
       This example is written for Next.js App Router but can be adapted to any React meta framework, such as Remix or Gatsby.
 
@@ -750,6 +821,78 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
           </Tab>
         </Tabs>
       </InjectKeys>
+    </Tab>
+
+    <Tab>
+      ```swift {{ filename: 'SMSOTPSignInView.swift' }}
+      import SwiftUI
+      import ClerkSDK
+
+      struct SMSOTPSignInView: View {
+          @State private var phoneNumber = ""
+          @State private var code = ""
+          @State private var isVerifying = false
+          
+          var body: some View {
+              if isVerifying {
+                  TextField("Enter your verification code", text: $code)
+                  Button("Verify") {
+                      Task { await verify(code: code) }
+                  }
+              } else {
+                  TextField("Enter phone number", text: $phoneNumber)
+                  Button("Continue") {
+                      Task { await submit(phoneNumber: phoneNumber) }
+                  }
+              }
+          }
+      }
+
+      extension SMSOTPSignInView {
+          
+          func submit(phoneNumber: String) async {
+              do {
+                  // Start the sign-in process using the phone number method.
+                  let signIn = try await SignIn.create(strategy: .identifier(phoneNumber))
+                  
+                  // Send the OTP code to the user.
+                  try await signIn.prepareFirstFactor(for: .phoneCode)
+                  
+                  // Set isVerifying to true to display second form
+                  // and capture the OTP code.
+                  isVerifying = true
+              } catch {
+                  // See https://clerk.com/docs/custom-flows/error-handling
+                  // for more info on error handling
+                  dump(error)
+              }
+          }
+          
+          func verify(code: String) async {
+              do {
+                  // Access the in progress sign in stored on the client object.
+                  guard let inProgressSignIn = Clerk.shared.client?.signIn else { return }
+                  
+                  // Use the code provided by the user and attempt verification.
+                  let signIn = try await inProgressSignIn.attemptFirstFactor(for: .phoneCode(code: code))
+                  
+                  switch signIn.status {
+                  case .complete:
+                      // If verification was completed, navigate the user as needed.
+                      dump(Clerk.shared.session)
+                  default:
+                      // If the status is not complete, check why. User may need to
+                      // complete further steps.
+                      dump(signIn.status)
+                  }
+              } catch {
+                  // See https://clerk.com/docs/custom-flows/error-handling
+                  // for more info on error handling
+                  dump(error)
+              }
+          }
+      }
+      ```
     </Tab>
   </Tabs>
 

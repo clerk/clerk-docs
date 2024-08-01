@@ -7,22 +7,27 @@ description: Learn how to use Clerk with Server Actions.
 
 Clerk provides helpers to allow you to protect your Server Actions, fetch the current user, and interact with the Clerk API.
 
-Below are some examples of usage both in Server Components or Client Components.
+The following guide provides examples for using Server Actions in Server Components and in Client Components.
 
-## With server components
+## With Server Components
 
-### Protect your actions
+### Protect your Server Actions
 
-```tsx filename="actions.ts"
+You can use the [`auth()`](/docs/references/nextjs/auth) helper to protect your server actions. This helper will return the current user's ID if they are signed in, or `null` if they are not.
+
+```tsx {{ prettier: false, filename: 'actions.ts' }}
 import { auth } from '@clerk/nextjs/server';
 
 export default function AddToCart() {
   async function addItem(formData: FormData) {
     'use server';
+
     const { userId } = auth();
+
     if (!userId) {
       throw new Error('You must be signed in to add an item to your cart');
     }
+
     console.log('add item server action', formData);
   }
 
@@ -41,14 +46,15 @@ export default function AddToCart() {
 
 ### Accessing the current user
 
-Current user data is important for data enrichment. You can use the [`currentUser()`](/docs/references/nextjs/current-user) helper to achieve this.
+Current user data is important for data enrichment. You can use the [`currentUser()`](/docs/references/nextjs/current-user) helper to fetch the current user's data in your server actions.
 
-```tsx filename="app/page.tsx"
+```tsx {{ prettier: false, filename: 'app/page.tsx' }}
 import { currentUser } from '@clerk/nextjs/server';
 
 export default function AddHobby() {
   async function addHobby(formData: FormData) {
     'use server';
+
     const user = await currentUser();
 
     if (!user) {
@@ -79,111 +85,107 @@ export default function AddHobby() {
 
 ## With Client Components
 
-When using Client Components, you need to make sure you use prop drilling to ensure that headers are available.
+When using Server Actions in Client Components, you need to make sure you use prop drilling to ensure that headers are available.
 
 ### Protect your Server Actions
 
-#### Server Action code
+Use the following tabs to see an example of how to protect a Server Action that is used in a Client Component.
 
-```tsx filename="actions.ts"
-'use server'
-import { auth } from '@clerk/nextjs/server';
+<CodeBlockTabs options={["Server Action", "Client Component", "Page"]}>
+  ```tsx {{ prettier: false, filename: 'app/actions.ts' }}
+  'use server'
+  import { auth } from '@clerk/nextjs/server';
 
-export async function addItem(formData: FormData) {
-  const { userId } = auth();
+  export async function addItem(formData: FormData) {
+    const { userId } = auth();
 
-  if (!userId) {
-    throw new Error('You must be signed in to add an item to your cart');
+    if (!userId) {
+      throw new Error('You must be signed in to add an item to your cart');
+    }
+
+    console.log('add item server action', formData);
   }
+  ```
 
-  console.log('add item server action', formData);
-}
-```
+  ```tsx {{ prettier: false, filename: 'app/components/AddItem.tsx' }}
+  'use client'
 
-#### Server page
+  export default function AddItem({ addItem }) {
+    return (
+      <form action={addItem}>
+        <input
+          value={'test'}
+          type='text'
+          name='name'
+        />
+        <button type='submit'>Add to Cart</button>
+      </form>
+    )
+  }
+  ```
 
-```tsx filename="page.tsx"
-import UI from "./UI";
-import { addItem } from "./actions"
-export default function Hobby() {
-  return (
-    <UI addItem={addItem} />
-  );
-}
-```
-
-#### Client Component
-
-```tsx filename="ui.tsx"
-"use client"
-
-export default function UI({ addItem }) {
-  return (
-    <form action={addItem}>
-      <input
-        value={'test'}
-        type='text'
-        name='name'
-      />
-      <button type='submit'>Add to Cart</button>
-    </form>
-  )
-}
-```
+  ```tsx {{ prettier: false, filename: 'app/page.tsx' }}
+  import AddItem from "./components/AddItem";
+  import { addItem } from "./actions"
+  export default function Hobby() {
+    return (
+      <AddItem addItem={addItem} />
+    );
+  }
+  ```
+</CodeBlockTabs>
 
 ### Accessing the current user
 
-#### Server Action Code
+Use the following tabs to see an example of how to access the current user in a Server Action that is used in a Client Component.
 
-```tsx filename="actions.ts"
-'use server'
-import { currentUser } from "@clerk/nextjs/server";
+<CodeBlockTabs options={["Server Action", "Client Component", "Page"]}>
+  ```tsx {{ prettier: false, filename: 'app/actions.ts' }}
+  'use server'
+  import { currentUser } from "@clerk/nextjs/server";
 
-export async function addHobby(formData: FormData) {
-  const user = await currentUser();
+  export async function addHobby(formData: FormData) {
+    const user = await currentUser();
 
-  if (!user) {
-    throw new Error('You must be signed in to use this feature');
+    if (!user) {
+      throw new Error('You must be signed in to use this feature');
+    }
+
+    const serverData = {
+      usersHobby: formData.get("hobby"),
+      userId: user.id,
+      profileImage: user.imageUrl
+    };
+
+    console.log('add Hobby completed with user details ', serverData);
   }
+  ```
 
-  const serverData = {
-    usersHobby: formData.get("hobby"),
-    userId: user.id,
-    profileImage: user.imageUrl
-  };
+  ```tsx {{ prettier: false, filename: 'app/components/AddHobby.tsx' }}
+  "use client"
 
-  console.log('add Hobby completed with user details ', serverData);
-}
-```
+  export default function UI({ addHobby }) {
 
-#### Server Page
+    return (
+      <form action={addHobby}>
+        <input
+          value={'soccer'}
+          type='text'
+          name='hobby'
+        />
+        <button type='submit'>Submit your hobby</button>
+      </form>
+    )
+  }
+  ```
 
-```tsx filename="page.tsx"
-import UI from "./ui";
-import { addHobby } from "./actions"
-export default function Hobby() {
-  return (
-    <UI addHobby={addHobby} />
-  );
-}
-```
-
-#### Client Component
-
-```tsx filename="ui.tsx"
-"use client"
-
-export default function UI({ addHobby }) {
-
-  return (
-    <form action={addHobby}>
-      <input
-        value={'soccer'}
-        type='text'
-        name='hobby'
-      />
-      <button type='submit'>Submit your hobby</button>
-    </form>
-  )
-}
-```
+  ```tsx {{ prettier: false, filename: 'app/page.tsx' }}
+  import AddHobby from "./components/AddHobby";
+  import { addHobby } from "./actions"
+  export default function Hobby() {
+    return (
+      <AddHobby addHobby={addHobby} />
+    );
+  }
+  ```
+</CodeBlockTabs>

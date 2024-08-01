@@ -11,19 +11,21 @@ The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js
 
 Create a `middleware.ts` file at the root of your project, or in your `src/` directory if you have one.
 
-<Callout level="info">
-  For more information about Middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/pages/building-your-application/routing/middleware).
-</Callout>
+> [!NOTE]
+> For more information about Middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/pages/building-your-application/routing/middleware).
 
-```tsx filename="middleware.ts"
+```tsx {{ prettier: false, filename: 'middleware.ts' }}
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
 export default clerkMiddleware()
 
 export const config = {
-  // The following matcher runs middleware on all routes
-  // except static assets.
-  matcher: [ '/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };
 ```
 
@@ -37,7 +39,7 @@ The `createRouteMatcher()` helper returns a function that, if called with the `r
 
 In the following example, `createRouteMatcher()` sets all `/dashboard` and `/forum` routes as protected routes.
 
-```tsx
+```tsx {{ prettier: false }}
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
   '/forum(.*)',
@@ -47,6 +49,7 @@ const isProtectedRoute = createRouteMatcher([
 ## Protect routes
 
 You can protect routes by checking either or both of the following:
+
 - [User authentication status](#protect-routes-based-on-user-authentication-status) (user is signed in or out)
 - [User authorization status](#protect-routes-based-on-user-authorization-status) (user has the required role or permission)
 
@@ -59,46 +62,58 @@ There are two methods that you can use:
 - Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
 - Use [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
-```tsx filename="middleware.ts"
-import {
-  clerkMiddleware,
-  createRouteMatcher
-} from '@clerk/nextjs/server';
+<CodeBlockTabs options={["auth().protect()", "auth().userId()"]}>
+  ```tsx {{ prettier: false, filename: 'middleware.ts' }}
+  import {
+    clerkMiddleware,
+    createRouteMatcher
+  } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/dashboard(.*)',
-  '/forum(.*)',
-]);
+  const isProtectedRoute = createRouteMatcher([
+    '/dashboard(.*)',
+    '/forum(.*)',
+  ]);
 
-export default clerkMiddleware((auth, req) => {
-  if (isProtectedRoute(req)) auth().protect();
-});
+  export default clerkMiddleware((auth, req) => {
+    if (isProtectedRoute(req)) auth().protect();
+  });
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 
-```tsx filename="app/middleware.ts"
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+  ```tsx {{ prettier: false, filename: 'app/middleware.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/dashboard(.*)',
-  '/forum(.*)',
-]);
+  const isProtectedRoute = createRouteMatcher([
+    '/dashboard(.*)',
+    '/forum(.*)',
+  ]);
 
-export default clerkMiddleware((auth, req) => {
-  if (!auth().userId && isProtectedRoute(req)) {
+  export default clerkMiddleware((auth, req) => {
+    if (!auth().userId && isProtectedRoute(req)) {
 
-    // Add custom logic to run before redirecting
+      // Add custom logic to run before redirecting
 
-    return auth().redirectToSignIn();
-  }
-});
+      return auth().redirectToSignIn();
+    }
+  });
 
-export const config = { matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)']};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 </CodeBlockTabs>
 
 ### Protect routes based on user authorization status
@@ -111,55 +126,65 @@ There are two methods that you can use:
 - Use [`auth().has()`](/docs/references/nextjs/auth-object#has) if you want more control over what your app does based on the authorization status.
 
 <CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
-```tsx filename="middleware.ts"
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+  ```tsx {{ prettier: false, filename: 'middleware.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/admin(.*)',
-]);
+  const isProtectedRoute = createRouteMatcher([
+    '/admin(.*)',
+  ]);
 
-export default clerkMiddleware((auth, req) => {
-  // Restrict admin routes to users with specific permissions
-  if (isProtectedRoute(req)) {
-    auth().protect(has => {
-      return (
-        has({ permission: 'org:sys_memberships:manage' }) ||
-        has({ permission: 'org:sys_domains_manage' })
-      )
-    })
-  }
-});
+  export default clerkMiddleware((auth, req) => {
+    // Restrict admin routes to users with specific permissions
+    if (isProtectedRoute(req)) {
+      auth().protect(has => {
+        return (
+          has({ permission: 'org:sys_memberships:manage' }) ||
+          has({ permission: 'org:sys_domains_manage' })
+        )
+      })
+    }
+  });
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 
-```tsx filename="middleware.ts"
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+  ```tsx {{ prettier: false, filename: 'middleware.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher([
-  '/admin(.*)',
-]);
+  const isProtectedRoute = createRouteMatcher([
+    '/admin(.*)',
+  ]);
 
-export default clerkMiddleware((auth, req) => {
-  const { has, redirectToSignIn } = auth()
-  // Restrict admin routes to users with specific permissions
-  if (isProtectedRoute(req) &&
-    !has({ permission: 'org:sys_memberships:manage' }) ||
-    !has({ permission: 'org:sys_domains_manage' })
-  ){
+  export default clerkMiddleware((auth, req) => {
+    const { has, redirectToSignIn } = auth()
+    // Restrict admin routes to users with specific permissions
+    if (isProtectedRoute(req) &&
+      !has({ permission: 'org:sys_memberships:manage' }) ||
+      !has({ permission: 'org:sys_domains_manage' })
+    ){
 
-    // Add logic to run if the user does not have the required permissions
+      // Add logic to run if the user does not have the required permissions
 
-    return redirectToSignIn();
-  }
-});
+      return redirectToSignIn();
+    }
+  });
 
-export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
-};
-```
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+  ```
 </CodeBlockTabs>
 
 ## Protect multiple groups of routes
@@ -168,14 +193,14 @@ You can use more than one `createRouteMatcher()` in your application if you have
 
 The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) method from Clerk's `auth()` helper.
 
-```tsx filename="middleware.ts"
+```tsx {{ prettier: false, filename: 'middleware.ts' }}
 import {
   clerkMiddleware,
   createRouteMatcher
 } from '@clerk/nextjs/server';
 
 const isTenantRoute = createRouteMatcher([
-  '/organization-selector',
+  '/organization-selector(.*)',
   '/orgid/(.*)'
 ])
 
@@ -200,7 +225,37 @@ export default clerkMiddleware((auth, req) => {
 });
 
 export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+};
+```
+
+## Protect all routes
+
+To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
+
+```jsx {{ prettier: false, filename: 'middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
+
+export default clerkMiddleware((auth, request) => {
+  if(!isPublicRoute(request)) {
+    auth().protect();
+  }
+});
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };
 ```
 
@@ -208,7 +263,7 @@ export const config = {
 
 If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
 
-```tsx filename="middleware.ts" {5}
+```tsx {{ prettier: false, filename: 'middleware.ts', mark: [5] }}
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
 export default clerkMiddleware((auth, req) => {
@@ -216,7 +271,12 @@ export default clerkMiddleware((auth, req) => {
 }, { debug: true })
 
 export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };
 ```
 
@@ -226,7 +286,7 @@ If you would like to set up debugging for your development environment only, you
 
 You can combine other Middleware with Clerk's Middleware by returning the second Middleware from `clerkMiddleware()`.
 
-```js filename="middleware.ts"
+```js {{ prettier: false, filename: 'middleware.ts' }}
 import {
   clerkMiddleware,
   createRouteMatcher,
@@ -253,7 +313,12 @@ export default clerkMiddleware((auth, req) => {
 });
 
 export const config = {
-  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };
 ```
 
@@ -261,15 +326,36 @@ export const config = {
 
 The `clerkMiddleware()` function accepts an optional object. The following options are available:
 
-| Name                               | Type                 | Description                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `audience?`                        | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). If passed, it is checked against the `aud` claim in the token.                                                                                                                                                                                    |
-| `authorizedParties?`               | `string[]`           | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br/>For example: `['http://localhost:3000', 'https://example.com']`<br/>For more information, refer to the [reference guide](/docs/references/nodejs/token-verification#validate-the-authorized-party-of-a-session-token). |
-| `clockSkewInMs?` | `number`             | Specifies the allowed time difference (in milliseconds) between the Clerk server (which generates the token) and the clock of the user's application server when validating a token. Defaults to 5000 ms (5 seconds).                                                                                                                                                                                                                                                                                                         |
-| `domain?`                          | `string`             | The domain used for satellites to inform Clerk where this application is deployed.                                                                                                                                                                                                                                                              |
-| `isSatellite?`                     | `boolean`            | When using Clerk's satellite feature, this should be set to `true` for secondary domains.                                                                                                                                                                                                                                                             |
-| `jwtKey?`                          | `string`             | An optional [custom JWT key](/docs/references/nodejs/token-verification#networkless-token-verification-using-the-jwt-verification-key) to use for session token validation.                                                                                                                                                                     |
-| `proxyUrl?`                        | `string`             | Specify the URL of the proxy, if using a proxy.                                                                                                                                                                                                                                                                                                 |
-| `signInUrl?`                       | `string`             | An alternative sign in URL.                                                                                                                                                                                                                                                                                                                     |
-| `publishableKey` | `string` | The Clerk publishable key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.|
-| `secretKey?` | `string` | The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.  |
+| Name | Type | Description |
+| - | - | - |
+| `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). If passed, it is checked against the `aud` claim in the token. |
+| `authorizedParties?` | `string[]` | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br />For example: `['http://localhost:3000', 'https://example.com']` |
+| `clockSkewInMs?` | `number` | Specifies the allowed time difference (in milliseconds) between the Clerk server (which generates the token) and the clock of the user's application server when validating a token. Defaults to 5000 ms (5 seconds). |
+| `domain?` | `string` | The domain used for satellites to inform Clerk where this application is deployed. |
+| `isSatellite?` | `boolean` | When using Clerk's satellite feature, this should be set to `true` for secondary domains. |
+| `jwtKey` | `string` | Used to verify the session token in a networkless manner. Supply the PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. **It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables) instead.** For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt). |
+| `proxyUrl?` | `string` | Specify the URL of the proxy, if using a proxy. |
+| `signInUrl?` | `string` | An alternative sign in URL. |
+| `signUpUrl?` | `string` | An alternative sign up URL. |
+| `publishableKey` | `string` | The Clerk publishable key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. |
+| `secretKey?` | `string` | The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. The `CLERK_ENCRYPTION_KEY` environment variable must be set when providing `secretKey` as an option, refer to [Dynamic keys](#dynamic-keys). |
+
+### Dynamic keys
+
+The following options, known as "Dynamic Keys," are shared to the Next.js application server through `clerkMiddleware`, enabling access by server-side helpers like [`auth()`](/docs/references/nextjs/auth):
+
+- `signUpUrl`
+- `signInUrl`
+- `secretKey`
+- `publishableKey`
+
+Dynamic keys are encrypted and shared during request time using a [AES encryption algorithm](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). When providing a `secretKey`, the `CLERK_ENCRYPTION_KEY` environment variable is mandatory and used as the encryption key. If no `secretKey` is provided to `clerkMiddleware`, the encryption key defaults to `CLERK_SECRET_KEY`.
+
+When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-bit), pseudorandom value. You can use `openssl` to generate a key:
+
+```sh {{ prettier: false, filename: 'terminal' }}
+openssl rand --hex 32
+```
+
+> [!NOTE]
+> Dynamic keys are not accessible on the client-side.

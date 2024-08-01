@@ -1,64 +1,162 @@
 ---
-title: Bot sign-up protection on a custom flow
-description: Learn how to use the Smart Bot Protection widget in your custom sign-up flow.
+description: Learn how to add Clerk's bot protection to your custom sign-up flow.
 ---
 
-# Smart bot sign-up protection
+# Add bot protection to your custom sign-up flow
 
-<Callout type="warning">
-  The simplest way to take advantage of [Bot Protection](/docs/security/bot-protection) for your Sign ups is by using our all-in-one [`<SignUp />` component](/docs/components/authentication/sign-up). This page describes how to implement Bot Protection if you are rebuilding your Sign Up view entirely from scratch using Clerk.
-</Callout>
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To implement Clerk's [Bot Protection](/docs/security/bot-protection) feature for your sign-ups using a _prebuilt_ UI, you should use Clerk's [`<SignUp />` component](/docs/components/authentication/sign-up).
 
+Clerk provides the ability to add a CAPTCHA widget to your sign-up flows to protect against bot sign-ups. This guide will show you how to add the CAPTCHA widget to your custom sign-up flow.
 
+<Steps>
+  ### Enable bot sign-up protection
 
-If you have enabled the Smart Bot Protection widget under **User & Authentication > Attack Protection > Bot sign-up protection** in Dashboard, it's required to include a specific element in your DOM, to enable rendering of the widget.
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/attack-protection).
+  1. Go to **User & Authentication > Attack Protection** in the sidebar menu.
+  1. In the **Bot sign-up protection** section, enable the feature and choose the **CAPTCHA type** you want to use.
 
-Specifically, there should be a `<div id="clerk-captcha" />` element by the time you call `signUp.create()`. This element acts as a placeholder onto which the widget will be rendered.
+  ### Add the CAPTCHA widget to your custom sign-up form
 
-If this element is not found, the SDK will transparently fall back to the Invisible widget, in order to avoid breaking your sign-up flow. If this happens, you should see a relevant error in your browser's console.
+  To render the CAPTCHA widget in your custom sign-up form, you need to include a specific element in your DOM. Specifically, there should be a `<div id="clerk-captcha" />` element by the time you call `signUp.create()`. This element acts as a placeholder onto which the widget will be rendered.
 
-The Invisible widget is more prone to false positives, therefore we strongly recommend that you fix this error by ensuring the `<div id="clerk-captcha" />` element exists in your DOM.
+  If this element is not found, the SDK will transparently fall back to the **Invisible** widget in order to avoid breaking your sign-up flow. If this happens, you should see a relevant error in your browser's console.
 
-## Example
-```jsx
-import { useState } from "react";
-import { useSignUp } from "@clerk/nextjs";
- 
-export default function SignUpForm() {
-  const { isLoaded, signUp, setActive } = useSignUp();
-  const [emailAddress, setEmailAddress] = useState("");
-  const [password, setPassword] = useState("");
+  > [!TIP]
+  > The **Invisible** widget automatically blocks suspected bot traffic without offering users falsely detected as bots with an opportunity to prove otherwise. Therefore, it's strongly recommended that you ensure the `<div id="clerk-captcha" />` element exists in your DOM.
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await signUp.create({
-        emailAddress,
-        password,
-      });
-    } catch (err: any) {
-      console.error('sign-up error');
-    }
-  };
- 
-  return (
-    <div>
-        <form>
-            <div>
-                <label htmlFor="email">Email</label>
-                <input onChange={(e) => setEmailAddress(e.target.value)} id="email" name="email" type="email" />
-            </div>
-            <div>
-                <label htmlFor="password">Password</label>
-                <input onChange={(e) => setPassword(e.target.value)} id="password" name="password" type="password" />
-            </div>
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      The following example demonstrates how to add the CAPTCHA widget to a custom sign-up form. This example uses the [Email & password custom flow](/docs/custom-flows/email-password) but you can add the CAPTCHA widget to _any_ custom sign-up form.
 
-            {/* CAPTCHA Widget */}
-            <div id="clerk-captcha"></div>
+      ```jsx {{ prettier: false, filename: 'app/sign-up/[[...sign-up]]/page.tsx', mark: [117, 118] }}
+        'use client';
 
-            <button onClick={handleSubmit}>Sign up</button>
-        </form>
-    </div>
-  );
-}
-```
+        import * as React from 'react';
+        import { useSignUp } from '@clerk/nextjs';
+        import { useRouter } from 'next/navigation';
+
+        export default function Page() {
+          const { isLoaded, signUp, setActive } = useSignUp();
+          const [emailAddress, setEmailAddress] = React.useState('');
+          const [password, setPassword] = React.useState('');
+          const [verifying, setVerifying] = React.useState(false);
+          const [code, setCode] = React.useState('');
+          const router = useRouter();
+
+          // Handle submission of the sign-up form
+          const handleSubmit = async (e: React.FormEvent) => {
+            e.preventDefault();
+
+            if (!isLoaded) return;
+
+            // Start the sign-up process using the email and password provided
+            try {
+              await signUp.create({
+                emailAddress,
+                password,
+              });
+
+              // Send the user an email with the verification code
+              await signUp.prepareEmailAddressVerification({
+                strategy: 'email_code',
+              });
+
+              // Set 'verifying' true to display second form
+              // and capture the OTP code
+              setVerifying(true);
+            } catch (err: any) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2));
+            }
+          };
+
+          // Handle the submission of the verification form
+          const handleVerify = async (e: React.FormEvent) => {
+            e.preventDefault();
+
+            if (!isLoaded) return;
+
+            try {
+              // Use the code the user provided to attempt verification
+              const completeSignUp = await signUp.attemptEmailAddressVerification({
+                code,
+              });
+
+              // If verification was completed, set the session to active
+              // and redirect the user
+              if (completeSignUp.status === 'complete') {
+                await setActive({ session: completeSignUp.createdSessionId });
+                router.push('/');
+              } else {
+                // If the status is not complete, check why. User may need to
+                // complete further steps.
+                console.error(JSON.stringify(completeSignUp, null, 2));
+              }
+            } catch (err: any) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error('Error:', JSON.stringify(err, null, 2));
+            }
+          };
+
+          // Display the verification form to capture the OTP code
+          if (verifying) {
+            return (
+              <>
+                <h1>Verify your email</h1>
+                <form onSubmit={handleVerify}>
+                  <label id="code">Enter your verification code</label>
+                  <input
+                    value={code}
+                    id="code"
+                    name="code"
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                  <button type="submit">Verify</button>
+                </form>
+              </>
+            );
+          }
+
+          // Display the initial sign-up form to capture the email and password
+          return (
+            <>
+              <h1>Sign up</h1>
+              <form onSubmit={handleSubmit}>
+                <div>
+                  <label htmlFor="email">Enter email address</label>
+                  <input
+                    id="email"
+                    type="email"
+                    name="email"
+                    value={emailAddress}
+                    onChange={(e) => setEmailAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password">Enter password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    name="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+
+                {/* CAPTCHA Widget */}
+                <div id="clerk-captcha"></div>
+
+                <div>
+                  <button type="submit">Next</button>
+                </div>
+              </form>
+            </>
+          );
+        }
+      ```
+    </Tab>
+  </Tabs>
+</Steps>

@@ -1,0 +1,378 @@
+---
+description: Learn how to use Clerk's API to build a custom flow for managing SMS-based multi-factor authentication.
+---
+
+# Build a custom flow for managing SMS-based multi-factor authentication
+
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
+
+[Multi-factor verification (MFA)](/docs/authentication/configuration/sign-up-sign-in-options) is an added layer of security that requires users to provide a second verification factor to access an account.
+
+One of the options that Clerk supports for MFA is **SMS verification codes**. This guide will walk you through how to build a custom flow that allows users to manage their TOTP settings.
+
+> [!TIP]
+> To learn how to build a custom flow for managing authenticator app (TOTP) MFA, see the [dedicated guide](/docs/custom-flows/manage-totp-based-mfa).
+
+<Steps>
+  ### Enable multi-factor authentication
+
+  For your users to be able to enable MFA for their account, you need to enable MFA as an MFA authentication strategy in your Clerk application.
+
+  1. Navigate to the [Clerk Dashboard.](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)
+  1. In the navigation sidebar, select **User & Authentication > Multi-factor**.
+  1. Enable **SMS verification code** and **Backup codes** and select **Save**.
+
+  ### Create the multi-factor management flow
+
+  This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
+
+  This example consists of two pages:
+
+  - The main page where users can manage their SMS MFA settings.
+  - The page where users can add a phone number to their account.
+
+  Use the following tabs to view the code necessary for each page.
+
+  <Tabs items={["Manage MFA page", "Add phone number page"]}>
+    <Tab>
+      ```jsx {{ prettier: false, filename: '/app/account/manage-mfa/page.tsx' }}
+      'use client';
+
+      import * as React from 'react';
+      import { useUser } from '@clerk/nextjs';
+      import { BackupCodeResource, PhoneNumberResource } from '@clerk/types';
+      import Link from 'next/link';
+
+      // Display phone numbers reserved for MFA
+      const ManageMfaPhoneNumbers = () => {
+        const { user } = useUser();
+
+        if (!user) return null;
+
+        // Check if any phone numbers are reserved for MFA
+        const mfaPhones = user.phoneNumbers
+          .filter((ph) => ph.verification.status === 'verified')
+          .filter((ph) => ph.reservedForSecondFactor)
+          .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1));
+
+        if (mfaPhones.length === 0) {
+          return <p>There are currently no phone numbers reserved for MFA.</p>;
+        }
+
+        return (
+          <>
+            <h2>Phone numbers reserved for MFA</h2>
+            <ul>
+              {mfaPhones.map((phone) => {
+                return (
+                  <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
+                    <p>
+                      {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
+                    </p>
+                    <div>
+                      <button
+                        onClick={() =>
+                          phone.setReservedForSecondFactor({ reserved: false })
+                        }
+                      >
+                        Disable for MFA
+                      </button>
+                    </div>
+
+                    {!phone.defaultSecondFactor && (
+                      <div>
+                        <button onClick={() => phone.makeDefaultSecondFactor()}>
+                          Make default
+                        </button>
+                      </div>
+                    )}
+
+                    <div>
+                      <button onClick={() => phone.destroy()}>
+                        Remove from account
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        );
+      };
+
+      // Display phone numbers that are not reserved for MFA
+      const ManageAvailablePhoneNumbers = () => {
+        const { user } = useUser();
+
+        if (!user) return null;
+
+        // Check if any phone numbers aren't reserved for MFA
+        const availalableForMfaPhones = user.phoneNumbers
+          .filter((ph) => ph.verification.status === 'verified')
+          .filter((ph) => !ph.reservedForSecondFactor);
+
+        // Reserve a phone number for MFA
+        const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
+          // Set the phone number as reserved for MFA
+          await phone.setReservedForSecondFactor({ reserved: true });
+          // Refresh the user information to reflect changes
+          await user.reload();
+        };
+
+        if (availalableForMfaPhones.length === 0) {
+          return (
+            <p>
+              There are currently no verified phone numbers available to be reserved for
+              MFA.
+            </p>
+          );
+        }
+
+        return (
+          <>
+            <h2>Phone numbers that are not reserved for MFA</h2>
+
+            <ul>
+              {availalableForMfaPhones.map((phone) => {
+                return (
+                  <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
+                    <p>{phone.phoneNumber}</p>
+                    <div>
+                      <button onClick={() => reservePhoneForMfa(phone)}>
+                        Use for MFA
+                      </button>
+                    </div>
+                    <div>
+                      <button onClick={() => phone.destroy()}>
+                        Remove from account
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        );
+      };
+
+      // Generate and display backup codes
+      function GenerateBackupCodes() {
+        const { user } = useUser();
+        const [backupCodes, setBackupCodes] = React.useState<
+          BackupCodeResource | undefined
+        >(undefined);
+
+        const [loading, setLoading] = React.useState(false);
+
+        React.useEffect(() => {
+          if (backupCodes) {
+            return;
+          }
+
+          setLoading(true);
+          void user
+            ?.createBackupCode()
+            .then((backupCode: BackupCodeResource) => {
+              setBackupCodes(backupCode);
+              setLoading(false);
+            })
+            .catch((err) => {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2));
+              setLoading(false);
+            });
+        }, []);
+
+        if (loading) {
+          return <p>Loading...</p>;
+        }
+
+        if (!backupCodes) {
+          return <p>There was a problem generating backup codes</p>;
+        }
+
+        return (
+          <ol>
+            {backupCodes.codes.map((code, index) => (
+              <li key={index}>{code}</li>
+            ))}
+          </ol>
+        );
+      }
+
+      export default function ManageSMSMFA() {
+        const [showBackupCodes, setShowBackupCodes] = React.useState(false);
+
+        const { isLoaded, user } = useUser();
+
+        if (!isLoaded) return null;
+
+        if (!user) {
+          return <p>You must be logged in to access this page</p>;
+        }
+
+        return (
+          <>
+            <h1>User MFA Settings</h1>
+
+            {/* Manage SMS MFA */}
+            <ManageMfaPhoneNumbers />
+            <ManageAvailablePhoneNumbers />
+            <Link href="/account/add-phone">Add a new phone number</Link>
+
+            {/* Manage backup codes */}
+            {user.twoFactorEnabled && (
+              <div>
+                <p>
+                  Generate new backup codes? -{' '}
+                  <button onClick={() => setShowBackupCodes(true)}>Generate</button>
+                </p>
+              </div>
+            )}
+            {showBackupCodes && (
+              <>
+                <GenerateBackupCodes />
+                <button onClick={() => setShowBackupCodes(false)}>Done</button>
+              </>
+            )}
+          </>
+        );
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```jsx {{ prettier: false, filename: '/app/account/add-phone/page.tsx' }}
+      'use client';
+
+      import * as React from 'react';
+      import { useUser } from '@clerk/nextjs';
+      import { PhoneNumberResource } from '@clerk/types';
+
+      export default function Page() {
+        const { isLoaded, user } = useUser();
+        const [phone, setPhone] = React.useState('');
+        const [code, setCode] = React.useState('');
+        const [isVerifying, setIsVerifying] = React.useState(false);
+        const [successful, setSuccessful] = React.useState(false);
+        const [phoneObj, setPhoneObj] = React.useState<
+          PhoneNumberResource | undefined
+        >();
+
+        if (!isLoaded) return null;
+
+        if (!user) {
+          return <p>You must be logged in to access this page</p>;
+        }
+
+        // Handle addition of the phone number
+        const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault();
+
+          try {
+            // Add unverified phone number to user
+            const res = await user.createPhoneNumber({ phoneNumber: phone });
+            // Reload user to get updated User object
+            await user.reload();
+
+            // Create a reference to the new phone number to use related methods
+            const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id);
+            setPhoneObj(phoneNumber);
+
+            // Send the user an SMS with the verification code
+            phoneNumber?.prepareVerification();
+
+            // Set to true to display second form
+            // and capture the OTP code
+            setIsVerifying(true);
+          } catch (err) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2));
+          }
+        };
+
+        // Handle the submission of the verification form
+        const verifyCode = async (e: React.FormEvent) => {
+          e.preventDefault();
+          try {
+            // Verify that the provided code matches the code sent to the user
+            const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code });
+
+            if (phoneVerifyAttempt?.verification.status === 'verified') {
+              setSuccessful(true);
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(phoneVerifyAttempt, null, 2));
+            }
+          } catch (err) {
+            console.error(JSON.stringify(err, null, 2));
+          }
+        };
+
+        // Display a success message if the phone number was added successfully
+        if (successful) {
+          return (
+            <>
+              <h1>Phone added</h1>
+            </>
+          );
+        }
+
+        // Display the verification form to capture the OTP code
+        if (isVerifying) {
+          return (
+            <>
+              <h1>Verify phone</h1>
+              <div>
+                <form onSubmit={(e) => verifyCode(e)}>
+                  <div>
+                    <label htmlFor="code">Enter code</label>
+                    <input
+                      onChange={(e) => setCode(e.target.value)}
+                      id="code"
+                      name="code"
+                      type="text"
+                      value={code}
+                    />
+                  </div>
+                  <div>
+                    <button type="submit">Verify</button>
+                  </div>
+                </form>
+              </div>
+            </>
+          );
+        }
+
+        // Display the initial form to capture the phone number
+        return (
+          <>
+            <h1>Add phone</h1>
+            <div>
+              <form onSubmit={(e) => handleSubmit(e)}>
+                <div>
+                  <label htmlFor="phone">Enter phone number</label>
+                  <input
+                    onChange={(e) => setPhone(e.target.value)}
+                    id="phone"
+                    name="phone"
+                    type="phone"
+                    value={phone}
+                  />
+                </div>
+                <div>
+                  <button type="submit">Continue</button>
+                </div>
+              </form>
+            </div>
+          </>
+        );
+      }
+      ```
+    </Tab>
+  </Tabs>
+</Steps>

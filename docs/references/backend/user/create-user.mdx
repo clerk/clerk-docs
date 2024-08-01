@@ -3,30 +3,44 @@ title: createUser()
 description: Use Clerk's Backend SDK to create a user.
 ---
 
+{/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/api/endpoints/UserApi.ts#L140 */}
+
 # `createUser()`
 
-Creates a [`User`](/docs/references/backend/types/backend-user). Your user management settings determine how you should setup your user model.
+Creates a [`User`](/docs/references/backend/types/backend-user).
+
+Your user management settings in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) determine how you should setup your user model. Anything **Required** in **Users & Authentication -> Email, Phone, Username** will need to be provided when creating a user. Trying to add a field that isn't enabled in **Users & Authentication -> Email, Phone, Username** will result in an error.
 
 Any email address and phone number created using this method will be automatically marked as verified.
 
-```tsx
+A rate limit rule of 20 requests per 10 seconds is applied to this endpoint.
+
+```tsx {{ prettier: false }}
 function createUser: (params: CreateUserParams) => Promise<User>;
 ```
 
 ## `CreateUserParams`
 
 | Name | Type | Description |
-| --- | --- | --- |
+| - | - | - |
 | `externalId?` | `string` | The ID of the user you use in your external systems. Must be unique across your instance. |
-| `emailAddress[]?` | `string` | Email addresses to add to the user. Must be unique across your instance. The first email address will be set as the users primary email address. |
-| `phoneNumber[]?` | `string` | Phone numbers that will be added to the user. Must be unique across your instance. The first phone number will be set as the users primary phone number. |
-| `username?` | `string` | The username to give to the user. Must be unique across your instance. |
-| `password?` | `string` | The plaintext password to give the user. |
 | `firstName?` | `string` | The user's first name. |
 | `lastName?` | `string` | The user's last name. |
+| `emailAddress[]?` | `string[]` | Email addresses to add to the user. Must be unique across your instance. The first email address will be set as the users primary email address. |
+| `phoneNumber[]?` | `string[]` | Phone numbers that will be added to the user. Must be unique across your instance. The first phone number will be set as the users primary phone number. |
+| `web3_wallet[]?` | `string[]` | Web3 wallet addresses that will be added to the user. Must be unique across your instance. The first wallet will be set as the users primary wallet. |
+| `username?` | `string` | The username to give to the user. Must be unique across your instance. |
+| `password?` | `string` | The plaintext password to give the user. Must be at least 8 characters long, and can not be in any list of hacked passwords. |
+| `passwordDigest?` | `string` | In case you already have the password digests and not the passwords, you can use them for the newly created user via this property. The digests should be generated with one of the supported algorithms. The hashing algorithm can be specified using the `password_hasher` property. |
+| `passwordHasher?` | `'argon2i' \| 'argon2id' \| 'bcrypt' \| 'bcrypt_sha256_django' \| 'md5' \| 'pbkdf2_sha256' \| 'pbkdf2_sha256_django' \| 'pbkdf2_sha1' \| 'phpass' \| 'scrypt_firebase' \| 'scrypt_werkzeug' \| 'sha256'` | The hashing algorithm that was used to generate the password digest. Each of the supported hashers expects the incoming digest to be in a particular format. See the [Clerk Backend API reference](https://clerk.com/docs/reference/backend-api/tag/Users#operation/CreateUser) for more information. |
+| `skipPasswordChecks?` | `boolean` | When set to `true`, all password checks are skipped. It is recommended to use this method only when migrating plaintext passwords to Clerk. Upon migration the user base should be prompted to pick stronger password. |
+| `skipPasswordRequirement?` | `boolean` | When set to `true`, password is not required anymore when creating the user and can be omitted. This is useful when you are trying to create a user that doesn't have a password, in an instance that is using passwords. Please note that you cannot use this flag if password is the only way for a user to sign into your instance. |
+| `totpSecret?` | `string` | In case TOTP is configured on the instance, you can provide the secret to enable it on the newly created user without the need to reset it. Please note that currently the supported options are: <ul><li>Period: 30 seconds</li><li>Code length: 6 digits</li><li>Algorithm: SHA1</li></ul> |
+| `backupCodes?` | `string[]` | If backup codes are configured on the instance, you can provide them to enable it on the newly created user without the need to reset them. You must provide the backup codes in plain format or the corresponding bcrypt digest. |
 | `publicMetadata?` | `Record<string, unknown>` | Metadata saved on the user, that is visible to both your Frontend and Backend APIs. |
 | `privateMetadata?` | `Record<string, unknown>` | Metadata saved on the user that is only visible to your Backend API. |
 | `unsafeMetadata?` | `Record<string, unknown>` | Metadata saved on the user, that can be updated from both the Frontend and Backend APIs. **Note:** Since this data can be modified from the frontend, it is not guaranteed to be safe. |
+| `createdAt` | `string` | A custom date/time denoting when the user signed up to the application, specified in [RFC3339 format](https://datatracker.ietf.org/doc/html/rfc3339). For example: `2012-10-20T07:15:20.902Z`. |
 
 ## Example
 
@@ -34,7 +48,7 @@ In this example, the application's instance settings have been configured to use
 
 You can see that the returned response is the created `User` object, with `firstName` as `"Test"`, `lastName` as `"User"`, and `emailAddress` as an array of email addresses, which includes `'testclerk123@gmail.com'`.
 
-```tsx {27, 28, 32-39}
+```tsx {{ prettier: false, mark: [27, 28, [32, 39]] }}
 const response = await clerkClient.users.createUser({
   firstName: "Test",
   lastName: "User",
@@ -45,17 +59,17 @@ const response = await clerkClient.users.createUser({
 console.log(response);
 /*
 _User {
-  id: 'user_2cSSCzV7948rhPJMsY601tXsEU4',
+  id: 'user_123',
   passwordEnabled: true,
   totpEnabled: false,
   backupCodeEnabled: false,
   twoFactorEnabled: false,
   banned: false,
-  createdAt: 1708103362688,
-  updatedAt: 1708103362701,
-  imageUrl: 'https://img.clerk.com/eyJ0eXBlIjoiZGVmYXVsdCIsImlpZCI6Imluc18yVjdKRFdyclJwRmZFZTlqQUM2dWpSMG8xSlQiLCJyaWQiOiJ1c2VyXzJjU1NDelY3OTQ4cmhQSk1zWTYwMXRYc0VVNCIsImluaXRpYWxzIjoiVFUifQ',
+  createdAt: 1720041242964,
+  updatedAt: 1720041242978,
+  imageUrl: 'https://img.clerk.com/eyJ...',
   hasImage: false,
-  primaryEmailAddressId: 'idn_2cSSCuFhU35F5u5Labwtmj7xU6B',
+  primaryEmailAddressId: 'idn_123',
   primaryPhoneNumberId: null,
   primaryWeb3WalletId: null,
   lastSignInAt: null,
@@ -68,7 +82,7 @@ _User {
   unsafeMetadata: {},
   emailAddresses: [
     _EmailAddress {
-      id: 'idn_2cSSCuFhU35F5u5Labwtmj7xU6B',
+      id: 'idn_123',
       emailAddress: 'testclerk123@gmail.com',
       verification: [_Verification],
       linkedTo: []
@@ -77,6 +91,7 @@ _User {
   phoneNumbers: [],
   web3Wallets: [],
   externalAccounts: [],
+  samlAccounts: [],
   lastActiveAt: null,
   createOrganizationEnabled: true
 }

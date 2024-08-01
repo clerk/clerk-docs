@@ -26,18 +26,17 @@ You need to have Node.js `18.17.0` or later installed. Last year, Node.js 16 ent
 All react-dependent Clerk SDKs now require you to use React 18 or higher. You can update your project by installing the latest version of `react` and `react-dom`.
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-    ```bash filename="terminal"
-    npm install react@latest react-dom@latest
-    ```
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  npm install react@latest react-dom@latest
+  ```
 
-    ```bash filename="terminal"
-    yarn add react@latest react-dom@latest
-    ```
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  yarn add react@latest react-dom@latest
+  ```
 
-    ```bash filename="terminal"
-    pnpm add react@latest react-dom@latest
-    ```
-
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  pnpm add react@latest react-dom@latest
+  ```
 </CodeBlockTabs>
 
 If you are upgrading from React 17 or lower, make sure to [learn about how to upgrade your React version to 18](https://react.dev/blog/2022/03/08/react-18-upgrade-guide) as well.
@@ -54,18 +53,17 @@ If you are upgrading from React 17 or lower, make sure to [learn about how to up
 Whenever you feel ready, go ahead and install the latest version of any Clerk SDKs you are using. Make sure that you are prepared to patch some breaking changes before your app will work properly, however. The commands below demonstrate how to install the latest version.
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-    ```bash filename="terminal"
-    npm install @clerk/nextjs
-    ```
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  npm install @clerk/nextjs
+  ```
 
-    ```bash filename="terminal"
-    yarn add @clerk/nextjs
-    ```
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  yarn add @clerk/nextjs
+  ```
 
-    ```bash filename="terminal"
-    pnpm add @clerk/nextjs
-    ```
-
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  pnpm add @clerk/nextjs
+  ```
 </CodeBlockTabs>
 
 ## CLI upgrade helper
@@ -75,18 +73,17 @@ Clerk now provides a `@clerk/upgrade` CLI tool that you can use to ease the upgr
 To run the CLI tool, navigate to your project and run it in the terminal:
 
 <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
+  ```bash {{ prettier: false, filename: 'terminal' }}
   npx @clerk/upgrade
   ```
 
-```bash filename="terminal"
-yarn dlx @clerk/upgrade
-```
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  yarn dlx @clerk/upgrade
+  ```
 
-```bash filename="terminal"
-pnpm dlx @clerk/upgrade
-```
-
+  ```bash {{ prettier: false, filename: 'terminal' }}
+  pnpm dlx @clerk/upgrade
+  ```
 </CodeBlockTabs>
 
 If you are having trouble with `npx`, it's also possible to install directly with `npm i @clerk/upgrade -g`, and can then be run with the `clerk-upgrade` command.
@@ -97,7 +94,7 @@ If you are having trouble with `npx`, it's also possible to install directly wit
 
 The new version ships with improved design and UX across all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/components/customization/overview) or tokens for a [custom theme](/docs/components/customization/overview#create-a-custom-theme), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/components/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
 
-[More detail on these changes &raquo;](/docs/upgrade-guides/core-2/component-redesign)
+[More detail on these changes »](/docs/upgrade-guides/core-2/component-redesign)
 
 ### New Middleware architecture
 
@@ -107,7 +104,7 @@ The primary change from the previous `authMiddleware()` is that `clerkMiddleware
 
 Here's an example that demonstrates route protection based on both authentication and authorization:
 
-```ts filename="middleware.ts"
+```ts {{ prettier: false, filename: 'middleware.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isDashboardRoute = createRouteMatcher(['/dashboard(.*)']);
@@ -122,7 +119,12 @@ export default clerkMiddleware((auth, req) => {
 });
 
 export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };
 ```
 
@@ -140,33 +142,36 @@ Clerk strongly recommends migrating to the new `clerkMiddleware()` for an improv
 
 The most basic migration will be updating the import and changing out the default export, then mirroring the previous behavior of protecting all routes except `/sign-in` or `/sign-up` by doing the following:
 
-```diff
-- import { authMiddleware } from "@clerk/nextjs/server"
-+ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+```js {{ prettier: false, del: [1, 6], ins: [2, 4, [7, 11]] }}
+import { authMiddleware } from "@clerk/nextjs/server"
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-+ const isPublicRoute = createRouteMatcher(['/sign-in', '/sign-up']);
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
 
-- export default authMiddleware()
-+ export default clerkMiddleware((auth, request) =>{ 
-+   if(!isPublicRoute(request)){
-+     auth().protect();
-+   }
-+ });
-
-  export const config = {
-    matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+export default authMiddleware()
+export default clerkMiddleware((auth, request) =>{
+  if(!isPublicRoute(request)){
+    auth().protect();
   }
+});
+
+export const config = {
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+}
 ```
 
 Of course, in most cases you'll have a more complicated setup than this. You can find some examples below for how to migrate a few common use cases. Be sure to review the [`clerkMiddleware()` documentation](/docs/references/nextjs/clerk-middleware) if your specific use case is not mentioned.
 
-<Accordion titles={["Protecting all routes except one or more public paths", "Protecting a single route path", "Combining with other Middlewares (like i18n)", "Using the redirectToSignIn method"]} heading="h4">
+<Accordion
+  titles={["Protecting all routes except one or more public paths", "Protecting a single route path", "Combining with other Middlewares (like i18n)", "Using the redirectToSignIn method"]}
+  heading="h4"
+>
   <AccordionPanel>
     By default, `clerkMiddleware()` treats all pages as public unless explicitly protected. If you prefer for it to operate the other way around (all pages are protected unless explicitly made public), you can reverse the middleware logic in this way:
 
     Before:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import { authMiddleware } from "@clerk/nextjs/server"
 
     export default authMiddleware({
@@ -174,19 +179,24 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
 
     After:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import {
       clerkMiddleware,
       createRouteMatcher
     } from "@clerk/nextjs/server"
 
-    const isPublicRoute = createRouteMatcher(["/", "/contact"])
+    const isPublicRoute = createRouteMatcher(["/", "/contact(.*)"])
 
     export default clerkMiddleware((auth, req) => {
       if (isPublicRoute(req)) return // if it's a public route, do nothing
@@ -194,17 +204,22 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
     An example can be seen below of code that ensures that all routes are public except everything under `/dashboard`.
 
     Before:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import { authMiddleware } from "@clerk/nextjs/server"
 
     export default authMiddleware({
@@ -212,13 +227,18 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
 
     After:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import {
       clerkMiddleware,
       createRouteMatcher
@@ -231,17 +251,22 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
     You can call other Middlewares inside `clerkMiddleware()`, giving you more direct control over what is called where. An example would be [next-intl](https://next-intl-docs.vercel.app/) to add internationalization to your app.
 
     Before:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import { authMiddleware } from "@clerk/nextjs/server"
     import createMiddleware from "next-intl/middleware"
 
@@ -258,13 +283,18 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
 
     After:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import {
       clerkMiddleware,
       createRouteMatcher
@@ -285,17 +315,22 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
     You can now access `redirectToSignIn` from the `auth()` object, rather than importing at the top level.
 
     Before:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import { authMiddleware, redirectToSignIn } from "@clerk/nextjs/server"
 
     export default authMiddleware({
@@ -303,13 +338,18 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
 
     After:
 
-    ```ts filename="middleware.ts"
+    ```ts {{ prettier: false, filename: 'middleware.ts' }}
     import { clerkMiddleware } from "@clerk/nextjs/server"
 
     export default clerkMiddleware((auth, req) => {
@@ -317,109 +357,115 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     })
 
     export const config = {
-      matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
-    }
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    };
     ```
-
   </AccordionPanel>
 </Accordion>
 
 ### Changes to top-level exports
 
-As part of this release, some of the top-level exports of `@clerk/nextjs` have been changed in order to improve bundle size and tree-shaking efficiency. These changes have resulted in a ~75% reduction in build size for middleware bundles. However, you will likely need to make some changes to import paths as a result.
+As part of this release, some of the top-level exports of `@clerk/nextjs` have been changed in order to improve bundle size and tree-shaking efficiency. These changes have resulted in a \~75% reduction in build size for middleware bundles. However, you will likely need to make some changes to import paths as a result.
 
-<Callout type='info'>
-  Use [the CLI tool](#cli-upgrade-helper) to automatically find occurences of imports that need to be changed.
-</Callout>
+> [!NOTE]
+> Use [the CLI tool](#cli-upgrade-helper) to automatically find occurences of imports that need to be changed.
 
-<Accordion titles={["@clerk/nextjs/server", "@clerk/nextjs/errors", "@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]}>
+<Accordion
+  titles={["@clerk/nextjs/server", "@clerk/nextjs/errors", "@clerk/nextjs/app-beta", "@clerk/nextjs/ssr", "@clerk/nextjs/edge-middleware", "@clerk/nextjs/edge-middlewarefiles", "@clerk/nextjs/api"]}
+>
   <AccordionPanel>
     Previously these exports have been exported both from `@clerk/nextjs` and `@clerk/nextjs/server`. As of v5 they are only exported from the latter. Going forward, the expectation can be that any imports that are intended to run within react on the client side, will come from `@clerk/nextjs` and imports that are intended to run on the server, will come from `@clerk/nextjs/server`.
 
-    ```diff
-      import {
-        auth,
-        currentUser,
-        authMiddleware,
-        buildClerkProps,
-        verifyToken,
-        verifyJwt,
-        decodeJwt,
-        signJwt,
-        constants,
-        redirect,
-        createAuthenticateRequest,
-        createIsomorphicRequest,
-    - } from "@clerk/nextjs"
-    + } from "@clerk/nextjs/server"
+    ```js {{ prettier: false, del: [14], ins: [15] }}
+    import {
+      auth,
+      currentUser,
+      authMiddleware,
+      buildClerkProps,
+      verifyToken,
+      verifyJwt,
+      decodeJwt,
+      signJwt,
+      constants,
+      redirect,
+      createAuthenticateRequest,
+      createIsomorphicRequest,
+    } from "@clerk/nextjs"
+    } from "@clerk/nextjs/server"
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
     Exports related to errors are now under `@clerk/nextjs/errors`.
 
-    ```diff
-      import {
-        isClerkAPIResponseError,
-        isEmailLinkError,
-        isKnownError,
-        isMetamaskError,
-        EmailLinkErrorCode,
-    - } from "@clerk/nextjs"
-    + } from "@clerk/nextjs/errors"
+    ```js {{ prettier: false, del: [7], ins: [8] }}
+    import {
+      isClerkAPIResponseError,
+      isEmailLinkError,
+      isKnownError,
+      isMetamaskError,
+      EmailLinkErrorCode,
+    } from "@clerk/nextjs"
+    } from "@clerk/nextjs/errors"
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
     The `@clerk/nextjs` import will work with both the App and Pages Router.
 
-    ```diff
-    - import { } from "@clerk/nextjs/app-beta"
-    + import { } from "@clerk/nextjs"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { } from "@clerk/nextjs/app-beta"
+    import { } from "@clerk/nextjs"
     ```
 
     Some behavior may have changed between Clerk's beta and the stable release. Please check on your end if behavior stayed the same.
-
   </AccordionPanel>
+
   <AccordionPanel>
     The top-level exports support SSR by default now.
 
-    ```diff
-    - import { } from "@clerk/nextjs/ssr"
-    + import { } from "@clerk/nextjs"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { } from "@clerk/nextjs/ssr"
+    import { } from "@clerk/nextjs"
     ```
+  </AccordionPanel>
 
-  </AccordionPanel>
   <AccordionPanel>
-    ```diff
-    - import { } from "@clerk/nextjs/edge-middleware"
-    + import { } from "@clerk/nextjs"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { } from "@clerk/nextjs/edge-middleware"
+    import { } from "@clerk/nextjs"
     ```
   </AccordionPanel>
+
   <AccordionPanel>
-    ```diff
-    - import { } from "@clerk/nextjs/edge-middlewarefiles"
-    + import { } from "@clerk/nextjs"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { } from "@clerk/nextjs/edge-middlewarefiles"
+    import { } from "@clerk/nextjs"
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `@clerk/nextjs/api` subpath was removed completely. It re-exported helpers from `@clerk/clerk-sdk-node` and its types. If you relied on these, import from `@clerk/clerk-sdk-node` directly instead.
 
-    ```diff
-      import type {
-        ClerkMiddleware,
-        ClerkMiddlewareOptions,
-        LooseAuthProp,
-        RequireAuthProp,
-        StrictAuthProp,
-        WithAuthProp
-    - } from "@clerk/nextjs/api"
-    + } from "@clerk/clerk-sdk-node"
+    ```js {{ prettier: false, del: [8, 11], ins: [9, 12] }}
+    import type {
+      ClerkMiddleware,
+      ClerkMiddlewareOptions,
+      LooseAuthProp,
+      RequireAuthProp,
+      StrictAuthProp,
+      WithAuthProp
+    } from "@clerk/nextjs/api"
+    } from "@clerk/clerk-sdk-node"
 
-    - import { requireAuth, withAuth } from "@clerk/nextjs/api"
-    + import { requireAuth, withAuth } from "@clerk/clerk-sdk-node"
+    import { requireAuth, withAuth } from "@clerk/nextjs/api"
+    import { requireAuth, withAuth } from "@clerk/clerk-sdk-node"
     ```
-
   </AccordionPanel>
 </Accordion>
 
@@ -429,29 +475,31 @@ Defining redirect URLs for after sign up, in, and/or out via the Clerk Dashboard
 
 As part of this change, the default redirect URL for each of these props has been set to `/`, so if you are passing `/` explicitly to any one of the above props, that line is no longer necessary and can be removed.
 
-```diff
-- <UserButton afterSignOutUrl='/' />
-+ <UserButton />
+```jsx {{ prettier: false, del: [1], ins: [2] }}
+<UserButton afterSignOutUrl='/' />
+<UserButton />
 ```
 
 ### `afterSignXUrl` changes
 
-Some changes are being made to the way that "after sign up/in url"s and redirect url props are handled as part of this new version, in order to make behavior more clear and predictable.
+> [!NOTE]
+> This section refers to `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
 
-> We will refer to these urls as `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
+All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been deprecated, and should be replaced by one of the following options:
 
-Previously, setting `afterSignInUrl` or `afterSignOutUrl` would only actually redirect some of the time. If the user clicks on any form of link that takes them to a sign up/in page, Clerk automatically sets `redirect_url` in the querystring such that after the sign up or in, the user is returned back to the page they were on before. This is a common pattern for sign up/in flows, as it leads to the least interruption of the user's navigation through your app. When a `redirect_url` is present, any value passed to `afterSignInUrl` or `afterSignUpUrl` is ignored. However, if the user navigates directly to a sign up/in page, there’s no redirect url in the querystring and in this case the `afterSignInUrl` or `afterSignOutUrl` would take effect. This behavior was not intuitive and didn't give a way to force a redirect after sign up/in, so the behavior is changing to address both of these issues.
+- `CLERK_SIGN_X_FORCE_REDIRECT_URL` / `signXForceRedirectUrl` – If set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user's flow by taking them away from the page they were on before.
+- `CLERK_SIGN_X_FALLBACK_REDIRECT_URL` / `signXFallbackRedirectUrl` – If set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
 
-All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been removed, and should be replaced by one of the following options:
+In general, use the environment variables over the props.
 
-- `signXForceRedirectUrl` / `CLERK_SIGN_X_FORCE_REDIRECT_URL` - if set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user’s flow by taking them away from the page they were on before.
-- `signXFallbackRedirectUrl` / `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL` - if set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
+> [!WARNING]
+> If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`.
 
-If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`. If you'd like to retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
+To retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
 
-```diff
-- <SignIn afterSignInUrl='/foo' />
-+ <SignIn signInFallbackRedirectUrl='/foo' />
+```jsx {{ prettier: false, del: [1], ins: [2] }}
+<SignIn afterSignInUrl='/foo' />
+<SignIn signInFallbackRedirectUrl='/foo' />
 ```
 
 ### Removed: `orgs` claim on JWT
@@ -462,23 +510,24 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
 
 <Accordion titles={["Next.js", "Fastify", "@clerk/backend", "@clerk/clerk-sdk-node"]} heading="h5">
   <AccordionPanel>
-    ```typescript filename="Next.js"
+    ```typescript {{ prettier: false, filename: 'Next.js' }}
     import { getAuth } from "@clerk/nextjs/server"
     const claims: JwtPayload = getAuth(request).sessionClaims
 
     import { getAuth } from "@clerk/ssr.server"
     const claims: JwtPayload = (await getAuth(request)).sessionClaims
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
-    ```typescript filename="Fastify"
+    ```typescript {{ prettier: false, filename: 'Fastify' }}
     import { getAuth } from "@clerk/fastify"
     const claims: JwtPayload = (await getAuth(request)).sessionClaims
     ```
   </AccordionPanel>
+
   <AccordionPanel>
-    ```typescript filename="@clerk/backend"
+    ```typescript {{ prettier: false, filename: '@clerk/backend' }}
     import { createClerkClient } from "@clerk/backend"
 
     const clerkClient = createClerkClient({ secretKey: "" })
@@ -488,10 +537,10 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
     )
     const claims: JwtPayload = requestState.toAuth().sessionClaims
     ```
-
   </AccordionPanel>
+
   <AccordionPanel>
-    ```typescript filename="@clerk/clerk-sdk-node"
+    ```typescript {{ prettier: false, filename: '@clerk/clerk-sdk-node' }}
     import { clerkClient } from "@clerk/clerk-sdk-node"
 
     router.use((...args) => clerkClient.expressRequireAuth()(...args))
@@ -499,7 +548,6 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
       return reply.json({ auth: req.auth })
     })
     ```
-
   </AccordionPanel>
 </Accordion>
 
@@ -511,7 +559,7 @@ On components like [`<SignIn />`](/docs/components/authentication/sign-in) you c
 
 In Core 2, the **default** `routing` strategy has become `'path'` for the Next.js SDK. Of course, you can still use `routing='hash'` or `routing='virtual'`.
 
-```jsx
+```jsx {{ prettier: false }}
 <UserProfile routing="hash" />
 <OrganizationProfile routing="virtual" />
 ```
@@ -520,16 +568,21 @@ In Core 2, the **default** `routing` strategy has become `'path'` for the Next.j
 
 There are a number of Clerk primitives that contain images, and previously they each had different property names, like `avatarUrl`, `logoUrl`, `profileImageUrl`, etc. In order to promote consistency and make it simpler for developers to know where to find associated images, all image properties are now named `imageUrl`. See the list below for all affected classes:
 
-<Accordion titles={["<code>Organization.logoUrl</code> -&gt; <code>Organization.imageUrl</code>", "<code>User.profileImageUrl</code> -&gt; <code>.imageUrl</code>", "<code>ExternalAccount.avatarUrl</code> -&gt; <code>.imageUrl</code>", "<code>OrganizationMembershipPublicUserData.profileImageUrl</code> -&gt; <code>.imageUrl</code>"]}>
+<Accordion
+  titles={["<code>Organization.logoUrl</code> -&gt; <code>Organization.imageUrl</code>", "<code>User.profileImageUrl</code> -&gt; <code>.imageUrl</code>", "<code>ExternalAccount.avatarUrl</code> -&gt; <code>.imageUrl</code>", "<code>OrganizationMembershipPublicUserData.profileImageUrl</code> -&gt; <code>.imageUrl</code>"]}
+>
   <AccordionPanel>
     The `logoUrl` property of any [`Organization` object](/docs/references/javascript/organization/organization#organization) has been changed to `imageUrl`.
   </AccordionPanel>
+
   <AccordionPanel>
     The `profileImageUrl` property of any `User` object has been changed to `imageUrl`.
   </AccordionPanel>
+
   <AccordionPanel>
     The `avatarUrl` property of any [`ExternalAcccount` object](/docs/references/javascript/external-account) has been changed to `imageUrl`.
   </AccordionPanel>
+
   <AccordionPanel>
     The `profileImageUrl` property of any `OrganizationMembershipPublicUserData` object has been changed to `imageUrl`.
   </AccordionPanel>
@@ -539,89 +592,100 @@ There are a number of Clerk primitives that contain images, and previously they 
 
 As part of this major version, a number of previously deprecated props, arugments, methods, etc. have been removed. Additionally there have been some changes to things that are only used internally, or only used very rarely. It's highly unlikely that any given app will encounter any of these items, but they are all breaking changes, so they have all been documented below.
 
-<Callout type='info'>
-  For this section more than any other one, please use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
-  section are very unlikely to appear in your codebase, the tool will save time looking for them.
-</Callout>
+> [!NOTE]
+> For this section more than any other one, please use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
+> section are very unlikely to appear in your codebase, the tool will save time looking for them.
 
 #### Deprecation removals
 
-<Accordion titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>", "<code>CLERK_API_KEY</code> replaced by <code>CLERK_SECRET_KEY</code>", "<code>CLERK_FRONTEND_API</code> replaced by <code>CLERK_PUBLISHABLE_KEY</code>", "<code>CLERK_JS_VERSION</code> should be <code>NEXT_PUBLIC_CLERK_JS_VERSION</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>authMiddleware</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to <code>authMiddleware</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>createClerkClient</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to <code>createClerkClient</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>getAuth</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as prop to <code>ClerkProvider</code>", "<code>@clerk/nextjs/app-beta</code> import removed", "<code>@clerk/nextjs/ssr</code> import removed", "<code>@clerk/nextjs/edge-middleware</code> import removed", "<code>@clerk/nextjs/edge-middlewarefiles</code> import removed", "<code>API_URL</code> constant removed", "<code>API_VERSION</code> constant removed", "<code>CLERK_JS_URL</code> constant removed", "<code>CLERK_JS_VERSION</code> constant removed", "<code>DOMAIN</code> constant removed", "<code>IS_SATELLITE</code> constant removed", "<code>PROXY_URL</code> constant removed", "<code>PUBLISHABLE_KEY</code> constant removed", "<code>SECRET_KEY</code> constant removed", "<code>SIGN_IN_URL</code> constant removed", "<code>SIGN_UP_URL</code> constant removed", "<code>@clerk/nextjs/api</code> import removed", "<code>MultiSessionAppSupport</code> import moved under <code>/internal</code>", "<code>NEXT_PUBLIC_CLERK_JS</code> should be <code>NEXT_PUBLIC_CLERK_JS_URL</code>"]}>
+<Accordion
+  titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>", "<code>CLERK_API_KEY</code> replaced by <code>CLERK_SECRET_KEY</code>", "<code>CLERK_FRONTEND_API</code> replaced by <code>CLERK_PUBLISHABLE_KEY</code>", "<code>CLERK_JS_VERSION</code> should be <code>NEXT_PUBLIC_CLERK_JS_VERSION</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>authMiddleware</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to <code>authMiddleware</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>createClerkClient</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to <code>createClerkClient</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to <code>getAuth</code>", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as prop to <code>ClerkProvider</code>", "<code>@clerk/nextjs/app-beta</code> import removed", "<code>@clerk/nextjs/ssr</code> import removed", "<code>@clerk/nextjs/edge-middleware</code> import removed", "<code>@clerk/nextjs/edge-middlewarefiles</code> import removed", "<code>API_URL</code> constant removed", "<code>API_VERSION</code> constant removed", "<code>CLERK_JS_URL</code> constant removed", "<code>CLERK_JS_VERSION</code> constant removed", "<code>DOMAIN</code> constant removed", "<code>IS_SATELLITE</code> constant removed", "<code>PROXY_URL</code> constant removed", "<code>PUBLISHABLE_KEY</code> constant removed", "<code>SECRET_KEY</code> constant removed", "<code>SIGN_IN_URL</code> constant removed", "<code>SIGN_UP_URL</code> constant removed", "<code>@clerk/nextjs/api</code> import removed", "<code>MultiSessionAppSupport</code> import moved under <code>/internal</code>", "<code>NEXT_PUBLIC_CLERK_JS</code> should be <code>NEXT_PUBLIC_CLERK_JS_URL</code>"]}
+>
   <AccordionPanel>
     If you are updating a user's password via the [`User.update` method](/docs/references/javascript/user/user#update), it must be changed to [`User.updatePassword`](/docs/references/javascript/user/password-management#update-password) instead. This method will require the current password as well as the desired new password. We made this update to improve the security of password changes. Example below:
 
-    ```diff
-    - user.update({ password: 'foo' });
+    ```js {{ prettier: false, del: [1], ins: [[3, 7]] }}
+    user.update({ password: 'foo' });
 
-    + user.updatePassword({
-    +   currentPassword: 'bar',
-    +   newPassword: 'foo',
-    +   signOutOfOtherSessions: true,
-    + });
+    user.updatePassword({
+      currentPassword: 'bar',
+      newPassword: 'foo',
+      signOutOfOtherSessions: true,
+    });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `CLERK_API_KEY` environment variable was renamed to `CLERK_SECRET_KEY`. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production).
   </AccordionPanel>
+
   <AccordionPanel>
     The `CLERK_FRONTEND_API` environment variable was renamed to `CLERK_PUBLISHABLE_KEY`. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production). **Note:** The values are different, so this is not just a key replacement. [More information](/docs/deployments/overview#api-keys-and-environment-variables).
   </AccordionPanel>
+
   <AccordionPanel>
     If you are using `CLERK_JS_VERSION` as an environment variable, it should be changed to `NEXT_PUBLIC_CLERK_JS_VERSION` instead.
 
     This change brings our SDK up to date with the latest standards for next.js - that public environment variables should have the `NEXT_PUBLIC_` prefix. This env variable is not private, so it should get the public prefix.
   </AccordionPanel>
+
   <AccordionPanel>
     The `apiKey` argument passed to `authMiddleware` must be changed to `secretKey`.
 
-    ```diff
+    ```js {{ prettier: false, del: [3], ins: [4] }}
     import { authMiddleware } from '@clerk/nextjs/server';
 
-    - authMiddleware({ apiKey: '...' });
-    + authMiddleware({ secretKey: '...' });
+    authMiddleware({ apiKey: '...' });
+    authMiddleware({ secretKey: '...' });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `frontendApi` argument passed to `authMiddleware` must be changed to `publishableKey`
 
-    ```diff
+    ```js {{ prettier: false, del: [3], ins: [4] }}
     import { authMiddleware } from "@clerk/nextjs/server"
 
-    - authMiddleware({ frontendApi: '...' })
-    + authMiddleware({ publishableKey: '...' })
+    authMiddleware({ frontendApi: '...' })
+    authMiddleware({ publishableKey: '...' })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `apiKey` argument passed to `createClerkClient` must be changed to `secretKey`.
 
-    ```diff
+    ```js {{ prettier: false, del: [3], ins: [4] }}
     import { createClerkClient } from '@clerk/nextjs/server';
 
-    - createClerkClient({ apiKey: '...' });
-    + createClerkClient({ secretKey: '...' });
+    createClerkClient({ apiKey: '...' });
+    createClerkClient({ secretKey: '...' });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `frontendApi` argument passed to `createClerkClient` must be changed to `publishableKey`. Note that the values of the two keys are different, so both keys and values need to be changed. You can find your application's publishable key in the Clerk dashboard.
 
-    ```diff
+    ```js {{ prettier: false, del: [3], ins: [4] }}
     import { createClerkClient } from '@clerk/nextjs/server';
 
-    - createClerkClient({ frontendApi: '...' });
-    + createClerkClient({ publishableKey: '...' });
+    createClerkClient({ frontendApi: '...' });
+    createClerkClient({ publishableKey: '...' });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `apiKey` argument passed to `getAuth` must be changed to `secretKey`.
 
-    ```diff
-    - getAuth({ apiKey: '...' })
-    + getAuth({ secretKey: '...' })
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    getAuth({ apiKey: '...' })
+    getAuth({ secretKey: '...' })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `frontendApi` prop passed to `<ClerkProvider>` was renamed to `publishableKey`. **Note:** The values are different, so this is not just a key replacement. You can visit your [Clerk dashboard](https://dashboard.clerk.com/last-active?path=api-keys) to copy/paste the new keys after choosing your framework. Make sure to update this in all environments (e.g. dev, staging, production). [More information](/docs/deployments/overview#api-keys-and-environment-variables).
   </AccordionPanel>
+
   <AccordionPanel>
     If you are using the `@clerk/nextjs/app-beta` import anywhere, it should use `@clerk/nextjs` instead. The `app-beta` import has been removed as our App Router support is stable.
 
@@ -629,52 +693,67 @@ As part of this major version, a number of previously deprecated props, arugment
 
     The `@clerk/nextjs` import will work with both App Router and Pages Router.
   </AccordionPanel>
+
   <AccordionPanel>
     If you are importing from `@clerk/nextjs/ssr`, you can use `@clerk/nextjs` instead. Our top-level import supports SSR functionality by default now, so the subpath on the import is no longer needed. This import can be directly replaced without any other considerations.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated import has been replaced by `@clerk/nextjs/server`. Usage should now look as such: `import { authMiddleware } from @clerk/nextjs/server`. There may be changes in functionality between the two exports depending on how old the version used is, so upgrade with caution.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated import has been replaced by `@clerk/nextjs/server`. Usage should now look as such: `import { authMiddleware } from @clerk/nextjs/server`. There may be changes in functionality between the two exports depending on how old the version used is, so upgrade with caution.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `CLERK_API_URL` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `CLERK_API_VERSION` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_JS_URL` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_JS_VERSION` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_DOMAIN` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_IS_SATELLITE` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_PROXY_URL` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `CLERK_SECRET_KEY` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_SIGN_IN_URL` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     This deprecated constant has been removed as an export from `@clerk/nextjs`. Instead, set and use the `NEXT_PUBLIC_CLERK_SIGN_UP_URL` environment variable.
   </AccordionPanel>
+
   <AccordionPanel>
     The import subpath `@clerk/nextjs/api` has been removed. This includes the following imports:
 
-    ```js
+    ```js {{ prettier: false }}
     // These have been removed
     import {
       ClerkMiddleware,
@@ -688,14 +767,16 @@ As part of this major version, a number of previously deprecated props, arugment
 
     If you still need to use any of these functions, they can be instead imported from `@clerk/clerk-sdk-node`.
   </AccordionPanel>
+
   <AccordionPanel>
     The `MultiSessionAppSupport` import path has changed from `@clerk/nextjs` to `@clerk/nextjs/internal`. You must update your import path in order for it to work correctly. Note that internal imports are not intended for usage and are outside the scope of semver. Example below of the fix that needs to be made:
 
-    ```diff
-    - import { MultiSessionAppSupport } from "@clerk/nextjs"
-    + import { MultiSessionAppSupport } from "@clerk/nextjs/internal"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { MultiSessionAppSupport } from "@clerk/nextjs"
+    import { MultiSessionAppSupport } from "@clerk/nextjs/internal"
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     If you are using `NEXT_PUBLIC_CLERK_JS` as an environment variable, it should be changed to `NEXT_PUBLIC_CLERK_JS_URL` instead. This variable was renamed for consistency across public APIs. Make sure to also check your production host configuration when changing environment variable values.
   </AccordionPanel>
@@ -703,254 +784,277 @@ As part of this major version, a number of previously deprecated props, arugment
 
 #### Other Breaking changes
 
-<Accordion titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed", "<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed", "<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>API_URL</code> value has changed", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>isMetamaskError</code> import moved under <code>/errors</code>", "<code>WithSession</code> component removed", "<code>WithClerk</code> component removed", "<code>WithUser</code> component removed", "<code>withClerk</code> function removed", "<code>withSession</code> function removed", "<code>withUser</code> function removed", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}>
+<Accordion
+  titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed", "<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed", "<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>API_URL</code> value has changed", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>isMetamaskError</code> import moved under <code>/errors</code>", "<code>WithSession</code> component removed", "<code>WithClerk</code> component removed", "<code>WithUser</code> component removed", "<code>withClerk</code> function removed", "<code>withSession</code> function removed", "<code>withUser</code> function removed", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}
+>
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await organization.getRoles({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await organization.getRoles({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await organization.getMemberships({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await organization.getMemberships({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await organization.getDomains({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await organization.getDomains({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await organization.getInvitations({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await organization.getInvitations({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await organization.getMembershipRequests({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await organization.getMembershipRequests({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await user.getOrganizationInvitations({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await user.getOrganizationInvitations({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await user.getOrganizationSuggestions({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await user.getOrganizationSuggestions({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
 
-    ```diff
-      const { data } = await user.getOrganizationMemberships({
-    -   limit: 10,
-    +   pageSize: 10,
-    -   offset: 10,
-    +   initialPage: 2,
-      })
+    ```js {{ prettier: false, del: [2, 4], ins: [3, 5] }}
+    const { data } = await user.getOrganizationMemberships({
+      limit: 10,
+      pageSize: 10,
+      offset: 10,
+      initialPage: 2,
+    })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Users.getOrganizationMembershipList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.users.getOrganizationMembershipList()
-    + const { data, totalCount } = await clerkClient.users.getOrganizationMembershipList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.users.getOrganizationMembershipList()
+    const { data, totalCount } = await clerkClient.users.getOrganizationMembershipList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Users.getOrganizationInvitationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.users.getOrganizationInvitationList()
-    + const { data, totalCount } = await clerkClient.users.getOrganizationInvitationList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.users.getOrganizationInvitationList()
+    const { data, totalCount } = await clerkClient.users.getOrganizationInvitationList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
-    ```diff
-      const data = await clerkClient.organizations.getOrganizationInvitationList({
-        organizationId: "...",
-      })
+    ```js {{ prettier: false, del: [5], ins: [6] }}
+    const data = await clerkClient.organizations.getOrganizationInvitationList({
+      organizationId: "...",
+    })
 
-    - data.forEach(() => {})
-    + data.data.forEach(() => {})
+    data.forEach(() => {})
+    data.data.forEach(() => {})
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
-    ```diff
-      const { user } = useUser()
-      const membershipList = user.getOrganizationMembershipList()
+    ```js {{ prettier: false, del: [4], ins: [5] }}
+    const { user } = useUser()
+    const membershipList = user.getOrganizationMembershipList()
 
-    - membershipList.forEach(() => {})
-    + membershipList.data.forEach(() => {})
+    membershipList.forEach(() => {})
+    membershipList.data.forEach(() => {})
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Users.getOrganizationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.users.getOrganizationList()
-    + const { data, totalCount } = await clerkClient.users.getOrganizationList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.users.getOrganizationList()
+    const { data, totalCount } = await clerkClient.users.getOrganizationList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
-    ```diff
-      const { organization } = useOrganization()
-      const orgList = organization.getOrganizationList()
+    ```js {{ prettier: false, del: [4], ins: [5] }}
+    const { organization } = useOrganization()
+    const orgList = organization.getOrganizationList()
 
-    - orgList.forEach(() => {})
-    + orgList.data.forEach(() => {})
+    orgList.forEach(() => {})
+    orgList.data.forEach(() => {})
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Invitations.getInvitationList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.invitations.getInvitationList()
-    + const { data, totalCount } = await clerkClient.invitations.getInvitationList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.invitations.getInvitationList()
+    const { data, totalCount } = await clerkClient.invitations.getInvitationList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Sessions.getSessionList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.sessions.getSessionList()
-    + const { data, totalCount } = await clerkClient.sessions.getSessionList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.sessions.getSessionList()
+    const { data, totalCount } = await clerkClient.sessions.getSessionList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Users.getUserList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.users.getUserList()
-    + const { data, totalCount } = await clerkClient.users.getUserList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.users.getUserList()
+    const { data, totalCount } = await clerkClient.users.getUserList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `AllowlistIdentifiers.getAllowlistIdentifierList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
-    + const { data, totalCount } = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
+    const { data, totalCount } = await clerkClient.allowlistIdentifiers.getAllowlistIdentifierList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Clients.getClientList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.clients.getClientList()
-    + const { data, totalCount } = await clerkClient.allowlistIdentifiers.getClientList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.clients.getClientList()
+    const { data, totalCount } = await clerkClient.allowlistIdentifiers.getClientList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `RedirectUrls.getRedirectUrlList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.redirectUrls.getRedirectUrlList()
-    + const { data, totalCount } = await clerkClient.redirectUrls.getRedirectUrlList()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.redirectUrls.getRedirectUrlList()
+    const { data, totalCount } = await clerkClient.redirectUrls.getRedirectUrlList()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The response payload of `Users.getUserOauthAccessToken` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the backend API returns directly.
 
     Here's an example of how the response shape would change with this modification:
 
-    ```diff
-    - const data = await clerkClient.users.getUserOauthAccessToken()
-    + const { data, totalCount } = await clerkClient.users.getUserOauthAccessToken()
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    const data = await clerkClient.users.getUserOauthAccessToken()
+    const { data, totalCount } = await clerkClient.users.getUserOauthAccessToken()
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     `setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk/session-methods#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
 
-    ```diff
-    - await setSession('sessionID', () => void)
-    + await setActive({ session: 'sessionID',  beforeEmit: () => void })
+    ```js {{ prettier: false, del: [1, 4, 7], ins: [2, 5, 8] }}
+    await setSession('sessionID', () => void)
+    await setActive({ session: 'sessionID',  beforeEmit: () => void })
 
-    - await setSession(sessionObj)
-    + await setActive({ session: sessionObj })
+    await setSession(sessionObj)
+    await setActive({ session: sessionObj })
 
-    - await setSession(sessionObj, () => void)
-    + await setActive({ session: sessionObj,  beforeEmit: () => void })
+    await setSession(sessionObj, () => void)
+    await setActive({ session: sessionObj,  beforeEmit: () => void })
     ```
 
     `setActive` also supports setting an active organization:
 
-    ```js
+    ```js {{ prettier: false }}
     await setActive({
       session: 'sessionID',
       organization: 'orgID',
@@ -964,46 +1068,54 @@ As part of this major version, a number of previously deprecated props, arugment
     })
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     Passing a string as an argument to `Organization.create` is no longer possible - instead, pass an object with the `name` property.
 
-    ```diff
-    - Organization.create('...');
-    + Organization.create({ name: '...' });
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    Organization.create('...');
+    Organization.create({ name: '...' });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `Organization.getPendingInvitations()` method has been removed. You can use `Organization.getInvitations` instead.
 
-    ```diff
-    - Organization.getPendingInvitations();
-    + Organization.getInvitations({ status: 'pending' });
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    Organization.getPendingInvitations();
+    Organization.getInvitations({ status: 'pending' });
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The value of this export has changed from `https://api.clerk.dev` to `https://api.clerk.com`. If you were relying on the text content of this value not changing, you may need to make adjustments.
   </AccordionPanel>
+
   <AccordionPanel>
     Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
   </AccordionPanel>
+
   <AccordionPanel>
     Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects functionality.
   </AccordionPanel>
+
   <AccordionPanel>
     Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
   </AccordionPanel>
+
   <AccordionPanel>
     The `isMetamaskError` import path has changed from `@clerk/react` to `@clerk/react/errors`. You must update your import path in order for it to work correctly. Example below of the fix that needs to be made:
 
-    ```diff
-    - import { isMetamaskError } from "@clerk/react"
-    + import { isMetamaskError } from "@clerk/react/errors"
+    ```js {{ prettier: false, del: [1], ins: [2] }}
+    import { isMetamaskError } from "@clerk/react"
+    import { isMetamaskError } from "@clerk/react/errors"
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `WithSession` higher order component has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     export const WithSession = ({ children }) => {
       const session = useSession();
       if (typeof children !== 'function') throw new Error();
@@ -1012,10 +1124,11 @@ As part of this major version, a number of previously deprecated props, arugment
     };
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `WithClerk` higher order component has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     export const WithClerk = ({ children }) => {
       const clerk = useClerk();
       if (typeof children !== 'function') throw new Error();
@@ -1024,10 +1137,11 @@ As part of this major version, a number of previously deprecated props, arugment
     };
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `WithUser` higher order component has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     export const WithUser = ({ children }) => {
       const user = useUser();
       if (typeof children !== 'function') throw new Error();
@@ -1036,10 +1150,11 @@ As part of this major version, a number of previously deprecated props, arugment
     };
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `withClerk` higher order function has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     function withClerk(Component, displayName) {
       displayName = displayName || Component.displayName || Component.name || 'Component';
       Component.displayName = displayName;
@@ -1061,10 +1176,11 @@ As part of this major version, a number of previously deprecated props, arugment
     }
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `withSession` higher order function has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     function withSession(Component, displayName) {
       displayName = displayName || Component.displayName || Component.name || 'Component';
       Component.displayName = displayName;
@@ -1086,10 +1202,11 @@ As part of this major version, a number of previously deprecated props, arugment
     }
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `withUser` higher order function has been removed. If you would still like to use this function in the way its implemented, it can be created quickly using Clerk's [custom hooks](/docs/references/react/overview). An example of how to do so is below:
 
-    ```js
+    ```js {{ prettier: false }}
     function withUser(Component, displayName) {
       displayName = displayName || Component.displayName || Component.name || 'Component';
       Component.displayName = displayName;
@@ -1111,22 +1228,23 @@ As part of this major version, a number of previously deprecated props, arugment
     }
     ```
   </AccordionPanel>
+
   <AccordionPanel>
     The `signOutCallback` prop on the [`<SignOutButton />` component](/docs/components/unstyled/sign-out-button) has been removed. Instead, you can use the `redirectUrl` prop. Example below:
 
-    ```diff
-      import { SignOutButton } from "@clerk/clerk-react";
+    ```jsx {{ prettier: false, del: [6], ins: [7] }}
+    import { SignOutButton } from "@clerk/clerk-react";
 
-      export const Signout = () => {
-        return (
-          <SignOutButton
-    -       signOutCallback={() => { window.location.href = "/your-path" }}
-    +       redirectUrl="/your-path"
-          >
-            <button>Sign Out</button>
-          </SignOutButton>
-        )
-      }
+    export const Signout = () => {
+      return (
+        <SignOutButton
+          signOutCallback={() => { window.location.href = "/your-path" }}
+          redirectUrl="/your-path"
+        >
+          <button>Sign Out</button>
+        </SignOutButton>
+      )
+    }
     ```
   </AccordionPanel>
 </Accordion>

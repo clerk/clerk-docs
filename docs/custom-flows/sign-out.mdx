@@ -1,105 +1,158 @@
 ---
-title: Sign out
-description: Learn how to sign-out users.
+title: Build a custom sign-out flow
+description: Learn how to build a custom sign-out flow using Clerk's signOut() function.
 ---
 
-# Sign out
+# Build a custom sign-out flow
 
-Once you have a signed-in user, you need to give them a way to sign out.
+> [!CAUTION]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To allow users to sign-out using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview)
 
-Please note that the sign-out flow only deactivates the current session. Other valid sessions that correspond to the same user (e.g. if the user is signed in on another computer) will continue to work.
+Clerk's [`<UserButton />`](/docs/components/user/user-button) and [`<SignOutButton />`](/docs/components/unstyled/sign-out-button) components provide a way to sign out users, out of the box. However, if you are building a custom solution, you can use the [`signOut()`](/docs/references/javascript/clerk/clerk#sign-out) function to sign out users.
 
-You can either sign out users in Clerk by utilizing [Clerk Components](/docs/components/overview) or by building a completely custom flow.
+The `signOut()` function signs a user out of all sessions in a [multi-session application](/docs/custom-flows/multi-session-applications), or simply the current session in a single-session context. You can also specify a specific session to sign out by passing the `sessionId` parameter.
 
-## Before you start
+Please note that the sign-out flow only deactivates the current session. Other valid sessions corresponding to the same user (for example, if the user is signed in on another computer) will continue to work.
 
-- You need to create a Clerk Application in your [Clerk Dashboard](https://dashboard.clerk.com/). For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
-- You need to install the correct SDK for your application. You can find steps on how to do so through Clerk's [quickstart](/docs/quickstarts/overview) guides.
+<Tabs items={["Next.js", "JavaScript", "iOS (Beta)"]}>
+  <Tab>
+    The [`useClerk()`](/docs/references/react/use-clerk) hook is used to access the `signOut()` function, which is then called when the user clicks the sign-out button.
 
-## Using Clerk components
+    The Next.js [`useRouter()`](https://nextjs.org/docs/api-reference/next/router#userouter) hook is used to redirect the user to the home page after they sign out.
 
-The simplest way to sign out users is via the [`<UserButton />`][user-button] component. The [`<UserButton />`][user-button] is a pre-built UI component that gives a signed-in user a way to manage their account. One of the options is a **Sign out** button.
+    This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix or Gatsby.
 
-<Images
-  width={880}
-  height={666}
-  src="/docs/images/custom-flows/sign-out.jpg"
-  alt="The User Button component with the 'Sign out' option hovered over."
-/>
+    ```jsx {{ prettier: false, filename: '/app/components/SignOutButton.tsx' }}
+    'use client'
 
-In an application with [multi-session](/docs/custom-flows/multi-session-applications) enabled and with more than one account signed in, the [`<UserButton />`][user-button] component will also display a **Sign out of all accounts** option.
+    import { useClerk } from '@clerk/nextjs';
 
-<Images
-  width={880}
-  height={666}
-  src="/docs/images/custom-flows/user-button-multisession.jpg"
-  alt="The User Button component with multiple accounts signed in."
-/>
+    export const SignOutButton = () => {
+      const { signOut } = useClerk();
 
-<CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
-```jsx
-import { UserButton } from "@clerk/clerk-react";
+      return (
+        // Clicking on this button will sign out a user
+        // and reroute them to the "/" (home) page.
+        <button onClick={() => signOut({ redirectUrl: '/' })}>
+          Sign out
+        </button>
+      );
+    };
+    ```
+  </Tab>
 
-const Header = () => {
-  return (
-    <header>
-      <h1>My application</h1>
+  <Tab>
+    <Tabs items={["NPM module", "<script>"]}>
+      <Tab>
+        For the following example, your HTML file should look like this:
 
-      <UserButton />
-    </header>
-  );
-};
-```
+        ```html {{ prettier: false, filename: 'index.html' }}
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <button id="sign-out">Sign out</button>
 
-```html
-<html>
-<body>
-    <header>
-        <h1>My application</h1>
+            <script
+              type="module"
+              src="/src/main.js"
+              async
+              crossorigin="anonymous"
+            ></script>
+          </body>
+        </html>
+        ```
 
-        <div id="user-button"></div>
-    </header>
+        And your JavaScript file should look like this:
 
-    <script>
-        const el = document.getElementById("user-button");
+        ```js {{ prettier: false, filename: 'main.js' }}
+        import Clerk from '@clerk/clerk-js';
 
-        // Mount the pre-built Clerk UserButton component
-        // in an HTMLElement on your page.
-        window.Clerk.mountUserButton(el);
-    </script>
-</body>
-</html>
-```
-</CodeBlockTabs>
+        // Initialize Clerk with your Clerk publishable key
+        const clerk = new Clerk('{{pub_key}}');
+        await clerk.load();
 
-## Custom sign-out
+        if (clerk.user) {
+          document.getElementById('sign-out').addEventListener('click', async () => { await clerk.signOut() });
+        }
+        ```
+      </Tab>
 
-If the pre-built [`<UserButton />`][user-button] doesn't cover your needs, you can use the [`signOut()`](/docs/references/javascript/clerk/clerk#sign-out) function to build a custom solution.
+      <Tab>
+        ```html {{ prettier: false, filename: 'index.html' }}
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <button id="sign-out">Sign out</button>
 
-In this example, the [`useClerk()`](/docs/references/react/use-clerk) hook is used to access the [`signOut()`](https://clerk.com/docs/references/javascript/clerk/clerk#sign-out) function. We then use the [`useRouter()`](https://nextjs.org/docs/pages/api-reference/functions/use-router) hook from Next.js to redirect the user to the home page (`/`) after they sign out.
+            <script
+              async
+              crossorigin="anonymous"
+              data-clerk-publishable-key="{{pub_key}}"
+              src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+              type="text/javascript"
+            ></script>
 
-<CodeBlockTabs type="framework" options={["React", "JavaScript"]}>
-```jsx
-import { useClerk } from "@clerk/clerk-react";
-import { useRouter } from 'next/navigation'
+            <script>
+              window.addEventListener('load', async function () {
+                await Clerk.load();
 
-const SignOutButton = () => {
-  const { signOut } = useClerk();
-  const router = useRouter()
+                if (Clerk.user) {
+                  document.getElementById('sign-out')
+                    .addEventListener('click', async () => {
+                      await Clerk.signOut();
+                    });
+                }
+              });
+            </script>
+          </body>
+        </html>
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
 
-  return (
-    // Clicking on this button will sign out a user and reroute them to the "/" (home) page.
-    <button onClick={() => signOut(() => router.push("/"))}>
-      Sign out
-    </button>
-  );
-};
-```
+  <Tab>
+    ```swift {{ filename: 'SignOutView.swift' }}
+    import SwiftUI
+    import ClerkSDK
 
-```js
-// Signs-out the current user.
-await window.Clerk.signOut();
-```
-</CodeBlockTabs>
+    struct SignOutView: View {
+        @ObservedObject private var clerk = Clerk.shared
+        
+        var body: some View {
+            if let session = clerk.session {
+                Text("Active Session: \(session.id)")
+                Button("Sign out") {
+                    Task { await signOut() }
+                }
+            } else {
+                Text("You are signed out")
+            }
+        }
+    }
 
-[user-button]: /docs/components/user/user-button
+    extension SignOutView {
+        
+        func signOut() async {
+            do {
+                try await clerk.signOut()
+            } catch {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling.
+                dump(error)
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>

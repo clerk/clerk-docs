@@ -1,0 +1,91 @@
+---
+title: Locals
+description: Learn how to authenticate your Astro application with Clerk using locals.
+---
+
+# Locals
+
+Through Astro [`locals`](https://docs.astro.build/en/guides/middleware/#storing-data-in-contextlocals), Clerk's [`Auth`](https://clerk.com/docs/references/nextjs/auth-object) and current [`User`](https://clerk.com/docs/references/javascript/user/user) objects can be accessed between middlewares and pages. These locals are injected when you install the provided [middleware](/docs/references/astro/clerk-middleware).
+
+The following guide provides examples of using the [`auth()`](https://clerk.com/docs/references/nextjs/auth) local to validate an authenticated user and the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) local to access the [`Backend API User`](https://clerk.com/docs/references/backend/types/backend-user) object for the authenticated user.
+
+## Protect your pages
+
+You can use the `auth()` local to protect your pages and forms. It will return the current user's ID if they are signed in, or `null` if they are not. For more information on `auth()`, see the [reference](https://clerk.com/docs/references/nextjs/auth).
+
+<CodeBlockTabs options={["Protect a page", "Protect a form"]}>
+  ```astro {{ prettier: false, filename: 'src/pages/protected.astro' }}
+  ---
+  const { userId, redirectToSignIn } = Astro.locals.auth();
+
+  if (!userId) {
+    return redirectToSignIn();
+  }
+  ---
+
+  <div>Protected page</div>
+  ```
+
+  ```astro {{ prettier: false, filename: 'src/pages/form.astro' }}
+  ---
+  if (Astro.request.method === "POST") {
+    if (!Astro.locals.auth().userId) {
+      throw new Error('You must be signed in to add an item to your cart');
+    }
+
+    const data = await Astro.request.formData();
+    console.log('add item action', data);
+  }
+  ---
+
+  <form method="POST">
+    <input
+      value="test"
+      type="text"
+      name="name"
+    />
+    <button type="submit">Add to Cart</button>
+  </form>
+  ```
+</CodeBlockTabs>
+
+## Accessing the current user
+
+Current user data is important for data enrichment. You can use the `currentUser()` local to fetch the current user's data in your pages.
+
+Under the hood, this local:
+
+- uses the `GET /v1/users/me` endpoint.
+- counts towards the [Backend API Request Rate Limit](/docs/backend-requests/resources/rate-limits#rate-limits).
+
+For more information on `currentUser()`, see the [reference](https://clerk.com/docs/references/nextjs/current-user).
+
+```astro {{ prettier: false, filename: 'src/pages/form.astro' }}
+---
+if (Astro.request.method === "POST") {
+  const user = await Astro.locals.currentUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to use this feature');
+  }
+
+  const data = await Astro.request.formData();
+  const serverData = {
+    usersHobby: data.get("hobby"),
+    userId: user.id,
+    profileImage: user.imageUrl
+  };
+
+  console.log('add item action completed with user details ', serverData);
+}
+---
+
+<form method="POST">
+  <input
+    value="soccer"
+    type="text"
+    name="hobby"
+  />
+  <button type="submit">Submit your hobby</button>
+</form>
+```

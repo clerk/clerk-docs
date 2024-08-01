@@ -1,0 +1,123 @@
+---
+title: authenticateRequest()
+description: Use Clerk's Backend SDK to verify a token passed from the frontend.
+---
+
+{/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/tokens/request.ts#L62 */}
+
+# `authenticateRequest()`
+
+Authenticates a token passed from the frontend. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from [Clerk's Backend API](/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
+
+```tsx {{ prettier: false }}
+function authenticateRequest: (request: Request, options: AuthenticateRequestOptions) => Promise<RequestState>;
+```
+
+## Parameters
+
+| Name | Type | Description |
+| - | - | - |
+| `request` | `Request` | `Request` object |
+| `options?` | [`AuthenticateRequestOptions`](#authenticate-request-options) | Optional options to configure the authentication. |
+
+## `AuthenticateRequestOptions`
+
+It is recommended to set these options as [environment variables](/docs/deployments/clerk-environment-variables#api-and-sdk-configuration) where possible, and then pass them to the function. For example, you can set the `secretKey` option using the `CLERK_SECRET_KEY` environment variable, and then pass it to the function like this: `createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })`.
+
+> [!WARNING]
+> You must provide either `jwtKey` or `secretKey`.
+
+| Name | Type | Description |
+| - | - | - |
+| `secretKey?` | `string` | The Clerk secret key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. |
+| `publishableKey?` | `string` | The Clerk publishable key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. |
+| `jwtKey?` | `string` | Used to verify the session token in a networkless manner. Supply the PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt). |
+| `domain?` | `string` | The domain for the application. For development, you can pass the localhost your application is running on. For example: `localhost:3001` |
+| `isSatellite?` | `boolean` | Set to `true` if the instance is a satellite domain in a multi-domain setup. |
+| `proxyUrl?` | `string` | The proxy URL from a multi-domain setup. |
+| `signInUrl?` | `string` | The sign-in URL from a multi-domain setup. |
+| `signUpUrl?` | `string` | It's recommended to use sign-up URL from a multi-domain setup. |
+| `afterSignInUrl?` | `string` | Full URL or path to navigate to after successful sign in. Defaults to `/`. |
+| `afterSignUpUrl?` | `string` | Full URL or path to navigate to after successful sign up. Defaults to `/`. |
+| `audience?` | `string \| string[]` | A string or list of [audiences](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3). |
+| `authorizedParties?` | `string[]` | An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br />For example: `['http://localhost:3000', 'https://example.com']` |
+| `clockSkewInMs?` | `number` | Specifies the allowed time difference (in milliseconds) between the Clerk server (which generates the token) and the clock of the user's application server when validating a token. Defaults to 5000 ms (5 seconds). |
+| `jwksCacheTtlInMs?` (deprecated) | `number` | Deprecated. Specifying a cache TTL is now a no-op. |
+| `skipJwksCache?` | `boolean` | A flag to skip ignore cache and always fetch JWKS before each jwt verification. |
+
+## Examples
+
+### With a higher-level SDK
+
+`authenticateRequest()` requires `publishableKey` to be set. If you are importing `clerkClient` from a higher-level SDK, such as Next.js, then `clerkClient` infers the `publishableKey` from your [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys).
+
+```tsx {{ prettier: false }}
+import { clerkClient } from '@clerk/nextjs/server';
+
+export async function GET(req: Request) {
+  const { isSignedIn } = await clerkClient.authenticateRequest(req);
+
+  if (!isSignedIn) {
+    return Response.json({ status: 401 });
+  }
+
+  // Perform protected actions
+  // Add logic to perform protected actions
+
+  return Response.json({ message: 'This is a reply' });
+}
+```
+
+### With the Backend SDK on its own
+
+If you are using the [JavaScript Backend SDK](/docs/references/backend/overview) on its own, you need to provide the `secretKey` and `publishableKey` to `createClerkClient()` so that it is passed to `authenticateRequest()`. You can set these values as [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass them to the function.
+
+```tsx {{ prettier: false }}
+import { createClerkClient } from '@clerk/backend';
+
+export async function GET(req: Request) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  });
+
+  const { isSignedIn } = await clerkClient.authenticateRequest(req);
+
+  if (!isSignedIn) {
+    return Response.json({ status: 401 });
+  }
+
+  // Add logic to perform protected actions
+
+  return Response.json({ message: 'This is a reply' });
+}
+```
+
+### Networkless token verification
+
+{/* Note: this example is duped from /authenticate-request. Probably a good opportunity to use a partial here */}
+
+The following example uses the `authenticateRequest()` method with the [JavaScript Backend SDK](/docs/references/backend/overview) to verify the token passed by the frontend, and performs a networkless authentication by passing `jwtKey`. This will verify if the user is signed into the application or not.
+
+```tsx {{ prettier: false }}
+import { createClerkClient } from '@clerk/backend';
+
+export async function GET(req: Request) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  });
+
+  const { isSignedIn } = await clerkClient.authenticateRequest(req, {
+    jwtKey: process.env.CLERK_JWT_KEY,
+  });
+
+  if (!isSignedIn) {
+    return Response.json({ status: 401 });
+  }
+
+  // Add logic to perform protected actions
+
+  return Response.json({ message: 'This is a reply' });
+}
+```

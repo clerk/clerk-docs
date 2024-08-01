@@ -11,49 +11,47 @@ The Clerk Go SDK provides an easy-to-use middleware that adds the active session
 
 **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
-{/* TODO: Is the filename of this code example supposed to be .env? */}
-
 <InjectKeys>
+  ```go {{ prettier: false, filename: 'main.go' }}
+  package main
 
-```go filename=".env"
-package main
+  import (
+  	"net/http"
 
-import (
-  "net/http"
-  "github.com/clerk/clerk-sdk-go/clerk"
-)
+  	"github.com/clerk/clerk-sdk-go/v2"
+  	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+  	"github.com/clerk/clerk-sdk-go/v2/user"
+  )
 
-func main() {
-	// Create a new Clerk client with your secret key from the Clerk Dashboard
-	client, _ := clerk.NewClient(`{{secret}}`)
+  func main() {
+  	clerk.SetKey(`{{secret}}`)
 
-	mux := http.NewServeMux()
+  	mux := http.NewServeMux()
+  	mux.Handle("/hello", clerkhttp.WithHeaderAuthorization()(hello()))
+  	http.ListenAndServe(":8080", mux)
+  }
 
-	injectActiveSession := clerk.WithSession(client)
-	mux.Handle("/hello", injectActiveSession(helloUserHandler(client)))
+  func hello() http.HandlerFunc {
+  	return func(w http.ResponseWriter, r *http.Request) {
+  		ctx := r.Context()
+  		claims, ok := clerk.SessionClaimsFromContext(ctx)
+  		if !ok {
+  			w.WriteHeader(http.StatusUnauthorized)
+  			w.Write([]byte(`{"access": "unauthorized"}`))
+  			return
+  		}
 
-	http.ListenAndServe(":8080", mux)
-}
+  		usr, err := user.Get(ctx, claims.Subject)
+  		if err != nil {
+  			panic(err)
+  		}
+  		if usr == nil {
+  			w.Write([]byte("User does not exist"))
+  			return
+  		}
 
-func helloUserHandler(client clerk.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		sessClaims, ok := ctx.Value(clerk.ActiveSessionClaims).(*clerk.SessionClaims)
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
-
-		user, err := client.Users().Read(sessClaims.Subject)
-		if err != nil {
-			panic(err)
-		}
-
-		w.Write([]byte("Welcome " + *user.FirstName))
-	}
-}
-```
-
+  		w.Write([]byte("Hello " + *usr.FirstName))
+  	}
+  }
+  ```
 </InjectKeys>

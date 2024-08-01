@@ -1,0 +1,85 @@
+---
+title: Read session and user data in your Astro app with Clerk
+description: Learn how to use Clerk's hooks and helpers to access the active session and user data in your Astro application.
+---
+
+# Read session and user data in your Astro app with Clerk
+
+Clerk provides helpers that you can use to access the active session and user data in your Astro application.
+
+## Server side
+
+The following example uses the [`auth()`](https://clerk.com/docs/references/nextjs/auth) local to validate an authenticated user and the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) local to access the [`Backend API User`](https://clerk.com/docs/references/backend/types/backend-user) object for the authenticated user.
+
+<CodeBlockTabs options={[".astro component", "API Route"]}>
+  ```astro {{ prettier: false, filename: 'src/pages/me.astro' }}
+  ---
+  if (!Astro.locals.auth().userId) {
+    return Astro.redirect('/login');
+  }
+
+  const user = await Astro.locals.currentUser()
+  ---
+
+  <div>{JSON.stringify(user)}</div>
+  ```
+
+  ```tsx {{ prettier: false, filename: 'src/api/me.ts' }}
+  export async function GET({ locals }) {
+    if (!locals.auth().userId) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const currentUser = await locals.currentUser();
+
+    return new Response(JSON.stringify(currentUser));
+  };
+  ```
+</CodeBlockTabs>
+
+## Client side
+
+Clerk Astro provides a set of useful [stores](/docs/references/astro/overview#client-side-helpers) that give you access to many important objects, such as the `Clerk`, `User`, and `Session` object.
+
+### `$authStore`
+
+The following example demonstrates how to use the [`$authStore`](/docs/references/astro/auth-store) to access auth information for the active user, such as the `userId` and `sessionId`.
+
+```tsx {{ prettier: false, filename: 'components/example.tsx' }}
+import { useStore } from '@nanostores/react';
+import { $authStore } from '@clerk/astro/client';
+
+export default function Example() {
+  const { userId, sessionId } = useStore($authStore);
+
+  // In case the user signs out while on the page.
+  if (!userId) {
+    return null;
+  }
+
+  return (
+    <div>
+      Hello, {userId} your current active session is {sessionId}
+    </div>
+  );
+}
+```
+
+### `$userStore`
+
+The following example demonstrates how to use the [`$userStore`](/docs/references/astro/user-store) store to access information about the active user, such as their `firstName`.
+
+```tsx {{ prettier: false, filename: 'components/example.tsx' }}
+import { useStore } from '@nanostores/react';
+import { $userStore } from '@clerk/astro/client';
+
+export default function Example() {
+  const user = useStore($userStore);
+
+  if (!user) {
+    return null;
+  }
+
+  return <div>Hello, {user.firstName} welcome to Clerk</div>;
+}
+```

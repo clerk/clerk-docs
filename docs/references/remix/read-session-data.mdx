@@ -1,0 +1,146 @@
+---
+title: Read session and user data in your Remix app with Clerk
+description: Learn how to use Clerk's hooks and helpers to access the active session and user data in your Remix application.
+---
+
+# Read session and user data in your Remix app with Clerk
+
+Clerk provides a set of [hooks and helpers](/docs/references/nextjs/overview#client-side-helpers) that you can use to access the active session and user data in your Remix application. Here are examples of how to use these helpers in both the client and server side to get you started.
+
+## Server side
+
+### `getAuth()`
+
+<Tabs type="function" items={["Loader Function", "Action Function"]}>
+  <Tab>
+    The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object), including the current `userId`. You can use this helper to protect your loader function or get data for the initial render of the route.
+
+    ```tsx {{ prettier: false, filename: 'routes/example.tsx' }}
+    export const loader: LoaderFunction = async (args) => {
+      // Use getAuth to retrieve user data
+      const { userId, sessionId, getToken } = await getAuth(args);
+
+      // If there is no userId, then redirect to sign-in route
+      if (!userId) {
+        return redirect("/sign-in?redirect_url=" + args.request.url);
+      }
+
+      // Use the userId to fetch data from your database
+      const posts = await mockGetPosts(userId);
+
+      return { posts };
+    };
+    ```
+  </Tab>
+
+  <Tab>
+    The [`getAuth()`][get-auth] helper allows you to access the [`Auth` object](/docs/references/nextjs/auth-object). You can use the returns from `getAuth()` to protect the action function, update the user or perform mutations on data in your database.
+
+    ```tsx {{ prettier: false, filename: 'routes/example.tsx' }}
+    export const action: ActionFunction = async (args) => {
+
+      // Use getAuth to retrieve user data
+      const { userId, getToken } = await getAuth(args)
+
+      // Use the userId to perform a mutation on data in your database
+      const updatedPost = await mockUpdatePost(userId, postId, body)
+
+      return { updatedPost };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Examples of fetching and mutating user data
+
+<Tabs type="function" items={["Loader Function", "Action Function"]}>
+  <Tab>
+    ```tsx {{ prettier: false, filename: 'routes/profile.tsx' }}
+    import { LoaderFunction, redirect } from "@remix-run/node";
+    import { getAuth } from "@clerk/remix/ssr.server";
+    import { createClerkClient } from '@clerk/remix/api.server';
+
+    export const loader: LoaderFunction = async (args) => {
+      const { userId } = await getAuth(args);
+
+      if (!userId) {
+        return redirect("/sign-in?redirect_url=" + args.request.url);
+      }
+
+      const user = await createClerkClient({secretKey: process.env.CLERK_SECRET_KEY}).users.getUser(userId);
+      return { serialisedUser: JSON.stringify(user) };
+    };
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ prettier: false, filename: 'routes/profile.tsx' }}
+    import { ActionFunction, redirect } from "@remix-run/node";
+    import { getAuth } from "@clerk/remix/ssr.server";
+    import { createClerkClient } from '@clerk/remix/api.server';
+
+    export const action: ActionFunction = async (args) => {
+      // Use getAuth to retrieve user data
+      const { userId } = await getAuth(args)
+
+      // If there is no userId, then redirect to sign-in route
+      if (!userId) {
+        return redirect("/sign-in?redirect_url=" + args.request.url);
+      }
+      // Prepare the data for the mutation
+      const params = { firstName: 'John', lastName: 'Wicker' };
+
+      // Initialize clerkClient and perform the mutations
+      const updatedUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.updateUser(userId, params);
+
+      // Return the updated user
+      return { serialisedUser: JSON.stringify(updatedUser) };
+    };
+    ```
+  </Tab>
+</Tabs>
+
+## Client Side
+
+### `useAuth()`
+
+The `useAuth` hook is a convenient way to access the current auth state. This hook provides the minimal information needed for data-loading and helper methods to manage the current active session.
+
+```tsx {{ prettier: false, filename: 'routes/example.tsx' }}
+import { useAuth } from "@clerk/remix";
+
+export default function Example() {
+  const { isLoaded, userId, sessionId, getToken } = useAuth();
+
+  // In case the user signs out while on the page.
+  if (!isLoaded || !userId) {
+    return null;
+  }
+
+  return (
+    <div>
+      Hello, {userId} your current active session is {sessionId}
+    </div>
+  );
+}
+```
+
+### `useUser()`
+
+The `useUser` hook is a convenient way to access the current user data where you need it. This hook provides the user data and helper methods to manage the current active session.
+
+```tsx {{ prettier: false, filename: 'routes/example.tsx' }}
+import { useUser } from "@clerk/remix";
+
+export default function Example() {
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  if (!isLoaded || !isSignedIn) {
+    return null;
+  }
+
+  return <div>Hello, {user.firstName} welcome to Clerk</div>;
+}
+```
+
+[get-auth]: /docs/references/nextjs/get-auth

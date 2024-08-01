@@ -1,163 +1,187 @@
 ---
 title: SAML connections
-description: Learn how to leverage the Clerk SDK to build a completely custom SAML flow.
+description: Learn how to build a custom SAML connection authentication flow using Clerk's API.
 ---
 
 # SAML connections
 
-If [the default SAML flow](/docs/authentication/saml/overview) doesn’t cover your needs, you can build a custom SAML flow with the Clerk SDK.
+> [!CAUTION]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with SAML connections using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
-<Callout type="info">
-  You still need to configure your instance through the Clerk Dashboard. You can create a SAML connection by visiting the **[Enterprise Connections](https://dashboard.clerk.com/last-active?path=user-authentication/enterprise-connections)** page.
-</Callout>
+## Before you start
 
-When using SAML, the sign-in and sign-up are equivalent. A successful SAML flow consists of the following steps:
+You must configure your application instance through the Clerk Dashboard for the SAML connection(s) that you want to use. Visit [the appropriate SAML guide for your platform](/docs/authentication/saml/overview) to learn how to configure your instance.
 
-1. Start the OAuth flow by calling [`SignIn.authenticateWithRedirect(params)`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-redirect) or [`SignUp.authenticateWithRedirect(params)`](/docs/references/javascript/sign-up/authenticate-with#authenticate-with-redirect). Note that both of these methods require a `redirectUrl` param, which is the URL that the browser will be redirected to once the user authenticates with the OAuth provider.
-2. Create a route at the URL `redirectUrl` points, typically `/sso-callback`, that calls the [`Clerk.handleRedirectCallback()`](/docs/references/javascript/clerk/handle-navigation#handle-redirect-callback) or simply renders the prebuilt [`<AuthenticateWithRedirectCallback/>`](/docs/components/control/authenticate-with-callback) component.
+## Create the sign-up and sign-in flow
 
-The React example below uses `react-router-dom` to define the required route. For NextJS apps, you only need to create a `pages/sso-callback` file.
+When using SAML, the sign-in and sign-up flows are equivalent. A successful SAML flow consists of the following steps:
 
-<CodeBlockTabs type="framework" options={["React"]}>
-```jsx
-import React from "react";
-import {
-  BrowserRouter,
-  Switch,
-  Route,
-} from "react-router-dom";
-import { SamlStrategy } from "@clerk/types";
-import {
-  ClerkProvider,
-  ClerkLoaded,
-  AuthenticateWithRedirectCallback,
-  UserButton,
-  useSignIn,
-  SignedIn,
-  SignedOut
-} from "@clerk/clerk-react";
+1. Start the SAML flow by calling [`SignIn.authenticateWithRedirect(params)`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-redirect) or [`SignUp.authenticateWithRedirect(params)`](/docs/references/javascript/sign-up/authenticate-with#authenticate-with-redirect). Note that both of these methods require a `redirectUrl` param, which is the URL that the browser will be redirected to once the user authenticates with the OAuth provider.
+1. Create a route at the URL that the `redirectUrl` param points to. The following example names this route `/sso-callback`. This route should either call the [`Clerk.handleRedirectCallback()`](/docs/references/javascript/clerk/handle-navigation#handle-redirect-callback) method or render the prebuilt [`<AuthenticateWithRedirectCallback/>`](/docs/components/control/authenticate-with-callback) component.
 
-const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
+The following example shows two files:
 
-function App() {
-  return (
-    //  react-router-dom requires your app to be wrapped with a Router
-    <BrowserRouter>
-      <ClerkProvider publishableKey={publishableKey}>
-        <Switch>
-          {/* Define a / route that displays the OAuth buttons */}
-          <Route path="/">
-            <SignedOut>
-							<SignInSAMLButton />
-            </SignedOut>
-            <SignedIn>
-              <UserButton afterSignOutAllUrl="/" />
-            </SignedIn>
-          </Route>
-         
-           {/* Define a /sso-callback route that handles the SAML redirect flow from the IdP */}
-          <Route path="/sso-callback">
-            <SSOCallback />
-          </Route>
-        </Switch>
-      </ClerkProvider>
-    </BrowserRouter>
-  );
-}
+1. The sign-in page where the user can start the SAML flow.
+1. The SSO callback page where the SAML flow is completed.
 
-function SSOCallback() {
-  // Handle the redirect flow by rendering the
-  // prebuilt AuthenticateWithRedirectCallback component.
-  // This is the final step in the custom SAML flow
-  return <AuthenticateWithRedirectCallback />;
-}
+<Tabs items={["Next.js"]}>
+  <Tab>
+    <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
+      ```jsx {{ prettier: false, filename: 'app/sign-in/page.tsx' }}
+      'use client';
 
-function SignInSAMLButton() {
-  const { signIn } = useSignIn();
+      import * as React from 'react';
+      import { useSignIn, useSignUp } from '@clerk/nextjs';
 
-  const signInWith = (strategy: SamlStrategy) => {
-    return signIn.authenticateWithRedirect({
-      identifier: "email_goes_here",
-      strategy: strategy,
-      redirectUrl: "/sso-callback",
-      redirectUrlComplete: "/",
-    });
-  };
+      export default function OauthSignIn() {
+        const { signIn } = useSignIn();
+        const { signUp } = useSignUp();
 
-  // Render a button for each supported SAML provider
-  // you want to add to your app
-  return (
-    <div>
-      <button onClick={() => signInWith("saml")}>
-        Sign in with SAML
-      </button>
-    </div>
-  );
-}
+        if (!signIn || !signUp) return null;
 
-export default App;
-```
-</CodeBlockTabs>
+        const signInWith = (e: React.FormEvent) => {
+          e.preventDefault();
 
-To initiate a SAMLflow for a user that is already signed in, you can use the [`user.createExternalAccount(params)`](/docs/references/javascript/user/create-metadata#create-external-account) method, where `user` is a reference to the currently signed in user.
+          const email = (e.target as HTMLFormElement).email.value;
 
-```jsx
-user
-  .createExternalAccount({ strategy: strategy, redirectUrl: 'your-redirect-url' })
-  .then(externalAccount => {
-    // navigate to
-    // externalAccount.verification!.externalVerificationRedirectURL
-  })
-  .catch(err => {
-    // handle error
-  });
-```
+          signIn
+            .authenticateWithRedirect({
+              identifier: email,
+              strategy: 'saml',
+              redirectUrl: '/sso-callback',
+              redirectUrlComplete: '/',
+            })
+            .then((res) => {
+              console.log(res);
+            })
+            .catch((err: any) => {
+              console.log(err.errors);
+              console.error(err, null, 2);
+            });
+        };
 
-## SAML account transfer flow
+        // Render a button for each supported SAML provider
+        // you want to add to your app
+        return (
+          <form onSubmit={(e) => signInWith(e)}>
+            <input type="email" name="email" placeholder="Enter email address" />
+            <button>Sign in with SAML</button>
+          </form>
+        );
+      }
+      ```
 
-When a user initiates a SAML SSO verification during sign-in, or sign-up, it may sometimes be necessary to move the verification between the two flows.
+      ```jsx {{ prettier: false, filename: 'app/sign-up/sso-callback/page.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs';
 
-For example, if someone already has an account, and tries to go through the sign up flow with the same SAML account, they can’t perform a successful sign up again. Or, if someone attempts to sign in with their SAML credentials but does not yet have an account, they won’t be signed in to the account. For these scenarios, we have “account transfers.”
+      export default function SSOCallback() {
+        console.log('testing');
+        // Handle the redirect flow by rendering the
+        // prebuilt AuthenticateWithRedirectCallback component.
+        // This is the final step in the custom SAML flow.
+        return <AuthenticateWithRedirectCallback />;
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>
 
-<CodeBlockTabs type="framework" options={["JavaScript"]}>
-```js
-// Get sign-in and sign-up objects in the SAML callback page
-const { signIn, signUp } = window.Clerk.client;
+## SAML account transfer flows
 
-// If the user has an account in your application, but does not yet 
-// have a saml account connected, you can use the transfer method to 
-// forward that information.
+It is common for users who are authenticating with OAuth to use a sign-in button when they mean to sign-up, and vice versa. For those cases, the `SignIn` and `SignUp` objects have a `transferable` status that indicates whether the user can be transferred to the other flow.
 
-const userExistsButNeedsToSignIn =
-  signUp.verifications.externalAccount.status === "transferable" &&
-  signUp.verifications.externalAccount.error?.code ===
-    "external_account_exists";
+If you would like to keep your sign-in and sign-up flows completely separate, then you can skip this section.
 
-if (userExistsButNeedsToSignIn) {
-  const res = await signIn.create({ transfer: true });
-  if (res.status === "complete") {
-    window.Clerk.setActive({
-      session: res.createdSessionId,
-    });
-  }
-}
+The following example shows how to handle these cases in your sign-in flow. The same logic can be applied to the sign-up flow; change the `signIn.AuthenticateWithRedirect()` to `signUp.authenticateWithRedirect()`.
 
-// If the user has an existing saml account but does not yet exist as 
-// a user in your app, you can use the transfer method to forward that 
-// information.
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```js {{ prettier: false, filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+    'use client';
 
-const userNeedsToBeCreated =
-  signIn.firstFactorVerification.status === "transferable";
+    import * as React from 'react';
+    import { useSignIn, useSignUp } from '@clerk/nextjs';
 
-if (userNeedsToBeCreated) {
-  const res = await signUp.create({
-    transfer: true,
-  });
-  if (res.status === "complete") {
-    window.Clerk.setActive({
-      session: res.createdSessionId,
-    });
-  }
-}
-```
-</CodeBlockTabs>
+    export default function OauthSignIn() {
+      const { signIn } = useSignIn();
+      const { signUp, setActive } = useSignUp();
+
+      if (!signIn || !signUp) return null;
+
+      const signInWith = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const email = (e.target as HTMLFormElement).email.value;
+
+        signIn
+          .authenticateWithRedirect({
+            identifier: email,
+            strategy: 'saml',
+            redirectUrl: '/sso-callback',
+            redirectUrlComplete: '/',
+          })
+          .then((res) => {
+            console.log(res);
+          })
+          .catch((err: any) => {
+            console.log(err.errors);
+            console.error(err, null, 2);
+          });
+      };
+
+      async function handleSignIn(e: React.FormEvent) {
+        if (!signIn || !signUp) return null;
+
+        // If the user has an account in your application, but does not yet
+        // have a SAML account connected to it, you can transfer the SAML
+        // account to the existing user account.
+        const userExistsButNeedsToSignIn =
+          signUp.verifications.externalAccount.status === 'transferable' &&
+          signUp.verifications.externalAccount.error?.code ===
+            'external_account_exists';
+
+        if (userExistsButNeedsToSignIn) {
+          const res = await signIn.create({ transfer: true });
+
+          if (res.status === 'complete') {
+            setActive({
+              session: res.createdSessionId,
+            });
+          }
+        }
+
+        // If the user has a SAML account but does not yet
+        // have an account in your app, you can create an account
+        // for them using the SAML information.
+        const userNeedsToBeCreated =
+          signIn.firstFactorVerification.status === 'transferable';
+
+        if (userNeedsToBeCreated) {
+          const res = await signUp.create({
+            transfer: true,
+          });
+
+          if (res.status === 'complete') {
+            setActive({
+              session: res.createdSessionId,
+            });
+          }
+        } else {
+          // If the user has an account in your application
+          // and has an SAML account connected to it, you can sign them in.
+          signInWith(e);
+        }
+      }
+
+      // Render a button for each supported OAuth provider
+      // you want to add to your app
+      return (
+        <form onSubmit={(e) => handleSignIn(e)}>
+          <input type="email" name="email" placeholder="Enter email address" />
+          <button>Sign in with SAML</button>
+        </form>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>

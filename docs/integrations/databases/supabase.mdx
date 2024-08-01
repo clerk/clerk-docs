@@ -19,204 +19,242 @@ description: Learn how to integrate Clerk into your Supabase application.
     },
   ]}
 >
-
-- Use Clerk to authenticate access to your Supabase data
-- Access Clerk user IDs in your Supabase RLS policies
-- Customize a JWT template to suit your use-case with Supabase
-
+  - Use Clerk to authenticate access to your Supabase data
+  - Access Clerk user IDs in your Supabase RLS policies
+  - Customize a Clerk JWT template to suit your use case with Supabase
 </TutorialHero>
 
 Integrating Supabase with Clerk gives you the benefits of using a Supabase database while leveraging Clerk's authentication, prebuilt components, and webhooks. To get the most out of Supabase with Clerk, you must implement custom [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) (RLS) policies.
 
-## Tutorial
+RLS works by validating database queries according to the restrictions defined in the RLS policies applied to the table. This guide will show you how to create RLS policies that restrict access to data based on the user's Clerk ID. This way, users can only access data that belongs to them. To set this up, you will:
 
-This tutorial will teach you how to integrate Supabase with Clerk by creating RLS policies that show users content associated with their account.
+- Create a function in Supabase to parse the Clerk user ID from the authentication token.
+- Create a `user_id` column that defaults to the Clerk user's ID when new records are created.
+- Create policies to restrict what data can be read and inserted.
+- Use the Clerk Supabase integration helper in your code to authenticate with Supabase and execute queries.
 
-<Callout type="info">
-  You must have a local project with Clerk set up already to follow this tutorial. See [the quickstart docs](/docs/quickstarts/overview) to get started.
-</Callout>
+This guide will have you create a new table in your [Supabase project](https://supabase.com/dashboard/projects), but you can apply these concepts to your existing tables as well.
+
+> [!TIP]
+> This integration restricts what data authenticated users can access in the database, but does not synchronize user records between Clerk and Supabase. To send additional data from Clerk to your Supabase database, use [webhooks](/docs/integrations/webhooks/overview).
+
+## Choose your own adventure
+
+For interacting with the Supabase dashboard, you can either use the **Supabase interface** or the **SQL Editor**. The **SQL Editor** is a more direct way to interact with your database, but the **Supabase interface** provides a more user-friendly experience.
 
 <Steps>
+  ### Create a SQL query that checks the user ID
 
-### Add a column for user IDs to your Supabase tables
+  Create a function named `requesting_user_id()` that will parse the Clerk user ID from the authentication token. This function will be used to set the default value of `user_id` in a table and in the RLS policies to ensure the user can only access their data.
 
-To show users content scoped to their account, you must create RLS policies that check the user's Clerk ID. This requires storing Clerk user IDs on the relevant tables. In this guide we will use a column named `user_id`, but you can use any name you would like.
+  <Tabs items={["Supabase interface", "SQL Editor"]}>
+    <Tab>
+      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **Database** > **Functions**.
+      1. Select **Create a new function**.
+      1. In the **Add a new function** sheet, make the following changes:
+         - Set **Name of function** to `requesting_user_id`.
+         - Set **Return type** to `text`.
+         - Toggle **Show advanced settings** on.
+         - Set **Language** to `sql`.
+         - Populate the **Definition** with the following sql:
+           ```sql {{ prettier: false }}
+           SELECT NULLIF(
+               current_setting('request.jwt.claims', true)::json->>'sub',
+               ''
+           )::text;
+           ```
+         - Select **Confirm**.
+    </Tab>
 
-- In the sidebar of your Supabase dashboard, navigate to **Database** > **Tables**. From here, you can add the user ID column to the table you want to use.
-    - Name the column `user_id`.
-    - **This column's data type must be `text`**.
-    - In the **Default Value** field, add `(requesting_user_id())`. This will make it default to the return value of the custom function you'll define in the next step. Doing this enables you to make each requesting user's ID available to Supabase from the request headers.
-<Callout type="info">
-  This step is required because Supabase's `auth.uuid()` function, which normally grants access to the user ID in RLS policies, is not compatible with Clerk's user IDs.
-</Callout>
+    <Tab>
+      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
+         ```sql {{ prettier: false }}
+         CREATE OR REPLACE FUNCTION requesting_user_id()
+         RETURNS TEXT AS $$
+             SELECT NULLIF(
+                 current_setting('request.jwt.claims', true)::json->>'sub',
+                 ''
+             )::text;
+         $$ LANGUAGE SQL STABLE;
+         ```
+      1. To execute the query and create the `requesting_user_id` function, select **Run**.
+    </Tab>
+  </Tabs>
 
-### Create a SQL query that checks the user ID
+  ### Create a table and enable RLS on it
 
-Create a `requesting_user_id()` function, which will get the Clerk user ID of the requesting user from the request headers. This will allow you to access the user ID in your RLS policies.
-    1. In the sidebar of your Supabase dashboard, navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
-        ```sql
-        CREATE OR REPLACE FUNCTION requesting_user_id()
-        RETURNS TEXT AS $$
-            SELECT NULLIF(
-                current_setting('request.jwt.claims', true)::json->>'sub',
-                ''
-            )::text;
-        $$ LANGUAGE SQL STABLE;
-        ```
-    1. Select **Run** to execute the query and create the `requesting_user_id` function.
+  Next, you'll create a `tasks` table and enable RLS on that table. The `tasks` table will also contain a `user_id` column that will use the `requesting_user_id()` function you just created as it's default value. This column will be used in the RLS policies to only return or modify records scoped to the user's account.
 
-### Create ID-based RLS policies
+  <Tabs items={["Supabase interface", "SQL Editor"]}>
+    <Tab>
+      In the left navigation, select **Table Editor** and select **Create a new table**. In the sheet that appears in the right, configure the following settings:
 
-Create RLS policies that allow users to modify and read content associated with their user IDs. This example will use an `Addresses` table, but you can replace `Addresses` with whatever table you're using.
-1. Create an RLS policy for inserting content:
-    - In your Supabase dashboard, in the sidebar, navigate to **Authentication** > **Policies**. Under the name of the table you want users to have access to, select **New Policy**.
-    - If you're using the policy editor, paste the following snippet, replacing `address` and `"Addresses"` with whatever you want:
-        ```sql filename="Supabase policy editor"
-        CREATE POLICY "create user address" ON "public"."Addresses"
-        AS PERMISSIVE FOR INSERT
-        TO authenticated
+      - Name: `tasks`.
+      - Toggle on **Enable Row Level Security (RLS).**
+      - Set up the **Columns** with the following configuration:
+        | Name | Type | Default value | Primary | Additional settings (Gear icon) |
+        | - | - | - | - | - |
+        | id | int8 | _NULL_ | Checked | Is identity |
+        | name | text | | | |
+        | user\_id | text | requesting\_user\_id() | | |
+      - Select **Save**.
+    </Tab>
 
-        WITH CHECK (requesting_user_id() = user_id)
-        ```
-    - If you're using the policy creator instead of the editor:
-        - Name the policy whatever you want.
-        - For **Allowed operation**, select **INSERT**.
-        - For **Target roles**, select **authenticated**.
-        - For the **USING** expression, paste the following:
-        ```sql filename="Supabase policy editor"
-        requesting_user_id() = user_id
-        ```
-1. Create another RLS policy to allow users to read content from the same table they can modify. Follow the same instructions as the previous step, but the **Allowed operation** must be **SELECT** instead of **INSERT**.
-    - If you're using the editor, copy the same snippet from the previous step, replacing `FOR INSERT` with `FOR SELECT`.
+    <Tab>
+      To create the `tasks` table and enable RLS on it, run the following two queries:
 
-### Get your Supabase JWT secret key
+      ```sql {{ prettier: false }}
+      -- Create a 'tasks' table
+      create table tasks(
+        id serial primary key,
+        name text not null,
+        user_id text not null default requesting_user_id()
+      );
 
-To give users access to your data, Supabase's API requires an authentication token. Your Clerk project can generate these authentication tokens, but it needs your Supabase project's JWT secret key first.
-
-To find the JWT secret key:
-
-1. In the Supabase dashboard, select your project.
-1. In the sidebar, select **Settings** > **API**. Copy the value in the **JWT Secret** field.
-1. Open the [Clerk dashboard](https://dashboard.clerk.com/) in a new tab.
-
-### Create a Supabase JWT template
-
-Clerk's JWT templates allow you to generate a new valid Supabase authentication token for each signed in user. These tokens allow authenticated users to access your data with Supabase's API.
-
-To create a JWT template for Supabase:
-
-1. Open your project in the Clerk Dashboard and navigate to the **JWT Templates** page in the sidebar.
-2. Select the **New template** button, then select **Supabase** from the list of options.
-3. Configure your template:
-    - The value of the **Name** field will be required when using the template in your code. For this tutorial, name it `supabase`.
-    - **Signing algorithm** will be `HS256` by default. This algorithm is required to use JWTs with Supabase. [Learn more in their docs](https://supabase.com/docs/guides/resources/glossary#jwt-signing-secret).
-    - Under **Signing key**, add the value of your Supabase **JWT secret key** from [the previous step](#get-your-supabase-jwt-secret-key).
-    - Leave all other fields at their default settings unless you want to customize them. See [Clerk's JWT template docs](/docs/backend-requests/making/jwt-templates#creating-a-template) to learn what each of them do.
-    - Select **Apply changes** to complete setup.
-
-### Set up your local project
-
-To use Clerk with Supabase in your code, first install the necessary SDKs by running the following terminal command in the root directory of your project:
-
-<Tabs type="framework" items={["Next.js", "React"]}>
-  <Tab>
-    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-      ```bash filename="terminal"
-      npm install @clerk/nextjs @supabase/supabase-js
+      -- Enable RLS on the table
+      alter table `tasks` enable row level security;
       ```
+    </Tab>
+  </Tabs>
 
-      ```bash filename="terminal"
-      yarn add @clerk/nextjs @supabase/supabase-js
+  ### Create ID-based RLS policies
+
+  Create RLS policies that permit users to read and insert content associated with their user IDs only.
+
+  <Tabs items={["Supabase interface", "SQL Editor"]}>
+    <Tab>
+      In the sidebar, navigate to **Authentication** > **Policies**. Create policies that allow your users to read and insert data into the `tasks` table:
+
+      1. Select **Create policy** to create the `SELECT` policy:
+         - Name: "Select tasks policy".
+         - For **Policy Command**, select **SELECT**.
+         - For **Target roles**, select **authenticated**.
+         - Replace the "-- Provide a SQL expression for the using statement" with the following:
+           ```sql {{ prettier: false, filename: 'Supabase policy editor' }}
+           requesting_user_id() = user_id
+           ```
+         - Select **Save policy**.
+      1. Select **Create policy** to create the `INSERT` policy:
+         - Name: "Insert task policy".
+         - For **Policy Command**, select **INSERT**.
+         - For **Target roles**, select **authenticated**.
+         - Replace the "-- Provide a SQL expression for the with check statement" with the following:
+           ```sql {{ prettier: false, filename: 'Supabase policy editor' }}
+           requesting_user_id() = user_id
+           ```
+         - Select **Save policy**.
+    </Tab>
+
+    <Tab>
+      In the sidebar, navigate to **SQL Editor**. Run the following queries to add policies for all statements issued on `tasks`:
+
+      ```sql {{ prettier: false }}
+      -- This policy will enforce that only tasks where the `user_id` matches the Clerk user ID are returned.
+      CREATE POLICY "Select tasks policy" ON "public"."tasks"
+      AS PERMISSIVE FOR SELECT
+      TO authenticated
+      USING (requesting_user_id() = user_id)
+
+      -- This policy will enforce the `user_id` field on INSERT statements matches the Clerk user ID.
+      CREATE POLICY "Insert tasks policy" ON "public"."tasks"
+      AS PERMISSIVE FOR INSERT
+      TO authenticated
+      WITH CHECK (requesting_user_id() = user_id)
       ```
+    </Tab>
+  </Tabs>
 
-      ```bash filename="terminal"
-      pnpm add @clerk/nextjs @supabase/supabase-js
-      ```
-    </CodeBlockTabs>
-  </Tab>
-  <Tab>
-    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-      ```bash filename="terminal"
-      npm install @clerk/clerk-react @supabase/supabase-js
-      ```
+  ### Get your Supabase JWT secret key
 
-      ```bash filename="terminal"
-      yarn add @clerk/clerk-react @supabase/supabase-js
-      ```
+  To give users access to your data, Supabase's API requires an authentication token. Your Clerk project can generate these authentication tokens, but it needs your Supabase project's JWT secret key first.
 
-      ```bash filename="terminal"
-      pnpm add @clerk/clerk-react @supabase/supabase-js
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+  To find the JWT secret key:
 
-Then, set up your environment variables:
+  1. In the sidebar, navigate to **Project Settings > API**.
+  1. Under the **JWT Settings** section, save the value in the **JWT Secret** field somewhere secure. This value will be used in the next step.
 
-1. If you don't have a `.env.local` file in the root directory of your Next.js project, create one now.
-1. Find your Clerk publishable key and secret key. If you're signed into Clerk, the `.env.local` snippet below will contain your keys. Otherwise:
-    - Navigate to your Clerk Dashboard.
-    - Select your application, then select **API Keys** in the sidebar menu.
-    - You can copy your keys from the **Quick Copy** section.
-1. Add your keys to your `.env.local` file.
-1. Find your Supabase credentials:
-    - Go to your Supabase dashboard. In the sidebar, select **Settings** > **API**.
-    - Copy the **Project URL** and add it to your `.env.local` file.
-    - Copy the value beside `anon` `public` in the **Project API Keys** section and add it to your `.env.local` file.
+  ### Create a Supabase JWT template
 
-The final result should be similar to this:
+  Clerk's JWT templates allow you to generate a new valid Supabase authentication token for each signed in user. These tokens allow authenticated users to access your data with Supabase's API.
 
-    <InjectKeys>
-    <CodeBlockTabs type="framework" options={["Next.js", "React"]}>
-    ```js filename=".env.local"
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-    NEXT_PUBLIC_SUPABASE_KEY=your_supabase_anon_key
+  To create a JWT template for Supabase:
+
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates).
+  1. In the navigation sidebar, select **JWT Templates**.
+  1. Select the **New template** button, then select **Supabase** from the list of options.
+  1. Configure your template:
+     - The value of the **Name** field will be required when using the template in your code. For this tutorial, name it `supabase`.
+     - **Signing algorithm** will be `HS256` by default. This algorithm is required to use JWTs with Supabase. [Learn more in their docs](https://supabase.com/docs/guides/resources/glossary#jwt-signing-secret).
+     - Under **Signing key**, add the value of your Supabase **JWT secret key** from [the previous step](#get-your-supabase-jwt-secret-key).
+     - You can leave all other fields at their default settings or customize them to your needs. See the [JWT template guide](/docs/backend-requests/making/jwt-templates#creating-a-template) to learn more about these settings.
+     - Select **Save** from the notification bubble to complete setup.
+
+  ### Install the Supabase client library
+
+  Add the Supabase client library to your project.
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    npm i @supabase/supabase-js
     ```
-    ```js filename=".env.local"
-    REACT_APP_CLERK_PUBLISHABLE_KEY={{pub_key}}
-    REACT_APP_SUPABASE_URL=your_supabase_url
-    REACT_APP_SUPABASE_KEY=your_supabase_anon_key
+
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    yarn add @supabase/supabase-js
     ```
-    </CodeBlockTabs>
-    </InjectKeys>
 
-### Fetch Supabase data in your code
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    pnpm add @supabase/supabase-js
+    ```
+  </CodeBlockTabs>
 
-The following steps will show you how to access content from your Supabase tables based on the user's ID. It assumes you have a table named `"Addresses"` with a `content` field, but you can adapt this code for any use case.
+  ### Set up your environment variables
 
-<Tabs items={["Client component", "Server component"]}>
-<Tab>
-1. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your Clerk JWT template:
+  1. In the sidebar of the [Supabase dashboard](https://supabase.com/dashboard/projects), select **Settings** > **API**.
+  1. Add the **Project URL** to your `.env.local` file as `SUPABASE_URL`.
+  1. In the **Project API keys** section, add the value beside `anon` `public` to your `.env.local` file as `SUPABASE_KEY`.
 
-    <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-    ```ts filename="app/supabase/page.tsx"
-    "use client";
-    import { createClient } from "@supabase/supabase-js";
-    import { useRef, useState } from "react";
+  > [!IMPORTANT]
+  > If you are using Next.js, the `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code.
 
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
+  ### Fetch Supabase data in your code
 
+  The following example shows the list of tasks for the user and allows the user to add new tasks.
+
+  The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client, but modifies it to inject the Clerk token you [created with the Supabase JWT template](#create-a-supabase-jwt-template) into the request headers sent to Supabase. The `requesting_user_id()` function that was created in the Supabase dashboard will parse this token to use it when querying data from the `tasks` table.
+
+  The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to access the [`useUser()`](/docs/references/react/use-user) and [`useSession()`](/docs/references/react/use-session) hooks, but you can adapt this code to work with any React-based Clerk SDK.
+
+  ```jsx {{ prettier: false, filename: 'app/page.tsx' }}
+  'use client';
+  import { useEffect, useState } from 'react';
+  import { useSession, useUser } from '@clerk/nextjs';
+  import { createClient } from '@supabase/supabase-js';
+
+  export default function Home() {
+    const [tasks, setTasks] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [name, setName] = useState('');
+    // The `useUser()` hook will be used to ensure that Clerk has loaded data about the logged in user
+    const { user } = useUser();
+    // The `useSession()` hook will be used to get the Clerk session object
+    const { session } = useSession();
+
+    // Create a custom supabase client that injects the Clerk Supabase token into the request headers
     function createClerkSupabaseClient() {
       return createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_KEY!,
         {
           global: {
-            // Get the Supabase token with a custom fetch method
+            // Get the custom Supabase token from Clerk
             fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
+              const clerkToken = await session?.getToken({
+                template: 'supabase',
               });
 
-              // Construct fetch headers
+              // Insert the Clerk Supabase token into the headers
               const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
+              headers.set('Authorization', `Bearer ${clerkToken}`);
 
               // Now call the default fetch
               return fetch(url, {
@@ -229,675 +267,64 @@ The following steps will show you how to access content from your Supabase table
       );
     }
 
+    // Create a `client` object for accessing Supabase data using the Clerk token
     const client = createClerkSupabaseClient();
-    ```
-    ```ts filename="pages/supabase/index.tsx"
-    import { createClient } from "@supabase/supabase-js";
-    import { useRef, useState } from "react";
 
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
+    // This `useEffect` will wait for the User object to be loaded before requesting
+    // the tasks for the logged in user
+    useEffect(() => {
+      if (!user) return;
+
+      async function loadTasks() {
+        setLoading(true);
+        const { data, error } = await client.from('tasks').select();
+        if (!error) setTasks(data);
+        setLoading(false);
       }
+
+      loadTasks();
+    }, [user]);
+
+    async function createTask(e: React.FormEvent<HTMLFormElement>) {
+      e.preventDefault();
+      // Insert task into the "tasks" database
+      await client.from('tasks').insert({
+        name,
+      });
+      window.location.reload();
     }
 
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the Supabase token with a custom fetch method
-            fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
-              });
-
-              // Construct fetch headers
-              const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
-
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
-        }
-      );
-    }
-
-    const client = createClerkSupabaseClient();
-    ```
-    ```ts filename="components/supabase.tsx"
-    import { createClient } from "@supabase/supabase-js";
-    import React, { useRef, useState } from "react";
-
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
-
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.REACT_APP_SUPABASE_URL!,
-        process.env.REACT_APP_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the Supabase token with a custom fetch method
-            fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
-              });
-
-              // Construct fetch headers
-              const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
-
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
-        }
-      );
-    }
-
-    const client = createClerkSupabaseClient();
-    ```
-    </CodeBlockTabs>
-
-1. Next, define a component with methods for listing addresses from and sending addresses to your database:
-    <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-    ```tsx filename="app/supabase/page.tsx"
-    export default function Supabase() {
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return null;
-    }
-    ```
-    ```tsx filename="pages/supabase/index.tsx"
-    export default function Supabase() {
-      const client = createClerkSupabaseClient();
-
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return null;
-    }
-    ```
-    ```tsx filename="component/supabase.tsx"
-    export default function Supabase() {
-      const client = createClerkSupabaseClient();
-
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return null;
-    }
-    ```
-    </CodeBlockTabs>
-
-1. Finally, edit your component to return a basic UI that allows you to list all your addresses and send new ones:
-    <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-    ```tsx filename="app/supabase/page.tsx"
     return (
-      <>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+      <div>
+        <h1>Tasks</h1>
+
+        {loading && <p>Loading...</p>}
+
+        {!loading &&
+          tasks.length > 0 &&
+          tasks.map((task: any) => <p>{task.name}</p>)}
+
+        {!loading && tasks.length === 0 && <p>No tasks found</p>}
+
+        <form onSubmit={createTask}>
           <input
-            onSubmit={sendAddress}
+            autoFocus
             type="text"
-            ref={inputRef}
+            name="name"
+            placeholder="Enter new task"
+            onChange={(e) => setName(e.target.value)}
+            value={name}
           />
-          <button onClick={sendAddress}>Send Address</button>
-          <button onClick={listAddresses}>Fetch Addresses</button>
-        </div>
-        <h2>Addresses</h2>
-        {!addresses ? (
-          <p>No addresses</p>
-        ) : (
-          <ul>
-            {addresses.map((address: any) => (
-              <li key={address.id}>{address.content}</li>
-            ))}
-          </ul>
-        )}
-      </>
+          <button type="submit">Add</button>
+        </form>
+      </div>
     );
-    ```
-    ```tsx filename="page/supabase/index.tsx"
-    return (
-      <>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <input
-            onSubmit={sendAddress}
-            type="text"
-            ref={inputRef}
-          />
-          <button onClick={sendAddress}>Send Address</button>
-          <button onClick={listAddresses}>Fetch Addresses</button>
-        </div>
-        <h2>Addresses</h2>
-        {!addresses ? (
-          <p>No addresses</p>
-        ) : (
-          <ul>
-            {addresses.map((address: any) => (
-              <li key={address.id}>{address.content}</li>
-            ))}
-          </ul>
-        )}
-      </>
-    );
-    ```
-    ```tsx filename="components/supabase.tsx"
-    return (
-      <>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <input
-            onSubmit={sendAddress}
-            type="text"
-            ref={inputRef}
-          />
-          <button onClick={sendAddress}>Send Address</button>
-          <button onClick={listAddresses}>Fetch Addresses</button>
-        </div>
-        <h2>Addresses</h2>
-        {!addresses ? (
-          <p>No addresses</p>
-        ) : (
-          <ul>
-            {addresses.map((address: any) => (
-              <li key={address.id}>{address.content}</li>
-            ))}
-          </ul>
-        )}
-      </>
-    );
-    ```
-    </CodeBlockTabs>
+  }
+  ```
 
-1. The final result should be similar to this:
-    <CodeBlockTabs type="framework" options={["Next.js App Router", "Next.js Pages Router", "React"]}>
-    ```ts filename="app/supabase/page.tsx"
-    "use client";
-    import { createClient } from "@supabase/supabase-js";
-    import { useRef, useState } from "react";
+  ### Test your integration
 
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
+  Run your project and sign in. Test creating and viewing tasks. Sign out and sign in as a different user, and repeat.
 
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the Supabase token with a custom fetch method
-            fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
-              });
-
-              // Construct fetch headers
-              const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
-
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
-        }
-      );
-    }
-
-    const client = createClerkSupabaseClient();
-
-    export default function Supabase() {
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return (
-        <>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <input
-              onSubmit={sendAddress}
-              style={{ color: "black" }}
-              type="text"
-              ref={inputRef}
-            />
-            <button onClick={sendAddress}>Send Address</button>
-            <button onClick={listAddresses}>Fetch Addresses</button>
-          </div>
-          <h2>Addresses</h2>
-          {!addresses ? (
-            <p>No addresses</p>
-          ) : (
-            <ul>
-              {addresses.map((address: any) => (
-                <li key={address.id}>{address.content}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    }
-    ```
-    ```ts filename="pages/supabase/index.tsx"
-    import { createClient } from "@supabase/supabase-js";
-    import { useRef, useState } from "react";
-
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
-
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the Supabase token with a custom fetch method
-            fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
-              });
-
-              // Construct fetch headers
-              const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
-
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
-        }
-      );
-    }
-
-    const client = createClerkSupabaseClient();
-
-    export default function Supabase() {
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return (
-        <>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <input
-              onSubmit={sendAddress}
-              style={{ color: "black" }}
-              type="text"
-              ref={inputRef}
-            />
-            <button onClick={sendAddress}>Send Address</button>
-            <button onClick={listAddresses}>Fetch Addresses</button>
-          </div>
-          <h2>Addresses</h2>
-          {!addresses ? (
-            <p>No addresses</p>
-          ) : (
-            <ul>
-              {addresses.map((address: any) => (
-                <li key={address.id}>{address.content}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    }
-    ```
-    ```ts filename="components/supabase.tsx"
-    import { createClient } from "@supabase/supabase-js";
-    import React, { useRef, useState } from "react";
-
-    // Add clerk to Window to avoid type errors
-    declare global {
-      interface Window {
-        Clerk: any;
-      }
-    }
-
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.REACT_APP_SUPABASE_URL!,
-        process.env.REACT_APP_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the Supabase token with a custom fetch method
-            fetch: async (url, options = {}) => {
-              const clerkToken = await window.Clerk.session?.getToken({
-                template: "supabase",
-              });
-
-              // Construct fetch headers
-              const headers = new Headers(options?.headers);
-              headers.set("Authorization", `Bearer ${clerkToken}`);
-
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
-        }
-      );
-    }
-
-    const client = createClerkSupabaseClient();
-
-    export default function Supabase() {
-      const [addresses, setAddresses] = useState<any>();
-      const listAddresses = async () => {
-        // Fetches all addresses scoped to the user
-        // Replace "Addresses" with your table name
-        const { data, error } = await client.from("Addresses").select();
-        if (!error) setAddresses(data);
-      };
-
-      const inputRef = useRef<HTMLInputElement>(null);
-      const sendAddress = async () => {
-        if (!inputRef.current?.value) return;
-        await client.from("Addresses").insert({
-          // Replace content with whatever field you want
-          content: inputRef.current?.value,
-        });
-      };
-
-      return (
-        <>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <input
-              onSubmit={sendAddress}
-              style={{ color: "black" }}
-              type="text"
-              ref={inputRef}
-            />
-            <button onClick={sendAddress}>Send Address</button>
-            <button onClick={listAddresses}>Fetch Addresses</button>
-          </div>
-          <h2>Addresses</h2>
-          {!addresses ? (
-            <p>No addresses</p>
-          ) : (
-            <ul>
-              {addresses.map((address: any) => (
-                <li key={address.id}>{address.content}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    }
-    ```
-    </CodeBlockTabs>
-
-1. Try out your application. When you visit the page with your component, you'll be required to sign in. Try creating and fetching content.
-
-</Tab>
-
-<Tab>
-1. To create a Supabase client in a Server component, you must first install the Supabase SSR package:
-
-    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-      ```bash filename="terminal"
-      npm install @supabase/ssr
-      ```
-
-      ```bash filename="terminal"
-      yarn add @supabase/ssr
-      ```
-
-      ```bash filename="terminal"
-      pnpm add @supabase/ssr
-      ```
-    </CodeBlockTabs>
-
-2. Create a component and define a `createClerkSupabaseClient` method. This method returns a client that connects to Supabase with an authentication token from your Clerk JWT template:
-
-    ```ts filename="app/supabase/page.tsx"
-    import { auth } from "@clerk/nextjs/server";
-    import { CookieOptions, createServerClient } from "@supabase/ssr";
-    import { cookies } from "next/headers";
-
-    async function createClerkSupabaseClient() {
-      const cookieStore = cookies();
-      const { getToken } = auth();
-
-      const token = await getToken({ template: "supabase" });
-      const authToken = token ? { Authorization: `Bearer ${token}` } : null;
-
-      return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: { headers: { "Cache-Control": "no-store", ...authToken } },
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value;
-            },
-            set(name: string, value: string, options: CookieOptions) {
-              try {
-                cookieStore.set({ name, value, ...options });
-              } catch (error) {
-                // Handle the error
-              }
-            },
-            remove(name: string, options: CookieOptions) {
-              try {
-                cookieStore.set({ name, value: "", ...options });
-              } catch (error) {
-                // Handle the error
-              }
-            },
-          },
-        }
-      );
-    }
-    ```
-
-1. Next, define a component with methods for accessing a user's addresses from your database:
-
-    ```ts filename="app/supabase/page.tsx"
-    export default async function Supabase() {
-      const client = await createClerkSupabaseClient();
-
-      const { data, error } = await client.from("Addresses").select();
-
-      if (error) {
-        return <p>Error: {JSON.stringify(error, null, 2)}</p>;
-      }
-
-      return null;
-    }
-    ```
-
-1. Finally, edit your component to return a basic UI that allows you to list all your addresses:
-
-    ```ts filename="app/supabase/page.tsx"
-      return (
-        <div>
-          <h2>Addresses</h2>
-          {!data ? (
-            <p>No addresses</p>
-          ) : (
-            <ul>
-              {data.map((address: any) => (
-                <li key={address.id}>{address.content}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      );
-    }
-    ```
-
-1. The final result should be similar to this:
-    ```ts filename="app/supabase/page.tsx"
-    import { auth } from "@clerk/nextjs/server";
-    import { CookieOptions, createServerClient } from "@supabase/ssr";
-    import { cookies } from "next/headers";
-
-    async function createClerkSupabaseClient() {
-      const cookieStore = cookies();
-      const { getToken } = auth();
-
-      const token = await getToken({ template: "supabase" });
-      const authToken = token ? { Authorization: `Bearer ${token}` } : null;
-
-      return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: { headers: { "Cache-Control": "no-store", ...authToken } },
-          cookies: {
-            get(name: string) {
-              return cookieStore.get(name)?.value;
-            },
-            set(name: string, value: string, options: CookieOptions) {
-              try {
-                cookieStore.set({ name, value, ...options });
-              } catch (error) {
-                // Handle the error
-              }
-            },
-            remove(name: string, options: CookieOptions) {
-              try {
-                cookieStore.set({ name, value: "", ...options });
-              } catch (error) {
-                // Handle the error
-              }
-            },
-          },
-        }
-      );
-    }
-
-    export default async function Supabase() {
-      const client = await createClerkSupabaseClient();
-
-      const { data, error } = await client.from("Addresses").select();
-
-      if (error) {
-        return <p>Error: {JSON.stringify(error, null, 2)}</p>;
-      }
-
-      return (
-        <div>
-          <h2>Addresses</h2>
-          {!data ? (
-            <p>No addresses</p>
-          ) : (
-            <ul>
-              {data.map((address: any) => (
-                <li key={address.id}>{address.content}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      );
-    }
-    ```
-
-1. Try out your application. When you visit the page with your component, you'll be required to sign in. Try creating and fetching content.
-
-</Tab>
-</Tabs>
-
-
+  If you have the same tasks across multiple accounts, double check that RLS is enabled, or that the RLS policies were properly created. Check the table in the Supabase dashboard. You should see all the tasks between both users, but with differing values in the `user_id` column.
 </Steps>
-
-## Next steps
-
-- Try adding some [custom claims](/docs/backend-requests/making/jwt-templates) to the JWT template in `app_metadata` or `user_metadata`

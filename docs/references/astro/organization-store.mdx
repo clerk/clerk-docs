@@ -1,0 +1,99 @@
+---
+title: $organizationStore
+description: Clerk's $organizationStore store retrieves the currently active organization.
+---
+
+# `$organizationStore`
+
+The `$organizationStore` store is used to retrieve attributes of the currently active organization.
+
+## How to use the `$organizationStore` store
+
+The following example demonstrates how to use the `$organizationStore` store to access the [`Organization`](https://clerk.com/docs/references/javascript/organization/organization) object, which allows you to access the current active organization.
+
+```tsx {{ prettier: false, filename: 'session.tsx' }}
+import { useStore } from '@nanostores/react';
+import { $organizationStore } from '@clerk/astro/client';
+
+export default function Home() {
+  const organization = useStore($organizationStore);
+
+  if (organization === undefined) {
+    // Add logic to handle loading state
+    return null;
+  }
+
+  if(organization === null) {
+    // Add logic to handle no active organization state
+    return null;
+  }
+
+  return (
+    <div>
+      <p>This current organization is {organization.name}</p>
+    </div>
+  )
+}
+```
+
+## Paginating data
+
+The following example demonstrates how to implement pagination for organization memberships. The `memberships` state will be populated with the first page of the organization's memberships. When the "Previous page" or "Next page" button is clicked, the `fetchMemberships` function will be called to fetch the previous or next page of memberships.
+
+You can implement this pattern to any Clerk function that returns a [`ClerkPaginatedResponse`](https://clerk.com/docs/references/javascript/types/clerk-paginated-response#clerk-paginated-response) object.
+
+```tsx {{ prettier: false, filename: 'organization-members.tsx' }}
+import { useState, useEffect } from 'react';
+import { $organizationStore } from '@clerk/astro/client'
+import { useStore } from '@nanostores/react';
+
+export default function OrganizationMembers() {
+  const [memberships, setMemberships] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const organization = useStore($organizationStore);
+
+  const pageSize = 10;
+
+  useEffect(() => {
+    fetchMemberships();
+  }, [currentPage, organization]);
+
+  const fetchMemberships = async () => {
+    if (!organization) {
+      return;
+    }
+
+    const { data } = await organization.getMemberships({
+      initialPage: currentPage,
+      pageSize: 5
+    });
+    setMemberships(data);
+  };
+
+  const fetchPrevious = () => setCurrentPage(currentPage - 1);
+  const fetchNext = () => setCurrentPage(currentPage + 1);
+
+  if (!organization) {
+    // Handle loading state
+    return null;
+  }
+
+  return (
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {memberships.map((membership) => (
+          <li key={membership.id}>
+            {membership.publicUserData.firstName} {membership.publicUserData.lastName} &lt;
+            {membership.publicUserData.identifier}&gt; :: {membership.role}
+          </li>
+        ))}
+      </ul>
+      <div>
+        <button onClick={fetchPrevious} disabled={currentPage === 1}>Previous</button>
+        <button onClick={fetchNext}>Next</button>
+      </div>
+    </div>
+  );
+};
+```

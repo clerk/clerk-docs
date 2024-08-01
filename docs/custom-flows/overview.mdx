@@ -5,64 +5,67 @@ description: Learn the process behind building custom sign-up and sign-in flows 
 
 # Custom flows
 
-A *custom flow* refers to a user flow created entirely from scratch using the Clerk API. If Clerk's [prebuilt components](/docs/components/overview) don't meet your specific needs or if you require more control over the logic, you can rebuild the existing Clerk flows using the Clerk API.
+A _custom flow_ refers to a user flow created entirely from scratch using the Clerk API. If Clerk's [prebuilt components](/docs/components/overview) don't meet your specific needs or if you require more control over the logic, you can rebuild the existing Clerk flows using the Clerk API.
 
-## Sign-up flow
+## How authentication flows work in Clerk
 
-Clerk provides a flexible way to build sign-up flows in your application. You can use a single [`SignUp`][sign-up-ref] object to gather information, verify their email address or phone number, add OAuth accounts, and finally, convert them into a [`User`][user-ref].
+Before building custom authentication flows, read the following sections to get a general understanding of how authentication flows work in Clerk.
 
-Every [`SignUp`][sign-up-ref] has a set of requirements it must meet before it is turned into a [`User`][user-ref]. These requirements are defined by the instance settings you selected in the [Clerk Dashboard](https://dashboard.clerk.com/). Once all requirements are met, the [`SignUp`][sign-up-ref] will turn into a new [`User`][user-ref], and an active session for that [`User`][user-ref] will be created on the current [`Client`][client-ref].
+### Sign-up flow
 
-Don't worry about collecting all the required fields at once and passing them to a single request. The API is designed to accommodate a progressive sign-up flow, often corresponding to multi-step sign-up forms.
+The [`SignUp`](/docs/references/javascript/sign-up/sign-up) object is the pivotal concept in the sign-up process. It is used to gather the user's information, verify their email address or phone number, add OAuth accounts, and finally, convert them into a [`User`](/docs/references/javascript/user/user).
 
-### Required fields
+Every `SignUp` has a set of requirements it must meet before it is turned into a `User`. These requirements are defined by the instance settings you selected in the [Clerk Dashboard](https://dashboard.clerk.com/). For example, on the [Email, Phone, Username](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) page, configuring passwords or email links or even both as the [authentication strategies](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies).
 
-The [`SignUp`][sign-up-ref] object will show the state of the current sign-up. You can consult the `required_fields`, `optional_fields`, and `missing_fields` keys for a hint on where things are and what you need to do next.
+Once all requirements are met, the `SignUp` will turn into a new `User`, and an active session for that `User` will be created on the current [`Client`](/docs/references/javascript/client).
+
+Don't worry about collecting all the required fields at once and passing them to a single request. The API is designed to accommodate progressive multi-step sign-up forms.
+
+The following steps outline the sign-up process:
+
+1. Initiate the sign-up process by collecting the user's authentication information and passing the appropriate parameters to the [`create()`](/docs/references/javascript/sign-in/sign-in#create) method.
+1. Prepare the verification.
+1. Attempt to complete the verification.
+1. If the verification is successful, set the newly created session as the active session by passing the `SignIn.createdSessionId` to the [`setActive()`](/docs/references/javascript/clerk/session-methods#set-active) method on the `Clerk` object.
+
+#### The state of a `SignUp`
+
+The `SignUp` object will show **the state of the current sign-up** in the `status` property.
+
+If you need further help on where things are and what you need to do next, you can also consult the `required_fields`, `optional_fields`, and `missingFields` properties.
 
 | Name | Description |
-| --- | --- |
-| `requiredFields` | All fields that must be collected before the [`SignUp`][sign-up-ref] converts into a [`User`][user-ref]. |
-| `optionalFields` | All fields that can be collected, but are not necessary to convert the [`SignUp`][sign-up-ref]. |
-| `missing_fields` | A subset of `required_fields`. It contains all fields that still need to be collected before a successful [`SignUp`][sign-up-ref]. Note that the `missingFields` will be updated dynamically. As you add more fields to the [`SignUp`][sign-up-ref], they will be removed from `missing_fields`. Once it's empty, your [`SignUp`][sign-up-ref] will automatically convert into a [`User`][user-ref]. |
+| - | - |
+| `requiredFields` | All fields that must be collected before the `SignUp` converts into a `User`. |
+| `optionalFields` | All fields that can be collected, but are not necessary to convert the `SignUp` into a `User`. |
+| `missingFields` | A subset of `requiredFields`. It contains all fields that still need to be collected before a `SignUp` can be converted into a `User`. Note that this property will be updated dynamically. As you add more fields to the `SignUp`, they will be removed. Once this property is empty, your `SignUp` will automatically convert into a `User`. |
 
-The values of the collected fields are all accessible on the root of the [`SignUp`][sign-up-ref], under their corresponding keys; `email_address` and `phone_number` are examples of such keys. Go to the [`SignUp` object documentiation][sign-up-ref] for a list of all available attributes.
+#### Verified fields
 
-### Verified fields
+Some properties of the `SignUp`, such as `emailAddress` and `phoneNumber`, must be **verified** before they are **fully** added to the `SignUp` object.
 
-Some fields, such as `email_address` and `phone_number`, must be verified before they are fully added to the [`SignUp`][sign-up-ref]. Similar to what happens with required fields, the [`SignUp`][sign-up-ref] contains the current state of all verified fields. The keys relative to verification are `unverified_fields` and `verifications`.
+The `SignUp` object will show **the state of verification** in the following properties:
 
 | Name | Description |
-| --- | --- |
-| `unverifiedFields` | A list of all [`User`][user-ref] attributes that need to be verified and are pending verification. This is a list that gets updated dynamically. When verification for all required fields has been successfully completed, this value will become an empty array. |
-| `verifications` | An object that describes the current state of verification for the [`SignUp`][sign-up-ref]. There are currently three different keys: `email_address`, `phone_number`, and `external_account`. |
+| - | - |
+| `unverifiedFields` | A list of all [`User`](/docs/references/javascript/user/user) attributes that need to be verified and are pending verification. This is a list that gets updated dynamically. When verification for all required fields has been successfully completed, this value will become an empty array. |
+| `verifications` | An object that describes the current state of verification for the [`SignUp`](/docs/references/javascript/sign-in/sign-in). There are currently three different keys: `email_address`, `phone_number`, and `external_account`. |
 
-## Sign-in flow
+### Sign-in flow
 
-Sign-in's are initiated by creating a [`SignIn`][sign-in-ref] object on the current [`Client`][client-ref]. The [`SignIn`][sign-in-ref] handles all the state and logic associated with a sign-in. If the sign-in is successfully authenticated, it will transform into an active session on the current [`Client`][client-ref].
+The [`SignIn`](/docs/references/javascript/sign-in/sign-in) object is the pivotal concept in the sign-in process.
 
-### Completing a sign-in
+Sign-ins are initiated by creating a `SignIn` object on the current `Client`. If the sign-in is successfully authenticated, it will transform into an active session for that [`User`](/docs/references/javascript/user/user) on the current `Client`.
 
-There are 3 main steps a user must perform in order to complete a sign-in.
+The following steps outline the sign-in process:
 
-<Steps>
+1. Initiate the sign-in process by collecting the user's authentication information and passing the appropriate parameters to the [`create()`](/docs/references/javascript/sign-in/sign-in#create) method.
+1. Prepare the [first factor verification](/docs/references/javascript/sign-in/sign-in#first-factor). Users must complete a first factor verification to prove their identity. This can be something like providing a password, an email link, a one-time code (OTP), a web3 wallet public address, or providing proof of their identity through an external social account (SSO/OAuth).
+1. Attempt to complete the first factor verification.
+1. Optionally, if you have enabled [multi-factor](/docs/authentication/configuration/sign-up-sign-in-options) for your application, you will need to prepare the [second factor verification](/docs/references/javascript/sign-in/sign-in#second-factor) for users who have set up 2FA for their account.
+1. Attempt to complete the second factor verification.
+1. If verification is successful, set the newly created session as the active session by passing the `SignIn.createdSessionId` to the [`setActive()`](/docs/references/javascript/clerk/session-methods#set-active) method on the `Clerk` object.
 
-### Identification
+## Next steps
 
-The first step a user needs to make is to identify what account they'd like to sign in to. This is done with an identifier, which can either be an email address, a phone number, or a username.
-
-### Factor one verification
-
-Once a user is identified, they need to prove their identity. This is the process of "authenticating" the user. There's a number of strategies a user can use to perform authentication with the most basic being the humble password. Other authentication strategies, like passwordless sign-in, can be explored in the [sign-in and sign-up options](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies) guide.
-
-### Factor two verification (optional)
-
-This step only applies to users that have turned on two-factor authentication, also known as [multifactor authentication](/docs/custom-flows/mfa), for their user.
-
-When one form of verification isn't enough, trust two! Forcing two different verification steps vastly increases the security of your account. The most common setup a user will have to protect their account is using a password as their first kind of verification and a `phone_code` as their second kind of verification.
-
-</Steps>
-
-[sign-in-ref]: /docs/references/javascript/sign-in/sign-in
-[sign-up-ref]: /docs/references/javascript/sign-up/sign-up
-[user-ref]: /docs/references/javascript/user/user
-[client-ref]: /docs/references/javascript/client
+Now that you have a general understanding of how authentication flows work in Clerk, you can start building your custom flows. To get started, choose the guide that best fits your needs from the navigation on the left.

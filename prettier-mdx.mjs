@@ -19,6 +19,20 @@ const processor = remark()
   .use(remarkFrontmatter)
   .use(remarkGfm, { tablePipeAlign: false })
   .use(remarkMdx, { printWidth: 120 })
+  .use(remarkDisallowDiffLang)
+
+function remarkDisallowDiffLang() {
+  return function traverse(tree) {
+    visit(tree, 'code', (node) => {
+      if (node.lang === 'diff') {
+        let position = `${node.position.start.line}:${node.position.start.column}`
+        throw new Error(
+          `The \`diff\` language is not supported (${position}). Please use the \`del\` and \`ins\` props instead. https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#highlighting`,
+        )
+      }
+    })
+  }
+}
 
 function formatAnnotation(annotation, prettierOptions) {
   let prefix = 'let _ = '

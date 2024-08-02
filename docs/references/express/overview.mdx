@@ -63,7 +63,31 @@ import { clerkMiddleware } from '@clerk/express'
 
 ### `requireAuth`
 
-The `requireAuth` helper protects routes in your Express application by checking if the user is authenticated or authorized. See the [reference documentation](/docs/references/express/require-auth) for more information.
+`requireAuth` is a middleware function that you can use to protect routes in your Express.js application. This function checks if the user is authenticated, and returns a 401 status code if they are not.
+
+`clerkMiddleware()` is required to be set in the middleware chain before this util is used.
+
+```js
+import { clerkMiddleware, requireAuth } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+
+const port = 3000
+
+// Apply centralized middleware
+app.use(clerkMiddleware())
+
+// Define a protected route
+app.get('/protected', requireAuth, (req, res) => {
+  res.send('This is a protected route')
+})
+
+// Start the server and listen on the specified port
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`)
+})
+```
 
 ### `getAuth()`
 
@@ -74,13 +98,12 @@ import { clerkMiddleware, getAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
-
 const port = 3000
 
 // Apply centralized middleware
 app.use(clerkMiddleware())
 
-// Protect a route based on authorized
+// Protect a route based on authorization status
 hasPermission = (request, response, next) => {
   const auth = getAuth(request)
 
@@ -93,7 +116,7 @@ hasPermission = (request, response, next) => {
   return next()
 }
 
-router.get('/path', requireAuth, hasPermission, getHandler)
+app.get('/path', requireAuth, hasPermission, (req, res) => res.json(req.auth))
 
 // Start the server and listen on the specified port
 app.listen(port, () => {
@@ -106,3 +129,20 @@ app.listen(port, () => {
 [Clerk's JavaScript Backend SDK](/docs/references/backend/overview) exposes Clerk's Backend API resources and low-level authentication utilities for JavaScript environments. For example, if you wanted to get a list of all users in your application, instead of creating a fetch to Clerk's `https://api.clerk.com/v1/users` endpoint, you can use the `users.getUserList()` method provided by the JavaScript Backend SDK.
 
 All resource operations are mounted as sub-APIs on the `clerkClient` object. See the [reference documentation](/docs/references/backend/overview#usage) for more information.
+
+```js
+import { clerkClient } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+const port = 3000
+
+const users = await clerkClient.users.getUserList()
+
+app.get('/users', requireAuth, (req, res) => res.json(users))
+
+// Start the server and listen on the specified port
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`)
+})
+```

@@ -1,12 +1,12 @@
 ---
-description: Learn how to migrate from the Clerk's Node SDK to the Express SDK.
+description: Learn how to upgrade from the Clerk's Node SDK to the Express SDK.
 ---
 
-# Migrate from Clerk's Node SDK to the Express SDK
+# Upgrade from Clerk's Node SDK to the Express SDK
 
 ## Install the Express SDK
 
-To migrate from the Clerk Node SDK to the Clerk Express SDK, uninstall the Node SDK by running the following command:
+To upgrade from the Clerk Node SDK to the Clerk Express SDK, uninstall the Node SDK by running the following command:
 
 <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
   ```sh {{ filename: 'terminal' }}
@@ -37,15 +37,6 @@ Then, install the Express SDK by running the following command:
   pnpm add @clerk/express
   ```
 </CodeBlockTabs>
-
-# Structure
-
-- backend re-exports (import from backend instead)
-- clerkClient and createClerkClient (the same, import from backend instead)
-- ✅ ClerkExpressRequireAuth and createClerkExpressRequireAuth
-- ✅ ClerkExpressWithAuth and createClerkExpressWithAuth
-- ✅ withAuth from node (replaced with getAuth)
-- ✅ requireAuth from node
 
 ## Migrate from `withAuth()`
 
@@ -104,7 +95,7 @@ const port = 3000
 + // clerkMiddleware is required to be set in the middleware chain before getAuth is used
 + app.use(clerkMiddleware())
 
-+ const LaxMiddleware = (req, res, next) => {
++ const withAuth = (req, res, next) => {
 +   const auth = getAuth(req)
 +   // If the user is not authenticated, return an empty object
 +   req.auth = auth || {}
@@ -115,7 +106,7 @@ const port = 3000
 - app.get('/protected-route', ClerkExpressWithAuth(), (req, res) => {
 -   res.json(req.auth);
 - })
-+ app.get('/protected', LaxMiddleware, (req, res) => {
++ app.get('/protected', withAuth, (req, res) => {
 +   res.json(req.auth)
 + })
 
@@ -164,14 +155,6 @@ app.listen(port, () => {
 
 If you previously used `createClerkExpressWithAuth` or `createClerkExpressRequireAuth` to create custom middleware by passing in custom Clerk keys, a custom `clerkClient` instance, and/or a custom API URL, you can no longer use these methods with the Express SDK. Instead, use `clerkMiddleware` to create your custom middleware.
 
-If you were passing a custom `clerkClient` instance, you can now pass it as an option to `clerkMiddleware` like this:
-
-```js
-import { clerkMiddleware } from '@clerk/express'
-
-app.use(clerkMiddleware({ clerkClient: 'xxx' }))
-```
-
 If you were passing custom Clerk keys or a custom API URL, pass those to `createClerkClient` from the [Backend SDK](/docs/references/backend/overview#usage) and then pass the custom `clerkClient` into the middleware.
 
 ```diff
@@ -192,14 +175,12 @@ If you were passing custom Clerk keys or a custom API URL, pass those to `create
 
 ### Removed imports
 
-{/* TODO: I don't see this in the JS repo? I don't think this is true */}
-
 With the Node SDK, you could import any of the Backend SDK methods directly from the Node SDK. With the Express SDK, you need to import the Backend SDK methods from the `@clerk/backend` package.
 
 ```diff
-- import { someMethod, requireAuth } from '@clerk/clerk-sdk-node';
+- import { User, requireAuth } from '@clerk/clerk-sdk-node';
 + import { requireAuth } from '@clerk/express';
-+ import { someMethod } from '@clerk/backend';
++ import { User } from '@clerk/backend';
 
 ```
 
@@ -219,40 +200,4 @@ If you were instantiating a custom `clerkClient` with `createClerkClient`, you c
 ```diff
 - import { createClerkClient } from '@clerk/clerk-sdk-node';
 + import { createClerkClient } from '@clerk/backend';
-```
-
-## Random Notes
-
-- Why were StrictAuthProp and RequireAuthProp types imported in the requireAuth example?
-
-- If you were using createClerkExpressWithAuth or createClerkExpressRequireAuth, these are no longer available. these methods allowed you to create your own middleware passing in custom clerk keys, clerkClient instance, and/or api url. If you need this functionality, here's how to do it with the express SDK
-  - if you are passing a custom clerkClient, you can now pass that as an option to clerkMiddleware like this `clerkMiddleware({ clerkClient: 'xxx' })`
-  - If you want to customize the clerk keys or api url, pass those to createClerkClient from backend SDK (link) and then pass the custom clerkClient into middeware and you good to go
-
-```
-- import { createClerkExpressRequireAuth } from '@clerk/clerk-sdk-node'
-+ import { clerkMiddleware, requireAuth } from '@clerk/express'
-+ import { createClerkClient } from '@clerk/backend'
-
-- const requireAuth = createClerkExpressRequireAuth({ publishableKey: '', apiUrl: '', secretKey: '' })
-+ const client = createClerkClient({ publishableKey: '', apiUrl: '', secretKey: '' })
-+ app.use(clerkMiddleware({ clerkClient: client }))
-
-...
-app.get('/path', requireAuth, (req, res) => res.json(req.auth))
-
-```
-
-{/* TODO: withAuth isn't exported in express ? */}
-
-- if you were using `requireAuth` or `withAuth` exports, you will need to move them to operating as middleware instead of wrapping your handlers
-
-```diff
-- import { requireAuth } from '@clerk/clerk-sdk-node'
-+ import { requireAuth, clerkMiddleware } from '@clerk/express'
-
-+ app.use(clerkMiddleware())
-
-- app.get('/', requireAuth(handler))
-+ app.get('/', requireAuth, handler)
 ```

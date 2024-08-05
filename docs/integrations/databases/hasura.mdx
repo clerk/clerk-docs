@@ -57,8 +57,8 @@ Go to your project settings, click **Env vars**, and then add **New Env Var**.
 
 Set the key to `HASURA_GRAPHQL_JWT_SECRET` and the value to the following:
 
-```json {{ prettier: false }}
-{"jwk_url":"https://{{fapi}}/.well-known/jwks.json"}
+```json
+{ "jwk_url": "https://{{fapi}}/.well-known/jwks.json" }
 ```
 
 ### Set up with Hasura Core
@@ -94,73 +94,67 @@ Even if you don’t have a database table set up yet, we can make use of the [bu
 
 Here is an example of using [Apollo Client](https://github.com/apollographql/apollo-client) in conjunction with the useAuth hook in a Next.js application to make a request to the Hasura GraphQL endpoint:
 
-```jsx {{ prettier: false }}
-import {
-  ApolloProvider,
-  ApolloClient,
-  HttpLink,
-  from,
-  InMemoryCache,
-} from "@apollo/client";
-import { setContext } from "@apollo/client/link/context";
-import { useAuth } from "@clerk/nextjs";
+```jsx
+import { ApolloProvider, ApolloClient, HttpLink, from, InMemoryCache } from '@apollo/client'
+import { setContext } from '@apollo/client/link/context'
+import { useAuth } from '@clerk/nextjs'
 
 export const ApolloProviderWrapper = ({ children }) => {
-  const { getToken } = useAuth();
+  const { getToken } = useAuth()
   const apolloClient = useMemo(() => {
     const authMiddleware = setContext(async (req, { headers }) => {
-      const token = await getToken({template: "template"});
+      const token = await getToken({ template: 'template' })
       return {
         headers: {
           ...headers,
           authorization: `Bearer ${token}`,
         },
-      };
-    });
+      }
+    })
 
     const httpLink = new HttpLink({
       uri: process.env.GRAPHQL_URI,
-    });
+    })
 
     return new ApolloClient({
       link: from([authMiddleware, httpLink]),
       cache: new InMemoryCache(),
-    });    
+    })
   }, [getToken])
 
-  return <ApolloProvider client={apolloClient}>{children}</ApolloProvider>;
-};
+  return <ApolloProvider client={apolloClient}>{children}</ApolloProvider>
+}
 ```
 
 As an alternative, here is an example of using [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) in conjunction with the [useSWR](https://swr.vercel.app/) hook in a Next.js application to make a request to the Hasura GraphQL endpoint:
 
-```jsx {{ prettier: false }}
-import { useAuth } from '@clerk/nextjs';
-import useSWR from 'swr';
+```jsx
+import { useAuth } from '@clerk/nextjs'
+import useSWR from 'swr'
 
 // This component needs to be a child of <ClerkProvider> and <SignedIn>
 // in order to access the authenticated session object
 const Main = () => {
-  const { getToken } = useAuth();
-  const endpoint = process.env.NEXT_PUBLIC_HASURA_GRAPHQL_API;
-  const query = `query { __schema { types { name } } }`;
+  const { getToken } = useAuth()
+  const endpoint = process.env.NEXT_PUBLIC_HASURA_GRAPHQL_API
+  const query = `query { __schema { types { name } } }`
   const fetcher = async (...args) =>
     fetch(...args, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Authorization: `Bearer ${await getToken({ template: 'hasura' })}`
+        Authorization: `Bearer ${await getToken({ template: 'hasura' })}`,
       },
-      body: JSON.stringify({ query })
-    }).then(res => res.json());
+      body: JSON.stringify({ query }),
+    }).then((res) => res.json())
 
-  const { data } = useSWR(endpoint, fetcher);
+  const { data } = useSWR(endpoint, fetcher)
 
-  return <p>GraphQL schema has {data?.data?.__schema.types.length} types</p>;
-};
+  return <p>GraphQL schema has {data?.data?.__schema.types.length} types</p>
+}
 
-export default Main;
+export default Main
 ```
 
 Note that the `getToken({ template: <your-template-name> })` call is asynchronous and returns a Promise that needs to be resolved before accessing the token value. This token is short-lived for better security and should be called before every request to your GraphQL API. The caching and refreshing of the token is handled automatically by Clerk.

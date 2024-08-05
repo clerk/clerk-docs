@@ -84,16 +84,16 @@ Suppose you need to write a function which will insert a new user into the datab
 
 ```typescript {{ prettier: false, filename: 'src/inngest/sync-user.ts' }}
 const syncUser = inngest.createFunction(
- { id: 'sync-user-from-clerk' },  // ←The 'id' is an arbitrary string used to identify the function in the dashboard
- { event: 'clerk/user.created' }, // ← This is the function's triggering event
- async ({ event }) => {
-   const user = event.data; // The event payload's data will be the Clerk User json object
-   const { id, first_name, last_name } = user;
-   const email = user.email_addresses.find(e =>
-     e.id === user.primary_email_address_id
-   ).email
-   await database.users.insert({ id, email, first_name, last_name })
- }
+  { id: 'sync-user-from-clerk' },  // ←The 'id' is an arbitrary string used to identify the function in the dashboard
+  { event: 'clerk/user.created' }, // ← This is the function's triggering event
+  async ({ event }) => {
+    const user = event.data; // The event payload's data will be the Clerk User json object
+    const { id, first_name, last_name } = user;
+    const email = user.email_addresses.find(e =>
+      e.id === user.primary_email_address_id
+    ).email_address
+    await database.users.insert({ id, email, first_name, last_name })
+  }
 )
 ```
 
@@ -115,17 +115,17 @@ The code below creates another function using the same `clerk/user.created` even
 
 ```typescript {{ prettier: false, filename: 'src/inngest/welcome-emails.ts' }}
 const sendWelcomeEmail = inngest.createFunction(
- { id: 'send-welcome-email' },
- { event: 'clerk/user.created' },
- async ({ event }) => {
-   const user = event.data
-   const { first_name } = user
-   const email = user.email_addresses.find(e =>
-     e.id === user.primary_email_address_id
-   ).email_address
-   // `emails` is a placeholder for the function in your codebase to send email
-   await emails.sendWelcomeEmail({ email, first_name })
- }
+  { id: 'send-welcome-email' },
+  { event: 'clerk/user.created' },
+  async ({ event }) => {
+    const user = event.data
+    const { first_name } = user
+    const email = user.email_addresses.find(e =>
+      e.id === user.primary_email_address_id
+    ).email_address
+    // `emails` is a placeholder for the function in your codebase to send email
+    await emails.sendWelcomeEmail({ email, first_name })
+  }
 )
 ```
 
@@ -139,28 +139,28 @@ The code below sends a welcome email, then uses `step.sleep` to wait for three d
 
 ```typescript {{ prettier: false, filename: 'src/inngest/welcome-emails.ts' }}
 const sendOnboardingEmails = inngest.createFunction(
- { id: 'onboarding-emails' },
- { event: 'clerk/user.created' },
- async ({ event, step }) => { // ← step is available in the handler's arguments
-   const user = event.data
-   const { first_name } = user
-   const email = user.email_addresses.find(e =>
-     e.id === user.primary_email_address_id
-   ).email
+  { id: 'onboarding-emails' },
+  { event: 'clerk/user.created' },
+  async ({ event, step }) => { // ← step is available in the handler's arguments
+    const user = event.data
+    const { first_name } = user
+    const email = user.email_addresses.find(e =>
+      e.id === user.primary_email_address_id
+    ).email_address
 
-   await step.run('welcome-email', async () => {
-     // `emails` is a placeholder for the function in your codebase to send email
-     await emails.sendWelcomeEmail({ email, first_name })
-   })
+    await step.run('welcome-email', async () => {
+      // `emails` is a placeholder for the function in your codebase to send email
+      await emails.sendWelcomeEmail({ email, first_name })
+    })
 
-   // wait 3 days before second email
-   await step.sleep('wait-3-days', '3 days')
+    // wait 3 days before second email
+    await step.sleep('wait-3-days', '3 days')
 
 
-   await step.run('trial-offer-email', async () => {
-     await emails.sendTrialOfferEmail({ email, first_name })
-   })
- }
+    await step.run('trial-offer-email', async () => {
+      await emails.sendTrialOfferEmail({ email, first_name })
+    })
+  }
 )
 ```
 

@@ -1,0 +1,211 @@
+---
+title: Migrate from Cognito
+description: Seamlessly migrate AWS Cognito user passwords into Clerk.
+---
+
+## Overview
+
+It is a known limitation that AWS Cognito does not include hashed passwords when listing user pool users.
+This necessitates a password reset flow when migrating users to another platform.
+
+To eliminate the need for a cumbersome password reset flow, Clerk provides a Cognito password migrator
+that enables your end users to sign in to Clerk using their existing Cognito passwords.
+
+In its barest form, it is simply two fields that you set on a Clerk `user` object, through
+the [backend API](/docs/reference/backend-api/tag/Users#operation/CreateUser).
+
+- `password_hasher`: `awscognito`
+- `password_digest`: `awscognito#<COGNITO_USER_POOL_ID>#<COGNITO_CLIENT_ID>#<identifier>`
+
+## Pre-flight checks
+
+In AWS, you will need to ensure that your Cognito user pool has a **public** client with the `ALLOW_USER_PASSWORD_AUTH` auth flow enabled.
+
+You can create a new client for your user pool at any time from the AWS console or through the [AWS CLI](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cognito-idp/create-user-pool-client.html)
+
+> [!CAUTION]
+> This step is critical for the migration to work as intended.
+
+## One-time upload
+
+For any Cognito user object that you’d wish to migrate, you will need to have an equivalent Clerk user object,
+with the `password_hasher` and `password_digest` fields set.
+
+Below is one method of conducting a batch upload of your Cognito users into Clerk.
+However, you are not limited to this approach, nor does it impact the migration flow.
+
+Ensure that you are using `node >= v20`, and run the following to create a new script directory and project.
+
+```shell {{ title: '~/' }}
+user@~: $ mkdir cognito_to_clerk
+user@~: $ cd cognito_to_clerk
+
+user@~/cognito_to_clerk: $ npm init -y
+user@~/cognito_to_clerk: $ npm i -E @aws-sdk/client-cognito-identity-provider@3.614.0
+user@~/cognito_to_clerk: $ npm i -E @clerk/backend@1.4.3
+
+user@~/cognito_to_clerk: $ touch .env
+user@~/cognito_to_clerk: $ touch main.ts
+```
+
+Fill in the `.env` file with your AWS and Clerk credentials.
+
+> [!IMPORTANT]
+>
+> - Always double check that the `CLERK_SECRET_KEY` points to the desired Clerk instance (development vs. production)
+> - The `COGNITO_CLIENT_ID` should be the public client ID that you created earlier in the [Pre-flight checks](#pre-flight-checks) section.
+
+```shell {{ title: '~/cognito_to_clerk/.env' }}
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=
+
+COGNITO_USER_POOL_ID=
+COGNITO_CLIENT_ID=
+
+CLERK_SECRET_KEY=
+```
+
+The provided script below lists your Cognito user pool users, calls
+`CreateUser` for each user, and sets the `password_hasher` and `password_digest` fields.
+
+> [!CAUTION]
+> As usual, rate limits apply to the `CreateUser` endpoint. [^1]
+
+[^1]: CreateUser has a rate limit rule of 20 requests per 10 seconds. [https://clerk.com/docs/reference/backend-api/tag/Users#operation/CreateUser](https://clerk.com/docs/reference/backend-api/tag/Users#operation/CreateUser)
+
+```ts {{ title: '~/cognito_to_clerk/main.ts' }}
+import { createClerkClient } from '@clerk/backend@'
+import * as IDP from '@aws-sdk/client-cognito-identity-provider'
+
+// NOTE: The IAM user should have permissions roughly equivalent to AmazonCognitoReadOnly.
+// https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AmazonCognitoReadOnly.html
+const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION } = process.env
+if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_REGION) {
+  throw new Error(
+    'AWS credentials are required. Double check that your `.env` file is set up correctly. Must have AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION.',
+  )
+}
+
+const { COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID } = process.env
+if (!COGNITO_USER_POOL_ID || !COGNITO_CLIENT_ID) {
+  throw new Error(
+    'Cognito user pool and client IDs are required. Double check that your `.env` file is set up correctly. Must have COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID.',
+  )
+}
+
+const { CLERK_SECRET_KEY } = process.env
+if (!CLERK_SECRET_KEY) {
+  throw new Error(
+    'Clerk Secret Key is required. Double check that your `.env` file is set up correctly. Must have CLERK_SECRET_KEY.',
+  )
+}
+
+const idpClient = new IDP.CognitoIdentityProviderClient({
+  region: AWS_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  },
+})
+
+const clerk = createClerkClient({
+  secretKey: CLERK_SECRET_KEY,
+})
+
+async function main() {
+  const usersResponse = await idpClient.send(
+    new IDP.ListUsersCommand({ UserPoolId: COGNITO_USER_POOL_ID }),
+  )
+  if (!usersResponse.Users) {
+    throw new Error('No users found')
+  }
+
+  usersLoop: for (const cognitoUser of usersResponse.Users) {
+    // Skip unconfirmed users or EXTERNAL_PROVIDER users (like Facebook, Google, etc)
+    if (cognitoUser.UserStatus !== 'CONFIRMED') {
+      console.log(
+        'Skipping user: User is not confirmed:',
+        cognitoUser.Username,
+        cognitoUser.UserStatus,
+      )
+      continue
+    }
+
+    // This identifier must match the one that use used for sign in on the Cognito user pool.
+    // Note that in AWS, this option is only configurable at the time of user creation.
+    let identifier: string
+    // Comment/Uncomment the block(s) below to use the identifier from the Cognito user pool.
+    {
+      identifier = cognitoUser.Attributes?.find((a) => a.Name === 'sub')!.Value!
+    }
+    {
+      identifier = cognitoUser.Attributes?.find((a) => a.Name === 'email')!.Value!
+    }
+    {
+      identifier = cognitoUser.Username!
+    }
+
+    if (!identifier) {
+      console.log('Skipping user: No identifier found:', cognitoUser)
+      continue
+    }
+
+    const email = cognitoUser.Attributes?.find((a) => a.Name === 'email')!.Value!
+
+    try {
+      await clerk.users.createUser({
+        emailAddress: [email],
+        passwordDigest: `awscognito#${COGNITO_USER_POOL_ID}#${COGNITO_CLIENT_ID}#${identifier}`,
+        // @ts-expect-error - awscognito works, but is not a valid TypeScript yet
+        passwordHasher: 'awscognito',
+      })
+      console.log('Created clerk user for:', identifier)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } catch (err) {
+      console.error(err)
+      break usersLoop
+    }
+  }
+}
+
+main()
+```
+
+Run the batch upload script.
+
+```shell {{ title: '~/cognito_to_clerk' }}
+user@~/cognito_to_clerk: $ npx tsx --env-file=.env main.ts
+```
+
+## Post-upload
+
+Once you have users with the special hasher and digest in your Clerk instance,
+you will be able to validate the migration behavior.
+
+<Steps>
+  ### Validate
+
+  We recommend validating the integration by taking a single user whose
+  Cognito password you know, such as your own, uploading it to Clerk with
+  the special `awscognito` hasher and custom digest, and then attempting to sign in
+  via your Clerk instance’s managed Account Portal.
+
+  If the password is correct, sign in should work seamlessly.
+
+  > [!TIP]
+  > If at any point you need to _reset_, you can delete the user via the Clerk dashboard, and restart the process.
+  >
+  > This validation may be performed on both your `development` and `production` instances.
+
+  ### Rollout changes
+
+  Up until this point, you were possibly using the Cognito hosted UI for your application’s user sign-in.
+  With the [one-time upload](#one-time-upload) out of the way and integration validated, you should be ready to
+  update your application to use Clerk’s managed [Account Portal](https://clerk.com/docs/account-portal/overview)
+  or the [`<SignIn />`](https://clerk.com/docs/components/authentication/sign-in) component.
+
+  Your end users will now be able to sign in to Clerk using their existing passwords without any password reset required.
+</Steps>
+
+As users successfully sign in to Clerk, their passwords will be re-hashed, and stored securely. No plaintext passwords are ever stored.

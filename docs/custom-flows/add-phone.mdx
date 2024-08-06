@@ -4,9 +4,8 @@ description: Learn how to use Clerk's API to build a custom flow for adding a ph
 
 # Build a custom flow for adding a phone number to a user's account
 
-<Callout type="danger">
-  This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
-</Callout>
+> [!CAUTION]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
 Users are able to add multiple phone numbers to their account.
 
@@ -22,7 +21,7 @@ The following example demonstrates how to build a custom user interface that all
 1. Uses the `prepareVerification()` method on the newly created `PhoneNumber` object to send a verification code to the user.
 1. Uses the `attemptVerification()` method on the same `PhoneNumber` object with the verification code provided by the user to verify the phone number.
 
-<Tabs items={["Next.js"]}>
+<Tabs items={["Next.js", "iOS (Beta)"]}>
   <Tab>
     ```jsx {{ prettier: false, filename: 'app/account/add-phone/page.tsx' }}
     'use client';
@@ -151,6 +150,81 @@ The following example demonstrates how to build a custom user interface that all
           </div>
         </>
       );
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```swift {{ filename: 'AddPhoneView.swift' }}
+    import SwiftUI
+    import ClerkSDK
+
+    struct AddPhoneView: View {
+      @State private var phone = ""
+      @State private var code = ""
+      @State private var isVerifying = false
+      // Create a reference to the phone number that we'll be creating
+      @State private var newPhoneNumber: PhoneNumber?
+
+      var body: some View {
+        if newPhoneNumber?.verification?.status == .verified {
+          Text("Phone added!")
+        }
+          
+        if isVerifying {
+          TextField("Enter code", text: $code)
+          Button("Verify") {
+            Task { await verifyCode(code) }
+          }
+        } else {
+          TextField("Enter phone number", text: $phone)
+          Button("Continue") {
+            Task { await createPhone(phone) }
+          }
+        }
+      }
+    }
+
+    extension AddPhoneView {
+        
+      func createPhone(_ phone: String) async {
+        do {
+          guard let user = Clerk.shared.user else { return }
+          
+          // Add an unverified phone number to user
+          self.newPhoneNumber = try await user.createPhoneNumber(phone)
+          
+          guard let newphoneNumber = self.newPhoneNumber else { return }
+          
+          // Send the user an sms message with the verification code
+          try await newphoneNumber.prepareVerification()
+          
+          // Set to true to display second form
+          // and capture the OTP code
+          isVerifying = true
+        } catch {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+        
+      func verifyCode(_ code: String) async {
+        do {
+          guard let newPhoneNumber else { return }
+          
+          // Verify that the code entered matches the code sent to the user
+          self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
+          
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          dump(self.newPhoneNumber?.verification?.status)
+        } catch {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
     }
     ```
   </Tab>

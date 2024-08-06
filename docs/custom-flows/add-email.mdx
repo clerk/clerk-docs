@@ -4,9 +4,8 @@ description: Learn how to use Clerk's API to build a custom flow for adding an e
 
 # Build a custom flow for adding an email to a user's account
 
-<Callout type="danger">
-  This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
-</Callout>
+> [!CAUTION]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
 Users are able to add multiple email addresses to their account.
 
@@ -22,7 +21,7 @@ The following example demonstrates how to build a custom user interface that all
 1. Uses the `prepareVerification()` method on the newly created `EmailAddress` object to send a verification code to the user.
 1. Uses the `attemptVerification()` method on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
 
-<Tabs items={["Next.js"]}>
+<Tabs items={["Next.js", "iOS (Beta)"]}>
   <Tab>
     ```jsx {{ prettier: false, filename: 'app/account/add-email/page.tsx' }}
     'use client';
@@ -152,6 +151,81 @@ The following example demonstrates how to build a custom user interface that all
           </div>
         </>
       );
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```swift {{ filename: 'AddEmailView.swift' }}
+    import SwiftUI
+    import ClerkSDK
+
+    struct AddEmailView: View {
+      @State private var email = ""
+      @State private var code = ""
+      @State private var isVerifying = false
+      // Create a reference to the email address that we'll be creating
+      @State private var newEmailAddress: EmailAddress?
+      
+      var body: some View {
+        if newEmailAddress?.verification?.status == .verified {
+          Text("Email added!")
+        }
+        
+        if isVerifying {
+          TextField("Enter code", text: $code)
+          Button("Verify") {
+            Task { await verifyCode(code) }
+          }
+        } else {
+          TextField("Enter email address", text: $email)
+          Button("Continue") {
+            Task { await createEmail(email) }
+          }
+        }
+      }
+    }
+
+    extension AddEmailView {
+        
+      func createEmail(_ email: String) async {
+        do {
+          guard let user = Clerk.shared.user else { return }
+          
+          // Add an unverified email address to user
+          self.newEmailAddress = try await user.createEmailAddress(email)
+          
+          guard let newEmailAddress = self.newEmailAddress else { return }
+          
+          // Send the user an email with the verification code
+          try await newEmailAddress.prepareVerification(strategy: .emailCode)
+          
+          // Set to true to display second form
+          // and capture the OTP code
+          isVerifying = true
+        } catch {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+        
+      func verifyCode(_ code: String) async {
+        do {
+          guard let newEmailAddress else { return }
+          
+          // Verify that the code entered matches the code sent to the user
+          self.newEmailAddress = try await newEmailAddress.attemptVerification(strategy: .emailCode(code: code))
+          
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          dump(self.newEmailAddress?.verification?.status)
+        } catch {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
     }
     ```
   </Tab>

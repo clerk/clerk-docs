@@ -1,7 +1,192 @@
 ---
-description: TODO
+description: A reference for implementing a backend-only Clerk SDK
 ---
 
 # Backend-only SDK
 
-TODO
+Generally speaking, you can either create a backend SDK that implements all BAPI endpoints or an SDK for an existing backend framework. You'll find the implementation steps below divided into these two categories.
+
+The source of truth for all BAPI endpoints is the [BAPI OpenAPI spec](https://clerk.com/docs/reference/backend-api). For Node.js backend frameworks, use the [JavaScript Backend SDK](/docs/references/backend/overview).
+
+## Expected features
+
+- User only needs to provide their [secret key](/docs/references/sdk/terminology)
+- Centralized request authentication (e.g. in a middleware or plugin)
+- Give access to the instance of Backend API client (so that users can use all methods)
+- User should be able to do auth for roles and permissions
+
+> [!IMPORTANT]
+> BAPI has [rate limits](/docs/backend-requests/resources/rate-limits) to help protect users against brute-force attacks or stop abuse of Clerk's platform. Be sure to include a backoff mechanism into your fetching logic and respect the `Retry-After` header to gracefully handle any active rate limits.
+
+If you're using `@clerk/backend` to build an SDK for an existing framework, these additional features are expected:
+
+- User should be able to use all `@clerk/backend` options
+
+## Optional features
+
+- User should be able to enforce auth on individual routes
+- Use singleton pattern to only create one instance of Clerk backend client
+
+## Implementation: BAPI
+
+You can manually create a wrapper library around the [BAPI OpenAPI](https://clerk.com/docs/reference/backend-api) or use one the many automatic SDK generation tools that take in OpenAPI definitions.
+
+> [!NOTE]
+> If you're looking for a real-world example, have a look at [`clerk-sdk-go`](https://github.com/clerk/clerk-sdk-go).
+
+## Implementation: Node.js backend framework
+
+`@clerk/backend` is built for Node.js/V8 isolates (Cloudflare Workers, Vercel Edge Runtime, etc.). It’s the foundational package for all JavaScript Backend SDKs and works across all JavaScript runtimes. By using `@clerk/backend` you can be sure to communicate with Clerk’s BAPI in a correct and secure way.
+
+> [!NOTE]
+> The code blocks below will be written in pseudo-code. If you're looking for real-world examples, have a look at [`@clerk/fastify`](https://github.com/clerk/javascript/tree/main/packages/fastify) and [`@clerk/express`](https://github.com/clerk/javascript/tree/main/packages/express).
+
+<Steps>
+  ### Create a Clerk client
+
+  Use `createClerkClient` from `@clerk/backend` to create your default Clerk client which will be used for the middleware.
+
+  ```ts {{ filename: 'client.ts' }}
+  import { createClerkClient } from '@clerk/backend'
+
+  const API_VERSION = process.env.CLERK_API_VERSION || 'v1'
+  const SECRET_KEY = process.env.CLERK_SECRET_KEY || ''
+  const PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || ''
+  const API_URL = process.env.CLERK_API_URL || ''
+  const JWT_KEY = process.env.CLERK_JWT_KEY || ''
+  const SDK_METADATA = {
+    name: PACKAGE_NAME,
+    version: PACKAGE_VERSION,
+    environment: process.env.NODE_ENV,
+  }
+
+  export const clerkClient = createClerkClient({
+    secretKey: SECRET_KEY,
+    apiUrl: API_URL,
+    apiVersion: API_VERSION,
+    jwtKey: JWT_KEY,
+    userAgent: `${PACKAGE_NAME}@${PACKAGE_VERSION}`,
+    sdkMetadata: SDK_METADATA,
+  })
+  ```
+
+  ### Create your middleware/plugin
+
+  Inside the middleware, you’ll use the user-provided Clerk client (or use the default one created in the previous step) and authenticate the request. `authenticateRequest` returns the request state which the middleware should set into its context (or similar). This way other helpers can access it later in the chain.
+
+  ```ts {{ filename: 'clerk-middleware.ts' }}
+  import { clerkClient as defaultClerkClient } from './client.ts'
+
+  const clerkMiddleware = (options) => {
+    return async (context, next) => {
+      const clerkClient = options.clerkClient || defaultClerkClient
+
+      const requestState = await clerkClient.authenticateRequest(context.req)
+
+      context.set('clerkAuth', requestState.toAuth())
+      context.set('clerk', clerkClient)
+
+      await next()
+    }
+  }
+  ```
+
+  ### Create a `getAuth` helper
+
+  This utility will access the stored `requestState` (in the example above as `clerkAuth`) and return it.
+
+  ```ts {{ filename: 'get-auth.ts' }}
+  export const getAuth = (context) => context.get('clerkAuth')
+  ```
+
+  Your end-users can use this utility in cases like these:
+
+  ```ts {{ filename: 'index.ts', mark: [5, [7, 9]] }}
+  const app = new Framework()
+
+  app.use('*', clerkMiddleware())
+  app.get('/', (context) => {
+    const auth = getAuth(context)
+
+    if (!auth?.userId) {
+      return context.json({ message: 'Not logged in' })
+    }
+
+    return context.json({ message: 'Logged in', userId: auth.userId })
+  })
+  ```
+
+  ### Create a `requireAuth` helper
+
+  This utility will require auth requests for user authenticated or authorized requests. An HTTP `401` status code is returned for unauthorized requests.
+
+  It’ll depend on your framework if that utility needs to take the hasPermission as an argument or can be chained as a handler after it.
+
+  ```ts {{ filename: 'require-auth.ts' }}
+  export const requireAuth = (context, next) => {
+    if (!hasAuthObject(context)) {
+      throw new Error('Middleware required')
+    }
+    if (!getAuth(context).userId) {
+      context.status = 401
+      return
+    }
+    return next()
+  }
+  ```
+
+  Your end-users can use this utility in cases like these:
+
+  ```ts {{ filename: 'index.ts', mark: [3, 16] }}
+  const app = new Framework()
+
+  app.get('/path', requireAuth())
+
+  // Or with checking the permissions
+
+  const hasPermission = (context, next) => {
+    const auth = getAuth(context)
+    if (!auth.has({ permission: 'permission' })) {
+      context.status = 403
+      return
+    }
+    return next()
+  }
+
+  app.get('/path', requireAuth(), hasPermission())
+  ```
+
+  ### Add handshake support
+
+  Add checks for the `headers` to apply them from the request to the response and handle and redirect headers.
+
+  ```ts {{ filename: 'clerk-middleware.ts', mark: [[9, 20]] }}
+  import { clerkClient as defaultClerkClient } from './client.ts'
+
+  const clerkMiddleware = (options) => {
+    return async (context, next) => {
+      const clerkClient = options.clerkClient || defaultClerkClient
+
+      const requestState = await clerkClient.authenticateRequest(context.req)
+
+      if (requestState.headers) {
+        // This adds observability headers to the res
+        requestState.headers.forEach((value, key) => context.res.headers.append(key, value))
+
+        const locationHeader = requestState.headers.get('location')
+
+        if (locationHeader) {
+          return context.redirect(locationHeader, 307)
+        } else if (requestState.status === 'handshake') {
+          throw new Error('Clerk: unexpected handshake without redirect')
+        }
+      }
+
+      context.set('clerkAuth', requestState.toAuth())
+      context.set('clerk', clerkClient)
+
+      await next()
+    }
+  }
+  ```
+</Steps>

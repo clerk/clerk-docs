@@ -327,13 +327,44 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       }
       ```
     </Tab>
+
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) along with the [`getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method of the [`auth()`](/docs/references/nextjs/auth#auth) helper.
 
       The `createClerkSupabaseClient()` is stored in a separate file so it can be accessed within `page.tsx` and `actions.ts`.
 
       ```{{ prettier: false, filename: 'src/app/ssr/client.ts'}}
+      import { auth } from "@clerk/nextjs/server";
+      import { createClient } from "@supabase/supabase-js";
 
+      export function createClerkSupabaseClientSsr() {
+        const { getToken } = auth()
+
+        return createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+          {
+            global: {
+              // 👉 Get the Supabase token with a custom fetch method
+              fetch: async (url, options = {}) => {
+                const clerkToken = await getToken({
+                  template: "supabase",
+                });
+
+                // 👉 Insert the Clerk Supabase token into the headers
+                const headers = new Headers(options?.headers);
+                headers.set("Authorization", `Bearer ${clerkToken}`);
+
+                // 👉 Now call the default fetch
+                return fetch(url, {
+                  ...options,
+                  headers,
+                });
+              },
+            }
+          }
+        )
+      }
       ```
 
       The client can be used to query data on page load.

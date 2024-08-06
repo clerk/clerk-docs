@@ -1,0 +1,100 @@
+---
+description: Learn how to use Clerk to natively Sign in with Apple.
+---
+
+# Sign in with Apple
+
+This guide will teach you how to add native Sign in with Apple to your Clerk apps on Apple platforms.
+
+<Steps>
+  ### Configure the Apple social connection
+
+  To support native Sign in with Apple, you need to configure the [Apple social connection](/docs/authentication/social-connections/apple) in your Clerk dashboard.
+
+  > Be sure to follow the instructions specific to native sign in with Apple flows.
+
+  ### Add the Sign in with Apple capability to your app
+
+  [Add the Sign in with Apple capability to your app](https://developer.apple.com/documentation/xcode/configuring-sign-in-with-apple#Add-the-Sign-in-with-Apple-capability-to-your-app).
+
+  ### Obtain an Apple ID Credential
+
+  To authenticate with Clerk using native Sign in with Apple in your app you need to obtain an [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential).
+  In order to obtain the credential:
+
+  1. You can use one of [Apple's built-in Sign in with Apple buttons](https://developer.apple.com/documentation/sign_in_with_apple/displaying_sign_in_with_apple_buttons_in_your_app).
+  1. You can do so manually by following the [Apple docs](https://developer.apple.com/documentation/sign_in_with_apple/implementing_user_authentication_with_sign_in_with_apple#3546457).
+
+  > You must set the nonce property of the `ASAuthorizationAppleIDRequest` when requesting an Apple ID Credential in order to authenticate with Clerk.
+
+  ### Sign In / Sign Up
+
+  Once you have obtained your [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential), you can use it to authenticate with Clerk by calling `SignIn.signInWithAppleIdToken()` or `SignUp.signUpWithAppleIdToken()`
+
+  ```swift {{ filename: 'SignIn' }}
+  static func signInWithAppleIdToken(
+    idToken: String,
+    code: String? = nil
+  ) async throws -> ExternalAuthResult?
+  ```
+
+  ```swift {{ filename: 'SignUp' }}
+  static func signUpWithAppleIdToken(
+    idToken: String,
+    code: String? = nil,
+    firstName: String? = nil,
+    lastName: String? = nil,
+    captchaToken: String? = nil
+  ) async throws -> ExternalAuthResult?
+  ```
+
+  You can access the necessary identity token on the Apple ID Credential with the following code:
+
+  ```swift
+  let idToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) })
+  ```
+
+  You can access the optional authorization code in the same way:
+
+  ```swift
+  let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) })
+  ```
+
+  ### Tying it all together
+
+  This example uses Apple's built-in `SignInWithAppleButton`
+
+  ```swift {{ filename: 'SignInWithAppleView.swift' }}
+  import SwiftUI
+  import ClerkSDK
+  import AuthenticationServices
+
+  struct SignInWithAppleView: View {
+    var body: some View {
+      SignInWithAppleButton { request in
+        request.requestedScopes = [.email, .fullName]
+        request.nonce = UUID().uuidString // Setting the nonce is mandatory
+      } onCompletion: { result in
+        Task {
+          guard let credential = try result.get().credential as? ASAuthorizationAppleIDCredential else {
+            dump("Unable to get credential of type ASAuthorizationAppleIDCredential")
+            return
+          }
+          
+          guard let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }) else {
+            dump("Unable to get ID token from Apple ID Credential.")
+            return
+          }
+          
+          let authCode = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) })
+          
+          try await SignIn.signInWithAppleIdToken(
+            idToken: token,
+            code: authCode
+          )
+        }
+      }
+    }
+  }
+  ```
+</Steps>

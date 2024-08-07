@@ -15,7 +15,11 @@ const EXCLUDE_LIST = [
   '/docs/reference/frontend-api',
   '/support',
   '/discord',
+  '/contact',
+  '/contact/sales',
   '/contact/support',
+  '/blog',
+  '/changelog/2024-04-19',
 ]
 
 const ERRORS = {

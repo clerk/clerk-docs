@@ -72,7 +72,7 @@ You can manually create a wrapper library around the [BAPI OpenAPI](https://cler
 
   ### Create your middleware/plugin
 
-  Inside the middleware, you’ll use the user-provided Clerk client (or use the default one created in the previous step) and authenticate the request. [`authenticateRequest`](/docs/references/backend/authenticate-request) returns the request state, which the middleware should set into its context (or similar). This way other helpers can access it later in the chain.
+  Inside the middleware, you’ll use the user-provided Clerk client (or use the default one created in the previous step) and authenticate the request. [`authenticateRequest`](/docs/references/backend/authenticate-request) returns `Promise<RequestState>`. The middleware should set `requestState.toAuth()` into its context as this will contain the resolved signed-in/signed-out [`Auth`](/docs/references/nextjs/auth-object) object. This way other helpers can access it later in the chain.
 
   ```ts {{ filename: 'clerk-middleware.ts' }}
   import { clerkClient as defaultClerkClient } from './client.ts'
@@ -93,7 +93,7 @@ You can manually create a wrapper library around the [BAPI OpenAPI](https://cler
 
   ### Create a `getAuth` helper
 
-  This utility will access the stored `requestState` (in the example above as `clerkAuth`) and return it.
+  This utility will access the stored `requestState` (in the example above saved as `clerkAuth`) and return it.
 
   ```ts {{ filename: 'get-auth.ts' }}
   export const getAuth = (context) => context.get('clerkAuth')
@@ -116,11 +116,12 @@ You can manually create a wrapper library around the [BAPI OpenAPI](https://cler
   })
   ```
 
+  > [!TIP]
+  > Check out the Next.js [`getAuth()`](/docs/references/nextjs/get-auth) reference to see how it's implemented.
+
   ### Create a `requireAuth` helper
 
   This utility will require auth requests for user authenticated or authorized requests. An HTTP `401` status code is returned for unauthorized requests.
-
-  It’ll depend on your framework if that utility needs to take the hasPermission as an argument or can be chained as a handler after it.
 
   ```ts {{ filename: 'require-auth.ts' }}
   export const requireAuth = (context, next) => {
@@ -137,12 +138,16 @@ You can manually create a wrapper library around the [BAPI OpenAPI](https://cler
 
   Your end-users can use this utility in cases like these:
 
-  ```ts {{ filename: 'index.ts', mark: [3, 16] }}
+  ```ts {{ filename: 'index.ts' }}
   const app = new Framework()
 
   app.get('/path', requireAuth())
+  ```
 
-  // Or with checking the permissions
+  Your end-users will also have access to a [`has()`](/docs/references/nextjs/auth-object#has) function on the [`Auth`](/docs/references/nextjs/auth-object) object. They can combine it with `requireAuth()` like so:
+
+  ```ts {{ filename: 'index.ts' }}
+  const app = new Framework()
 
   const hasPermission = (context, next) => {
     const auth = getAuth(context)

@@ -225,105 +225,222 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
 
   The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client, but modifies it to inject the Clerk token you [created with the Supabase JWT template](#create-a-supabase-jwt-template) into the request headers sent to Supabase. The `requesting_user_id()` function that was created in the Supabase dashboard will parse this token to use it when querying data from the `tasks` table.
 
-  The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to access the [`useUser()`](/docs/references/react/use-user) and [`useSession()`](/docs/references/react/use-session) hooks, but you can adapt this code to work with any React-based Clerk SDK.
+  <Tabs items={["Client side rendering", "Server side rendering"]}>
+    <Tab>
+      The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to access the [`useUser()`](/docs/references/react/use-user) and [`useSession()`](/docs/references/react/use-session) hooks, but you can adapt this code to work with any React-based Clerk SDK.
 
-  ```jsx {{ prettier: false, filename: 'app/page.tsx' }}
-  'use client';
-  import { useEffect, useState } from 'react';
-  import { useSession, useUser } from '@clerk/nextjs';
-  import { createClient } from '@supabase/supabase-js';
+      ```jsx {{ prettier: false, filename: 'app/page.tsx' }}
+      'use client';
+      import { useEffect, useState } from 'react';
+      import { useSession, useUser } from '@clerk/nextjs';
+      import { createClient } from '@supabase/supabase-js';
 
-  export default function Home() {
-    const [tasks, setTasks] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [name, setName] = useState('');
-    // The `useUser()` hook will be used to ensure that Clerk has loaded data about the logged in user
-    const { user } = useUser();
-    // The `useSession()` hook will be used to get the Clerk session object
-    const { session } = useSession();
+      export default function Home() {
+        const [tasks, setTasks] = useState<any[]>([]);
+        const [loading, setLoading] = useState(true);
+        const [name, setName] = useState('');
+        // The `useUser()` hook will be used to ensure that Clerk has loaded data about the logged in user
+        const { user } = useUser();
+        // The `useSession()` hook will be used to get the Clerk session object
+        const { session } = useSession();
 
-    // Create a custom supabase client that injects the Clerk Supabase token into the request headers
-    function createClerkSupabaseClient() {
-      return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-        {
-          global: {
-            // Get the custom Supabase token from Clerk
-            fetch: async (url, options = {}) => {
-              const clerkToken = await session?.getToken({
-                template: 'supabase',
-              });
+        // Create a custom supabase client that injects the Clerk Supabase token into the request headers
+        function createClerkSupabaseClient() {
+          return createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+            {
+              global: {
+                // Get the custom Supabase token from Clerk
+                fetch: async (url, options = {}) => {
+                  const clerkToken = await session?.getToken({
+                    template: 'supabase',
+                  });
 
-              // Insert the Clerk Supabase token into the headers
-              const headers = new Headers(options?.headers);
-              headers.set('Authorization', `Bearer ${clerkToken}`);
+                  // Insert the Clerk Supabase token into the headers
+                  const headers = new Headers(options?.headers);
+                  headers.set('Authorization', `Bearer ${clerkToken}`);
 
-              // Now call the default fetch
-              return fetch(url, {
-                ...options,
-                headers,
-              });
-            },
-          },
+                  // Now call the default fetch
+                  return fetch(url, {
+                    ...options,
+                    headers,
+                  });
+                },
+              },
+            }
+          );
         }
-      );
-    }
 
-    // Create a `client` object for accessing Supabase data using the Clerk token
-    const client = createClerkSupabaseClient();
+        // Create a `client` object for accessing Supabase data using the Clerk token
+        const client = createClerkSupabaseClient();
 
-    // This `useEffect` will wait for the User object to be loaded before requesting
-    // the tasks for the logged in user
-    useEffect(() => {
-      if (!user) return;
+        // This `useEffect` will wait for the User object to be loaded before requesting
+        // the tasks for the logged in user
+        useEffect(() => {
+          if (!user) return;
 
-      async function loadTasks() {
-        setLoading(true);
-        const { data, error } = await client.from('tasks').select();
-        if (!error) setTasks(data);
-        setLoading(false);
+          async function loadTasks() {
+            setLoading(true);
+            const { data, error } = await client.from('tasks').select();
+            if (!error) setTasks(data);
+            setLoading(false);
+          }
+
+          loadTasks();
+        }, [user]);
+
+        async function createTask(e: React.FormEvent<HTMLFormElement>) {
+          e.preventDefault();
+          // Insert task into the "tasks" database
+          await client.from('tasks').insert({
+            name,
+          });
+          window.location.reload();
+        }
+
+        return (
+          <div>
+            <h1>Tasks</h1>
+
+            {loading && <p>Loading...</p>}
+
+            {!loading &&
+              tasks.length > 0 &&
+              tasks.map((task: any) => <p>{task.name}</p>)}
+
+            {!loading && tasks.length === 0 && <p>No tasks found</p>}
+
+            <form onSubmit={createTask}>
+              <input
+                autoFocus
+                type="text"
+                name="name"
+                placeholder="Enter new task"
+                onChange={(e) => setName(e.target.value)}
+                value={name}
+              />
+              <button type="submit">Add</button>
+            </form>
+          </div>
+        );
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to demonstrate how to integrate Supabase with Clerk in a **server-side rendered** application.
+
+      The `createClerkSupabaseClient()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
+
+      ```jsx {{ prettier: false, filename: 'src/app/ssr/client.ts' }}
+      import { auth } from "@clerk/nextjs/server";
+      import { createClient } from "@supabase/supabase-js";
+
+      export function createClerkSupabaseClient() {
+        const { getToken } = auth()
+
+        return createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+          {
+            global: {
+              // Get the Supabase token with a custom fetch method
+              fetch: async (url, options = {}) => {
+                const clerkToken = await getToken({
+                  template: "supabase",
+                });
+
+                // Insert the Clerk Supabase token into the headers
+                const headers = new Headers(options?.headers);
+                headers.set("Authorization", `Bearer ${clerkToken}`);
+
+                // Now call the default fetch
+                return fetch(url, {
+                  ...options,
+                  headers,
+                });
+              },
+            }
+          }
+        )
+      }
+      ```
+
+      The client can be used to query data on page load.
+
+      ```jsx {{ prettier: false, filename: 'src/app/ssr/page.tsx' }}
+      import { Input } from "@/components/ui/input";
+      import { Button } from "@/components/ui/button";
+      import { createClerkSupabaseClient } from "./client";
+      import TaskRow from "./TaskRow";
+
+      // Register the `Clerk` object  the global window fix TypeScript errors
+      declare global {
+        interface Window {
+          Clerk: any;
+        }
       }
 
-      loadTasks();
-    }, [user]);
+      const client = createClerkSupabaseClient();
 
-    async function createTask(e: React.FormEvent<HTMLFormElement>) {
-      e.preventDefault();
-      // Insert task into the "tasks" database
-      await client.from('tasks').insert({
-        name,
-      });
-      window.location.reload();
-    }
+      export default async function Home() {
+        // Query the "tasks" table to render the page
+        const { data, error } = await client.from("tasks").select()
+        if(error) {
+          throw error
+        }
+        const tasks = data
 
-    return (
-      <div>
-        <h1>Tasks</h1>
+        async function onSubmit(formData: FormData) {
+          'use server'
+          const name = formData.get('name') as string;
+          await client.from("tasks").insert({
+            name
+          });
+        }
 
-        {loading && <p>Loading...</p>}
+        return (
+          <div className='flex flex-col'>
+            <form action={onSubmit} className='flex gap-2'>
+              <Input
+                autoFocus
+                type='text'
+                name='name'
+                placeholder='What do you need to do?' />
+              <Button type='submit' className='disabled:cursor-not-allowed'>Add</Button>
+            </form>
+            <div className='flex flex-col gap-2 p-2'>
+              {tasks?.map((task: any) =>
+                <TaskRow key={task.id} id={task.id} name={task.name} is_done={task.is_done} />
+              )}
+            </div>
+          </div>
+        );
+      }
+      ```
 
-        {!loading &&
-          tasks.length > 0 &&
-          tasks.map((task: any) => <p>{task.name}</p>)}
+      The client can also be used within server actions.
 
-        {!loading && tasks.length === 0 && <p>No tasks found</p>}
+      ```jsx {{ prettier: false, filename: 'src/app/ssr/actions.ts' }}
+      'use server'
 
-        <form onSubmit={createTask}>
-          <input
-            autoFocus
-            type="text"
-            name="name"
-            placeholder="Enter new task"
-            onChange={(e) => setName(e.target.value)}
-            value={name}
-          />
-          <button type="submit">Add</button>
-        </form>
-      </div>
-    );
-  }
-  ```
+      import { createClerkSupabaseClient } from "./client"
+
+      const client = createClerkSupabaseClient()
+
+      export async function deleteTask(taskId: number) {
+        await client.from("tasks").delete().eq("id", taskId)
+      }
+
+      export async function setTaskState(taskId: number, isDone: boolean) {
+        await client.from("tasks").update({
+          is_done: isDone
+        }).eq("id", taskId)
+      }
+      ```
+    </Tab>
+  </Tabs>
 
   ### Test your integration
 

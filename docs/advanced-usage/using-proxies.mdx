@@ -39,7 +39,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   #### Example configuration
 
-  <Tabs items={["Nginx", "Cloudflare Workers"]}>
+  <Tabs items={["Nginx", "Cloudflare Workers", "Next.js"]}>
     <Tab>
       ```nginx {{ prettier: false, filename: 'nginx.conf' }}
       http {
@@ -101,6 +101,43 @@ When using a proxy, all requests to the Frontend API will be made through your d
           }
         ```
       </CodeBlockTabs>
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'middleware.ts' }}
+        import { NextResponse } from "next/server";
+        import { clerkMiddleware } from "@clerk/nextjs/server";
+
+        export default clerkMiddleware((auth, request) => {
+          if (request.url.match("__clerk")) {
+            const proxyHeaders = new Headers(request.headers);
+            proxyHeaders.set("Clerk-Proxy-Url", "https://app.dev/__clerk");
+            proxyHeaders.set("Clerk-Secret-Key", process.env.CLERK_SECRET_KEY || "");
+            proxyHeaders.set("X-Forwarded-For", request.ip || "");
+
+            const proxyUrl = new URL(request.url);
+            proxyUrl.host = "frontend-api.clerk.dev";
+            proxyUrl.protocol = "https";
+            proxyUrl.pathname = proxyUrl.pathname.replace("/__clerk", "");
+
+            return NextResponse.rewrite(proxyUrl, {
+              request: {
+                headers: proxyHeaders,
+              },
+            });
+          }
+        });
+
+        export const config = {
+          matcher: [
+            // Skip Next.js internals and all static files, unless found in search params
+            "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+            // Always run for API routes AND anything passed through the proxy
+            "/(api|trpc|__clerk)(.*)",
+          ],
+        };
+
+      ```
     </Tab>
   </Tabs>
 

@@ -54,5 +54,107 @@ module.exports = nextConfig;
 ## Usage of `unsafe-eval` and `unsafe-inline` directives in Next.js
 
 - Within `script-src`, `unsafe-eval` is a [requirement for Next.js](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy#without-nonces) to run in development mode. _For production environment CSPs, it should be removed_.
-- Within `script-src`, `unsafe-inline` is a requirement for Next.js in both dev and prod environments if you're using the App Router. If you are using the Pages Router, it should be removed.
+- Within `script-src`, `unsafe-inline` is a requirement for Next.js in both dev and prod environments if you're using the App Router and not using `strict-dynamic`. If you are using the Pages Router, it can be removed.
 - Within `style-src`, `unsafe-inline` is a requirement for Clerk's components to inject their styles. Removing this requirement is on our roadmap - please [reach out to support](/support){{ target: '_blank' }} if you'd like to see this implemented sooner.
+
+## Implementing a `strict-dynamic` CSP
+
+If you'd like to implement a [strict-dynamic CSP](https://content-security-policy.com/strict-dynamic/), Clerk supports this, but with a different type of configuration. As strict-dynamic CSPs require a "nonce" value that should be programmatically generated per-request, the best way to make this work is within middleware that runs on every request. The following example demonstrates how to implement a strict-dynamic CSP with Next.js middleware, but the same approach could be used with any other framework.
+
+```js {{ prettier: false, filename: 'middleware.ts' }}
+  import { NextResponse } from "next/server";
+  import { clerkMiddleware } from "@clerk/nextjs/server";
+
+  export default clerkMiddleware((auth, request) => {
+    return applyCsp(request);
+  });
+
+  function applyCsp(request) {
+    // create a randomly generated nonce value
+    const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+
+    // format the CSP header
+    const cspHeader = `
+      script-src 'self' 'strict-dynamic' 'nonce-${nonce}' https: http: ${
+      process.env.NODE_ENV === "production" ? "" : `'unsafe-eval'`
+    };
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' blob: data: https://img.clerk.com;
+      worker-src 'self' blob:;
+      font-src 'self';
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      frame-ancestors 'none';
+      upgrade-insecure-requests;
+  `;
+    // Replace newline characters and spaces
+    const contentSecurityPolicyHeaderValue = cspHeader
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    // set the nonce and csp values in the request headers
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-nonce", nonce);
+    requestHeaders.set(
+      "Content-Security-Policy",
+      contentSecurityPolicyHeaderValue
+    );
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    
+    response.headers.set(
+      "Content-Security-Policy",
+      contentSecurityPolicyHeaderValue
+    );
+
+    return response;
+  }
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  };
+```
+
+With this `strict-dynamic` configuration in place, **all script tags must be passed with a `nonce` value** or they will be blocked. This can be done by passing the nonce value as a `nonce` parameter to the script tag. For example, `<script src="https://example.com/script.js" nonce="<nonce_value>"></script>`. If you are using Next.js, any scripts loaded through next will automatically have the nonce value injected.
+
+With the above middleware, the nonce value is made accessible via the `x-nonce` request header. An example is provided below on how to access this value within a Next.js page.
+
+```js {{ prettier: false, filename: 'pages/index.tsx' }}
+  import { headers } from "next/headers";
+
+  export default function Page() {
+    const nonce = headers().get("x-nonce");
+
+    return <p>{nonce}</p>;
+  }
+```
+
+If you're using one of Clerk's React-based SDKs, in order for Clerk to load correctly, the nonce value must also be passed to Clerk's `ClerkProvider` component. This can be done by passing the nonce value as a `nonce` prop to the `ClerkProvider` component. For example:
+
+```js {{ prettier: false, filename: 'app/layout.tsx' }}
+import { ClerkProvider} from "@clerk/nextjs";
+import { headers } from "next/headers";
+
+export default function Layout({ children }) {
+  return (
+    // Note: since this is server-rendered, you don't _need_ to pass the nonce, see note below
+    <ClerkProvider nonce={headers().get("x-nonce")}>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
+  );
+}
+```
+
+If you are using Next.js and your layout file is rendered on the server (as is the case with the example above), our SDK will automatically load the nonce into ClerkProvider, and the explicit passing of the nonce would be unnecessary. However, if you are rendering the provider on the client, you will need to explicitly pass the nonce value to ClerkProvider.

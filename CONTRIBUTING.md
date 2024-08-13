@@ -218,7 +218,7 @@ description: Some brief, but effective description of the page's content.
 ---
 ```
 
-- **`title`** - The title of the page. Used to populate the HTML `<title>` tag
+- **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown e.g. ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 These fields should be present on every documentation page.
@@ -227,7 +227,9 @@ These fields should be present on every documentation page.
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.
 
-Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading".
+Headings should be written in **sentence-casing**, where only the first word of the heading is capitalized. E.g. "This is a heading".
+
+h1's are not necessary and are considered tech-debt, as the `title` property in the [frontmatter](#file-metadata) will set the h1.
 
 `h2` and `h3` headings are automatically included in the table of contents. You can control this behaviour by using the `toc` prop:
 

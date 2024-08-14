@@ -6,7 +6,7 @@ description: Learn how to build a custom SAML connection authentication flow usi
 # SAML connections
 
 > [!CAUTION]
-> This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with SAML connections using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/account-portal/overview) or [prebuilt components](/docs/components/overview).
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with SAML connections using a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/customization/account-portal//overview) or [prebuilt components](/docs/components/overview).
 
 ## Before you start
 
@@ -27,22 +27,22 @@ The following example shows two files:
 <Tabs items={["Next.js"]}>
   <Tab>
     <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
-      ```jsx {{ prettier: false, filename: 'app/sign-in/page.tsx' }}
-      'use client';
+      ```tsx {{ filename: 'app/sign-in/page.tsx' }}
+      'use client'
 
-      import * as React from 'react';
-      import { useSignIn, useSignUp } from '@clerk/nextjs';
+      import * as React from 'react'
+      import { useSignIn, useSignUp } from '@clerk/nextjs'
 
       export default function OauthSignIn() {
-        const { signIn } = useSignIn();
-        const { signUp } = useSignUp();
+        const { signIn } = useSignIn()
+        const { signUp } = useSignUp()
 
-        if (!signIn || !signUp) return null;
+        if (!signIn || !signUp) return null
 
         const signInWith = (e: React.FormEvent) => {
-          e.preventDefault();
+          e.preventDefault()
 
-          const email = (e.target as HTMLFormElement).email.value;
+          const email = (e.target as HTMLFormElement).email.value
 
           signIn
             .authenticateWithRedirect({
@@ -52,13 +52,13 @@ The following example shows two files:
               redirectUrlComplete: '/',
             })
             .then((res) => {
-              console.log(res);
+              console.log(res)
             })
             .catch((err: any) => {
-              console.log(err.errors);
-              console.error(err, null, 2);
-            });
-        };
+              console.log(err.errors)
+              console.error(err, null, 2)
+            })
+        }
 
         // Render a button for each supported SAML provider
         // you want to add to your app
@@ -67,19 +67,19 @@ The following example shows two files:
             <input type="email" name="email" placeholder="Enter email address" />
             <button>Sign in with SAML</button>
           </form>
-        );
+        )
       }
       ```
 
-      ```jsx {{ prettier: false, filename: 'app/sign-up/sso-callback/page.tsx' }}
-      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs';
+      ```jsx {{ filename: 'app/sign-up/sso-callback/page.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
 
       export default function SSOCallback() {
-        console.log('testing');
+        console.log('testing')
         // Handle the redirect flow by rendering the
         // prebuilt AuthenticateWithRedirectCallback component.
         // This is the final step in the custom SAML flow.
-        return <AuthenticateWithRedirectCallback />;
+        return <AuthenticateWithRedirectCallback />
       }
       ```
     </CodeBlockTabs>
@@ -96,22 +96,22 @@ The following example shows how to handle these cases in your sign-in flow. The 
 
 <Tabs items={["Next.js"]}>
   <Tab>
-    ```js {{ prettier: false, filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
-    'use client';
+    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+    'use client'
 
-    import * as React from 'react';
-    import { useSignIn, useSignUp } from '@clerk/nextjs';
+    import * as React from 'react'
+    import { useSignIn, useSignUp } from '@clerk/nextjs'
 
     export default function OauthSignIn() {
-      const { signIn } = useSignIn();
-      const { signUp, setActive } = useSignUp();
+      const { signIn } = useSignIn()
+      const { signUp, setActive } = useSignUp()
 
-      if (!signIn || !signUp) return null;
+      if (!signIn || !signUp) return null
 
       const signInWith = (e: React.FormEvent) => {
-        e.preventDefault();
+        e.preventDefault()
 
-        const email = (e.target as HTMLFormElement).email.value;
+        const email = (e.target as HTMLFormElement).email.value
 
         signIn
           .authenticateWithRedirect({
@@ -121,55 +121,53 @@ The following example shows how to handle these cases in your sign-in flow. The 
             redirectUrlComplete: '/',
           })
           .then((res) => {
-            console.log(res);
+            console.log(res)
           })
           .catch((err: any) => {
-            console.log(err.errors);
-            console.error(err, null, 2);
-          });
-      };
+            console.log(err.errors)
+            console.error(err, null, 2)
+          })
+      }
 
       async function handleSignIn(e: React.FormEvent) {
-        if (!signIn || !signUp) return null;
+        if (!signIn || !signUp) return null
 
         // If the user has an account in your application, but does not yet
         // have a SAML account connected to it, you can transfer the SAML
         // account to the existing user account.
         const userExistsButNeedsToSignIn =
           signUp.verifications.externalAccount.status === 'transferable' &&
-          signUp.verifications.externalAccount.error?.code ===
-            'external_account_exists';
+          signUp.verifications.externalAccount.error?.code === 'external_account_exists'
 
         if (userExistsButNeedsToSignIn) {
-          const res = await signIn.create({ transfer: true });
+          const res = await signIn.create({ transfer: true })
 
           if (res.status === 'complete') {
             setActive({
               session: res.createdSessionId,
-            });
+            })
           }
         }
 
         // If the user has a SAML account but does not yet
         // have an account in your app, you can create an account
         // for them using the SAML information.
-        const userNeedsToBeCreated =
-          signIn.firstFactorVerification.status === 'transferable';
+        const userNeedsToBeCreated = signIn.firstFactorVerification.status === 'transferable'
 
         if (userNeedsToBeCreated) {
           const res = await signUp.create({
             transfer: true,
-          });
+          })
 
           if (res.status === 'complete') {
             setActive({
               session: res.createdSessionId,
-            });
+            })
           }
         } else {
           // If the user has an account in your application
           // and has an SAML account connected to it, you can sign them in.
-          signInWith(e);
+          signInWith(e)
         }
       }
 
@@ -180,7 +178,7 @@ The following example shows how to handle these cases in your sign-in flow. The 
           <input type="email" name="email" placeholder="Enter email address" />
           <button>Sign in with SAML</button>
         </form>
-      );
+      )
     }
     ```
   </Tab>

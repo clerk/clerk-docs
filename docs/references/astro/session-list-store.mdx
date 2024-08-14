@@ -5,28 +5,92 @@ description: Clerk's $sessionList store retrieves a list of sessions that have b
 
 # `$sessionListStore`
 
-The `$sessionListStore` store returns an array of [`Session`](https://clerk.com/docs/references/javascript/session) objects that have been registered on the client device.
+The `$sessionListStore` store returns an array of [`Session`](/docs/references/javascript/session){{ target: '_blank' }} objects that have been registered on the client device.
 
 ## How to use the `$sessionListStore` store
 
-The following example demonstrates how to use the `$sessionListStore` store to display the expiration time of the first session in the list.
+The following example demonstrates how to use the `$sessionListStore` to create a basic user button component. This component displays the current session's email address and provides a menu to switch between active sessions or sign out of all accounts.
 
-```tsx {{ prettier: false, filename: 'session-list.tsx' }}
-import { useStore } from '@nanostores/react';
-import { $sessionList } from '@clerk/astro/client';
+<CodeBlockTabs options={['React', 'Vue', 'Svelte']}>
+  ```tsx {{ filename: 'user-button.tsx' }}
+  import { $sessionListStore, $clerkStore } from '@clerk/astro/client'
 
-export default function Home() {
-  const sessions = useStore($sessionList);
+  export default function UserButton() {
+    const sessions = useStore($sessionListStore)
+    const { session, setActive, signOut } = useStore($clerkStore)
 
-  if (sessions === undefined) {
-    // handle loading state
-    return null;
+    if (sessions === undefined) {
+      // Handle loading state
+      return <div>Loading sessions...</div>
+    }
+
+    return (
+      <div>
+        <div>{session.user.primaryEmailAddress}</div>
+        <div role="menu">
+          {sessions.map((sess) => (
+            <button role="menuitem" onClick={() => setActive({ session: sess.id })} key={sess.id}>
+              {sess.user.primaryEmailAddress}
+            </button>
+          ))}
+          <button role="menuitem" onClick={() => signOut()}>
+            Sign out of all accounts
+          </button>
+        </div>
+      </div>
+    )
   }
+  ```
 
-  return (
-    <div>
-      <p>Your current session expires at {sessions[0].expireAt}.</p>
+  ```vue {{ filename: 'user-button.vue' }}
+  <script setup>
+  import { useStore } from '@nanostores/vue'
+  import { $sessionListStore, $clerkStore } from '@clerk/astro/client'
+
+  const sessions = useStore($sessionListStore)
+  const clerk = useStore($clerkStore)
+  </script>
+
+  <template>
+    <div v-if="sessions === undefined">Loading sessions...</div>
+    <div v-else>
+      <div>{{ clerk.session.user.primaryEmailAddress }}</div>
+      <div role="menu">
+        <button
+          v-for="sess in sessions"
+          :key="sess.id"
+          role="menuitem"
+          @click="clerk.setActive({ session: sess.id })"
+        >
+          {{ sess.user.primaryEmailAddress }}
+        </button>
+        <button role="menuitem" @click="clerk.signOut">Sign out of all accounts</button>
+      </div>
     </div>
-  )
-}
-```
+  </template>
+  ```
+
+  ```svelte {{ filename: 'session-list.svelte' }}
+  <script>
+    // The $ prefix is reserved in Svelte for its own reactivity system.
+    // Alias the imports to avoid conflicts.
+    import { $sessionListStore as sessions, $clerkStore as clerk } from '@clerk/astro/client'
+  </script>
+
+  {#if $sessions === undefined}
+    <div>Loading sessions...</div>
+  {:else}
+    <div>
+      <div>{$clerk.session.user.primaryEmailAddress}</div>
+      <div role="menu">
+        {#each $sessions as sess (sess.id)}
+          <button role="menuitem" on:click={() => $clerk.setActive({ session: sess.id })}>
+            {sess.user.primaryEmailAddress}
+          </button>
+        {/each}
+        <button role="menuitem" on:click={() => $clerk.signOut()}> Sign out of all accounts </button>
+      </div>
+    </div>
+  {/if}
+  ```
+</CodeBlockTabs>

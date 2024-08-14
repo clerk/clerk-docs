@@ -28,11 +28,11 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
   ### Create a new Next.js project
 
   1. Create a new Next.js project using the following command:
-     ```sh {{ prettier: false, filename: 'terminal' }}
+     ```sh {{ filename: 'terminal' }}
      npx create-next-app clerk-neon-example --typescript --eslint --tailwind --use-npm --no-src-dir --app --import-alias "@/*"
      ```
   1. Navigate to the project directory and install the required dependencies:
-     ```sh {{ prettier: false, filename: 'terminal' }}
+     ```sh {{ filename: 'terminal' }}
      cd clerk-neon-example
      npm install @neondatabase/serverless
      npm install drizzle-orm --legacy-peer-deps
@@ -47,10 +47,12 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
 
   To ensure that only authenticated users can access your application, modify [`clerkMiddleware`](/docs/references/nextjs/clerk-middleware) to require authentication for every route.
 
-  ```typescript {{ prettier: false, filename: 'middleware.ts', mark: [3] }}
-  import { clerkMiddleware } from '@clerk/nextjs/server';
+  ```typescript {{ filename: 'middleware.ts', mark: [[3, 5]] }}
+  import { clerkMiddleware } from '@clerk/nextjs/server'
 
-  export default clerkMiddleware((auth) => { auth().protect() });
+  export default clerkMiddleware((auth) => {
+    auth().protect()
+  })
 
   export const config = {
     matcher: [
@@ -59,7 +61,7 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
       // Always run for API routes
       '/(api|trpc)(.*)',
     ],
-  };
+  }
   ```
 
   ### Set your neon connection string
@@ -68,7 +70,7 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
 
   Your environment variable file should have the following values:
 
-  ```sh {{ prettier: false, filename: '.env.local' }}
+  ```env {{ filename: '.env.local' }}
   DATABASE_URL=NEON_DB_CONNECTION_STRING
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
   CLERK_SECRET_KEY={{secret}}
@@ -80,93 +82,93 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
 
   1. Create a `schema.ts` file in the `db/` directory that defines the database schema. The schema will include a table called `user_messages` with the columns `user_id`, `create_ts`, and `message`.The `user_id` column will be used to store the user's Clerk ID.
 
-  ```typescript {{ prettier: false, filename: 'app/db/schema.ts', mark: [4] }}
-  import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+     ```typescript {{ filename: 'app/db/schema.ts', mark: [4] }}
+     import { pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 
-  export const UserMessages = pgTable("user_messages", {
-    user_id: text("user_id").primaryKey().notNull(),
-    createTs: timestamp("create_ts").defaultNow().notNull(),
-    message: text("message").notNull(),
-  });
-  ```
+     export const UserMessages = pgTable('user_messages', {
+       user_id: text('user_id').primaryKey().notNull(),
+       createTs: timestamp('create_ts').defaultNow().notNull(),
+       message: text('message').notNull(),
+     })
+     ```
 
   1. Create an `index.ts` file in the `db` directory to set up the database connection.
 
-  ```typescript {{ prettier: false, filename: 'app/db/index.ts' }}
-  import { loadEnvConfig } from "@next/env";
-  import { neon } from "@neondatabase/serverless";
-  import { drizzle } from "drizzle-orm/neon-http";
-  import { UserMessages } from "./schema";
+     ```typescript {{ filename: 'app/db/index.ts' }}
+     import { loadEnvConfig } from '@next/env'
+     import { neon } from '@neondatabase/serverless'
+     import { drizzle } from 'drizzle-orm/neon-http'
+     import { UserMessages } from './schema'
 
-  loadEnvConfig(process.cwd());
+     loadEnvConfig(process.cwd())
 
-  if (!process.env.DATABASE_URL) {
-   throw new Error("DATABASE_URL must be a Neon postgres connection string");
-  }
+     if (!process.env.DATABASE_URL) {
+       throw new Error('DATABASE_URL must be a Neon postgres connection string')
+     }
 
-  const sql = neon(process.env.DATABASE_URL);
-  export const db = drizzle(sql, {
-   schema: { UserMessages },
-  });
-  ```
+     const sql = neon(process.env.DATABASE_URL)
+     export const db = drizzle(sql, {
+       schema: { UserMessages },
+     })
+     ```
 
   ### Push the schema to the database
 
   1. To load the schema into the database, create a `drizzle.config.ts` file at the root of your project and add the following configuration:
 
-  ```typescript {{ prettier: false, filename: 'drizzle.config.ts' }}
-  import { defineConfig } from "drizzle-kit";
-  import { loadEnvConfig } from "@next/env";
+     ```typescript {{ filename: 'drizzle.config.ts' }}
+     import { defineConfig } from 'drizzle-kit'
+     import { loadEnvConfig } from '@next/env'
 
-  loadEnvConfig(process.cwd());
+     loadEnvConfig(process.cwd())
 
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be a Neon postgres connection string");
-  }
+     if (!process.env.DATABASE_URL) {
+       throw new Error('DATABASE_URL must be a Neon postgres connection string')
+     }
 
-  export default defineConfig({
-    dialect: "postgresql",
-    dbCredentials: {
-      url: process.env.DATABASE_URL,
-    },
-    schema: "./app/db/schema.ts",
-  });
-  ```
+     export default defineConfig({
+       dialect: 'postgresql',
+       dbCredentials: {
+         url: process.env.DATABASE_URL,
+       },
+       schema: './app/db/schema.ts',
+     })
+     ```
 
   1. To push the schema to the database, run the following command:
 
-  ```sh {{ prettier: false, filename: 'terminal' }}
-  npx drizzle-kit push
-  ```
+     ```sh {{ filename: 'terminal' }}
+     npx drizzle-kit push
+     ```
 
   ### Create Server Actions to handle user interactions
 
   To handle form submissions for adding and deleting user messages, create two Server Actions in `app/actions.ts`. Use the [`auth()`](/docs/references/nextjs/auth) function from Clerk to obtain the user ID, which will be used to interact with the database.
 
-  ```typescript {{ prettier: false, filename: 'app/actions.ts' }}
-  "use server";
+  ```typescript {{ filename: 'app/actions.ts' }}
+  'use server'
 
-  import { auth } from "@clerk/nextjs/server";
-  import { UserMessages } from "./db/schema";
-  import { db } from "./db";
-  import { eq } from "drizzle-orm";
+  import { auth } from '@clerk/nextjs/server'
+  import { UserMessages } from './db/schema'
+  import { db } from './db'
+  import { eq } from 'drizzle-orm'
 
   export async function createUserMessage(formData: FormData) {
-    const { userId } = auth();
-    if (!userId) throw new Error("User not found");
+    const { userId } = auth()
+    if (!userId) throw new Error('User not found')
 
-    const message = formData.get("message") as string;
+    const message = formData.get('message') as string
     await db.insert(UserMessages).values({
       user_id: user.id,
       message,
-    });
+    })
   }
 
   export async function deleteUserMessage() {
-    const { userId } = auth();
-    if (!userId) throw new Error("User not found");
+    const { userId } = auth()
+    if (!userId) throw new Error('User not found')
 
-    await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id));
+    await db.delete(UserMessages).where(eq(UserMessages.user_id, user.id))
   }
   ```
 
@@ -178,17 +180,17 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
 
   To enable the user to delete or add a message, use the `deleteUserMessage()` and `createUserMessage()` actions created in the previous step.
 
-  ```tsx {{ prettier: false, filename: 'app/page.tsx' }}
-  import { createUserMessage, deleteUserMessage } from "./actions";
-  import { db } from "./db";
-  import { auth } from "@clerk/nextjs/server";
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import { createUserMessage, deleteUserMessage } from './actions'
+  import { db } from './db'
+  import { auth } from '@clerk/nextjs/server'
 
   export default async function Home() {
-    const { userId } = auth();
-    if (!userId) throw new Error("User not found");
+    const { userId } = auth()
+    if (!userId) throw new Error('User not found')
     const existingMessage = db.query.UserMessages.findFirst({
       where: (messages, { eq }) => eq(messages.user_id, userId),
-    });
+    })
 
     return (
       <main>
@@ -197,21 +199,17 @@ This tutorial demonstrates how to integrate Neon Postgres with Clerk in a Next.j
           <div>
             <p>{existingMessage.message}</p>
             <form action={deleteUserMessage}>
-              <button>
-                Delete Message
-              </button>
+              <button>Delete Message</button>
             </form>
           </div>
         ) : (
           <form action={createUserMessage}>
             <input type="text" name="message" placeholder="Enter a message" />
-            <button>
-              Save Message
-            </button>
+            <button>Save Message</button>
           </form>
         )}
       </main>
-    );
+    )
   }
   ```
 

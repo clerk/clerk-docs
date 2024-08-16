@@ -4,162 +4,154 @@ description: Learn how to add Clerk's bot protection to your custom sign-up flow
 
 # Add bot protection to your custom sign-up flow
 
-<Callout type="warning">
-  This guide is for users who want to build a *custom* user interface using the Clerk API. To implement Clerk's [Bot Protection](/docs/security/bot-protection) feature for your sign-ups using a *prebuilt* UI, you should use Clerk's [`<SignUp />` component](/docs/components/authentication/sign-up).
-</Callout>
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To implement Clerk's [Bot Protection](/docs/security/bot-protection) feature for your sign-ups using a _prebuilt_ UI, you should use Clerk's [`<SignUp />` component](/docs/components/authentication/sign-up).
 
 Clerk provides the ability to add a CAPTCHA widget to your sign-up flows to protect against bot sign-ups. This guide will show you how to add the CAPTCHA widget to your custom sign-up flow.
 
 <Steps>
+  ### Enable bot sign-up protection
 
-### Enable bot sign-up protection
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/attack-protection).
+  1. Go to **User & Authentication > Attack Protection** in the sidebar menu.
+  1. In the **Bot sign-up protection** section, enable the feature and choose the **CAPTCHA type** you want to use.
 
-1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/attack-protection).
-1. Go to **User & Authentication > Attack Protection** in the sidebar menu.
-1. In the **Bot sign-up protection** section, enable the feature and choose the **CAPTCHA type** you want to use.
+  ### Add the CAPTCHA widget to your custom sign-up form
 
-### Add the CAPTCHA widget to your custom sign-up form
+  To render the CAPTCHA widget in your custom sign-up form, you need to include a specific element in your DOM. Specifically, there should be a `<div id="clerk-captcha" />` element by the time you call `signUp.create()`. This element acts as a placeholder onto which the widget will be rendered.
 
-To render the CAPTCHA widget in your custom sign-up form, you need to include a specific element in your DOM. Specifically, there should be a `<div id="clerk-captcha" />` element by the time you call `signUp.create()`. This element acts as a placeholder onto which the widget will be rendered.
+  If this element is not found, the SDK will transparently fall back to the **Invisible** widget in order to avoid breaking your sign-up flow. If this happens, you should see a relevant error in your browser's console.
 
-If this element is not found, the SDK will transparently fall back to the **Invisible** widget in order to avoid breaking your sign-up flow. If this happens, you should see a relevant error in your browser's console.
+  > [!TIP]
+  > The **Invisible** widget automatically blocks suspected bot traffic without offering users falsely detected as bots with an opportunity to prove otherwise. Therefore, it's strongly recommended that you ensure the `<div id="clerk-captcha" />` element exists in your DOM.
 
-> [!TIP]
-> The **Invisible** widget automatically blocks suspected bot traffic without offering users falsely detected as bots with an opportunity to prove otherwise. Therefore, it's strongly recommended that you ensure the `<div id="clerk-captcha" />` element exists in your DOM.
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      The following example demonstrates how to add the CAPTCHA widget to a custom sign-up form. This example uses the [Email & password custom flow](/docs/custom-flows/email-password) but you can add the CAPTCHA widget to _any_ custom sign-up form.
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-  The following example demonstrates how to add the CAPTCHA widget to a custom sign-up form. This example uses the [Email & password custom flow](/docs/custom-flows/email-password) but you can add the CAPTCHA widget to _any_ custom sign-up form.
+      ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', mark: [112, 113] }}
+      'use client'
 
-  ```jsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', mark: [117, 118] }}
-    'use client';
+      import * as React from 'react'
+      import { useSignUp } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-    import * as React from 'react';
-    import { useSignUp } from '@clerk/nextjs';
-    import { useRouter } from 'next/navigation';
+      export default function Page() {
+        const { isLoaded, signUp, setActive } = useSignUp()
+        const [emailAddress, setEmailAddress] = React.useState('')
+        const [password, setPassword] = React.useState('')
+        const [verifying, setVerifying] = React.useState(false)
+        const [code, setCode] = React.useState('')
+        const router = useRouter()
 
-    export default function Page() {
-      const { isLoaded, signUp, setActive } = useSignUp();
-      const [emailAddress, setEmailAddress] = React.useState('');
-      const [password, setPassword] = React.useState('');
-      const [verifying, setVerifying] = React.useState(false);
-      const [code, setCode] = React.useState('');
-      const router = useRouter();
+        // Handle submission of the sign-up form
+        const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault()
 
-      // Handle submission of the sign-up form
-      const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+          if (!isLoaded) return
 
-        if (!isLoaded) return;
+          // Start the sign-up process using the email and password provided
+          try {
+            await signUp.create({
+              emailAddress,
+              password,
+            })
 
-        // Start the sign-up process using the email and password provided
-        try {
-          await signUp.create({
-            emailAddress,
-            password,
-          });
+            // Send the user an email with the verification code
+            await signUp.prepareEmailAddressVerification({
+              strategy: 'email_code',
+            })
 
-          // Send the user an email with the verification code
-          await signUp.prepareEmailAddressVerification({
-            strategy: 'email_code',
-          });
-
-          // Set 'verifying' true to display second form
-          // and capture the OTP code
-          setVerifying(true);
-        } catch (err: any) {
-          // See https://clerk.com/docs/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2));
-        }
-      };
-
-      // Handle the submission of the verification form
-      const handleVerify = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!isLoaded) return;
-
-        try {
-          // Use the code the user provided to attempt verification
-          const completeSignUp = await signUp.attemptEmailAddressVerification({
-            code,
-          });
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (completeSignUp.status === 'complete') {
-            await setActive({ session: completeSignUp.createdSessionId });
-            router.push('/');
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(completeSignUp, null, 2));
+            // Set 'verifying' true to display second form
+            // and capture the OTP code
+            setVerifying(true)
+          } catch (err: any) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
           }
-        } catch (err: any) {
-          // See https://clerk.com/docs/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2));
         }
-      };
 
-      // Display the verification form to capture the OTP code
-      if (verifying) {
+        // Handle the submission of the verification form
+        const handleVerify = async (e: React.FormEvent) => {
+          e.preventDefault()
+
+          if (!isLoaded) return
+
+          try {
+            // Use the code the user provided to attempt verification
+            const completeSignUp = await signUp.attemptEmailAddressVerification({
+              code,
+            })
+
+            // If verification was completed, set the session to active
+            // and redirect the user
+            if (completeSignUp.status === 'complete') {
+              await setActive({ session: completeSignUp.createdSessionId })
+              router.push('/')
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(completeSignUp, null, 2))
+            }
+          } catch (err: any) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error('Error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        // Display the verification form to capture the OTP code
+        if (verifying) {
+          return (
+            <>
+              <h1>Verify your email</h1>
+              <form onSubmit={handleVerify}>
+                <label id="code">Enter your verification code</label>
+                <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
+                <button type="submit">Verify</button>
+              </form>
+            </>
+          )
+        }
+
+        // Display the initial sign-up form to capture the email and password
         return (
           <>
-            <h1>Verify your email</h1>
-            <form onSubmit={handleVerify}>
-              <label id="code">Enter your verification code</label>
-              <input
-                value={code}
-                id="code"
-                name="code"
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <button type="submit">Verify</button>
+            <h1>Sign up</h1>
+            <form onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email">Enter email address</label>
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="password">Enter password</label>
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+
+              {/* CAPTCHA Widget */}
+              <div id="clerk-captcha"></div>
+
+              <div>
+                <button type="submit">Next</button>
+              </div>
             </form>
           </>
-        );
+        )
       }
-
-      // Display the initial sign-up form to capture the email and password
-      return (
-        <>
-          <h1>Sign up</h1>
-          <form onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                value={emailAddress}
-                onChange={(e) => setEmailAddress(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input
-                id="password"
-                type="password"
-                name="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            {/* CAPTCHA Widget */}
-            <div id="clerk-captcha"></div>
-
-            <div>
-              <button type="submit">Next</button>
-            </div>
-          </form>
-        </>
-      );
-    }
-    ```
-  </Tab>
-</Tabs>
-
+      ```
+    </Tab>
+  </Tabs>
 </Steps>

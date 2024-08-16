@@ -9,7 +9,7 @@ The first step is to create a new Clerk application from your Clerk Dashboard if
 
 After your Clerk application has been created, go to the Clerk Dashboard and navigate to the **[JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates)** page. Click on the **New template** button to create a new template based on Grafbase.
 
-<Images 
+<Images
   width={3024}
   height={1652}
   src="/docs/images/integrations/grafbase/jwt-template.webp"
@@ -18,7 +18,7 @@ After your Clerk application has been created, go to the Clerk Dashboard and nav
 
 Once the Grafbase template is created, you will be redirected to the template's page. You can now configure the template to your needs.
 
-<Images 
+<Images
   width={3024}
   height={1652}
   src="/docs/images/integrations/grafbase/create-template.webp"
@@ -27,11 +27,10 @@ Once the Grafbase template is created, you will be redirected to the template's 
 
 The Grafbase template will pre-populate the default claims required by Grafbase. You can include additional claims as necessary. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
 
-<Callout type="info">
-  If your GraphQL API restricts access based on groups, you’ll need to specify the users groups in the `groups` claim.
-</Callout>
+> [!NOTE]
+> If your GraphQL API restricts access based on groups, you’ll need to specify the users groups in the `groups` claim.
 
-<Images 
+<Images
   width={3024}
   height={1652}
   src="/docs/images/integrations/grafbase/template-shortcodes.webp"
@@ -42,7 +41,7 @@ The Grafbase template will pre-populate the default claims required by Grafbase.
 
 The next step is to configure Grafbase with the issuer domain provided by Clerk. From your Clerk **JWT template** screen, find the **Issuer** input and click to **Copy** the URL.
 
-<Images 
+<Images
   width={3024}
   height={1652}
   src="/docs/images/integrations/grafbase/template-issuer.webp"
@@ -55,10 +54,7 @@ If you want to enable access to your Grafbase data for any signed-in user, then 
 
 ```graphql
 schema
-  @auth(
-    providers: [{ type: oidc, issuer: "{{ env.ISSUER_URL }}" }]
-    rules: [{ allow: private }]
-  ) {
+  @auth(providers: [{ type: oidc, issuer: "{{ env.ISSUER_URL }}" }], rules: [{ allow: private }]) {
   query: Query
 }
 ```
@@ -73,7 +69,7 @@ If you’re working with group-based user access then you can use `allow: groups
 schema
   @auth(
     providers: [{ type: oidc, issuer: "{{ env.ISSUER_URL }}" }]
-		rules: [{ allow: groups, groups: ["backend", "admin"] }]
+    rules: [{ allow: groups, groups: ["backend", "admin"] }]
   ) {
   query: Query
 }
@@ -85,7 +81,7 @@ If needed, you can also use a shortcode to dynamically include the users current
 
 ```json
 {
-	"groups": ["{{org.role}}"]
+  "groups": ["{{org.role}}"]
 }
 ```
 
@@ -96,78 +92,78 @@ You must send OIDC (JWT) tokens using an `Authorization: Bearer TOKEN` header. Y
 The [`useAuth()`](/docs/references/react/use-auth) hook os the easiest way to generate JWTs. Use `await getToken({ template: "..." })` and specify your grafbase template to retrieve a new JWT.
 
 <CodeBlockTabs options={["Next.js with SWR", "Next.js with Apollo"]}>
-```tsx
-import { useAuth } from '@clerk/nextjs'
-import useSWR from 'swr'
+  ```tsx
+  import { useAuth } from '@clerk/nextjs'
+  import useSWR from 'swr'
 
-export const useQuery = (query, variables) => {
-  if (!query) {
-    throw Error('No query provided to `useQuery`')
-  }
+  export const useQuery = (query, variables) => {
+    if (!query) {
+      throw Error('No query provided to `useQuery`')
+    }
 
-  const { getToken } = useAuth()
+    const { getToken } = useAuth()
 
-  const fetcher = async () => {
-    const token = await getToken({ template: 'grafbase' })
-    const results = await fetch('YOUR_GRAFBASE_API', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ query, variables })
-    }).then(res => res.json())
-    return results
-  }
-  return useSWR(query, fetcher)
-}
-
-const YOUR_GRAPHQL_QUERY = `
-	query {
-		__schema {
-			types {
-				name
-			}
-		}
-	}
-`
-
-const SchemaPage = () => {
-  const { data, error } = useQuery(YOUR_GRAPHQL_QUERY)
-  if (error) {
-    return <div>error</div>
-  }
-  return <pre>{JSON.stringify({ data }, 2, null)}</pre>
-}
-
-export default SchemaPage
-```
-
-```tsx
-import { useAuth } from '@clerk/nextjs'
-
-export const ApolloProviderWrapper = ({ children }: PropsWithChildren) => {
-  const { getToken } = useAuth()
-
-  const client = useMemo(() => {
-    const authMiddleware = setContext(async (operation, { headers }) => {
+    const fetcher = async () => {
       const token = await getToken({ template: 'grafbase' })
-
-      return {
+      const results = await fetch('YOUR_GRAFBASE_API', {
+        method: 'POST',
         headers: {
-          ...headers,
-          authorization: `Bearer ${token}`
+          'Content-Type': 'application/json',
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ query, variables }),
+      }).then((res) => res.json())
+      return results
+    }
+    return useSWR(query, fetcher)
+  }
+
+  const YOUR_GRAPHQL_QUERY = `
+  	query {
+  		__schema {
+  			types {
+  				name
+  			}
+  		}
+  	}
+  `
+
+  const SchemaPage = () => {
+    const { data, error } = useQuery(YOUR_GRAPHQL_QUERY)
+    if (error) {
+      return <div>error</div>
+    }
+    return <pre>{JSON.stringify({ data }, 2, null)}</pre>
+  }
+
+  export default SchemaPage
+  ```
+
+  ```tsx
+  import { useAuth } from '@clerk/nextjs'
+
+  export const ApolloProviderWrapper = ({ children }: PropsWithChildren) => {
+    const { getToken } = useAuth()
+
+    const client = useMemo(() => {
+      const authMiddleware = setContext(async (operation, { headers }) => {
+        const token = await getToken({ template: 'grafbase' })
+
+        return {
+          headers: {
+            ...headers,
+            authorization: `Bearer ${token}`,
+          },
         }
-      }
-    })
+      })
 
-    return new ApolloClient({
-      link: from([authMiddleware, httpLink]),
-      cache: new InMemoryCache()
-    })
-  }, [getToken])
+      return new ApolloClient({
+        link: from([authMiddleware, httpLink]),
+        cache: new InMemoryCache(),
+      })
+    }, [getToken])
 
-  return <ApolloProvider client={client}>{children}</ApolloProvider>
-}
-```
+    return <ApolloProvider client={client}>{children}</ApolloProvider>
+  }
+  ```
 </CodeBlockTabs>

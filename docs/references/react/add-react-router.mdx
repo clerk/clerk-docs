@@ -15,299 +15,322 @@ description: Learn how to add React Router to your React application using their
   beforeYouStart={[
     {
       title: "Set up a Clerk application",
-      link: "https://clerk.com/docs/quickstarts/setup-clerk",
+      link: "/docs/quickstarts/setup-clerk",
       icon: "clerk"
     },
     {
       title: "Add authentication and user management to your React app with Clerk",
-      link: "https://clerk.com/docs/quickstarts/react",
+      link: "/docs/quickstarts/react",
       icon: "react"
     },
   ]}
 >
-- Install `react-router-dom`
-- Create components for your routes
-- Create layouts
-- Wire layouts and routes up with `createBrowserRouter`
+  - Install `react-router-dom`
+  - Create components for your routes
+  - Create layouts
+  - Wire layouts and routes up with `createBrowserRouter`
 </TutorialHero>
 
 # Add React Router to your Clerk-powered React application
 
+> [!WARNING]
+> [Loaders](https://reactrouter.com/en/main/route/loader) and [Actions](https://reactrouter.com/en/main/route/action) are currently not supported by Clerk with React Router.
+
 Learn how to add React Router to your application using React Router's new Data API router. This tutorial will cover configuring layouts and setting up protected routes.
 
 <Steps>
+  ### Install `react-router-dom`
 
-### Install `react-router-dom`
+  React Router's `react-router-dom` is a mature, battle tested routing package for React that gives you many options. As it is the most popular routing option, it will be used for this guide.
 
-React Router's `react-router-dom` is a mature, battle tested routing package for React that gives you many options. As it is the most popular routing option, it will be used for this guide.
+  <CodeBlockTabs type="installer" options={["npm", "yarn",  "pnpm" ]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install react-router-dom
+    ```
 
-<CodeBlockTabs type="installer" options={["npm", "pnpm", "yarn" ]}>
-  ```bash filename="terminal"
-  npm install react-router-dom
-  ```
+    ```bash {{ filename: 'terminal' }}
+    yarn add react-router-dom
+    ```
 
-  ```bash filename="terminal"
-  pnpm add react-router-dom
-  ```
+    ```bash {{ filename: 'terminal' }}
+    pnpm add react-router-dom
+    ```
+  </CodeBlockTabs>
 
-  ```bash filename="terminal"
-  yarn add react-router-dom
-  ```
-</CodeBlockTabs>
+  ### Create components for your routes
 
-### Create components for your routes
+  The exact routes you will need depends on your application. For this guide, you will create `/`, `/contact`, `/dashboard`, `/sign-in`, and `sign-up` routes. The `/dashboard` route will contain a default route (`/dashbard/`) and an invoices route (`/dashboard/invoices`). The first step will be creating basic components for these routes.
 
-The exact routes you will need depends on your application. For this guide, you will create `/`, `/contact`, `/dashboard`, `/sign-in`, and `sign-up` routes. The `/dashboard` route will contain a default route (`/dashbard/`) and an invoices route (`/dashboard/invoices`). The first step will be creating basic components for these routes.
+  Use the tabs below to find the example components and recreate these files using the path from each tab.
 
-Use the tabs below to find the example components and recreate these files using the path from each tab.
+  <CodeBlockTabs options={["Index", "Contact", "Sign-in", "Sign-up", "Dashboard",  "Invoices"]}>
+    ```tsx {{ filename: 'src/routes/index.tsx' }}
+    import { Link } from 'react-router-dom'
 
-<CodeBlockTabs options={["Index", "Contact", "Sign-in", "Sign-up", "Dashboard",  "Invoices"]}>
-
-```tsx filename="src/routes/index.tsx"
-import { Link } from "react-router-dom";
-
-export default function IndexPage() {
-  return (
-    <div>
-      <h1>This is the index page</h1>
-      <div>
-        <ul>
-          <li><Link to="/sign-up">Sign Up</Link></li>
-          <li><Link to="/sign-in">Sign In</Link></li>
-          <li><Link to="/contact">Contact</Link></li>
-          <li><Link to="/dashboard">Dashboard</Link></li>
-        </ul>
-      </div>
-    </div>
-  )
-}
-```
-
-```tsx filename="src/routes/contact.tsx"
-import { Link } from "react-router-dom";
-
-export default function ContactPage() {
-  return (
-    <>
-      <h1>Contact</h1>
-      <p>This is a public page meant to contain a contact form and other related contact details.</p>
-      <ul>
-        <li><Link to="/">Return to Index</Link></li>
-        <li><Link to="/dashboard">Dashboard</Link></li>
-      </ul>
-    </>
-  );
-}
-```
-
-```tsx filename="src/routes/sign-in.tsx"
-import { SignIn } from "@clerk/clerk-react"
-
-export default function SignInPage() {
-  return <SignIn path="/sign-in" />;
-}
-```
-
-```tsx filename="src/routes/sign-up.tsx"
-import { SignUp } from "@clerk/clerk-react"
-
-export default function SignUpPage() {
-  return <SignUp path="/sign-up" />;
-}
-```
-
-```tsx filename="src/routes/dashboard.tsx"
-import { Link } from "react-router-dom";
-
-export default function DashboardPage() {
-  return (
-    <>
-      <h1>Dashboard page</h1>
-      <p>This is a protected page.</p>
-
-      <ul>
-        <li><Link to="/dashboard/invoices">Invoices</Link></li>
-        <li><Link to="/">Return to index</Link></li>
-      </ul>
-    </>
-  );
-}
-```
-
-```tsx filename="src/routes/dashboard.invoices.tsx"
-import { Link } from "react-router-dom";
-
-export default function InvoicesPage() {
-  return (
-    <>
-      <h1>Invoices page</h1>
-      <p>This is a protected page.</p>
-
-      <ul>
-        <li><Link to="/dashboard">Dashboard</Link></li>
-        <li><Link to="/">Return to index</Link></li>
-      </ul>
-    </>
-  );
-}
-```
-
-</CodeBlockTabs>
-
-### Create layouts
-
-You're going to create two layouts for your application. One will mount [`<ClerkProvider>`](/docs/components/clerk-provider) and act as a top level layout. It will also be a place for a header, footer, and other standard elements for your application.
-
-The second layout will be non-rendering and will protect everything in the `/dashboard` route. This avoids the need for per-page auth checks or for using Clerk's control components.
-
-<CodeBlockTabs options={["Root Layout", "Dashboard Layout"]}>
-
-```tsx filename="src/layouts/root-layout.tsx"
-import { Link, Outlet, useNavigate } from 'react-router-dom'
-import { ClerkProvider, SignedIn, SignedOut, UserButton } from '@clerk/clerk-react'
-
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-if (!PUBLISHABLE_KEY) {
-  throw new Error("Missing Publishable Key")
-}
-
-export default function RootLayout() {
-  const navigate = useNavigate();
-
-  return (
-    <ClerkProvider
-      routerPush={(to) => navigate(to)}
-      routerReplace={(to) => navigate(to, { replace: true })}
-      publishableKey={PUBLISHABLE_KEY}
-    >
-      <header className="header">
+    export default function IndexPage() {
+      return (
         <div>
+          <h1>This is the index page</h1>
           <div>
-            <p>Clerk + React + React Router App</p>
+            <ul>
+              <li>
+                <Link to="/sign-up">Sign Up</Link>
+              </li>
+              <li>
+                <Link to="/sign-in">Sign In</Link>
+              </li>
+              <li>
+                <Link to="/contact">Contact</Link>
+              </li>
+              <li>
+                <Link to="/dashboard">Dashboard</Link>
+              </li>
+            </ul>
           </div>
-          <SignedIn>
-            <UserButton afterSignOutUrl='/sign-in' />
-          </SignedIn>
-          <SignedOut>
-            <Link to="/sign-in">Sign In</Link>
-          </SignedOut>
         </div>
-      </header>
-      <main>
-        <Outlet />
-      </main>
-    </ClerkProvider>
-  )
-}
-```
+      )
+    }
+    ```
 
-```tsx filename="src/layouts/dashboard-layout.tsx"
-import * as React from 'react'
-import { useAuth } from "@clerk/clerk-react"
-import { Outlet, useNavigate } from "react-router-dom"
+    ```tsx {{ filename: 'src/routes/contact.tsx' }}
+    import { Link } from 'react-router-dom'
 
-export default function DashboardLayout() {
-    const { userId, isLoaded } = useAuth()
-    const navigate = useNavigate()
+    export default function ContactPage() {
+      return (
+        <>
+          <h1>Contact</h1>
+          <p>
+            This is a public page meant to contain a contact form and other related contact details.
+          </p>
+          <ul>
+            <li>
+              <Link to="/">Return to Index</Link>
+            </li>
+            <li>
+              <Link to="/dashboard">Dashboard</Link>
+            </li>
+          </ul>
+        </>
+      )
+    }
+    ```
 
-    console.log('test', userId)
+    ```tsx {{ filename: 'src/routes/sign-in.tsx' }}
+    import { SignIn } from '@clerk/clerk-react'
 
-    React.useEffect(() => {
+    export default function SignInPage() {
+      return <SignIn path="/sign-in" />
+    }
+    ```
+
+    ```tsx {{ filename: 'src/routes/sign-up.tsx' }}
+    import { SignUp } from '@clerk/clerk-react'
+
+    export default function SignUpPage() {
+      return <SignUp path="/sign-up" />
+    }
+    ```
+
+    ```tsx {{ filename: 'src/routes/dashboard.tsx' }}
+    import { Link } from 'react-router-dom'
+
+    export default function DashboardPage() {
+      return (
+        <>
+          <h1>Dashboard page</h1>
+          <p>This is a protected page.</p>
+
+          <ul>
+            <li>
+              <Link to="/dashboard/invoices">Invoices</Link>
+            </li>
+            <li>
+              <Link to="/">Return to index</Link>
+            </li>
+          </ul>
+        </>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'src/routes/dashboard.invoices.tsx' }}
+    import { Link } from 'react-router-dom'
+
+    export default function InvoicesPage() {
+      return (
+        <>
+          <h1>Invoices page</h1>
+          <p>This is a protected page.</p>
+
+          <ul>
+            <li>
+              <Link to="/dashboard">Dashboard</Link>
+            </li>
+            <li>
+              <Link to="/">Return to index</Link>
+            </li>
+          </ul>
+        </>
+      )
+    }
+    ```
+  </CodeBlockTabs>
+
+  ### Create layouts
+
+  You're going to create two layouts for your application. One will mount [`<ClerkProvider>`](/docs/components/clerk-provider) and act as a top level layout. It will also be a place for a header, footer, and other standard elements for your application.
+
+  The second layout will be non-rendering and will protect everything in the `/dashboard` route. This avoids the need for per-page auth checks or for using Clerk's control components.
+
+  <CodeBlockTabs options={["Root Layout", "Dashboard Layout"]}>
+    ```tsx {{ filename: 'src/layouts/root-layout.tsx' }}
+    import { Link, Outlet, useNavigate } from 'react-router-dom'
+    import { ClerkProvider, SignedIn, SignedOut, UserButton } from '@clerk/clerk-react'
+
+    const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!PUBLISHABLE_KEY) {
+      throw new Error('Missing Publishable Key')
+    }
+
+    export default function RootLayout() {
+      const navigate = useNavigate()
+
+      return (
+        <ClerkProvider
+          routerPush={(to) => navigate(to)}
+          routerReplace={(to) => navigate(to, { replace: true })}
+          publishableKey={PUBLISHABLE_KEY}
+        >
+          <header className="header">
+            <div>
+              <div>
+                <p>Clerk + React + React Router App</p>
+              </div>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+              <SignedOut>
+                <Link to="/sign-in">Sign In</Link>
+              </SignedOut>
+            </div>
+          </header>
+          <main>
+            <Outlet />
+          </main>
+        </ClerkProvider>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'src/layouts/dashboard-layout.tsx' }}
+    import * as React from 'react'
+    import { useAuth } from '@clerk/clerk-react'
+    import { Outlet, useNavigate } from 'react-router-dom'
+
+    export default function DashboardLayout() {
+      const { userId, isLoaded } = useAuth()
+      const navigate = useNavigate()
+
+      console.log('test', userId)
+
+      React.useEffect(() => {
         if (isLoaded && !userId) {
-            navigate("/sign-in")
+          navigate('/sign-in')
         }
-    }, [isLoaded])
+      }, [isLoaded])
 
-    if (!isLoaded) return "Loading..."
+      if (!isLoaded) return 'Loading...'
 
-    return (
-        <Outlet />
-    )
-}
-```
-</CodeBlockTabs>
+      return <Outlet />
+    }
+    ```
+  </CodeBlockTabs>
 
-#### Key Takeaways
+  #### Key Takeaways
 
-- The new root-layout.tsx has a simple header that includes the `<UserButton />` and a link to the `/sign-in` page instead of a `<SignInButton />`. The rendering of these is controlled by the `<SignedIn>` and `<SignedOut>` control components. This is very similar to the [Embed the `<UserButton />` and `<SignInButton />`](/docs/quickstarts/react#embed-the-user-button-and-sign-in-button) step from the [React Quickstart](/docs/quickstarts/react).
-- Both the layouts contain an `<Outlet />` component from `react-router-dom`. This behaves similar to `{children}` in Next.js or more generic React components. You will take advantage of this component in the next step.
+  - The new root-layout.tsx has a simple header that includes the `<UserButton />` and a link to the `/sign-in` page instead of a `<SignInButton />`. The rendering of these is controlled by the `<SignedIn>` and `<SignedOut>` control components. This is very similar to the [Embed the `<UserButton />` and `<SignInButton />`](/docs/quickstarts/react#embed-the-user-button-and-sign-in-button) step from the [React Quickstart](/docs/quickstarts/react).
+  - Both the layouts contain an `<Outlet />` component from `react-router-dom`. This behaves similar to `{children}` in Next.js or more generic React components. You will take advantage of this component in the next step.
 
-### Wire layouts and routes up with `createBrowserRouter`
+  ### Wire layouts and routes up with `createBrowserRouter`
 
-With all the routes and layouts you need created, you now need to wire up the layouts and the routes with the `createBrowserRouter` function from `react-router-dom`. This will use the Data API (aka Data Router) to configure your application.
+  With all the routes and layouts you need created, you now need to wire up the layouts and the routes with the `createBrowserRouter` function from `react-router-dom`. This will use the Data API (aka Data Router) to configure your application.
 
-You can start by removing `src/App.tsx`—the contents of that file were moved to `src/layouts/root-layout.tsx`.
+  You can start by removing `src/App.tsx`—the contents of that file were moved to `src/layouts/root-layout.tsx`.
 
-In `src/main.tsx`, import `RouterProvider` and `createBrowserRouter()` from `react-router-dom`, as well as all of the default components from the layouts and routes you created. Replace the contents inside of `<React.StrictMode />` with only ` <RouterProvider router={router} />`. Lastly, you will build the `router` using `createBrowserRouter()`.
+  In `src/main.tsx`, import `RouterProvider` and `createBrowserRouter()` from `react-router-dom`, as well as all of the default components from the layouts and routes you created. Replace the contents inside of `<React.StrictMode />` with only ` <RouterProvider router={router} />`. Lastly, you will build the `router` using `createBrowserRouter()`.
 
-```tsx filename="src/main.tsx"
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import './index.css'
-import { RouterProvider, createBrowserRouter } from 'react-router-dom'
+  ```tsx {{ filename: 'src/main.tsx' }}
+  import React from 'react'
+  import ReactDOM from 'react-dom/client'
+  import './index.css'
+  import { RouterProvider, createBrowserRouter } from 'react-router-dom'
 
-// Import the layouts
-import RootLayout from './layouts/root-layout'
-import DashboardLayout from './layouts/dashboard-layout'
+  // Import the layouts
+  import RootLayout from './layouts/root-layout'
+  import DashboardLayout from './layouts/dashboard-layout'
 
-// Import the components
-import IndexPage from './routes'
-import ContactPage from './routes/contact'
-import SignInPage from './routes/sign-in'
-import SignUpPage from './routes/sign-up'
-import DashboardPage from './routes/dashboard'
-import InvoicesPage from './routes/dashboard.invoices'
+  // Import the components
+  import IndexPage from './routes'
+  import ContactPage from './routes/contact'
+  import SignInPage from './routes/sign-in'
+  import SignUpPage from './routes/sign-up'
+  import DashboardPage from './routes/dashboard'
+  import InvoicesPage from './routes/dashboard.invoices'
 
-const router = createBrowserRouter([
-  {
-    element: <RootLayout />,
-    children: [
-      { path: "/", element: <IndexPage /> },
-      { path: "/contact", element: <ContactPage /> },
-      { path: "/sign-in/*", element: <SignInPage /> },
-      { path: "/sign-up/*", element: <SignUpPage /> },
-      {
-        element: <DashboardLayout />,
-        path: "dashboard",
-        children: [
-          { path: "/dashboard", element: <DashboardPage /> },
-          { path: "/dashboard/invoices", element: <InvoicesPage /> }
-        ]
-      }
-    ]
-  }
-])
+  const router = createBrowserRouter([
+    {
+      element: <RootLayout />,
+      children: [
+        { path: '/', element: <IndexPage /> },
+        { path: '/contact', element: <ContactPage /> },
+        { path: '/sign-in/*', element: <SignInPage /> },
+        { path: '/sign-up/*', element: <SignUpPage /> },
+        {
+          element: <DashboardLayout />,
+          path: 'dashboard',
+          children: [
+            { path: '/dashboard', element: <DashboardPage /> },
+            { path: '/dashboard/invoices', element: <InvoicesPage /> },
+          ],
+        },
+      ],
+    },
+  ])
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>,
-)
-```
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <RouterProvider router={router} />
+    </React.StrictMode>,
+  )
+  ```
 
-Visit [`http://localhost:5173`](http://localhost:5173) and explore your app's pages.
+  Visit [`http://localhost:5173`](http://localhost:5173) and explore your app's pages.
 
-#### Key Takeaways
+  #### Key Takeaways
 
-- The top most object in the `router` is the `<RootLayout />` component, and everything else is a child. Any child route will be mounted where the `<Outlet />` component is inside the root layout. This wraps the entire application with `<ClerkProvider>` and allows you to add a header, footer, sidebars and other pieces that will be available to the entire application.
-- Several routes are direct children of the root layout. These are all public routes. You can use control components like `<SignedIn>` or check the `userId` from `useAuth()` if you want to make content protected.
-- The `<DashboardLayout />` is child of the root layout, renders nothing, and has a check to see if the `userId` exists. This will confirm that a user is signed in. If the `userId` is not truthy, then the user will be redirected to the `/sign-in` route to sign-in. That protects all pages in the `/dashboard` route. All children of `/dashboard` will be mounted inside of the `<Outlet />` component in the dashboard layout.
-
+  - The top most object in the `router` is the `<RootLayout />` component, and everything else is a child. Any child route will be mounted where the `<Outlet />` component is inside the root layout. This wraps the entire application with `<ClerkProvider>` and allows you to add a header, footer, sidebars and other pieces that will be available to the entire application.
+  - Several routes are direct children of the root layout. These are all public routes. You can use control components like `<SignedIn>` or check the `userId` from `useAuth()` if you want to make content protected.
+  - The `<DashboardLayout />` is child of the root layout, renders nothing, and has a check to see if the `userId` exists. This will confirm that a user is signed in. If the `userId` is not truthy, then the user will be redirected to the `/sign-in` route to sign-in. That protects all pages in the `/dashboard` route. All children of `/dashboard` will be mounted inside of the `<Outlet />` component in the dashboard layout.
 </Steps>
 
 Your application is setup with `react-router-dom` and ready for you to add more layouts and routes as needed! If you want to get started using a template from this guide, please clone the following repository and then checkout the `integrate-react-router-dom-using-data-router-method` branch.
 
-* [Clerk + React Quickstart](https://github.com/clerk/clerk-react-quickstart)
+- [Clerk + React Quickstart](https://github.com/clerk/clerk-react-quickstart)
 
 ### Next steps
 
-<div className="container mx-auto my-4">
-  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-    <Cards title="Customization & Localization" description="Learn how to customize and localize the Clerk components." link="/docs/components/customization/overview" cta="Learn More" />
+<Cards>
+  - [Customization & Localization](/docs/customization/overview)
+  - Learn how to customize and localize the Clerk components.
 
-    <Cards title="Authentication Components" description="Learn more about all our authentication components." link="/docs/components/authentication/sign-in" cta="Learn More" />
+  ---
 
-    <Cards title="Client Side Helpers" description="Learn more about our client side helpers and how to use them." link="/docs/references/react/use-user" cta="Learn More" />
-  </div>
-</div>
+  - [Authentication Components](/docs/components/authentication/sign-in)
+  - Learn more about all our authentication components.
+
+  ---
+
+  - [Client Side Helpers](/docs/references/react/use-user)
+  - Learn more about our client side helpers and how to use them.
+</Cards>

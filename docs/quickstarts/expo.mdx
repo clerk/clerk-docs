@@ -16,209 +16,221 @@ description: Add authentication and user management to your Expo app with Clerk.
   beforeYouStart={[
     {
       title: "Set up a Clerk application",
-      link: "https://clerk.com/docs/quickstarts/setup-clerk",
+      link: "/docs/quickstarts/setup-clerk",
       icon: "clerk",
-    },
-    {
-      title: "Create an Expo application",
-      link: "https://docs.expo.dev/tutorial/create-your-first-app/",
-      icon: "link",
-    },
+    }
   ]}
 >
-
-- Install `@clerk/expo`
-- Set up your environment keys to test your app locally
-- Add `<ClerkProvider />` to your application
-- Protect specific pages with authentication
-- Use Clerk hooks to enable users to sign in and out of your application
-
+  - Create an Expo application
+  - Install `@clerk/expo`
+  - Set up your environment keys to test your app locally
+  - Add `<ClerkProvider />` to your application
+  - Protect specific pages with authentication
+  - Use Clerk hooks to enable users to sign in and out of your application
 </TutorialHero>
 
 <Steps>
+  ### Create an Expo application
 
-### Install `@clerk/clerk-expo`
+  To get started using Clerk with Expo, create a new Expo project and install the necessary dependencies. See the [Expo documentation](https://docs.expo.dev/tutorial/create-your-first-app/) for more information.
 
-To get started using Clerk with Expo, add the SDK to your project:
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash filename="terminal"
+    npx create-expo-app application-name --template blank && cd application-name
+    npx expo install react-dom react-native-web @expo/metro-runtime
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-  ```bash filename="terminal"
-  npm install @clerk/clerk-expo
+    ```
+
+    ```bash filename="terminal"
+    npx create-expo-app application-name --template blank && cd application-name
+    npx expo install react-dom react-native-web @expo/metro-runtime
+    ```
+
+    ```bash filename="terminal"
+    pnpm dlx create-expo-app application-name --template blank && cd application-name
+    pnpm dlx expo install react-dom react-native-web @expo/metro-runtime
+    ```
+  </CodeBlockTabs>
+
+  ### Install `@clerk/clerk-expo`
+
+  Add Clerk's [Expo SDK](/docs/references/expo/overview) to your project:
+
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash filename="terminal"
+    npm install @clerk/clerk-expo
+    ```
+
+    ```bash filename="terminal"
+    yarn add @clerk/clerk-expo
+    ```
+
+    ```bash filename="terminal"
+    pnpm add @clerk/clerk-expo
+    ```
+  </CodeBlockTabs>
+
+  ### Set your environment variables
+
+  <SignedIn>
+    Add the following keys to your `.env` file. These keys can always be retrieved from your project's [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  </SignedIn>
+
+  <SignedOut>
+    1. Navigate to the Clerk Dashboard.
+    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+    1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+    1. Paste your keys into your `.env` file.
+
+    The final result should resemble the following:
+  </SignedOut>
+
+  ```env {{ filename: '.env' }}
+  EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
   ```
 
-  ```bash filename="terminal"
-  yarn add @clerk/clerk-expo
+  ### Add `<ClerkProvider>` to your root layout
+
+  All Clerk hooks and components must be children of [`<ClerkProvider>`](/docs/components/clerk-provider), which provides active session and user context. Clerk also provides `<ClerkLoaded>`, which will not render child content unless the Clerk API has loaded.
+
+  To grant your entire app access to Clerk session data and ensure nothing renders until Clerk loads, add both components to your root layout as shown in the following example:
+
+  ```tsx filename="app/_layout.tsx"
+  import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo'
+  import { Slot } from 'expo-router'
+
+  const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
+
+  if (!publishableKey) {
+    throw new Error(
+      'Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env',
+    )
+  }
+
+  function RootLayoutNav() {
+    return (
+      <ClerkProvider publishableKey={publishableKey}>
+        <ClerkLoaded>
+          <Slot />
+        </ClerkLoaded>
+      </ClerkProvider>
+    )
+  }
   ```
 
-  ```bash filename="terminal"
-  pnpm add @clerk/clerk-expo
+  ### Configure the Token Cache with Expo
+
+  The token cache is used to persist the active user's session token. Clerk stores this token in memory by default, however it is recommended to use a token cache for production applications.
+
+  Install `expo-secure-store`, which you'll use as your token cache:
+
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install expo-secure-store
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add expo-secure-store
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add expo-secure-store
+    ```
+  </CodeBlockTabs>
+
+  When configuring a custom token cache, you must create an object that conforms to the `TokenCache` interface:
+
+  ```tsx {{ filename: 'TokenCache' }}
+  export interface TokenCache {
+    getToken: (key: string) => Promise<string | undefined | null>
+    saveToken: (key: string, token: string) => Promise<void>
+    clearToken?: (key: string) => void
+  }
   ```
-</CodeBlockTabs>
 
-<Callout type="warning">
-  Currently the `@clerk/expo` SDK only supports mobile app output. You can upvote the addition of Clerk supporting web output [here](https://feedback.clerk.com/roadmap/fb56a8db-763a-4e0d-a4b2-f8a453be195c).
-</Callout>
+  The following example demonstrates an Expo layout that defines a custom token cache to securely store the user's session JWT using `expo-secure-store`:
 
-### Set your environment variables
+  > [!IMPORTANT]
+  > Data stored with `expo-secure-store` may not persist between new builds of your application unless you [clear the app data of the previously installed build](https://github.com/expo/expo/issues/23426#issuecomment-1642246470).
 
-<SignedIn>
+  ```tsx {{ filename: 'app/_layout.tsx' }}
+  import * as SecureStore from 'expo-secure-store'
+  import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo'
+  import { Slot } from 'expo-navigation'
 
-Add the following keys to your `.env` file. These keys can always be retrieved from your project's [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
-
-</SignedIn>
-
-<SignedOut>
-
-1. Navigate to the Clerk Dashboard.
-2. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
-3. In the **Quick Copy** section, copy your Clerk publishable and secret key.
-4. Paste your keys into your `.env` file.
-
-The final result should resemble the following:
-
-</SignedOut>
-
-```sh filename=".env"
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-```
-
-### Add `<ClerkProvider>` to your root layout
-
-All Clerk hooks and components must be children of [`<ClerkProvider>`](/docs/components/clerk-provider), which provides active session and user context. Clerk also provides `<ClerkLoaded>`, which will not render child content unless the Clerk API has loaded.
-
-To grant your entire app access to Clerk session data and ensure nothing renders until Clerk loads, add both components to your root layout as shown in the following example:
-
-```tsx filename="app/_layout.tsx"
-import { ClerkProvider, ClerkLoaded } from "@clerk/clerk-expo"
-import { Slot } from "expo-router"
-
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-
-if (!publishableKey) {
-  throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env')
-}
-
-function RootLayoutNav() {
-  return (
-    <ClerkProvider publishableKey={publishableKey}>
-      <ClerkLoaded>
-        <Slot />
-      </ClerkLoaded>
-    </ClerkProvider>
-  );
-}
-```
-
-### Configure the Token Cache with Expo
-
-The token cache is used to persist the active user's session token. Clerk stores this token in memory by default, however it is recommended to use a token cache for production applications.
-
-Install `expo-secure-store`, which you'll use as your token cache:
-    <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-      ```bash {{ filename: "terminal" }}
-      npm install expo-secure-store
-      ```
-      ```bash {{ filename: "terminal" }}
-      yarn add expo-secure-store
-      ```
-      ```bash {{ filename: "terminal" }}
-      pnpm add expo-secure-store
-      ```
-    </CodeBlockTabs>
-
-When configuring a custom token cache, you must create an object that conforms to the `TokenCache` interface:
-
-```tsx {{ filename: "TokenCache" }}
-export interface TokenCache {
-  getToken: (key: string) => Promise<string | undefined | null>;
-  saveToken: (key: string, token: string) => Promise<void>;
-  clearToken?: (key: string) => void;
-}
-```
-
-The following example demonstrates an Expo layout that defines a custom token cache to securely store the user's session JWT using `expo-secure-store`:
-
-> [!IMPORTANT]
-> Data stored with `expo-secure-store` may not persist between new builds of your application unless you [clear the app data of the previously installed build](https://github.com/expo/expo/issues/23426#issuecomment-1642246470).
-
-```tsx {{ filename: "app/_layout.tsx" }}
-import * as SecureStore from 'expo-secure-store';
-import { ClerkProvider, ClerkLoaded } from "@clerk/clerk-expo"
-import { Slot } from "expo-router"
-
-const tokenCache = {
-  async getToken(key: string) {
-    try {
-      const item = await SecureStore.getItemAsync(key);
-      if (item) {
-        console.log(`${key} was used 🔐 \n`);
-      } else {
-        console.log("No values stored under key: " + key);
+  const tokenCache = {
+    async getToken(key: string) {
+      try {
+        const item = await SecureStore.getItemAsync(key)
+        if (item) {
+          console.log(`${key} was used 🔐 \n`)
+        } else {
+          console.log('No values stored under key: ' + key)
+        }
+        return item
+      } catch (error) {
+        console.error('SecureStore get item error: ', error)
+        await SecureStore.deleteItemAsync(key)
+        return null
       }
-      return item;
-    } catch (error) {
-      console.error("SecureStore get item error: ", error);
-      await SecureStore.deleteItemAsync(key);
-      return null;
-    }
-  },
-  async saveToken(key: string, value: string) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      return;
-    }
-  },
-};
+    },
+    async saveToken(key: string, value: string) {
+      try {
+        return SecureStore.setItemAsync(key, value)
+      } catch (err) {
+        return
+      }
+    },
+  }
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+  const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
 
-if (!publishableKey) {
-  throw new Error('Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env')
-}
+  if (!publishableKey) {
+    throw new Error(
+      'Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env',
+    )
+  }
 
-function RootLayoutNav() {
-  return (
-    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-      <ClerkLoaded>
-        <Slot />
-      </ClerkLoaded>
-    </ClerkProvider>
-  );
-}
-```
+  function RootLayoutNav() {
+    return (
+      <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+        <ClerkLoaded>
+          <Slot />
+        </ClerkLoaded>
+      </ClerkProvider>
+    )
+  }
+  ```
 
-> [!TIP]
-> When you sign a user out with [`signOut()`](/docs/references/react/use-auth#use-auth-returns), Clerk will remove the user's session JWT from the token cache.
+  > [!TIP]
+  > When you sign a user out with [`signOut()`](/docs/references/react/use-auth#use-auth-returns), Clerk will remove the user's session JWT from the token cache.
 
+  ### Conditionally render content
 
+  You can control which content signed-in and signed-out users can see with Clerk's [prebuilt components](/docs/components/overview). For this quickstart, you'll use:
 
-### Conditionally render content
+  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
 
-You can control which content signed-in and signed-out users can see with Clerk's [prebuilt components](/docs/components/overview). For this quickstart, you'll use:
+  To get started, create a `(home)` route group with the following layout file:
 
-- [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
-- [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  ```tsx filename="app/(home)/_layout.tsx"
+  import { Stack } from 'expo-router/stack'
 
-To get started, create a `(home)` route group with the following layout file:
+  export default function Layout() {
+    return <Stack />
+  }
+  ```
 
-```tsx filename="app/(home)/_layout.tsx"
-import { Stack } from 'expo-router/stack';
+  Then, in the same folder, create an `index.tsx` file and add the following code. It displays the user's email if they're signed in, or sign-in and sign-up links if they're not:
 
-export default function Layout() {
-  return <Stack />;
-}
-```
+  ```tsx filename="app/(home)/index.tsx"
+  import { SignedIn, SignedOut, useUser } from '@clerk/clerk-expo'
+  import { Link } from 'expo-router'
+  import { Text, View } from 'react-native'
 
-Then, in the same folder, create an `index.tsx` file and add the following code. It displays the user's email if they're signed in, or sign-in and sign-up links if they're not:
-
-```tsx filename="app/(home)/index.tsx"
-import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
-import { Link } from "expo-router";
-import { Text, View } from "react-native";
-
-export default function Page() {
-  const { user } = useUser();
+  export default function Page() {
+    const { user } = useUser()
 
   return (
     <View>
@@ -229,7 +241,6 @@ export default function Page() {
         <Link href="/(auth)/sign-in">
           <Text>Sign In</Text>
         </Link>
-        {/* // Same here */}
         <Link href="/(auth)/sign-up">
           <Text>Sign Up</Text>
         </Link>
@@ -239,194 +250,188 @@ export default function Page() {
 }
 ```
 
-### Add `sign-up` and `sign-in` pages
+  ### Add `sign-up` and `sign-in` pages
 
-Finally, add pages for signing in and signing up.
+  Finally, add pages for signing in and signing up.
 
-First, protect your `auth` routes in the `layout`. Create a new route group `(auth)` with a `_layout.tsx` file. This layout will redirect users to the home page if they're already signed in:
+  First, protect your `auth` routes in the `layout`. Create a new route group `(auth)` with a `_layout.tsx` file. This layout will redirect users to the home page if they're already signed in:
 
-```tsx filename="/app/(auth)/_layout.tsx"
+  ```tsx filename="/app/(auth)/_layout.tsx"
+  import { Redirect, Stack } from 'expo-router'
+  import { useAuth } from '@clerk/clerk-expo'
 
-import { Redirect, Stack } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
+  export default function AuthRoutesLayout() {
+    const { isSignedIn } = useAuth()
 
-export default function AuthRoutesLayout() {
-  const { isSignedIn } = useAuth();
+    if (isSignedIn) {
+      return <Redirect href={'/'} />
+    }
 
-  if (isSignedIn) {
-    return <Redirect href={"/"} />;
+    return <Stack />
   }
+  ```
 
-  return <Stack />;
-}
-```
+  #### `Sign-up page`
 
-#### `Sign-up page`
+  The following example creates a sign-up page that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
 
-The following example creates a sign-up page that allows users to sign up using email address and password, and sends an email verification code to confirm their email address.
+  ```tsx filename="/app/(auth)/sign-up.tsx"
+  import * as React from 'react'
+  import { TextInput, Button, View } from 'react-native'
+  import { useSignUp } from '@clerk/clerk-expo'
+  import { useRouter } from 'expo-router'
 
-```tsx filename="/app/(auth)/sign-up.tsx"
-import * as React from "react";
-import { TextInput, Button, View } from "react-native";
-import { useSignUp } from "@clerk/clerk-expo";
-import { useRouter } from "expo-router";
+  export default function SignUpScreen() {
+    const { isLoaded, signUp, setActive } = useSignUp()
+    const router = useRouter()
 
-export default function SignUpScreen() {
-  const { isLoaded, signUp, setActive } = useSignUp();
-  const router = useRouter();
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [pendingVerification, setPendingVerification] = React.useState(false)
+    const [code, setCode] = React.useState('')
 
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [pendingVerification, setPendingVerification] = React.useState(false);
-  const [code, setCode] = React.useState("");
-
-  const onSignUpPress = async () => {
-    if (!isLoaded) {
-      return;
-    }
-
-    try {
-      await signUp.create({
-        emailAddress,
-        password,
-      });
-
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-
-      setPendingVerification(true);
-    } catch (err: any) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
-    }
-  };
-
-  const onPressVerify = async () => {
-    if (!isLoaded) {
-      return;
-    }
-
-    try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code,
-      });
-
-      if (completeSignUp.status === 'complete') {
-        await setActive({ session: completeSignUp.createdSessionId });
-        router.replace('/');
-      } else {
-        console.error(JSON.stringify(completeSignUp, null, 2));
+    const onSignUpPress = async () => {
+      if (!isLoaded) {
+        return
       }
-    } catch (err: any) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
-    }
-  };
 
-  return (
-    <View>
-      {!pendingVerification && (
-        <>
-          <TextInput
-            autoCapitalize="none"
-            value={emailAddress}
-            placeholder="Email..."
-            onChangeText={(email) => setEmailAddress(email)}
-          />
-          <TextInput
-            value={password}
-            placeholder="Password..."
-            secureTextEntry={true}
-            onChangeText={(password) => setPassword(password)}
-          />
-          <Button title="Sign Up" onPress={onSignUpPress} />
-        </>
-      )}
-      {pendingVerification && (
-        <>
-          <TextInput
-            value={code}
-            placeholder="Code..."
-            onChangeText={(code) => setCode(code)}
-          />
-          <Button title="Verify Email" onPress={onPressVerify} />
-        </>
-      )}
-    </View>
-  );
-}
-```
+      try {
+        await signUp.create({
+          emailAddress,
+          password,
+        })
 
-#### `Sign-in page`
+        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
 
-The following example creates a sign-in page that allows users to sign in using email address and password, or navigate to the sign-up page.
-
-```tsx filename="/app/(auth)/sign-in.tsx"
-import {  useSignIn } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
-import { Text, TextInput, Button, View } from "react-native";
-import React from "react";
-
-export default function Page() {
-  const { signIn, setActive, isLoaded } = useSignIn();
-  const router = useRouter();
-
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-
-  const onSignInPress = React.useCallback(async () => {
-    if (!isLoaded) {
-      return;
-    }
-
-    try {
-      const signInAttempt = await signIn.create({
-        identifier: emailAddress,
-        password,
-      });
-
-      if (signInAttempt.status === 'complete') {
-        await setActive({ session: signInAttempt.createdSessionId });
-        router.replace('/');
-      } else {
+        setPendingVerification(true)
+      } catch (err: any) {
         // See https://clerk.com/docs/custom-flows/error-handling
         // for more info on error handling
-        console.error(JSON.stringify(signInAttempt, null, 2));
+        console.error(JSON.stringify(err, null, 2))
       }
-    } catch (err: any) {
-      console.error(JSON.stringify(err, null, 2));
     }
-  }, [isLoaded, emailAddress, password]);
 
-  return (
-    <View>
-      <TextInput
-        autoCapitalize="none"
-        value={emailAddress}
-        placeholder="Email..."
-        onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
-      />
-      <TextInput
-        value={password}
-        placeholder="Password..."
-        secureTextEntry={true}
-        onChangeText={(password) => setPassword(password)}
-      />
-      <Button title="Sign In" onPress={onSignInPress} />
+    const onPressVerify = async () => {
+      if (!isLoaded) {
+        return
+      }
+
+      try {
+        const completeSignUp = await signUp.attemptEmailAddressVerification({
+          code,
+        })
+
+        if (completeSignUp.status === 'complete') {
+          await setActive({ session: completeSignUp.createdSessionId })
+          router.replace('/')
+        } else {
+          console.error(JSON.stringify(completeSignUp, null, 2))
+        }
+      } catch (err: any) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    return (
       <View>
-        <Text>Don't have an account?</Text>
-        <Link href="/sign-up">
-          <Text>Sign up</Text>
-        </Link>
+        {!pendingVerification && (
+          <>
+            <TextInput
+              autoCapitalize="none"
+              value={emailAddress}
+              placeholder="Email..."
+              onChangeText={(email) => setEmailAddress(email)}
+            />
+            <TextInput
+              value={password}
+              placeholder="Password..."
+              secureTextEntry={true}
+              onChangeText={(password) => setPassword(password)}
+            />
+            <Button title="Sign Up" onPress={onSignUpPress} />
+          </>
+        )}
+        {pendingVerification && (
+          <>
+            <TextInput value={code} placeholder="Code..." onChangeText={(code) => setCode(code)} />
+            <Button title="Verify Email" onPress={onPressVerify} />
+          </>
+        )}
       </View>
-    </View>
-  );
-}
-```
+    )
+  }
+  ```
 
-For more information about building these _custom flows_, including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/custom-flows/email-password) guide.
+  #### `Sign-in page`
 
+  The following example creates a sign-in page that allows users to sign in using email address and password, or navigate to the sign-up page.
+
+  ```tsx filename="/app/(auth)/sign-in.tsx"
+  import { useSignIn } from '@clerk/clerk-expo'
+  import { Link, useRouter } from 'expo-router'
+  import { Text, TextInput, Button, View } from 'react-native'
+  import React from 'react'
+
+  export default function Page() {
+    const { signIn, setActive, isLoaded } = useSignIn()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+
+    const onSignInPress = React.useCallback(async () => {
+      if (!isLoaded) {
+        return
+      }
+
+      try {
+        const signInAttempt = await signIn.create({
+          identifier: emailAddress,
+          password,
+        })
+
+        if (signInAttempt.status === 'complete') {
+          await setActive({ session: signInAttempt.createdSessionId })
+          router.replace('/')
+        } else {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err: any) {
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }, [isLoaded, emailAddress, password])
+
+    return (
+      <View>
+        <TextInput
+          autoCapitalize="none"
+          value={emailAddress}
+          placeholder="Email..."
+          onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+        />
+        <TextInput
+          value={password}
+          placeholder="Password..."
+          secureTextEntry={true}
+          onChangeText={(password) => setPassword(password)}
+        />
+        <Button title="Sign In" onPress={onSignInPress} />
+        <View>
+          <Text>Don't have an account?</Text>
+          <Link href="/sign-up">
+            <Text>Sign up</Text>
+          </Link>
+        </View>
+      </View>
+    )
+  }
+  ```
+
+  For more information about building these _custom flows_, including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/custom-flows/email-password) guide.
 </Steps>
 
 ## Enable OTA updates
@@ -439,14 +444,22 @@ See the [`expo-updates`](https://docs.expo.dev/versions/latest/sdk/updates) libr
 
 See the following guides to take the next steps toward fleshing out your Expo app.
 
-<div className="container mx-auto my-4">
-  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-    <Cards title="OAuth with Expo" description="Learn more how to build a custom OAuth flow with Expo." link="/docs/references/expo/expo-oauth" cta="Learn More" />
+<Cards>
+  - [OAuth with Expo](/docs/custom-flows/oauth-connections)
+  - Learn more how to build a custom OAuth flow with Expo.
 
-    <Cards title="MFA with Expo" description="Learn more how to build a custom multi-factor authentication flow with Expo." link="/docs/references/expo/expo-mfa" cta="Learn More" />
+  ---
 
-    <Cards title="Read session and user data" description="Learn how to read session and user data with Expo." link="/docs/references/expo/expo-read-session-user-data" cta="Learn More" />
+  - [MFA with Expo](/docs/custom-flows/email-password-mfa)
+  - Learn more how to build a custom multi-factor authentication flow with Expo.
 
-    <Cards title="Sign-up and sign-in flow" description="Learn how to build a custom sign-up and sign-in authentication flow." link="/docs/custom-flows/email-password" cta="Learn More" />
-  </div>
-</div>
+  ---
+
+  - [Read session and user data](/docs/references/expo/read-session-user-data)
+  - Learn how to read session and user data with Expo.
+
+  ---
+
+  - [Sign-up and sign-in flow](/docs/custom-flows/email-password)
+  - Learn how to build a custom sign-up and sign-in authentication flow.
+</Cards>

@@ -636,7 +636,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <Cards variant="image">
 
 - [What is Clerk authentication?](/docs/authentication/overview)
-- Clerk offers multiple authentication strategies to identify legitimate users of your appication, and to allow them to make authenticated requests to your backend.
+- Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---

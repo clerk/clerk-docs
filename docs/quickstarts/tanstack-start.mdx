@@ -1,0 +1,225 @@
+---
+title: Use Clerk with TanStack Start
+description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your TanStack Start application.
+---
+
+# Use Clerk with TanStack Start
+
+<TutorialHero
+  framework="react"
+  exampleRepo={[
+    {
+      title: "TanStack Start Quickstart Repo",
+      link: "https://github.com/clerk/clerk-tanstack-start-quickstart"
+
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+>
+  - Install `@clerk/tanstack-start`
+  - Set up your environment variables
+  - Configure clerkHandler
+  - Add `<ClerkProvider/>` to your application
+  - Protecting your pages
+</TutorialHero>
+
+Learn how to use Clerk to quickly and easily add secure authentication and user management to your TanStack Start application.
+
+> [!WARNING]
+> The TanStack Start SDK is currently in beta. It is not yet recommended for production use. If you have any feedback, please reach out to [beta-start@clerk.dev](mailto:beta-start@clerk.dev).
+
+<Steps>
+  ### Install `@clerk/tanstack-start`
+
+  Once you have a TanStack Start application ready, you need to install Clerk's TanStack Start SDK. This gives you access to our prebuilt components and hooks for TanStack Start applications.
+
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    npm install @clerk/tanstack-start
+    ```
+
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    yarn add @clerk/tanstack-start
+    ```
+
+    ```bash {{ prettier: false, filename: 'terminal' }}
+    pnpm add @clerk/tanstack-start
+    ```
+  </CodeBlockTabs>
+
+  ### Set environment variables
+
+  Below is an example of an `.env` file.
+
+  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+
+  ```env {{ prettier: false, filename: '.env' }}
+  CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
+
+  ### Add `clerkHandler` to your application
+
+  To configure Clerk in your TanStack application, you will need to update SSR entrypoint.
+
+  ```tsx {{ prettier: false, filename: 'app/ssr.tsx' }}
+  import { createStartHandler, defaultStreamHandler } from '@tanstack/start/server';
+  import { getRouterManifest } from '@tanstack/start/router-manifest';
+  import { createRouter } from './router';
+  import { createClerkHandler } from '@clerk/tanstack-start/server';
+
+  const handler = createStartHandler({
+  createRouter,
+  getRouterManifest,
+  });
+
+  const clerkHandler = createClerkHandler(handler);
+
+  export default clerkHandler(defaultStreamHandler);
+  ```
+
+  ### Add `<ClerkProvider>` and components to your app
+
+  All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context.
+
+  You can control which content signed in and signed out users can see with Clerk's [prebuilt components](/docs/components/overview). To get started, create a header for your users to sign in or out. To do this, you will use:
+
+  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  - [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out of the box to show the avatar from the account the user is signed in with.
+  - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page or displays the sign-in modal.
+
+  Select your preferred router to learn how to make this data available across your entire app:
+
+  ```tsx {{ prettier: false, filename: 'app/routes/__root.tsx' }}
+   import {
+    Outlet,
+    ScrollRestoration,
+    createRootRoute,
+  } from '@tanstack/react-router'
+  import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+  import { Body, Head, Html, Meta, Scripts } from '@tanstack/start'
+  import * as React from 'react'
+  import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary'
+  import { NotFound } from '~/components/NotFound'
+  import { ClerkProvider } from '@clerk/tanstack-start'
+  import appCss from '~/styles/app.css?url'
+
+  export const Route = createRootRoute({
+    links: () => [
+      { rel: 'stylesheet', href: appCss },
+    ],
+    errorComponent: (props) => {
+      return (
+        <RootDocument>
+          <DefaultCatchBoundary {...props} />
+        </RootDocument>
+      )
+    },
+    notFoundComponent: () => <NotFound />,
+    component: () => {
+      return (
+        <RootDocument>
+          <Outlet />
+        </RootDocument>
+      )
+    },
+  })
+
+  function RootDocument({ children }: { children: React.ReactNode }) {
+    return (
+      <ClerkProvider>
+        <Html>
+          <Head>
+            <Meta />
+          </Head>
+          <Body>
+            {children}
+            <ScrollRestoration />
+            <TanStackRouterDevtools position="bottom-right" />
+            <Scripts />
+          </Body>
+        </Html>
+      </ClerkProvider>
+    )
+  }
+  ```
+
+  ### Protecting your pages
+
+  #### Client side
+
+  Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
+
+  ```tsx {{ prettier: false, filename: 'app/routes/index.tsx' }}
+  import {
+    SignInButton,
+    SignOutButton,
+    SignUpButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from "@clerk/remix";
+
+  export default function Index() {
+    return (
+      <div>
+        <h1>Index Route</h1>
+        <SignedIn>
+          <p>You are signed in!</p>
+          <div>
+            <p>View your profile here</p>
+            <UserButton />
+          </div>
+          <div>
+            <SignOutButton />
+          </div>
+        </SignedIn>
+        <SignedOut>
+          <p>You are signed out</p>
+          <div>
+            <SignInButton />
+          </div>
+          <div>
+            <SignUpButton />
+          </div>
+        </SignedOut>
+      </div>
+    );
+  }
+  ```
+
+  #### Server side
+
+  To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
+
+  ```tsx {{ prettier: false, filename: 'routes/_index.tsx' }}
+  import { UserButton } from "@clerk/remix";
+  import { getAuth } from "@clerk/remix/ssr.server";
+  import { LoaderFunction, redirect } from "@remix-run/node";
+
+  export const loader: LoaderFunction = async (args) => {
+    const { userId } = await getAuth(args);
+    if (!userId) {
+      return redirect("/sign-in");
+    }
+    return {};
+  }
+
+  export default function Index() {
+    return (
+      <div>
+          <h1>Index route</h1>
+          <p>You are signed in!</p>
+          <UserButton />
+      </div>
+    );
+  }
+  ```
+</Steps>

@@ -113,6 +113,41 @@ To access authentication state from a satellite domain, users will be transparen
           # CLERK_SIGN_UP_URL=http://localhost:3000/sign-up
           ```
         </CodeBlockTabs>
+      - You will also need to add the `allowedRedirectOrigins` property to `ClerkProvider` on your *primary domain app* to ensure that the redirect back from primary to satellite domain works correctly. For example:
+
+        <CodeBlockTabs options={["Development", "Production"]}>
+        ```tsx {{ filename: 'app/layout.tsx' }}
+        import { ClerkProvider } from '@clerk/nextjs'
+
+        export default function RootLayout({ children }: { children: React.ReactNode }) {
+          return (
+            <html lang="en">
+              <body>
+                <ClerkProvider allowedRedirectOrigins={['http://localhost:3001']}>
+                  {children}
+                </ClerkProvider>
+              </body>
+            </html>
+          )
+        }
+        ```
+
+        ```tsx {{ filename: 'app/layout.tsx' }}
+        import { ClerkProvider } from '@clerk/nextjs'
+
+        export default function RootLayout({ children }: { children: React.ReactNode }) {
+          return (
+            <html lang="en">
+              <body>
+                <ClerkProvider allowedRedirectOrigins={['https://satellite.dev']}>
+                  {children}
+                </ClerkProvider>
+              </body>
+            </html>
+          )
+        }
+        ```
+        </CodeBlockTabs>
     </Tab>
 
     <Tab>
@@ -120,7 +155,9 @@ To access authentication state from a satellite domain, users will be transparen
 
       - `isSatellite` - Defines the app as a satellite app when `true`.
       - `domain` - Sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
-      - `signInUrl` - This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `signInUrl` - This url will be used when signing in on your satellite application and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `signUpUrl` - This url will be used for signing up on your satellite application and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `allowedRedirectOrigins` - This is a list of origins that are allowed to redirect back to from the primary domain.
 
       > [!TIP]
       > The `URL` parameter that can be passed to `isSatellite` and `domain` is the request url for server-side usage or the current location for client usage.
@@ -141,13 +178,17 @@ To access authentication state from a satellite domain, users will be transparen
               export default function RootLayout({ children }: { children: React.ReactNode }) {
                 const primarySignInUrl = '/sign-in'
                 const primarySignUpUrl = '/sign-up'
+                const satelliteUrl = 'https://satellite.dev'
 
                 return (
                   <html lang="en">
                     <body>
-                      <ClerkProvider signInUrl={primarySignInUrl} signUpUrl={primarySignUpUrl}>
-                        <title>Satellite Next.js app</title>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      <ClerkProvider
+                        signInUrl={primarySignInUrl}
+                        signUpUrl={primarySignUpUrl}
+                        allowedRedirectOrigins={[satelliteUrl]}
+                      >
+                        <p>Satellite Next.js app</p>
                         {children}
                       </ClerkProvider>
                     </body>
@@ -163,9 +204,15 @@ To access authentication state from a satellite domain, users will be transparen
               export default function App({ Component, pageProps }) {
                 const primarySignInUrl = '/sign-in'
                 const primarySignUpUrl = '/sign-up'
+                const satelliteUrl = 'https://satellite.dev'
 
                 return (
-                  <ClerkProvider signInUrl={primarySignInUrl} signUpUrl={primarySignUpUrl} {...pageProps}>
+                  <ClerkProvider
+                    signInUrl={primarySignInUrl}
+                    signUpUrl={primarySignUpUrl}
+                    allowedRedirectOrigins={[satelliteUrl]}
+                    {...pageProps}
+                  >
                     <Head>
                       <title>Satellite Next.js app</title>
                       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -193,7 +240,11 @@ To access authentication state from a satellite domain, users will be transparen
                 return (
                   <html lang="en">
                     <body>
-                      <ClerkProvider isSatellite domain={(url) => url.host} signInUrl={primarySignInUrl} signUpUrl={primarySignUpUrl}>
+                      <ClerkProvider
+                        isSatellite domain={(url) => url.host}
+                        signInUrl={primarySignInUrl}
+                        signUpUrl={primarySignUpUrl}
+                      >
                         <title>Satellite Next.js app</title>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                         {children}
@@ -290,7 +341,8 @@ To access authentication state from a satellite domain, users will be transparen
                 {
                   loadUser: true,
                   signInUrl: '/sign-in',
-                  signUpUrl: '/sign-up', 
+                  signUpUrl: '/sign-up',
+                  allowedRedirectOrigins: ['https://satellite.dev'],
                 } as const,
               )
             }

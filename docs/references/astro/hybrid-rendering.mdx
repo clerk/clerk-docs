@@ -1,6 +1,6 @@
 ---
-title: Astro Quickstart
-description: Add authentication and user management to your Astro app with Clerk.
+title: Astro Hybrid Rendering
+description: Clerk supports Astro in hybrid/static mode out-of-the-box.
 ---
 
 <TutorialHero
@@ -17,12 +17,6 @@ description: Add authentication and user management to your Astro app with Clerk
       icon: "astro",
     },
   ]}
-  exampleRepo={[
-    {
-      title: "Astro Quickstart Repo",
-      link: "https://github.com/clerk/clerk-astro-quickstart"
-    }
-  ]}
 >
   - Install `@clerk/astro`
   - Set up your environment keys to test your app locally
@@ -31,6 +25,10 @@ description: Add authentication and user management to your Astro app with Clerk
   - Use Clerk middleware to implement route-specific authentication
   - Create a header with Clerk components for users to sign in and out
 </TutorialHero>
+
+> [!NOTE]
+> This guide explains how to use Clerk with [Astro in Hybrid mode](https://docs.astro.build/en/guides/server-side-rendering/#configure-server-or-hybrid).
+> If you are using Astro in server-only mode, follow the [Clerk quickstart](/docs/quickstarts/astro).
 
 Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of components, hooks, and stores that make it easy to build authentication and user management features in your Astro app.
 
@@ -65,6 +63,9 @@ Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of component
     1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
     1. Paste your keys into your `.env.local` file.
 
+    > [!IMPORTANT]
+    > You don't need a secret key if your app is fully-prerendered.
+
     The final result should resemble the following:
   </SignedOut>
 
@@ -78,8 +79,8 @@ Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of component
   To configure Clerk in your astro application, you will need to update your `astro.config.mjs`.
 
   - Add the Clerk integration to the `integrations` list.
-  - Install an [SSR adapter](https://docs.astro.build/en/guides/server-side-rendering/#official-adapters). For this quickstart we chose the [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/) adapter. You can use any Node based adapter you wish.
-  - Set `output` to `server`. This is required when deploying to a host supporting SSR.
+  - Install an [SSR adapter](https://docs.astro.build/en/guides/server-side-rendering/#official-adapters). This is required if you opt-out of prerendering. For this quickstart we chose the [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/) adapter. You can use any Node based adapter you wish.
+  - Set `output` to `hybrid`. This is required when you want static pages or the full flexibility of server rendering for each page.
 
   ```ts {{ filename: 'astro.config.mjs', mark: [2, 3, [6, 8]] }}
   import { defineConfig } from 'astro/config'
@@ -89,11 +90,14 @@ Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of component
   export default defineConfig({
     integrations: [clerk()],
     adapter: node({ mode: 'standalone' }),
-    output: 'server',
+    output: 'hybrid',
   })
   ```
 
   ### Add middleware to your application
+
+  > [!IMPORTANT]
+  > You can skip this step if your app is fully-prerendered.
 
   [`clerkMiddleware()`](/docs/references/astro/clerk-middleware) grants you access to user authentication state throughout your application, on any route or page. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your application, follow these steps:
 
@@ -120,46 +124,50 @@ Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of component
 
   Clerk offers components that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
 
-  ```astro {{ filename: 'src/layouts/SiteLayout.astro' }}
-  ---
-  import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/astro/components'
-  ---
+  <Tabs items={["Prerendered", "Opt-out"]}>
+    <Tab>
+      ```astro {{ filename: 'src/pages/index.astro' }}
+      ---
+      import SiteLayout from '../layouts/SiteLayout.astro'
+      import { SignedIn, SignedOut, UserButton } from '@clerk/astro/components'
 
-  <html lang="en">
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-      <meta name="generator" content={Astro.generator} />
-    </head>
-    <body>
-      <header>
-        <h1>{title}</h1>
-        <nav>
-          <SignedOut>
-            <SignInButton mode="modal" />
-          </SignedOut>
-          <SignedIn>
-            <UserButton />
-          </SignedIn>
-        </nav>
-      </header>
-      <article>
-        <slot />
-      </article>
-    </body>
-  </html>
-  ```
+      export const prerender = true
+      ---
 
-  ```astro {{ filename: 'src/pages/index.astro' }}
-  ---
-  import SiteLayout from '../layouts/SiteLayout.astro'
-  ---
+      <SiteLayout>
+        <SignedOut>
+          <SignInButton mode="modal" />
+        </SignedOut>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </SiteLayout>
+      ```
+    </Tab>
 
-  <SiteLayout title="Clerk + Astro">
-    <p>Sign in to try Clerk out!</p>
-  </SiteLayout>
-  ```
+    <Tab>
+      > [!WARNING]
+      > If you opt-out of prerendering, you must set the `isStatic` prop to `false` on the `SignedIn`, `SignedOut`, and `Protect` components.
+
+      ```astro {{ filename: 'src/pages/index.astro' }}
+      ---
+      import SiteLayout from '../layouts/SiteLayout.astro'
+      import { SignedIn, SignedOut, UserButton } from '@clerk/astro/components'
+
+      export const prerender = false
+      ---
+
+      <SiteLayout>
+        <SignedOut isStatic={false}>
+          <SignInButton mode="modal" />
+        </SignedOut>
+        <SignedIn isStatic={false}>
+          <UserButton />
+        </SignedIn>
+      </SiteLayout>
+      ```
+    </Tab>
+  </Tabs>
 </Steps>
 
 ## Next steps

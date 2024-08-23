@@ -1,8 +1,7 @@
 ---
+title: Backend-only SDK
 description: A reference for implementing a backend-only Clerk SDK
 ---
-
-# Backend-only SDK
 
 When creating a backend-only SDK, you have two options for implementing the [BAPI](/docs/references/sdk/terminology) endpoints: either [develop a backend SDK that encompasses all BAPI endpoints](#implementation-bapi) or [create an SDK tailored for an existing backend framework.](#implementation-node-js-backend-framework)
 
@@ -159,39 +158,5 @@ You can manually create a wrapper library around the [BAPI OpenAPI](https://cler
   }
 
   app.get('/path', requireAuth(), hasPermission())
-  ```
-
-  ### Add handshake support
-
-  Inside your Clerk middleware, add checks for the `headers` on the `requestState`. Apply these headers to the `Response` and handle any existing `location` headers (e.g. redirects).
-
-  ```ts {{ filename: 'clerk-middleware.ts', mark: [[9, 20]] }}
-  import { clerkClient as defaultClerkClient } from './client.ts'
-
-  const clerkMiddleware = (options) => {
-    return async (context, next) => {
-      const clerkClient = options.clerkClient || defaultClerkClient
-
-      const requestState = await clerkClient.authenticateRequest(context.req)
-
-      if (requestState.headers) {
-        // This adds observability headers to the res
-        requestState.headers.forEach((value, key) => context.res.headers.append(key, value))
-
-        const locationHeader = requestState.headers.get('location')
-
-        if (locationHeader) {
-          return context.redirect(locationHeader, 307)
-        } else if (requestState.status === 'handshake') {
-          throw new Error('Clerk: unexpected handshake without redirect')
-        }
-      }
-
-      context.set('clerkAuth', requestState.toAuth())
-      context.set('clerk', clerkClient)
-
-      await next()
-    }
-  }
   ```
 </Steps>

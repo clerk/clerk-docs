@@ -3,112 +3,148 @@ title: Integrate Fauna with Clerk
 description: Learn how to integrate Clerk into your Fauna application.
 ---
 
-The first step is to create a new Clerk application from your Clerk Dashboard if you haven’t done so already. You can choose whichever authentication strategy and social sign-in providers you prefer. For more information, check out our [Set up your application](/docs/quickstarts/setup-clerk) guide.
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate the appropriate Clerk SDK in your local project",
+      link: "/docs/quickstarts/overview",
+      icon: "code-bracket",
+    },
+  ]}
+>
+  -
+</TutorialHero>
 
-After your Clerk application has been created, in the Clerk Dashboard, navigate to the **[API keys](https://dashboard.clerk.com/last-active?path=api-keys)** page and copy your **Publishable key**.
+> [!IMPORTANT]
+> Check out the [demo repo](https://github.com/clerk/clerk-fauna-nextjs) for a full example of how to integrate Fauna with Clerk in a Next.js app.
 
-![The API keys page in the Clerk Dashboard. There is a red arrow pointing to the copy button next to the 'Publishable key'.](/docs/images/integrations/publishable-key.webp)
+Integrating Fauna with Clerk gives you the benefits of using a Fauna database while leveraging Clerk's authentication, prebuilt components, and webhooks.
 
-Next, log in to the [Fauna Dashboard](https://dashboard.fauna.com/) and click the database that you want Clerk-authenticated users to access. Then click the **Access Providers** tab.
+This guide will walk you through the steps to integrate Fauna with Clerk in your Next.js app.
 
-![The Access Providers tab in the Fauna dashboard.](/docs/images/integrations/fauna/security-providers.webp)
+<Steps>
+  ### Get your Clerk publishable key and JWKS URL
 
-Click the **Create Access Provider** button.
+  <SignedIn>
+    Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+  </SignedIn>
 
-Enter a name in the **Name** field that will identify this access provider. The recommendation is to use “Clerk”.
+  <SignedOut>
+    1. Navigate to the Clerk Dashboard.
+    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+    1. In the **Quick Copy** section, copy your Clerk publishable key.
+    1. In the left sidebar, select **Show JWT public key**.
+    1. Copy the **JWKS URL**.
 
-Paste the **Publishable key** you copied from the Clerk Dashboard into the **Issuer** field and then prefix it with the `https://` protocol so it follows `https://<YOUR_PUBLISHABLE_KEY>`
+    The final result should resemble the following:
+  </SignedOut>
 
-> [!NOTE]
-> Make sure you do not add a trailing slash / to the end of the Issuer URL or it will fail.
+  ```env {{ filename: '.env.local' }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_JWKS_URL={{jwks_url}}
+  ```
 
-Assuming you didn’t use a custom signing key, set the **JWKS Endpoint** field to the JSON Web Key Set (JWKS) URL Clerk automatically created with your Frontend API at `https://<YOUR_FRONTEND_API>/.well-known/jwks.json`
+  ### Configure Fauna
 
-You can find this URL in the Clerk Dashboard on the **[API keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. Scroll down and click on **Advanced**. In the **JWT public key** section, copy the **JWKS URL**.
+  1. Navigate to the [Fauna Dashboard](https://dashboard.fauna.com/) and select your database.
+  1. Select the **Access Providers** tab and select **Create Access Provider**.
+  1. Fill out the form:
+     - Enter a **Name** for the access provider, such as Clerk.
+     - Copy and save the **Audience** URL. You will need this later.
+     - In **Issuer**, paste the Clerk publishable key you copied in the previous step.
+     - In **JWKS Endpoint**, paste the Clerk **JWKS URL** you copied in the previous step.
+     - Select **Create**.
+  1. Select the access provider that you just created.
+  1. Update the access provider's FSL schema to include a [user-defined role](https://docs.fauna.com/fauna/current/learn/security/roles/). For example:
+     ```fsl {{ mark: [6, 7] }}
+     access provider Clerk {
+       // Don't change the values of the issuer or jwks_uri fields.
+       issuer "..."
+       jwks_uri "..."
 
-![The API Keys page in the Clerk Dashboard. A red box outlines the 'Advanced' drop down button. A red arrow is pointing to the copy button next to 'JWKS URL' in the 'JWT public key' section.](/docs/images/integrations/jwks-url.webp)
+       // Adds a user-defined role to JWTs created by the access provider.
+       role <YOUR_ROLE>
+     }
+     ```
+  1. Select **Save**.
 
-The completed provider form should resemble the following:
+  ### Create a JWT template in Clerk
 
-![The access provider form in Fauna.](/docs/images/integrations/fauna/new-access-provider.webp)
+  Clerk's JWT templates allow you to generate a new valid Fauna authentication token for each signed in user. These tokens allow authenticated users to access your data with Fauna's API.
 
-Copy the **Audience** value and click **Create**.
+  To create a JWT template for Fauna:
 
-In the Fauna Dashboard, update the access provider’s FSL schema to include a [user-defined role](https://docs.fauna.com/fauna/current/learn/security/roles/). For example:
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates).
+  1. In the navigation sidebar, select **JWT Templates**.
+  1. Select the **New template** button, then select **Fauna** from the list of options.
+  1. Configure your template:
+     - The value of the **Name** field will be required when using the template in your code. For this tutorial, name it `fauna`.
+     - You can leave all other fields at their default settings or customize them to your needs. See the [JWT template guide](/docs/backend-requests/making/jwt-templates#creating-a-template) to learn more about these settings.
+     - In the **Claims** section, set the `aud` claim to the **Audience URL** you copied from Fauna in Step 2. The URL format should be `https://db.fauna.com/db/<YOUR_FAUNA_DB_ID>`. You can include additional claims if you’d like, but `aud` is the only required one. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
+     - Select **Save** from the notification bubble to complete setup.
 
-```fsl
-access provider Clerk {
-  ...
+  ### Install the Fauna library
 
-  // Adds a user-defined role to JWTs created by the access provider.
-  role <role>
-}
-```
+  Add the Fauna library to your project.
 
-You can specify multiple `role` propertiesif needed. Don’t change the `issuer` or `jwks_uri` fields values.
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i fauna
+    ```
 
-Click **Save**.
+    ```bash {{ filename: 'terminal' }}
+    yarn add fauna
+    ```
 
-## Create a new Fauna JWT template
+    ```bash {{ filename: 'terminal' }}
+    pnpm add fauna
+    ```
+  </CodeBlockTabs>
 
-In the Clerk Dashboard, navigate to the **[JWT Templates](https://dashboard.clerk.com/last-active?path=jwt-templates)** page. Click on the **New template** button to create a new template based on Fauna.
+  ### Authenticate queries in your Next.js app
 
-![The JWT Templates page in the Clerk Dashboard. The 'New template' button was clicked, and a pop up titled 'New JWT template' is shown. The 'Fauna' template is hovered over.](/docs/images/integrations/fauna/jwt-templates.webp)
+  You can now create Fauna JWTs in Clerk using the JWT template you created in the previous step. Generate the Fauna JWT by calling Clerk's [`useAuth().getToken`](/docs/references/react/use-auth) method, and use it to authenticate with Fauna as an end user, as shown in the following example:
 
-Once the Fauna template is created, you will be redirected to the template's page. You can now configure the template to your needs.
+  ```jsx
+  import React from 'react'
+  import { useAuth } from '@clerk/nextjs'
+  import { Client, fql } from 'fauna'
 
-![The 'Create new template' page of the JWT Templates page in the Clerk Dashboard.](/docs/images/integrations/fauna/create-template.webp)
+  const Example = () => {
+    const { getToken } = useAuth()
+    const [message, setMessage] = React.useState('')
 
-Scroll down to the **Claims** section and set the `aud` claim to the **Audience URL** you copied from Fauna. The URL format should be `https://db.fauna.com/db/<YOUR_FAUNA_DB_ID>`.
-
-![The 'Create new template' page of the JWT Templates page in the Clerk Dashboard. The page is scrolled down to the 'Claims' section.](/docs/images/integrations/fauna/template-shortcodes.webp)
-
-You can include additional claims if you’d like, but `aud` is the only required one. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
-
-Don't forget to click the **Apply changes** button at the bottom right to save your Fauna JWT template.
-
-## Authenticating Fauna queries
-
-The way to authenticate requests to Fauna with Clerk is to use a JWT. After adding the necessary claims in a JWT template, you can generate the token by calling the `getToken` method from the [`useAuth()`](/docs/references/react/use-auth) hook provided by Clerk.
-
-```jsx
-import React from 'react';
-import { useAuth } from '@clerk/nextjs';
-import { Client, fql } from "fauna";
-
-const Example = () => {
-  const { getToken } = useAuth();
-  const [message, setMessage] = React.useState('');
-
-  const makeQuery = async () => {
-    let client;
-    try {
-      const secret = await getToken({ template: '<your-template-name>' });
-      client = new Client({ secret: secret });
-      const response = await client.query(fql`'Hello World!'`);
-      setMessage(response);
-    } catch (error) {
-      console.error(error);
-      setMessage('Error occurred');
-    } finally {
-      if (client) client.close();
+    const makeQuery = async () => {
+      let client
+      try {
+        const secret = await getToken({ template: '<your-template-name>' })
+        client = new Client({ secret: secret })
+        const response = await client.query(fql`'Hello World!'`)
+        setMessage(response)
+      } catch (error) {
+        console.error(error)
+        setMessage('Error occurred')
+      } finally {
+        if (client) client.close()
+      }
     }
+
+    return (
+      <>
+        <button onClick={makeQuery}>Make authenticated query</button>
+        <p>Message: {message}</p>
+      </>
+    )
   }
 
-  return (
-    <>
-      <button onClick={makeQuery}>Make authenticated query</button>
-      <p>Message: {message}</p>
-    </>
-  );
-};
+  export default Example
+  ```
 
-export default Example;
-```
-
-> [!NOTE]
-> The `getToken({ template: <your-template-name> })` call is asynchronous and returns a Promise that needs to be resolved before accessing the token value. This token is short-lived for better security and should be called before every request to your Fauna database. The caching and refreshing of the token are handled automatically by Clerk.
-
-## Next steps
-
-- Try adding some [custom claims](/docs/backend-requests/making/jwt-templates) to the JWT token.
+  > [!NOTE]
+  > The `getToken({ template: <your-template-name> })` call is asynchronous and returns a Promise that needs to be resolved before accessing the token value. This token is short-lived for better security and should be called before every request to your Fauna database. The caching and refreshing of the token are handled automatically by Clerk.
+</Steps>

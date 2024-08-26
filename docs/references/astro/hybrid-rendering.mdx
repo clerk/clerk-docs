@@ -1,188 +1,64 @@
 ---
 title: Astro Hybrid Rendering
-description: Clerk supports Astro in hybrid/static mode out-of-the-box.
+description: Clerk supports Astro in hybrid mode out-of-the-box.
 ---
 
-<TutorialHero
-  framework="astro"
-  beforeYouStart={[
-    {
-      title: "Set up a Clerk application",
-      link: "/docs/quickstarts/setup-clerk",
-      icon: "clerk",
-    },
-    {
-      title: "Create a Astro application",
-      link: "https://docs.astro.build/en/install-and-setup",
-      icon: "astro",
-    },
-  ]}
->
-  - Install `@clerk/astro`
-  - Set up your environment keys to test your app locally
-  - Add TypeScript declarations
-  - Add the `clerk()` integration to your application
-  - Use Clerk middleware to implement route-specific authentication
-  - Create a header with Clerk components for users to sign in and out
-</TutorialHero>
+Astro's on-demand rendering output modes (`server` and `hybrid`) allows you to prerender certain pages while keeping others server-rendered. The Astro SDK supports Astro in hybrid mode out-of-the-box.
 
-> [!NOTE]
-> This guide explains how to use Clerk with [Astro in Hybrid mode](https://docs.astro.build/en/guides/server-side-rendering/#configure-server-or-hybrid).
-> If you are using Astro in server-only mode, follow the [Clerk quickstart](/docs/quickstarts/astro).
+## Server output mode
 
-Clerk's [Astro SDK](/docs/references/astro/overview) provides a set of components, hooks, and stores that make it easy to build authentication and user management features in your Astro app.
+When the output mode is set to `server`, pages are server-rendered on request by default. However, you can opt-in to prerendering specific pages.
 
-<Steps>
-  ### Install `@clerk/astro`
+### Using Control Components
 
-  Add Clerk's Astro SDK to your project:
+When using control components ([`Protect`](/docs/components/protect), [`SignedIn`](/docs/components/control/signed-in), [`SignedOut`](/docs/components/control/signed-out)) in server output mode:
 
-  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-    ```bash {{ filename: 'terminal' }}
-    npm install @clerk/astro
-    ```
+- By default, these components will be server-rendered.
+- If you opt-in to prerendering a page by adding `export const prerender = true`, you need to add the `isStatic={true}` prop to any control components used on that page. This specifies that the component should use the client-side version which relies on the [client nanostores](/docs/references/astro/auth-store).
 
-    ```bash {{ filename: 'terminal' }}
-    yarn add @clerk/astro
-    ```
+```astro {{ filename: 'src/pages/index.astro' }}
+---
+export const prerender = true
+---
 
-    ```bash {{ filename: 'terminal' }}
-    pnpm add @clerk/astro
-    ```
-  </CodeBlockTabs>
+<SignedIn isStatic={true}> You are signed in! </SignedIn>
+```
 
-  ### Set environment variables
+## Hybrid output mode
 
-  <SignedIn>
-    Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
-  </SignedIn>
+In `hybrid` output mode, pages are prerendered by default. You can opt-out of prerendering for specific pages to make them server-rendered.
 
-  <SignedOut>
-    1. Navigate to the Clerk Dashboard.
-    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
-    1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
-    1. Paste your keys into your `.env.local` file.
+### Using Control Components
 
-    > [!IMPORTANT]
-    > You don't need a secret key if your app is fully-prerendered.
+When using control components in `hybrid` output mode:
 
-    The final result should resemble the following:
-  </SignedOut>
+- By default, these components will be prerendered.
+- If you opt-out of prerendering a page by adding `export const prerender = false`, you need to add the `isStatic={false}` prop to any control components used on that page. This specifies that the component should use the server-side version which relies on the [locals](/docs/references/astro/locals) injected by the middleware.
 
-  ```env {{ filename: '.env' }}
-  PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_SECRET_KEY={{secret}}
-  ```
+```astro {{ filename: 'src/pages/index.astro' }}
+---
+export const prerender = false
+---
 
-  ### Update `astro.config.mjs`
+<SignedIn isStatic={false}> You are signed in! </SignedIn>
+```
 
-  To configure Clerk in your astro application, you will need to update your `astro.config.mjs`.
+## Styling considerations
 
-  - Add the Clerk integration to the `integrations` list.
-  - Install an [SSR adapter](https://docs.astro.build/en/guides/server-side-rendering/#official-adapters). This is required if you opt-out of prerendering. For this quickstart we chose the [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/) adapter. You can use any Node based adapter you wish.
-  - Set `output` to `hybrid`. This is required when you want static pages or the full flexibility of server rendering for each page.
+When using the client-side version of control components (i.e., when `isStatic={true}`), be aware of the wrapper element. For example, the `<SignedIn>` component is wrapped in a custom element. This wrapper may affect your styling, so you might need to adjust your CSS selectors accordingly.
 
-  ```ts {{ filename: 'astro.config.mjs', mark: [2, 3, [6, 8]] }}
-  import { defineConfig } from 'astro/config'
-  import node from '@astrojs/node'
-  import clerk from '@clerk/astro'
+For instance, if you want to style the content inside a `<SignedIn>` component, you might need to use a selector like this:
 
-  export default defineConfig({
-    integrations: [clerk()],
-    adapter: node({ mode: 'standalone' }),
-    output: 'hybrid',
-  })
-  ```
+```astro {{ filename: 'src/pages/index.astro' }}
+---
+export const prerender = true
+---
 
-  ### Add middleware to your application
+<SignedIn class="signed-in" isStatic={true}> You are signed in! </SignedIn>
 
-  > [!IMPORTANT]
-  > You can skip this step if your app is fully-prerendered.
-
-  [`clerkMiddleware()`](/docs/references/astro/clerk-middleware) grants you access to user authentication state throughout your application, on any route or page. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your application, follow these steps:
-
-  1. Create a `middleware.ts` file inside your `src/` directory.
-  1. In your `middleware.ts` file, export an `onRequest` constant and assign the result of the `clerkMiddleware` function to it.
-
-     ```tsx {{ filename: 'src/middleware.ts' }}
-     import { clerkMiddleware } from '@clerk/astro/server'
-
-     export const onRequest = clerkMiddleware()
-     ```
-  1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/astro/clerk-middleware) to learn how to require authentication for specific routes.
-
-  ### Add TypeScript declarations
-
-  Update the `env.d.ts` file in your `src/` directory to add type definitions for the `locals` added by the middleware.
-
-  ```ts {{ prettier: false, filename: 'src/env.d.ts', mark: [3] }}
-  /// <reference types="astro/client" />
-  /// <reference types="@clerk/astro/env" />
-  ```
-
-  ### Add components to your app
-
-  Clerk offers components that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
-
-  <Tabs items={["Prerendered", "Opt-out"]}>
-    <Tab>
-      ```astro {{ filename: 'src/pages/index.astro' }}
-      ---
-      import SiteLayout from '../layouts/SiteLayout.astro'
-      import { SignedIn, SignedOut, UserButton } from '@clerk/astro/components'
-
-      export const prerender = true
-      ---
-
-      <SiteLayout>
-        <SignedOut>
-          <SignInButton mode="modal" />
-        </SignedOut>
-        <SignedIn>
-          <UserButton />
-        </SignedIn>
-      </SiteLayout>
-      ```
-    </Tab>
-
-    <Tab>
-      > [!WARNING]
-      > If you opt-out of prerendering, you must set the `isStatic` prop to `false` on the `SignedIn`, `SignedOut`, and `Protect` components.
-
-      ```astro {{ filename: 'src/pages/index.astro' }}
-      ---
-      import SiteLayout from '../layouts/SiteLayout.astro'
-      import { SignedIn, SignedOut, UserButton } from '@clerk/astro/components'
-
-      export const prerender = false
-      ---
-
-      <SiteLayout>
-        <SignedOut isStatic={false}>
-          <SignInButton mode="modal" />
-        </SignedOut>
-        <SignedIn isStatic={false}>
-          <UserButton />
-        </SignedIn>
-      </SiteLayout>
-      ```
-    </Tab>
-  </Tabs>
-</Steps>
-
-## Next steps
-
-<Cards>
-  - [Protect routes using Clerk Middleware](/docs/references/astro/clerk-middleware)
-  - Learn how to protect specific routes from unauthenticated users.
-
-  ---
-
-  - [Read session and user data](/docs/references/astro/read-session-data)
-  - Learn how to use Clerk's stores and helpers to access the active session and user data in your Astro application.
-
-  ---
-
-  - [Clerk + Astro Quickstart Repo](https://github.com/clerk/clerk-astro-quickstart)
-  - The official companion repo for Clerk's Astro Quickstart.
-</Cards>
+<style global>
+.signed-in {
+  /* Your styles for the wrapper element */
+}
+</style>
+```

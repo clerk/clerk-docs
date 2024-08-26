@@ -60,7 +60,7 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
 
   ```env {{ prettier: false, filename: '.env' }}
-  CLERK_PUBLISHABLE_KEY={{pub_key}}
+  VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
   CLERK_SECRET_KEY={{secret}}
   ```
 
@@ -74,14 +74,10 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   import { createRouter } from './router';
   import { createClerkHandler } from '@clerk/tanstack-start/server';
 
-  const handler = createStartHandler({
-  createRouter,
-  getRouterManifest,
-  });
-
-  const clerkHandler = createClerkHandler(handler);
-
-  export default clerkHandler(defaultStreamHandler);
+  export default createClerkHandler(createStartHandler({
+    createRouter,
+    getRouterManifest,
+  }))(defaultStreamHandler);
   ```
 
   ### Add `<ClerkProvider>` and components to your app
@@ -158,16 +154,14 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
 
   ```tsx {{ prettier: false, filename: 'app/routes/index.tsx' }}
-  import {
-    SignInButton,
-    SignOutButton,
-    SignUpButton,
-    SignedIn,
-    SignedOut,
-    UserButton,
-  } from "@clerk/remix";
+  import { SignedIn, UserButton, SignOutButton, SignedOut, SignInButton, SignUpButton } from '@clerk/tanstack-start'
+  import { createFileRoute } from '@tanstack/react-router'
 
-  export default function Index() {
+  export const Route = createFileRoute('/')({
+    component: Home,
+  })
+
+  function Home() {
     return (
       <div>
         <h1>Index Route</h1>
@@ -183,43 +177,63 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
         </SignedIn>
         <SignedOut>
           <p>You are signed out</p>
-          <div>
-            <SignInButton />
-          </div>
-          <div>
-            <SignUpButton />
-          </div>
+
+          <SignInButton mode='modal' />
+
+          <SignUpButton mode='modal' />
         </SignedOut>
       </div>
-    );
+    )
   }
   ```
 
   #### Server side
 
-  To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
+  To protect your routes, you can use the `beforeLoader` paired with server function to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
 
-  ```tsx {{ prettier: false, filename: 'routes/_index.tsx' }}
-  import { UserButton } from "@clerk/remix";
-  import { getAuth } from "@clerk/remix/ssr.server";
-  import { LoaderFunction, redirect } from "@remix-run/node";
+  ```tsx {{ prettier: false, filename: 'routes/index.tsx' }}
+  import { SignedIn, UserButton, SignOutButton, SignedOut, SignInButton, SignUpButton } from '@clerk/tanstack-start'
+  import { getAuth } from '@clerk/tanstack-start/server'
+  import { createFileRoute } from '@tanstack/react-router'
+  import { createServerFn } from '@tanstack/start'
 
-  export const loader: LoaderFunction = async (args) => {
-    const { userId } = await getAuth(args);
-    if (!userId) {
-      return redirect("/sign-in");
+  const getAuthenticatedUser = createServerFn('POST', async (_, { request }) => {
+    const auth = await getAuth(request)
+
+    if (!auth.userId) {
+      throw redirect({
+        to: '/sign-in',
+      })
     }
-    return {};
-  }
 
-  export default function Index() {
+    return { auth }
+  })
+
+  export const Route = createFileRoute('/')({
+    component: Home,
+    beforeLoader: async () => {
+      const { userId } = await getAuthenticatedUser()
+
+      return { userId }
+    }
+  })
+
+  function Home() {
     return (
       <div>
-          <h1>Index route</h1>
+        <h1>Index Route</h1>
+        <SignedIn>
           <p>You are signed in!</p>
-          <UserButton />
+          <div>
+            <p>View your profile here</p>
+            <UserButton />
+          </div>
+          <div>
+            <SignOutButton />
+          </div>
+        </SignedIn>
       </div>
-    );
+    )
   }
   ```
 </Steps>

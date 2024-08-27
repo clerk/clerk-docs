@@ -9,7 +9,18 @@ import remarkFrontmatter from 'remark-frontmatter'
 
 // Some URLs are valid (e.g. they link to marketing sites or docs that are not hosted through clerk-docs) so they should be excluded from the check.
 // These URLs will be used with the .startsWith() method, so they should be specific enough to not match any URLs that should be checked.
-const EXCLUDE_LIST = ['/pricing', '/docs/reference/backend-api', '/docs/reference/frontend-api', '/support', '/discord']
+const EXCLUDE_LIST = [
+  '/pricing',
+  '/docs/reference/backend-api',
+  '/docs/reference/frontend-api',
+  '/support',
+  '/discord',
+  '/contact',
+  '/contact/sales',
+  '/contact/support',
+  '/blog',
+  '/changelog/2024-04-19',
+]
 
 const ERRORS = {
   RELATIVE_LINK(url) {

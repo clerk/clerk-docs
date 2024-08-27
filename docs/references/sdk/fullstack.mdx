@@ -1,0 +1,67 @@
+---
+title: Fullstack SDK
+description: A reference for implementing a fullstack Clerk SDK
+---
+
+A fullstack SDK combines the [frontend-only SDK](/docs/references/sdk/frontend-only) and [backend-only SDK](/docs/references/sdk/backend-only) into one. A fullstack SDK is necessary for frameworks that support multiple rendering strategies (SSR, SSG, etc.), middleware, data fetching, and more. Examples of such frameworks would be Next.js or Rails.
+
+## Expected features
+
+- User only needs to provide their [publishable key](/docs/references/sdk/terminology) and [secret key](/docs/references/sdk/terminology)
+- User only needs to adjust one or two files to add Clerk to their app (e.g. adding Clerk to the configuration file of that framework)
+- User can use [Clerk’s components](/docs/components/overview) in their choice of framework (e.g. in a React-based framework you import these components as React components)
+- Give users access to [`Client`](/docs/references/javascript/client){{ target: '_blank' }}, [`Session`](/docs/references/javascript/session){{ target: '_blank' }}, [`User`](/docs/references/javascript/user/user){{ target: '_blank' }}, and [`Organization`](/docs/references/javascript/organization/organization){{ target: '_blank' }} properties through the framework’s choice of state management
+- User should be able to use [ClerkJS options](/docs/references/javascript/clerk/clerk#clerk-options){{ target: '_blank' }}
+- Centralized request authentication (e.g. in a middleware or plugin)
+- Give access to the instance of [BAPI](/docs/references/sdk/terminology) client (so that users can use all methods)
+- User should be able to limit access to routes by checking for [roles and permissions](/docs/organizations/roles-permissions)
+
+## Optional features
+
+- User should be able to enforce authentication on individual routes (e.g. with a [`requireAuth`](/docs/references/sdk/backend-only#create-a-require-auth-helper) helper)
+- Use singleton pattern to only create a pre-configured instance of Clerk backend client
+
+## Implementation
+
+Please check out the respective [frontend-only SDK](/docs/references/sdk/frontend-only) and [backend-only SDK](/docs/references/sdk/backend-only) implementation instructions.
+
+In addition to these instructions, you'll need to go through the following steps to support all required features.
+
+> [!NOTE]
+> If you're looking for a real-world example, have a look at [`@clerk/nextjs`](https://github.com/clerk/javascript/tree/main/packages/nextjs).
+
+<Steps>
+  ### Add handshake support
+
+  Inside your Clerk middleware, add checks for the `headers` on the `requestState`. Apply these headers to the `Response` and handle any existing `location` headers (e.g. redirects).
+
+  ```ts {{ filename: 'clerk-middleware.ts', mark: [[9, 20]] }}
+  import { clerkClient as defaultClerkClient } from './client.ts'
+
+  const clerkMiddleware = (options) => {
+    return async (context, next) => {
+      const clerkClient = options.clerkClient || defaultClerkClient
+
+      const requestState = await clerkClient.authenticateRequest(context.req)
+
+      if (requestState.headers) {
+        // This adds observability headers to the res
+        requestState.headers.forEach((value, key) => context.res.headers.append(key, value))
+
+        const locationHeader = requestState.headers.get('location')
+
+        if (locationHeader) {
+          return context.redirect(locationHeader, 307)
+        } else if (requestState.status === 'handshake') {
+          throw new Error('Clerk: unexpected handshake without redirect')
+        }
+      }
+
+      context.set('clerkAuth', requestState.toAuth())
+      context.set('clerk', clerkClient)
+
+      await next()
+    }
+  }
+  ```
+</Steps>

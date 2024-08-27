@@ -1,0 +1,107 @@
+---
+title: OAuth with a custom auth provider
+description: Configure a custom OpenID Connect (OIDC) compatible authentication provider for your Clerk application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "An OIDC identity provider is required.",
+      link: "https://openid.net/specs/openid-connect-core-1_0.html",
+      icon: "user-circle",
+    }
+  ]}
+>
+  - Configure custom Auth provider for your Clerk application.
+</TutorialHero>
+
+Clerk allows you to configure custom OpenID Connect (OIDC) compatible authentication providers for your application. This guide walks you through the steps to set up a custom OAuth provider.
+
+## Configuration
+
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)
+1. In the navigation sidebar, select **User & Authentication > Social Connections**.
+1. Under **Custom Auth Providers**, select **Add provider**.
+1. Fill in the following fields:
+   - **Name**: The provider name (visible to users)
+   - **Key**: A unique identifier for the provider (cannot be changed after creation)
+   - **Discovery Endpoint**: The OIDC discovery endpoint URL of your provider
+     - Alternatively, select **Manual configuration** to set up provider endpoints manually
+   - **Client ID**: Obtained from your provider
+   - **Client Secret**: Obtained from your provider
+1. Select **Save** to add the provider to your instance.
+
+The provider is now configured but not yet enabled. Access the details page for advanced configuration options and to find the **Authorized redirect URLs** to configure in your provider's settings.
+
+Enable the provider either from the provider list or the top of the details page when ready.
+
+## Attribute mapping
+
+If your provider returns claims in a non-standard format:
+
+1. Go to the provider's details page.
+1. Under **Attribute mapping**, configure the mapping to match your provider's claim format.
+
+### Tips
+
+- For fields like **Email address verified**, set default values for missing claims.
+- If the provider returns a claim but you don't want to set it, leave the mapping field empty.
+- If you set a user info URL, it takes priority over the ID Token for claim retrieval.
+
+## Handling edge cases
+
+Sometimes [attribute mapping](#attribute-mapping) isn't enough to get a provider working. For example, the call to the **User info URL** might require additional credentials or API calls. In these instances you should implement a proxy between Clerk and the provider to handle these transformations. The proxy will then be set as the **User info URL**.
+
+The proxy receives the request from Clerk (which contains an `Authorization` header) and should return a JSON object which you can use for attribute mapping.
+
+### Example: Hono with Cloudflare Workers
+
+1. Initialize a new [Hono + Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers) project
+
+1. Implement your proxy logic, e.g. making an additional API call. Here's a minimal example:
+
+   ```ts {{ filename: 'src/index.ts' }}
+   import { Hono } from 'hono'
+
+   const app = new Hono()
+
+   app.get('/', async (c) => {
+     const authorization = c.req.header('authorization')
+
+     const userRes = await fetch('https://api.com/user', {
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: authorization,
+         'api-key': 'some-api-key',
+       },
+     })
+
+     const user = await userRes.json()
+
+     return c.json({
+       uuid: user.uuid,
+       avatar_url: user.avatar,
+       name: user.name,
+       username: user.username,
+       slug: user.id.slug,
+     })
+   })
+
+   export default app
+   ```
+
+1. Deploy your proxy
+
+1. Set the URL of the deployed Cloudflare worker as the **User info URL**
+
+1. Map the returned claim format of the proxy to the respective attributes in the **Attribute mapping** section
+
+## References
+
+- [OpenID Connect Specification](https://openid.net/specs/openid-connect-core-1_0.html)
+- [OAuth 2.0 Framework](https://oauth.net/2/)

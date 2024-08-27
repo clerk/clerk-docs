@@ -1,9 +1,7 @@
 ---
-title: Implement basic Role Based Access Control with metadata
+title: Implement basic Role Based Access Control (RBAC) with metadata
 description: Learn how to leverage Clerk's publicMetadata to implement your own basic Role Based Access Controls.
 ---
-
-# Implement basic Role Based Access Control (RBAC) with metadata
 
 To control which users can access certain parts of your application, you can leverage Clerk's [roles](/docs/organizations/roles-permissions#roles) feature. Although Clerk offers a roles feature as part of the feature set for [organizations](/docs/organizations/overview), not every app implements organizations. This guide will cover a workaround for setting up a basic Role Based Access Control (RBAC) system for products that don't use Clerk's organizations or roles.
 
@@ -19,36 +17,30 @@ To build a basic RBAC system, first, you need to make `publicMetadata` available
 
 In the Clerk Dashboard, navigate to [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions). In the **Customize session token** section, select **Edit**. In the modal that opens, enter the following JSON. If you have already customized your session token, you may need to merge this with what you currently have.
 
-```json {{ prettier: false }}
+```json
 {
-	"metadata": "{{user.public_metadata}}"
+  "metadata": "{{user.public_metadata}}"
 }
 ```
 
-<Images
-  width={2494}
-  height={1400}
-  src="/docs/images/guides/basic-rbac/customize-session-token.webp"
-  alt="The Sessions page in the Clerk Dashboard with the 'Customize session token' modal opened. The modal has a text field with the JSON 'metadata': '{{user.public_metadata}}'."
-/>
+![The Sessions page in the Clerk Dashboard with the 'Customize session token' modal opened. The modal has a text field with the JSON 'metadata': '\{\{user.public\_metadata}}'.](/docs/images/guides/basic-rbac/customize-session-token.webp)
 
-<Callout type="danger">
-  The entire session token has a limit of 4kb of data. Exceeding this size can have adverse effects, including a possible infinite redirect loop for users who exceed this size in Next.js applications.
-  It's recommended to move particularly large claims out of the JWT and fetch these using a separate API call from your backend.
-</Callout>
+> [!CAUTION]
+> The entire session token has a limit of 4kb of data. Exceeding this size can have adverse effects, including a possible infinite redirect loop for users who exceed this size in Next.js applications.
+> It's recommended to move particularly large claims out of the JWT and fetch these using a separate API call from your backend.
 
 ## Provide a global TypeScript definition
 
 In your application's root folder, add a `types` directory. Inside of the `types` directory, add a `globals.d.ts` file. This file will provide auto-complete, prevent TypeScript errors when working with the role, and control the roles that are allowed in the application. For this guide, only an `admin` and `moderator` role will be defined.
 
-```ts {{ prettier: false, filename: 'types/globals.d.ts' }}
-export { };
+```ts {{ filename: 'types/globals.d.ts' }}
+export {}
 
 declare global {
   interface CustomJwtSessionClaims {
     metadata: {
-      role?: "admin" | "moderator";
-    };
+      role?: 'admin' | 'moderator'
+    }
   }
 }
 ```
@@ -57,18 +49,13 @@ declare global {
 
 Later, you will add a basic admin tool to change the user's role, but for now, let's manually add a role to your own user account. In the Clerk Dashboard, navigate to [**Users**](https://dashboard.clerk.com/last-active?path=users) and select your own user account. Scroll down to the **Metadata** section and next to the **Public** option, select **Edit**. Add the following JSON and select **Save**.
 
-```json {{ prettier: false }}
+```json
 {
   "role": "admin"
 }
 ```
 
-<Images
-  width={2494}
-  height={1400}
-  src="/docs/images/guides/basic-rbac/edit-public-metadata.webp"
-  alt="The Users page in the Clerk Dashboard with the 'Edit public metadata' modal open. The modal has a text field with the JSON 'role': 'admin'."
-/>
+![The Users page in the Clerk Dashboard with the 'Edit public metadata' modal open. The modal has a text field with the JSON 'role': 'admin'.](/docs/images/guides/basic-rbac/edit-public-metadata.webp)
 
 ## Create an admin dashboard and protect it
 
@@ -76,16 +63,16 @@ Now that your user has the `admin` role, let's build an admin dashboard to help 
 
 You want the dashboard to only be available to users with the `admin` role. [As you configured earlier](#configure-the-session-token), a user's role can be found in the metadata stored in the session token. You can access the session token's claims using Clerk's `auth()` hook.
 
-```tsx {{ prettier: false, filename: 'app/admin/dashboard/page.tsx' }}
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+```tsx {{ filename: 'app/admin/dashboard/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
 
 export default function AdminDashboard() {
-  const { sessionClaims } = auth();
+  const { sessionClaims } = auth()
 
   // If the user does not have the admin role, redirect them to the home page
-  if (sessionClaims?.metadata.role !== "admin") {
-    redirect("/");
+  if (sessionClaims?.metadata.role !== 'admin') {
+    redirect('/')
   }
 
   return (
@@ -93,7 +80,7 @@ export default function AdminDashboard() {
       <h1>This is the admin dashboard</h1>
       <p>This page is restricted to users with the 'admin' role.</p>
     </>
-  );
+  )
 }
 ```
 
@@ -103,31 +90,31 @@ The `/admin/dashboard` route now requires the user to sign into the application.
 
 Let's create a helper function to make checking roles easier. The first step is modifying `globals.d.ts`. Create a `type` for `Roles` so that the union type for the roles can be used in other places in the application. Then, modify the interface you previously added to use the new `Roles` type.
 
-```ts {{ prettier: false, filename: 'types/globals.d.ts', mark: [[3, 4], 9] }}
-export { };
+```ts {{ filename: 'types/globals.d.ts', mark: [[3, 4], 9] }}
+export {}
 
 // Create a type for the roles
-export type Roles = "admin" | "moderator";
+export type Roles = 'admin' | 'moderator'
 
 declare global {
   interface CustomJwtSessionClaims {
     metadata: {
       role?: Roles
-    };
+    }
   }
 }
 ```
 
 The next step is creating the helper function. Create the `utils/` directory and inside, add the file `roles.ts`. In the `roles.ts` file, add the following code.
 
-```ts {{ prettier: false, filename: 'utils/roles.ts' }}
-import { Roles } from "@/types/globals"
-import { auth } from "@clerk/nextjs/server"
+```ts {{ filename: 'utils/roles.ts' }}
+import { Roles } from '@/types/globals'
+import { auth } from '@clerk/nextjs/server'
 
 export const checkRole = (role: Roles) => {
   const { sessionClaims } = auth()
 
-  return sessionClaims?.metadata.role === role;
+  return sessionClaims?.metadata.role === role
 }
 ```
 
@@ -135,15 +122,14 @@ This `checkRole()` helper will accept a role using the `Roles` type and will ret
 
 Next, the admin dashboard can be refactored to use the `checkRole()` helper. Navigate back to the admin dashboard file. In the `if()` statement, remove the check that was used previously and replace it with the new `checkRole()` helper with `"admin"` as the argument.
 
-```tsx {{ prettier: false, filename: 'app/admin/dashboard/page.tsx', mark: [2, [6, 9]] }}
-import { redirect } from "next/navigation";
-import { checkRole } from "@/utils/roles";
+```tsx {{ filename: 'app/admin/dashboard/page.tsx', mark: [2, [5, 8]] }}
+import { redirect } from 'next/navigation'
+import { checkRole } from '@/utils/roles'
 
 export default function AdminDashboard() {
-
   // If the user does not have the admin role, redirect them to the home page
-  if (!checkRole("admin")) {
-    redirect("/");
+  if (!checkRole('admin')) {
+    redirect('/')
   }
 
   return (
@@ -151,13 +137,12 @@ export default function AdminDashboard() {
       <h1>This is the admin dashboard</h1>
       <p>This page is restricted to users with the 'admin' role.</p>
     </>
-  );
+  )
 }
 ```
 
-<Callout type="info">
-  You can modify the behavior of the helper function to meet your needs. Maybe it will return the roles that the user has, or you could create a `protectByRole()` and have that function handle the redirect.
-</Callout>
+> [!NOTE]
+> You can modify the behavior of the helper function to meet your needs. Maybe it will return the roles that the user has, or you could create a `protectByRole()` and have that function handle the redirect.
 
 ## Add admin tools to find users and add roles
 
@@ -165,52 +150,49 @@ You can leverage the `checkRole()` function you added along with server actions 
 
 Start with the server action. The `setRole()` action below will check the role of the current user using the `checkRoles()` helper to confirm that the user is an `admin`. It will then set the role for the selected user to the specified role.
 
-```ts {{ prettier: false, filename: 'app/admin/dashboard/_actions.ts' }}
-"use server";
+```ts {{ filename: 'app/admin/dashboard/_actions.ts' }}
+'use server'
 
-import { checkRole } from "@/utils/roles";
-import { clerkClient } from "@clerk/nextjs/server";
+import { checkRole } from '@/utils/roles'
+import { clerkClient } from '@clerk/nextjs/server'
 
 export async function setRole(formData: FormData) {
   // Check that the user trying to set the role is an admin
-  if (!checkRole("admin")) {
-    return { message: "Not Authorized" };
+  if (!checkRole('admin')) {
+    return { message: 'Not Authorized' }
   }
 
   try {
-    const res = await clerkClient().users.updateUser(
-      formData.get("id") as string,
-      {
-        publicMetadata: { role: formData.get("role") },
-      }
-    );
-    return { message: res.publicMetadata };
+    const res = await clerkClient().users.updateUser(formData.get('id') as string, {
+      publicMetadata: { role: formData.get('role') },
+    })
+    return { message: res.publicMetadata }
   } catch (err) {
-    return { message: err };
+    return { message: err }
   }
 }
 ```
 
 With the server action in place, you can build the `<SearchUsers />` component. This will have a form that can be used to search for users. On form submission, the search term is added to the URL as a search parameter. The page component, which is a server component that you will refactor next, will perform a query based on this change.
 
-```tsx {{ prettier: false, filename: 'app/admin/dashboard/_search-users.tsx' }}
-"use client";
+```tsx {{ filename: 'app/admin/dashboard/_search-users.tsx' }}
+'use client'
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from 'next/navigation'
 
 export const SearchUsers = () => {
-  const router = useRouter();
-  const pathname = usePathname();
+  const router = useRouter()
+  const pathname = usePathname()
 
   return (
     <div>
       <form
         onSubmit={async (e) => {
-          e.preventDefault();
-          const form = e.currentTarget;
-          const formData = new FormData(form);
-          const queryTerm = formData.get("search") as string;
-          router.push(pathname + "?search=" + queryTerm);
+          e.preventDefault()
+          const form = e.currentTarget
+          const formData = new FormData(form)
+          const queryTerm = formData.get('search') as string
+          router.push(pathname + '?search=' + queryTerm)
         }}
       >
         <label htmlFor="search">Search for Users</label>
@@ -218,29 +200,27 @@ export const SearchUsers = () => {
         <button type="submit">Submit</button>
       </form>
     </div>
-  );
-};
+  )
+}
 ```
 
 With the server action and the search form in place, you'll refactor the server component for the `app/admin/dashboard` route. It will now check if a search parameter has been added to the URL by the search form, and if there is a search parameter present, it will search for users that match the entered term. If an array of one or more users is returned, then the component will render a list of users using their first and last name, primary email address, current role, and 'Make Admin' and 'Make Moderator' buttons. The buttons include hidden inputs for the user ID and the role, and they use the `setRole()` server action to update the role for the user.
 
-```tsx {{ prettier: false, filename: 'src/app/admin/dashboard/page.tsx', mark: [[3, 5], [7, 9], 14, 16, 23, [25, 55]] }}
-import { redirect } from "next/navigation";
-import { checkRole } from "@/utils/roles";
-import { SearchUsers } from "./_search-users";
-import { clerkClient } from "@clerk/nextjs/server";
-import { setRole } from "./_actions";
+```tsx {{ filename: 'src/app/admin/dashboard/page.tsx', mark: [[3, 5], 7, 12, 14, 21, [23, 52]] }}
+import { redirect } from 'next/navigation'
+import { checkRole } from '@/utils/roles'
+import { SearchUsers } from './_search-users'
+import { clerkClient } from '@clerk/nextjs/server'
+import { setRole } from './_actions'
 
-export default async function AdminDashboard(params: {
-  searchParams: { search?: string };
-}) {
-  if (!checkRole("admin")) {
-    redirect("/");
+export default async function AdminDashboard(params: { searchParams: { search?: string } }) {
+  if (!checkRole('admin')) {
+    redirect('/')
   }
 
-  const query = params.searchParams.search;
+  const query = params.searchParams.search
 
-  const users = query ? (await clerkClient().users.getUserList({ query })).data : [];
+  const users = query ? (await clerkClient().users.getUserList({ query })).data : []
 
   return (
     <>
@@ -257,9 +237,8 @@ export default async function AdminDashboard(params: {
             </div>
             <div>
               {
-                user.emailAddresses.find(
-                  (email) => email.id === user.primaryEmailAddressId
-                )?.emailAddress
+                user.emailAddresses.find((email) => email.id === user.primaryEmailAddressId)
+                  ?.emailAddress
               }
             </div>
             <div>{user.publicMetadata.role as string}</div>
@@ -278,10 +257,10 @@ export default async function AdminDashboard(params: {
               </form>
             </div>
           </div>
-        );
+        )
       })}
     </>
-  );
+  )
 }
 ```
 

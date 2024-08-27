@@ -1,0 +1,115 @@
+---
+title: '`getAuth()`'
+description: The getAuth() helper retrieves the authentication state allowing you to protect your API routes or gather relevant data.
+---
+
+The `getAuth()` helper retrieves the authentication state, allowing you to protect your routes or gather relevant data.
+
+## Parameters
+
+<Properties>
+  - `request`
+
+  The Request object.
+
+  ---
+
+  - `opts?`
+
+  An optional object that can be used to configure the behavior of the `getAuth()` function. It accepts the following properties:
+
+  - `secretKey?`: A string that represents the secret key used to sign the session token. If not provided, the secret key is retrieved from the environment variable `CLERK_SECRET_KEY`.
+</Properties>
+
+## Returns
+
+`getAuth()` returns the [`Auth`](/docs/references/nextjs/auth-object) object.
+
+## Usage
+
+### Basic usage
+
+The following example demonstrates how to use `getAuth()` to retrieve authentication information in a server function.
+
+```tsx {{ filename: 'app/routes/index.tsx' }}
+import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/start'
+import { getAuth } from '@clerk/tanstack-start/server'
+
+const authStateFn = createServerFn('GET', async (_, { request }) => {
+  const { userId } = await getAuth(request)
+
+  if (!userId) {
+    throw redirect({
+      to: '/sign-in',
+    })
+  }
+
+  return { userId }
+})
+
+export const Route = createFileRoute('/')({
+  component: Home,
+  beforeLoad: await authStateFn(),
+  loader: async ({ context }) => {
+    return { userId: context.userId }
+  },
+})
+
+function Home() {
+  const router = useRouter()
+  const state = Route.useLoaderData()
+
+  return <h1>Welcome your id is {state.userId}!</h1>
+}
+```
+
+### Protect API routes
+
+It is important to protect your API routes to ensure that only authenticated users can access them. You can do this by checking if the `userId` is present in the `getAuth()` response, like in the following example:
+
+```tsx {{ filename: 'app/routes/api/currentUser.ts' }}
+import { getAuth } from '@clerk/nextjs/server'
+import { json } from '@tanstack/start'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/currentUser')({
+  GET: async ({ request, params }) => {
+    const { userId } = await getAuth(request);
+
+    if (!userId) {
+      return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return json({
+      userId,
+    })
+  },
+})
+```
+
+### Usage with `getToken()`
+
+`getAuth()` returns `getToken()`, which is a method that returns the current user's session token. You can also use this function to retrieve a custom JWT template, like in the following example:
+
+```tsx {{ filename: 'app/routes/api/currentUser.ts' }}
+import { getAuth } from '@clerk/nextjs/server'
+import { json } from '@tanstack/start'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/currentUser')({
+  GET: async ({ request, params }) => {
+    const { userId, getToken } = await getAuth(request);
+
+    if (!userId) {
+      return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = await getToken({ template: 'supabase' })
+
+    // Add logic that retrieves the data
+    // from your database using the token
+
+    return json({ ... });
+  },
+})
+```

@@ -363,70 +363,162 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       }
       ```
 
-      The client can be used to query data on page load.
+      The `client` can be used to both query data on page load and within server actions, which are callable from server and client components.
 
-      ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
-      import { createClerkSupabaseClientSsr } from './client'
-      import TaskRow from './TaskRow'
-      import AddTaskForm from './AddTaskForm'
+      <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx', 'TaskRow.tsx']}>
+        ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
+        import { createClerkSupabaseClientSsr } from './client'
+        import TaskRow from './TaskRow'
+        import AddTaskForm from './AddTaskForm'
 
-      // Register the `Clerk` object  the global window fix TypeScript errors
-      declare global {
-        interface Window {
-          Clerk: any
+        // Register the `Clerk` object  the global window fix TypeScript errors
+        declare global {
+          interface Window {
+            Clerk: any
+          }
         }
-      }
 
-      export default async function Home() {
-        const client = await createClerkSupabaseClientSsr()
-        // Query the 'tasks' table to render the page
-        const { data, error } = await client.from('tasks').select()
-        if (error) {
-          throw error
-        }
-        const tasks = data
+        export default async function Home() {
+          const client = await createClerkSupabaseClientSsr()
+          // Query the 'tasks' table to render the page
+          const { data, error } = await client.from('tasks').select()
+          if (error) {
+            throw error
+          }
+          const tasks = data
 
-        return (
-          <div className="flex flex-col">
-            <AddTaskForm />
-            <div className="flex flex-col gap-2 p-2">
-              {tasks?.map((task: any) => (
-                <TaskRow key={task.id} id={task.id} name={task.name} is_done={task.is_done} />
-              ))}
+          return (
+            <div className="flex flex-col">
+              <AddTaskForm />
+              <div className="flex flex-col gap-2 p-2">
+                {tasks?.map((task: any) => (
+                  <TaskRow key={task.id} id={task.id} name={task.name} is_done={task.is_done} />
+                ))}
+              </div>
             </div>
-          </div>
-        )
-      }
-      ```
+          )
+        }
+        ```
 
-      The client can also be used within server actions.
+        ```ts {{ filename: 'src/app/ssr/actions.ts' }}
+        'use server'
 
-      ```ts {{ filename: 'src/app/ssr/actions.ts' }}
-      'use server'
+        import { createClerkSupabaseClient } from './client'
 
-      import { createClerkSupabaseClient } from './client'
+        const client = createClerkSupabaseClient()
 
-      const client = createClerkSupabaseClient()
-
-      export async function addTask(name: string) {
-        await client.from('tasks').insert({
-          name,
-        })
-      }
-
-      export async function deleteTask(taskId: number) {
-        await client.from('tasks').delete().eq('id', taskId)
-      }
-
-      export async function setTaskState(taskId: number, isDone: boolean) {
-        await client
-          .from('tasks')
-          .update({
-            is_done: isDone,
+        export async function addTask(name: string) {
+          await client.from('tasks').insert({
+            name,
           })
-          .eq('id', taskId)
-      }
-      ```
+        }
+
+        export async function deleteTask(taskId: number) {
+          await client.from('tasks').delete().eq('id', taskId)
+        }
+
+        export async function setTaskState(taskId: number, isDone: boolean) {
+          await client
+            .from('tasks')
+            .update({
+              is_done: isDone,
+            })
+            .eq('id', taskId)
+        }
+        ```
+
+        ```ts {{ filename: 'src/app/ssr/AddTaskForm.tsx' }}
+        'use client'
+        import { Button } from '@/components/ui/button'
+        import { Input } from '@/components/ui/input'
+        import React, { useState } from 'react'
+        import { addTask } from './actions'
+        import { useRouter } from 'next/navigation'
+
+        function AddTaskForm() {
+          const [taskName, setTaskName] = useState('')
+          const router = useRouter()
+
+          async function onSubmit() {
+            await addTask(taskName)
+            setTaskName('')
+            router.refresh()
+          }
+
+          return (
+            <form action={onSubmit} className="flex gap-2">
+              <Input
+                autoFocus
+                type="text"
+                name="name"
+                onChange={(e) => setTaskName(e.target.value)}
+                value={taskName}
+                placeholder="What do you need to do?"
+              />
+              <Button type="submit" className="disabled:cursor-not-allowed">
+                Add
+              </Button>
+            </form>
+          )
+        }
+        export default AddTaskForm
+        ```
+
+        ```ts {{ filename: 'src/app/ssr/TaskRow.tsx' }}
+        'use client'
+        import { Button } from '@/components/ui/button'
+        import { DeleteIcon } from 'lucide-react'
+        import React from 'react'
+        import { FiCheckCircle, FiCircle } from 'react-icons/fi'
+        import { deleteTask, setTaskState } from './actions'
+        import { useRouter } from 'next/navigation'
+
+        type Props = {
+          id: number
+          name: string
+          is_done: boolean
+        }
+
+        function TaskRow({ id, name, is_done }: Props) {
+          const router = useRouter()
+
+          async function onCheckClicked(taskId: number, isDone: boolean) {
+            // Update a task when its completed
+            await setTaskState(taskId, isDone)
+            router.refresh()
+          }
+
+          async function onDeleteClicked(taskId: number) {
+            // Delete a task from the database
+            await deleteTask(taskId)
+            router.refresh()
+          }
+          return (
+            <div
+              className={`group flex items-center transition-all w-full${is_done ? 'text-slate-500' : ''}`}
+            >
+              <Button
+                variant="link"
+                className="text-lg text-inherit disabled:cursor-not-allowed"
+                onClick={() => onCheckClicked(id, !is_done)}
+              >
+                {is_done ? <FiCheckCircle /> : <FiCircle />}
+              </Button>
+              {name}
+              <Button
+                variant="link"
+                className="text-lg text-inherit hover:text-red-500"
+                onClick={() => onDeleteClicked(id)}
+              >
+                <DeleteIcon />
+              </Button>
+            </div>
+          )
+        }
+
+        export default TaskRow
+        ```
+      </CodeBlockTabs>
     </Tab>
   </Tabs>
 

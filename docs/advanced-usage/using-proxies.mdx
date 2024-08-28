@@ -3,8 +3,6 @@ title: Proxying the Clerk Frontend API
 description: Learn how to proxy the Clerk Frontend API through your domain.
 ---
 
-# Proxying the Clerk Frontend API
-
 Clerk supports two configuration methods for connecting to the Clerk Frontend API: CNAME and Proxy.
 
 The recommended way to connect to the Clerk Frontend API is to [set up CNAME records and use DNS](/docs/deployments/overview). However, if you're unable to use this approach, or would like more control over your integration with Clerk, you can use a proxy.
@@ -41,18 +39,18 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   <Tabs items={["Nginx", "Cloudflare Workers"]}>
     <Tab>
-      ```nginx {{ prettier: false, filename: 'nginx.conf' }}
+      ```nginx {{ filename: 'nginx.conf' }}
       http {
         # ...
         server {
           # ...
           location /__clerk/ {
-            rewrite ^/__clerk/(.*)$ /$1 break;
-            proxy_pass https://frontend-api.clerk.dev;
+            rewrite          ^/__clerk/(.*)$ /$1 break;
+            proxy_pass       https://frontend-api.clerk.dev;
             proxy_set_header Clerk-Proxy-Url https://app.dev/__clerk;
             proxy_set_header Clerk-Secret-Key sk_live_***;
             proxy_set_header X-Forwarded-For $remote_addr;
-            proxy_redirect off;
+            proxy_redirect   off;
           }
         }
       }
@@ -61,24 +59,24 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
     <Tab>
       <CodeBlockTabs options={["Handler", "Wrangler Config", "Environment", "Types"]}>
-        ```ts {{ prettier: false, filename: 'src/index.ts' }}
-          export default {
-            async fetch(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-              const url = req.url.replace(env.CLERK_PROXY_URL, env.CLERK_FAPI)
-              const proxyReq = new Request(req, {
-                redirect: 'manual',
-              });
+        ```ts {{ filename: 'src/index.ts' }}
+        export default {
+          async fetch(req: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+            const url = req.url.replace(env.CLERK_PROXY_URL, env.CLERK_FAPI)
+            const proxyReq = new Request(req, {
+              redirect: 'manual',
+            })
 
-              proxyReq.headers.set('Clerk-Proxy-Url', env.CLERK_PROXY_URL);
-              proxyReq.headers.set('Clerk-Secret-Key', env.CLERK_SECRET_KEY);
-              proxyReq.headers.set('X-Forwarded-For', req.headers.get('CF-Connecting-IP') || '');
+            proxyReq.headers.set('Clerk-Proxy-Url', env.CLERK_PROXY_URL)
+            proxyReq.headers.set('Clerk-Secret-Key', env.CLERK_SECRET_KEY)
+            proxyReq.headers.set('X-Forwarded-For', req.headers.get('CF-Connecting-IP') || '')
 
-              return fetch(url, proxyReq);
-            },
-          };
+            return fetch(url, proxyReq)
+          },
+        }
         ```
 
-        ```toml {{ prettier: false, filename: 'wrangler.toml' }}
+        ```toml {{ filename: 'wrangler.toml' }}
           name = "cloudflare-proxy"
           main = "src/index.ts"
           compatibility_date = "2023-10-02"
@@ -87,25 +85,25 @@ When using a proxy, all requests to the Frontend API will be made through your d
           CLERK_FAPI="https://frontend-api.clerk.dev"
         ```
 
-        ```env {{ prettier: false, filename: '.dev.vars' }}
+        ```env {{ filename: '.dev.vars' }}
           # Do not commit this file to source control
           CLERK_PROXY_URL="https://app.dev/__clerk"
           CLERK_SECRET_KEY="sk_live_xxxxx"
         ```
 
-        ```ts {{ prettier: false, filename: 'worker-configuration.d.ts' }}
-          interface Env {
-            CLERK_FAPI: string;
-            CLERK_PROXY_URL: string;
-            CLERK_SECRET_KEY: string;
-          }
+        ```ts {{ filename: 'worker-configuration.d.ts' }}
+        interface Env {
+          CLERK_FAPI: string
+          CLERK_PROXY_URL: string
+          CLERK_SECRET_KEY: string
+        }
         ```
       </CodeBlockTabs>
     </Tab>
   </Tabs>
 
   > [!NOTE]
-  > Every proxy configuration will be different and we're here to help. Please [reach out](https://clerk.com/contact/support) if there's a specific use-case you're looking to solve.
+  > Every proxy configuration will be different and we're here to help. Please [reach out](/contact/support){{ target: '_blank' }} if there's a specific use-case you're looking to solve.
 
   ### Enable proxying
 
@@ -126,7 +124,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       The request below will update the domain to use the proxy URL `https://app.dev/__clerk`. In doing so, it will trigger checks to validate the proxy URL.
 
-      ```bash {{ prettier: false }}
+      ```bash
       curl -X PATCH https://api.clerk.com/v1/domains/{{DOMAIN ID}} \
           -H "Authorization: Bearer {{SECRET KEY}}" \
           -H "Content-Type: application/json" \
@@ -146,56 +144,50 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
   To configure your proxy setup using environment variables, your `.env.local` file should look like this:
 
-  <InjectKeys>
-    <Tabs type="framework" items={["Next.js", "Remix", "JavaScript"]}>
-      <Tab>
-        ```env {{ prettier: false, filename: '.env.local' }}
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+  <Tabs type="framework" items={["Next.js", "Remix", "JavaScript"]}>
+    <Tab>
+      ```env {{ filename: '.env.local' }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+      CLERK_SECRET_KEY={{secret}}
 
-        NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
-      </Tab>
+      NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
+      ```
+    </Tab>
 
-      <Tab>
-        ```env {{ prettier: false, filename: '.env.local' }}
-        CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+    <Tab>
+      ```env {{ filename: '.env.local' }}
+      CLERK_PUBLISHABLE_KEY={{pub_key}}
+      CLERK_SECRET_KEY={{secret}}
 
-        CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
-      </Tab>
+      CLERK_PROXY_URL=https://app.dev/__clerk
+      ```
+    </Tab>
 
-      <Tab>
-        You will only need to set environment variables in your JavaScript application if you are using a bundler (the `NPM module` method for ClerkJS installation). If you are using the `<script>` method, configure your proxy setup using [properties in your application](#properties-in-your-application) instead.
+    <Tab>
+      You will only need to set environment variables in your JavaScript application if you are using a bundler (the `NPM module` method for ClerkJS installation). If you are using the `<script>` method, configure your proxy setup using [properties in your application](#properties-in-your-application) instead.
 
-        ```env {{ prettier: false, filename: '.env.local' }}
-        CLERK_PUBLISHABLE_KEY={{pub_key}}
-        CLERK_SECRET_KEY={{secret}}
+      ```env {{ filename: '.env.local' }}
+      CLERK_PUBLISHABLE_KEY={{pub_key}}
+      CLERK_SECRET_KEY={{secret}}
 
-        CLERK_PROXY_URL=https://app.dev/__clerk
-        ```
-      </Tab>
-    </Tabs>
-  </InjectKeys>
+      CLERK_PROXY_URL=https://app.dev/__clerk
+      ```
+    </Tab>
+  </Tabs>
 
   #### Properties in your application
 
   <Tabs type="framework" items={["Next.js", "Remix", "JavaScript"]}>
     <Tab>
-      To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](https://clerk.com/docs/components/clerk-provider) component.
+      To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](/docs/components/clerk-provider) component.
 
       <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-        ```tsx {{ prettier: false, filename: 'app/layout.tsx', mark: [9] }}
-        import { ClerkProvider } from '@clerk/nextjs';
+        ```tsx {{ filename: 'app/layout.tsx', mark: [5] }}
+        import { ClerkProvider } from '@clerk/nextjs'
 
-        export default function RootLayout({
-          children,
-        }: {
-          children: React.ReactNode
-        }) {
+        export default function RootLayout({ children }: { children: React.ReactNode }) {
           return (
-            <ClerkProvider proxyUrl='https://app.dev/__clerk'>
+            <ClerkProvider proxyUrl="https://app.dev/__clerk">
               <html lang="en">
                 <body>{children}</body>
               </html>
@@ -204,18 +196,18 @@ When using a proxy, all requests to the Frontend API will be made through your d
         }
         ```
 
-        ```tsx {{ prettier: false, filename: '_app.tsx', mark: [6] }}
-        import { ClerkProvider } from "@clerk/nextjs";
-        import type { AppProps } from "next/app";
+        ```tsx {{ filename: '_app.tsx', mark: [6] }}
+        import { ClerkProvider } from '@clerk/nextjs'
+        import type { AppProps } from 'next/app'
 
         function MyApp({ Component, pageProps }: AppProps) {
           return (
-            <ClerkProvider proxyUrl='https://app.dev/__clerk' {...pageProps}>
+            <ClerkProvider proxyUrl="https://app.dev/__clerk" {...pageProps}>
               <Component {...pageProps} />
             </ClerkProvider>
-          );
+          )
         }
-        export default MyApp;
+        export default MyApp
         ```
       </CodeBlockTabs>
     </Tab>
@@ -223,67 +215,65 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       To configure your proxy setup using properties in your Remix application, set the `proxyUrl` property on the [`ClerkApp`](/docs/references/remix/clerk-app) wrapper.
 
-      ```tsx {{ prettier: false, filename: 'root.tsx' }}
-        export const loader = (args) => {
-          return rootAuthLoader(
-            args,
-            ({ request }) => {
-              const { userId, sessionId, getToken } = request.auth;
-              return json({
-                  message: `Hello from the root loader :)`,
-                  ENV: getBrowserEnvironment(),
-              });
-            },
-            {
-              loadUser: true,
-              proxyUrl: 'https://app.dev/__clerk'
-            } as const
-          );
-        };
+      ```tsx {{ filename: 'root.tsx' }}
+      export const loader = (args) => {
+        return rootAuthLoader(
+          args,
+          ({ request }) => {
+            const { userId, sessionId, getToken } = request.auth
+            return json({
+              message: `Hello from the root loader :)`,
+              ENV: getBrowserEnvironment(),
+            })
+          },
+          {
+            loadUser: true,
+            proxyUrl: 'https://app.dev/__clerk',
+          } as const,
+        )
+      }
 
-        export default ClerkApp(App, {
-          proxyUrl: 'https://app.dev/__clerk'
-        });
+      export default ClerkApp(App, {
+        proxyUrl: 'https://app.dev/__clerk',
+      })
       ```
     </Tab>
 
     <Tab>
       To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/references/javascript/clerk/clerk#load) method.
 
-      <InjectKeys>
-        <CodeBlockTabs type="npm-script" options={["NPM module", "<script>"]}>
-          ```js {{ prettier: false, filename: 'main.js' }}
-            import { Clerk } from '@clerk/clerk-js';
+      <CodeBlockTabs type="npm-script" options={["NPM module", "<script>"]}>
+        ```js {{ filename: 'main.js' }}
+        import { Clerk } from '@clerk/clerk-js'
 
-            // Initialize Clerk with your Clerk publishable key
-            const clerk = new Clerk('{{pub_key}}');
+        // Initialize Clerk with your Clerk publishable key
+        const clerk = new Clerk('{{pub_key}}')
 
-            await clerk.load({
+        await clerk.load({
+          proxyUrl: 'https://app.dev/__clerk',
+        })
+        ```
+
+        ```html {{ filename: 'index.html' }}
+        <!-- Initialize Clerk with your
+          Clerk Publishable key and Frontend API URL -->
+        <script
+          async
+          crossorigin="anonymous"
+          data-clerk-publishable-key="{{pub_key}}"
+          src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+          type="text/javascript"
+        ></script>
+
+        <script>
+          window.addEventListener('load', async function () {
+            await Clerk.load({
               proxyUrl: 'https://app.dev/__clerk',
-            });
-          ```
-
-          ```html {{ prettier: false, filename: 'index.html' }}
-            <!-- Initialize Clerk with your
-            Clerk Publishable key and Frontend API URL -->
-            <script
-              async
-              crossorigin="anonymous"
-              data-clerk-publishable-key="{{pub_key}}"
-              src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-              type="text/javascript"
-            ></script>
-
-            <script>
-              window.addEventListener("load", async function () {
-                await Clerk.load({
-                  proxyUrl: 'https://app.dev/__clerk',
-                });
-              });
-            </script>
-          ```
-        </CodeBlockTabs>
-      </InjectKeys>
+            })
+          })
+        </script>
+        ```
+      </CodeBlockTabs>
     </Tab>
   </Tabs>
 

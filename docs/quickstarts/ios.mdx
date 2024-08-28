@@ -1,0 +1,292 @@
+---
+title: iOS Quickstart (Beta)
+description: Add authentication and user management to your iOS app with Clerk.
+---
+
+> [!WARNING]
+> The Clerk iOS SDK is currently in beta. It is **not yet recommended for production use**.
+
+<TutorialHero
+  framework="iOS"
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+>
+  - Create a new Xcode project
+  - Install the Clerk iOS SDK
+  - Configure `Clerk` with your publishable key
+  - Use Clerk to enable users to sign in and out of your application
+</TutorialHero>
+
+<Steps>
+  ### Create an iOS Project
+
+  To get started using Clerk with iOS, create a new project in Xcode. Select SwiftUI as your interface and Swift as your language.
+  See the [Xcode documentation](https://developer.apple.com/documentation/xcode/creating-an-xcode-project-for-an-app) for more information.
+
+  ### Install the Clerk iOS SDK
+
+  Follow the Swift Package Manager [instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to install Clerk as a dependency.
+  When prompted for the package URL, enter [https://github.com/clerk/clerk-ios](https://github.com/clerk/clerk-ios). Be sure to add the package to your target.
+
+  ### Load Clerk
+
+  To use Clerk in your app, you must first configure and load `Clerk`.
+
+  - Inside your new project in Xcode, open your `@main` app file.
+  - Import `ClerkSDK`.
+  - Add a new variable `clerk` marked with the `@ObservedObject` property wrapper.
+  - Replace `ContentView()` with the below `ZStack`.
+  - Attach a `.task` modifier to the new `ZStack`. In the body of the task, configure `clerk` with your publishable key, and then load `clerk`. You can get your publishable key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of the Clerk Dashboard.
+
+  ```swift {{ filename: 'ClerkQuickstartApp.swift', mark: [2, 6, [10, 20]] }}
+  import SwiftUI
+  import ClerkSDK
+
+  @main
+  struct ClerkQuickstartApp: App {
+    @ObservedObject private var clerk = Clerk.shared
+
+    var body: some Scene {
+      WindowGroup {
+        ZStack {
+          if clerk.loadingState == .notLoaded {
+            ProgressView()
+          } else {
+            ContentView()
+          }
+        }
+        .task {
+          clerk.configure(publishableKey: "{{pub_key}}")
+          try? await clerk.load()
+        }
+      }
+    }
+  }
+  ```
+
+  ### Conditionally render content
+
+  To render content based on whether a user is authenticated or not:
+
+  - Open your `ContentView` file.
+  - Import `ClerkSDK`.
+  - Add a new variable `clerk` marked with the `@ObservedObject` property wrapper.
+  - Replace the content of the view body with a conditional that checks for a `clerk.user`.
+
+  ```swift {{ filename: 'ContentView.swift', mark: [2, 5, [8, 14]] }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct ContentView: View {
+    @ObservedObject private var clerk = Clerk.shared
+
+    var body: some View {
+      VStack {
+        if let user = clerk.user {
+          Text("Hello, \(user.id)")
+        } else {
+          Text("You are signed out")
+        }
+      }
+    }
+  }
+  ```
+
+  ### Create views for sign-up and sign-in
+
+  #### `SignUpView`
+
+  The following example creates a `SignUpView` that allows users to sign up using their email address and password, and sends an email verification code to confirm their email address.
+
+  ```swift {{ filename: 'SignUpView.swift' }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct SignUpView: View {
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var isVerifying = false
+    
+    var body: some View {
+      VStack {
+        Text("Sign Up")
+        if isVerifying {
+          TextField("Code", text: $code)
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          TextField("Email", text: $email)
+          SecureField("Password", text: $password)
+          Button("Continue") {
+            Task { await signUp(email: email, password: password) }
+          }
+        }
+      }
+      .padding()
+    }
+  }
+
+  extension SignUpView {
+    
+    func signUp(email: String, password: String) async {
+      do {
+        let signUp = try await SignUp.create(
+          strategy: .standard(emailAddress: email, password: password)
+        )
+        
+        try await signUp.prepareVerification(strategy: .emailCode)
+
+        isVerifying = true
+      } catch {
+        dump(error)
+      }
+    }
+    
+    func verify(code: String) async {
+      do {
+        guard let signUp = Clerk.shared.client?.signUp else {
+          isVerifying = false
+          return
+        }
+        
+        try await signUp.attemptVerification(.emailCode(code: code))
+      } catch {
+        dump(error)
+      }
+    }
+    
+  }
+  ```
+
+  #### `SignInView`
+
+  The following example creates a `SignInView` that allows users to sign in using their email address and password.
+
+  ```swift {{ filename: 'SignInView.swift' }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct SignInView: View {
+    @State private var email = ""
+    @State private var password = ""
+    
+    var body: some View {
+      VStack {
+        Text("Sign In")
+        TextField("Email", text: $email)
+        SecureField("Password", text: $password)
+        Button("Continue") {
+          Task { await submit(email: email, password: password) }
+        }
+      }
+      .padding()
+    }
+  }
+
+  extension SignInView {
+      
+    func submit(email: String, password: String) async {
+      do {
+        try await SignIn.create(
+          strategy: .identifier(email, password: password)
+        )
+      } catch {
+        dump(error)
+      }
+    }
+      
+  }
+  ```
+
+  #### `SignUpOrSignInView`
+
+  Finally, create a `SignUpOrSignInView` container view that allows users to switch between sign up and sign in.
+
+  ```swift {{ filename: 'SignUporSignInView.swift' }}
+  import SwiftUI
+
+  struct SignUpOrSignInView: View {
+    @State private var isSignUp = true
+    
+    var body: some View {
+      ScrollView {
+        if isSignUp {
+          SignUpView()
+        } else {
+          SignInView()
+        }
+        
+        Button {
+          isSignUp.toggle()
+        } label: {
+          if isSignUp {
+            Text("Already have an account? Sign In")
+          } else {
+            Text("Don't have an account? Sign Up")
+          }
+        }
+        .padding()
+      }
+    }
+  }
+  ```
+
+  ### Allow users to sign up or sign in
+
+  Go back to your `ContentView` and render your newly created `SignUpOrSignInView` when the user isn't signed in.
+
+  ```swift {{ filename: 'ContentView.swift', mark: [12] }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct ContentView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+      VStack {
+        if let user = clerk.user {
+          Text("Hello, \(user.id)")
+        } else {
+          SignUpOrSignInView()
+        }
+      }
+    }
+  }
+  ```
+
+  ### Allow users to sign out
+
+  Finally, provide users with a way to sign out of your app:
+
+  - Open your `ContentView`.
+  - Add a button that ends a user's session.
+
+  ```swift {{ filename: 'ContentView.swift', mark: [[11, 13]] }}
+  import SwiftUI
+  import ClerkSDK
+
+  struct ContentView: View {
+    @ObservedObject private var clerk = Clerk.shared
+    
+    var body: some View {
+      VStack {
+        if let user = clerk.user {
+          Text("Hello, \(user.id)")
+          Button("Sign Out") {
+            Task { try? await clerk.signOut() }
+          }
+        } else {
+          SignUpOrSignInView()
+        }
+      }
+    }
+  }
+  ```
+</Steps>

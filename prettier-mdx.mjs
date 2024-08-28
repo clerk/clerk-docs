@@ -19,7 +19,7 @@ const processor = remark()
   .use(remarkFrontmatter)
   .use(remarkGfm, { tablePipeAlign: false })
   .use(remarkMdx, { printWidth: 120 })
-  .use(remarkDisallowDiffLang)
+// .use(remarkDisallowDiffLang) - allow for now
 
 function remarkDisallowDiffLang() {
   return function traverse(tree) {

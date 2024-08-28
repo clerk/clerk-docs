@@ -91,7 +91,7 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
 
   Select your preferred router to learn how to make this data available across your entire app:
 
-  ```tsx {{ prettier: false, filename: 'app/routes/__root.tsx' }}
+```tsx {{ prettier: false, filename: 'app/routes/__root.tsx' }}
    import {
     Outlet,
     ScrollRestoration,
@@ -189,50 +189,37 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
 
   To protect your routes, you can use the `beforeLoader` paired with server function to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
 
-  ```tsx {{ prettier: false, filename: 'routes/index.tsx' }}
-  import { SignedIn, UserButton, SignOutButton, SignedOut, SignInButton, SignUpButton } from '@clerk/tanstack-start'
-  import { getAuth } from '@clerk/tanstack-start/server'
-  import { createFileRoute } from '@tanstack/react-router'
-  import { createServerFn } from '@tanstack/start'
+  ```tsx {{ prettier: false, filename: 'app/routes/index.tsx' }}
+import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/start'
+import { getAuth } from '@clerk/tanstack-start/server'
 
-  const getAuthenticatedUser = createServerFn('POST', async (_, { request }) => {
-    const auth = await getAuth(request)
+const authStateFn = createServerFn('GET', async (_, { request }) => {
+  const { userId } = await getAuth(request)
 
-    if (!auth.userId) {
-      throw redirect({
-        to: '/sign-in/$',
-      })
-    }
-
-    return { auth }
-  })
-
-  export const Route = createFileRoute('/')({
-    component: Home,
-    beforeLoader: async () => {
-      const { userId } = await getAuthenticatedUser()
-
-      return { userId }
-    }
-  })
-
-  function Home() {
-    return (
-      <div>
-        <h1>Index Route</h1>
-        <SignedIn>
-          <p>You are signed in!</p>
-          <div>
-            <p>View your profile here</p>
-            <UserButton />
-          </div>
-          <div>
-            <SignOutButton />
-          </div>
-        </SignedIn>
-      </div>
-    )
+  if (!userId) {
+    throw redirect({
+      to: '/sign-in',
+    })
   }
+
+  return { userId }
+})
+
+export const Route = createFileRoute('/')({
+  component: Home,
+  beforeLoad: await authStateFn(),
+  loader: async ({ context }) => {
+    return { userId: context.userId }
+  },
+})
+
+function Home() {
+  const router = useRouter()
+  const state = Route.useLoaderData()
+
+  return <h1>Welcome your id is {state.userId}!</h1>
+}
   ```
 </Steps>
 

@@ -17,7 +17,9 @@ description: Learn how to integrate Clerk into your Fauna application.
     },
   ]}
 >
-  -
+  - Configure Fauna to accept JWTs from Clerk
+  - Create a JWT template in Clerk to generate Fauna JWTs
+  - Use the Fauna JWTs to authenticate Fauna queries in your Next.js app
 </TutorialHero>
 
 > [!IMPORTANT]
@@ -28,7 +30,7 @@ Integrating Fauna with Clerk gives you the benefits of using a Fauna database wh
 This guide will walk you through the steps to integrate Fauna with Clerk in your Next.js app.
 
 <Steps>
-  ### Get your Clerk publishable key and JWKS URL
+  ### Get your Clerk Frontend API URL and JWKS URL
 
   <SignedIn>
     Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
@@ -37,16 +39,18 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
   <SignedOut>
     1. Navigate to the Clerk Dashboard.
     1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
-    1. In the **Quick Copy** section, copy your Clerk publishable key.
+    1. In the left sidebar, select **Show API URLs**.
+    1. Copy the **Frontend API URL**.
     1. In the left sidebar, select **Show JWT public key**.
     1. Copy the **JWKS URL**.
+    1. Paste your keys into your `.env.local` file.
 
     The final result should resemble the following:
   </SignedOut>
 
   ```env {{ filename: '.env.local' }}
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_JWKS_URL={{jwks_url}}
+  NEXT_PUBLIC_CLERK_FAPI_URL={{fapi_url}}
+  NEXT_PUBLIC_CLERK_JWKS_URL={{jwks_url}}
   ```
 
   ### Configure Fauna
@@ -56,7 +60,7 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
   1. Fill out the form:
      - Enter a **Name** for the access provider, such as Clerk.
      - Copy and save the **Audience** URL. You will need this later.
-     - In **Issuer**, paste the Clerk publishable key you copied in the previous step.
+     - In **Issuer**, paste the Clerk **Frontend API URL** you copied in the previous step. Do not include a trailing slash (`/`).
      - In **JWKS Endpoint**, paste the Clerk **JWKS URL** you copied in the previous step.
      - Select **Create**.
   1. Select the access provider that you just created.
@@ -67,7 +71,7 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
        issuer "..."
        jwks_uri "..."
 
-       // Adds a user-defined role to JWTs created by the access provider.
+       // Adds a user-defined role to Clerk JWTs.
        role <YOUR_ROLE>
      }
      ```
@@ -75,7 +79,7 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
 
   ### Create a JWT template in Clerk
 
-  Clerk's JWT templates allow you to generate a new valid Fauna authentication token for each signed in user. These tokens allow authenticated users to access your data with Fauna's API.
+  Clerk's JWT templates allow you to generate a new valid Fauna authentication token (JWT) for each signed in user. These tokens allow authenticated users to access your data with Fauna's API.
 
   To create a JWT template for Fauna:
 
@@ -84,7 +88,7 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
   1. Select the **New template** button, then select **Fauna** from the list of options.
   1. Configure your template:
      - The value of the **Name** field will be required when using the template in your code. For this tutorial, name it `fauna`.
-     - You can leave all other fields at their default settings or customize them to your needs. See the [JWT template guide](/docs/backend-requests/making/jwt-templates#creating-a-template) to learn more about these settings.
+     - You can leave all other fields as their default settings or customize them to your needs. See the [JWT template guide](/docs/backend-requests/making/jwt-templates#creating-a-template) to learn more about these settings.
      - In the **Claims** section, set the `aud` claim to the **Audience URL** you copied from Fauna in Step 2. The URL format should be `https://db.fauna.com/db/<YOUR_FAUNA_DB_ID>`. You can include additional claims if you’d like, but `aud` is the only required one. [Shortcodes](/docs/backend-requests/making/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
      - Select **Save** from the notification bubble to complete setup.
 
@@ -106,26 +110,41 @@ This guide will walk you through the steps to integrate Fauna with Clerk in your
     ```
   </CodeBlockTabs>
 
-  ### Authenticate queries in your Next.js app
+  ### Authenticate Fauna queries in your Next.js app
 
   You can now create Fauna JWTs in Clerk using the JWT template you created in the previous step. Generate the Fauna JWT by calling Clerk's [`useAuth().getToken`](/docs/references/react/use-auth) method, and use it to authenticate with Fauna as an end user, as shown in the following example:
 
-  ```jsx
+  ```jsx {{ filename: 'app/page.tsx' }}
+  'use client'
+
   import React from 'react'
   import { useAuth } from '@clerk/nextjs'
   import { Client, fql } from 'fauna'
 
   const Example = () => {
-    const { getToken } = useAuth()
     const [message, setMessage] = React.useState('')
+    // The `useAuth()` hook is used to get the `getToken()` method.
+    const { getToken } = useAuth()
 
+    // Create a function to make a query to Fauna.
     const makeQuery = async () => {
       let client
+
       try {
-        const secret = await getToken({ template: '<your-template-name>' })
-        client = new Client({ secret: secret })
+        // Get the custom Fauna token from Clerk.
+        const clerkToken = await getToken({ template: 'fauna' })
+
+        if (!clerkToken) {
+          setMessage('No token found')
+          return
+        }
+
+        // Initialize a new Fauna client with the Clerk token.
+        client = new Client({ clerkToken: clerkToken })
+
+        // Make a query to Fauna.
         const response = await client.query(fql`'Hello World!'`)
-        setMessage(response)
+        setMessage(JSON.stringify(response))
       } catch (error) {
         console.error(error)
         setMessage('Error occurred')

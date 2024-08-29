@@ -55,12 +55,51 @@ If your provider returns claims in a non-standard format:
 
 ## Handling edge cases
 
-For providers requiring complex integration:
+Sometimes [attribute mapping](#attribute-mapping) isn't enough to get a provider working. For example, the call to the **User info URL** might require additional credentials or API calls. In these instances you should implement a proxy between Clerk and the provider to handle these transformations. The proxy will then be set as the **User info URL**.
 
-1. Consider implementing a proxy between Clerk and the provider.
-1. Use the proxy to handle transformations or complex API calls.
-1. Set the user info endpoint URL to your proxy.
-1. Respond to Clerk with properly formatted claims after processing provider data.
+The proxy receives the request from Clerk (which contains an `Authorization` header) and should return a JSON object which you can use for attribute mapping.
+
+### Example: Hono with Cloudflare Workers
+
+1. Initialize a new [Hono + Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers) project
+
+1. Implement your proxy logic, e.g. making an additional API call. Here's a minimal example:
+
+   ```ts {{ filename: 'src/index.ts' }}
+   import { Hono } from 'hono'
+
+   const app = new Hono()
+
+   app.get('/', async (c) => {
+     const authorization = c.req.header('authorization')
+
+     const userRes = await fetch('https://api.com/user', {
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: authorization,
+         'api-key': 'some-api-key',
+       },
+     })
+
+     const user = await userRes.json()
+
+     return c.json({
+       uuid: user.uuid,
+       avatar_url: user.avatar,
+       name: user.name,
+       username: user.username,
+       slug: user.id.slug,
+     })
+   })
+
+   export default app
+   ```
+
+1. Deploy your proxy
+
+1. Set the URL of the deployed Cloudflare worker as the **User info URL**
+
+1. Map the returned claim format of the proxy to the respective attributes in the **Attribute mapping** section
 
 ## References
 

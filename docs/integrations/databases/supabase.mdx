@@ -327,13 +327,14 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to demonstrate how to integrate Supabase with Clerk in a **server-side rendered** application.
 
-      The `createClerkSupabaseClient()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
+      The `createClerkSupabaseClientSsr()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
 
       ```ts {{ filename: 'src/app/ssr/client.ts' }}
       import { auth } from '@clerk/nextjs/server'
       import { createClient } from '@supabase/supabase-js'
 
-      export function createClerkSupabaseClient() {
+      export function createClerkSupabaseClientSsr() {
+        // The `useAuth()` hook is used to access the `getToken()` method
         const { getToken } = auth()
 
         return createClient(
@@ -341,7 +342,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
           process.env.NEXT_PUBLIC_SUPABASE_KEY!,
           {
             global: {
-              // Get the Supabase token with a custom fetch method
+              // Get the custom Supabase token from Clerk
               fetch: async (url, options = {}) => {
                 const clerkToken = await getToken({
                   template: 'supabase',
@@ -363,24 +364,18 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       }
       ```
 
-      The `client` can be used to both query data on page load and within server actions, which are callable from server and client components.
+      The following files render the `/ssr` page and handle the "Add task" form submission. Use the following tabs to view the code for each page.
 
-      <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx', 'TaskRow.tsx']}>
+      <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx']}>
         ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
         import { createClerkSupabaseClientSsr } from './client'
-        import TaskRow from './TaskRow'
         import AddTaskForm from './AddTaskForm'
 
-        // Register the `Clerk` object  the global window fix TypeScript errors
-        declare global {
-          interface Window {
-            Clerk: any
-          }
-        }
-
         export default async function Home() {
-          const client = await createClerkSupabaseClientSsr()
-          // Query the 'tasks' table to render the page
+          // Use the custom Supabase client you created
+          const client = createClerkSupabaseClientSsr()
+
+          // Query the 'tasks' table to render the list of tasks
           const { data, error } = await client.from('tasks').select()
           if (error) {
             throw error
@@ -388,13 +383,12 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
           const tasks = data
 
           return (
-            <div className="flex flex-col">
+            <div>
+              <h1>Tasks</h1>
+
+              <div>{tasks?.map((task: any) => <p>{task.name}</p>)}</div>
+
               <AddTaskForm />
-              <div className="flex flex-col gap-2 p-2">
-                {tasks?.map((task: any) => (
-                  <TaskRow key={task.id} id={task.id} name={task.name} is_done={task.is_done} />
-                ))}
-              </div>
             </div>
           )
         }
@@ -403,34 +397,26 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
         ```ts {{ filename: 'src/app/ssr/actions.ts' }}
         'use server'
 
-        import { createClerkSupabaseClient } from './client'
+        import { createClerkSupabaseClientSsr } from './client'
 
-        const client = createClerkSupabaseClient()
+        const client = createClerkSupabaseClientSsr()
 
         export async function addTask(name: string) {
-          await client.from('tasks').insert({
-            name,
-          })
-        }
-
-        export async function deleteTask(taskId: number) {
-          await client.from('tasks').delete().eq('id', taskId)
-        }
-
-        export async function setTaskState(taskId: number, isDone: boolean) {
-          await client
-            .from('tasks')
-            .update({
-              is_done: isDone,
+          try {
+            const response = await client.from('tasks').insert({
+              name,
             })
-            .eq('id', taskId)
+
+            console.log('Task successfully added!', response)
+          } catch (error: any) {
+            console.error('Error adding task:', error.message)
+            throw new Error('Failed to add task')
+          }
         }
         ```
 
         ```ts {{ filename: 'src/app/ssr/AddTaskForm.tsx' }}
         'use client'
-        import { Button } from '@/components/ui/button'
-        import { Input } from '@/components/ui/input'
         import React, { useState } from 'react'
         import { addTask } from './actions'
         import { useRouter } from 'next/navigation'
@@ -446,77 +432,20 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
           }
 
           return (
-            <form action={onSubmit} className="flex gap-2">
-              <Input
+            <form action={onSubmit}>
+              <input
                 autoFocus
                 type="text"
                 name="name"
+                placeholder="Enter new task"
                 onChange={(e) => setTaskName(e.target.value)}
                 value={taskName}
-                placeholder="What do you need to do?"
               />
-              <Button type="submit" className="disabled:cursor-not-allowed">
-                Add
-              </Button>
+              <button type="submit">Add</button>
             </form>
           )
         }
         export default AddTaskForm
-        ```
-
-        ```ts {{ filename: 'src/app/ssr/TaskRow.tsx' }}
-        'use client'
-        import { Button } from '@/components/ui/button'
-        import { DeleteIcon } from 'lucide-react'
-        import React from 'react'
-        import { FiCheckCircle, FiCircle } from 'react-icons/fi'
-        import { deleteTask, setTaskState } from './actions'
-        import { useRouter } from 'next/navigation'
-
-        type Props = {
-          id: number
-          name: string
-          is_done: boolean
-        }
-
-        function TaskRow({ id, name, is_done }: Props) {
-          const router = useRouter()
-
-          async function onCheckClicked(taskId: number, isDone: boolean) {
-            // Update a task when its completed
-            await setTaskState(taskId, isDone)
-            router.refresh()
-          }
-
-          async function onDeleteClicked(taskId: number) {
-            // Delete a task from the database
-            await deleteTask(taskId)
-            router.refresh()
-          }
-          return (
-            <div
-              className={`group flex items-center transition-all w-full${is_done ? 'text-slate-500' : ''}`}
-            >
-              <Button
-                variant="link"
-                className="text-lg text-inherit disabled:cursor-not-allowed"
-                onClick={() => onCheckClicked(id, !is_done)}
-              >
-                {is_done ? <FiCheckCircle /> : <FiCircle />}
-              </Button>
-              {name}
-              <Button
-                variant="link"
-                className="text-lg text-inherit hover:text-red-500"
-                onClick={() => onDeleteClicked(id)}
-              >
-                <DeleteIcon />
-              </Button>
-            </div>
-          )
-        }
-
-        export default TaskRow
         ```
       </CodeBlockTabs>
     </Tab>

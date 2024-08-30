@@ -64,11 +64,16 @@ Add the following keys to your `.env` file. These keys can always be retrieved f
 
   To configure Clerk in your TanStack application, you will need to update the SSR entrypoint.
 
-  ```tsx {{ filename: 'app/ssr.tsx' }}
+  ```tsx {{ filename: 'app/ssr.tsx', ins: [4, [11,14]], del: [[6,9]] }}
   import { createStartHandler, defaultStreamHandler } from '@tanstack/start/server';
   import { getRouterManifest } from '@tanstack/start/router-manifest';
   import { createRouter } from './router';
   import { createClerkHandler } from '@clerk/tanstack-start/server';
+
+  export default createStartHandler({
+    createRouter,
+    getRouterManifest,
+  })(defaultStreamHandler);
 
   export default createClerkHandler(createStartHandler({
     createRouter,
@@ -80,16 +85,7 @@ Add the following keys to your `.env` file. These keys can always be retrieved f
 
   All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context.
 
-  You can control which content signed in and signed out users can see with Clerk's [prebuilt components](/docs/components/overview). To get started, create a header for your users to sign in or out. To do this, you will use:
-
-  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
-  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
-  - [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out of the box to show the avatar from the account the user is signed in with.
-  - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page or displays the sign-in modal.
-
-  Select your preferred router to learn how to make this data available across your entire app:
-
-  ```tsx {{ filename: 'app/routes/__root.tsx' }}
+  ```tsx {{ filename: 'app/routes/__root.tsx', ins: [11, 28, 32] }}
      import {
       Outlet,
       ScrollRestoration,
@@ -187,36 +183,36 @@ Add the following keys to your `.env` file. These keys can always be retrieved f
 
   To protect your routes, you can use the `beforeLoader` paired with server function to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
 
-  ```tsx {{ filename: 'app/routes/index.tsx' }}
+  ```tsx {{ filename: 'app/routes/index.tsx', prettier: false }}
   import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
   import { createServerFn } from '@tanstack/start'
   import { getAuth } from '@clerk/tanstack-start/server'
 
   const authStateFn = createServerFn('GET', async (_, { request }) => {
-  const { userId } = await getAuth(request)
+    const { userId } = await getAuth(request)
 
-  if (!userId) {
-    throw redirect({
-      to: '/sign-in',
-    })
-  }
+    if (!userId) {
+      throw redirect({
+        to: '/sign-in',
+      })
+    }
 
-  return { userId }
+    return { userId }
   })
 
   export const Route = createFileRoute('/')({
-  component: Home,
-  beforeLoad: await authStateFn(),
-  loader: async ({ context }) => {
-    return { userId: context.userId }
-  },
+    component: Home,
+    beforeLoad: await authStateFn(),
+    loader: async ({ context }) => {
+      return { userId: context.userId }
+    },
   })
 
   function Home() {
-  const router = useRouter()
-  const state = Route.useLoaderData()
+    const router = useRouter()
+    const state = Route.useLoaderData()
 
-  return <h1>Welcome your id is {state.userId}!</h1>
+    return <h1>Welcome your id is {state.userId}!</h1>
   }
   ```
 </Steps>

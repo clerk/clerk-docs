@@ -1,9 +1,7 @@
 ---
-title: Use Clerk with Remix
+title: Remix Quickstart
 description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your Remix application.
 ---
-
-# Use Clerk with Remix
 
 <TutorialHero
   framework="remix"
@@ -19,14 +17,19 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
       title: "Set up a Clerk application",
       link: "/docs/quickstarts/setup-clerk",
       icon: "clerk",
+    },
+    {
+      title: "Create a Remix application",
+      link: "https://remix.run/docs/en/main/start/quickstart",
+      icon: "remix",
     }
   ]}
 >
   - Install `@clerk/remix`
-  - Set up your environment variables
-  - Configure rootAuthLoader
-  - Configure ClerkApp
-  - Protecting your pages
+  - Set your Clerk API keys
+  - Configure `rootAuthLoader`
+  - Configure `ClerkApp`
+  - Protect your pages
 </TutorialHero>
 
 Learn how to use Clerk to quickly and easily add secure authentication and user management to your Remix application. This guide assumes that you are using Remix v2 or later.
@@ -40,26 +43,35 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   Once you have a Remix application ready, you need to install Clerk's Remix SDK. This gives you access to our prebuilt components and hooks for Remix applications.
 
   <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
-    ```bash {{ prettier: false, filename: 'terminal' }}
+    ```bash {{ filename: 'terminal' }}
     npm install @clerk/remix
     ```
 
-    ```bash {{ prettier: false, filename: 'terminal' }}
+    ```bash {{ filename: 'terminal' }}
     yarn add @clerk/remix
     ```
 
-    ```bash {{ prettier: false, filename: 'terminal' }}
+    ```bash {{ filename: 'terminal' }}
     pnpm add @clerk/remix
     ```
   </CodeBlockTabs>
 
-  ### Set environment variables
+  ### Set your Clerk API keys
 
-  Below is an example of an `.env` file.
+  <SignedIn>
+    Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+  </SignedIn>
 
-  **Pro tip!** If you are signed into your Clerk Dashboard, your secret key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the Clerk Dashboard on the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page.
+  <SignedOut>
+    1. Navigate to the Clerk Dashboard.
+    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+    1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+    1. Paste your keys into your `.env.local` file.
 
-  ```env {{ prettier: false, filename: '.env' }}
+    The final result should resemble the following:
+  </SignedOut>
+
+  ```env {{ filename: '.env.local' }}
   CLERK_PUBLISHABLE_KEY={{pub_key}}
   CLERK_SECRET_KEY={{secret}}
   ```
@@ -68,27 +80,25 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
 
   To configure Clerk in your Remix application, you will need to update your root loader. This will enable you to have access to authentication state in any Remix routes.
 
-  ```tsx {{ prettier: false, filename: 'app/root.tsx' }}
-  import type { MetaFunction, LoaderFunction } from "@remix-run/node";
-  import {
-    Links,
-    Meta,
-    Outlet,
-    Scripts,
-    ScrollRestoration,
-  } from "@remix-run/react";
+  Update your `root.tsx` file with the following code:
+
+  ```tsx {{ filename: 'app/root.tsx', mark: [1, [4, 5], [15, 16]] }}
+  import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+  import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
 
   // Import rootAuthLoader
-  import { rootAuthLoader } from "@clerk/remix/ssr.server";
+  import { rootAuthLoader } from '@clerk/remix/ssr.server'
 
-  export const meta: MetaFunction = () => ([{
-    charset: "utf-8",
-    title: "New Remix App",
-    viewport: "width=device-width,initial-scale=1",
-  }]);
+  export const meta: MetaFunction = () => [
+    {
+      charset: 'utf-8',
+      title: 'New Remix App',
+      viewport: 'width=device-width,initial-scale=1',
+    },
+  ]
 
   // Export as the root route loader
-  export const loader: LoaderFunction = (args) => rootAuthLoader(args);
+  export const loader: LoaderFunction = (args) => rootAuthLoader(args)
 
   export function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -103,57 +113,54 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
           <Scripts />
         </body>
       </html>
-    );
+    )
   }
 
   export default function App() {
-    return <Outlet />;
+    return <Outlet />
   }
   ```
 
-  If you need to load in additonal data, you can pass your loader directly to the `rootAuthLoader`.
+  If you need to load in additional data, you can pass your loader directly to the `rootAuthLoader`.
 
-  ```tsx {{ prettier: false, filename: 'app/root.tsx' }}
+  ```tsx {{ filename: 'app/root.tsx' }}
   // Imports
 
-
-  export const loader: LoaderFunction = args => {
+  export const loader: LoaderFunction = (args) => {
     return rootAuthLoader(args, ({ request }) => {
-      const { sessionId, userId, getToken } = request.auth;
-      // fetch data
-      return { yourData: 'here' };
-    });
-  };
+      const { sessionId, userId, getToken } = request.auth
+      // Add logic to fetch data
+      return { yourData: 'here' }
+    })
+  }
 
-  // Additonal application code
+  // Additional application code
   ```
 
   ### Configure `ClerkApp`
 
   Clerk provides a `ClerkApp` wrapper to provide the authentication state to your React tree. This helper works with Remix SSR out-of-the-box and follows the "higher-order component" paradigm.
 
-  ```tsx {{ prettier: false, filename: 'app/root.tsx' }}
-  import type { MetaFunction, LoaderFunction } from "@remix-run/node";
+  Update your `root.tsx` file with the following code:
 
-  import {
-    Links,
-    Meta,
-    Outlet,
-    Scripts,
-    ScrollRestoration,
-  } from "@remix-run/react";
+  ```tsx {{ filename: 'app/root.tsx', mark: [[6, 7], 39] }}
+  import type { MetaFunction, LoaderFunction } from '@remix-run/node'
 
-  import { rootAuthLoader } from "@clerk/remix/ssr.server";
+  import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+
+  import { rootAuthLoader } from '@clerk/remix/ssr.server'
   // Import ClerkApp
-  import { ClerkApp } from "@clerk/remix";
+  import { ClerkApp } from '@clerk/remix'
 
-  export const meta: MetaFunction = () => ([{
-    charset: "utf-8",
-    title: "New Remix App",
-    viewport: "width=device-width,initial-scale=1",
-  }]);
+  export const meta: MetaFunction = () => [
+    {
+      charset: 'utf-8',
+      title: 'New Remix App',
+      viewport: 'width=device-width,initial-scale=1',
+    },
+  ]
 
-  export const loader: LoaderFunction = (args) => rootAuthLoader(args);
+  export const loader: LoaderFunction = (args) => rootAuthLoader(args)
 
   export function Layout({ children }: { children: React.ReactNode }) {
     return (
@@ -168,23 +175,31 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
           <Scripts />
         </body>
       </html>
-    );
+    )
   }
 
   function App() {
-    return <Outlet />;
+    return <Outlet />
   }
 
-  export default ClerkApp(App);
+  export default ClerkApp(App)
   ```
 
-  ### Protecting your pages
+  ### Protect your pages
 
   #### Client side
 
-  Clerk offers [Control Components](/docs/components/overview) that allow you to protect your pages. These components are used to control the visibility of your pages based on the user's authentication state.
+  To protect your pages on the client side, you can use Clerk's [prebuilt control components](/docs/components/overview) that control the visibility of content based on the user's authentication state.
 
-  ```tsx {{ prettier: false, filename: 'routes/_index.tsx' }}
+  The following example uses the following components:
+
+  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  - [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out of the box to show the avatar from the account the user is signed in with.
+  - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page. For this example, it links to the [Account Portal sign-in page.](/docs/customization/account-portal/overview)
+  - [`<SignUpButton />`](/docs/components/unstyled/sign-up-button): An unstyled component that links to the sign-up page or displays the sign-up modal, depending on which `mode` you have set. For this example, it links to the [Account Portal sign-up page.](/docs/customization/account-portal/overview)
+
+  ```tsx {{ filename: 'routes/_index.tsx' }}
   import {
     SignInButton,
     SignOutButton,
@@ -192,7 +207,7 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
     SignedIn,
     SignedOut,
     UserButton,
-  } from "@clerk/remix";
+  } from '@clerk/remix'
 
   export default function Index() {
     return (
@@ -218,42 +233,40 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
           </div>
         </SignedOut>
       </div>
-    );
+    )
   }
   ```
 
   #### Server side
 
-  To protect your routes, you can use the the loader to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
+  To protect your routes, use the [`getAuth()`](/docs/references/nextjs/get-auth) function in your loader. This function retrieves the authentication state from the request object, returning an `Auth` object that includes the `userId`, allowing you to determine if the user is authenticated.
 
-  ```tsx {{ prettier: false, filename: 'routes/_index.tsx' }}
-  import { UserButton } from "@clerk/remix";
-  import { getAuth } from "@clerk/remix/ssr.server";
-  import { LoaderFunction, redirect } from "@remix-run/node";
+  ```tsx {{ filename: 'routes/_index.tsx' }}
+  import { UserButton } from '@clerk/remix'
+  import { getAuth } from '@clerk/remix/ssr.server'
+  import { LoaderFunction, redirect } from '@remix-run/node'
 
   export const loader: LoaderFunction = async (args) => {
-    const { userId } = await getAuth(args);
+    const { userId } = await getAuth(args)
     if (!userId) {
-      return redirect("/sign-in");
+      return redirect('/sign-in')
     }
-    return {};
+    return {}
   }
 
   export default function Index() {
     return (
       <div>
-          <h1>Index route</h1>
-          <p>You are signed in!</p>
-          <UserButton />
+        <h1>Index route</h1>
+        <p>You are signed in!</p>
+        <UserButton />
       </div>
-    );
+    )
   }
   ```
 </Steps>
 
-### Next steps
-
-Now that you have an application integrated with Clerk, you will want to read the following documentation:
+## Next steps
 
 <Cards>
   - [Create custom sign-up and sign-in pages](/docs/references/remix/custom-signup-signin-pages)
@@ -266,11 +279,11 @@ Now that you have an application integrated with Clerk, you will want to read th
 
   ---
 
-  - [Customization & Localization](/docs/customization/overview)
+  - [Customization & localization](/docs/customization/overview)
   - Learn how to customize and localize the Clerk components.
 
   ---
 
-  - [Authentication Components](/docs/components/authentication/sign-in)
-  - Learn more about all our authentication components.
+  - [Clerk components](/docs/components/overview)
+  - Learn more about Clerk's prebuilt components.
 </Cards>

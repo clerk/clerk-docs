@@ -387,5 +387,44 @@ When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-b
 openssl rand --hex 32
 ```
 
+For multi-tenant applications where you need to provide different Clerk keys depending on the incoming request, you can use a function to dynamically set these keys. Here's an example:
+
+```tsx {{ filename: 'middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+// Get the tenant from the request
+function getTenant(req: Request) {
+  const host = req.headers.get('host')
+  const subdomain = host?.split('.')[0]
+  return subdomain
+}
+
+// Get Clerk keys for the tenant
+// You would typically fetch these from a external store or environment variables.
+function getClerkKeys(tenant: string) {
+  const tenantKeys = {
+    tenant1: {
+      publishableKey: 'pk_tenant1...',
+      secretKey: 'sk_tenant1...',
+    },
+    tenant2: {
+      publishableKey: 'pk_tenant2...',
+      secretKey: 'sk_tenant2...',
+    },
+  }
+  return tenantKeys[tenant] || tenantKeys.default
+}
+
+export default clerkMiddleware((auth, req) => {
+  const tenant = getTenant(req)
+  const { publishableKey, secretKey } = getClerkKeys(tenant)
+
+  return {
+    publishableKey,
+    secretKey,
+  }
+})
+```
+
 > [!NOTE]
 > Dynamic keys are not accessible on the client-side.

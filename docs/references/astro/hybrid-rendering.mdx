@@ -1,0 +1,71 @@
+---
+title: Astro hybrid rendering
+description: Clerk's Astro SDK supports Astro's on-demand rendering output modes (`server` and `hybrid`).
+---
+
+Astro's on-demand rendering output modes (`server` and `hybrid`) allow you to pre-render certain pages while keeping others server-rendered. The Clerk Astro SDK supports these output modes out-of-the-box; no additional configuration is required. However, you may need to make some adjustments to your code to ensure that Clerk's [control components](/docs/components/overview#what-are-control-components) are rendered correctly in hybrid mode.
+
+## Server output mode
+
+In `server` output mode, pages and control components are server-rendered by default, but you can opt-in to pre-rendering specific pages by adding `export const prerender = true` to the page. When you opt-in to pre-rendering a page, you must add `isStatic={true}` to any control components used on that page. This specifies that the component should use the client-side version, which relies on [client nanostores](/docs/references/astro/auth-store).
+
+The following example shows how to opt-in to pre-rendering a page and specify that the control components used on that page should use the client-side version.
+
+```astro {{ filename: 'src/pages/index.astro' }}
+---
+export const prerender = true
+---
+
+<SignedIn isStatic={true}> You are signed in! </SignedIn>
+```
+
+## Hybrid output mode
+
+In `hybrid` output mode, pages and control components are pre-rendered by default, but you can opt-out of pre-rendering for specific pages by adding `export const prerender = false`. When you opt-out of pre-rendering a page, you must add the `isStatic={false}` prop to any control components used on that page. This specifies that the component should use the server-side version which relies on the [locals](/docs/references/astro/locals) injected by the middleware.
+
+The following example shows how to opt-out of pre-rendering a page and specify that the control components used on that page should use the server-side version.
+
+```astro {{ filename: 'src/pages/index.astro' }}
+---
+export const prerender = false
+---
+
+<SignedIn isStatic={false}> You are signed in! </SignedIn>
+```
+
+## Styling considerations
+
+If you pass `isStatic={true}` to a control component and you want to style the component, be aware that the component is wrapped in a custom element.
+
+For example, say you were trying to align the content inside a `<SignedIn>` component using `flex`, as shown in the following code:
+
+```jsx
+<div className="flex items-center">
+  <SignedIn isStatic={true}>
+    <span>You are signed in!</span>
+  </SignedIn>
+  <span>This content is always visible.</span>
+</div>
+```
+
+It would be rendered as:
+
+```html {{ mark: [2, 4] }}
+<div className="flex items-center">
+  <clerk-signed-in>
+    <span>You are signed in!</span>
+  </clerk-signed-in>
+  <span>This content is always visible.</span>
+</div>
+```
+
+The `clerk-signed-in` wrapper wouldn't be a flex item by default, potentially misaligning the content. To fix this, you would need to apply flex properties to the `<SignedIn>` component itself by using a selector, as shown in the following example:
+
+```jsx {{ mark: [2] }}
+<div class="flex items-center">
+  <SignedIn isStatic={true} class="flex items-center">
+    <span>User</span>
+  </SignedIn>
+  <span>Always visible</span>
+</div>
+```

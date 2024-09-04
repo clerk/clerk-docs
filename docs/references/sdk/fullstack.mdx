@@ -3,8 +3,6 @@ title: Fullstack SDK
 description: A reference for implementing a fullstack Clerk SDK
 ---
 
-# Fullstack SDK
-
 A fullstack SDK combines the [frontend-only SDK](/docs/references/sdk/frontend-only) and [backend-only SDK](/docs/references/sdk/backend-only) into one. A fullstack SDK is necessary for frameworks that support multiple rendering strategies (SSR, SSG, etc.), middleware, data fetching, and more. Examples of such frameworks would be Next.js or Rails.
 
 ## Expected features
@@ -27,5 +25,43 @@ A fullstack SDK combines the [frontend-only SDK](/docs/references/sdk/frontend-o
 
 Please check out the respective [frontend-only SDK](/docs/references/sdk/frontend-only) and [backend-only SDK](/docs/references/sdk/backend-only) implementation instructions.
 
+In addition to these instructions, you'll need to go through the following steps to support all required features.
+
 > [!NOTE]
 > If you're looking for a real-world example, have a look at [`@clerk/nextjs`](https://github.com/clerk/javascript/tree/main/packages/nextjs).
+
+<Steps>
+  ### Add handshake support
+
+  Inside your Clerk middleware, add checks for the `headers` on the `requestState`. Apply these headers to the `Response` and handle any existing `location` headers (e.g. redirects).
+
+  ```ts {{ filename: 'clerk-middleware.ts', mark: [[9, 20]] }}
+  import { clerkClient as defaultClerkClient } from './client.ts'
+
+  const clerkMiddleware = (options) => {
+    return async (context, next) => {
+      const clerkClient = options.clerkClient || defaultClerkClient
+
+      const requestState = await clerkClient.authenticateRequest(context.req)
+
+      if (requestState.headers) {
+        // This adds observability headers to the res
+        requestState.headers.forEach((value, key) => context.res.headers.append(key, value))
+
+        const locationHeader = requestState.headers.get('location')
+
+        if (locationHeader) {
+          return context.redirect(locationHeader, 307)
+        } else if (requestState.status === 'handshake') {
+          throw new Error('Clerk: unexpected handshake without redirect')
+        }
+      }
+
+      context.set('clerkAuth', requestState.toAuth())
+      context.set('clerk', clerkClient)
+
+      await next()
+    }
+  }
+  ```
+</Steps>

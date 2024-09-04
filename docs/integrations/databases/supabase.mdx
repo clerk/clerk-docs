@@ -3,8 +3,6 @@ title: Integrate Supabase with Clerk
 description: Learn how to integrate Clerk into your Supabase application.
 ---
 
-# Integrate Supabase with Clerk
-
 <TutorialHero
   beforeYouStart={[
     {
@@ -70,7 +68,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     </Tab>
 
     <Tab>
-      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**, then select **New query**. Paste the following into the editor:
+      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**, and paste the following into the editor:
          ```sql
          CREATE OR REPLACE FUNCTION requesting_user_id()
          RETURNS TEXT AS $$
@@ -80,7 +78,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
              )::text;
          $$ LANGUAGE SQL STABLE;
          ```
-      1. To execute the query and create the `requesting_user_id` function, select **Run**.
+      1. To execute the query and create the `requesting_user_id()` function, select **Run**.
     </Tab>
   </Tabs>
 
@@ -104,10 +102,11 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     </Tab>
 
     <Tab>
-      To create the `tasks` table and enable RLS on it, run the following two queries:
+      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**.
+      1. To create the `"tasks"` table and enable RLS on it, run the following two queries:
 
       ```sql
-      -- Create a 'tasks' table
+      -- Create a "tasks" table
       create table tasks(
         id serial primary key,
         name text not null,
@@ -115,7 +114,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       );
 
       -- Enable RLS on the table
-      alter table `tasks` enable row level security;
+      alter table "tasks" enable row level security;
       ```
     </Tab>
   </Tabs>
@@ -149,20 +148,19 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     </Tab>
 
     <Tab>
-      In the sidebar, navigate to **SQL Editor**. Run the following queries to add policies for all statements issued on `tasks`:
+      1. In the sidebar of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**
+      1. Run the following queries to add policies for all statements issued on `"tasks"`:
 
       ```sql
       -- This policy will enforce that only tasks where the `user_id` matches the Clerk user ID are returned.
-      CREATE POLICY "Select tasks policy" ON "public"."tasks"
-      AS PERMISSIVE FOR SELECT
-      TO authenticated
-      USING (requesting_user_id() = user_id)
+      CREATE POLICY "Select tasks policy" ON "public"."tasks" AS PERMISSIVE FOR
+      SELECT
+        TO authenticated USING (requesting_user_id () = user_id);
 
       -- This policy will enforce the `user_id` field on INSERT statements matches the Clerk user ID.
-      CREATE POLICY "Insert tasks policy" ON "public"."tasks"
-      AS PERMISSIVE FOR INSERT
-      TO authenticated
-      WITH CHECK (requesting_user_id() = user_id)
+      CREATE POLICY "Insert tasks policy" ON "public"."tasks" AS PERMISSIVE FOR INSERT TO authenticated
+      WITH
+        CHECK (requesting_user_id () = user_id);
       ```
     </Tab>
   </Tabs>
@@ -329,13 +327,14 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to demonstrate how to integrate Supabase with Clerk in a **server-side rendered** application.
 
-      The `createClerkSupabaseClient()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
+      The `createClerkSupabaseClientSsr()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
 
       ```ts {{ filename: 'src/app/ssr/client.ts' }}
       import { auth } from '@clerk/nextjs/server'
       import { createClient } from '@supabase/supabase-js'
 
-      export function createClerkSupabaseClient() {
+      export function createClerkSupabaseClientSsr() {
+        // The `useAuth()` hook is used to access the `getToken()` method
         const { getToken } = auth()
 
         return createClient(
@@ -343,7 +342,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
           process.env.NEXT_PUBLIC_SUPABASE_KEY!,
           {
             global: {
-              // Get the Supabase token with a custom fetch method
+              // Get the custom Supabase token from Clerk
               fetch: async (url, options = {}) => {
                 const clerkToken = await getToken({
                   template: 'supabase',
@@ -365,79 +364,90 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       }
       ```
 
-      The client can be used to query data on page load.
+      The following files render the `/ssr` page and handle the "Add task" form submission. Use the following tabs to view the code for each page.
 
-      ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
-      import { Input } from '@/components/ui/input'
-      import { Button } from '@/components/ui/button'
-      import { createClerkSupabaseClient } from './client'
-      import TaskRow from './TaskRow'
+      <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx']}>
+        ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
+        import { createClerkSupabaseClientSsr } from './client'
+        import AddTaskForm from './AddTaskForm'
 
-      // Register the `Clerk` object  the global window fix TypeScript errors
-      declare global {
-        interface Window {
-          Clerk: any
-        }
-      }
+        export default async function Home() {
+          // Use the custom Supabase client you created
+          const client = createClerkSupabaseClientSsr()
 
-      const client = createClerkSupabaseClient()
+          // Query the 'tasks' table to render the list of tasks
+          const { data, error } = await client.from('tasks').select()
+          if (error) {
+            throw error
+          }
+          const tasks = data
 
-      export default async function Home() {
-        // Query the "tasks" table to render the page
-        const { data, error } = await client.from('tasks').select()
-        if (error) {
-          throw error
-        }
-        const tasks = data
+          return (
+            <div>
+              <h1>Tasks</h1>
 
-        async function onSubmit(formData: FormData) {
-          'use server'
-          const name = formData.get('name') as string
-          await client.from('tasks').insert({
-            name,
-          })
-        }
+              <div>{tasks?.map((task: any) => <p>{task.name}</p>)}</div>
 
-        return (
-          <div className="flex flex-col">
-            <form action={onSubmit} className="flex gap-2">
-              <Input autoFocus type="text" name="name" placeholder="What do you need to do?" />
-              <Button type="submit" className="disabled:cursor-not-allowed">
-                Add
-              </Button>
-            </form>
-            <div className="flex flex-col gap-2 p-2">
-              {tasks?.map((task: any) => (
-                <TaskRow key={task.id} id={task.id} name={task.name} is_done={task.is_done} />
-              ))}
+              <AddTaskForm />
             </div>
-          </div>
-        )
-      }
-      ```
+          )
+        }
+        ```
 
-      The client can also be used within server actions.
+        ```ts {{ filename: 'src/app/ssr/actions.ts' }}
+        'use server'
 
-      ```ts {{ filename: 'src/app/ssr/actions.ts' }}
-      'use server'
+        import { createClerkSupabaseClientSsr } from './client'
 
-      import { createClerkSupabaseClient } from './client'
+        const client = createClerkSupabaseClientSsr()
 
-      const client = createClerkSupabaseClient()
+        export async function addTask(name: string) {
+          try {
+            const response = await client.from('tasks').insert({
+              name,
+            })
 
-      export async function deleteTask(taskId: number) {
-        await client.from('tasks').delete().eq('id', taskId)
-      }
+            console.log('Task successfully added!', response)
+          } catch (error: any) {
+            console.error('Error adding task:', error.message)
+            throw new Error('Failed to add task')
+          }
+        }
+        ```
 
-      export async function setTaskState(taskId: number, isDone: boolean) {
-        await client
-          .from('tasks')
-          .update({
-            is_done: isDone,
-          })
-          .eq('id', taskId)
-      }
-      ```
+        ```ts {{ filename: 'src/app/ssr/AddTaskForm.tsx' }}
+        'use client'
+        import React, { useState } from 'react'
+        import { addTask } from './actions'
+        import { useRouter } from 'next/navigation'
+
+        function AddTaskForm() {
+          const [taskName, setTaskName] = useState('')
+          const router = useRouter()
+
+          async function onSubmit() {
+            await addTask(taskName)
+            setTaskName('')
+            router.refresh()
+          }
+
+          return (
+            <form action={onSubmit}>
+              <input
+                autoFocus
+                type="text"
+                name="name"
+                placeholder="Enter new task"
+                onChange={(e) => setTaskName(e.target.value)}
+                value={taskName}
+              />
+              <button type="submit">Add</button>
+            </form>
+          )
+        }
+        export default AddTaskForm
+        ```
+      </CodeBlockTabs>
     </Tab>
   </Tabs>
 

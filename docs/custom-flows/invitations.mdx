@@ -1,6 +1,6 @@
 ---
-title: Handle invitations
-description: Learn how to use Clerk's API to build a custom flows for handling application and organization invitations.
+title: Sign-up with application invitations
+description: Learn how to use Clerk's API to build a custom flows for handling application invitations.
 ---
 
 > [!WARNING]
@@ -8,19 +8,17 @@ description: Learn how to use Clerk's API to build a custom flows for handling a
 
 When a user visits an [invitation](/docs/users/invitations) link, and no custom redirect URL was specified, then they will be redirected to Clerk's [Account Portal sign-up page](/docs/customization/account-portal/hosted-pages#sign-up) and **their email address will be automatically verified.**
 
-{/* TODO: What happens if the user is already signed up? */}
-
 However, if you specified [a redirect URL when creating the invitation](/docs/users/invitations#redirect-url), you must handle the sign-up flow in your code for that page.
 
 This guide will demonstrate how to build a custom sign-up flow to handle application invitations.
 
 ## Create the sign-up flow
 
-Once the user visits the invitation link and is redirected to the specified URL, the URL will contain the query parameter `__clerk_ticket`, which contains the invitation token.
+Once the user visits the invitation link and is redirected to the specified URL, the query parameter `__clerk_ticket` will be appended to the URL. This query parameter contains the invitation token.
 
-To create a sign-up flow using the invitation token, you need to extract the token from the URL and pass it to the [`signUp.create`](/docs/references/javascript/sign-up/sign-up#create) method.
+For example, if the redirect URL was `https://www.example.com/accept-invitation`, the URL that the user would be redirected to would be `https://www.example.com/accept-invitation?__clerk_ticket=.....`.
 
-The following example demonstrates how to create a new sign-up using the invitation token. If there is no invitation token in the URL, the user will be shown a message indicating that they need an invitation to sign up for the application.
+To create a sign-up flow using the invitation token, you need to extract the token from the URL and pass it to the [`signUp.create()`](/docs/references/javascript/sign-up/sign-up#create) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
 
 <Tabs items={["Next.js", "JavaScript"]}>
   <Tab>
@@ -28,22 +26,31 @@ The following example demonstrates how to create a new sign-up using the invitat
     'use client'
 
     import * as React from 'react'
-    import { useSignUp } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+    import { useSignUp, useUser } from '@clerk/nextjs'
+    import { useSearchParams, useRouter } from 'next/navigation'
 
     export default function Page() {
+      const { user } = useUser()
+      const router = useRouter()
       const { isLoaded, signUp, setActive } = useSignUp()
       const [firstName, setFirstName] = React.useState('')
       const [lastName, setLastName] = React.useState('')
-      const router = useRouter()
+      const [password, setPassword] = React.useState('')
 
-      // Get the token from the query parameter
-      const param = '__clerk_ticket'
-      const ticket = new URL(window.location.href).searchParams.get(param)
+      // Handle signed-in users visiting this page
+      // This will also redirect the user once they finish the sign-up process
+      React.useEffect(() => {
+        if (user?.id) {
+          router.push('/')
+        }
+      }, [user])
 
-      // If there is no invitation token, restrict access to the sign-up page
-      if (!ticket) {
-        return <p>You need an invitation to sign up for this application.</p>
+      // Get the token from the query params
+      const token = useSearchParams().get('__clerk_ticket')
+
+      // If there is no invitation token, restrict access to this page
+      if (!token) {
+        return <p>No invitation token found.</p>
       }
 
       // Handle submission of the sign-up form
@@ -53,11 +60,7 @@ The following example demonstrates how to create a new sign-up using the invitat
         if (!isLoaded) return
 
         try {
-          if (!ticket) return null
-
-          // Optional: collect additional user information
-          const firstName = 'John'
-          const lastName = 'Doe'
+          if (!token) return null
 
           // Create a new sign-up with the supplied invitation token.
           // Make sure you're also passing the ticket strategy.
@@ -65,27 +68,25 @@ The following example demonstrates how to create a new sign-up using the invitat
           // automatically verified because of the invitation token.
           const signUpAttempt = await signUp.create({
             strategy: 'ticket',
-            ticket,
+            ticket: token,
             firstName,
             lastName,
+            password,
           })
 
-          // If verification was completed, set the session to active
-          // and redirect the user
+          // If the sign-up was completed, set the session to active
           if (signUpAttempt.status === 'complete') {
             await setActive({ session: signUpAttempt.createdSessionId })
-            router.push('/')
           } else {
             // If the status is not complete, check why. User may need to
             // complete further steps.
             console.error(JSON.stringify(signUpAttempt, null, 2))
           }
-        } catch (err: any) {
+        } catch (err) {
           console.error(JSON.stringify(err, null, 2))
         }
       }
 
-      // Display the initial sign-up form to capture optional sign-up info
       return (
         <>
           <h1>Sign up</h1>
@@ -108,6 +109,16 @@ The following example demonstrates how to create a new sign-up using the invitat
                 name="lastName"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="password">Enter password</label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
             <div>
@@ -141,6 +152,8 @@ The following example demonstrates how to create a new sign-up using the invitat
                 <input name="firstName" id="firstName" />
                 <label for="lastName">Enter last name</label>
                 <input name="lastName" id="lastName" />
+                <label for="password">Enter password</label>
+                <input name="password" id="password" />
                 <button type="submit">Continue</button>
               </form>
             </div>
@@ -169,7 +182,7 @@ The following example demonstrates how to create a new sign-up using the invitat
         } else {
           // Get the token from the query parameter
           const param = '__clerk_ticket'
-          const ticket = new URL(window.location.href).searchParams.get(param)
+          const token = new URL(window.location.href).searchParams.get(param)
 
           // Handle the sign-up form
           document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
@@ -178,14 +191,16 @@ The following example demonstrates how to create a new sign-up using the invitat
             const formData = new FormData(e.target)
             const firstName = formData.get('firstName')
             const lastName = formData.get('lastName')
+            const password = formData.get('password')
 
             try {
               // Start the sign-up process using the ticket method
               const signUpAttempt = await clerk.client.signUp.create({
                 strategy: 'ticket',
-                ticket,
+                ticket: token,
                 firstName,
                 lastName,
+                password,
               })
 
               // If sign-up was successful, set the session to active
@@ -196,10 +211,10 @@ The following example demonstrates how to create a new sign-up using the invitat
                 // complete further steps.
                 console.error(JSON.stringify(signUpAttempt, null, 2))
               }
-            } catch (error) {
+            } catch (err) {
               // See https://clerk.com/docs/custom-flows/error-handling
               // for more info on error handling
-              console.error(JSON.stringify(error, null, 2))
+              console.error(JSON.stringify(err, null, 2))
             }
           })
         }
@@ -225,6 +240,8 @@ The following example demonstrates how to create a new sign-up using the invitat
                 <input name="firstName" id="firstName" />
                 <label for="lastName">Enter last name</label>
                 <input name="lastName" id="lastName" />
+                <label for="password">Enter password</label>
+                <input name="password" id="password" />
                 <button type="submit">Continue</button>
               </form>
             </div>
@@ -253,7 +270,7 @@ The following example demonstrates how to create a new sign-up using the invitat
                 } else {
                   // Get the token from the query parameter
                   const param = '__clerk_ticket'
-                  const ticket = new URL(window.location.href).searchParams.get(param)
+                  const token = new URL(window.location.href).searchParams.get(param)
 
                   // Handle the sign-up form
                   document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
@@ -262,14 +279,16 @@ The following example demonstrates how to create a new sign-up using the invitat
                     const formData = new FormData(e.target)
                     const firstName = formData.get('firstName')
                     const lastName = formData.get('lastName')
+                    const password = formData.get('password')
 
                     try {
                       // Start the sign-up process using the ticket method
                       const signUpAttempt = await Clerk.client.signUp.create({
                         strategy: 'ticket',
-                        ticket,
+                        ticket: token,
                         firstName,
                         lastName,
+                        password,
                       })
 
                       // If sign-up was successful, set the session to active
@@ -280,10 +299,10 @@ The following example demonstrates how to create a new sign-up using the invitat
                         // complete further steps.
                         console.error(JSON.stringify(signUpAttempt, null, 2))
                       }
-                    } catch (error) {
+                    } catch (err) {
                       // See https://clerk.com/docs/custom-flows/error-handling
                       // for more info on error handling
-                      console.error(JSON.stringify(error, null, 2))
+                      console.error(JSON.stringify(err, null, 2))
                     }
                   })
                 }

@@ -1,6 +1,6 @@
 ---
-title: Integrate Instant with Clerk
-description: Learn how to integrate Clerk into your Instant application.
+title: Integrate InstantDB with Clerk
+description: Learn how to integrate Clerk into your InstantDB application.
 ---
 
 <TutorialHero
@@ -11,7 +11,7 @@ description: Learn how to integrate Clerk into your Instant application.
       icon: "clerk",
     },
     {
-      title: "Create an Instant database",
+      title: "Create an InstantDB account",
       link: "https://instantdb.com",
       icon: "cog-6-teeth",
     },
@@ -22,91 +22,112 @@ description: Learn how to integrate Clerk into your Instant application.
     },
   ]}
 >
-  - Use Clerk to authenticate with Instant.
+  - Configure your Clerk session token to include the `email` claim.
+  - Configure InstantDB to use your Clerk application.
+  - Integrate InstantDB into your Clerk application.
 </TutorialHero>
 
 > [!IMPORTANT]
-> Check out the [demo repo](https://github.com/clerk/clerk-instant-nextjs) for a full example of how to integrate Instant with Clerk in a Next.js app.
+> Check out the [demo repo](https://github.com/clerk/clerk-instantdb-nextjs) for a full example of how to integrate InstantDB with Clerk in a Next.js app.
 
-Integrating Instant with Clerk gives you the benefits of using an Instant database while leveraging Clerk's authentication, prebuilt components, and webhooks.
-This guide will walk you through the steps to integrate Instant with Clerk in your Next.js app.
+Integrating [InstantDB](https://www.instantdb.com/) with Clerk gives you the benefits of using an InstantDB database while leveraging Clerk's authentication, prebuilt components, and webhooks.
+
+This guide will walk you through the steps to integrate InstantDB with Clerk in your Next.js app.
 
 <Steps>
-  ### Include the `email` claim in your Clerk session
+  ### Configure your Clerk session token
 
-  1. Go to your Clerk dashboard, and select **[Sessions](https://dashboard.clerk.com/last-active?path=sessions)**.
-  1. In the **Customize session token** section, click **Edit**
+  InstantDB uses Clerk's [session token](/docs/backend-requests/resources/session-tokens) to authenticate users. To use InstantDB with Clerk, you need to include the `email` claim in your session token.
 
-  Add the email claim to your session token:
-
-  ```json
-  {
-    "email": "{{user.primary_email_address}}"
-  }
-  ```
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=sessions).
+  1. In the navigation sidebar, select **Sessions**.
+  1. In the **Customize session token** section, select **Edit**.
+  1. Add the email claim to your session token:
+     ```json
+     {
+       "email": "{{user.primary_email_address}}"
+     }
+     ```
 
   You can have additional claims as long as the `email` claim is set to `{{user.primary_email_address}}`.
 
-  ### Get your Clerk Publishable key
+  ### Get your Clerk publishable key
 
-  1. In the Clerk dashboard, navigate to **[API keys](https://dashboard.clerk.com/last-active?path=api-keys)**,
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
+  1. In the navigation sidebar, select **API Keys**.
+  1. In the **Quick Copy** section, copy your Clerk publishable key.
 
-  Copy the **Publishable key**. It should start with `pk_`.
+  ### Configure InstantDB
 
-  ### Register your Clerk Publishable key with Instant
+  1. Navigate to the [InstantDB dashboard](https://www.instantdb.com/dash?t=auth).
+  1. Select the **Auth** tab.
+  1. Select **Setup Clerk**.
+  1. Add the publishable key you copied in the previous step.
+  1. Confirm the **The session token has the "email" claim.** message.
+  1. Select **Add Clerk app**.
 
-  1. Go to the Instant dashboard, navigate to the **[Auth](https://www.instantdb.com/dash?t=auth)** tab
+  ### Install the InstantDB library
 
-  Add a new clerk app with the **Publishable key** you copied.
+  Add the InstantDB library to your project.
 
-  ### Use Instant with Clerk in your code
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @instantdb/react
+    ```
 
-  Now that you have configured the integration, it's time to use Instant with Clerk in your code.
+    ```bash {{ filename: 'terminal' }}
+    yarn add @instantdb/react
+    ```
 
-  The following example:
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @instantdb/react
+    ```
+  </CodeBlockTabs>
 
-  - Uses Clerk's `getToken` helper to get the session for a signed in user
-  - Calls Instant's `db.auth.signInWithIdToken` with the session, to sign into Instant
+  ### Integrate InstantDB to your Clerk application
 
-  When you call `db.auth.signInWithIdToken`, Instant will verify that the session was signed by your Clerk app. If verified, Instant use the email in the session's claims to log in, lookup your user or create a new one.
+  To sign in to InstantDB with Clerk, you need to:
 
-  Be sure to call Instant's `db.auth.signOut` when you want to sign the user out.
+  - Initialize InstantDB with your Clerk publishable key.
+  - Use Clerk's `getToken()` helper to get the session for the user that is signed in to Clerk.
+  - Pass the session to InstantDB's `db.auth.signInWithIdToken()` method in order to sign in to InstantDB. When you call `db.auth.signInWithIdToken()`, InstantDB will verify that the session was signed by your Clerk app. If verified, InstantDB uses the email in the session's claims to sign in, lookup your user, or create a new one.
 
-  This example is written for Next.js App Router, but is supported by any React meta framework, such as Remix.
+  To sign out of the application, call both InstantDB's `db.auth.signOut()` method and Clerk's `signOut()` method.
 
-  ```tsx {{ filename: 'app/instant/page.tsx' }}
+  ```tsx {{ filename: 'app/page.tsx' }}
   'use client'
 
-  import { useAuth, ClerkProvider, SignInButton, SignedIn, SignedOut } from '@clerk/next'
+  import { useAuth } from '@clerk/nextjs'
   import { init } from '@instantdb/react'
   import { useEffect } from 'react'
 
-  // Your app id lives in https://instantdb.com/dash :)
-  const APP_ID = '__APP_ID__'
+  // Insert your app ID from https://instantdb.com/dash
+  const APP_ID = '<YOUR_APP_ID>'
+  // Use the Clerk client name that you set in the "Auth" tab of the InstantDB dashboard
+  const CLERK_CLIENT_NAME = 'clerk'
 
+  // Initialize InstantDB
   const db = init({ appId: APP_ID })
 
-  // Use the clerk client name you set in the "Auth" tab
-  const CLERK_CLIENT_NAME = 'REPLACE_ME'
-
-  function ClerkSignedInComponent() {
+  export default function Page() {
+    // Use `useAuth()` to get the `getToken()` and `signOut()` methods
     const { getToken, signOut } = useAuth()
 
+    // Create a function to sign in to InstantDB with the Clerk token
     const signInToInstantWithClerkToken = async () => {
-      // getToken gets the jwt from Clerk for your signed in user.
-      const idToken = await getToken()
+      // Get the JWT (token) from Clerk for your signed-in user
+      const token = await getToken()
 
-      if (!idToken) {
-        // No jwt, can't sign in to instant
+      if (!token) {
         return
       }
 
-      // Create a long-lived session with Instant for your clerk user
+      // Create a long-lived session with InstantDB for your Clerk user
       // It will look up the user by email or create a new user with
-      // the email address in the session token.
+      // the email provided in the session token
       db.auth.signInWithIdToken({
         clientName: CLERK_CLIENT_NAME,
-        idToken: idToken,
+        idToken: token,
       })
     }
 
@@ -119,18 +140,20 @@ This guide will walk you through the steps to integrate Instant with Clerk in yo
     if (isLoading) {
       return <div>Loading...</div>
     }
+
     if (error) {
-      return <div>Error signing in to Instant! {error.message}</div>
+      return <div>Error signing in to InstantDB! {error.message}</div>
     }
+
     if (user) {
       return (
         <div>
-          <p>Signed in with Instant through Clerk!</p>{' '}
+          <p>Signed in with InstantDB through Clerk!</p>{' '}
           <button
             onClick={() => {
-              // First sign out of Instant to clear the Instant session.
+              // First sign out of InstantDB to clear the InstantDB session
               db.auth.signOut().then(() => {
-                // Then sign out of Clerk to clear the Clerk session.
+                // Then, sign out of Clerk to clear the Clerk session
                 signOut()
               })
             }}
@@ -142,24 +165,9 @@ This guide will walk you through the steps to integrate Instant with Clerk in yo
     }
     return (
       <div>
-        <button onClick={signInToInstantWithClerkToken}>Sign in to Instant</button>
+        <button onClick={signInToInstantWithClerkToken}>Sign in to InstantDB</button>
       </div>
     )
   }
-
-  function App() {
-    return (
-      <ClerkProvider>
-        <SignedOut>
-          <SignInButton />
-        </SignedOut>
-        <SignedIn>
-          <ClerkSignedInComponent />
-        </SignedIn>
-      </ClerkProvider>
-    )
-  }
-
-  export default App
   ```
 </Steps>

@@ -24,9 +24,9 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
   ]}
 >
   - Install `@clerk/tanstack-start`
-  - Set up your environment variables
-  - Configure `clerkHandler`
-  - Add `<ClerkProvider />` to your application
+  - Set your Clerk API keys
+  - Add `createClerkHandler()`
+  - Add `<ClerkProvider />`
   - Protect your pages
 </TutorialHero>
 
@@ -56,44 +56,36 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   ### Set your Clerk API keys
 
   <SignedIn>
-    Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
   </SignedIn>
 
   <SignedOut>
     1. Navigate to the Clerk Dashboard.
     1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
     1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
-    1. Paste your keys into your `.env.local` file.
+    1. Paste your keys into your `.env` file.
 
     The final result should resemble the following:
   </SignedOut>
-
-  ```env {{ filename: '.env.local' }}
-  VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_SECRET_KEY={{secret}}
-  ```
-
-  Add the following keys to your `.env.local` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
 
   ```env {{ filename: '.env' }}
   VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
   CLERK_SECRET_KEY={{secret}}
   ```
 
-  ### Add `createClerkHandler` to your application
+  ### Add `createClerkHandler()`
 
-  To configure Clerk in your TanStack application, you will need to update the SSR entrypoint.
+  Tanstack's [`createStartHandler()`](https://tanstack.com/router/latest/docs/framework/react/start/getting-started#the-server-entry-point) creates a server-side handler that determines which routes and loaders need to be executed when the user hits a given route.
 
-  ```tsx {{ filename: 'app/ssr.tsx', ins: [4, [11, 16]], del: [[6, 9]] }}
+  Clerk's [`createClerkHandler()`](/docs/references/tanstack-start/create-clerk-handler) configures Clerk to handle authentication state for TanStack routes, allowing you to easily access user session information within your app.
+
+  Update your app's SSR entrypoint by wrapping `createStartHandler()` in `createClerkHandler()`, as shown in the following example:
+
+  ```tsx {{ filename: 'app/ssr.tsx' }}
   import { createStartHandler, defaultStreamHandler } from '@tanstack/start/server'
   import { getRouterManifest } from '@tanstack/start/router-manifest'
   import { createRouter } from './router'
   import { createClerkHandler } from '@clerk/tanstack-start/server'
-
-  export default createStartHandler({
-    createRouter,
-    getRouterManifest,
-  })(defaultStreamHandler)
 
   export default createClerkHandler(
     createStartHandler({
@@ -103,9 +95,11 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   )(defaultStreamHandler)
   ```
 
-  ### Add `<ClerkProvider>` and components to your app
+  ### Add `<ClerkProvider>`
 
-  All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context.
+  The [`<ClerkProvider>`](/docs/components/clerk-provider) component wraps your application to provide active session and user context to Clerk's hooks and other components.
+
+  Add the `<ClerkProvider>` component to your app's root route, as shown in the following example:
 
   ```tsx {{ filename: 'app/routes/__root.tsx', ins: [5, 19, 31] }}
   import { Outlet, ScrollRestoration, createRootRoute } from '@tanstack/react-router'
@@ -177,7 +171,7 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
       <div>
         <h1>Index Route</h1>
         <SignedIn>
-          <p>You are signed in!</p>
+          <p>You are signed in</p>
 
           <UserButton />
 
@@ -197,10 +191,10 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
 
   #### Server side
 
-  To protect your routes, you can use the `beforeLoader` paired with server function to check for the `userId` singleton. If it doesn't exist, redirect your user back to the sign-in page.
+  To protect your routes, create a [server function](https://tanstack.com/router/latest/docs/framework/react/start/server-functions) that checks the user's authentication state via Clerk's [`getAuth()`](/docs/references/tanstack-start/get-auth) method. If the user is not authenticated, they are redirected to a sign-in page. If authenticated, the user's `userId` is passed to the route, allowing access to the `<Home />` component, which welcomes the user and displays their `userId`. The [`beforeLoad()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#beforeload-method) method ensures authentication is checked before loading the page, and the [`loader()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#loader-method) method returns the user data for use in the component.
 
   ```tsx {{ filename: 'app/routes/index.tsx' }}
-  import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
+  import { createFileRoute, redirect } from '@tanstack/react-router'
   import { createServerFn } from '@tanstack/start'
   import { getAuth } from '@clerk/tanstack-start/server'
 
@@ -208,8 +202,10 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
     const { userId } = await getAuth(request)
 
     if (!userId) {
+      // This will error because you're redirecting to a path that doesn't exist yet
+      // You can create a sign-in route to handle this
       throw redirect({
-        to: '/sign-in',
+        to: '/sign-in/$',
       })
     }
 
@@ -225,12 +221,31 @@ Learn how to use Clerk to quickly and easily add secure authentication and user 
   })
 
   function Home() {
-    const router = useRouter()
     const state = Route.useLoaderData()
 
     return <h1>Welcome your id is {state.userId}!</h1>
   }
   ```
+
+  ### Create your first user
+
+  Run your project with the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm run dev
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn dev
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm dev
+    ```
+  </CodeBlockTabs>
+
+  Visit your app's homepage at [http://localhost:3000](http://localhost:3000). Sign up to create your first user.
 </Steps>
 
 ## Next steps

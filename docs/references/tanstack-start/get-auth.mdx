@@ -1,0 +1,146 @@
+---
+title: '`getAuth()`'
+description: The getAuth() helper retrieves the authentication state allowing you to protect your API routes or gather relevant data.
+---
+
+The `getAuth()` helper retrieves authentication state from the request object.
+
+## Parameters
+
+<Properties>
+  - `request`
+
+  The request object.
+
+  ---
+
+  - `opts?`
+
+  An optional object that can be used to configure the behavior of the `getAuth()` function. It accepts the following properties:
+
+  - `secretKey?`: A string that represents the secret key used to sign the session token. If not provided, the secret key is retrieved from the environment variable `CLERK_SECRET_KEY`.
+</Properties>
+
+## Returns
+
+`getAuth()` returns the [`Auth`](/docs/references/nextjs/auth-object){{ target: '_blank' }} object.
+
+## Usage
+
+### Basic usage
+
+The following example demonstrates how to use `getAuth()` to retrieve authentication information in a [server function](https://tanstack.com/router/latest/docs/framework/react/start/server-functions).
+
+```tsx {{ filename: 'app/routes/index.tsx' }}
+import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
+import { createServerFn } from '@tanstack/start'
+import { getAuth } from '@clerk/tanstack-start/server'
+
+const authStateFn = createServerFn('GET', async (_, { request }) => {
+  const { userId } = await getAuth(request)
+
+  if (!userId) {
+    // This might error if you're redirecting to a path that doesn't exist yet
+    // You can create a sign-in route to handle this
+    throw redirect({
+      to: '/sign-in/$',
+    })
+  }
+
+  return { userId }
+})
+
+export const Route = createFileRoute('/')({
+  component: Home,
+  beforeLoad: () => authStateFn(),
+  loader: async ({ context }) => {
+    return { userId: context.userId }
+  },
+})
+
+function Home() {
+  const state = Route.useLoaderData()
+
+  return <h1>Welcome! Your ID is {state.userId}!</h1>
+}
+```
+
+### Protect API routes
+
+It is important to protect your API routes to ensure that only authenticated users can access them. You can do this by checking if the `userId` is present in the `getAuth()` response, as shown in the following example:
+
+```ts {{ filename: 'app/routes/api/example.ts' }}
+import { getAuth } from '@clerk/tanstack-start/server'
+import { json } from '@tanstack/start'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/example')({
+  GET: async ({ request, params }) => {
+    const { userId } = await getAuth(request)
+
+    if (!userId) {
+      return json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Add logic that retrieves the data for the API route
+
+    return json({
+      userId,
+    })
+  },
+})
+```
+
+### Usage with `getToken()`
+
+`getAuth()` returns `getToken()`, which is a method that returns the current user's session token. You can also use this function to retrieve a token from a custom JWT template and use it to fetch data from an external source, as shown in the following example:
+
+```ts {{ filename: 'app/routes/api/example.ts' }}
+import { getAuth } from '@clerk/tanstack-start/server'
+import { json } from '@tanstack/start'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/example')({
+  GET: async ({ request, params }) => {
+    const { userId, getToken } = await getAuth(request)
+
+    if (!userId) {
+      return json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const token = await getToken({ template: 'supabase' })
+
+    // Add logic that retrieves the data
+    // from your database using the token
+
+    return json({
+      // ...
+    })
+  },
+})
+```
+
+### Usage with `clerkClient()`
+
+`clerkClient` is used to access the [Backend SDK](/docs/references/backend/overview), which exposes Clerk's backend API resources. You can use `getAuth()` to pass authentication information that many of the Backend SDK methods require, like in the following example:
+
+```ts {{ filename: 'app/routes/api/example.ts' }}
+import { createClerkClient } from '@clerk/backend'
+import { getAuth } from '@clerk/tanstack-start/server'
+import { json } from '@tanstack/start'
+import { createAPIFileRoute } from '@tanstack/start/api'
+
+export const Route = createAPIFileRoute('/api/example')({
+  GET: async ({ request, params }) => {
+    const { userId } = await getAuth(request)
+
+    const clerkClient = createClerkClient({
+      secretKey: import.meta.env.CLERK_SECRET_KEY,
+    })
+
+    const user = userId ? await clerkClient.users.getUser(userId) : null
+
+    return json({ user })
+  },
+})
+```

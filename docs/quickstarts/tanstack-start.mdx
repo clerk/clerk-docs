@@ -1,0 +1,272 @@
+---
+title: TanStack Start Quickstart (Beta)
+description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your TanStack Start application.
+---
+
+> [!WARNING]
+> The TanStack Start SDK is currently in beta. **It is not yet recommended for production use**.
+
+<TutorialHero
+  framework="react"
+  exampleRepo={[
+    {
+      title: "TanStack Start Quickstart Repo",
+      link: "https://github.com/clerk/clerk-tanstack-start-quickstart"
+
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+>
+  - Install `@clerk/tanstack-start`
+  - Set your Clerk API keys
+  - Add `createClerkHandler()`
+  - Add `<ClerkProvider />`
+  - Protect your pages
+</TutorialHero>
+
+Learn how to use Clerk to quickly and easily add secure authentication and user management to your TanStack Start application.
+
+<Steps>
+  ### Install `@clerk/tanstack-start`
+
+  Once you have a TanStack Start application ready, you need to install Clerk's [TanStack Start SDK](/docs/references/tanstack-start/overview). This gives you access to Clerk's prebuilt components and hooks for TanStack Start applications.
+
+  Add the SDK to your project by running the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/tanstack-start@beta
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/tanstack-start@beta
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/tanstack-start@beta
+    ```
+  </CodeBlockTabs>
+
+  ### Set your Clerk API keys
+
+  <SignedIn>
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+  </SignedIn>
+
+  <SignedOut>
+    1. Navigate to the Clerk Dashboard.
+    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+    1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+    1. Paste your keys into your `.env` file.
+
+    The final result should resemble the following:
+  </SignedOut>
+
+  ```env {{ filename: '.env' }}
+  VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
+
+  ### Add `createClerkHandler()`
+
+  TanStack's [`createStartHandler()`](https://tanstack.com/router/latest/docs/framework/react/start/getting-started#the-server-entry-point) creates a server-side handler that determines which routes and loaders need to be executed when the user hits a given route.
+
+  Clerk's [`createClerkHandler()`](/docs/references/tanstack-start/create-clerk-handler) configures Clerk to handle authentication state for TanStack routes, allowing you to easily access user session information within your app.
+
+  Update your app's SSR entrypoint by wrapping `createStartHandler()` in `createClerkHandler()`, as shown in the following example:
+
+  ```tsx {{ filename: 'app/ssr.tsx' }}
+  import { createStartHandler, defaultStreamHandler } from '@tanstack/start/server'
+  import { getRouterManifest } from '@tanstack/start/router-manifest'
+  import { createRouter } from './router'
+  import { createClerkHandler } from '@clerk/tanstack-start/server'
+
+  export default createClerkHandler(
+    createStartHandler({
+      createRouter,
+      getRouterManifest,
+    }),
+  )(defaultStreamHandler)
+  ```
+
+  ### Add `<ClerkProvider>`
+
+  The [`<ClerkProvider>`](/docs/components/clerk-provider) component wraps your application to provide active session and user context to Clerk's hooks and other components.
+
+  Add the `<ClerkProvider>` component to your app's root route, as shown in the following example:
+
+  ```tsx {{ filename: 'app/routes/__root.tsx', ins: [4, 18, 29] }}
+  import { Outlet, ScrollRestoration, createRootRoute } from '@tanstack/react-router'
+  import { Body, Head, Html, Meta, Scripts } from '@tanstack/start'
+  import * as React from 'react'
+  import { ClerkProvider } from '@clerk/tanstack-start'
+
+  export const Route = createRootRoute({
+    component: () => {
+      return (
+        <RootDocument>
+          <Outlet />
+        </RootDocument>
+      )
+    },
+  })
+
+  function RootDocument({ children }: { children: React.ReactNode }) {
+    return (
+      <ClerkProvider>
+        <Html>
+          <Head>
+            <Meta />
+          </Head>
+          <Body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </Body>
+        </Html>
+      </ClerkProvider>
+    )
+  }
+  ```
+
+  ### Protect your pages
+
+  #### Client side
+
+  To protect your pages on the client side, you can use Clerk's [prebuilt control components](/docs/components/overview#what-are-control-components) that control the visibility of content based on the user's authentication state.
+
+  The following example uses the following components:
+
+  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  - [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out of the box to show the avatar from the account the user is signed in with.
+  - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page. For this example, it links to the [Account Portal sign-in page.](/docs/customization/account-portal/overview)
+  - [`<SignUpButton />`](/docs/components/unstyled/sign-up-button): An unstyled component that links to the sign-up page or displays the sign-up modal, depending on which `mode` you have set. For this example, it links to the [Account Portal sign-up page.](/docs/customization/account-portal/overview)
+
+  ```tsx {{ filename: 'app/routes/index.tsx' }}
+  import {
+    SignedIn,
+    UserButton,
+    SignOutButton,
+    SignedOut,
+    SignInButton,
+    SignUpButton,
+  } from '@clerk/tanstack-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/')({
+    component: Home,
+  })
+
+  function Home() {
+    return (
+      <div>
+        <h1>Index Route</h1>
+        <SignedIn>
+          <p>You are signed in</p>
+
+          <UserButton />
+
+          <SignOutButton />
+        </SignedIn>
+        <SignedOut>
+          <p>You are signed out</p>
+
+          <SignInButton />
+
+          <SignUpButton />
+        </SignedOut>
+      </div>
+    )
+  }
+  ```
+
+  #### Server side
+
+  To protect your routes, create a [server function](https://tanstack.com/router/latest/docs/framework/react/start/server-functions) that checks the user's authentication state via Clerk's [`getAuth()`](/docs/references/tanstack-start/get-auth) method. If the user is not authenticated, they are redirected to a sign-in page. If authenticated, the user's `userId` is passed to the route, allowing access to the `<Home />` component, which welcomes the user and displays their `userId`. The [`beforeLoad()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#beforeload-method) method ensures authentication is checked before loading the page, and the [`loader()`](https://tanstack.com/router/latest/docs/framework/react/api/router/RouteOptionsType#loader-method) method returns the user data for use in the component.
+
+  > [!TIP]
+  > Ensure that your app has the [TanStack Start API entry handler](https://tanstack.com/router/latest/docs/framework/react/start/api-routes#setting-up-the-entry-handler) configured in order for your API routes to work.
+
+  ```tsx {{ filename: 'app/routes/index.tsx' }}
+  import { createFileRoute, redirect } from '@tanstack/react-router'
+  import { createServerFn } from '@tanstack/start'
+  import { getAuth } from '@clerk/tanstack-start/server'
+
+  const authStateFn = createServerFn('GET', async (_, { request }) => {
+    const { userId } = await getAuth(request)
+
+    if (!userId) {
+      // This will error because you're redirecting to a path that doesn't exist yet
+      // You can create a sign-in route to handle this
+      throw redirect({
+        to: '/sign-in/$',
+      })
+    }
+
+    return { userId }
+  })
+
+  export const Route = createFileRoute('/')({
+    component: Home,
+    beforeLoad: async () => await authStateFn(),
+    loader: async ({ context }) => {
+      return { userId: context.userId }
+    },
+  })
+
+  function Home() {
+    const state = Route.useLoaderData()
+
+    return <h1>Welcome! Your ID is {state.userId}!</h1>
+  }
+  ```
+
+  ### Create your first user
+
+  Run your project with the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm run dev
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn dev
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm dev
+    ```
+  </CodeBlockTabs>
+
+  Visit your app's homepage at [http://localhost:3000](http://localhost:3000). Sign up to create your first user.
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Create custom sign-up and sign-in pages](/docs/references/tanstack-start/custom-signup-signin-pages)
+  - Learn how add custom sign-up and sign-in pages with Clerk components.
+
+  ---
+
+  - [Read user and session data](/docs/references/tanstack-start/read-session-data)
+  - Learn how to use Clerk's hooks and helpers to access the active session and user data in your TanStack Start application.
+
+  ---
+
+  - [Customization & localization](/docs/customization/overview)
+  - Learn how to customize and localize the Clerk components.
+
+  ---
+
+  - [Clerk components](/docs/components/overview)
+  - Learn more about Clerk's prebuilt components.
+</Cards>

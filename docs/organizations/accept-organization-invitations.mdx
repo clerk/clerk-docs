@@ -1,0 +1,181 @@
+---
+title: Accept organization invitations
+description: Learn how to use Clerk's API to build a custom flows for handling organization invitations.
+---
+
+> [!WARNING]
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/customization/account-portal//overview) or [prebuilt components](/docs/components/overview).
+
+When a user visits an [organization invitation](/docs/organizations/invitations) link, and no custom redirect URL was specified, and they have an account for your application, then they will be redirected to Clerk's [Account Portal sign-in page](/docs/customization/account-portal/hosted-pages#sign-in). If they do not have an account for your application, they will be redirected to Clerk's [Account Portal sign-up page](/docs/customization/account-portal/hosted-pages#sign-up).
+
+However, if you specified [a redirect URL when creating the invitation](/docs/users/invitations#redirect-url), you must handle the sign-up and sign-in flows in your code for that page.
+
+This guide will demonstrate how to build a custom sign-up flow to handle organization invitations.
+
+## Create the sign-up flow
+
+Once the user visits the invitation link and is redirected to the specified URL, the query parameters `__clerk_ticket` and `__clerk_status` will be appended to the URL.
+
+For example, if the redirect URL was `https://www.example.com/accept-invitation`, the URL that the user would be redirected to would be `https://www.example.com/accept-invitation?__clerk_ticket=.....`.
+
+The `__clerk_ticket` query parameter contains the ticket token, which is essential for completing the organization invitation flow. You'll use this token in your code for the page that you redirected the user to.
+
+The `__clerk_status` query parameter is the outcome of the ticket verification and will contain one of three values:
+
+- `sign_in` indicates the user already exists in your application. You should create a sign-in flow using the invitation token by extracting the token from the URL and passing it to the [`signIn.create()`](/docs/references/javascript/sign-in/sign-in#create) method.
+- `sign_up` indicates the user doesn't already exist in your application. You should create a sign-up flow using the invitation token by extracting the token from the URL and passing it to the [`signUp.create()`](/docs/references/javascript/sign-up/sign-up#create) method.
+- `complete` indicates the user already exists in your application, and was signed in. The flow has been completed and no further actions are required.
+
+The following example demonstrates how to handle both sign-up and sign-in flows using the invitation token:
+
+1. It extracts the token from the URL.
+1. It passes the token to either [`signUp.create()`](/docs/references/javascript/sign-up/sign-up#create) or [`signIn.create()`](/docs/references/javascript/sign-in/sign-in#create), depending on the `__clerk_status`.
+1. It includes optional fields for collecting additional user information during sign-up. You can modify or remove these fields as needed for your application.
+
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/accept-invitation/page.tsx' }}
+    'use client'
+
+    import * as React from 'react'
+    import { useOrganization, useSignIn, useSignUp } from '@clerk/nextjs'
+    import { useSearchParams } from 'next/navigation'
+
+    export default function Page() {
+      const { isLoaded, signUp, setActive: setActiveSignUp } = useSignUp()
+      const { signIn, setActive: setActiveSignIn } = useSignIn()
+      const { organization } = useOrganization()
+      const [firstName, setFirstName] = React.useState('')
+      const [lastName, setLastName] = React.useState('')
+      const [password, setPassword] = React.useState('')
+
+      // Get the token and account status from the query params
+      const token = useSearchParams().get('__clerk_ticket')
+      const accountStatus = useSearchParams().get('__clerk_status')
+
+      // If there is no invitation token, restrict access to this page
+      if (!token) {
+        return <p>No invitation token found.</p>
+      }
+
+      // Handle sign-in
+      React.useEffect(() => {
+        if (!signIn || !setActiveSignIn || !token || organization || accountStatus !== 'sign_in') {
+          return
+        }
+
+        const createSignIn = async () => {
+          try {
+            // Create a new `SignIn` with the supplied invitation token.
+            // Make sure you're also passing the ticket strategy.
+            const signInAttempt = await signIn.create({
+              strategy: 'ticket',
+              ticket: token as string,
+            })
+
+            // If the sign-in was successful, set the session to active
+            if (signInAttempt.status === 'complete') {
+              await setActiveSignIn({
+                session: signInAttempt.createdSessionId,
+              })
+            } else {
+              // If the sign-in attempt is not complete, check why.
+              // User may need to complete further steps.
+              console.error(JSON.stringify(signInAttempt, null, 2))
+            }
+          } catch (err) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error('Error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        createSignIn()
+      }, [signIn])
+
+      // Handle submission of the sign-up form
+      const handleSignUp = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        if (!isLoaded) return
+
+        try {
+          // Create a new sign-up with the supplied invitation token.
+          // Make sure you're also passing the ticket strategy.
+          // After the below call, the user's email address will be
+          // automatically verified because of the invitation token.
+          const signUpAttempt = await signUp.create({
+            strategy: 'ticket',
+            ticket: token,
+            firstName,
+            lastName,
+            password,
+          })
+
+          // If the sign-up was successful, set the session to active
+          if (signUpAttempt.status === 'complete') {
+            await setActiveSignUp({ session: signUpAttempt.createdSessionId })
+          } else {
+            // If the sign-in attempt is not complete, check why.
+            // User may need to complete further steps.
+            console.error(JSON.stringify(signUpAttempt, null, 2))
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      if (accountStatus === 'sign_in' && !organization) {
+        return <div>Signing you in...</div>
+      }
+
+      if (accountStatus === 'sign_up' && !organization) {
+        return (
+          <>
+            <h1>Sign up</h1>
+            <form onSubmit={handleSignUp}>
+              <div>
+                <label htmlFor="firstName">Enter first name</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  name="firstName"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="lastName">Enter last name</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  name="lastName"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="password">Enter password</label>
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div>
+                <button type="submit">Next</button>
+              </div>
+            </form>
+          </>
+        )
+      }
+
+      return <div>Organization invitation accepted!</div>
+    }
+    ```
+  </Tab>
+</Tabs>

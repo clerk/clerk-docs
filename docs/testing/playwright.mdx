@@ -76,4 +76,176 @@ Playwright is a well-established JavaScript testing framework. This guide aims t
   ```
 </Steps>
 
+
+## Test Helpers
+
+The `@clerk/testing` package also provides some helper functions to sign in/sign out with Clerk in your Playwright tests without having to interact with the UI.
+To use these commands, you just have to import the `clerk` object from the `@clerk/testing/playwright` package.
+
+### `clerk.signIn`
+
+The `clerk.signIn` function is used to sign in a user using Clerk. This helper supports only the following first factor strategies:
+
+- Password
+- Phone code
+- Email code
+
+Multi-factor authentication is not supported.
+
+> [!NOTE]
+> This helper function internally uses the `setupClerkTestingToken()` helper, so you don't need to call it separately.
+
+#### Prerequisites
+
+- Before calling this function, you must call `page.goto`.
+- Before using this function, navigate to a non-protected page that loads Clerk.
+
+#### Parameters
+
+`clerk.signIn` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - `Object`
+
+  The Playwright page object to use for the sign-in operation.
+
+  ---
+
+  - `signInParams.strategy`
+  - `'password' | 'phone_code' | 'email_code'`
+
+  The sign-in strategy. Supported strategies are:
+
+  - `password`: The command will sign in the user using the provided password and identifier.
+  - `phone_code`: You must have a user with a test phone number as an identifier (e.g., `+15555550100`).
+  - `email_code`: You must have a user with a test email as an identifier (e.g., `your_email+clerk_test@example.com`).
+
+  ---
+
+  - `signInParams.identifier`
+  - `string`
+
+  The user's identifier. This could be a username, a phone number, or an email.
+
+  ---
+
+  - `signInParams.password`
+  - `string`
+
+  The user's password. This is required only if the `strategy` is set to `'password'`.
+
+  ---
+
+  - `setupClerkTestingTokenOptions?`
+  - `Object`
+
+  Options to pass to the `setupClerkTestingToken` function. Optional.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use the `clerk.signIn` helper function in a test to sign in a user.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from "@clerk/testing/playwright";
+
+test("sign in", async ({ page }) => {
+  await page.goto("/");
+  await clerk.signIn({
+    page,
+    signInParams: { strategy: 'phone_code', identifier: '+15555550100' },
+  });
+  await page.goto("/protected");
+});
+```
+
+### `clerk.signOut`
+
+The `clerk.signOut` function is used to sign out the current user using Clerk.
+
+#### Prerequisites
+
+- Before calling this function, yu must call `page.goto`.
+- Before using this function, navigate to a page that loads Clerk.
+
+#### Parameters
+
+`clerk.signOut` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - `Object`
+
+  The Playwright page object to use for the sign-in operation.
+
+  ---
+
+  - `signOutOptions.sessionId?`
+  - `string`
+
+  The ID of a specific session to sign out of. Useful for multi-session applications.
+
+  ---
+
+  - `signOutOptions.redirectUrl?`
+  - `string`
+
+  The redirect URL to navigate to after sign out is complete.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use the `clerk.signOut` helper in a test to sign a user out.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from "@clerk/testing/playwright";
+
+test("sign out", async ({ page }) => {
+  await page.goto("/");
+  await clerk.signIn({
+    page,
+    signInParams: { strategy: 'phone_code', identifier: '+15555550100' },
+  });
+  await page.goto("/protected");
+  await clerk.signOut({ page });
+  await page.goto("/protected");
+  // should redirect to sign in page
+});
+```
+
+### `clerk.loaded`
+
+The `clerk.loaded` function asserts that Clerk has been loaded.
+
+#### Prerequisites
+
+- Before calling this command, you must call `page.goto`.
+- Before using this command, navigate to a page that loads Clerk.
+
+#### Parameters
+
+`clerk.loaded` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - `Object`
+
+  The Playwright page object to use for the sign-in operation.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use the `clerk.loaded` helper in a test to assert that Clerk has been loaded.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from "@clerk/testing/playwright";
+
+test("ensure that clerk has loaded", async ({ page }) => {
+  await page.goto("/");
+  await clerk.loaded({ page });
+  // clerk has loaded
+});
+```
+
 For more information, feedback or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

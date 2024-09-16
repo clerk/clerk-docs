@@ -1,20 +1,28 @@
 ---
 title: Build a custom authentication flow using passkeys
-description: Learn how to allow your users authenticate with passkeys with Clerk.
+description: Learn how to use Clerk's API to build a custom authentication flow using passkeys.
 ---
 
 > [!WARNING]
-> This guide is for users who want to build a _custom_ user interface using the Clerk API. To authenticate users with passkeys using a _prebuilt_ UI, you should use Clerk's [`<SignIn />`](/docs/components/authentication/sign-in) and [`<UserProfile />`](/docs/components/user/user-profile) components. See [the sign-in and sign-out options docs](/docs/authentication/configuration/sign-up-sign-in-options#passkeys) to learn more.
+> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, use Clerk's [Account Portal pages](/docs/customization/account-portal/overview) or [prebuilt components](/docs/components/overview).
 
 Clerk supports passwordless authentication via passkeys, enabling users to sign in without having to remember a password. Instead, users select a passkey associated with their device, which they can use to authenticate themselves.
 
-This guide will teach you how to use Clerk's API to build custom flows for creating, signing users in with, and managing passkeys.
+This guide will walk you through how to use Clerk's API to build custom flows for creating, signing users in with, and managing passkeys.
+
+## Enable passkeys
+
+To use passkeys, you first need to enable the strategy in the Clerk Dashboard.
+
+1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
+1. In the navigation sidebar, select **User & Authentication > Email, Phone, and Username**.
+1. In the **Authentication strategies** section of this page, ensure **Passkeys** is enabled.
 
 ## Create user passkeys
 
-To create a passkey for a user, you must call [`User.createPasskey()`](/docs/references/javascript/user/user#create-passkey) as shown in the following example:
+To create a passkey for a user, you must call [`User.createPasskey()`](/docs/references/javascript/user/user#create-passkey), as shown in the following example:
 
-<CodeBlockTabs options={["Next.js App Router"]}>
+<CodeBlockTabs options={["Next.js"]}>
   ```tsx {{ filename: 'app/components/CustomCreatePasskeysButton.tsx' }}
   'use client'
 
@@ -27,8 +35,10 @@ To create a passkey for a user, you must call [`User.createPasskey()`](/docs/ref
       try {
         const response = await user?.createPasskey()
         console.log(response)
-      } catch (error: ClerkRuntimeError) {
-        console.log(error)
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
       }
     }
 
@@ -41,23 +51,36 @@ To create a passkey for a user, you must call [`User.createPasskey()`](/docs/ref
 
 To sign a user into your Clerk app with a passkey, you must call [`SignIn.authenticateWithPasskey()`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-passkey). This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
 
-<CodeBlockTabs options={["Next.js App router"]}>
+<CodeBlockTabs options={["Next.js"]}>
   ```tsx {{ filename: 'components/SignInWithPasskeyButton.tsx' }}
   'use client'
 
   import { useSignIn } from '@clerk/nextjs'
+  import { useRouter } from 'next/navigation'
 
   export function SignInWithPasskeyButton() {
     const { signIn } = useSignIn()
+    const router = useRouter()
 
     const signInWithPasskey = async () => {
       // 'discoverable' lets the user choose a passkey
       // without autofilling any of the options
       try {
-        const response = await signIn?.authenticateWithPasskey()
-        console.log(response)
-      } catch (error) {
-        console.log(error)
+        const signInAttempt = await signIn?.authenticateWithPasskey({
+          flow: 'discoverable',
+        })
+
+        if (signInAttempt?.status === 'complete') {
+          router.push('/')
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
       }
     }
 
@@ -70,13 +93,14 @@ To sign a user into your Clerk app with a passkey, you must call [`SignIn.authen
 
 Clerk generates a name based on the device associated with the passkey when it's created. Sometimes users may want to rename a passkey to make it easier to identify.
 
-To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/references/javascript/types/passkey-resource#update) method of the passkey object as shown in the following example:
+To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/references/javascript/types/passkey-resource#update) method of the passkey object, as shown in the following example:
 
-<CodeBlockTabs options={["Next.js App router"]}>
+<CodeBlockTabs options={["Next.js"]}>
   ```tsx {{ filename: 'components/RenamePasskeyUI.tsx' }}
   'use client'
 
   import { useUser } from '@clerk/nextjs'
+  import { PasskeyResource } from '@clerk/types'
   import { useRef, useState } from 'react'
 
   export function RenamePasskeyUI() {
@@ -96,8 +120,10 @@ To rename a user's passkey in your Clerk app, you must call the [`update()`](/do
         })
         console.log(response)
         setSuccess(true)
-      } catch (error) {
-        console.log(error)
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
         setSuccess(false)
       }
     }
@@ -126,9 +152,9 @@ To rename a user's passkey in your Clerk app, you must call the [`update()`](/do
 
 ## Delete user passkeys
 
-To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object as shown in the following example:
+To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/references/javascript/types/passkey-resource#delete) method of the passkey object, as shown in the following example:
 
-<CodeBlockTabs options={["Next.js App router"]}>
+<CodeBlockTabs options={["Next.js"]}>
   ```tsx {{ filename: 'components/DeletePasskeyUI.tsx' }}
   'use client'
 
@@ -145,10 +171,12 @@ To delete a user's passkey from your Clerk app, you must call the [`delete()`](/
       const passkeyToDelete = passkeys?.find((pk: any) => pk.id === passkeyToDeleteId.current?.value)
       try {
         const response = await passkeyToDelete?.delete()
-        console.log('Response', response)
+        console.log(response)
         setSuccess(true)
-      } catch (error) {
-        console.log('Error', error)
+      } catch (err) {
+        // See https://clerk.com/docs/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
         setSuccess(false)
       }
     }

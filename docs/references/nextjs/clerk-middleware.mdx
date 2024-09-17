@@ -370,6 +370,22 @@ The `clerkMiddleware()` function accepts an optional object. The following optio
   The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. The `CLERK_ENCRYPTION_KEY` environment variable must be set when providing `secretKey` as an option, refer to [Dynamic keys](#dynamic-keys).
 </Properties>
 
+It's also possible to dynamically set options based on the incoming request:
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => ({
+    // Provide `domain` based on the request host
+    domain: req.nextUrl.host,
+  }),
+)
+```
+
 ### Dynamic keys
 
 The following options, known as "Dynamic Keys," are shared to the Next.js application server through `clerkMiddleware`, enabling access by server-side helpers like [`auth()`](/docs/references/nextjs/auth):
@@ -385,6 +401,29 @@ When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-b
 
 ```sh {{ filename: 'terminal' }}
 openssl rand --hex 32
+```
+
+For multi-tenant applications, you can dynamically define Clerk keys depending on the incoming request. Here's an example:
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// You would typically fetch these keys from a external store or environment variables.
+const tenantKeys = {
+  tenant1: { publishableKey: 'pk_tenant1...', secretKey: 'sk_tenant1...' },
+  tenant2: { publishableKey: 'pk_tenant2...', secretKey: 'sk_tenant2...' },
+}
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => {
+    // Resolve tenant based on the request
+    const tenant = getTenant(req)
+    return tenantKeys[tenant]
+  },
+)
 ```
 
 > [!NOTE]

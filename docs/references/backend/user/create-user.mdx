@@ -84,9 +84,71 @@ function createUser(params: CreateUserParams): Promise<User>
   ---
 
   - `passwordHasher?`
-  - `'argon2i' | 'argon2id' | 'bcrypt' | 'bcrypt_sha256_django' | 'md5' | 'pbkdf2_sha256' | 'pbkdf2_sha256_django' | 'pbkdf2_sha1' | 'phpass' | 'scrypt_firebase' | 'scrypt_werkzeug' | 'sha256'`
+  - `'argon2i' | 'argon2id' | 'awscognito' | 'bcrypt' | 'bcrypt_sha256_django' | 'md5' | 'pbkdf2_sha256' | 'pbkdf2_sha256_django' | 'pbkdf2_sha1' | 'phpass' | 'scrypt_firebase' | 'scrypt_werkzeug' | 'sha256'`
 
-  The hashing algorithm that was used to generate the password digest. Each of the supported hashers expects the incoming digest to be in a particular format. See the [Clerk Backend API reference](/docs/reference/backend-api/tag/Users#operation/CreateUser){{ target: '_blank' }} for more information.
+  The hashing algorithm that was used to generate the password digest.
+  The algorithms we support at the moment are:
+
+  > [!WARNING]
+  > For password hashers considered insecure (currently, `MD5` and `SHA256`), the corresponding user password hashes will be transparently migrated to `bcrypt` (a secure hasher) upon the user's first successful password sign in.
+  > Insecure schemes are marked with `(insecure)` in the list below.
+
+  - `awscognito`
+    - When set, `password_digest` must be in the format of `awscognito#<userpoolid>#<clientid>#<identifier>`.
+    - Upon a successful migration, `password_hasher` will be updated to `bcrypt`, and `password_digest` will be updated to a `bcrypt` hash.
+    - See our [migration guide](https://clerk.com/docs/deployments/migrate-from-cognito) for usage details.
+  - [`bcrypt`](https://en.wikipedia.org/wiki/Bcrypt)
+    - When set, `password_digest` must be in the format of `$<algorithm version>$<cost>$<salt & hash>`
+  - [`bcrypt_sha256_django`](https://docs.djangoproject.com/en/4.0/topics/auth/passwords/)
+    - This is the Django-specific variant of Bcrypt, using SHA256 hashing function. When set, `password_digest` must be in the format of (as exported from Django): `bcrypt_sha256$$<algorithm version>$<cost>$<salt & hash>`
+  - [`bcrypt_peppered`](https://github.com/heartcombo/devise)
+    - As used in implementations such as Devise for Ruby on Rails applications. Identical to bcrypt except for the fact that a `pepper` string is appended to the input before hashing. When set, `password_digest` must be in the format of `$<algorithm version>$<cost>$<salt & hash>$<pepper>`
+  - [`md5` (insecure)](https://en.wikipedia.org/wiki/MD5)
+    - When set, `password_digest` must be in the format of `5f4dcc3b5aa765d61d8327deb882cf99`
+  - [`pbkdf2_sha1`](https://en.wikipedia.org/wiki/PBKDF2)
+    - When set, `password_digest` must be in the format of `pbkdf2_sha1$<iterations>$<salt>$<hash-as-hex-string>` or `pbkdf2_sha1$<iterations>$<salt-as-hex-string>$<hash-as-hex-string>$<key-length>`
+    - Accepts the salt as a hex-encoded string. If the salt is not a valid hex string, the raw bytes will be used instead. Accepts the hash as a hex-encoded string. Optionally accepts the key length as the last parameter (defaults to 32).
+  - [`pbkdf2_sha256`](https://en.wikipedia.org/wiki/PBKDF2)
+    - This is the PBKDF2 algorithm using the SHA256 hashing function. When set, `password_digest` must be in the format of `pbkdf2_sha256$<iterations>$<salt>$<hash>`
+    - Both the salt and the hash are expected to be base64-encoded.
+  - [`pbkdf2_sha512`](https://en.wikipedia.org/wiki/PBKDF2)
+    - This is the PBKDF2 algorithm using the SHA512 hashing function. When set, `password_digest` must be in the format of `pbkdf2_sha512$<iterations>$<salt>$<hash>`
+  - [`pbkdf2_sha256_django`](https://docs.djangoproject.com/en/4.0/topics/auth/passwords/)
+    - This is the Django-specific variant of PBKDF2. When set, `password_digest` must be in the format of (as exported from Django): `pbkdf2_sha256$<iterations>$<salt>$<hash>`
+    - The salt is expected to be un-encoded, the hash is expected base64-encoded.
+  - [`phpass`](https://www.openwall.com/phpass/)
+    - Portable public domain password hashing framework for use in PHP applications. When set, `password_digest` must be in the format of `$P$<rounds><salt><encoded-checksum>`
+    - `$P$` is the prefix used to identify `phpass` hashes.
+    - _rounds_ is a single character encoding a 6-bit integer representing the number of rounds used.
+    - _salt_ is eight characters drawn from \[./0-9A-Za-z], providing a 48-bit salt.
+    - _checksum_ is 22 characters drawn from the same set, encoding the 128-bit checksum with MD5.
+  - [`scrypt_firebase`](https://firebaseopensource.com/projects/firebase/scrypt/)
+    - The Firebase-specific variant of scrypt. When set, `password_digest` must be in the format of `<hash>$<salt>$<signer key>$<salt separator>$<rounds>$<memory cost>`
+    - _hash:_ The actual Base64 hash. This can be retrieved when exporting the user from Firebase.
+    - _salt:_ The salt used to generate the above hash. Again, this is given when exporting the user from Firebase.
+    - _signer key:_ The base64 encoded signer key.
+    - _salt separator:_ The base64 encoded salt separator.
+    - _rounds:_ The number of rounds the algorithm needs to run.
+    - _memory cost:_ The cost of the algorithm run
+    - The first 2 (hash and salt) are per user and can be retrieved when exporting the user from Firebase. The other 4 values (signer key, salt separator, rounds and memory cost) are project-wide settings and can be retrieved from the project's password hash parameters.
+  - [`scrypt_werkzeug`](https://werkzeug.palletsprojects.com/en/3.0.x/utils/#werkzeug.security.generate_password_hash)
+    - The Werkzeug-specific variant of scrypt. When set, `password_digest` must be in the format of `$<algorithm args>$<salt>$<hash>`
+    - _algorithm args:_ The algorithm used to generate the hash.
+    - _salt:_ The salt used to generate the above hash.
+    - _hash:_ The actual Base64 hash.
+  - [`sha256` (insecure)](https://en.wikipedia.org/wiki/SHA-2)
+    - When set, `password_digest` must be a 64-length hex string. For example: `9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08`
+  - [`argon2`](https://argon2.online/) variants: `argon2i` and `argon2id`.
+    - Algorithms in the argon2 family generate digests that encode the following information:
+      - _version (v):_ The argon version, version 19 is assumed
+      - _memory (m):_ The memory used by the algorithm (in kibibytes)
+      - _iterations (t):_ The number of iterations to perform
+      - _parallelism (p):_ The number of threads to use
+    - Parts are demarcated by the `$` character, with the first part identifying the algorithm variant The middle part is a comma-separated list of the encoding options (memory, iterations, parallelism). The final part is the actual digest.
+    - When set, `password_digest` must be in the format of `$argon2i$v=19$m=4096,t=3,p=1$4t6CL3P7YiHBtwESXawI8Hm20zJj4cs7/4/G3c187e0$m7RQFczcKr5bIR0IIxbpO2P0tyrLjf3eUW3M3QSwnLc`
+    - For the argon2id case, the value of the algorithm in the first part of the digest is `argon2id`: `$argon2id$v=19$m=64,t=4,p=8$Z2liZXJyaXNo$iGXEpMBTDYQ8G/71tF0qGjxRHEmR3gpGULcE93zUJVU`
+
+  If you need support for any particular hashing algorithm, [please let us know](https://clerk.com/support).
 
   ---
 

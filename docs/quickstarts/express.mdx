@@ -26,8 +26,9 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
 >
   - Install `@clerk/express`
   - Set your Clerk API keys
-  - Configure Clerk middleware
-  - Protect your routes
+  - Add Clerk middleware to your application
+  - Use `getAuth()` to access the current auth state
+  - Protect specific routes
 </TutorialHero>
 
 <Steps>
@@ -92,7 +93,7 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
 
   The `clerkMiddleware` can be registered globally or for specific routes. This examples registers the middleware globally.
 
-  ```ts {{ filename: 'index.ts' }}
+  ```ts {{ filename: 'index.ts', mark: [3, 7] }}
   import 'dotenv/config'
   import express from 'express'
   import { clerkMiddleware } from '@clerk/express'
@@ -106,38 +107,44 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
   })
   ```
 
-  ### Accessing auth state using `getAuth`
+  ### Use `getAuth()` to access the current auth state
 
-  The [`getAuth`](/docs/references/nextjs/get-auth) helper can be used to access the authentication state of the current request. It can also be used to protect your routes.
+  The [`getAuth`](/docs/references/nextjs/get-auth) helper can be used to access the authentication state of the current request. In the following example, the `userId` loads the entire [`User`](/docs/references/javascript/user/user) object from Clerk.
 
-  ```ts {{ filename: 'index.ts' }}
+  ```ts {{ filename: 'index.ts', mark: [3, [9, 13]] }}
   import 'dotenv/config'
   import express from 'express'
-  import { clerkMiddleware, getAuth } from '@clerk/express'
+  import { clerkClient, clerkMiddleware, getAuth } from '@clerk/express'
 
   const app = express()
 
   app.use(clerkMiddleware())
 
-  app.get('/protected', async (req, res) => {
-    /**
-     * Access the auth state for this request.
-     * In this example, the userId loads the whole User object
-     * from the Clerk servers
-     */
+  app.get('/', async (req, res) => {
     const { userId } = getAuth(req)
-
-    if (!userId) {
-      return res.status(401).send('Unauthorized')
-    }
-
-    const user = await clerkClient.users.getUser(userId)
-
+    const user = userId ? await clerkClient.users.getUser(userId) : null
     return res.json({ user })
   })
 
   app.listen(3000, () => {
     console.log(`Example app listening at http://localhost:${port}`)
+  })
+  ```
+
+  ### Protect specific routes
+
+  To protect a route, use the `getAuth()` function to check if the user is authenticated.
+
+  ```ts {{ filename: 'index.ts' }}
+  app.get('/', async (req, res) => {
+    const { userId } = getAuth(req)
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const user = await clerkClient.users.getUser(userId)
+    return res.json({ user })
   })
   ```
 </Steps>

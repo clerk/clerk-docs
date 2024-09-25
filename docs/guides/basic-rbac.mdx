@@ -59,9 +59,83 @@ Later in the, you will add a basic admin tool to change a user's role. For now, 
 }
 ```
 
-## Create and secure an admin dashboard with the admin role
+## Create a reusable function to check roles
 
-Now that your user has the `admin` role, let's build an admin dashboard manage user roles easily.
+Let's create a helper function to simplify checking roles. Start by modifying the `globals.d.ts` file.
+
+1. Define a `Roles` type so that the union type for roles can be reused throughout the application.
+1. Update the interface you previously created to use the new `Roles` type.
+
+```ts {{ filename: 'types/globals.d.ts', mark: [[3, 4], 9] }}
+export {}
+
+// Create a type for the roles
+export type Roles = 'admin' | 'moderator'
+
+declare global {
+  interface CustomJwtSessionClaims {
+    metadata: {
+      role?: Roles
+    }
+  }
+}
+```
+
+Now, create a helper function for checking roles.
+
+1. Create a `utils/` directory in your application's root folder.
+1. Inside this directory, add a `roles.ts` file.
+1. Copy the following code and paste it into the file.
+
+```ts {{ filename: 'utils/roles.ts' }}
+import { Roles } from '@/types/globals'
+import { auth } from '@clerk/nextjs/server'
+
+export const checkRole = (role: Roles) => {
+  const { sessionClaims } = auth()
+  return sessionClaims?.metadata.role === role
+}
+```
+
+This `checkRole()` helper will accept a role of type `Roles` and return `true` if the user has that role, or `false` if the they do not.
+
+## Create the admin dashboard
+
+Now, you will create an admin dashboard. In the following section, you will learn how to protect the `/admin` route.
+
+1. In your `app/` directory, create an `admin/` folder.
+1. In the `admin/` folder, create a file named `page.tsx`.
+1. Copy the following code and paste it into the file.
+
+```tsx {{ filename: 'app/admin/page.tsx' }}
+export default function AdminDashboard() {
+  return <p>This is the protected admin dashboard restricted to users with the `admin` role.</p>
+}
+```
+
+## Protecting the admin dashboard
+
+To protect the `/admin` route, choose **one** of the two following methods:
+
+1. **Middleware**: Apply role-based access control globally at the route level. This method restricts access to all routes matching `/admin` before the request reaches the actual page.
+1. **Page-Level Role Check**: Apply role-based access control directly in the admin page component. This method protects the page itself but doesn't block access at the middleware level.
+
+> [!IMPORTANT]
+> You only need to follow **one** of the following methods to secure your `/admin` route.
+
+## Protect the `/admin` route using middleware
+
+In this method, you will secure the `/admin` route by applying middleware that checks if the user has the admin role. If the user does not have this role, they will be redirected or denied access.
+
+1. In your app's root directory, create a `middleware.ts` file that imports the necessary tools from Clerk and your custom `checkRole()` function.
+1. Use the `createRouteMatcher()` function to identify routes starting with `/admin`.
+1. Apply `clerkMiddleware` to intercept requests to the `/admin` route, and use the `checkRole()` function to verify that the user has the `admin` role.
+
+```tsx {{ filename: 'middleware.ts' }}
+// todo
+```
+
+## Protect the `/admin` route at the page-level
 
 1. In your `app/` directory, create an `admin/` folder.
 1. In the `admin/` folder, create a file named `page.tsx`.
@@ -87,49 +161,8 @@ export default function AdminDashboard() {
 
 The `/admin` route now requires the user to sign in to access the application. Additionally, users must have a `publicMetadata` value of `{"role": "admin"}` to access this route.
 
-## Create a reusable function to check roles
+Next, refactor the page to use the `checkRole()` helper.
 
-Let's create a helper function to simplify checking roles. Start by modifying the `globals.d.ts` file.
-
-1. Define a `Roles` type so that the union type for roles can be reused throughout the application.
-1. Update the interface you previously created to use the new `Roles` type.
-
-```ts {{ filename: 'types/globals.d.ts', mark: [[3, 4], 9] }}
-export {}
-
-// Create a type for the roles
-export type Roles = 'admin' | 'moderator'
-
-declare global {
-  interface CustomJwtSessionClaims {
-    metadata: {
-      role?: Roles
-    }
-  }
-}
-```
-
-The next step is to create the helper function for checking roles.
-
-1. Create a `utils/` directory in your application's root folder.
-1. Inside this directory, add a `roles.ts` file.
-1. Add the following code to `roles.ts`.
-
-```ts {{ filename: 'utils/roles.ts' }}
-import { Roles } from '@/types/globals'
-import { auth } from '@clerk/nextjs/server'
-
-export const checkRole = (role: Roles) => {
-  const { sessionClaims } = auth()
-  return sessionClaims?.metadata.role === role
-}
-```
-
-This `checkRole()` helper will accept a role of type `Roles` and return `true` if the user has that role, or `false` if the they do not.
-
-Next, refactor the admin dashboard to use the `checkRole()` helper.
-
-1. Navigate back to the admin dashboard file.
 1. In the `if()` statement, remove the previous role check.
 1. Replace it with the new `checkRole()` helper, passing `"admin"` as the argument.
 

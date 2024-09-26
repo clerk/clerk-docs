@@ -11,7 +11,7 @@ This guide assumes that you're using Next.js App Router. The concepts here can b
 
 Clerk provides [user metadata](/docs/users/metadata#user-metadata), a tool that can be leveraged to build flexible custom logic into your application. Metadata can be used to store information, and in this case, it can be used to store a user's role.
 
-The `unsafeMetadata` property can be read and updated in the browser, meaning users can modify this data. While you should validate unsafeMetadata before trusting it for sensitive operations, not all use cases require strict validation. For example, if a user self-reports their job title, like on LinkedIn, the application may simply display the data without needing to validate it. `privateMetadata` cannot be accessed or modified in the browser and publicMetadata can only be updated server-side or in the Clerk Dashboard. Since publicMetadata can only be read by the browser, it is the safest and most appropriate choice for scenarios where security is a priority.
+The `unsafeMetadata` property can be read and updated in the browser, meaning users can modify this data. While you should validate unsafeMetadata before trusting it for sensitive operations, not all use cases require strict validation. For example, if a user self-reports their job title, like on LinkedIn, the application can display the data without needing to validate it. `privateMetadata` cannot be accessed or modified in the browser and `publicMetadata` can only be updated server-side or in the Clerk Dashboard. Since `publicMetadata` can only be read by the browser, it is the safest and most appropriate choice for use cases where security is a priority.
 
 To build a basic RBAC system, you first need to make `publicMetadata` available to the application directly from the session token. By attaching `publicMetadata` to the user's session, you can access the data without needing to make a fetch or network request each time.
 
@@ -31,7 +31,10 @@ To build a basic RBAC system, you first need to make `publicMetadata` available 
 
 ## Create a global TypeScript definition
 
-In your application's root folder, create a `types` directory. Inside this directory, add a `globals.d.ts` file. This file will provide auto-completion, prevent TypeScript errors when working with roles, and control which roles are allowed in the application. For this guide, only the `admin` and `moderator` roles will be defined.
+1. In your application's root folder, create a `types` directory.
+1. Inside this directory, add a `globals.d.ts` file. This file will provide auto-completion, prevent TypeScript errors when working with roles, and control which roles are allowed in the application.
+
+For this guide, only the `admin` and `moderator` roles will be defined.
 
 ```ts {{ filename: 'types/globals.d.ts' }}
 export {}
@@ -47,7 +50,7 @@ declare global {
 
 ## Set the admin role for your user
 
-Later in the, you will add a basic admin tool to change a user's role. For now, let's manually add a role to your own user account.
+Later in the guide, you will add a basic admin tool to change a user's role. For now, let's manually add a role to your own user account.
 
 1. In the Clerk Dashboard, navigate to [**Users**](https://dashboard.clerk.com/last-active?path=users) and select your own user account.
 1. Scroll down to the **User metadata** section and next to the **Public** option, select **Edit**.
@@ -83,7 +86,7 @@ declare global {
 
 Now, create a helper function for checking roles.
 
-1. Create a `utils/` directory in your application's root folder.
+1. In your application's root directory, create a `utils/` folder.
 1. Inside this directory, add a `roles.ts` file.
 1. Copy the following code and paste it into the file.
 
@@ -97,7 +100,7 @@ export const checkRole = (role: Roles) => {
 }
 ```
 
-This `checkRole()` helper will accept a role of type `Roles` and return `true` if the user has that role, or `false` if the they do not.
+This `checkRole()` helper accepts a role of type `Roles` and returns `true` if the user has that role or `false` if the they do not.
 
 ## Create the admin dashboard
 
@@ -123,7 +126,7 @@ To protect the `/admin` route, choose **one** of the two following methods:
 > [!IMPORTANT]
 > You only need to follow **one** of the following methods to secure your `/admin` route.
 
-## Protect the `/admin` route using middleware
+## Option 1: Protect the `/admin` route using middleware
 
 In this method, you will secure the `/admin` route by applying middleware that checks if the user has the admin role. If the user does not have this role, they will be redirected or denied access.
 
@@ -132,16 +135,33 @@ In this method, you will secure the `/admin` route by applying middleware that c
 1. Apply `clerkMiddleware` to intercept requests to the `/admin` route, and use the `checkRole()` function to verify that the user has the `admin` role.
 
 ```tsx {{ filename: 'middleware.ts' }}
-// todo
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+
+const isAdminRoute = createRouteMatcher(['/admin(.*)'])
+
+export default clerkMiddleware((auth, req) => {
+  if (isAdminRoute(req) && auth().sessionClaims?.metadata?.role !== 'admin') {
+    const url = new URL('/', req.url)
+    return NextResponse.redirect(url)
+  }
+})
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+}
 ```
 
-## Protect the `/admin` route at the page-level
+## Option 2: Protect the `/admin` route at the page-level
 
 1. In your `app/` directory, create an `admin/` folder.
 1. In the `admin/` folder, create a file named `page.tsx`.
 1. Copy the following code and paste it into the file.
 
-You want the dashboard to be accessible only to users with the `admin` role. As configured earlier in the [Configure the session token](#configure-the-session-token) section, a user's role is stored in the metadata within the session token. You can access the session token's claims using Clerk's `auth()` hook.
+Use the `checkRole()` helper function you created earlier to restrict access to the dashboard for users with the `admin` role only. As explained in the [Configure the session token](#configure-the-session-token) section, a user's role is stored in the metadata of the session token. You can access the session token's claims using Clerk's [`auth()`](/docs/references/nextjs/auth) hook.
+
+> [!NOTE]
+> You can customize the behavior of the `checkRole()` helper function to suit your needs. For example, you could modify it to return the roles a user has or create a `protectByRole()` function that handles role-based redirects.
 
 ```tsx {{ filename: 'app/admin/page.tsx' }}
 import { auth } from '@clerk/nextjs/server'
@@ -151,27 +171,6 @@ export default function AdminDashboard() {
   const { sessionClaims } = auth()
 
   // If the user does not have the admin role, redirect them to the home page
-  if (sessionClaims?.metadata.role !== 'admin') {
-    redirect('/')
-  }
-
-  return <p>This is the protected admin dashboard restricted to users with the `admin` role.</p>
-}
-```
-
-The `/admin` route now requires the user to sign in to access the application. Additionally, users must have a `publicMetadata` value of `{"role": "admin"}` to access this route.
-
-Next, refactor the page to use the `checkRole()` helper.
-
-1. In the `if()` statement, remove the previous role check.
-1. Replace it with the new `checkRole()` helper, passing `"admin"` as the argument.
-
-```tsx {{ filename: 'app/admin/page.tsx', mark: [2, [5, 8]] }}
-import { redirect } from 'next/navigation'
-import { checkRole } from '@/utils/roles'
-
-export default function AdminDashboard() {
-  // If the user does not have the admin role, redirect them to the home page
   if (!checkRole('admin')) {
     redirect('/')
   }
@@ -180,8 +179,7 @@ export default function AdminDashboard() {
 }
 ```
 
-> [!NOTE]
-> You can customize the behavior of the `checkRole()` helper function to suit your needs. For example, you could modify it to return the roles a user has or create a `protectByRole()` function that handles role-based redirects.
+The `/admin` route now requires the user to sign in to access the application. Additionally, users must have a `publicMetadata` value of `{"role": "admin"}` to access this route.
 
 ## Add admin tools to find users and manage roles
 
@@ -212,7 +210,7 @@ export async function setRole(formData: FormData) {
 }
 ```
 
-With the server action in place, you can now build the `<SearchUsers />` component. This component will include a form for searching users. When the form is submitted, the search term is appended to the URL as a search parameter. The page component, which is a server component that you will refactor next, will perform a query based on the updated URL.
+With the server action set up, you can now build the `<SearchUsers />` component. This component includes a form for searching users, and when submitted, appends the search term to the URL as a search parameter. The page component, which you'll refactor next as a server component, will then perform a query based on the updated URL.
 
 ```tsx {{ filename: 'app/admin/_search-users.tsx' }}
 'use client'
@@ -243,9 +241,9 @@ export const SearchUsers = () => {
 }
 ```
 
-With the server action and the search form in place, you'll now refactor the server component for the `app/admin` route. The component will check if a search parameter has been added to the URL by the search form. If a search parameter is present, it will search for users matching the entered term.
+With the server action and the search form set up, you'll now refactor the server component for the `app/admin` route. The component will check whether a search parameter has been appended to the URL by the search form. If a search parameter is present, it will query for users matching the entered term.
 
-If an array of one or more users is returned, then the component will display a list of users including their first and last names, primary email address, and current role. Each user will have `Make Admin` and `Make Moderator` buttons. These buttons include hidden inputs for the user ID and role, and they use the `setRole()` server action to update the user's role.
+If one or more users are found, the component will display a list of users, showing their first and last names, primary email address, and current role.  Each user will have `Make Admin` and `Make Moderator` buttons, which include hidden inputs for the user ID and role. These buttons will use the `setRole()` server action to update the user's role.
 
 ```tsx {{ filename: 'app/admin/page.tsx', mark: [[3, 5], 7, 12, 14, 17, [20, 52]] }}
 import { redirect } from 'next/navigation'
@@ -304,4 +302,4 @@ export default async function AdminDashboard(params: { searchParams: { search?: 
 }
 ```
 
-The building blocks for a custom RBAC system are now in place. Roles are attached directly to the user's session, allowing your application to access them without requiring a separate fetch or network request. The helper function simplifies role checks and reduces code complexity. The final piece is the admin dashboard, which enables admins to find users and set their roles efficiently.
+The foundation of a custom RBAC (Role-Based Access Control) system is now set up. Roles are attached directly to the user's session, allowing your application to access them without the need for additional network requests. The helper function simplifies role checks and reduces code complexity. The final component is the admin dashboard, which enables admins to efficiently search for users and assign roles.

@@ -27,10 +27,10 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
   - Install `@clerk/express`
   - Set your Clerk API keys
   - Add `clerkMiddleware()` to your application
-  - Access auth state using `getAuth()`
+  - Protect your routes using `requireAuth()`
 </TutorialHero>
 
-Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide uses TypeScript and allows you to choose your frontend framework.
+Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide covers backend implementation only and requires a Clerk frontend SDK in order for any of this to work.
 
 <Steps>
   ### Install `@clerk/express`
@@ -89,9 +89,9 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
     ```
   </CodeBlockTabs>
 
-  ### Add middleware to your application
+  ### Add `clerkMiddleware()` to your application
 
-  The [`clerkMiddleware()`](/docs/references/express/overview#clerk-middleware) helper integrates Clerk authentication into your Express application. It can be registered globally or for specific routes. The following example registers it globally.
+  The [`clerkMiddleware()`](/docs/references/express/overview#clerk-middleware) function checks the request's cookies and headers for a session JWT and, if found, attaches the [Auth](/docs/references/nextjs/auth-object#auth-object) object to the request object under the `auth` key.
 
   ```ts {{ filename: 'index.ts', mark: [3, 8] }}
   import 'dotenv/config'
@@ -99,49 +99,48 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
   import { clerkMiddleware } from '@clerk/express'
 
   const app = express()
-  const PORT = 3000
 
   app.use(clerkMiddleware())
 
-  app.listen(PORT, () => {
+  app.listen(3000, () => {
     console.log(`Example app listening at http://localhost:${PORT}`)
   })
   ```
 
-  ### Accessing auth state using `getAuth()`
+  You can then accesss the authenticate state in any route by accessing the `auth` property on the request object.
 
-  The [`getAuth()`](/docs/references/express/overview#get-auth) helper retrieves authentication state from the request object.
+  ```ts
+  app.get('/auth', (req, res) => {
+    res.json({ auth: req.auth })
+  });
+  ```
 
-  [`clerkClient`](/docs/references/express/overview#clerk-client) is an instance of Clerk's JavaScript Backend SDK, which provides access to Clerk's Backend API resources and low-level authentication utilities for JavaScript environments.
+  ### Protect your routes using `requireAuth()`
 
-  The following example uses `getAuth()` to retrieve the `userId`, which is used to protect the route and is passed to `clerkClient.users.getUser()` to retrieve the current user's `User` object.
+  To protect your routes, use the [`requireAuth`](/docs/references/express/overview#require-auth) middleware. This middleware functions the same as `clerkMiddleware` except it redirects you to the configured sign in URL when unauthenticated.
 
-  > [!NOTE]
-  > If you would rather use middleware to protect routes, check out [`requireAuth`](/docs/references/express/overview#require-auth).
+  In this example, if the user is authenticated, it retrieves the `userId` from the `req.auth` object and uses it with `clerkClient.users.getUser()` to fetch the current user's `User` object. If the user is not authenticated, they are redirected to the '/sign-in' route.
 
-  ```ts {{ filename: 'index.ts', mark: [3, [10, 19]] }}
+  ```ts {{ filename: 'index.ts', mark: [3, [7, 8], [10, 13], [15, 17]] }}
   import 'dotenv/config'
   import express from 'express'
-  import { clerkClient, clerkMiddleware, getAuth } from '@clerk/express'
+  import { clerkClient, requireAuth } from '@clerk/express'
 
   const app = express()
-  const PORT = 3000
 
-  app.use(clerkMiddleware())
+  // Example view engine
+  app.set('view engine', 'ejs')
 
-  app.get('/', async (req, res) => {
-    const { userId } = getAuth(req)
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
-
-    const user = await clerkClient.users.getUser(userId)
-
+  app.get('/protected', requireAuth({ signInUrl: '/sign-in' }), (req, res) => {
+    const user = await clerkClient.users.getUser(req.auth.userId)
     return res.json({ user })
-  })
+  });
 
-  app.listen(PORT, () => {
+  app.get('/sign-in', (req, res) => {
+    res.render('sign-in')
+  });
+
+  app.listen(3000, () => {
     console.log(`Example app listening at http://localhost:${PORT}`)
   })
   ```

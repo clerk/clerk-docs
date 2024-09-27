@@ -23,7 +23,7 @@ This guide assumes that you're using Next.js App Router, but the concepts can be
   To build a basic RBAC system, you first need to make `publicMetadata` available to the application directly from the session token. By attaching `publicMetadata` to the user's session, you can access the data without needing to make a fetch or network request each time.
 
   1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=sessions).
-  1. In the top navigation, select **Configure**. Then in the sidebar, select**Sessions**.
+  1. In the top navigation, select **Configure**. Then in the sidebar, select **Sessions**.
   1. Under the **Customize session token** section, select **Edit**.
   1. In the modal that opens, enter the following JSON and select **Save**. If you have already customized your session token, you may need to merge this with what you currently have.
 
@@ -84,7 +84,7 @@ This guide assumes that you're using Next.js App Router, but the concepts can be
   1. Create a `checkRole()` helper that uses the [`auth()`](/docs/references/nextjs/auth) helper to access the user's session claims. From the session claims, access the `publicMetadata` object to check the user's role. The `checkRole()` helper should accept a role of type `Roles`, which you created in the [Create a global TypeScript definition](#create-a-global-typescript-definition) step. It should return `true` if the user has that role or `false` if they do not.
 
   ```ts {{ filename: 'utils/roles.ts' }}
-  import { Roles } from '@/types/globals'
+  import { Roles } from '@/types/global'
   import { auth } from '@clerk/nextjs/server'
 
   export const checkRole = (role: Roles) => {
@@ -122,20 +122,19 @@ This guide assumes that you're using Next.js App Router, but the concepts can be
 
   #### Option 1: Protect the `/admin` route using middleware
 
-  1. In your app's root directory, create a `middleware.ts` file that imports the necessary tools from Clerk and your custom `checkRole()` function.
+  1. In your app's root directory, create a `middleware.ts` file.
   1. Use the `createRouteMatcher()` function to identify routes starting with `/admin`.
-  1. Apply `clerkMiddleware` to intercept requests to the `/admin` route, and use the `checkRole()` function to verify that the user has the `admin` role. If the user does not have the `admin` role, redirect them to the home page.
+  1. Apply `clerkMiddleware` to intercept requests to the `/admin` route, and check the user's role in their `publicMetadata` to verify that they have the `admin` role. If they don't, redirect them to the home page.
 
   ```tsx {{ filename: 'middleware.ts' }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
   import { NextResponse } from 'next/server'
-  import { checkRole } from './utils/roles'
 
   const isAdminRoute = createRouteMatcher(['/admin(.*)'])
 
   export default clerkMiddleware((auth, req) => {
     // Protect all routes starting with `/admin`
-    if (isAdminRoute(req) && !checkRole('admin')) {
+    if (isAdminRoute(req) && auth().sessionClaims?.metadata?.role !== 'admin') {
       const url = new URL('/', req.url)
       return NextResponse.redirect(url)
     }
@@ -202,7 +201,7 @@ This guide assumes that you're using Next.js App Router, but the concepts can be
   }
   ```
 
-  With the server action set up, now build the `<SearchUsers />` component. This component includes a form for searching users, and when submitted, appends the search term to the URL as a search parameter. The page component, which you'll refactor next as a server component, will then perform a query based on the updated URL.
+  With the server action set up, now build the `<SearchUsers />` component. This component includes a form for searching users, and when submitted, appends the search term to the URL as a search parameter. Your `/admin` route will then perform a query based on the updated URL.
 
   1. In your `app/admin/` directory, create a `_search-users.tsx` file.
   1. Add the following code to the file.
@@ -236,7 +235,7 @@ This guide assumes that you're using Next.js App Router, but the concepts can be
   }
   ```
 
-  With the server action and the search form set up, it's time to refactor the page for the `app/admin` route to be a server component. It will check whether a search parameter has been appended to the URL by the search form. If a search parameter is present, it will query for users matching the entered term.
+  With the server action and the search form set up, it's time to refactor the `app/admin/page.tsx` to be a server component. It will check whether a search parameter has been appended to the URL by the search form. If a search parameter is present, it will query for users matching the entered term.
 
   If one or more users are found, the component will display a list of users, showing their first and last names, primary email address, and current role. Each user will have `Make Admin` and `Make Moderator` buttons, which include hidden inputs for the user ID and role. These buttons will use the `setRole()` server action to update the user's role.
 

@@ -93,7 +93,7 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
 
   The [`clerkMiddleware()`](/docs/references/express/overview#clerk-middleware) function checks the request's cookies and headers for a session JWT and, if found, attaches the [Auth](/docs/references/nextjs/auth-object#auth-object) object to the request object under the `auth` key.
 
-  ```ts {{ filename: 'index.ts', mark: [3, 8] }}
+  ```ts {{ filename: 'index.ts', mark: [3, 7] }}
   import 'dotenv/config'
   import express from 'express'
   import { clerkMiddleware } from '@clerk/express'
@@ -107,11 +107,13 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
   })
   ```
 
-  You can then accesss the authenticate state in any route by accessing the `auth` property on the request object.
+  You can then use the [`getAuth`](/docs/references/express/overview#get-auth) helper to access the authentication state in any route:
 
   ```ts
+  import { getAuth } from '@clerk/express'
+
   app.get('/auth', (req, res) => {
-    res.json({ auth: req.auth })
+    res.json({ auth: getAuth(req) })
   });
   ```
 
@@ -119,24 +121,23 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
 
   To protect your routes, use the [`requireAuth`](/docs/references/express/overview#require-auth) middleware. This middleware functions the same as `clerkMiddleware` except it redirects you to the configured sign in URL when unauthenticated.
 
-  In this example, if the user is authenticated, it retrieves the `userId` from the `req.auth` object and uses it with `clerkClient.users.getUser()` to fetch the current user's `User` object. If the user is not authenticated, they are redirected to the '/sign-in' route.
+  In this example, if the user is authenticated, it retrieves the `userId` using the `getAuth()` helper and uses it with `clerkClient.users.getUser()` to fetch the current user's `User` object. If the user is not authenticated, they are redirected to the '/sign-in' route.
 
-  ```ts {{ filename: 'index.ts', mark: [3, [7, 8], [10, 13], [15, 17]] }}
+  ```ts {{ filename: 'index.ts', mark: [3, [7, 11], [13, 16]] }}
   import 'dotenv/config'
   import express from 'express'
-  import { clerkClient, requireAuth } from '@clerk/express'
+  import { clerkClient, getAuth, requireAuth } from '@clerk/express'
 
   const app = express()
 
-  // Example view engine
-  app.set('view engine', 'ejs')
-
   app.get('/protected', requireAuth({ signInUrl: '/sign-in' }), (req, res) => {
-    const user = await clerkClient.users.getUser(req.auth.userId)
+    const { userId } = getAuth(req)
+    const user = await clerkClient.users.getUser()
     return res.json({ user })
   });
 
   app.get('/sign-in', (req, res) => {
+    // Assuming you have a template engine installed
     res.render('sign-in')
   });
 

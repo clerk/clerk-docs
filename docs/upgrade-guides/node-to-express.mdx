@@ -72,15 +72,12 @@ app.listen(port, () => {
 
 In the Node SDK, `requireAuth()` wrapped route handlers. With the Express SDK, you must instead pass `requireAuth` as a middleware function before your handler instead of wrapping your handler.
 
-```ts {{ del: [1, 7], ins: [2, 4, 5, 8] }}
+```ts {{ del: [1, 4], ins: [2, 5] }}
 import { requireAuth } from '@clerk/clerk-sdk-node'
-import { requireAuth, clerkMiddleware } from '@clerk/express'
-
-// clerkMiddleware is required to be set in the middleware chain before requireAuth is used
-app.use(clerkMiddleware())
+import { requireAuth } from '@clerk/express'
 
 app.get('/', requireAuth(handler))
-app.get('/', requireAuth, handler)
+app.get('/', requireAuth(), handler)
 ```
 
 ## Migrate from `ClerkExpressWithAuth`
@@ -99,9 +96,9 @@ const port = 3000
 app.use(clerkMiddleware())
 
 const withAuth = (req, res, next) => {
-  const auth = getAuth(req)
+  const { userId } = getAuth(req)
   // If the user is not authenticated, return an empty object
-  req.auth = auth || {}
+  req.auth = userId ? auth : {}
   next()
 }
 
@@ -122,11 +119,9 @@ app.listen(port, () => {
 
 To enforce strict authentication, replace your existing Node SDK strict middleware, [`ClerkExpressRequireAuth`](/docs/backend-requests/handling/nodejs), with the new Express SDK middleware, [`requireAuth`](/docs/references/express/overview#require-auth).
 
-`requireAuth` is a middleware function that you can use to protect routes in your Express.js application. This function checks if the user is authenticated, and passes an error to the error middleware if they are not.
+`requireAuth` is a middleware function that you can use to protect routes in your Express.js application. This function checks if the user is authenticated, and redirects to the configured sign in URl if they are not.
 
-`clerkMiddleware()` is required to be set in the middleware chain before this util is used, as shown in the following example.
-
-```ts {{ del: [1, [12, 14]], ins: [2, 3, 9, [15, 17]] }}
+```ts {{ del: [1, [9, 11]], ins: [2, 3, [12, 14]] }}
 import { ClerkExpressRequireAuth, RequireAuthProp, StrictAuthProp } from '@clerk/clerk-sdk-node'
 import { clerkMiddleware, requireAuth } from '@clerk/express'
 import express from 'express'
@@ -134,14 +129,11 @@ import express from 'express'
 const app = express()
 const port = 3000
 
-// clerkMiddleware is required to be set in the middleware chain before requireAuth is used
-app.use(clerkMiddleware())
-
 // Define a protected route
 app.get('/protected', ClerkExpressRequireAuth(), (req, res) => {
   res.send('This is a protected route')
 })
-app.get('/protected', requireAuth, (req, res) => {
+app.get('/protected', requireAuth(), (req, res) => {
   res.send('This is a protected route')
 })
 

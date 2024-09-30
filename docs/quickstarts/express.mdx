@@ -1,0 +1,170 @@
+---
+title: Express Quickstart
+description: Learn how to use Clerk to quickly and easily add secure authentication and user management to your Express server.
+---
+
+<TutorialHero
+  framework="express"
+  exampleRepo={[
+    {
+      title: "Express Quickstart Repo",
+      link: "https://github.com/clerk/clerk-express-quickstart"
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Create a Express application",
+      link: "https://expressjs.com/en/starter/installing.html",
+      icon: "expressjs",
+    }
+  ]}
+>
+  - Install `@clerk/express`
+  - Set your Clerk API keys
+  - Add `clerkMiddleware()` to your application
+  - Protect your routes using `requireAuth()`
+</TutorialHero>
+
+Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide covers backend implementation only and requires a Clerk frontend SDK in order for any of this to work.
+
+<Steps>
+  ### Install `@clerk/express`
+
+  Clerk's [Express SDK](/docs/references/express/overview) ships with a variety of helpers for the backend to make user authentication easier.
+
+  To get started using Clerk with Express, add the SDK to your project:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/express
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/express
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/express
+    ```
+  </CodeBlockTabs>
+
+  ### Set your Clerk API keys
+
+  <SignedIn>
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+  </SignedIn>
+
+  <SignedOut>
+    1. Navigate to the Clerk Dashboard.
+    1. In the navigation sidebar, select [API Keys](https://dashboard.clerk.com/last-active?path=api-keys).
+    1. In the **Quick Copy** section, copy your Clerk publishable and secret key.
+    1. Paste your keys into your `.env` file.
+
+    The final result should resemble the following:
+  </SignedOut>
+
+  ```sh {{ filename: '.env' }}
+  CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
+
+  This guide uses `dotenv` to load the environment variables. Install the package by running the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install dotenv
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add dotenv
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add dotenv
+    ```
+  </CodeBlockTabs>
+
+  ### Add `clerkMiddleware()` to your application
+
+  The [`clerkMiddleware()`](/docs/references/express/overview#clerk-middleware) function checks the request's cookies and headers for a session JWT and, if found, attaches the [Auth](/docs/references/nextjs/auth-object#auth-object) object to the request object under the `auth` key.
+
+  ```ts {{ filename: 'index.ts', mark: [3, 7] }}
+  import 'dotenv/config'
+  import express from 'express'
+  import { clerkMiddleware } from '@clerk/express'
+
+  const app = express()
+
+  app.use(clerkMiddleware())
+
+  app.listen(3000, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`)
+  })
+  ```
+
+  You can then use the [`getAuth`](/docs/references/express/overview#get-auth) helper to access the authentication state in any route:
+
+  ```ts
+  import { getAuth } from '@clerk/express'
+
+  app.get('/auth', (req, res) => {
+    res.json({ auth: getAuth(req) })
+  })
+  ```
+
+  ### Protect your routes using `requireAuth()`
+
+  To protect your routes, use the [`requireAuth`](/docs/references/express/overview#require-auth) middleware. This middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the sign-in page.
+
+  In this example, if the user is authenticated, it retrieves the `userId` using the `getAuth()` helper and uses it with `clerkClient.users.getUser()` to fetch the current user's `User` object. If the user is not authenticated, they are redirected to the '/sign-in' route.
+
+  ```ts {{ filename: 'index.ts', mark: [3, [7, 11], [13, 16]] }}
+  import 'dotenv/config'
+  import express from 'express'
+  import { clerkClient, getAuth, requireAuth } from '@clerk/express'
+
+  const app = express()
+
+  app.get('/protected', requireAuth({ signInUrl: '/sign-in' }), (req, res) => {
+    const { userId } = getAuth(req)
+    const user = await clerkClient.users.getUser()
+    return res.json({ user })
+  })
+
+  app.get('/sign-in', (req, res) => {
+    // Assuming you have a template engine installed and are using a Clerk JavaScript SDK on this page
+    res.render('sign-in')
+  })
+
+  app.listen(3000, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`)
+  })
+  ```
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Use middleware to protect routes](/docs/references/express/overview#require-auth)
+  - Learn how to protect specific routes from unauthenticated users.
+
+  ---
+
+  - [Protect routes based on authorization status](/docs/references/express/overview#get-auth)
+  - Learn how to protect a route based on both authentication and authorization status.
+
+  ---
+
+  - [Express SDK reference](/docs/references/express/overview)
+  - Learn more about additional Express SDK methods.
+
+  ---
+
+  - [Deploy to Production](/docs/deployments/overview)
+  - Learn how to deploy your Clerk app to production.
+</Cards>

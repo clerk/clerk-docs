@@ -273,4 +273,103 @@ test('ensure that clerk has loaded', async ({ page }) => {
 })
 ```
 
+## Testing authenticated flows
+
+Playwright executes tests in isolated environments called browser contexts. So, each test case runs in a new browser context, which means that the user session is not shared between test cases. However, tests can load existing authenticated state in Playwright.
+
+Following the [Playwright docs on Authentication](https://playwright.dev/docs/auth), you can test authenticated flows without having to sign in for each test case.
+
+The steps below showcase an example of how to save the session storage in a file and load it in your test cases. Of course, you can customize this to fit your needs. You can also have a look at our example repository [here](https://github.com/clerk/clerk-playwright-nextjs).
+
+<Steps>
+
+  ### Add the storage file in your `.gitingore`
+
+  Create a `playwright/.clerk` directory and add it to your `.gitignore`.
+
+  ```sh {{ filename: 'terminal' }}
+  mkdir -p playwright/.clerk
+  echo $'\nplaywright/.clerk' >> .gitignore
+  ```
+
+  ### Save the session in your setup file
+
+  Save the session in your global setup file. This file will be executed before all projects.
+
+  ```tsx {{ filename: 'global.setup.ts' }}
+  import { clerkSetup } from '@clerk/testing/playwright'
+  import { test as setup } from '@playwright/test'
+
+  setup('global setup', async ({}) => {
+    await clerkSetup()
+  })
+
+  const authFile = path.join(__dirname, "../playwright/.clerk/user.json");
+
+  setup("authenticate and save state to storage", async ({ page }) => {
+    // here you can either use a helper function to sign in or do it manually
+    await page.goto("/");
+    await clerk.signIn({
+      page,
+      signInParams: {
+        strategy: "password",
+        identifier: process.env.E2E_CLERK_USER_USERNAME!,
+        password: process.env.E2E_CLERK_USER_PASSWORD!,
+      },
+    });
+    await page.goto("/protected");
+    await page.waitForSelector("h1:has-text('This is a PROTECTED page')");
+
+    await page.context().storageState({ path: authFile });
+  });
+  ```
+
+  ### Load the stored session in your test cases
+
+  You can either load the stored session in a Playwright project:
+
+  ```tsx {{ filename: 'playwright.config.ts' }}
+  ...
+    projects: [
+    {
+      name: "global setup",
+      testMatch: /global\.setup\.ts/,
+    },
+    {
+      name: "Main tests",
+      testMatch: /.*app.spec.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+      dependencies: ["global setup"],
+    },
+    {
+      name: "Authenticated tests",
+      testMatch: /.*authenticated.spec.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+
+        // Use prepared Clerk auth state.
+        storageState: "playwright/.clerk/user.json",
+
+      },
+      dependencies: ["global setup"],
+    },
+  ],
+  ```
+
+  OR, load the session in a test file:
+
+  ```tsx {{ filename: 'authenticated.spec.ts' }}
+  import { test } from '@playwright/test';
+
+  test.use({ storageState: 'playwright/.clerk/user.json' });
+
+  test('user test', async ({ page }) => {
+    // page is authenticated
+  });
+  ```
+  
+</Steps>
+
 For more information, feedback, or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

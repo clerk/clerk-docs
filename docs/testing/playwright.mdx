@@ -75,4 +75,202 @@ description: Use Playwright to write end-to-end tests with Clerk.
   ```
 </Steps>
 
-For more information, feedback or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.
+## Test Helpers
+
+The `@clerk/testing` package also provides some helper functions to sign in/sign out with Clerk in your Playwright tests without having to interact with the UI.
+To use these commands, import the `clerk` object from the `@clerk/testing/playwright` package.
+
+### `clerk.signIn()`
+
+The `clerk.signIn()` function is used to sign in a user using Clerk. This helper only supports the following first factor strategies: password, phone code, and email code. Multi-factor authentication is not supported.
+
+Before calling `clerk.signIn()`, it is required to call `page.goto()` and navigate to an unprotected page that loads Clerk. For example, the index (`/`) page.
+
+> [!NOTE]
+> `clerk.signIn()` internally uses the `setupClerkTestingToken()` helper, so you don't need to call it separately.
+
+#### Parameters
+
+`clerk.signIn()` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - [`Page`](https://playwright.dev/docs/pom)
+
+  [The Playwright `Page` object](https://playwright.dev/docs/pom) to use for the sign-in operation.
+
+  ---
+
+  - `signInParams`
+  - [`ClerkSignInParams`](#clerk-sign-in-params)
+
+  The parameters to use for the sign-in operation. See [`ClerkSignInParams`](#clerk-sign-in-params).
+
+  ---
+
+  - `setupClerkTestingTokenOptions?`
+  - [`SetupClerkTestingTokenOptions`](#set-up-clerk-testing-token-options)
+
+  Options to pass to `setupClerkTestingToken()`. See [`SetupClerkTestingTokenOptions`](#set-up-clerk-testing-token-options).
+</Properties>
+
+#### `ClerkSignInParams`
+
+The `ClerkSignInParams` type is used to define the object that is passed to the `signInParams` parameter of the `clerk.signIn()` function. It has the following properties:
+
+<Properties>
+  - `strategy`
+  - `'password' | 'phone_code' | 'email_code'`
+
+  The sign-in strategy. Supported strategies are:
+
+  - `password`: The command will sign in the user using the provided password and identifier.
+  - `phone_code`: You must have a user with a test phone number as an identifier (e.g., `+15555550100`).
+  - `email_code`: You must have a user with a test email as an identifier (e.g., `your_email+clerk_test@example.com`).
+
+  ---
+
+  - `identifier`
+  - `string`
+
+  The user's identifier. This could be a username, a phone number, or an email.
+
+  ---
+
+  - `password`
+  - `string`
+
+  The user's password. This is required only if the `strategy` is set to `'password'`.
+</Properties>
+
+#### `SetupClerkTestingTokenOptions`
+
+The `SetupClerkTestingTokenOptions` type is used to define the object that is passed to the `setupClerkTestingTokenOptions` parameter of the `clerk.signIn()` function. It has the following properties:
+
+<Properties>
+  - `frontendApiUrl?`
+  - `string`
+
+  The frontend API URL for your Clerk dev instance, without the protocol. If provided, it overrides the Frontend API URL parsed from the publishable key. It can be found in your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys) under **API Keys > Show API URLs**. For example, `'relieved-chamois-66.clerk.accounts.dev'`.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use `clerk.signIn()` in a test to sign in a user.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from '@clerk/testing/playwright'
+
+test('sign in', async ({ page }) => {
+  // Navigate to an unprotected page that loads Clerk
+  await page.goto('/')
+
+  await clerk.signIn({
+    page,
+    signInParams: { strategy: 'phone_code', identifier: '+15555550100' },
+  })
+
+  // Navigate to a protected page
+  await page.goto('/protected')
+})
+```
+
+### `clerk.signOut()`
+
+`clerk.signOut()` is used to sign out the current user using Clerk.
+
+Before calling `clerk.signOut()`, it is required to call `page.goto()` and navigate to an unprotected page that loads Clerk. For example, the index (`/`) page.
+
+#### Parameters
+
+`clerk.signOut()` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - [`Page`](https://playwright.dev/docs/pom)
+
+  [The Playwright `Page` object](https://playwright.dev/docs/pom) to use for the sign-in operation.
+
+  ---
+
+  - `signOutOptions?`
+  - `SignOutOptions`
+
+  Options to pass to `clerk.signOut()`. See [`SignOutOptions`](#sign-out-options).
+</Properties>
+
+#### `SignOutOptions`
+
+The `SignOutOptions` type is used to define the object that is passed to the `signOutOptions` parameter of the `clerk.signOut()` function. It has the following properties:
+
+<Properties>
+  - `sessionId?`
+  - `string`
+
+  The ID of a specific session to sign out of. Useful for multi-session applications.
+
+  ---
+
+  - `redirectUrl?`
+  - `string`
+
+  The redirect URL to navigate to after sign out is complete.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use `clerk.signOut()` in a test to sign out a user.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from '@clerk/testing/playwright'
+
+test('sign out', async ({ page }) => {
+  // Navigate to an unprotected page that loads Clerk
+  await page.goto('/')
+
+  await clerk.signIn({
+    page,
+    signInParams: { strategy: 'phone_code', identifier: '+15555550100' },
+  })
+
+  await page.goto('/protected')
+  await clerk.signOut({ page })
+  await page.goto('/protected')
+  // should redirect to sign in page
+})
+```
+
+### `clerk.loaded()`
+
+`clerk.loaded()` asserts that Clerk has been loaded.
+
+Before calling `clerk.loaded()`, it is required to call `page.goto()` and navigate to an unprotected page that loads Clerk. For example, the index (`/`) page.
+
+#### Parameters
+
+`clerk.loaded()` accepts an object with the following properties:
+
+<Properties>
+  - `page`
+  - [`Page`](https://playwright.dev/docs/pom)
+
+  [The Playwright `Page` object](https://playwright.dev/docs/pom) to use for the sign-in operation.
+</Properties>
+
+#### Example
+
+The following example demonstrates how to use `clerk.loaded()` in a test to assert that Clerk has been loaded.
+
+```ts {{ filename: 'e2e/app.spec.ts' }}
+import { clerk } from '@clerk/testing/playwright'
+
+test('ensure that clerk has loaded', async ({ page }) => {
+  // Navigate to an unprotected page that loads Clerk
+  await page.goto('/')
+
+  await clerk.loaded({ page })
+  // clerk has loaded
+})
+```
+
+For more information, feedback, or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

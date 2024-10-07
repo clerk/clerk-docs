@@ -1,0 +1,225 @@
+---
+description: Learn how to upgrade from the Clerk's Node SDK to the Express SDK.
+---
+
+# Upgrade from Clerk's Node SDK to the Express SDK
+
+## Install the Express SDK
+
+To upgrade from the Clerk Node SDK to the Clerk Express SDK, uninstall the Node SDK by running the following command:
+
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+  ```sh {{ filename: 'terminal' }}
+  npm uninstall @clerk/clerk-sdk-node
+  ```
+
+  ```sh {{ filename: 'terminal' }}
+  yarn remove @clerk/clerk-sdk-node
+  ```
+
+  ```sh {{ filename: 'terminal' }}
+  pnpm remove @clerk/clerk-sdk-node
+  ```
+</CodeBlockTabs>
+
+Then, install the Express SDK by running the following command:
+
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+  ```sh {{ filename: 'terminal' }}
+  npm install @clerk/express
+  ```
+
+  ```sh {{ filename: 'terminal' }}
+  yarn add @clerk/express
+  ```
+
+  ```sh {{ filename: 'terminal' }}
+  pnpm add @clerk/express
+  ```
+</CodeBlockTabs>
+
+## Migrate from `withAuth()`
+
+If you previously used `withAuth()` to wrap your route handlers, you can now retrieve the authentication state within your Express route handlers using the `req.auth` object.
+
+`clerkMiddleware()` is required to be set in the middleware chain before this util is used, as shown in the following example.
+
+```ts {{ del: [1, [10, 13]], ins: [2, 8, [14, 17]] }}
+import { withAuth } from '@clerk/clerk-sdk-node'
+import { clerkMiddleware } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+const port = 3000
+
+app.use(clerkMiddleware())
+
+app.get(
+  '/auth-state',
+  withAuth((req, res) => res.json(req.auth)),
+)
+app.get('/auth-state', (req, res) => {
+  const authState = req.auth
+  return res.json(authState)
+})
+
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`)
+})
+```
+
+## `requireAuth()` usage changes
+
+In the Node SDK, `requireAuth()` wrapped route handlers. With the Express SDK, you must instead pass `requireAuth)` as a middleware function before your handler instead of wrapping your handler. Additionally, `requireAuth()` will now redirect un-authenticated users to the sign in page, where previously it would emit an error.
+
+```ts {{ del: [1, 4], ins: [2, 5] }}
+import { requireAuth } from '@clerk/clerk-sdk-node'
+import { requireAuth } from '@clerk/express'
+
+app.get('/', requireAuth(handler))
+app.get('/', requireAuth(), handler)
+```
+
+If you'd like to retain the previous behavior of `requireAuth()` (emitting an error rather than redirecting), you can accomplish this as such:
+
+```ts
+const legacyRequireAuth = (req, res, next) => {
+  if (!req.auth) {
+    return next(new Error('Unauthenticated'))
+  }
+  next()
+}
+app.get('/', legacyRequireAuth, handler)
+```
+
+You also want to make sure to catch and handle the error using an [error middleware](https://expressjs.com/en/guide/error-handling.html) below.
+
+## Migrate from `ClerkExpressWithAuth`
+
+To replace your existing Node SDK middleware [`ClerkExpressWithAuth()`](/docs/backend-requests/handling/nodejs), which allows requests to proceed even when users are not authenticated, you need to write your own middleware that uses `req.auth` object to retrieve the auth state and then return an empty object if the user is not authenticated.
+
+```ts {{ del: [1, [19, 21]], ins: [2, 8, 9, [11, 16], [22, 24]] }}
+import { ClerkExpressWithAuth } from '@clerk/clerk-sdk-node'
+import { clerkMiddleware } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+const port = 3000
+
+// clerkMiddleware is required to be set in the middleware chain before req.auth is used
+app.use(clerkMiddleware())
+
+const withAuth = (req, res, next) => {
+  const { userId } = req.auth
+  // If the user is not authenticated, return an empty object
+  req.auth = userId ? auth : {}
+  next()
+}
+
+// Define a protected route
+app.get('/protected-route', ClerkExpressWithAuth(), (req, res) => {
+  res.json(req.auth)
+})
+app.get('/protected', withAuth, (req, res) => {
+  res.json(req.auth)
+})
+
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`)
+})
+```
+
+## Migrate from `ClerkExpressRequireAuth`
+
+To enforce strict authentication, replace your existing Node SDK strict middleware, [`ClerkExpressRequireAuth`](/docs/backend-requests/handling/nodejs), with the new Express SDK middleware, [`requireAuth()`](/docs/references/express/overview#require-auth).
+
+`requireAuth()` is a middleware function that you can use to protect routes in your Express.js application. This function checks if the user is authenticated, and redirects to the configured sign in URl if they are not.
+
+```ts {{ del: [1, [9, 11]], ins: [2, 3, [12, 14]] }}
+import { ClerkExpressRequireAuth, RequireAuthProp, StrictAuthProp } from '@clerk/clerk-sdk-node'
+import { clerkMiddleware, requireAuth } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+const port = 3000
+
+// Define a protected route
+app.get('/protected', ClerkExpressRequireAuth(), (req, res) => {
+  res.send('This is a protected route')
+})
+app.get('/protected', requireAuth(), (req, res) => {
+  res.send('This is a protected route')
+})
+
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`)
+})
+```
+
+If you'd like to retain the previous behavior of `ClerkExpressRequireAuth` (emitting an error rather than redirecting), you can accomplish this as such:
+
+```ts
+const legacyRequireAuth = (req, res, next) => {
+  if (!req.auth) {
+    return next(new Error('Unauthenticated'))
+  }
+  next()
+}
+app.get('/', legacyRequireAuth, handler)
+```
+
+You also want to make sure to catch and handle the error using an [error middleware](https://expressjs.com/en/guide/error-handling.html) below.
+
+## Migrate from `createClerkExpressWithAuth` and `createClerkExpressRequireAuth`
+
+If you previously used `createClerkExpressWithAuth` or `createClerkExpressRequireAuth` to create custom middleware by passing in custom Clerk keys, a custom `clerkClient` instance, and/or a custom API URL, you can no longer use these methods with the Express SDK. Instead, use `clerkMiddleware` to create your custom middleware.
+
+If you were passing custom Clerk keys or a custom API URL, pass those to `createClerkClient` from the [Backend SDK](/docs/references/backend/overview#usage) and then pass the custom `clerkClient` into the middleware.
+
+```ts {{ del: [1, [5, 9], 14], ins: [2, 3, 10, 12, 15] }}
+import { createClerkExpressRequireAuth } from '@clerk/clerk-sdk-node'
+import { createClerkClient } from '@clerk/backend'
+import { clerkMiddleware } from '@clerk/express'
+
+const customMiddleware = createClerkExpressRequireAuth({
+  publishableKey: '',
+  apiUrl: '',
+  secretKey: '',
+})
+const clerkClient = createClerkClient({ publishableKey: '', apiUrl: '', secretKey: '' })
+
+app.use(clerkMiddleware({ clerkClient }))
+
+app.get('/path', customMiddleware, (req, res) => res.json(req.auth))
+app.get('/path', (req, res) => res.json(req.auth))
+```
+
+## Backend SDK
+
+### Removed imports
+
+With the Node SDK, you could import any of the Backend SDK methods directly from the Node SDK. With the Express SDK, you need to import the Backend SDK methods from the `@clerk/backend` package.
+
+```ts {{ del: [1], ins: [2, 3] }}
+import { User, requireAuth } from '@clerk/clerk-sdk-node'
+import { requireAuth } from '@clerk/express'
+import { User } from '@clerk/backend'
+```
+
+### `clerkClient` import
+
+The `clerkClient` is used to access the [Backend SDK](/docs/references/backend/overview), which exposes Clerk's backend API resources. If you were importing `clerkClient` from the Node SDK, you can import it from the Express SDK.
+
+```ts {{ del: [1], ins: [2] }}
+import { clerkClient } from '@clerk/clerk-sdk-node'
+import { clerkClient } from '@clerk/express'
+```
+
+### Instantiating a custom `clerkClient`
+
+If you were instantiating a custom `clerkClient` with `createClerkClient`, you can no longer import this method from the Express SDK. You must import it from the [Backend SDK](/docs/references/backend/overview#usage).
+
+```ts {{ del: [1], ins: [2] }}
+import { createClerkClient } from '@clerk/clerk-sdk-node'
+import { createClerkClient } from '@clerk/backend'
+```

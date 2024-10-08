@@ -3,4 +3,136 @@ title: '`createClerkClient()`'
 description: "`createClerkClient()` allows Chrome Extension developers to access a user's session information or get a token in a service worker."
 ---
 
-adf
+The Chrome Extension SDK provides a new feature for developers for interacting with a signed in user while the popup is closed. The `createClerkClient()` helper can be used in a background service worker to access a user's information or token. 
+
+When the extension popup is closed, the Clerk process that normally refreshes the user's session token every 60 seconds is no longer running. The stored session will become stale, as a closed popup or a background service worker do not run in the background.
+
+The `createClerkClient()` helper wille initialize a new Clerk instance on demand, and refresh the session token is there is a valid, signed user. This is the same process as returning to a web application after the tab or browser was closed. 
+
+This guide will demonstrate how to implement this in your Plasmo based Chrome Extension.
+
+Your application may need to interact with the background service worker from content injected into a webpage or from a new tab that your extension opens. For the sake of this guide you will create a web page that the extension will open as a new tab, and that page will have a button on it that retrieves the signed in user's token when clicked.
+
+## Create your Background Service Worker
+
+In your Plasmo based repo, create a new file called `index.ts` in `src/background`. In this file we will create a listener for messages from content script and create a function that uses `createClerkClient()` to get a new token for the user.
+
+> [!Note]
+> The helper is currently marked as `unstable` as it is a new feature. This is a common practice we employ at Clerk.
+
+```typescript {{ filename: 'src/background/index.ts' }}
+  import { __unstable__createClerkClient as createClerkClient } from '@clerk/chrome-extension/background';
+
+  console.log('Background Script w/ Clerk createClerkClient() demo loaded')
+
+  const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+  if (!publishableKey) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
+  }
+
+  // iniatiate a new Clerk instance, refresh the user's session if valid and return a token
+  async function getToken() {
+    const clerk = await createClerkClient({
+      publishableKey,
+      syncHost: process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
+    });
+    return await clerk.session?.getToken();
+  }
+
+  // create a listener to listen for messages from content scripts
+  // NOTE: A runtime listener cannot be async.
+  //       It must return true, in order to keep the connection open and send a response later.
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('Handling request for the user\s current token')
+    getToken().then((token) => sendResponse({ token }));
+    return true;
+  });
+```
+
+## Create the tab with the content script 
+
+First you will create a basic HTML file that will be house the React component for the content script.
+
+```html {{ filename: 'src/tabs/background-worker-demo.html' }}
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Clerk Background Worker demo</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+
+<body></body>
+
+</html>
+```
+
+Now you want to create a React component with content for the page, a button and a function to execute when the button is clicked. The button will send a message to the backround service worker, and then handle the response. If the use is signed in then a token will be returned, added to the state and then displayed on the page.
+
+
+```tsx {{ filename: 'src/tabs/background-worker-demo.tsx' }}
+import * as React from 'react';
+
+export default function NewTab() {
+  const [token, setToken] = React.useState<string | null>(null);
+
+  const getToken = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+
+    // send a message to the background service worker
+    chrome.runtime.sendMessage({ greeting: 'get-token' }, response => {
+      console.log('MESSAGE RESPONSE', JSON.stringify(response));
+      setToken(response.token);
+    });
+  };
+
+  return (
+    <div>
+      <p>Clerk Background Worker demo</p>
+      <div className="App">
+        <p>This new tab simluates a content page where you might want to access user information, or make a request to your backend server and include a user token in the request.</p>
+        <p>Make sure that you are signed into the extension. You can have the popup closed.</p>
+        <button
+          type='button'
+          onClick={getToken}
+          className='button invert'
+        >
+          Get Token (Service Worker) asdfasdfds
+        </button>
+        {token && <p>Token: {token}</p>}
+      </div>
+
+    </div>
+  )
+}
+```
+
+## Add a button to the extension to open the new tab
+
+Add a button to your Chrome Extension to open that page you created as a new tab. This can be added anywhere in your extension. The below example would place the button on the home page of the extension if you followed the [React Router guide](/docs/references/chrome-extension/add-react-router) for Chrome Extensions.
+
+```tsx {{ filename: 'src/popup/routes/index.tsx' }}
+  export const Index = () => {
+    return (
+      <>
+        <h1>Clerk + Chrome Extension</h1>
+        <p>Background Worker</p>
+        <button
+          onClick={() => {
+            chrome.tabs.create({
+              url: "./tabs/background-worker-demo.html"
+            })
+          }}>
+          open tab page
+        </button>
+      </>
+    );
+  };
+```
+
+## Testing the Background Service Worker
+
+Restart or rebuild your Chrome Extension and ensure that your Chromium browser is using the latest bundle. Open the popup for your Chrome Extension and sign in. Once you've signed in, click on the button that you added and a new tab will open. 
+
+In the new tab click the `Get Token (Service Worker)` button. The content script will send a message to the background service worker, `createClerkClient()` will start and confirm that there is a valid session for the user and refresh it, and then service worker will return a token for the user which will be displayed on the screen.

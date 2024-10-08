@@ -33,7 +33,7 @@ These are the guidelines we use to write our SSO guides.
 
   The simplest way to test your OAuth is to visit your Clerk application's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk applications out-of-the-box.
 
-  1. In the Clerk Dashboard, navigate to the [Account Portal](https://dashboard.clerk.com/last-active?path=account-portal) page.
+  1. In the Clerk Dashboard, navigate to the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page.
   1. Next to the **Sign-in** URL, select **Visit**. The URL should resemble:
 
   - **For development** – `https://your-domain.accounts.dev/sign-in`

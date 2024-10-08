@@ -1,0 +1,125 @@
+---
+title: Test authenticated flows
+description: Learn how to test authenticated flows with Playwright.
+---
+
+Playwright executes tests in isolated environments called browser contexts. Because each test case runs in a new browser context, the user session is not shared between test cases by default. However, tests can load existing authenticated state.
+
+This guide demonstrates how to save the auth state globally and load it in your test cases, eliminating the need to authenticate in every test and speeding up test execution. Visit the [Playwright docs about authentication](https://playwright.dev/docs/auth) for more information.
+
+> [!IMPORTANT]
+> Check out the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys, a test user with username and password, and have username and password authentication enabled in the Clerk Dashboard.
+
+<Steps>
+  ### Create a storage directory
+
+  Create a `playwright/.clerk` directory and add it to your `.gitignore`. Once the auth state is generated, it will be stored to a file in this directory. Later on, tests will reuse this state and start already authenticated.
+
+  ```sh {{ filename: 'terminal' }}
+  mkdir -p playwright/.clerk
+  echo $'\nplaywright/.clerk' >> .gitignore
+  ```
+
+  ### Prepare auth state for your tests
+
+  Authenticate and save the auth state in your [global setup file](https://playwright.dev/docs/test-global-setup-teardown).
+
+  This file:
+
+  - Is executed before all projects.
+  - Calls [`clerkSetup()`](/docs/testing/playwright/overview#configure-playwright-with-clerk) to configure Playwright with Clerk.
+  - Calls `clerk.signIn()` to sign in a test user using credentials stored in environment variables. See the [reference](/docs/testing/playwright/test-helpers#clerk-sign-in) for more information about the different parameters you can pass.
+  - Checks if the user can access a protected page to ensure the user is successfully authenticated.
+  - Stores the auth state in the storage file.
+
+  ```tsx {{ filename: 'global.setup.ts' }}
+  import { clerk, clerkSetup } from '@clerk/testing/playwright'
+  import { test as setup } from '@playwright/test'
+  import path from 'path'
+
+  // Configure Playwright with Clerk
+  setup('global setup', async ({}) => {
+    await clerkSetup()
+  })
+
+  // Define the path to the storage file, which is `user.json`
+  const authFile = path.join(__dirname, '../playwright/.clerk/user.json')
+
+  setup('authenticate and save state to storage', async ({ page }) => {
+    // Perform authentication steps.
+    // This example uses a Clerk helper to authenticate
+    await page.goto('/')
+    await clerk.signIn({
+      page,
+      signInParams: {
+        strategy: 'password',
+        identifier: process.env.E2E_CLERK_USER_USERNAME!,
+        password: process.env.E2E_CLERK_USER_PASSWORD!,
+      },
+    })
+    await page.goto('/protected')
+    // Ensure the user has successfully accessed the protected page
+    // by checking an element on the page that only the authenticated user can access
+    await page.waitForSelector("h1:has-text('This is a PROTECTED page')")
+
+    await page.context().storageState({ path: authFile })
+  })
+  ```
+
+  ### Load the stored auth state in your tests
+
+  You can either load the stored auth state [in the config](#-in-the-config) or directly [in a test file](#-in-a-test-file). Loading in the config is useful if you want to authenticate once and reuse the same auth state for all tests or groups of tests. Loading in a test file is useful if you want to authenticate for a specific test case.
+
+  #### In the config
+
+  In your `playwright.config.ts`, create a `global setup` project and declare it as a [dependency](https://playwright.dev/docs/test-projects#dependencies) for all your testing projects. This means that the `global setup` project will always run before all the tests, and because it's where you prepared auth state, it will authenticate before all the tests. All testing projects should use the authenticated state as `storageState`.
+
+  ```tsx {{ filename: 'playwright.config.ts' }}
+  // ...
+  projects: [
+    {
+      name: 'global setup',
+      testMatch: /global\.setup\.ts/,
+    },
+    {
+      name: 'Main tests',
+      testMatch: /.*app.spec.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      dependencies: ['global setup'],
+    },
+    {
+      name: 'Authenticated tests',
+      testMatch: /.*authenticated.spec.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+
+        // Use prepared Clerk auth state
+        storageState: 'playwright/.clerk/user.json',
+      },
+      dependencies: ['global setup'],
+    },
+  ]
+  ```
+
+  #### In a test file
+
+  To use the stored auth state in a test file, see the following example:
+
+  ```tsx {{ filename: 'authenticated.spec.ts', mark: [4, 5] }}
+  import { setupClerkTestingToken } from '@clerk/testing/playwright'
+  import { test } from '@playwright/test'
+
+  // Use prepared Clerk auth state
+  test.use({ storageState: 'playwright/.clerk/user.json' })
+
+  test('user test', async ({ page }) => {
+    await setupClerkTestingToken({ page })
+
+    // page is authenticated
+  })
+  ```
+</Steps>
+
+For more information, feedback, or issues, visit the [`@clerk/testing`](https://github.com/clerk/javascript/tree/main/packages/testing) package.

@@ -40,7 +40,6 @@ description: Add authentication and user management to your Chrome Extension wit
   ```bash {{ filename: 'terminal' }}
   pnpm create plasmo --with-tailwindcss --with-src chrome-extension
   cd clerk-chrome-extension
-  pnpm dev
   ```
 
   ## Install `@clerk/chrome-extension`
@@ -81,7 +80,7 @@ description: Add authentication and user management to your Chrome Extension wit
 
   To make this data available across your entire app, wrap your app in the `<ClerkProvider>` component. You **must** pass your publishable key as a prop to the `<ClerkProvider>` component.
 
-  ```tsx {{ filename: 'src/popup.tsx', mark: [6, [8, 10], 14, 18] }}
+  ```tsx {{ filename: 'src/popup.tsx', mark: [1, 6, [8, 10], 14, 18] }}
   import { ClerkProvider } from '@clerk/chrome-extension'
   import { CountButton } from '~features/count-button'
 
@@ -154,6 +153,63 @@ description: Add authentication and user management to your Chrome Extension wit
   export default IndexPopup
   ```
 
+  ## Update `<ClerkProvider>` props for Chrome Extension navigation
+
+  {/* TODO: Alexis, here are some point form notes for you to use in writing this section */}
+  - Chrome extensions don't use a URL like `htto://localhost:3000`
+  - They have an ID unique to the extension, called a CRX ID
+  - This is used with `chrome-extension://` to create an internal URL like `chrome-extension://kleljgkimpmbjddfaljiohjeliodehcp`
+  - Use `afterSignOutUrl`, `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` with the Extension URL to avoid navigation errors
+
+
+  ```tsx {{ filename: 'src/popup.tsx', mark: [14, [24,26]] }}
+  import {
+    ClerkProvider,
+    SignInButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from '@clerk/chrome-extension'
+
+  import { CountButton } from "~features/count-button"
+
+  import "~style.css"
+
+  const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+  const EXTENSION_URL = chrome.runtime.getURL(".")
+
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
+  }
+
+  function IndexPopup() {
+    return (
+      <ClerkProvider
+        publishableKey={PUBLISHABLE_KEY}
+        afterSignOutUrl={`${EXTENSION_URL}/popup.html`}
+        signInFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
+        signUpFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
+      >
+        <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-[600px] plasmo-w-[800px] plasmo-flex-col">
+          <header className="plasmo-w-full">
+            <SignedOut>
+              <SignInButton mode="modal" />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main className="plasmo-grow">
+            <CountButton />
+          </main>
+        </div>
+      </ClerkProvider>
+    )
+  }
+
+export default IndexPopup
+  ```
+
   ## Create a consistent CRX ID for your extension
 
   Chrome Extensions have a unique CRX ID that rotates by default, which can cause errors and issues with the Clerk integration. To avoid these problems, ensure that you have a **consistent** CRX ID in both development and production for your extension by following these steps:
@@ -175,6 +231,8 @@ description: Add authentication and user management to your Chrome Extension wit
   If you were building an extension from scratch or using other tools, you would need to maintain a `manifest.json` file, and potentially modify it for development and production. Plasmo uses the `package.json` to generate a `manifest.json` on build, and allows for the use of environment variables in `package.json`.
 
   In your `package.json`, add `"key": "$CRX_PUBLIC_KEY"` to the `manifest` object, as shown in the following example:
+
+  {/* TODO: Additionally need to set the `permissions`, and set/update `host_permissions` as shown below */}
 
   ```json {{ filename: 'package.json', mark: [33] }}
   {
@@ -206,15 +264,30 @@ description: Add authentication and user management to your Chrome Extension wit
       "typescript": "5.3.3"
     },
     "manifest": {
-      "host_permissions": ["https://*/*"],
+      "permissions": [
+        "cookies",
+        "storage"
+      ],
+      "host_permissions": [
+        "http://localhost/*",
+        "$CLERK_FRONTEND_API/*"
+      ],
       "key": "$CRX_PUBLIC_KEY"
     }
   }
   ```
-
-  ## Load your Chrome Extension into your Chromium-based browser
+{/* TODO: Moved the `pnpm dev` command here, as Plasmo does not read changes to the .env* files */}
+  ## Use `pnpm dev` to start your development server and create a build
 
   Plasmo facilitates Chrome Extension development by automatically "hot loading" the application whenever you save a changed file in the project. This ensures the `build/chrome-mv3-dev` folder remains up to date. Without the plugin, you would need to manually execute the build command and reload your Chrome Extension after each change. Plasmo automates this process, streamlining development.
+
+  Run the following command to start your development enivronment. This will also create the build in `build/chrome-mv3-dev`, and rebuild it when you make changes to the extension.
+
+  ```bash {{ filename: 'terminal' }}
+  pnpm dev
+  ```
+
+  ## Load your Chrome Extension into your Chromium-based browser
 
   With your application running, please do the following:
 

@@ -8,7 +8,7 @@ These are the guidelines we use to write our SSO guides.
 - Needs an introductory sentence
 
   ```mdx
-  Enabling <TYPE_OF_SSO> with <SSO_PROVIDER> allows your users to sign in and sign up to your Clerk application with their <SSO_PROVIDER> account.
+  Enabling <TYPE_OF_SSO> with <SSO_PROVIDER> allows your users to sign up and sign in to your Clerk application with their <SSO_PROVIDER> account.
   ```
 
 - **Social connection guides only** Needs instructions for **development** versus **production**

@@ -166,7 +166,7 @@ Use "application" for the first instance where it's used, and then use "app" for
 
 ## Page vs. Tab
 
-Assume users are opening windows versus browser tabs. Use active voice.
+Assume users are opening windows versus browser tabs. Use active voice, e.g. "keep" instead of "leave".
 
 ### Do
 

@@ -29,7 +29,7 @@ These are the guidelines we use to write our SSO guides.
 
   ## Configure for your production instance
 
-  In _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your Microsoft Entra ID account.
+  For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your Microsoft Entra ID account.
 
   To make the setup process easier, it's recommended to keep two browser tabs open: one for your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [Microsoft Azure portal](https://portal.azure.com).
   ```

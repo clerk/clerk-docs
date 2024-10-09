@@ -4,14 +4,23 @@ These are the guidelines we use to write our SSO guides.
 
 ## Structure of the guide
 
+- The frontmatter should be formatted as follows:
+
+  ```mdx
+  ---
+  title: Add <SSO_PROVIDER> as a <SSO_TYPE> connection
+  description: Learn how to allow users to sign up and sign in to your Clerk app with their <SSO_PROVIDER> account using <SSO_TYPE>.
+  ---
+  ```
+
 - Needs a `<TutorialHero />` component
-- Needs an introductory sentence
+- The introductory sentence should be formatted as follows:
 
   ```mdx
   Enabling <TYPE_OF_SSO> with <SSO_PROVIDER> allows your users to sign up and sign in to your Clerk application with their <SSO_PROVIDER> account.
   ```
 
-- **Social connection guides only** Needs instructions for **development** versus **production**
+- **Social connection guides only** The instructions for **development** versus **production** should be formatted as follows:
 
   ```mdx
   ## Configure for your development instance
@@ -26,7 +35,7 @@ These are the guidelines we use to write our SSO guides.
   ```
 
 - Use `<Steps />` to lay out the steps
-- Needs a `Test your OAuth` section included in the steps
+- The `Test your OAuth` section should be included in the `<Steps />` and formatted as follows:
 
   ```mdx
   ### Test your OAuth
@@ -163,6 +172,22 @@ In the panel that appears
 ## Application vs. app
 
 Use "application" for the first instance where it's used, and then use "app" for the rest of the guide.
+
+## Redirected to vs. taken to
+
+Use "redirected to" instead of "taken to".
+
+### Do
+
+```mdx
+On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be redirected to the **Certificate & secrets** page.
+```
+
+### Don't
+
+```mdx
+On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be taken to the **Certificate & secrets** page.
+```
 
 ## Page vs. Tab
 

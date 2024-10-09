@@ -164,7 +164,7 @@ In the panel that appears
 
 Use "application" for the first instance where it's used, and then use "app" for the rest of the guide.
 
-## Taken to vs. redirected
+## Redirected to vs. taken to
 
 Use "redirected to" instead of "taken to".
 

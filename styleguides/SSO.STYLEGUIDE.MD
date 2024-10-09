@@ -164,6 +164,22 @@ In the panel that appears
 
 Use "application" for the first instance where it's used, and then use "app" for the rest of the guide.
 
+## Taken to vs. redirected
+
+Use "redirect" instead of "taken to".
+
+### Do
+
+```mdx
+On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be redirected to the **Certificate & secrets** page.
+```
+
+### Don't
+
+```mdx
+On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be taken to the **Certificate & secrets** page.
+```
+
 ## Page vs. Tab
 
 Assume users are opening windows versus browser tabs. Use active voice, e.g. "keep" instead of "leave".

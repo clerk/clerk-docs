@@ -166,7 +166,7 @@ Use "application" for the first instance where it's used, and then use "app" for
 
 ## Taken to vs. redirected
 
-Use "redirect" instead of "taken to".
+Use "redirected to" instead of "taken to".
 
 ### Do
 

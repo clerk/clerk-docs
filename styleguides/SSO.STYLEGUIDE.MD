@@ -163,3 +163,37 @@ In the panel that appears
 ## Application vs. app
 
 Use "application" for the first instance where it's used, and then use "app" for the rest of the guide.
+
+## Page vs. Tab
+
+Assume users are opening windows versus browser tabs. Use active voice, e.g. "keep" instead of "leave".
+
+### Do
+
+```mdx
+Keep the page open.
+```
+
+### Don't
+
+```mdx
+Leave the page open.
+```
+
+```mdx
+Leave the tab open.
+```
+
+## Complete vs. Fill out
+
+### Do
+
+```mdx
+Complete the form as follows
+```
+
+### Don't
+
+```mdx
+Fill out the form as follows
+```

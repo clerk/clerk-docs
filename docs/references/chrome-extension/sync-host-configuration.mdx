@@ -5,21 +5,79 @@ description: Learn how to configure your Chrome Extension to sync user authentic
 
 The Sync Host feature enables your user's session in your web application to be synced with your Chrome Extension. As soon as a user authenticates in your web application, the user will be authenticated in your Chrome Extension as well.
 
+> [!NOTE]
+> This guide is based on using the [Plasmo](https://www.plasmo.com/) framework and having following the [React Router for Chrome Extension](/docs/references/chrome-extension/add-react-router) guide. You may need to adjust the implementation and edite files based off of your specific configuration.
+
 <Steps>
   ### Add `CLERK_SYNC_HOST` to your environment variables
 
-  To enable Sync Host, add the `PLASMO_PUBLIC_CLERK_SYNC_HOST` environment variable to your `.env.production` and `.env.development` files. The value will be the URL of your production application or development application. If you are using a Vite based React application, then you would likely use `http://localhost:5173`.
+  1. Add `PLASMO_PUBLIC_SYNC_HOST` to your `.env.development` and `.env.production` files.
+  1. For `.env.development` use the domain your development app runs on. If you are using a Vite based React application, then you would likely use `localhost:5173`
+  2. For `.env.production` use the domain for your deployed web application. For example, `clerk.com`
+
+> [!NOTE] 
+> Do not add `http://` or `https://` during this step.
 
   {/* TODO: Alexis, maybe tabs for .env.development and .env.production? */}
   ```tsx {{ filename: '.env.development', mark: [3], prettier: false }}
   PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_
   CLERK_FRONTEND_API=  
-  PLASMO_PUBLIC_CLERK_SYNC_HOST=http://localhost:5173
+  PLASMO_PUBLIC_SYNC_HOST=localhost:5173
   ```
   
-  > [!NOTE]
-  > You can alternatively use the `syncHost` prop for `<ClerkProvider>`. If you do this you will need to make this value is accurate for development or production builds.
+  ### Add `syncHost` prop to your `<ClerkProvider>`
 
+  
+  ```tsx {{ filename: 'src/popup/layouts/root-layout.tsx', mark: [10, [12,14], 27] }}
+  import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+  import {
+    ClerkProvider,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from "@clerk/chrome-extension";
+
+  const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+  const SYNC_HOST = process.env.PLASMO_PUBLIC_SYNC_HOST
+
+  if (!PUBLISHABLE_KEY || !SYNC_HOST) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY and PLASMO_PUBLIC_SYNC_HOST to the .env.development file')
+  }
+
+  export const RootLayout = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    console.log("location", location);
+    return (
+      <ClerkProvider
+        routerPush={(to) => navigate(to)}
+        routerReplace={(to) => navigate(to, { replace: true })}
+        publishableKey={PUBLISHABLE_KEY}
+        afterSignOutUrl="/"
+        syncHost={`http://${SYNC_HOST}`}
+      >
+        <div className="plasmo-w-[785px] plasmo-h-[600px] plasmo-flex plasmo-flex-col">
+          <main className="plasmo-grow plasmo-border-2 plasmo-border-red-500">
+            <Outlet />
+          </main>
+          <footer className="plasmo-border-2 plasmo-border-green-500">
+            <SignedIn>
+              <Link to="/sdk-features">SDK Features</Link>
+              <Link to="/settings">Settings</Link>
+              <UserButton />
+            </SignedIn>
+            <SignedOut>
+              <Link to="/">Home</Link>
+              <Link to="/sign-in">Sign In</Link>
+              <Link to="/sign-up">Sign Up</Link>
+            </SignedOut>
+          </footer>
+        </div>
+      </ClerkProvider>
+    );
+  };
+```
 
   ### Configure `host_permissions`
 
@@ -28,7 +86,7 @@ The Sync Host feature enables your user's session in your web application to be 
   The values for your web application and of the Clerk Frontend API will be different for development and production. Using `.env.development` and `.env.production` will allow you to pass those values to your development and production builds seamlessly.
 
   1. Open your `manifest.json` file and edit the `host_permissions` key.
-  1. Remove `http://localhost/*` or similiar is present and replace with `$PLASMO_PUBLIC_CLERK_SYNC_HOST/*`. 
+  1. Remove `http://localhost/*` or similiar is present and replace with `$PLASMO_PUBLIC_SYNC_HOST/*`. 
 
   The following examples shows how to configure `host_permissions`:
 
@@ -39,7 +97,7 @@ The Sync Host feature enables your user's session in your web application to be 
       "storage"
     ],
     "host_permissions": [
-      "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
+      "http://$PLASMO_PUBLIC_SYNC_HOST/*"
       "$CLERK_FRONTEND_API/*"
     ],
     "key": "$CRX_PUBLIC_KEY"

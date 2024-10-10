@@ -29,9 +29,9 @@ These are the guidelines we use to write our SSO guides.
 
   ## Configure for your production instance
 
-  For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your Microsoft Entra ID account.
+  For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your <SSO_PROVIDER> account.
 
-  To make the setup process easier, it's recommended to keep two browser tabs open: one for your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [Microsoft Azure portal](https://portal.azure.com).
+  To make the setup process easier, it's recommended to keep two browser tabs open: one for your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps
@@ -40,7 +40,7 @@ These are the guidelines we use to write our SSO guides.
   ```mdx
   ### Test your OAuth
 
-  The simplest way to test your OAuth is to visit your Clerk application's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk applications out-of-the-box.
+  The simplest way to test your OAuth is to visit your Clerk app's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk apps out-of-the-box.
 
   1. In the Clerk Dashboard, navigate to the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page.
   1. Next to the **Sign-in** URL, select **Visit**. The URL should resemble:
@@ -99,25 +99,26 @@ If the step ends with a redirect, include the redirect instructions in the step.
 
 ### Do
 
-1. Select **New application**. You'll be redirected to the **Browse Microsoft Entra Gallery** page.
+1. Select **New application**. You'll be redirected to the <SSO_PROVIDER_DASHBOARD>.
 1. Select **Create your own application**.
 
 ### Don't
 
 1. Select **New application**.
-1. In the **Browse Microsoft Entra Gallery** page, select **Create your own application**.
+1. In the **<SSO_PROVIDER_DASHBOARD>**, select **Create your own application**.
 
 ## Component naming
 
 The proper names for the components are:
 
-- Panel = drawer
-- Modal = popup
+- Dashboard: refers to a control panel or central hub where users can interact with multiple tools or view data
+- Panel: drawer
+- Modal: popup
 - Dropdown
 
 ## Use conjunctions
 
-Use conjunctions in the copy to make it more natural.
+Use conjunctions in the copy to make the copy more colloquial.
 
 ### Do
 
@@ -169,13 +170,24 @@ In the panel that opens
 In the panel that appears
 ```
 
+## Action verbs
+
+- Add: general use (e.g., Add your app information)
+- Enter: general typing (e.g., Enter your email address)
+- Paste: to copy and paste values (e.g., Paste the Client ID you copied from the Clerk Dashboard)
+- Complete: to fill out forms
+
 ## Application vs. app
 
-Use "application" for the first instance where it's used, and then use "app" for the rest of the guide.
+Use "application" for the first instance where it's used and then "app" for the rest of the guide.
 
 ## Redirected to vs. taken to
 
-Use "redirected to" instead of "taken to".
+Use "redirected to" instead of "taken to."
+
+## Ensure vs. make sure
+
+Use "ensure" instead of "make sure."
 
 ### Do
 
@@ -191,7 +203,7 @@ On this same page, under **Client credentials**, select **Add a certificate or s
 
 ## Page vs. Tab
 
-Assume users are opening windows versus browser tabs. Use active voice, e.g. "keep" instead of "leave".
+Assume users are opening windows versus browser tabs. Use active voice (e.g., "keep" vs. "leave).
 
 ### Do
 

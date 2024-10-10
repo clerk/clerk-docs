@@ -17,36 +17,29 @@ Your application may need to interact with the background service worker from co
 
 In your Plasmo based repo, create a new file called `index.ts` in `src/background`. In this file we will create a listener for messages from content script and create a function that uses `createClerkClient()` to get a new token for the user.
 
-> [!Note]
-> The helper is currently marked as `unstable` as it is a new feature. This is a common practice we employ at Clerk.
 
 ```typescript {{ filename: 'src/background/index.ts' }}
-  import { __unstable__createClerkClient as createClerkClient } from '@clerk/chrome-extension/background';
-
-  console.log('Background Script w/ Clerk createClerkClient() demo loaded')
+  import { createClerkClient } from '@clerk/chrome-extension/background';
 
   const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
   if (!publishableKey) {
     throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
   }
 
-  // iniatiate a new Clerk instance, refresh the user's session if valid and return a token
+  // Create a new Clerk instance and get a fresh token for the user
   async function getToken() {
     const clerk = await createClerkClient({
-      publishableKey,
-      syncHost: process.env.PLASMO_PUBLIC_SYNC_HOST // add if you are using the Sync Host feature
+      publishableKey: process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY,
     });
     return await clerk.session?.getToken();
   }
 
-  // create a listener to listen for messages from content scripts
-  // NOTE: A runtime listener cannot be async.
-  //       It must return true, in order to keep the connection open and send a response later.
+  // Create a listener to listen for messages from content scripts
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Handling request for the user\s current token')
+    // You can use the token in the listener to perform actions on behalf of the user
+    // Or send the token back to the content script
     getToken().then((token) => sendResponse({ token }));
-    return true;
-  });
+  return true; // REQUIRED: Indicates that the listener responds asynchronously.
 ```
 
 ## Create the tab with the content script 

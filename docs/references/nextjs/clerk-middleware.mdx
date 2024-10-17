@@ -336,6 +336,13 @@ The `clerkMiddleware()` function accepts an optional object. The following optio
 
   ---
 
+  - `organizationSyncOptions?`
+  - <code>[OrganizationSyncOptions](#organization-sync-options) | undefined</code>
+
+  Used to activate a particular [organization](docs/organizations/overview) or the [personal account](/glossary#personal-account) based on path parameters in the URL.
+
+  ---
+
   - `proxyUrl?`
   - `string`
 
@@ -428,3 +435,86 @@ export default clerkMiddleware(
 
 > [!NOTE]
 > Dynamic keys are not accessible on the client-side.
+
+### OrganizationSyncOptions
+
+The `organizationSyncOptions` property on the <code>[clerkMiddleware()](#clerk-middleware-options)</code> options
+object has the type `OrganizationSyncOptions`.
+
+This defines the options for automatically activating an organization or the [personal account](/glossary#personal-account)
+based on the URL. This is useful for applications that require organization slugs or IDs to appear in URL paths.
+
+If a mismatch between the active organization on the session (e.g. as reported by
+<code>[auth()](/docs/references/nextjs/auth)</code>) and the organization as indicated by the URL is detected, an attempt
+to activate the given organization will be made.
+
+`OrganizationSyncOptions` has the following properties:
+
+<Properties>
+  - `organizationPatterns`
+  - <code>[Pattern](#pattern)\[]</code>
+
+  URL patterns that are organization-specific and contain an organization ID or slug as a path parameter. If a request
+  matches this path, the organization identifier will be extracted and activated before rendering.
+
+  If the route also matches the personalAccountPatterns, this takes precedence.
+
+  Patterns must have a path parameter named either `:id` (matches a clerk organization ID) or `:slug` (matches a clerk
+  organization slug).
+
+  > [!WARNING]
+  > If the organization cannot be activated, either because it does not exist or the user lacks access,
+  > no change will be made to the previously active organization. Components must detect this case and respond with an
+  > appropriate error (e. g., `notFound()`, an
+  > [organization switcher](/docs/components/organization/organization-switcher), etc.).
+
+  Common examples:
+  - `["/orgs/:slug", "/orgs/:slug/(.*)"]`
+  - `["/orgs/:id", "/orgs/:id/(.*)"]`
+  - `["/app/:any/orgs/:slug", "/app/:any/orgs/:slug/(.*)"]`
+
+  ---
+
+  - `personalAccountPatterns`
+  - <code>[Pattern](#pattern)\[]</code>
+
+  URL patterns for resources that exist within the context of a clerk [personal account](/glossary#personal-account) (user-specific, outside any
+  organization).
+
+  If the route also matches the organizationPattern, the organizationPattern takes precedence.
+
+  Common examples:
+  - `["/me", "/me/(.*)"]`
+  - `["/user/:any", "/user/:any/(.*)"]`
+</Properties>
+
+### Pattern
+
+A `Pattern` is a `string` that represents the structure of a URL path. In addition to any valid URL, it may include:
+- Named path parameters prefixed with a colon (e. g., `:id`, `:slug`, `:any`).
+- Wildcard token, `(.*)`, which will match the remainder of the path.
+
+#### <h4>Examples</h4>
+
+  - `/orgs/:slug`
+
+  | URL                       | Matches | `:slug` value |
+  |---------------------------|---------|---------------|
+  | `/orgs/acmecorp`          | ✅       | `acmecorp`    |
+  | `/orgs`                   | ❌       | n/a           |
+  | `/orgs/acmecorp/settings` | ❌       | n/a           |
+
+
+  - `/app/:any/orgs/:id`
+
+  | URL                             | Matches | `:id` value |
+  |---------------------------------|---------|-------------|
+  | `/app/petstore/orgs/org_123`    | ✅       | `org_123`   |
+  | `/app/dogstore/v2/orgs/org_123` | ❌       | n/a         |
+
+  - `/personal-account/(.*)`
+
+  | URL                          | Matches |
+  |------------------------------|---------|
+  | `/personal-account/settings` | ✅       |
+  | `/personal-account`          | ❌       |

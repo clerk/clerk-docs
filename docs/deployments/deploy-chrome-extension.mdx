@@ -1,79 +1,73 @@
 ---
-title: Deploy a Chrome Extension
-description: Learn how to deploy a Chrome Extension with Clerk.
+title: Deploy a Chrome Extension to production
+description: Learn how to deploy a Chrome Extension to production with Clerk.
 ---
 
 ## Create a production instance
 
-For Clerk production instances, there must be a domain associated with the instance. Even though there may not be a web application associated with the Chrome Extension, a domain is still required. Follow the [guide on deploying your Clerk app to production](/docs/deployments/overview).
+For Clerk production instances, there must be a domain associated with the instance. Even though there may not be a web application associated with your Chrome Extension, a domain is still required. Follow the [guide on deploying your Clerk app to production](/docs/deployments/overview).
+
+## Update your `.env.production` file
+
+<SignedIn>
+  Add your publishable and frontend API keys for your Clerk production instance to your `.env.production` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard. If you are using [the Sync Host feature](/docs/references/chrome-extension/sync-host), you will also need to set the `PLASMO_PUBLIC_SYNC_HOST` environment variable. The value should be the domain your web app's production server runs on. For example, `https://clerk.com`.
+</SignedIn>
+
+<SignedOut>
+  1. At the top of the Clerk Dashboard, in the instance selection dropdown, ensure that your production instance is selected.
+  1. Navigate to the [**API Keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+  1. In the **Quick Copy** section, select **Chrome Extension** and copy your Clerk publishable and frontend API key.
+  1. Paste your keys into your `.env.production` file.
+  1. If you are using [the Sync Host feature](/docs/references/chrome-extension/sync-host), you will also need to set the `PLASMO_PUBLIC_SYNC_HOST` environment variable. The value should be the domain your web app's production server runs on. For example, `https://clerk.com`.
+
+  The final result should resemble the following:
+</SignedOut>
+
+```env {{ filename: '.env.production' }}
+PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+CLERK_FRONTEND_API={{fapi_url}}
+PLASMO_PUBLIC_SYNC_HOST=https://yourdomain.com
+```
 
 ## Add production domain to `host_permissions`
 
-`host_permissions` allows you to specify which hosts, or websites, will have permission to sync auth state with your application. It accepts an array, allowing you to add more than one host.
-
-<Steps>
-  ### Set your Clerk API keys
-
-  Create an `.env.production` file.
-
-  <SignedIn>
-    Add the following keys to your `.env.production` file. These keys can always be retrieved from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
-  </SignedIn>
-
-  <SignedOut>
-    1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
-    1. At the top of the Dashboard, ensure that your production instance is selected.
-    1. In the navigation sidebar, select **API Keys**.
-    1. In the **Quick Copy** section, select **Chrome Extension** and copy your Clerk publishable and frontend API key.
-    1. Paste your keys into your `.env.production` file.
-    1. If you are using the Sync Host feature, follow the [Sync Host Configuration](/docs/references/chrome-extension/sync-host-configuration) guide to correctly configure your `syncHost` prop on `<ClerkProvider>` and the `host_permissions` in your `package.json` or `manifest.json`
-    1. If you followed our guide then your `package.json` will add `/*` to the end. Otherwise ensure that you add that yourself at this stage.
-
-
-    The final result should resemble the following:
-  </SignedOut>
-
-  ```env {{ filename: '.env.production' }}
-  PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_FRONTEND_API={{fapi_url}}
-  PLASMO_PUBLIC_SYNC_HOST=https://yourdomain.com
-  ```
-
-  ### Update `package.json`
-
-  > [!NOTE]
-  > If you followed our guide for Sync Host then you have completed this step and are using the value of the Environment Variable from `.env.production`
-
-  `host_permissions` allows you to specify which hosts, or websites, will have permission to sync auth state with your application. It accepts an array, allowing you to add more than one host.
-
-  1. Open your `manifest.json` file and add the `host_permissions` key.
-  1. For production, add your domain and ensure it is preceded with `https://`. For example, `https://clerk.com`. Only add the root domain and not any subdomains.
-  1. Add `/*` to the end of the domain
-
-  The following example shows how to configure `host_permissions` for production:
-
-  ```json {{ filename: 'package.json' }}
-  {
-    // ... the rest of your package.json
-    "host_permissions": ["https://<yourdomain>/*", "https://$CLERK_FRONTEND_API/*"]
-  }
-  ```
-</Steps>
-
-## Add the Extension's ID to your instance's `allowed_origins`
+`host_permissions` specifies which hosts, or websites, will have permission to sync auth state with your app. It accepts an array, allowing you to add more than one host. You must add your production domain to the `host_permissions` array.
 
 > [!WARNING]
-> You will have likely added the Extension ID already, but using your development secret key. You must also add the Extension to the production instance's `allowed_origins`
+> If you are using the Sync Host feature and followed [the configuration guide](/docs/references/chrome-extension/sync-host), then you have already completed this step (the `http://$PLASMO_PUBLIC_SYNC_HOST/*` value points to your production domain.)
 
-For web applications, Clerk requires you to set a **domain** in your Clerk Dashboard. For Chrome Extensions, the **extension ID** is used _instead_ of a domain. You must add this to your application's settings via the Backend API instead of the Clerk Dashboard.
+In the `package.json` file, in the `manifest` object, update the `host_permissions` array. Add your domain and ensure it is preceded with `https://`. For example, `https://clerk.com`. Only add the root domain and not any subdomains. Then, add `/*` to the end of the domain.
 
-1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
-1. At the top of the Dashboard, ensure that your production instance is selected.
-1. In the navigation sidebar, select **API Keys**.
-1. Copy your secret key. It should begin with `sk_live_`.
-1. In your terminal, paste the following command and replace `<YOUR_SECRET_KEY>` with your Clerk secret key, and the `<CHROME_EXTENSION_KEY>` with your extension's ID.
+The following example shows how to configure `host_permissions` for production:
 
-The final result should resemble the following:
+```json {{ filename: 'package.json', mark: [6] }}
+{
+  // The rest of your package.json file
+  "manifest": {
+    "key": "$CRX_PUBLIC_KEY",
+    "permissions": ["cookies", "storage"],
+    "host_permissions": ["https://<yourdomain>/*", "$CLERK_FRONTEND_API/*"]
+  }
+}
+```
+
+## Add the Extension's ID to your web app's `allowed_origins`
+
+> [!WARNING]
+> You may have already added the Extension ID to your web app's `allowed_origins` using your **development** secret key. You must repeat this step using your **production** secret key.
+
+<SignedIn>
+  In your terminal, paste the following command and replace the `<CHROME_EXTENSION_KEY>` with your extension's ID.
+</SignedIn>
+
+<SignedOut>
+  1. At the top of the Clerk Dashboard, in the instance selection dropdown, ensure that your production instance is selected.
+  1. Navigate to the [**API Keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+  1. Copy your secret key. It should begin with `sk_live_`.
+  1. In your terminal, paste the following command. Replace `YOUR_SECRET_KEY` with your Clerk secret key and the `<CHROME_EXTENSION_KEY>` with your extension's ID.
+
+  The final result should resemble the following:
+</SignedOut>
 
 ```bash {{ filename: 'terminal' }}
 curl -X PATCH https://api.clerk.com/v1/instance \
@@ -82,10 +76,10 @@ curl -X PATCH https://api.clerk.com/v1/instance \
   -d '{"allowed_origins": ["chrome-extension://<CHROME_EXTENSION_KEY>"]}'
 ```
 
-Running the command will add the extension's ID to your instance's `allowed_origins`.
-
 ## Submit your extension for review
 
-1. In your application, create a new zip of `build/chrome-mv3-dev` folder. Upload this to the Chrome Web Store Developer Dashboard.
-1. In the **Privacy** tab, find the **Permission justification** section. In this section, there is a **Are you using remote code?** section. You will need to indicate that you are using remote code. Clerk loads the `@clerk/clerk-js` package from a CDN and it is not included in the extension.
-1. Submit for review in the Chrome Developer Dashboard.
+1. In your app, create a new zip of the `build/chrome-mv3-dev` folder.
+1. In the top-right of the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/developer/dashboard), select **Upload new package** and upload the zip file.
+1. In the sidebar, select the **Privacy** tab.
+1. In the **Permission justification** section, it asks **Are you using remote code?**. You will need to indicate that you are using remote code. In the **Justification** textbox, paste "Clerk loads the `@clerk/clerk-js` package from a CDN and it is not included in the extension."
+1. Complete the required information to submit your extension for review. To check the requirements that must be met before submitting, select **Why can't I submit?**.

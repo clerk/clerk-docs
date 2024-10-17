@@ -3,26 +3,35 @@ title: CSRF protection
 description: CSRF is an attack that tricks the victim into submitting a malicious request. It inherits the identity and privileges of the victim to perform an undesired function on the victim’s behalf.
 ---
 
-CSRF is an attack that tricks the victim into submitting a malicious request. It inherits the identity and privileges of the victim to perform an undesired function on the victim's behalf. For most sites, browser requests automatically include any credentials associated with the site, such as the user's session cookie, IP address, Windows domain credentials, and so forth. Therefore, if the user is currently authenticated to the site, the site will have no way to distinguish between the forged request sent by the victim and a legitimate request sent by the victim.
+Cross Site Request Forgery (CSRF) is an attack that deceives a victim into submitting a malicious request. The attack inherits the victim's identity and privileges to perform an undesired action on the their behalf. For most sites, browser requests automatically include credentials associated with the site, such as the user's session cookie, IP address, Windows domain credentials, and more. Therefore, if the user is currently authenticated, the site cannot distinguish between a forged request initiated by the attacker and a legitimate request from the user.
 
-[The OWASP® Foundation, Cross Site Request Forgery (CSRF)](https://owasp.org/www-community/attacks/xss/)
+[The OWASP® Foundation, Cross Site Request Forgery (CSRF)](https://owasp.org/www-community/attacks/csrf)
 
-Most Cross Site Request Forgery (CSRF) attacks can be protected against by properly configuring the way session tokens are stored. Clerk handles the necessary configuration on your behalf by configuring cookies with the _SameSite_ flag.
+Most CSRF attacks can be protected against by properly configuring the way session tokens are stored. Clerk handles the necessary configuration on your behalf by configuring cookies with the `SameSite` flag.
+
+## What does a CSRF attack look like?
+
+Imagine an attacker made a malicious website at `foo.com` that contained the following code:
+
+```html
+<img src="https://www.example.com/?action=delete&id=123" />
+```
+
+Notice the query string `?action=delete&id=123`.
+
+If a user logged into `example.com` loads this page, and `example.com` is configured to execute actions from the query string for authorized users, an attacker could potentially delete the user's account on `example.com` without their knowledge. The user would simply see a webpage with a broken image, which could be easily hidden using CSS.
 
 ## How does SameSite help prevent CSRF attacks?
 
-SameSite is a flag on the [Set-Cookie header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) that is issued by a server to set a cookie in the browser.
+Fortunately, [the `SameSite` flag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value), which can be added to the `Set-Cookie` header, can prevent CSRF attacks. In the previous example, if the developers of `example.com` set the `SameSite` flag on their session cookies to `Strict` or `Lax`, the browser would not send the cookie with requests to `foo.com`. Therefore, the attack would fail as the user would not be authenticated and the backend would presumably block the delete action.
 
-When a cookie's SameSite flag is set to Strict or Lax, the cookie will not be sent with HTTP requests that originate from a third party site (a "cross-site" request). The cookie will only be sent when the originating site shares the same root domain, or more precisely, the same [public suffix](https://publicsuffix.org/).
+Let's break down what each of the values of `SameSite` do:
 
-For example, consider a cookie that is set on foo.example.com:
+- `Strict`: The cookie will only be sent with HTTP requests initiated from the same site. While this may seem like the most secure option, it results in users being signed out if they navigate to the site from an external link. Since the cookie is omitted in cross-site requests, this leads to a poor user experience and is generally not recommended when using cookies for authentication.
+- `Lax`: The cookie will be sent with HTTP requests initiated from the same site, and with direct navigations from a cross-site origin, but not with requests to load resources such as images or frames. This setting still protects against CSRF attacks without the poor user experience issues of `Strict`, where users are signed out when navigating from external links. `Lax` is the default setting in modern browsers and is recommended for most use cases.
+- `None`: The browser will send cookies for both same-site and cross-site requests. While this setting allows for more flexibility in certain scenarios, it also increases the risk of CSRF attacks and therefore is not recommended.
 
-- The cookie _will_ be sent when `bar.example.com` initiates a request to `foo.example.com`
-- The cookie _will not_ be sent when `bar.example.org` initiates a request to `foo.example.com`
-
-_Lax_ alleviates this restriction slightly and allows for the cookie to be sent when the user is navigating from a third party site. In the example above, if the user is on `bar.example.org` and clicks a link to `foo.example.com`, then the initial request to load `foo.example.com` will include the cookie.
-
-Clerk sets the SameSite flag to _Lax_, which is the default in modern browsers.
+Clerk sets the `SameSite` flag for all of its session cookies to `Lax`, which is the default in modern browsers.
 
 ## Do I need to take additional steps to prevent CSRF attacks?
 

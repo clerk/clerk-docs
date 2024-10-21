@@ -11,13 +11,14 @@ It's recommended to use `createClerkClient()` for Chrome Extension's that are co
 
 ## How it works
 
-A background service worker runs on demand. When a request comes in from a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts) that wants to interact with Clerk, the background service worker is triggered and calls `createClerkClient()`. This creates a Clerk instance and refreshes the session token.
+A background service worker runs on demand. It adds an event listener that listens for a request from a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts). If the request wants to interact with Clerk, the listener calls `createClerkClient()` to create a Clerk instance and refresh the session token.
 
 ## Usage
 
-The following example will demonstrate how to configure your Chrome Extension to use `createClerkClient()` to ensure that the user's session is always fresh. Your application may need to interact with the background service worker from content injected into a webpage or from a new tab that your extension opens. For this example, you will create a web page that the extension will open as a new tab, and that page will have a button on it that, when clicked, retrieves the signed in user's token.
+The following example will demonstrate how to configure your Chrome Extension to use `createClerkClient()` to refresh your user's session token if it's valid. For this example, you will create a web page that the extension will open as a new tab, and that page will have a button on it that, when clicked, retrieves the signed in user's token.
 
-The following example assumes that you have followed the [Chrome Extension Quickstart](/docs/quickstarts/chrome-extension) and then the [Add React Router](/docs/references/chrome-extension/add-react-router) guide, but you can apply these concepts to your own application.
+> [!WARNING]
+> The following example assumes that you have followed the [Chrome Extension Quickstart](/docs/quickstarts/chrome-extension) and then the [Add React Router](/docs/references/chrome-extension/add-react-router) guide, but you can apply these concepts to your own application.
 
 <Steps>
   ### Create your background service worker
@@ -50,7 +51,7 @@ The following example assumes that you have followed the [Chrome Extension Quick
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // This example sends the token back to the content script
     // but you could also use the token to perform actions on behalf of the user
-    getToken().then((token) => sendResponse({ token }))
+    getToken().then((token) => sendResponse({ token })).catch((error) => console.error('[Background service worker] Error:', JSON.stringify(error)))
     return true // REQUIRED: Indicates that the listener responds asynchronously.
   })
   ```
@@ -72,8 +73,8 @@ The following example assumes that you have followed the [Chrome Extension Quick
        <body></body>
      </html>
      ```
-  1. In the `tabs/` directory, create the `background-work-demo.tsx` file.
-  1. In the `background-work-demo.tsx` file, paste the following code to create a React component with a button that will trigger the background service worker to get the token. If the token is returned, it will be displayed on the page.
+  1. In the `tabs/` directory, create the `background-worker-demo.tsx` file.
+  1. In the `background-worker-demo.tsx` file, paste the following code to create a React component with a button that will trigger the background service worker to get the token. If the token is returned, it will be displayed on the page.
      ```tsx {{ filename: 'src/tabs/background-worker-demo.tsx' }}
      import * as React from 'react'
 
@@ -86,7 +87,6 @@ The following example assumes that you have followed the [Chrome Extension Quick
          // Trigger the background service worker to get the token
          // and set the token in the state
          chrome.runtime.sendMessage({ greeting: 'get-token' }, (response) => {
-           console.log('MESSAGE RESPONSE', JSON.stringify(response))
            setToken(response.token)
          })
        }

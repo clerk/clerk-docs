@@ -1,0 +1,47 @@
+---
+title: 'Nextjs 15 `<ClerkProvider>`'
+description: Access minimal authentication data for managing sessions and data fetching.
+---
+Partial prerendering (PPR) is a new rendering mode for Next.js that allows a page to be both static _and_ dynamic. To accomplish this, Next.js analyzes your pages and determines which parts of the page can be statically rendered at build-time, and which parts rely on dynamic request data. This allows granular optimization at the component level, instead of at the page level.
+
+Historically, usage of `<ClerkProvider>` has opted your entire application in to dynamic rendering due to the dynamic and personalized nature of auth-related data. We've heard the feedback from our users that this default didn't feel like it aligned with Next.js best practices. Starting with v6, **`<ClerkProvider>` will no longer opt your entire application into dynamic rendering by default.** This sets the stage for PPR support and more granular optimization.
+
+Dynamic auth data is still available by using the `auth()` helper in a server component. This data can also be passed to client components directly as needed. This is the recommended way to access auth data going forward, but for client components that rely on hooks like `useAuth()` during server-side rendering, use the new `<ClerkDynamicProvider>` component to wrap your client components. As a best practice, we recommend wrapping usage of `<ClerkDynamicProvider>` with suspense to ensure your page is setup to take advantage of PPR.
+
+```tsx
+import { Suspense } from 'react'
+import { ClerkDynamicProvider } from '@clerk/nextjs'
+
+export default function Page() {
+  return (
+    <main>
+      <header>
+        <Logo />
+        <Suspense fallback={<FallbackAvatar />}>
+          <ClerkDynamicProvider>
+            <UserAvatar />
+          </ClerkDynamicProvider>
+        </Suspense>
+      </header>
+    </main>
+  )
+}
+```
+
+If you want `<ClerkProvider>` to continue making dynamic auth data available by default, add the `dynamic` prop:
+
+```tsx
+import { ClerkProvider } from '@clerk/nextjs'
+
+export default function RootLayout({ children }) {
+  return (
+    <ClerkProvider dynamic>
+      <html>
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
+  )
+}
+```
+
+`<ClerkProvider>` was also refactored to support PPR out of the box, even in dynamic mode. When `dynamic` is passed to the provider, every page is opted-in to PPR when enabled. For this reason, it is still recommended to take a more granular approach to dynamic data access.

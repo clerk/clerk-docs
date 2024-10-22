@@ -3,15 +3,19 @@ title: 'Nextjs 15 `<ClerkProvider>`'
 description: Access minimal authentication data for managing sessions and data fetching.
 ---
 
-Partial prerendering (PPR) is a new rendering mode for Next.js that allows a page to be both static _and_ dynamic. To accomplish this, Next.js analyzes your pages and determines which parts of the page can be statically rendered at build-time, and which parts rely on dynamic request data. This allows granular optimization at the component level, instead of at the page level.
+The `<ClerkProvider>` component wraps your Next.js application and provides authentication context to manage user authentication and authorization. Starting from `@clerk/nextjs v6`, `<ClerkProvider>` no longer forces dynamic rendering across your entire app by default, supporting Next.js best practices such as Partial Prerendering (PPR). 
 
-Historically, usage of `<ClerkProvider>` has opted your entire application in to dynamic rendering due to the dynamic and personalized nature of auth-related data. We've heard the feedback from our users that this default didn't feel like it aligned with Next.js best practices. Starting with v6, **`<ClerkProvider>` will no longer opt your entire application into dynamic rendering by default.** This sets the stage for PPR support and more granular optimization.
+To access dynamic authentication data, use the `auth()` helper in Server Components or pass it directly to Client Components as needed. For Client Components relying on hooks like `useAuth()` during server-side rendering, the new `<ClerkDynamicProvider>` component allows you to selectively load dynamic auth data only when necessary. This approach is more optimized for PPR, giving you control over when and where dynamic auth data is accessed.
 
-Dynamic auth data is still available by using the `auth()` helper in a server component. This data can also be passed to client components directly as needed. This is the recommended way to access auth data going forward, but for client components that rely on hooks like `useAuth()` during server-side rendering, use the new `<ClerkDynamicProvider>` component to wrap your client components. As a best practice, we recommend wrapping usage of `<ClerkDynamicProvider>` with suspense to ensure your page is setup to take advantage of PPR.
+#### Use `<ClerkProvider>` for Static and Dynamic Data
+
+By default, `<ClerkProvider>` provides static authentication support. If your app relies on dynamic authentication data, such as client-side hooks, you should use `<ClerkDynamicProvider>` in conjunction with Suspense to manage loading states while ensuring efficient data fetching for Partial Prerendering.
+
+Example usage with `<ClerkDynamicProvider>` and `<Suspense>`:
 
 ```tsx
-import { Suspense } from 'react'
-import { ClerkDynamicProvider } from '@clerk/nextjs'
+import { Suspense } from 'react';
+import { ClerkDynamicProvider } from '@clerk/nextjs';
 
 export default function Page() {
   return (
@@ -25,12 +29,15 @@ export default function Page() {
         </Suspense>
       </header>
     </main>
-  )
+  );
 }
 ```
 
-If you want `<ClerkProvider>` to continue making dynamic auth data available by default, add the `dynamic` prop:
+#### Opt into Dynamic Rendering with the dynamic Prop
 
+If you want `<ClerkProvider>` to enable dynamic rendering for authentication data by default, simply add the dynamic prop. This will make dynamic auth data available throughout your entire application without needing `<ClerkDynamicProvider>`. When the dynamic prop is set, all pages are opted into PPR where possible.
+
+Example:
 ```tsx
 import { ClerkProvider } from '@clerk/nextjs'
 
@@ -44,5 +51,8 @@ export default function RootLayout({ children }) {
   )
 }
 ```
+#### Prerendering and Dynamic Data
 
-`<ClerkProvider>` was also refactored to support PPR out of the box, even in dynamic mode. When `dynamic` is passed to the provider, every page is opted-in to PPR when enabled. For this reason, it is still recommended to take a more granular approach to dynamic data access.
+Even when using the dynamic prop, `<ClerkProvider>` supports PPR out of the box. It is recommended to adopt a more granular approach, using the auth() helper and `<ClerkDynamicProvider>` where necessary, to optimize for both performance and dynamic data needs.
+
+For the best results with Next.js, use auth() in Server Components or Route Handlers to access authentication data, and reserve `<ClerkDynamicProvider>` for Client Components that rely on dynamic data.

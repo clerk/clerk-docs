@@ -3,19 +3,17 @@ title: '`createClerkClient()`'
 description: "`createClerkClient()` allows Chrome Extension developers to access a user's session information or get a token in a service worker."
 ---
 
-The `createClerkClient()` helper initializes a new Clerk instance on demand and refreshes the session token if there is a valid, signed-in user. It can be used in a [background service worker](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/basics) to access a user's information or token.
+The `createClerkClient()` helper initializes a new Clerk instance on demand and refreshes the session token if there is a valid, signed-in user. It can be used in a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts) or a [background service worker](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/basics) to access a user's information or session token.
 
-## Why use `createClerkClient()`?
-
-It's recommended to use `createClerkClient()` for Chrome Extension's that are configured as popups. When the popup is closed, the Clerk process that normally refreshes the user's session token every 60 seconds is no longer running, and the stored session will become stale. If a request were made 60 seconds after the popup was closed, it would fail because the session token is no longer valid. By configuring `createClerkClient()` to run in a background service worker, you can ensure that the user's session is always fresh.
-
-## How it works
-
-A background service worker runs on demand. It adds an event listener that listens for a request from a [content script](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts). If the request wants to interact with Clerk, the listener calls `createClerkClient()` to create a Clerk instance and refresh the session token.
+When a side panel or a popup is closed, the Clerk process that normally refreshes the user's session token every 60 seconds is no longer running, and the stored session will become stale. If a request were made 60 seconds after the side panel or popup was closed, it would fail because the session token is no longer valid. By configuring `createClerkClient()` to run in a background service worker, you can ensure that the user's session is always fresh.
 
 ## Usage
 
-The following example will demonstrate how to configure your Chrome Extension to use `createClerkClient()` to refresh your user's session token if it's valid. For this example, you will create a web page that the extension will open as a new tab, and that page will have a button on it that, when clicked, retrieves the signed in user's token.
+The following example:
+
+- Creates a background service worker that sets up an event listener to handle requests from a content script. If the request wants to interact with Clerk, the listener calls `createClerkClient()` to create a Clerk instance and refresh the session token, and then calls [`getToken()`](/docs/references/javascript/session#get-token) to get the token.
+- Adds a link to the home page of the extension that when visited, opens the page as a new tab.
+- The new tab has a button on it that, when clicked, triggers the background service worker.
 
 > [!WARNING]
 > The following example assumes that you have followed the [Chrome Extension Quickstart](/docs/quickstarts/chrome-extension) and then the [Add React Router](/docs/references/chrome-extension/add-react-router) guide, but you can apply these concepts to your own application.
@@ -37,7 +35,7 @@ The following example will demonstrate how to configure your Chrome Extension to
   }
 
   // Use `createClerkClient()` to create a new Clerk instance
-  // and get a fresh token for the user
+  // and use `getToken()` to get a fresh token for the user
   async function getToken() {
     const clerk = await createClerkClient({
       publishableKey,
@@ -51,7 +49,9 @@ The following example will demonstrate how to configure your Chrome Extension to
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // This example sends the token back to the content script
     // but you could also use the token to perform actions on behalf of the user
-    getToken().then((token) => sendResponse({ token })).catch((error) => console.error('[Background service worker] Error:', JSON.stringify(error)))
+    getToken()
+      .then((token) => sendResponse({ token }))
+      .catch((error) => console.error('[Background service worker] Error:', JSON.stringify(error)))
     return true // REQUIRED: Indicates that the listener responds asynchronously.
   })
   ```

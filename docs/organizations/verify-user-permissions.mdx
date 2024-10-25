@@ -4,7 +4,7 @@ description: A collection of utility functions and components in order to allow 
 ---
 
 > [!IMPORTANT]
-> The following authorization checks are predicated on a user having an active organization. Without this, they will likely always evaluate to false by default. Learn more about [active organizations](/docs/organizations/overview#active-organization).
+> The following authorization checks are predicated on a user having an active organization. Without this, they will likely always evaluate to false by default. Learn more about [active organizations](/docs/organizations/overview#active-organization). If you would like to perform authorization checks without using Clerk's organizations feature, see [the Role Based Access Control (RBAC) guide](/docs/guides/basic-rbac).
 
 In general, you should always verify whether or not a user is authorized to access sensitive information, important content, or exclusive features. The most secure way to implement authorization is by checking the active user's [role or permissions](/docs/organizations/roles-permissions#permissions).
 
@@ -18,7 +18,7 @@ Clerk enables two broad approaches to role and permissions-based authorization:
 
 ## Authorization in Client Components
 
-The examples below work for both SSR and CSR. Examples are written for Next.js App Router but they are supported by any React meta framework, such as Remix.
+The following examples work for both SSR and CSR.
 
 <Tabs items={["<Protect>", "has()"]}>
   <Tab>
@@ -28,7 +28,7 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
     'use client'
     import { Protect } from '@clerk/nextjs'
 
-    export function SettingsForm() {
+    export default function SettingsForm() {
       return (
         <Protect
           permission="org:team_settings:manage"
@@ -42,21 +42,25 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
   </Tab>
 
   <Tab>
-    Use the [`useAuth()`](/docs/references/react/use-auth) hook to access the `has()` helper in Client Components.
-
     The following example uses `has()` to inspect a user's permissions granularly. If the user doesn't have the permission, `has()` returns `false`, causing the component to return `null` instead of rendering its children.
 
     ```tsx {{ filename: '/app/dashboard/settings/form.tsx' }}
     'use client'
     import { useAuth } from '@clerk/nextjs'
 
-    export function SettingsForm() {
+    export default function SettingsForm() {
       const { has } = useAuth()
 
+      if (!has) return null
+
+      // Check if the user is authorized
       const canManageSettings = has({ permission: 'org:team_settings:manage' })
 
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns null.
       if (!canManageSettings) return null
 
+      // If the user is both authenticated and authorized, move forward with your logic
       return <form>{/* Add UI for managing team settings */}</form>
     }
     ```
@@ -67,7 +71,10 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
 <Tabs items={["<Protect>", "has()", "auth.protect()"]}>
   <Tab>
-    The following example uses Clerk's `<Protect>` component to only render the form for users with the correct permission. If the user is not authorized, the component will not render its children.
+    The following example uses Clerk's `<Protect>` component to only render the layout for users with the correct permission. If the user is not authorized, the component will not render its children.
+
+    > [!WARNING]
+    > Be cautious when doing authorization checks in layouts, as these don't re-render on navigation, meaning the user session won't be checked on every route change. [Read more in the Next.js docs.](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks)
 
     ```tsx {{ filename: '/app/dashboard/settings/layout.tsx' }}
     import type { PropsWithChildren } from 'react'
@@ -82,6 +89,9 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
   <Tab>
     The following example uses `has()` to inspect a user's permissions granularly. If the user doesn't have the correct permission, `has()` returns `false`, causing the component to return `null` instead of rendering its children.
 
+    > [!WARNING]
+    > Be cautious when doing authorization checks in layouts, as these don't re-render on navigation, meaning the user session won't be checked on every route change. [Read more in the Next.js docs.](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks)
+
     ```tsx {{ filename: '/app/dashboard/settings/layout.tsx' }}
     import type { PropsWithChildren } from 'react'
     import { auth } from '@clerk/nextjs/server'
@@ -89,8 +99,11 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
     export default async function SettingsLayout(props: PropsWithChildren) {
       const { has } = await auth()
 
+      // Check if the user is authorized
       const canAccessSettings = has({ permission: 'org:team_settings:read' })
 
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns null.
       if (!canAccessSettings) return null
 
       return props.children
@@ -100,7 +113,7 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
   <Tab>
     > [!WARNING]
-    > `auth.protect()` only works for App Router and is considered experimental.
+    > [`auth.protect()`](/docs/references/nextjs/auth#protect) is only available for App Router, and only works on the server-side.
 
     The following example uses [`auth.protect()`](/docs/references/nextjs/auth#protect) to protect a RSC from unauthenticated and unauthorized access.
 
@@ -108,14 +121,13 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
     - If the user is authenticated but is not authorized (as in, does not have the `org:team_settings:read` permission), `auth.protect()` will throw a `404` error.
     - If the user is both authenticated and authorized, `auth.protect()` will return the user's `userId`.
 
-    ```tsx {{ filename: '/app/dashboard/settings/layout.tsx' }}
-    import type { PropsWithChildren } from 'react'
+    ```tsx {{ filename: '/app/dashboard/settings/page.tsx' }}
     import { auth } from '@clerk/nextjs/server'
 
-    export default async function SettingsLayout(props: PropsWithChildren) {
+    export default async function Page() {
       const { userId } = await auth.protect({ permission: 'org:team_settings:read' })
 
-      return props.children
+      return <p>{userId} is authorized to access this page.</p>
     }
     ```
   </Tab>
@@ -131,21 +143,24 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
     import { auth } from '@clerk/nextjs/server'
 
     export default async function ExampleServerComponent() {
-      async function myAction(formData: FormData) {
+      async function myServerAction(formData: FormData) {
         'use server'
         const { has } = await auth()
 
+        // Check if the user is authorized
         const canManage = has({ permission: 'org:team_settings:manage' })
 
         // If has() returns false, the user does not have the correct permissions
+        // You can choose how your app responds. This example returns a 403 error.
         if (!canManage)
           return Response.json({ error: 'User does not have the correct permissions' }, { status: 403 })
 
-        // Add logic for managing team settings
+        // If the user is both authenticated and authorized, move forward with your logic
+        return users.getTeams(userId)
       }
 
       return (
-        <form action={myAction}>
+        <form action={myServerAction}>
           {/* Add UI for managing team settings */}
           <button type="submit">Submit</button>
         </form>
@@ -161,24 +176,29 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
         The example:
 
-        - uses the `userId` returned from [`auth()`](/docs/references/nextjs/auth) to check if the user is signed in. If the user is not authenticated, the Route Handler will return a `401` error.
-        - uses `has()` to check if the user has the correct permission. If the user is not authorized, `has()` will return false, causing the Route Handler to return a `403` error.
+        - uses the `userId` returned from [`auth()`](/docs/references/nextjs/auth) to check if the user is signed in. If the user is not **authenticated**, the Route Handler will return a `401` error.
+        - uses `has()` to check if the user has the correct permission. If the user is not **authorized**, `has()` will return false, causing the Route Handler to return a `403` error.
 
         ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
         import { auth } from '@clerk/nextjs/server'
 
-        export const GET = () => {
+        export const GET = async () => {
           const { userId, has } = await auth()
 
+          // Check if the user is authenticated
           if (!userId) {
             return Response.json({ error: 'User is not signed in' }, { status: 401 })
           }
 
+          // Check if the user is authorized
           const canRead = has({ permission: 'org:team_settings:read' })
 
+          // If has() returns false, the user does not have the correct permissions
+          // You can choose how your app responds. This example returns a 403 error.
           if (!canRead)
             return Response.json({ error: 'User does not have the correct permissions' }, { status: 403 })
 
+          // If the user is both authenticated and authorized, move forward with your logic
           return users.getTeams(userId)
         }
         ```
@@ -186,7 +206,7 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
       <Tab>
         > [!WARNING]
-        > `auth.protect()` only works for App Router and is considered experimental.
+        > [`auth.protect()`](/docs/references/nextjs/auth#protect) is only available for App Router, and only works on the server-side.
 
         The following example uses [`auth.protect()`](/docs/references/nextjs/auth#protect) to protect a Next.js Route Handler from unauthenticated and unauthorized access.
 
@@ -196,12 +216,12 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
         ```tsx {{ filename: 'app/api/create-team/route.tsx' }}
         import { auth } from '@clerk/nextjs/server'
 
-        export const POST = async () => {
+        export const GET = async () => {
           const { userId } = await auth.protect({
             permission: 'org:team_settings:manage',
           })
 
-          return users.createTeam(userId)
+          return Response.json({ userId })
         }
         ```
       </Tab>
@@ -213,8 +233,8 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
     The following example:
 
-    - uses the `userId` returned from `getAuth()` to check if the user is signed in. If the user is not authenticated, the route will return a `401` error.
-    - uses `has()` to check if the user has the correct permission. If the user is not authorized, `has()` will return false, causing the route to return a `403` error.
+    - uses the `userId` returned from `getAuth()` to check if the user is signed in. If the user is not **authenticated**, the route will return a `401` error.
+    - uses `has()` to check if the user has the correct permission. If the user is not **authorized**, `has()` will return false, causing the route to return a `403` error.
 
     ```tsx {{ filename: 'src/pages/api/get-teams.ts' }}
     import { getAuth } from '@clerk/nextjs/server'
@@ -222,12 +242,17 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
     export default async function handler(req: NextApiRequest) {
       const { userId, has } = await getAuth(req)
 
+      // Check if the user is authenticated
       if (!userId) return res.status(401)
 
+      // Check if the user is authorized
       const canRead = has({ permission: 'org:team_settings:read' })
 
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns a 403 error.
       if (!canRead) return res.status(403)
 
+      // If the user is both authenticated and authorized, move forward with your logic
       return users.getTeams(userId)
     }
     ```
@@ -236,53 +261,60 @@ The examples below work for both SSR and CSR. Examples are written for Next.js A
 
 ## Authorization in Remix Loaders
 
-<CodeBlockTabs type="framework" options={["Remix"]}>
-  ```tsx
-  export const loader: LoaderFunction = async (args) => {
-    const { has } = await getAuth(args)
+The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) helper to check if the user has the correct permission. If the user is not authorized, `has()` will return false, causing the loader to redirect the user to the `/request-access` route.
 
-    if (has({ permission: 'org:team_settings:manage' })) {
-      return redirect('/request-access')
+<Tabs items={["Remix"]}>
+  <Tab>
+    ```tsx
+    export const loader: LoaderFunction = async (args) => {
+      const { has } = await getAuth(args)
+
+      if (has({ permission: 'org:team_settings:manage' }) === false) {
+        return redirect('/request-access')
+      }
+
+      return {}
     }
-    return {}
-  }
 
-  export default function Settings() {
-    return (
-      <div>
-        <h1>Settings Page</h1>
-      </div>
-    )
-  }
-  ```
-</CodeBlockTabs>
+    export default function Settings() {
+      return (
+        <div>
+          <h1>Settings Page</h1>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ## Authorization in JavaScript
 
-If you are not using React or any of the meta-frameworks we support, you can use the Clerk JavaScript SDK. The following example demonstrates how to use the [`checkAuthorization()`](/docs/references/javascript/session#check-authorization) method to check if a user is authorized.
+If you are not using React or any of the meta-frameworks we support, you can use the [Clerk JavaScript SDK](/docs/references/javascript/overview). The following example demonstrates how to use the [`checkAuthorization()`](/docs/references/javascript/session#check-authorization) method to check if a user is authorized.
 
 <Tabs items={["JavaScript"]}>
-  ```tsx {{ filename: 'main.js' }}
-  import { Clerk } from '@clerk/clerk-js'
+  <Tab>
+    ```tsx {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js'
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}')
-  await clerk.load()
+    // Initialize Clerk with your Clerk publishable key
+    const clerk = new Clerk('{{pub_key}}')
+    await clerk.load()
 
-  // Check if the user is authenticated
-  if (clerk.user) {
-    // Check if the user is authorized
-    const canManageSettings = clerk.session.checkAuthorization({
-      permission: 'org:team_settings:manage',
-    })
-  }
-  ```
+    // Check if the user is authenticated
+    if (clerk.user) {
+      // Check if the user is authorized
+      const canManageSettings = clerk.session.checkAuthorization({
+        permission: 'org:team_settings:manage',
+      })
+    }
+    ```
+  </Tab>
 </Tabs>
 
 ## Authorize with roles
 
 > [!WARNING]
-> We suggest permission-based authorization over role-based authorization, as it reduces complexity and increases security. Usually, complex role checks can be refactored with a single permission check.
+> It's best practice to use permission-based authorization over role-based authorization, as it reduces complexity and increases security. Usually, complex role checks can be refactored with a single permission check.
 
 You can pass a `role` the same way you can pass a `permission` in all the examples above.
 
@@ -290,16 +322,15 @@ You can pass a `role` the same way you can pass a `permission` in all the exampl
   <Tab>
     The following example uses `<Protect>`'s `condition` prop to conditionally render its children if the user has the correct role.
 
-    ```tsx {{ filename: '/app/dashboard/settings/layout.tsx' }}
-    import type { PropsWithChildren } from 'react'
+    ```tsx {{ filename: '/app/dashboard/settings/Page.tsx' }}
     import { Protect } from '@clerk/nextjs'
 
-    export default function SettingsLayout(props: PropsWithChildren) {
+    export default function Page() {
       return (
         <Protect
           condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
         >
-          {props.children}
+          <p>Admin settings</p>
         </Protect>
       )
     }
@@ -308,7 +339,7 @@ You can pass a `role` the same way you can pass a `permission` in all the exampl
 
   <Tab>
     > [!WARNING]
-    > `auth.protect()` only works for App Router and is considered experimental.
+    > [`auth.protect()`](/docs/references/nextjs/auth#protect) is only available for App Router, and only works on the server-side.
 
     The following example uses [`auth.protect()`](/docs/references/nextjs/auth#protect) to protect a RSC from unauthenticated and unauthorized access.
 
@@ -316,23 +347,20 @@ You can pass a `role` the same way you can pass a `permission` in all the exampl
     - If the user is authenticated but is not authorized (as in, does not have the `org:admin` or `org:billing_manager` role), `auth.protect()` will throw a `404` error.
     - If the user is both authenticated and authorized, `auth.protect()` will return the user's `userId`.
 
-    ```tsx {{ filename: '/app/dashboard/settings/layout.tsx' }}
-    import type { PropsWithChildren } from 'react'
+    ```tsx {{ filename: '/app/dashboard/settings/page.tsx' }}
     import { auth } from '@clerk/nextjs/server'
 
-    export default async function SettingsLayout(props: PropsWithChildren) {
+    export default async function Page() {
       const { userId } = await auth.protect(
         (has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' }),
       )
 
-      return props.children
+      return <p>{userId} is authorized to access this page.</p>
     }
     ```
   </Tab>
 
   <Tab>
-    Use the [`useAuth()`](/docs/references/react/use-auth) hook to access the `has()` helper in Client Components.
-
     The following example uses `has()` to inspect a user's roles granularly. If the user doesn't have the correct role, `has()` returns `false`, causing the component to return `null` instead of rendering its children.
 
     ```tsx {{ filename: '/app/dashboard/settings/form.tsx' }}
@@ -342,10 +370,14 @@ You can pass a `role` the same way you can pass a `permission` in all the exampl
     export function SettingsForm() {
       const { has } = useAuth()
 
+      // Check if the user is authorized
       const canAccessSettings = has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })
 
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns null.
       if (!canAccessSettings) return null
 
+      // If the user is both authenticated and authorized, move forward with your logic
       return <form>{/* Add UI for team settings */}</form>
     }
     ```

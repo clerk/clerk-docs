@@ -54,17 +54,17 @@ You can protect routes based on user authentication status by checking if the us
 
 There are two methods that you can use:
 
-- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
+- Use [`auth.protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
 - Use [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().userId()"]}>
+<CodeBlockTabs options={["auth.protect()", "auth().userId()"]}>
   ```tsx {{ filename: 'middleware.ts' }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
   const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    if (isProtectedRoute(req)) auth().protect()
+  export default clerkMiddleware(async (auth, req) => {
+    if (isProtectedRoute(req)) await auth.protect()
   })
 
   export const config = {
@@ -82,8 +82,10 @@ There are two methods that you can use:
 
   const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    if (!auth().userId && isProtectedRoute(req)) {
+  export default clerkMiddleware(async (auth, req) => {
+    const { userId } = await auth()
+
+    if (!userId && isProtectedRoute(req)) {
       // Add custom logic to run before redirecting
 
       return auth().redirectToSignIn()
@@ -107,19 +109,19 @@ You can protect routes based on user authorization status by checking if the use
 
 There are two methods that you can use:
 
-- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
+- Use [`auth.protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
 - Use [`auth().has()`](/docs/references/nextjs/auth-object#has) if you want more control over what your app does based on the authorization status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
+<CodeBlockTabs options={["auth.protect()", "auth().has()"]}>
   ```tsx {{ filename: 'middleware.ts' }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
   const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
+  export default clerkMiddleware(async (auth, req) => {
     // Restrict admin routes to users with specific permissions
     if (isProtectedRoute(req)) {
-      auth().protect((has) => {
+      await auth.protect((has) => {
         return (
           has({ permission: 'org:sys_memberships:manage' }) ||
           has({ permission: 'org:sys_domains_manage' })
@@ -143,8 +145,8 @@ There are two methods that you can use:
 
   const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    const { has, redirectToSignIn } = auth()
+  export default clerkMiddleware(async (auth, req) => {
+    const { has, redirectToSignIn } = await auth()
     // Restrict admin routes to users with specific permissions
     if (
       (isProtectedRoute(req) && !has({ permission: 'org:sys_memberships:manage' })) ||
@@ -180,10 +182,10 @@ const isTenantRoute = createRouteMatcher(['/organization-selector(.*)', '/orgid/
 
 const isTenantAdminRoute = createRouteMatcher(['/orgId/(.*)/memberships', '/orgId/(.*)/domain'])
 
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   // Restrict admin routes to users with specific permissions
   if (isTenantAdminRoute(req)) {
-    auth().protect((has) => {
+    await auth.protect((has) => {
       return (
         has({ permission: 'org:sys_memberships:manage' }) ||
         has({ permission: 'org:sys_domains_manage' })
@@ -191,7 +193,7 @@ export default clerkMiddleware((auth, req) => {
     })
   }
   // Restrict organization routes to signed in users
-  if (isTenantRoute(req)) auth().protect()
+  if (isTenantRoute(req)) await auth.protect()
 })
 
 export const config = {
@@ -213,9 +215,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
 
-export default clerkMiddleware((auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
-    auth().protect()
+    await auth.protect()
   }
 })
 
@@ -273,10 +275,10 @@ const intlMiddleware = createMiddleware({
 
 const isProtectedRoute = createRouteMatcher(['dashboard/(.*)'])
 
-export default clerkMiddleware((auth, req) => {
-  if (isProtectedRoute(req)) auth().protect()
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) await auth.protect()
 
-  intlMiddleware(req)
+  return intlMiddleware(req)
 })
 
 export const config = {

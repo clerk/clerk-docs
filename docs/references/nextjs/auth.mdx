@@ -3,27 +3,20 @@ title: '`auth()`'
 description: Access minimal authentication data for managing sessions and data fetching.
 ---
 
-The `auth()` helper returns the [`Auth`](/docs/references/nextjs/auth-object) object of the currently active user. This is the same `Auth` object that is returned by the [`getAuth()`](/docs/references/nextjs/get-auth) hook. However, it can be used in Server Components, Route Handlers, and Server Actions.
+The `auth()` helper returns the [`Auth`](/docs/references/nextjs/auth-object) object of the currently active user, as well as the [`redirectToSignIn()`](#redirect-to-sign-in) method.
 
-The `auth()` helper does require [Middleware](/docs/references/nextjs/clerk-middleware).
+- Only available for App Router.
+- Only works on the server-side, such as in Server Components, Route Handlers, and Server Actions.
+- Requires [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) to be configured.
 
-## Returns
+## `auth.protect()`
 
-`auth()` returns the [`Auth`](/docs/references/nextjs/auth-object) object with a few extra properties:
-
-- [`redirectToSignIn()`](#redirect-to-sign-in)
-
-### `auth.protect()`
-
-> [!WARNING]
-> `auth.protect()` only works for App Router and is considered experimental.
-
-You can use the `auth.protect()` helper in two ways:
+`auth` includes a single property, the `protect()` method, which you can use in two ways:
 
 - to check if a user is authenticated (signed in)
 - to check if a user is authorized (has the correct roles or permissions) to access something, such as a component or a route handler
 
-The following table describes how the `auth.protect()` helper behaves based on user authentication or authorization status:
+The following table describes how `auth.protect()` behaves based on user authentication or authorization status:
 
 | Authenticated | Authorized | `auth.protect()` will |
 | - | - | - |
@@ -54,7 +47,7 @@ The following table describes how the `auth.protect()` helper behaves based on u
   - `has?`
   - `(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions) => boolean`
 
-  A function that returns a boolean based on the permission or role provided as parameter. Can be used for authorization. See the dedicated [`has()`](/docs/references/nextjs/auth-object#has) section for more information.
+  A function that returns a boolean based on the permission or role provided as parameter. Can be used for authorization. See [the dedicated `has()` section](/docs/references/nextjs/auth-object#has) for more information.
 
   ---
 
@@ -71,11 +64,15 @@ The following table describes how the `auth.protect()` helper behaves based on u
   The URL to redirect the user to if they are not authenticated.
 </Properties>
 
-For more information on how to use `auth.protect()`, see the [examples](#use-auth-to-check-if-a-user-is-authenticated) in this guide. There are also examples in the [Verify user permissions](/docs/organizations/verify-user-permissions) guide.
+### Examples
 
-### `redirectToSignIn()`
+`auth.protect()` can be used to check if a user is authenticated or authorized to access certain parts of your application or even entire routes. See detailed examples in [the dedicated guide.](/docs/organizations/verify-user-permissions)
 
-`redirectToSignIn()` is a method that redirects the user to the sign-in page. It accepts the following parameters:
+## `redirectToSignIn()`
+
+The `auth()` helper returns the `redirectToSignIn()` method, which you can use to redirect the user to the sign-in page.
+
+`redirectToSignIn()` accepts the following parameters:
 
 <Properties>
   - `returnBackUrl?`
@@ -86,6 +83,22 @@ For more information on how to use `auth.protect()`, see the [examples](#use-aut
 
 > [!NOTE]
 > `auth()` on the server-side can only access redirect URLs defined via [environment variables](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) or [`clerkMiddleware` dynamic keys](/docs/references/nextjs/clerk-middleware#dynamic-keys).
+
+### Example
+
+The following example shows how to use `redirectToSignIn()` to redirect the user to the sign-in page if they are not authenticated. It's also common to use `redirectToSignIn()` in `clerkMiddleware()` to protect entire routes; see [the `clerkMiddleware()` docs](/docs/references/nextjs/clerk-middleware) for more information.
+
+```tsx {{ filename: 'app/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  const { userId, redirectToSignIn } = await auth()
+
+  if (!userId) return redirectToSignIn()
+
+  return <h1>Hello, {userId}</h1>
+}
+```
 
 ## Use `auth()` to retrieve `userId`
 
@@ -131,95 +144,6 @@ export async function GET() {
 }
 ```
 
-## Use `auth.protect()` to check if a user is authenticated
+## Use `auth()` to protect your app
 
-`auth.protect()` can be used in a `layout.tsx` file to protect the entire route, including all children.
-
-In the following example,
-
-- the `auth.protect()` helper is used to check if a user visiting any `/dashboard` route is authenticated.
-- If the user is not authenticated, they will be redirected to the sign-in route.
-- If the user is authenticated, they can view any `/dashboard` route and its children.
-
-```tsx {{ filename: 'app/dashboard/layout.tsx' }}
-import { auth } from '@clerk/nextjs/server'
-
-export default async function Layout({ children }: { children: React.ReactNode }) {
-  await auth.protect()
-
-  return <>{children}</>
-}
-```
-
-## Use `auth()` to check if a user is authorized
-
-`auth()` returns the [`Auth`](/docs/references/nextjs/auth-object#auth-object) object, which includes the [`has()`](/docs/references/nextjs/auth-object#has) helper.
-
-You can protect certain parts of your application or even entire routes based on user authorization status by checking if the user has the required roles or permissions.
-
-- Use `auth.protect()` if you want Clerk to return a `404` if the user does not have the role or permission.
-- Use `has()` if you want more control over what your app does based on the authorization status instead of immediately returning a `404`.
-
-<Tabs items={["has()", "auth.protect()"]}>
-  <Tab>
-    The following example uses `has()` to protect a pages content from unauthorized access.
-
-    - If the user does not have the permission, `has()` will return `false`, causing the component to return `null`.
-    - If the user has the permission, `has()` will return `true`, allowing the component to render its children.
-
-    ```tsx {{ filename: 'app/team-settings/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
-
-    export default async function Page() {
-      const { has } = await auth()
-
-      const canManage = has({ permission: 'org:team_settings:manage' })
-
-      if (!canManage) return null
-
-      return <h1>Team Settings</h1>
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    > [!WARNING]
-    > `auth.protect()` only works for App Router and is considered experimental.
-
-    The following example uses `auth.protect()` to protect a Next.js Route Handler from unauthenticated and unauthorized access.
-
-    - If the user is not authenticated, `auth.protect()` will redirect the user to the sign-in route.
-    - If the user is authenticated but is not authorized (as in, does not have the `org:team_settings:manage` permission), `auth.protect()` will throw a `404` error.
-    - If the user is both authenticated and authorized, `auth.protect()` will return the user's `userId`.
-
-    ```tsx {{ filename: 'app/api/create-team/route.ts' }}
-    import { auth } from '@clerk/nextjs/server'
-
-    export const POST = async () => {
-      const { userId } = await auth.protect({ permission: 'org:team_settings:manage' })
-
-      return users.createTeam(userId)
-    }
-    ```
-  </Tab>
-</Tabs>
-
-## Use `auth()` to check your current user's role
-
-In some cases, you need to check your user's current organization role before displaying data or allowing certain actions to be performed.
-
-Check the current user's role with the `orgRole` property of the `Auth` object returned by `auth()`, as shown in the following example:
-
-```tsx {{ filename: 'app/page.tsx' }}
-import { auth } from '@clerk/nextjs/server'
-
-export default async function Page() {
-  const { orgRole } = await auth()
-
-  return (
-    <>
-      <div>Your current role is {orgRole}</div>
-    </>
-  )
-}
-```
+You can protect certain parts of your application or even entire routes based on a user's authentication and/or authorization status. See detailed examples in [the dedicated guide.](/docs/organizations/verify-user-permissions)

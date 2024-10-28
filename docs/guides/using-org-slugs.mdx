@@ -1,6 +1,6 @@
 ---
 title: 'Using Organization Slugs in URLs'
-description: Learn about using organization slugs in URLs to manage the active Clerk organization.
+description: Learn how to use organization slugs in URLs to manage the active Clerk organization.
 ---
 
 <TutorialHero
@@ -29,48 +29,56 @@ description: Learn about using organization slugs in URLs to manage the active C
 
 ## Introduction
 
-In this guide, you will learn how to include an organization slug in your applications URLs, and
-how to see information about the active organization at runtime.
-
-This guide will be written for Next.js applications using App Router.
+In this guide, you will learn how to include an organization slug in your application's URLs, and
+how to render information about the user's active organization at runtime.
 
 ## Background
 
-With Clerk Organizations, users can create entities that represent their companies within your
-application. Users can be members of multiple organizations, but can only have one "active" at
-any given time. Clerk automatically sets organizations as active when a user picks an organization
-with a pre-built component (e.g. the Organization Switcher), and clerk provides APIs (like
-auth() and useAuth()), that let you determine the active organization and render the appropriate
+With [Organizations](/docs/organizations/overview), users can create entities that represent their companies within your
+application. Users can be members of multiple organizations, but can only have one
+[active organization](/docs/organizations/overview#active-organization) at any given time. Clerk automatically sets organizations as
+active when a user picks an organization with a pre-built component (e.g. the
+[Organization Switcher](/docs/components/organization/organization-switcher)), and Clerk provides
+APIs (like [<code>auth()</code>](/docs/references/nextjs/auth) and [<code>useAuth()</code>](/docs/references/react/use-auth)), that let you determine the active organization and render the appropriate
 content.
 
-A relatively common practice is to represent organization scoped spaces within an app by prefixing
-URLs with an organization slug. For example, imagine a b2b application named "Petstore" that has
+A relatively common practice is to represent organization-scoped spaces within an app by prefixing
+URLs with an organization slug. For example, imagine a B2B application named "Petstore" that has
 two customers, "Acmecorp" and "Widgetco". The application may choose to have urls like:
 
 `https://petstore.example.com/orgs/`<b>`acmecorp`</b>`/dashboard` ⬅ indicates **Acmecorp**'s dashboard
 `https://petstore.example.com/orgs/`<b>`widgetco`</b>`/dashboard` ⬅ indicates **Widgetco**'s dashboard
 
-Caution: Think carefully about whether you need to include organization slugs in URLs! Consider:
+It is also possible to use an [organization ID](/docs/references/javascript/organization/organization#properties) to
+indicate the active organization in URLs:
 
-- Will organization-specific links be more useful for your application than
-organization-agnostic links? If most users will only ever be in one organization (that represents
-their company), they won't need the organization slug to disambiguate the org when sharing
-links with their coworkers. Public documentation, marketing, and third-party blogs are also
-made easier if links aren't tied to any specific organization.
-- Adding an additional piece of state that indicates the organization will require additional
-complexity in your application, as opposed to managing it soley and transparently in the clerk
-session.
+`https://petstore.example.com/orgs/`<b>`org_1a2b3c4d5e6f7g8e`</b>`/dashboard` ⬅ **Acmecorp's ID** indicates Acmecorp's dashboard
 
-If your application does need to manage the active organization via the URl though, this guide
-will cover the best practices for doing so, specifically for nextjs applications that use
-server components.
+This guide will focus on using a human-comprehensible slug, but IDs are just as well-supported in Clerk's component
+configuration.
+
+> [!CAUTION]
+> Think carefully about whether you need to include organization slugs in URLs! Consider:
+>
+> - Will organization-specific links be more useful to your users than
+> organization-agnostic links? If most users will only ever be in one organization (that represents
+> their company), they won't need the slug to disambiguate the organization when sharing
+> links with their coworkers. Public documentation, marketing, and third-party blogs are also
+> made easier to write if links aren't tied to any specific organization.
+> - Adding an additional piece of state (i.e. the URL) that indicates the organization will require additional
+> complexity in your application, as opposed to managing it soley and transparently in the Clerk
+> session.
+>
+> We at Clerk generally recommend against including organization slugs in URLs. If your application
+> does have this requirement though, this guide will cover the best practices for doing so with a NextJS application.
 
 <Steps>
   ### Defining URL patterns
 
-  To begin with, we'll define which sections of our application are scoped to organizations and
-  the personal account. For this example, we'll assume that the prefix "orgs" indicates an organizaiton
-  is active, followed by the org slug, and the prefix "me" indicates that the personal account is active.
+  To begin, you can define which sections of your application are scoped to organizations and which belong to
+  the [personal account](https://clerk.com/glossary#personal-account). For this example, we'll assume that the prefix
+  `/orgs/` indicates that an organization is active, followed by the organization slug, and the prefix `/me/` indicates that the
+  personal account is active.
 
   | URL | What should be active? | What should be displayed? |
   | - | - | - |
@@ -81,16 +89,17 @@ server components.
 
   ### Configuring the Organization Switcher
 
-  The Organization Switcher and Organization List components each have a powerful set of options for
-  working with slugs.
+  The [Organization Switcher](/docs/components/organization/organization-switcher) and
+  [Organization List](/docs/components/organization/organization-list) components each have a powerful set of options for
+  working with slugs and IDs.
 
-  Our application uses the personal account, so we will set hidePersonal to `false` to ensure the personal
-  account is selectable. We will also allow our users to customize their organization's URL slug when they
-  create their organization initially, so we'll also set `hideSlug` to `false.
+  This sample application uses the [personal account](https://clerk.com/glossary#personal-account), so you can set `hidePersonal` to `false` to ensure the personal
+  account is selectable. You can also allow users to customize their organization's URL slug when they
+  create their organization initially by setting `hideSlug` to `false`.
 
-  Finally, we'll give the components navigation instructions. If the user selects or creates an organization
-  with the slug `acmecorp`, the values of `afterCreateOrganizationUrl` and `afterSelectOrganizationUrl` will
-  instruct the component to navigate them to `/orgs/acmecorp`. If the user selects their personal account,
+  Finally, you can give the components navigation instructions. If the user selects or creates an organization
+  with the slug `acmecorp`, by setting `afterCreateOrganizationUrl` and `afterSelectOrganizationUrl` to `'/orgs/:slug'`,
+  the component will navigate the user to `/orgs/acmecorp`. If the user selects their [personal account](https://clerk.com/glossary#personal-account),
   they will be navigated to `/me` via `afterSelectPersonalUrl`.
 
   <Tabs items={["<OrganizationSwitcher />", "<OrganizationList />"]}>
@@ -132,16 +141,42 @@ server components.
   </Tab>
 </Tabs>
 
-Note that if you'd prefer to have organization IDs appear in your URL rather than slugs, you can use `:id` instead of
-`:slug` with `afterCreateOrganizationUrl` and `afterSelectOrganizationUrl`.
 
-### Using Clerk Middleware to set the active organization
+> [!TIP]
+> If you prefer to have an [organization ID](/docs/references/javascript/organization/organization#properties) appear in
+> your URL rather than a slug, you can use `:id` instead of `:slug` with both `afterCreateOrganizationUrl` and
+> `afterSelectOrganizationUrl`.
 
-Using ClerkMiddleware, it's possible to tell Clerk which URL patterns indicate that a
-specific organization or the user's personal account are active. If clerk detects one
-of these patterns in nextjs middleware, and it notices that a different organization is
-currently active according to the session, it will activate the indicated organization [1] if
+### Using clerkMiddleware to set the active organization
+
+With [clerkMiddleware](https://clerk.com/docs/references/nextjs/clerk-middleware), you can
+declare URL patterns that indicate that a specific organization or the user's [personal account](https://clerk.com/glossary#personal-account)
+should be activated. If the middleware detects one
+of these patterns in the URL, and it notices that a different organization is
+currently active according to the session, it will activate the indicated organization if
 possible.
+
+> [!NOTE]
+> Implementation Detail: To resolve a mismatch, Clerk middleware initiaties a [Handshake](docs/references/sdk/terminology#:~:text=each:Handshake).
+> The middleware will respond to the browser with a redirect to Clerk's API with a request to activate the URL-indicated
+> organization. If it's possible to do so, Clerk's API will respond with a redirect back to the original URL, including
+> a session token with the desired organization as active and redirect back to your application.
+
+For this application, the path `/orgs/:slug` with any optional trailing path segments should activate the
+organization indicated by the slug. To achieve this, you can define two `organizationPatterns`: one for the
+root (e.g. `/orgs/acmecorp`), and one using the wildcard matcher `(.*)` that will match
+`/orgs/acmecorp/any/other/resource`.
+
+You can use the same approach for the [personal account](https://clerk.com/glossary#personal-account) with `personalAccountPatterns`.
+
+> [!WARNING]
+> It may not always be possible to activate the organization requested in the URL. This can happen if no organization
+> with the given slug exists, or the user isn't a member of the given organization. In these cases, clerkMiddleware
+> **will not modify** the active organization, leaving as active whichever organization was previously active on the
+> clerk session.
+
+See the documentation for [organizationSyncOptions](/docs/references/nextjs/clerk-middleware#organization-sync-options)
+for more specific usage of the middleware options.
 
 ```tsx {{ filename: 'middleware.ts' }}
 import { clerkMiddleware } from '@clerk/nextjs/server'
@@ -173,14 +208,16 @@ export const config = {
 };
 ```
 
-Note that if you'd prefer to have organization IDs appear in your URL rather than slugs, you can use `:id` instead
-of `:slug` in `organizationPatterns` and `personalAccountPatterns`.
+> [!TIP]
+> If you prefer to have an [organization ID](/docs/references/javascript/organization/organization#properties)
+> appear in your URL rather than slugs, you can use `:id` placeholder instead of `:slug` in both `organizationPatterns`
+> and `personalAccountPatterns`.
 
 ### Server Rendered Organization Page
 
-Now we're ready to build an organization-specific landing page.
+Now that clerkMiddleware is configured to activate organizations, you can build an organization-specific home page.
 
-First, we need to handle the case where the middleware cannot activate the organization based on the URL. This can
+First, you must handle the case where the middleware cannot activate the organization based on the URL. This can
 happen if no organization with the given slug exists, or if the given user isn't a member of the organization.
 
 When this happens, the middleware will not change the active organization, so whatever organization was previously
@@ -190,11 +227,12 @@ log:
 > Clerk: Organization activation handshake loop detected. This is likely due to an invalid organization ID or slug.
 Skipping organization activation.
 
-It's the ultimate responsibility of the page to ensure that it renders the appropriate content for a given URL, and
-to handle the case where the expected organization is not active. In this case, we detect the actual organization slug
-as a nextjs [Dynamic Route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes) param, and
-compare it to the active organization slug. If they don't match, we render an error message and the OrganizationList
-component to allow the user to select a valid organization.
+> [!CAUTION]
+> It is ultimately the responsibility of the page to ensure that it renders the appropriate content for a given URL, and
+> to handle the case where the expected organization is not active. In this case, we detect the actual organization slug
+> as a NextJS [Dynamic Route](https://nextjs.org/docs/pages/building-your-application/routing/dynamic-routes) param, and
+> compare it to the active organization slug. If they don't match, we render an error message and the [Organization List](/docs/components/organization/organization-list)
+> component to allow the user to select a valid organization.
 
 
 ```tsx {{ filename: 'src/app/orgs/[slug]/page.tsx' }}
@@ -230,9 +268,9 @@ export default function Home({params}:{
 
 ### Rendering Organization-specific content
 
-Next, let's render some organization-specific content, including the organization's name. To do this, we'll
+Next, you can render organization-specific content, including the organization's name. To do this, you can
 [customize the Clerk session token](https://clerk.com/docs/backend-requests/making/custom-session-token) to include
-the organization name.
+the organization name:
 
 1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=sessions).
 1. In the navigation sidebar, select **Sessions**.
@@ -246,9 +284,8 @@ the organization name.
 ```
 1. Select **Save**.
 
-Now, let's render the organization name in our page. We'll use the organization name, and also the organization role,
-which is included in the
-[default session claims](https://clerk.com/docs/backend-requests/resources/session-tokens#default-session-claims).
+Now you can render the organization name in your page. This example also displays the user's role within the
+organization (`authObject.orgRole`), which is included in the [default session claims](https://clerk.com/docs/backend-requests/resources/session-tokens#default-session-claims).
 
 ```tsx {{ filename: 'src/app/orgs/[slug]/page.tsx' }}
 import { auth } from '@clerk/nextjs/server';
@@ -291,18 +328,86 @@ export default function Home({params}:{
 }
 ```
 
-### The Personal Account and Client-side Routing
+### Client-side Routing
 
-Now let's build the page for the personal account as a nextjs client-side component. This page will be
-rendered when the user navigates to `/me`.
+You can also build client-side pages that are organization-scoped according to your URLs. `clerkMiddleware` executes
+before your client components render, so you don't need to explicitly activate any organization. This example shows a
+client-side settings page for organizations using [OrganizationProfile](/docs/components/organization/organization-profile).
 
+Rather than the server-specific [<code>auth()</code>](/docs/references/nextjs/auth) hook, you can use the client-side
+[<code>useOrganization()</code>](/docs/references/react/use-organization) hook to get the active organization. You must
+verify that the desired organization has been activated. If so, this example renders the
+[OrganizationProfile](/docs/components/organization/organization-profile).
+
+```tsx {{ filename: 'src/app/orgs/[slug]/settings/[[...rest]]/page.tsx' }}
+"use client";
+
+import {OrganizationList, OrganizationProfile, useOrganization} from "@clerk/nextjs";
+
+export default function Home({params}:{
+  params: { slug: string }
+}) {
+const {organization} = useOrganization()
+
+if (!organization || organization.slug != params.slug) {
+  return (
+    <>
+      <p className="pb-8">Sorry, organization {params.slug} is not valid.</p>
+      <OrganizationList
+        hidePersonal={false}
+        hideSlug={false}
+        afterCreateOrganizationUrl='/orgs/:slug'
+        afterSelectOrganizationUrl='/orgs/:slug'
+        afterSelectPersonalUrl='/me'
+      />
+    </>
+  )
+}
+
+return <>
+  <OrganizationProfile/>
+</>
+}
+```
+
+### Personal account
+
+The [personal account](https://clerk.com/glossary#personal-account) is represented by the absense of any other active
+organization. Barring unexpected errors, Clerk middleware should always be able to activate the user's personal account,
+so checking for an organization mismatch is optional.
+
+To display personal-account specific settings, this example builds a server rendered page that verifies that the personal
+account is active (e.g. that no other organization is active), and the render something personal-account specific.
+Remember, you can gain access to other user-specific information, like the username, by [customizing the session token](/docs/backend-requests/making/custom-session-token).
+
+```tsx {{ filename: 'src/app/me/settings/page.tsx' }}
+import { auth } from '@clerk/nextjs/server';
+import {notFound} from "next/navigation";
+
+export default function Home():{} {
+  const authObject = auth();
+
+  if (authObject.orgId != null ) {
+    notFound();
+  }
+
+  return (
+    <>
+      <p className="pb-8">Welcome, user {authObject.userId} to your own personal account settings!</p>
+    </>
+  )
+}
+```
 
 </Steps>
 
 
---------------------- Footer ---------------------------
 
-[^1] Implementation Note: If clerk realizes a mismatch, it will attempt to resolve it by
-using a handshake, wherein it will redirect the browser back to clerk with a request to
-activate the given organization. If it's possible to do so, Clerk will respond with a new
-session token with the desired organization as active and redirect back to your application.
+
+### Further Reading
+To see all of these pages working in the context of an application, visit the
+[sync-orgs-with-url](https://github.com/clerk/orgs/tree/main/examples/sync-org-with-url) sample repository on Github.
+
+The active organization can also be controlled via the client-side [setActive](https://clerk.com/docs/references/javascript/clerk/session-methods)
+session method. See our [Hide Personal Accounts and force organizations](https://clerk.com/docs/guides/force-organizations#set-an-active-organization-based-on-the-url)
+guide to learn how to manually activate a specific organization based on the URL.

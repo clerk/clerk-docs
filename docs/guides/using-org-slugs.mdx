@@ -184,7 +184,7 @@ configuration.
 
   export default clerkMiddleware(
     (auth, req) => {
-         // Add your middleware checks
+      // Add your middleware checks
     },
     {
       organizationSyncOptions: {
@@ -209,7 +209,7 @@ configuration.
   > appear in your URL rather than slugs, you can use `:id` placeholder instead of `:slug` in both `organizationPatterns`
   > and `personalAccountPatterns`.
 
-  ### Building server-rendered page
+  ### Building a component
 
   Now that `clerkMiddleware` is configured to activate organizations, you can build an organization-specific home page.
 
@@ -259,9 +259,9 @@ configuration.
 
   ### Rendering Organization-specific content
 
-  Next, you can render organization-specific content, including the organization's name. To do this, you can
-  [customize the Clerk session token](https://clerk.com/docs/backend-requests/making/custom-session-token) to include
-  the organization name:
+  Next, you can render organization-specific content, including the organization's name. To see this data in
+  a server component, you can [customize the Clerk session token](https://clerk.com/docs/backend-requests/making/custom-session-token)
+  to include the organization name:
 
   1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=sessions).
   1. In the navigation sidebar, select **Sessions**.
@@ -276,116 +276,73 @@ configuration.
 
   1. Select **Save**.
 
-  Now you can render the organization name in your page. This example also displays the user's role within the
-  organization (`authObject.orgRole`), which is included in the [default session claims](https://clerk.com/docs/backend-requests/resources/session-tokens#default-session-claims).
+  Now you can access the organizaiton name within the [sessionClaims](/docs/references/nextjs/auth-object#:~:text=sessionClaims)
+  returned by `auth()`.
 
-  ```tsx {{ filename: 'src/app/orgs/[slug]/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
-  import { OrganizationList } from '@clerk/nextjs'
+  In client components, rather than the server-specific [<code>auth()</code>](/docs/references/nextjs/auth) hook, you
+  can use the client-side [<code>useOrganization()</code>](/docs/references/react/use-organization) hook to get the
+  active organization.
 
-  export default function Home({ params }: { params: { slug: string } }) {
-    const authObject = auth()
-    const orgSlug = authObject.orgSlug
+  <Tabs items={["Server component","Client component"]}>
+    <Tab>
+      ```tsx {{ filename: 'src/app/orgs/[slug]/page.tsx' }}
+      import { auth } from '@clerk/nextjs/server'
+      import { OrganizationList } from '@clerk/nextjs'
 
-    if (params.slug != orgSlug) {
-      return (
-        <>
-          <p className="pb-8">Sorry, organization {params.slug} is not valid.</p>
-          <OrganizationList
-            hidePersonal={false}
-            hideSlug={false}
-            afterCreateOrganizationUrl="/orgs/:slug"
-            afterSelectOrganizationUrl="/orgs/:slug"
-            afterSelectPersonalUrl="/me"
-          />
-        </>
-      )
-    }
-    let orgName = authObject.sessionClaims['org_name'] as string
+      export default function Home({ params }: { params: { slug: string } }) {
+        const authObject = auth()
+        const orgSlug = authObject.orgSlug
 
-    return (
-      <div>
-        {orgName && <h2>Welcome to organization {orgName}</h2>}
-        <p>
-          Your role in this organization: <span>{authObject.orgRole}</span>
-        </p>
-      </div>
-    )
-  }
-  ```
+        if (params.slug != orgSlug) {
+          return (
+            <>
+              <p>Sorry, organization {params.slug} is not valid.</p>
+              <OrganizationList
+                hidePersonal={false}
+                hideSlug={false}
+                afterCreateOrganizationUrl="/orgs/:slug"
+                afterSelectOrganizationUrl="/orgs/:slug"
+                afterSelectPersonalUrl="/me"
+              />
+            </>
+          )
+        }
+        let orgName = authObject.sessionClaims['org_name'] as string
 
-  ### Client-side Routing
+        return <div>{orgName && <h2>Welcome to organization {orgName}</h2>}</div>
+      }
+      ```
+    </Tab>
 
-  You can also build client-side pages that are organization-scoped according to your URLs. `clerkMiddleware` executes
-  before your client components render, so you don't need to explicitly activate any organization. This example shows a
-  client-side settings page for organizations using [OrganizationProfile](/docs/components/organization/organization-profile).
+    <Tab>
+      ```tsx {{ filename: 'src/app/orgs/[slug]/page.tsx' }}
+      'use client'
 
-  Rather than the server-specific [<code>auth()</code>](/docs/references/nextjs/auth) hook, you can use the client-side
-  [<code>useOrganization()</code>](/docs/references/react/use-organization) hook to get the active organization. You must
-  verify that the desired organization has been activated. If so, this example renders the
-  [OrganizationProfile](/docs/components/organization/organization-profile).
+      import { OrganizationList, useOrganization } from '@clerk/nextjs'
 
-  ```tsx {{ filename: 'src/app/orgs/[slug]/settings/[[...rest]]/page.tsx' }}
-  'use client'
+      export default function Home({ params }: { params: { slug: string } }) {
+        const { organization } = useOrganization()
 
-  import { OrganizationList, OrganizationProfile, useOrganization } from '@clerk/nextjs'
+        if (!organization || organization.slug != params.slug) {
+          return (
+            <>
+              <p>Sorry, organization {params.slug} is not valid.</p>
+              <OrganizationList
+                hidePersonal={false}
+                hideSlug={false}
+                afterCreateOrganizationUrl="/orgs/:slug"
+                afterSelectOrganizationUrl="/orgs/:slug"
+                afterSelectPersonalUrl="/me"
+              />
+            </>
+          )
+        }
 
-  export default function Home({ params }: { params: { slug: string } }) {
-    const { organization } = useOrganization()
-
-    if (!organization || organization.slug != params.slug) {
-      return (
-        <>
-          <p className="pb-8">Sorry, organization {params.slug} is not valid.</p>
-          <OrganizationList
-            hidePersonal={false}
-            hideSlug={false}
-            afterCreateOrganizationUrl="/orgs/:slug"
-            afterSelectOrganizationUrl="/orgs/:slug"
-            afterSelectPersonalUrl="/me"
-          />
-        </>
-      )
-    }
-
-    return (
-      <>
-        <OrganizationProfile />
-      </>
-    )
-  }
-  ```
-
-  ### Personal account
-
-  The [personal account](https://clerk.com/glossary#personal-account) is represented by the absense of any other active
-  organization. Barring unexpected errors, Clerk middleware should always be able to activate the user's personal account,
-  so checking for an organization mismatch is optional.
-
-  To display personal-account specific settings, this example builds a server rendered page that verifies that the personal
-  account is active (e.g. that no other organization is active), and the render something personal-account specific.
-  Remember, you can gain access to other user-specific information, like the username, by [customizing the session token](/docs/backend-requests/making/custom-session-token).
-
-  ```tsx {{ filename: 'src/app/me/settings/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
-  import { notFound } from 'next/navigation'
-
-  export default function Home(): {} {
-    const authObject = auth()
-
-    if (authObject.orgId != null) {
-      notFound()
-    }
-
-    return (
-      <>
-        <p className="pb-8">
-          Welcome, user {authObject.userId} to your own personal account settings!
-        </p>
-      </>
-    )
-  }
-  ```
+        return <div>{organization && <h2>Welcome to organization {organization.name}</h2>}</div>
+      }
+      ```
+    </Tab>
+  </Tabs>
 </Steps>
 
 ### Further Reading

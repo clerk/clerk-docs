@@ -28,7 +28,13 @@ description: Learn how to sync Clerk data to your app with webhooks.
 
 The recommended way to sync Clerk data to your app is through webhooks.
 
-In this guide, you'll set up a webhook in your Next.js app to listen for the `user.updated` event, create an endpoint in the Clerk Dashboard, build a handler, and test it locally using ngrok and the Clerk Dashboard.
+In this guide, you'll set up a webhook in your Next.js app to listen for the `user.created` event, create an endpoint in the Clerk Dashboard, build a handler, and test it locally using ngrok and the Clerk Dashboard.
+
+Clerk offers many user events, but three key events include:
+
+- `user.created`: Triggers when a new user registers in the app or is created via the Clerk Dashboard or Backend API. Listening to this event allows the initial insertion of user information in your database.
+- `user.updated`: Triggers when user information is updated via Clerk components, the Clerk Dashboard, or Backend API. Listening to this event keeps data synced between Clerk and your external database. It is recommended to only sync what you need to simplify this process.
+- `user.deleted`: Triggers when a user deletes their account, or their account is removed via the Clerk Dashboard or Backend API. Listening to this event allows you to delete the user from your database or add a `deleted: true` flag.
 
 These steps apply to any Clerk event. To make the setup process easier, it's recommended to keep two browser tabs open: one for your Clerk [**Webhooks**](https://dashboard.clerk.com/last-active?path=webhooks) page and one for your [ngrok dashboard](https://dashboard.ngrok.com).
 
@@ -47,12 +53,12 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   ### Set up a webhook endpoint
 
-  To set up a webhook endpoint, you must provide the **Endpoint URL** and choose the events you want to listen to. For this guide, select the `user.updated` event.
+  To set up a webhook endpoint, you must provide the **Endpoint URL** and choose the events you want to listen to. For this guide, select the `user.created` event.
 
   1. In the Clerk Dashboard, navigate to the [**Webhooks**](https://dashboard.clerk.com/last-active?path=webhooks) page.
   1. Select **Add Endpoint**.
   1. In the **Endpoint URL** field, paste the ngrok **Forwarding** URL you saved earlier, followed by `/api/webhooks`. This is the endpoint that Svix uses to send the webhook payload. The full URL should resemble `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
-  1. In the **Subscribe to events** section, scroll down and select `user.updated`.
+  1. In the **Subscribe to events** section, scroll down and select `user.created`.
   1. Select **Create**. You'll be redirected to your endpoint's settings page. Keep this page open.
 
   ### Add your Signing Secret to `.env.local`
@@ -112,12 +118,12 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   Set up a Route Handler that uses `svix` to verify the webhook signature and process the payload.
 
-  For this guide, the payload will be logged to the console. In a real app, you'd use the payload to trigger an action. For example, if listening for the `user.updated` event, you might perform a database `update` or `upsert` to update the user's details.
+  For this guide, the payload will be logged to the console. In a real app, you'd use the payload to trigger an action. For example, if listening for the `user.created` event, you might perform a database `update` or `upsert` to update the user's details.
 
   The webhook must return either an error code or a success code, such as `200` or `201`. An error code will appear in the Clerk Dashboard log and trigger a [retry](/docs/integrations/webhooks/overview#retry). A success code will stop further retries and show a success status in the Clerk Dashboard log.
 
   > [!NOTE]
-  > The following Route Handler can be used for any webhook event you choose to listen to, not just `user.updated`.
+  > The following Route Handler can be used for any webhook event you choose to listen to, not just `user.created`.
 
   <Tabs type="framework" items={["Next.js", "Express"]}>
     <Tab>
@@ -259,13 +265,13 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   `WebhookEvent` encompasses all possible webhook types. Narrow down the event type for accurate typing for specific events.
 
-  In the following example, the `if` statement narrows the type to `user.updated`, enabling type-safe access to evt.data with autocompletion.
+  In the following example, the `if` statement narrows the type to `user.created`, enabling type-safe access to evt.data with autocompletion.
 
   ```ts {{ filename: 'app/api/webhooks/route.ts', del: [1, 2], ins: [[4, 6]] }}
   console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
   console.log('Webhook payload:', body)
 
-  if (evt.type === 'user.updated') {
+  if (evt.type === 'user.created') {
     console.log('userId:', evt.data.id)
   }
   ```
@@ -285,7 +291,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   1. Start your Next.js server.
   1. In your endpoint's settings page in the Clerk Dashboard, select the **Testing** tab.
-  1. In the **Select event** dropdown, select `user.updated`.
+  1. In the **Select event** dropdown, select `user.created`.
   1. Select **Send Example**.
   1. In the **Message Attempts** section, confirm that the event is labeled with `Succeeded`.
 
@@ -298,7 +304,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   ### Trigger the webhook
 
-  To trigger the `user.updated` event, you can do either one of the following:
+  To trigger the `user.created` event, you can do either one of the following:
 
   1. Edit your user in the Clerk Dashboard.
   1. Select the `<UserProfile />` component in your app to edit your profile.
@@ -310,5 +316,6 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
 1. When you're ready to deploy your app to production, follow [the guide on deploying your Clerk app to production](/docs/deployments/overview).
 1. Create your production webhook by following the steps in the previous [Set up a webhook endpoint](#set-up-a-webhook-endpoint) section. In the **Endpoint URL** field, instead of pasting the ngrok URL, paste your production app URL.
-1. After you've set up your webhook endpoint, you'll be redirected to your endpoint's settings page. Copy the **Signing Secret** and update your `.env.local` file with the new **Signing Secret**.
-1. On your hosting platform, update your environment variables with the new **Signing Secret**. Redeploy your app.
+1. After you've set up your webhook endpoint, you'll be redirected to your endpoint's settings page. Copy the **Signing Secret**.
+1. On your hosting platform, update your environment variables by adding **Signing Secret** with the key of `SIGNING_SECRET`.
+1. Redeploy your app.

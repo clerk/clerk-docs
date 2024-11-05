@@ -1,0 +1,58 @@
+---
+title: Test Account Portal
+description: Learn how to test the Account Portal flow with Cypress.
+---
+
+When testing with Cypress, navigations that involve redirects to external URLs can be tricky to test. This guide demonstrates how to test the Account Portal flow with Cypress, which involves redirecting to the Account Portal and back to your application.
+
+In order to achieve this you need to use the `cy.origin()` command. More information about this command can be found in the [Cypress documentation](https://docs.cypress.io/api/commands/origin).
+
+Also, you need to know your Account Portal domain to use it in the `cy.origin()` command. You can find your Account Portal domain in the Clerk Dashboard under the **Configure > Account Portal** section (e.g. `https://ready-flea-75.accounts.dev`).
+
+The test should be structured as follows:
+
+```ts
+it('sign in with Account Portal redirects', () => {
+  setupClerkTestingToken()
+
+  // set the origin to the Account Portal domain
+  cy.origin('https://ready-flea-75.accounts.dev', () => {
+    // visit a protected page that redirects to the Account Portal when not signed in
+    cy.visit('http://localhost:3000/protected')
+    // fill the form to sign in
+    // ...
+  })
+
+  // the user should be redirected back to the protected page
+  cy.url().should('include', '/protected')
+})
+```
+
+### Full example
+
+The following snippet showcases a full example of a test that signs in with the Account Portal redirects. It can also be found in the [Clerk Cypress demo repo](https://github.com/clerk/clerk-cypress-nextjs).
+
+```ts
+import { setupClerkTestingToken } from '@clerk/testing/cypress'
+
+describe('Testing Tokens', () => {
+  it('sign in with Account Portal redirects', () => {
+    setupClerkTestingToken()
+
+    cy.origin('https://ready-flea-75.accounts.dev', () => {
+      cy.visit('http://localhost:3000/protected')
+      cy.contains('h1', 'Sign in')
+      cy.get('.cl-signIn-root').should('exist')
+      cy.get('input[name=identifier]').type(Cypress.env('test_user'))
+
+      cy.get('.cl-formButtonPrimary').contains('button', 'Continue').click()
+      cy.get('input[name=password]').type(Cypress.env('test_password'))
+
+      cy.get('.cl-formButtonPrimary').contains('button', 'Continue').click()
+    })
+
+    cy.url().should('include', '/protected')
+    cy.contains('h1', 'This is a PROTECTED page')
+  })
+})
+```

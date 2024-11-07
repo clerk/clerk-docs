@@ -1,0 +1,180 @@
+---
+title: Allow users to use passkeys
+description: Learn how to use passkeys in you Expo app with Clerk.
+---
+
+This guide show's you how to authenticate with passkeys in your Expo application.
+
+> [!WARNING]
+> This API is available only for [@clerk/clerk-expo v2](/docs/upgrade-guides/expo-v2/upgrade) >=2.2.0.
+
+<Steps>
+  ### Enable passkeys
+
+  To use passkeys, first enable the strategy in the Clerk Dashboard. If you haven't already visit the [Enable passkeys documentation section](https://clerk.com/docs/custom-flows/passkeys#enable-passkeys)
+
+  ### Set your associated domains and your digital asset links files.
+
+  In order to use passkeys you will need to navigate to [Clerk Dashboard](https://dashboard.clerk.com/)
+  then go to `Native Applications` page. You can find that page under the `Configure` tab.
+
+  <Tabs items={['iOS', 'Android']}>
+    <Tab>
+      > [!WARNING]
+      > Ios Support passkeys from version iOS 16+
+
+      To create your digital asset links file, in the form that appears you will need to provide `Bundle ID` and your `App ID Prefix`.
+
+      // Put an image of the form
+      // Put an image of the where we are copying the link that the associated domains are hosted
+
+      After successfully submitting the above values the association file will be
+      hosted at https\://${YOUR_APPS_FRONTEND_API_URL}/.well-known/apple-app-site-association.
+
+      > [!NOTE]
+      > You can view your ${YOUR_APPS_FRONTEND_API_URL} after submitting all value in the description of the card.
+      > //TODO-AlexNti:ADD IMAGE HERE
+
+      After successfully creating the associated domains file, update your app.json in you Expo application.
+
+      ```json
+      {
+        "expo": {
+          //...existing properties
+          "plugins": [
+            [
+              "expo-build-properties",
+              {
+                "ios": {
+                  "deploymentTarget": "16.0" //  Ios Support passkeys from version iOS 16+
+                }
+              }
+            ]
+          ],
+          "ios": {
+            //...existing properties
+            "associatedDomains": ["applinks:${YOUR_DOMAIN}", "webcredentials:${YOUR_DOMAIN}"]
+          }
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      > [!WARNING]
+      > Android supports passkeys from version Android 9+
+
+      To create your digital asset links file, in the form that appears you will need to provide the `namespace `, `package name` and `sha256_cert_fingerprints`
+      of your android app.
+
+      - For namespace use the value of `android_app`.
+      - For package name use the package name of your app.
+      - Learn more about the `sha256_cert_fingerprints` and how to generate in the following links:
+        - [Android app linking in official Expo docs](https://docs.expo.dev/linking/android-app-links/#create-assetlinksjson-file)
+        - [Verify app linking in official Android docs](https://developer.android.com/training/app-links/verify-android-applinks#web-assoc)
+
+      > [!NOTE]
+      > You can check that your `assetlinks.json` can be associated your app use [Statement List Generator and Tester](https://developers.google.com/digital-asset-links/tools/generator)
+
+      After successfully submitting the above values the `assetlinks.json` will be hosted at https\://${YOUR_APPS_FRONTEND_API_URL}/.well-known/assetlinks.json.
+
+      > [!NOTE]
+      > You can view your ${YOUR_APPS_FRONTEND_API_URL} after submitting all value in the description of the card.
+      > //TODO-AlexNti:ADD IMAGE HERE
+
+      Now that we set up the assetlinks.json we need to update the app.json file in our Expo application.
+
+      ```json
+      {
+        "expo": {
+          "android": {
+            //...existing properties
+            "intentFilters": [
+              {
+                "action": "VIEW",
+                "autoVerify": true,
+                "data": [
+                  {
+                    "scheme": "https",
+                    "host": "${YOUR_APPS_FRONTEND_API_URL}"
+                  }
+                ],
+                "category": ["BROWSABLE", "DEFAULT"]
+              }
+            ]
+          }
+        }
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ### Install the necessary peer dependencies
+
+  <CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/expo-passkeys
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/expo-passkeys
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/expo-passkeys
+    ```
+  </CodeBlockTabs>
+
+  ### Add passkeys object your `<ClerkProvider>`
+
+  ```tsx
+  import { ClerkProvider } from '@clerk/clerk-expo'
+  import { passkeys } from '@clerk/clerk-expo/passkeys'
+
+  return <ClerkProvider __experimental__passkeys={passkeys}>{/* Your app here */}</ClerkProvider>
+  ```
+
+  ### Create a passkey
+
+  ```tsx
+  const { user } = useUser()
+
+  const handleCreatePasskey = async () => {
+    if (!user) return
+    try {
+      return await user.createPasskey()
+    } catch (e: any) {
+      // handle error
+    }
+  }
+  ```
+
+  ### Authenticate a user with a passkey
+
+  ```tsx
+  const { signIn, setActive } = useSignIn()
+
+  const handlePasskeySignIn = async () => {
+    try {
+      const signInResponse = await signIn.authenticateWithPasskey({ flow: 'discoverable' })
+      await setActive({ session: signInResponse.createdSessionId })
+    } catch (err: any) {
+      // handle error
+    }
+  }
+  ```
+</Steps>
+
+## More resources
+
+Use the following guides to learn more about Clerk components, how to build custom flows for your native apps, and how to use Clerk's client-side helpers.
+
+<Cards>
+  - [Expo SDK](/docs/quickstarts/expo)
+  - Use Clerk with Expo to authenticate users in your React Native application.
+
+  ---
+
+  - [Authentication flow with passkeys](https://clerk.com/docs/custom-flows/passkeys#enable-passkeys)
+  - This guide will walk you through how to use Clerk's API to build custom flows for creating, signing users in with, and managing passkeys.
+</Cards>

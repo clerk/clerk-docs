@@ -1,36 +1,49 @@
 ---
-title: Test Account Portal
+title: Test Account Portal flows
 description: Learn how to test the Account Portal flow with Cypress.
 ---
 
-When testing with Cypress, navigations that involve redirects to external URLs can be tricky to test. This guide demonstrates how to test the Account Portal flow with Cypress, which involves redirecting to the Account Portal and back to your application.
+When testing with Cypress, navigation flows that involve redirects to external URLs can be difficult to test. This guide demonstrates how to use Cypress to test Clerk's Account Portal flow, which involves redirecting to the Account Portal and back to your application.
 
-In order to achieve this you need to use the `cy.origin()` command. More information about this command can be found in the [Cypress documentation](https://docs.cypress.io/api/commands/origin).
+> [!IMPORTANT]
+> Check out the [demo repo](https://github.com/clerk/clerk-playwright-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys, a test user with username and password, and have username and password authentication enabled in the Clerk Dashboard.
 
-Also, you need to know your Account Portal domain to use it in the `cy.origin()` command. You can find your Account Portal domain in the Clerk Dashboard under the **Configure > Account Portal** section (e.g. `https://ready-flea-75.accounts.dev`).
+## Get your Account Portal domain
 
-The test should be structured as follows:
+Get your Account Portal domain from the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page in the Clerk Dashboard. The format should be: `https://ready-flea-75.accounts.dev`
+
+## The test format
+
+Cypress's `cy.origin()` function allows you to visit multiple domains of different origin in the same test. See the [Cypress documentation](https://docs.cypress.io/api/commands/origin) for more information.
+
+By passing your Account Portal domain to `cy.origin()`, your test is able to visit the Account Portal domain and then return to your application.
+
+The test that includes the Account Portal redirects should be structured as follows:
 
 ```ts
 it('sign in with Account Portal redirects', () => {
   setupClerkTestingToken()
 
-  // set the origin to the Account Portal domain
+  // Set the origin to the Account Portal domain
   cy.origin('https://ready-flea-75.accounts.dev', () => {
-    // visit a protected page that redirects to the Account Portal when not signed in
+    // Visit a protected page that redirects to the Account Portal when not signed in
     cy.visit('http://localhost:3000/protected')
-    // fill the form to sign in
+    // Fill the form to sign in
     // ...
   })
 
-  // the user should be redirected back to the protected page
+  // The user should be redirected back to the protected page
   cy.url().should('include', '/protected')
 })
 ```
 
-### Full example
+## Example
 
-The following snippet showcases a full example of a test that signs in with the Account Portal redirects. It can also be found in the [Clerk Cypress demo repo](https://github.com/clerk/clerk-cypress-nextjs).
+The following example demonstrates how to create a test that:
+
+- visits a protected page, which redirects to the Account Portal when not signed in.
+- fills the form to sign in.
+- is redirected back to the protected page.
 
 ```ts
 import { setupClerkTestingToken } from '@clerk/testing/cypress'
@@ -52,6 +65,8 @@ describe('Testing Tokens', () => {
     })
 
     cy.url().should('include', '/protected')
+    // Ensure the user has successfully accessed the protected page
+    // by checking an element on the page that only the authenticated user can access
     cy.contains('h1', 'This is a PROTECTED page')
   })
 })

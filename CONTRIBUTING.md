@@ -229,11 +229,11 @@ These fields should be present on every documentation page.
 
 The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
 
-| Name | Type | Default | Description |
-| - | - | - | - |
-| `exclude` | `boolean` | `false` | Whether to exclude the page from search entirely |
-| `rank` | `number` | `0` | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
-| `keywords` | `Array<string>` | `[]` | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users. |
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                           |
+| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
+| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users.                                                                                                    |
 
 You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
 
@@ -248,6 +248,7 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 + search: false
   ---
 ```
+
 </details>
 
 <details>
@@ -260,6 +261,7 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 +   rank: 1
   ---
 ```
+
 </details>
 
 <details>
@@ -273,6 +275,7 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 +     - supercalifragilisticexpialidocious
   ---
 ```
+
 </details>
 
 ### Headings

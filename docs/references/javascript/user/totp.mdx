@@ -149,125 +149,123 @@ The following example assumes:
 - you have followed the [quickstart](/docs/quickstarts/javascript) in order to add Clerk to your JavaScript application
 - you have [enabled **Authenticator application** and **Backup codes** as multi-factor strategies in your Clerk Dashboard](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies)
 
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html' }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
 
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html' }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="app"></div>
+        <p id="error-container" hidden>
+          Error:
+          <span id="error-message"></span>
+        </p>
 
-          <p id="error-container" hidden>
-            Error:
-            <span id="error-message"></span>
+        <button id="create-totp">Create TOTP</button>
+        <button id="disable-totp">Disable TOTP</button>
+        <button id="create-backup-codes">Create Backup Codes</button>
+
+        <div id="totp-container" hidden>
+          <p id="enter-totp-secret">
+            Enter the TOTP secret into your authenticator app:
+            <span id="totp-secret"></span>
           </p>
 
-          <button id="create-totp">Create TOTP</button>
-          <button id="disable-totp">Disable TOTP</button>
-          <button id="create-backup-codes">Create Backup Codes</button>
+          <label for="totp-code"> Enter the code from your authenticator app </label>
+          <input id="totp-code" type="text" />
+          <button id="verify-totp">Verify TOTP</button>
+        </div>
 
-          <div id="totp-container" hidden>
-            <p id="enter-totp-secret">
-              Enter the TOTP secret into your authenticator app:
-              <span id="totp-secret"></span>
-            </p>
+        <h2>Response:</h2>
+        <pre id="response"></pre>
 
-            <label for="totp-code"> Enter the code from your authenticator app </label>
-            <input id="totp-code" type="text" />
-            <button id="verify-totp">Verify TOTP</button>
-          </div>
+        <script type="module" src="/main.js"></script>
+      </body>
+    </html>
+    ```
 
-          <h2>Response:</h2>
-          <pre id="response"></pre>
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js'
 
-          <script type="module" src="/main.js"></script>
-        </body>
-      </html>
-      ```
+    // Initialize Clerk with your Clerk publishable key
+    const clerk = new Clerk('{{pub_key}}')
+    await clerk.load()
 
-      ```js {{ filename: 'main.js' }}
-      import { Clerk } from '@clerk/clerk-js'
+    if (clerk.user) {
+      // Create and verify TOTP
+      document.getElementById('create-totp').addEventListener('click', async () => {
+        clerk.user
+          .createTOTP()
+          .then((res) => {
+            // Show the TOTP container with the secret and verify button
+            document.getElementById('totp-container').removeAttribute('hidden')
 
-      // Initialize Clerk with your Clerk publishable key
-      const clerk = new Clerk('{{pub_key}}')
-      await clerk.load()
+            // Display the secret to the user
+            document.getElementById('totp-secret').innerHTML = res.secret
 
-      if (clerk.user) {
-        // Create and verify TOTP
-        document.getElementById('create-totp').addEventListener('click', async () => {
-          clerk.user
-            .createTOTP()
-            .then((res) => {
-              // Show the TOTP container with the secret and verify button
-              document.getElementById('totp-container').removeAttribute('hidden')
-
-              // Display the secret to the user
-              document.getElementById('totp-secret').innerHTML = res.secret
-
-              // Add event listener to verify TOTP button
-              document.getElementById('verify-totp').addEventListener('click', async () => {
-                const code = document.getElementById('totp-code').value
-                clerk.user
-                  .verifyTOTP({ code })
-                  .then((res) => {
-                    document.getElementById('response').innerHTML = JSON.stringify(res)
-                  })
-                  .catch((error) => {
-                    document.getElementById('error-container').removeAttribute('hidden')
-                    document.getElementById('error-message').innerHTML = error.errors[0].longMessage
-                    console.log('An error occurred:', error.errors)
-                  })
-              })
+            // Add event listener to verify TOTP button
+            document.getElementById('verify-totp').addEventListener('click', async () => {
+              const code = document.getElementById('totp-code').value
+              clerk.user
+                .verifyTOTP({ code })
+                .then((res) => {
+                  document.getElementById('response').innerHTML = JSON.stringify(res)
+                })
+                .catch((error) => {
+                  document.getElementById('error-container').removeAttribute('hidden')
+                  document.getElementById('error-message').innerHTML = error.errors[0].longMessage
+                  console.log('An error occurred:', error.errors)
+                })
             })
-            .catch((error) => {
-              document.getElementById('error-container').removeAttribute('hidden')
-              document.getElementById('error-message').innerHTML = error.errors[0].longMessage
-              console.log('An error occurred:', error.errors)
-            })
-        })
+          })
+          .catch((error) => {
+            document.getElementById('error-container').removeAttribute('hidden')
+            document.getElementById('error-message').innerHTML = error.errors[0].longMessage
+            console.log('An error occurred:', error.errors)
+          })
+      })
 
-        // Disable TOTP
-        document.getElementById('disable-totp').addEventListener('click', async () => {
-          clerk.user
-            .disableTOTP()
-            .then((res) => {
-              document.getElementById('response').innerHTML = JSON.stringify(res)
-            })
-            .catch((error) => {
-              document.getElementById('error-container').removeAttribute('hidden')
-              document.getElementById('error-message').innerHTML = error.errors[0].longMessage
-              console.log('An error occurred:', error.errors)
-            })
-        })
+      // Disable TOTP
+      document.getElementById('disable-totp').addEventListener('click', async () => {
+        clerk.user
+          .disableTOTP()
+          .then((res) => {
+            document.getElementById('response').innerHTML = JSON.stringify(res)
+          })
+          .catch((error) => {
+            document.getElementById('error-container').removeAttribute('hidden')
+            document.getElementById('error-message').innerHTML = error.errors[0].longMessage
+            console.log('An error occurred:', error.errors)
+          })
+      })
 
-        // Create backup codes
-        document.getElementById('create-backup-codes').addEventListener('click', async () => {
-          clerk.user
-            .createBackupCode()
-            .then((res) => {
-              document.getElementById('response').innerHTML = JSON.stringify(res)
-            })
-            .catch((error) => {
-              document.getElementById('error-container').removeAttribute('hidden')
-              document.getElementById('error-message').innerHTML = error.errors[0].longMessage
-              console.log('An error occurred:', error.errors)
-            })
-        })
-      } else {
-        document.getElementById('app').innerHTML = `
-          <div id="sign-in"></div>
-        `
+      // Create backup codes
+      document.getElementById('create-backup-codes').addEventListener('click', async () => {
+        clerk.user
+          .createBackupCode()
+          .then((res) => {
+            document.getElementById('response').innerHTML = JSON.stringify(res)
+          })
+          .catch((error) => {
+            document.getElementById('error-container').removeAttribute('hidden')
+            document.getElementById('error-message').innerHTML = error.errors[0].longMessage
+            console.log('An error occurred:', error.errors)
+          })
+      })
+    } else {
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `
 
-        const signInDiv = document.getElementById('sign-in')
+      const signInDiv = document.getElementById('sign-in')
 
-        clerk.mountSignIn(signInDiv)
-      }
-      ```
-    </CodeBlockTabs>
-
+      clerk.mountSignIn(signInDiv)
+    }
+    ```
+  </CodeBlockTabs>

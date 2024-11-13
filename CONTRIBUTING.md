@@ -515,7 +515,7 @@ pnpm add @clerk/nextjs
 
 The image below shows what this example looks like once rendered.
 
-![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)
+![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package](/.github/media/code-block-tabs.png).
 
 ### `<Tabs />`
 

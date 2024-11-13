@@ -135,100 +135,103 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
       ```
     </Tab>
 
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
+    <Tab>
+      <CodeBlockTabs options={["index.html", "main.js"]}>
+        ```html {{ filename: 'index.html', collapsible: true }}
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="signed-in"></div>
 
-          <div id="sign-up">
-            <h2>Sign up</h2>
-            <form id="sign-up-form">
-              <label for="phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-up-phone" />
-              <button type="submit">Continue</button>
+            <div id="sign-up">
+              <h2>Sign up</h2>
+              <form id="sign-up-form">
+                <label for="phone">Enter phone number</label>
+                <input type="tel" name="phone" id="sign-up-phone" />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
+
+            <form id="verifying" hidden>
+              <h2>Verify your phone number</h2>
+              <label for="code">Enter your verification code</label>
+              <input id="code" name="code" />
+              <button type="submit" id="verify-button">Verify</button>
             </form>
-          </div>
 
-          <form id="verifying" hidden>
-            <h2>Verify your phone number</h2>
-            <label for="code">Enter your verification code</label>
-            <input id="code" name="code" />
-            <button type="submit" id="verify-button">Verify</button>
-          </form>
+            <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+          </body>
+        </html>
+        ```
 
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
+        ```js {{ filename: 'main.js', collapsible: true }}
+        import { Clerk } from '@clerk/clerk-js'
 
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
+        const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-      // Initialize Clerk with your Clerk publishable key
-      const clerk = new Clerk('{{pub_key}}')
-      await clerk.load()
+        const clerk = new Clerk(pubKey)
+        await clerk.load()
 
-      if (clerk.user) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
+        if (clerk.user) {
+          // Mount user button component
+          document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
 
-        const userbuttonDiv = document.getElementById('user-button')
+          const userbuttonDiv = document.getElementById('user-button')
 
-        clerk.mountUserButton(userbuttonDiv)
-      } else {
-        // Handle the sign-up form
-        document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
+          clerk.mountUserButton(userbuttonDiv)
+        } else {
+          // Handle the sign-up form
+          document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
+            e.preventDefault()
 
-          const formData = new FormData(e.target)
-          const phoneNumber = formData.get('phone')
+            const formData = new FormData(e.target)
+            const phoneNumber = formData.get('phone')
 
-          try {
-            // Start the sign-up process using the phone number method
-            await clerk.client.signUp.create({ phoneNumber })
-            await clerk.client.signUp.preparePhoneNumberVerification()
-            // Hide sign-up form
-            document.getElementById('sign-up').setAttribute('hidden', '')
-            // Show verification form
-            document.getElementById('verifying').removeAttribute('hidden')
-          } catch (error) {
-            // See https://clerk.com/docs/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
+            try {
+              // Start the sign-up process using the phone number method
+              await clerk.client.signUp.create({ phoneNumber })
+              await clerk.client.signUp.preparePhoneNumberVerification()
+              // Hide sign-up form
+              document.getElementById('sign-up').setAttribute('hidden', '')
+              // Show verification form
+              document.getElementById('verifying').removeAttribute('hidden')
+            } catch (error) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(error)
+            }
+          })
 
-        // Handle the verification form
-        document.getElementById('verifying').addEventListener('submit', async (e) => {
-          const formData = new FormData(e.target)
-          const code = formData.get('code')
+          // Handle the verification form
+          document.getElementById('verifying').addEventListener('submit', async (e) => {
+            const formData = new FormData(e.target)
+            const code = formData.get('code')
 
-          try {
-            // Verify the phone number
-            const verify = await clerk.client.signUp.attemptPhoneNumberVerification({
-              code,
-            })
+            try {
+              // Verify the phone number
+              const verify = await clerk.client.signUp.attemptPhoneNumberVerification({
+                code,
+              })
 
-            // Now that the user is created, set the session to active.
-            await clerk.setActive({ session: verify.createdSessionId })
-          } catch (error) {
-            // See https://clerk.com/docs/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
+              // Now that the user is created, set the session to active.
+              await clerk.setActive({ session: verify.createdSessionId })
+            } catch (error) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(error)
+            }
+          })
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
 
     <Tab>
       ```swift {{ filename: 'SMSOTPSignUpView.swift', collapsible: true }}
@@ -434,118 +437,121 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
       ```
     </Tab>
 
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
+    <Tab>
+      <CodeBlockTabs options={["index.html", "main.js"]}>
+        ```html {{ filename: 'index.html', collapsible: true }}
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="signed-in"></div>
 
-          <div id="sign-in">
-            <h2>Sign in</h2>
-            <form id="sign-in-form">
-              <label for="phone">Enter phone number</label>
-              <input type="tel" name="phone" id="sign-in-phone" />
-              <button type="submit">Continue</button>
+            <div id="sign-in">
+              <h2>Sign in</h2>
+              <form id="sign-in-form">
+                <label for="phone">Enter phone number</label>
+                <input type="tel" name="phone" id="sign-in-phone" />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
+
+            <form id="verifying" hidden>
+              <h2>Verify your phone number</h2>
+              <label for="code">Enter your verification code</label>
+              <input id="code" name="code" />
+              <button type="submit" id="verify-button">Verify</button>
             </form>
-          </div>
 
-          <form id="verifying" hidden>
-            <h2>Verify your phone number</h2>
-            <label for="code">Enter your verification code</label>
-            <input id="code" name="code" />
-            <button type="submit" id="verify-button">Verify</button>
-          </form>
+            <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+          </body>
+        </html>
+        ```
 
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
+        ```js {{ filename: 'main.js', collapsible: true }}
+        import { Clerk } from '@clerk/clerk-js'
 
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
+        const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-      // Initialize Clerk with your Clerk publishable key
-      const clerk = new Clerk('{{pub_key}}')
-      await clerk.load()
+        const clerk = new Clerk(pubKey)
+        await clerk.load()
 
-      if (clerk.user) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
+        if (clerk.user) {
+          // Mount user button component
+          document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
 
-        const userbuttonDiv = document.getElementById('user-button')
+          const userbuttonDiv = document.getElementById('user-button')
 
-        clerk.mountUserButton(userbuttonDiv)
-      } else {
-        // Handle the sign-in form
-        document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
+          clerk.mountUserButton(userbuttonDiv)
+        } else {
+          // Handle the sign-in form
+          document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
+            e.preventDefault()
 
-          const formData = new FormData(e.target)
-          const phone = formData.get('phone')
+            const formData = new FormData(e.target)
+            const phone = formData.get('phone')
 
-          try {
-            // Start the sign-in process using the user's identifier.
-            // In this case, it's their phone number.
-            const { supportedFirstFactors } = await clerk.client.signIn.create({
-              identifier: phone,
-            })
+            try {
+              // Start the sign-in process using the user's identifier.
+              // In this case, it's their phone number.
+              const { supportedFirstFactors } = await clerk.client.signIn.create({
+                identifier: phone,
+              })
 
-            // Find the phoneNumberId from all the available first factors for the current sign-in
-            const firstPhoneFactor = supportedFirstFactors.find((factor) => {
-              return factor.strategy === 'phone_code'
-            })
+              // Find the phoneNumberId from all the available first factors for the current sign-in
+              const firstPhoneFactor = supportedFirstFactors.find((factor) => {
+                return factor.strategy === 'phone_code'
+              })
 
-            const { phoneNumberId } = firstPhoneFactor
+              const { phoneNumberId } = firstPhoneFactor
 
-            // Prepare first factor verification, specifying
-            // the phone code strategy.
-            await clerk.client.signIn.prepareFirstFactor({
-              strategy: 'phone_code',
-              phoneNumberId,
-            })
+              // Prepare first factor verification, specifying
+              // the phone code strategy.
+              await clerk.client.signIn.prepareFirstFactor({
+                strategy: 'phone_code',
+                phoneNumberId,
+              })
 
-            // Hide sign-in form
-            document.getElementById('sign-in').setAttribute('hidden', '')
-            // Show verification form
-            document.getElementById('verifying').removeAttribute('hidden')
-          } catch (error) {
-            // See https://clerk.com/docs/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
+              // Hide sign-in form
+              document.getElementById('sign-in').setAttribute('hidden', '')
+              // Show verification form
+              document.getElementById('verifying').removeAttribute('hidden')
+            } catch (error) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(error)
+            }
+          })
 
-        // Handle the verification form
-        document.getElementById('verifying').addEventListener('submit', async (e) => {
-          const formData = new FormData(e.target)
-          const code = formData.get('code')
+          // Handle the verification form
+          document.getElementById('verifying').addEventListener('submit', async (e) => {
+            const formData = new FormData(e.target)
+            const code = formData.get('code')
 
-          try {
-            // Verify the phone number
-            const verify = await clerk.client.signIn.attemptFirstFactor({
-              strategy: 'phone_code',
-              code,
-            })
+            try {
+              // Verify the phone number
+              const verify = await clerk.client.signIn.attemptFirstFactor({
+                strategy: 'phone_code',
+                code,
+              })
 
-            // Now that the user is created, set the session to active.
-            await clerk.setActive({ session: verify.createdSessionId })
-          } catch (error) {
-            // See https://clerk.com/docs/custom-flows/error-handling
-            // for more info on error handling
-            console.error(error)
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
+              // Now that the user is created, set the session to active.
+              await clerk.setActive({ session: verify.createdSessionId })
+            } catch (error) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(error)
+            }
+          })
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
 
     <Tab>
       ```swift {{ filename: 'SMSOTPSignInView.swift', collapsible: true }}

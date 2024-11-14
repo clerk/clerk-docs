@@ -365,7 +365,7 @@ When presenting things in a series of tabs, ensure that similar things are group
 
 #### Do
 
-![App Router and Pages Router exist as two tabs, side by side](/.github/media/uncrowded-tabs.png).
+![App Router and Pages Router exist as two tabs, side by side](/.github/media/uncrowded-tabs.png)
 
 Next.js is a platform with two different implementations grouped underneath it.
 

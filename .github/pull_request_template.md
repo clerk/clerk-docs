@@ -13,6 +13,6 @@
 
 ### Checklist
 
-[ ] I have clicked on "Files changed" and performed a thorough self-review
-[ ] I have added the "deploy-preview" label and added the preview link(s) to this PR description
-[ ] All existing checks pass
+- [ ] I have clicked on "Files changed" and performed a thorough self-review
+- [ ] I have added the "deploy-preview" label and added the preview link(s) to this PR description
+- [ ] All existing checks pass

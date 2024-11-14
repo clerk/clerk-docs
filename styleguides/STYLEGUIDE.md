@@ -371,7 +371,7 @@ Next.js is a platform with two different implementations grouped underneath it.
 
 #### Don't
 
-![App Router and Pages Router are sitting alongside other very different methods of retrieving data](/.github/media/crowded-tabs.png).
+![App Router and Pages Router are sitting alongside other very different methods of retrieving data](/.github/media/crowded-tabs.png)
 
 Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.
 

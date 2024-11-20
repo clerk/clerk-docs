@@ -1,0 +1,78 @@
+---
+title: '`clerkMiddleware()` | Nuxt'
+description: The `clerkMiddleware()` function allows you to protect your Nuxt application using Middleware.
+---
+
+The `clerkMiddleware()` helper integrates Clerk authentication into your Nuxt application through middleware.
+
+## Configure `clerkMiddleware()`
+
+By default, the Clerk Nuxt module automatically adds the `clerkMiddleware()` helper to your Nuxt application. If you prefer to manually configure the middleware, you can set `skipServerMiddleware` in your `nuxt.config.ts` under the `clerk` property:
+
+```ts
+export default defineNuxtConfig({
+  modules: ['@clerk/nuxt'],
+  clerk: {
+    skipServerMiddleware: true,
+  },
+})
+```
+
+Then create a file inside your `server/middleware/` directory:
+
+```ts {{ filename: 'src/middleware/clerk.ts' }}
+import { clerkMiddleware } from '@clerk/nuxt/server'
+
+export default clerkMiddleware()
+```
+
+## Protect API routes
+
+You can protect API routes by checking either or both of the following:
+
+- [User authentication status](#protect-routes-based-on-user-authentication-status) -- user is signed in or out
+- [User authorization status](#protect-routes-based-on-user-authorization-status) -- user has the required role or permission
+
+### Protect routes based on user authentication status
+
+To protect routes based on user authentication status, use [`auth.userId`](/docs/references/nextjs/auth#retrieving-user-id){{ target: '_blank' }} to check if the `userId` is present. If it is not, the user is not authenticated, and you can throw an error.
+
+```tsx {{ filename: 'server/middleware/clerk.ts' }}
+import { clerkMiddleware } from '@clerk/nuxt/server'
+
+export default clerkMiddleware((event) => {
+  const { userId } = event.context.auth
+
+  if (!userId && event.path.startsWith('/api/user')) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized',
+    })
+  }
+})
+```
+
+### Protect routes based on user authorization status
+
+To protect routes based on user authorization status, use [`auth().has()`](/docs/references/nextjs/auth-object#has){{ target: '_blank' }} to check if the user has the required roles or permissions.
+
+```tsx {{ filename: 'server/middleware/clerk.ts' }}
+import { clerkMiddleware } from '@clerk/nuxt/server'
+
+export default clerkMiddleware((event) => {
+  const { has } = event.context.auth
+
+  const isAdminRoute = event.path.startsWith('/api/admin')
+
+  // Restrict admin routes to users with specific permissions
+  if (
+    (isAdminRoute && !has({ permission: 'org:sys_memberships:manage' })) ||
+    !has({ permission: 'org:sys_domains_manage' })
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Forbidden',
+    })
+  }
+})
+```

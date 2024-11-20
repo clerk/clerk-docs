@@ -71,6 +71,13 @@ Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/reference
 
   ---
 
+  - factorAgeVerification
+  - `[number, number] | undefined`
+
+  An array that describes when a first factor and second factor were used to verify the user's identity.
+
+  ---
+
   - [`getToken()`](#get-token)
   - [`ServerGetToken`](#server-get-token)
 
@@ -128,9 +135,37 @@ function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions):
   - `string`
 
   The permission to check for.
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](#reverification-config) | [ReverificationCustomConfig](#reverification-custom-config)</code>
 </Properties>
 
-#### `has()` example
+#### `ReverificationConfig`
+`“strict_mfa”`, `“strict”`, `“moderate”`, `"lax”`
+| strict_mfa | User should have verified credentials in the past 10 minutes, otherwise ask for both first factor and second factor |
+| --- | --- |
+| strict | User should have verified credentials in the past 10 minutes, otherwise ask for second factor |
+| moderate | User should have verified credentials in the past 1 hour, otherwise ask for second factor |
+| lax | User should have verified credentials in the past 1 day, otherwise ask for second factor |
+
+### `ReverificationCustomConfig`
+<Properties>
+  - `level`
+  - `“first_factor”`, `“second_factor”`, `“multi_factor”`
+
+  The reverification level of credentials to check for.
+
+  ---
+
+  - `afterMinutes`
+  - `number`
+
+  The age of the factor level to check for. Value should be ≥ 1 < 99_999.
+</Properties>
+
+#### `has()` permissions example
 
 You can use `has()` to check if a user is authorized to access a component.
 
@@ -151,6 +186,28 @@ export default async function Page() {
 
   return <h1>Team Settings</h1>
 }
+```
+
+#### `has()` reverification example
+
+In the following example:
+
+- `has()` is used to check if the user has the verified their credentials in the last 10 minutes.
+- If the user hasn’t then we return with a specific response that will trigger the re-verification flow on the client.
+
+```tsx
+import { auth, reverificationErrorResponse } from "@clerk/nextjs/server";
+
+export const POST = async (req: Request) => {
+  const { has } = await auth()
+  
+  const shouldUserRevalidate = !has({ reverification: "strict"})
+  if (shouldUserRevalidate) {
+    return reverificationErrorResponse("strict");
+  }
+
+  return new Response(...)
+};
 ```
 
 ### `getToken()`
@@ -307,6 +364,60 @@ The following is an example of the `Auth` object with an active organization:
   orgRole: 'org:admin',
   orgSlug: undefined,
   orgPermissions: ['org:team_settings:manage'], // Custom permissions
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
+    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  },
+}
+```
+
+## `Auth` object example with valid factor age
+
+The following is an example of the `Auth` object without an active organization:
+
+```js {{ prettier: false }}
+{
+  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
+  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorAgeVerification: [0,0],
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
+    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  },
+}
+```
+
+## `Auth` object example for user without a 2fa method registered.
+
+The following is an example of the `Auth` object without an active organization:
+
+```js {{ prettier: false }}
+{
+  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
+  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorAgeVerification: [0,-1],
   has: [Function (anonymous)],
   getToken: [AsyncFunction (anonymous)],
   claims: {

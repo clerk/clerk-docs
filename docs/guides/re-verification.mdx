@@ -21,98 +21,95 @@ Clerk offers a suite of utilities that helps you handle a re-verification flow.
 ## Mutations on sensitive resources
 In order to decrease the chances of a user’s account being accessible to unauthorized actors performing sensitive actions, you can frequently ask for the user to re-verify their active session, by verifying their credentials on the spot.
 
-<Tabs type="framework" items={["Next.js App Router", "Ruby w/ React", "Other"]}>
+<Tabs type="framework" items={["Next.js Server Action", "Next.js Route Handler", "Ruby w/ React", "Other"]}>
+  
   <Tab>
-    <Tabs type="endpoints" items={["Server Actions", "Route Handler"]}>
-      <Tab>
-        
-        ### Authorizing your server actions
-        
-        ```ts {{ filename: '/app/actions.ts' }}
-        "use server";
+    
+    ### Authorizing your server actions
+    
+    ```ts {{ filename: '/app/actions.ts' }}
+    "use server";
 
-        import { auth, reverificationError } from "@clerk/nextjs/server";
+    import { auth, reverificationError } from "@clerk/nextjs/server";
 
-        export const myAction = async () => {
-          const { orgId, has } = await auth.protect();
-          
-          const shouldUserRevalidate = !has({ reverification: "strict"})
-          
-          if (shouldUserRevalidate) {
-            return reverificationError("strict");
-          }
+    export const myAction = async () => {
+      const { orgId, has } = await auth.protect();
+      
+      const shouldUserRevalidate = !has({ reverification: "strict"})
+      
+      if (shouldUserRevalidate) {
+        return reverificationError("strict");
+      }
 
-          return { success: true };
-        };
-        ```
+      return { success: true };
+    };
+    ```
 
-        Once our actions are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
+    Once our actions are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
 
-        ```tsx {{ filename: '/app/perform-action/page.tsx' }}
-        "use client";
+    ```tsx {{ filename: '/app/perform-action/page.tsx' }}
+    "use client";
 
-        import { useReverification } from "@clerk/nextjs";
-        import { myAction } from '@/app/actions'
+    import { useReverification } from "@clerk/nextjs";
+    import { myAction } from '@/app/actions'
 
-        export function MyButton() {
-          const [performAction] = useReverification(myAction);
+    export function MyButton() {
+      const [performAction] = useReverification(myAction);
 
-          return (
-            <button
-              onClick={async () => {
-                  const myData = await performAction()
-                  if(!myData) return 
-                  .... console.log(myData)
-              }}
-            >
-              Perform Action
-            </button>
-          );
-        }
-        ```
-      </Tab>
-      <Tab>
-        ### Authorizing your route handlers
+      return (
+        <button
+          onClick={async () => {
+              const myData = await performAction()
+              if(!myData) return 
+              .... console.log(myData)
+          }}
+        >
+          Perform Action
+        </button>
+      );
+    }
+    ```
+  </Tab>
+  <Tab>
+    ### Authorizing your route handlers
 
-        ```ts {{ filename: '/app/api/transfer-balance/route.ts' }}
-        import { auth, reverificationErrorResponse } from "@clerk/nextjs/server";
+    ```ts {{ filename: '/app/api/transfer-balance/route.ts' }}
+    import { auth, reverificationErrorResponse } from "@clerk/nextjs/server";
 
-        export const POST = async (req: Request) => {
-          const { has } = await auth.protect();
-          
-          const shouldUserRevalidate = !has({ reverification: "strict"})
-          
-          if (shouldUserRevalidate) {
-            return reverificationErrorResponse("strict");
-          }
+    export const POST = async (req: Request) => {
+      const { has } = await auth.protect();
+      
+      const shouldUserRevalidate = !has({ reverification: "strict"})
+      
+      if (shouldUserRevalidate) {
+        return reverificationErrorResponse("strict");
+      }
 
-          return new Response(JSON.stringify({ success: true }))
-        };
-        ```
+      return new Response(JSON.stringify({ success: true }))
+    };
+    ```
 
-        Once our endpoints are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
+    Once our endpoints are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
 
-        ```tsx {{ filename: '/app/transfer/page.tsx' }}
-        "use client";
+    ```tsx {{ filename: '/app/transfer/page.tsx' }}
+    "use client";
 
-        import { useReverification } from "@clerk/nextjs";
+    import { useReverification } from "@clerk/nextjs";
 
-        export function TransferButton({ amount_in_cents }) {
-          const [transferMoney] = useReverification(()=>
-            fetch("/api/transfer-balance", {
-              method: "POST",
-              body: JSON.stringify({ amount_in_cents })
-            }))
+    export function TransferButton({ amount_in_cents }) {
+      const [transferMoney] = useReverification(()=>
+        fetch("/api/transfer-balance", {
+          method: "POST",
+          body: JSON.stringify({ amount_in_cents })
+        }))
 
-          return (
-            <button onClick={transferMoney}>
-              Transfer
-            </button>
-          );
-        }
-        ```
-      </Tab>
-    </Tabs>
+      return (
+        <button onClick={transferMoney}>
+          Transfer
+        </button>
+      );
+    }
+    ```
   </Tab>
   <Tab>
     In your controller add a filter that leverages the new helpers

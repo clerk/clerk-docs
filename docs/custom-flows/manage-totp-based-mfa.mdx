@@ -590,4 +590,55 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
       </Tabs>
     </Tab>
   </Tabs>
+
+  #### Force MFA (optional)
+
+  While Clerk does not natively enforce MFA for all users, you can implement this functionality by using middleware to check whether a user has MFA enabled. If MFA is not enabled, the middleware can redirect the user to an MFA setup page. Below is an example of how to achieve this.
+
+  ```tsx {{ filename: 'middleware.ts', collapsible: true }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { NextResponse } from 'next/server'
+
+  const isMFARoute = createRouteMatcher(['/mfa(.*)'])
+  const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+  export default clerkMiddleware(async (auth, req) => {
+    const { userId } = await auth()
+
+    if (userId !== null && isSignInRoute(req) && !isMFARoute(req)) {
+      // redirect to root if logged in
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+    if (userId !== null && !isMFARoute(req)) {
+      const res = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        },
+      })
+
+      const userData = await res.json()
+
+      if (userData.two_factor_enabled === false) {
+        return NextResponse.redirect(new URL('/mfa', req.url))
+      }
+    }
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+
+  ### How It Works
+
+  1. **Middleware Setup**: The middleware runs for all incoming requests and uses Clerk’s API to fetch user details.
+  1. **Check MFA Status**: It verifies whether the signed-in user has MFA enabled by checking the `two_factor_enabled` property in the user's data.
+  1. **Redirect to MFA Setup**: If the user does not have MFA enabled, the middleware redirects them to the `/mfa` page where they can set up MFA.
+  1. **Skip Certain Routes**: The middleware excludes static files and Next.js internals to ensure efficient routing. It always applies to API routes for comprehensive coverage.
+
+  For a complete implementation, you can refer to [this sample repository](https://github.com/clerk/clerk-nextjs-force-mfa-template).
 </Steps>

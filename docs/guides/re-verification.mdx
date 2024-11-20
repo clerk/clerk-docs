@@ -18,17 +18,120 @@ Clerk offers a suite of utilities that helps you handle a re-verification flow.
 > [!NOTE]
 > This feature is currently on Public Beta.
 
+## Mutations on sensitive resources
+In order to decrease the chances of a user’s account being accessible to unauthorized actors performing sensitive actions, you can frequently ask for the user to re-verify their active session, by verifying their credentials on the spot.
+
+<Tabs type="framework" items={["Next.js App Router", "Ruby", "Other"]}>
+  ### Authorizing your server endpoints
+  <Tab>
+    <Tabs type="endpoints" items={["Server Actions", "Route Handler"]}>
+      <Tab>
+        ```ts {{ filename: '/app/actions.ts' }}
+        "use server";
+
+        import { auth, reverificationError } from "@clerk/nextjs/server";
+
+        export const myAction = async () => {
+          const { orgId, has } = await auth.protect();
+          
+          const shouldUserRevalidate = !has({ reverification: "strict"})
+          
+          if (shouldUserRevalidate) {
+            return reverificationError("strict");
+          }
+
+          return { success: true };
+        };
+        ```
+
+        Once our endpoints or actions are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
+
+        ```tsx {{ filename: '/app/perform-action/page.tsx' }}
+        "use client";
+
+        import { useReverification } from "@clerk/nextjs";
+        import { myAction } from '@/app/actions'
+
+        export function MyButton() {
+          const [performAction] = useReverification(myAction);
+
+          return (
+            <button
+              onClick={async () => {
+                  const myData = await performAction()
+                  if(!myData) return 
+                  .... console.log(myData)
+              }}
+            >
+              Perform Action
+            </button>
+          );
+        }
+        ```
+      </Tab>
+      <Tab>
+        ```ts {{ filename: '/app/api/transfer-balance/route.ts' }}
+        import { auth, reverificationErrorResponse } from "@clerk/nextjs/server";
+
+        export const POST = async (req: Request) => {
+          const { has } = await auth.protect();
+          
+          const shouldUserRevalidate = !has({ reverification: "strict"})
+          
+          if (shouldUserRevalidate) {
+            return reverificationErrorResponse("strict");
+          }
+
+          return new Response(JSON.stringify({ success: true }))
+        };
+        ```
+
+        Once our endpoints or actions are authorized, we need to handle the authorization error that might reach the client. For that, we have introduced a new hook called `useReverification` that will detect the authorization error and automatically display a UI in a modal that enables the end-user to verify their identity. On success the previously failed request will be retried automatically.
+
+        ```tsx {{ filename: '/app/transfer/page.tsx' }}
+        "use client";
+
+        import { useReverification } from "@clerk/nextjs";
+
+        export function TransferButton({ amount_in_cents }) {
+          const [transferMoney] = useReverification(()=>
+            fetch("/api/transfer-balance", {
+              method: "POST",
+              body: JSON.stringify({ amount_in_cents })
+            }))
+
+          return (
+            <button onClick={transferMoney}>
+              Transfer
+            </button>
+          );
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+  <Tab>
+    Ruby
+  </Tab>
+  <Tab>
+  You can use the `reverificationMismatchResponse` exported from `@clerk/shared/authorization-errors` . If you are not using Javascript / Typescript, you can create your own helper that returns this JSON response:
+  ```json
+  {
+    "clerk_error": {
+      "type": "forbidden",
+      "reason": "reverification-mismatch",
+    }
+  }
+  ```
+  </Tab>
+</Tabs>
+
+
 ## Caveats
 There are a few things to consider, before you opt-in to this feature.
 1. Not all factors are available to be used for re-verification. The available are:
-    - First factors
-        - Password
-        - Email code
-        - Phone code
-    - Second Factors
-        - Phone code
-        - Authenticator app
-        - Backup code
+  - First factors: Password, Email code, Phone code
+  - Second Factors: Phone code, Authenticator app, Backup code
 2. If a user does not have any of the above, they will not be able to re-verify their credentials and thus not be eligible to perform “sensitive actions”.
 
 

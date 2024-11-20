@@ -23,7 +23,7 @@ You need to have Node.js `18.17.0` or later installed. Last year, Node.js 16 ent
 
 All react-dependent Clerk SDKs now require you to use React 18 or higher. You can update your project by installing the latest version of `react` and `react-dom`.
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
   ```bash {{ filename: 'terminal' }}
   npm install react@latest react-dom@latest
   ```
@@ -41,7 +41,7 @@ If you are upgrading from React 17 or lower, make sure to [learn about how to up
 
 **Updating Next.js**
 
-`@clerk/nextjs` now requires you to use Next.js version `13.0.4` or later. Check out Next's upgrade guides for more guidance if you have not yet upgraded to Next.js 13:
+`@clerk/nextjs` now requires you to use Next.js version `13.0.4` or later. See Next's upgrade guides for more guidance if you have not yet upgraded to Next.js 13:
 
 - [Upgrading from 12 to 13](https://nextjs.org/docs/pages/building-your-application/upgrading/version-13)
 - [Upgrading from 13 to 14](https://nextjs.org/docs/app/building-your-application/upgrading/version-14)
@@ -50,7 +50,7 @@ If you are upgrading from React 17 or lower, make sure to [learn about how to up
 
 Whenever you feel ready, go ahead and install the latest version of any Clerk SDKs you are using. Make sure that you are prepared to patch some breaking changes before your app will work properly, however. The commands below demonstrate how to install the latest version.
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
   ```bash {{ filename: 'terminal' }}
   npm install @clerk/nextjs
   ```
@@ -70,7 +70,7 @@ Clerk now provides a `@clerk/upgrade` CLI tool that you can use to ease the upgr
 
 To run the CLI tool, navigate to your project and run it in the terminal:
 
-<CodeBlockTabs type="installer" options={["npm", "yarn", "pnpm"]}>
+<CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
   ```bash {{ filename: 'terminal' }}
   npx @clerk/upgrade
   ```
@@ -108,12 +108,12 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 const isDashboardRoute = createRouteMatcher(['/dashboard(.*)'])
 const isAdminRoute = createRouteMatcher(['/admin(.*)'])
 
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   // Restrict admin route to users with specific role
-  if (isAdminRoute(req)) auth().protect({ role: 'org:admin' })
+  if (isAdminRoute(req)) await auth.protect({ role: 'org:admin' })
 
   // Restrict dashboard routes to signed in users
-  if (isDashboardRoute(req)) auth().protect()
+  if (isDashboardRoute(req)) await auth.protect()
 })
 
 export const config = {
@@ -130,7 +130,7 @@ A couple things to note here:
 
 - The `createRouteMatcher` helper makes it easy to define route groups that you can leverage inside the Middleware function and check in whichever order you'd like. Note that it can take an array of routes as well.
 - With `clerkMiddleware`, you're defining the routes you want **to be protected**, rather than the routes you don't want to be protected.
-- The [`auth().protect()`](/docs/references/nextjs/auth#protect) helper is utilized heavily here, check out its docs for more info.
+- The `auth.protect()` helper is used extensively here. See its [reference doc](/docs/references/nextjs/auth#protect) for more info.
 
 See the [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) docs for more information and detailed usage examples.
 
@@ -147,9 +147,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
 
 export default authMiddleware()
-export default clerkMiddleware((auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
-    auth().protect()
+    await auth.protect()
   }
 })
 
@@ -193,9 +193,9 @@ Of course, in most cases you'll have a more complicated setup than this. You can
 
     const isPublicRoute = createRouteMatcher(['/', '/contact(.*)'])
 
-    export default clerkMiddleware((auth, req) => {
+    export default clerkMiddleware(async (auth, req) => {
       if (isPublicRoute(req)) return // if it's a public route, do nothing
-      auth().protect() // for any other route, require auth
+      await auth.protect() // for any other route, require auth
     })
 
     export const config = {
@@ -238,8 +238,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
 
     const isDashboardRoute = createRouteMatcher(['/dashboard(.*)'])
 
-    export default clerkMiddleware((auth, request) => {
-      if (isDashboardRoute(request)) auth().protect()
+    export default clerkMiddleware(async (auth, request) => {
+      if (isDashboardRoute(request)) await auth.protect()
     })
 
     export const config = {
@@ -297,8 +297,8 @@ Of course, in most cases you'll have a more complicated setup than this. You can
 
     const isDashboardRoute = createRouteMatcher(['/dashboard(.*)'])
 
-    export default clerkMiddleware((auth, request) => {
-      if (isDashboardRoute(request)) auth().protect()
+    export default clerkMiddleware(async (auth, request) => {
+      if (isDashboardRoute(request)) await auth.protect()
 
       return intlMiddleware(request)
     })
@@ -341,8 +341,9 @@ Of course, in most cases you'll have a more complicated setup than this. You can
     ```ts {{ filename: 'middleware.ts' }}
     import { clerkMiddleware } from '@clerk/nextjs/server'
 
-    export default clerkMiddleware((auth, req) => {
-      if (someCondition) auth().redirectToSignIn()
+    export default clerkMiddleware(async (auth, req) => {
+      const { redirectToSignIn } = await auth()
+      if (someCondition) redirectToSignIn()
     })
 
     export const config = {
@@ -412,7 +413,7 @@ As part of this release, some of the top-level exports of `@clerk/nextjs` have b
     import { } from '@clerk/nextjs'
     ```
 
-    Some behavior may have changed between Clerk's beta and the stable release. Please check on your end if behavior stayed the same.
+    Some behavior may have changed between Clerk's beta and the stable release. Check on your end if behavior stayed the same.
   </AccordionPanel>
 
   <AccordionPanel>
@@ -439,6 +440,9 @@ As part of this release, some of the top-level exports of `@clerk/nextjs` have b
   </AccordionPanel>
 
   <AccordionPanel>
+    > [!CAUTION]
+    > On January 8, 2025, the Node SDK will no longer be available. [Upgrade to the Express SDK](/docs/upgrade-guides/node-to-express).
+
     The `@clerk/nextjs/api` subpath was removed completely. It re-exported helpers from `@clerk/clerk-sdk-node` and its types. If you relied on these, import from `@clerk/clerk-sdk-node` directly instead.
 
     ```js {{ prettier: false, del: [8, 11], ins: [9, 12] }}
@@ -526,6 +530,9 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
   </AccordionPanel>
 
   <AccordionPanel>
+    > [!CAUTION]
+    > On January 8, 2025, the Node SDK will no longer be available. [Upgrade to the Express SDK](/docs/upgrade-guides/node-to-express).
+
     ```typescript {{ filename: '@clerk/clerk-sdk-node' }}
     import { clerkClient } from '@clerk/clerk-sdk-node'
 
@@ -541,7 +548,7 @@ If you would like to have your JWT return all of the user's organizations, you c
 
 ### Path routing is now the default
 
-On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` describes the routing strategy that should be used and can be set to `'hash' | 'path' | 'virtual'`. `path` defines where the component is mounted when `routing='path'` is used. [Learn more about Clerk routing.](/docs/guides/routing)
+On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` describes the routing strategy that should be used and can be set to `'hash' | 'path' | 'virtual'`. `path` defines where the component is mounted when `routing='path'` is used. [Learn more about Clerk routing](/docs/guides/routing).
 
 In Core 2, the **default** `routing` strategy has become `'path'` for the Next.js SDK. Of course, you can still use `routing='hash'` or `routing='virtual'`.
 
@@ -579,7 +586,7 @@ There are a number of Clerk primitives that contain images, and previously they 
 As part of this major version, a number of previously deprecated props, arguments, methods, etc. have been removed. Additionally there have been some changes to things that are only used internally, or only used very rarely. It's highly unlikely that any given app will encounter any of these items, but they are all breaking changes, so they have all been documented below.
 
 > [!NOTE]
-> For this section more than any other one, please use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
+> For this section more than any other one, use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
 > section are very unlikely to appear in your codebase, the tool will save time looking for them.
 
 #### Deprecation removals
@@ -737,6 +744,9 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
+    > [!CAUTION]
+    > On January 8, 2025, the Node SDK will no longer be available. [Upgrade to the Express SDK](/docs/upgrade-guides/node-to-express).
+
     The import subpath `@clerk/nextjs/api` has been removed. This includes the following imports:
 
     ```js
@@ -900,7 +910,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [5], ins: [6] }}
     const data = await clerkClient.organizations.getOrganizationInvitationList({
@@ -913,7 +923,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [4], ins: [5] }}
     const { user } = useUser()
@@ -936,7 +946,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [4], ins: [5] }}
     const { organization } = useOrganization()

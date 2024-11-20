@@ -1,0 +1,73 @@
+---
+title: Test Account Portal flows
+description: Learn how to test the Account Portal flow with Cypress.
+---
+
+Testing navigation flows with Cypress can be challenging, especially when redirects to external URLs are involved. This guide demonstrates how to use Cypress to test the Account Portal flow, including the redirect to the Account Portal and back to your app.
+
+> [!IMPORTANT]
+> Check out the [demo repo](https://github.com/clerk/clerk-cypress-nextjs) that demonstrates testing a Clerk-powered application using [Testing Tokens](/docs/testing/overview#testing-tokens). To run the tests, you'll need dev instance Clerk API keys, a test user with username and password, and have username and password authentication enabled in the Clerk Dashboard.
+
+## Get your Account Portal domain
+
+To get your Account Portal domain, go to the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page in the Clerk Dashboard. The domain format should resemble: `https://verb-noun-00.accounts.dev`
+
+## The test format
+
+Cypress's `cy.origin()` function lets you visit multiple domains of different origins in the same test. For more information, see the [Cypress documentation](https://docs.cypress.io/api/commands/origin).
+
+By passing your Account Portal domain to `cy.origin()`, your test can navigate to the Account Portal domain and then return to your app.
+
+Structure tests that include Account Portal redirects as follows:
+
+```ts
+it('sign in with Account Portal redirects', () => {
+  setupClerkTestingToken()
+
+  // Set the origin to the Account Portal domain
+  cy.origin('https://verb-noun-00.accounts.dev', () => {
+    // Visit a protected page that redirects to the Account Portal when not signed in
+    cy.visit('http://localhost:3000/protected')
+    // Fill the form to sign in
+    // Add any other actions to test
+  })
+
+  // The user should be redirected back to the protected page
+  cy.url().should('include', '/protected')
+})
+```
+
+## Example
+
+The following example creates a test that:
+
+- visits a protected page, which redirects to the Account Portal when not signed in
+- completes the form to sign in
+- redirects back to the protected page
+
+```ts
+import { setupClerkTestingToken } from '@clerk/testing/cypress'
+
+describe('Testing Tokens', () => {
+  it('sign in with Account Portal redirects', () => {
+    setupClerkTestingToken()
+
+    cy.origin('https://verb-noun-00.accounts.dev', () => {
+      cy.visit('http://localhost:3000/protected')
+      cy.contains('h1', 'Sign in')
+      cy.get('.cl-signIn-root').should('exist')
+      cy.get('input[name=identifier]').type(Cypress.env('test_user'))
+
+      cy.get('.cl-formButtonPrimary').contains('button', 'Continue').click()
+      cy.get('input[name=password]').type(Cypress.env('test_password'))
+
+      cy.get('.cl-formButtonPrimary').contains('button', 'Continue').click()
+    })
+
+    cy.url().should('include', '/protected')
+    // Ensure the user has successfully accessed the protected page
+    // by checking an element on the page that only the authenticated user can access
+    cy.contains('h1', 'This is a PROTECTED page')
+  })
+})
+```

@@ -3,42 +3,103 @@ title: How Clerk Works
 description: Learn how Clerk is architected and how it works under the hood.
 ---
 
-This section is for those who want to understand how Clerk works under the hood. If you're just looking to get authentication in your app and move on with building out the rest of your app's logic, we recommend heading over to our quickstart guides.
+This section is for those who want to understand how Clerk works under the hood. If you're just looking to get authentication in your app and move on with building out the rest of your app's logic, we recommend heading over to [our quickstart guides](/docs/quickstarts/overview).
 
-### the frontend api
-- when you set up a clerk app, we provision an API that we call the "frontend api" (FAPI) for your app
-    - in development, this api is hosted at `https://<slug>.accounts.dev`. 
-    - fun fact: your "publishable key"  is just the url of your frontend api encoded as base64, so that your app knows where it lives and can make requests to it
-    - this api is used to handle authentication flows on a per-user basis
-        - for example, if you are trying to sign up a user, get a user's active sessions, create an organization on behalf of a user, get a user's organization invites, etc. this is the type of task handled by FAPI normally
-    - you can see the docs for FAPI right here https://clerk.com/docs/reference/frontend-api/tag/Sign-Ins
-    - For any methods that require authentication for fapi, it will check the user's session cookie, which is set when the user signs in
-    - While you can build out authentication using FAPI directly, it's a lot more work, and we find that most users prefer to use one of our frontend SDKs which offer higher level abstractions like `mountSignIn()` or `<SignIn />` (for react-based SDKs).
-        - These higher level methods deliver a well-tested, thoughtfully designed, a11y-optimized, customizable UI for authentication flows that can handle every possible way you could configure your authentication preferences.
+## The Frontend API
 
-### levels of abstraction
-    - as mentioned previously, our pre-built UI components, which we refer to as "all in one" (AIO) components, are our highest level of abstraction, that offer the lowest effort and most complete implementation of authentication for your app. while we strongly recommend using our AIO components due to the amount of research we have put into delivering an optimal experience, it's not the only option, if you feel that you need more control over your authentication flows.
-        - customizability: you can modify the css for any part of the AIO components, but not the html structure.
-    - the next level of abstraction is "clerk elements". This is a headless UI library - the building blocks that make up our AIO components. They are a set of React components that you can use to build your own custom UI for authentication flows -- sort of like radix, reach, or headless ui, but specifically for clerk. Elements is still in beta, and only currently supports Sign In and Sign Up flows, but we're excited to see what you build with them and to hear your feedback.
-        - customizability: full control over both the css and the html structure of the components, but you can't change the logic/ordering of how the authentication flow works.
-    - finally, if you feel like you need to implement your own custom authentication flow on top of Clerk primitives, you can do this using our set of primitive hooks. We refer to these implementations as "custom flows". These are the most advanced level of abstraction, carries the largest implementation and maintenance burden, and we recommend using them only if you have a very specific use case that absolutely requires a custom implementation of an authentication flow.
-        - customizability: full control over every part of the authentication flow, including html structure, css, and the logic/ordering of how the authentication flow works.
+To get started with Clerk, you create an account on clerk.com, then create a new Clerk app. When you do this, Clerk provisions an API that we call the "frontend api" (FAPI) for your specific app. This API is used to handle authentication flows on a per-user basis. FAPI is hosted at `https://<slug>.accounts.dev` in the default development environment. The slug will be randomly generated per application - you can find yours [here in your dashboard](https://dashboard.clerk.com/last-active?path=domains).
 
-### backend api
-- We call the frontend api this way because it really only makes sense to interact with it from the frontend of your app. All of the methods are targeted towards getting a user signed in, and after this handling the user's related resources and data.
-- However, you may also want to be able run "administrative" tasks that are available only to you as an application developer and not to your users, such as creating an organization on a user's behalf, getting a list of all users, banning a user, impersonating a user, etc. These types of tasks should only be executed on the server, with a secret key not accessible to your users or in the browser, and are handled by a separate API we call the "backend api" (BAPI).
-- You can see the docs for BAPI right here https://clerk.com/docs/reference/backend-api
-- We also have a bunch of SDKs for different languages that make it easier to interact with BAPI.
-- While all these capabilities are very important, likely the most common task you will need to do on your server though is to verify a user's authentication state, so when a user sends a request from the frontend, perhaps to update their email address, you can be sure that the user is authenticated and that they are allowed to make that request. Let's talk about how that works.
+When setting up your Clerk app, you need to add a [publishable key](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) - this key is actually just the url of your FAPI instance encoded as base64 (with a prefix to indicate the key type and environment, and postfix of a `$` as a separator for future-proofing), so that your app knows where it lives and can make requests to it. You can decode it yourself and see if you'd like!
 
-### stateful & stateless auth
-- The most traditional authentication model, which we will refer to as "stateful" authentication, works as such:
-    - user sends credentials from client to server
-    - server creates a "session" for the user and returns the session id to the client
-    - client stores the session id in a cookie, which is sent back to the server on every request
-    - on each request where user data needs to be accessed or modified, you look up the session id in the database to ensure it's valid before executing the operation
-    - Diagram of stateful auth
-    - This is a perfectly reasonable authentication model and works great for most apps. It's also very simple to understand and implement. Additionally, since it checks the database for every request requiring authentication, sessions can be instantly revoked if needed. However, it does add latency to every request due to this database lookup, and can be a bit more difficult to scale as you start to shard out your database.
+```js
+const publishableKey = 'pk_test_ZXhhbXBsZS5hY2NvdW50cy5kZXYk';
+const keyWithoutPrefix = publishableKey.replace('pk_test_', '');
+
+atob(keyWithoutPrefix); // => example.accounts.dev$
+```
+
+> [!NOTE]
+> In previous versions of Clerk, there was no publishable key, just a "frontend api url". This was a more confusing concept to users though, so we changed over to encoding it as base64 and making it a key.
+
+FAPI handles authentication flows on a _per-user basis_. For example, if you are trying to sign up a user, sign in, get a user's active sessions, create an organization on behalf of a user, get a user's organization invites, etc. The API documentation for FAPI can be found [here](https://clerk.com/docs/reference/frontend-api).
+
+FAPI _does not_ handle administrative actions that impact multiple users, like listing all users, banning users, impersonating a user, etc. These types of tasks are handled by [the backend API](#backend-api).
+
+Some methods, such as [signing up a user](https://clerk.com/docs/reference/frontend-api/tag/Sign-Ups#operation/createSignUps), don't require any sort of authentication, since that would defeat the purpose of such an endpoint. However, for other endpoints intended for use by users who have already signed in, like [updating a user's details](https://clerk.com/docs/reference/frontend-api/tag/User#operation/patchUser), FAPI needs some way to know which user the request is for, as well as a way to verify that the user is authorized to make the request, to ensure that not anyone can update another user's details. This is normally done by sending a signed token along with the request, either as a cookie or a header. We'll learn more about Clerk's auth tokens [further along in this guide](#stateful-authentication).
+
+While you could build out full authentication flows directly on top of your FAPI instance, it's a lot more work, and we have found that the vast majority of users prefer to use one of our frontend SDKs which offer higher level abstractions like [`mountSignIn()`](/docs/components/authentication/sign-in#mount-sign-in) or [`<SignIn />`](/docs/components/authentication/sign-in) (for react-based SDKs). These higher level methods deliver a well-tested, thoughtfully designed, a11y-optimized, customizable UI for authentication flows that handle every possible way you could configure your authentication preferences out of the box.
+
+## Levels of Abstraction
+
+Our pre-built UI components, which we refer to as "all in one" (AIO) components, are our highest level of abstraction, that offer the lowest effort and most complete implementation of authentication for your app. While we strongly recommend using our AIO components due to the amount of research we have put into delivering an optimal experience, it's not the only option if you feel that you need more control over your authentication flows.
+
+IMAGE
+
+> **Customizability:** You can modify the CSS for any part of the AIO components, but not the html structure or the logic/ordering of how the authentication flow works.
+
+The next level of abstraction is [Clerk Elements](/docs/customization/elements/overview). This is a headless UI library, and are the building blocks that make up our AIO components. They are a set of React components that you can use to build your own custom UI for authentication flows -- sort of like [Radix](https://www.radix-ui.com), [reach](https://reach.tech), or [Headless UI](https://headlessui.com), but specifically for Clerk. _Elements is still in beta_, and only currently supports Sign In and Sign Up flows, but we're excited to see what you build with them and to hear your feedback.
+
+IMAGE
+
+> **Customizability:** You have full control over both the CSS and the HTML structure of the components, but you can't change the logic/ordering of how the authentication flow works.
+
+Finally, if you feel like you need to implement your own custom authentication flow on top of Clerk primitives, you can do so directly using Clerk's primitives, which are light abstractions on top of API endpoints. We refer to these implementations as "custom flows". These are the most advanced level of abstraction, carries the largest implementation and maintenance burden, and we recommend using them only if you have a very specific use case that absolutely requires a custom implementation of an authentication flow.
+
+IMAGE
+
+> **Customizability:** You have full control over every part of the authentication flow, including HTML structure, CSS, and the logic/ordering of how the authentication flow works.
+
+## Backend API
+
+The frontend API is named as such because it really only makes sense to interact with it from the frontend of your app. All of the methods are targeted towards getting a user signed in, and after this, handling the user's related resources and data. However, you may also want to be able run "administrative" tasks that are available only to you as an application developer and not to your individual users, such as modifying multiple user and/or organization details, getting a list of all users, banning a user, impersonating a user, etc.
+
+In order to keep your app secure, these types of tasks should only be executed on the server side, with a secret key that is not accessible to your users or in the browser, and are handled by a separate API we call the "backend api" (BAPI). [Here's the documentation for BAPI](https://clerk.com/docs/reference/backend-api).
+
+Similar to FAPI, while it's possible to interact with BAPI directly, most developers prefer to use one of Clerk's SDKs to make integration with your language or framework of choice smoother. Documentation for each of Clerk's SDKs can be found in [the left sidebar of the docs](https://clerk.com/docs), if you scroll down a bit. That being said, FAPI is a more complex and nuanced API that relies on more custom logic outside of its endpoints to create a functional SDK on top of it. As such, interacting directly with FAPI is not recommended, whereas interacting directly with BAPI is generally fine.
+
+While the administrative capabilities BAPI provides are important for many apps, it's more likely that the most common task you will need to do on your server is to _verify a user's authentication state when a request comes in from your app's frontend_. For example, let's say a user sends a request from the frontend to update their email address to your server. You will need a way to be absolutely sure that the user is authenticated and that they are allowed to make that request - otherwise, any malicious actor could take over any of your users' accounts. Let's talk about how Clerk handles this scenario.
+
+## Stateful Authentication
+
+In order to build a foundation for learning about how authentication works in Clerk, it's important to first understand how the most common implementation of authentication logic works. This model is sometimes referred to as "stateful authentication" or "session token authentication".
+
+- User goes to `example.com/login`, enters their credentials into the browser, and hits a "submit" button, which makes a request to the server with the credentials.
+- Server checks the credentials against a database, and if they are valid, creates a new session in the database associated with the user, typically containing at least the following columns: `id, user_id, expires_at, state`.
+- Server responds to the request from the browser with the session id, normally in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
+
+<Video src='/docs/images/how-clerk-works/stateful-auth.mp4' loop autoPlay muted />
+
+- The next time the browser sends a request to the server, it sends the cookie containing the session id. The server can then look up the session id in the database to verify that the user has a valid session, and get back the user id, which can be used to look up the user's data.
+
+<Video src='/docs/images/how-clerk-works/stateful-auth-2.mp4' loop autoPlay muted />
+
+> [!NOTE]
+> You may wonder, what happens if an attacker gets their hands on your session id? Generally, the answer here is that you're in trouble - if an attacker gets your session ID, they can log in as you. For this reason, using [https](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS) (ensures attacker can't [sniff it](https://en.wikipedia.org/wiki/Sniffing_attack)) and ensuring the cookie is [set as `HttpOnly`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) (ensures attacker can't get it via remote javascript execution) are best practices.
+
+This is a perfectly reasonable authentication model and works great for most apps. It's also very simple to understand and implement. Additionally, since it checks the database for _every request_ requiring authentication, sessions can be instantly revoked if needed (set state to `revoked` and add a check in server logic). However, it does add latency to every request due to this extra database lookup, and can be a bit more difficult to scale as you start to shard out your database.
+
+## Stateless Authentication
+
+There is another authentication model, referred to as "stateless" authentication, which mitigates the two downsides of stateful authentication, but introduces its own downsides as a result. Stateless authentication works as follows:
+
+- User goes to `example.com/login`, enters their credentials into the browser, and hits a "submit" button, which makes a request to the server with the credentials.
+- Server checks the credentials against a database, and if they are valid, creates a [signed token](/docs/how-clerk-works/tokens-signatures) containing some basic user data such as the user id.
+- Server responds to the request from the browser with the token, normally in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
+
+<Video src='/docs/images/how-clerk-works/stateless-auth.mp4' loop autoPlay muted />
+
+- The next time the browser sends a request to the server, it sends the cookie containing the token. The server can then verify the signature of the token to ensure that it's valid, and utilize the user id contained within the token to look up the user's data.
+
+<Video src='/docs/images/how-clerk-works/stateless-auth-2.mp4' loop autoPlay muted />
+
+This model is substantially more complex to implement, but has a number of advantages. The primary advantage is that it eliminates the additional database lookup latency from the stateful model. It also eliminates any scaling issues due to the elimination of the database lookup. The only downside, aside from the additional complexity (which isn't a downside for you if you're using Clerk, since we handle that for you), is the fact that **JWTs cannot be revoked**, since they never "phone home".
+
+This means that if you need to revoke a user's session, you'd need to either wait until the JWT expires on its own, or change your signing keys, which would sign out all your users, and also may not be that fast of a revocation method regardless depending on how long the public key is cached in your customers' apps.
+
+## Clerk's Authentication Model
+
+---
+    
 - Clerk uses a different model for authentication called "stateless" authentication. This model works as follows:
     - user sends credentials from client to server
     - server creates a "session" for the user and returns a JWT containing a customizable payload of user data to the client

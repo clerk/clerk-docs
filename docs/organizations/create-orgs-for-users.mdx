@@ -1,0 +1,41 @@
+---
+title: Create organizations on behalf of users
+description: Learn how to architect your application to create organizations on users' behalf without running into rate limits and billing issues.
+---
+
+In some cases, you may want the onboarding process for your app to include creating an organization on the user's behalf. This could be beneficial for several reasons, such as:
+
+- You'd like your users to be manually onboarded by sales staff who will send invites to join via an organization created for them.
+- Your app only makes sense if the user is part of an organization, so you want to create the organization on their behalf as part of onboarding.
+- You'd like to have an "admin account" that has access to all organizations across your app and can achieve this by creating an organization for the user with an admin account, rather than allowing the user to create their own organization.
+
+If this aligns with your use case, this guide will walk you through architecting your app to avoid unexpected rate limits or billing issues, which can be a common problem when creating organizations on behalf of users.
+
+## Recommended: require users to create orgs during onboarding
+
+The recommended approach is to implement an [onboarding flow](/docs/guides/add-onboarding-flow) in which it's required to create an organization before the user is able to access the app. You can use tools like the [`<CreateOrganization>` component](/docs/components/organization/create-organization) to allow the user to create and name their own organization, or you can use the [backend API](/docs/reference/backend-api/tag/Organizations#operation/CreateOrganization) or a backend SDK, such as the [JS Backend SDK](/docs/references/backend/organization/create-organization), to create an organization on the user's behalf.
+
+If you'd like to have the onboarding flow include inviting users via email, use the [invitation feature](/docs/users/invitations). The flow would look like this:
+
+- User receives an invitation via email to join your app.
+- User visits the invitation link, registers an account, and enters the onboarding flow.
+- User creates an organization as part of the onboarding flow, and can invite other users if needed.
+- The user can now access your app and is part of an org.
+
+If you'd like to enable users to join an existing org that matches their email domain (if one exists) as an alternative to creating a new organization, use the [verified domains](/docs/organizations/verified-domains) feature.
+
+## Not recommended: use an admin account to create organizations for users
+
+Although it may seem like a reasonable option, it's strongly recommended not to use a single admin account to create organizations on the behalf of users. Generally, this is because it can create **unexpectedly high costs** due to [the way that organizations are billed](/docs/organizations/overview#monthly-active-organization-mao).
+
+Let's walk through an example to see why.
+
+Imagine you have an admin account configured to create organizations on a user's behalf during onboarding and then sends an invitation to the user to join the organization. When the user accepts the invitation, the organization will have their account plus the admin account in it. At that point, the organization has two monthly active users (MAUs), which makes it a **billable** organization. All [Clerk plans](https://clerk.com/pricing) come with 100 active organizations included for free, but over that limit, organizations are billed at $1 per month. In this case, for every user that is created in your app, they have an active organization automatically, because of the fact that the admin account is also in the organization. This tends to result in much higher costs than if users' organizations are created without an admin account included, since orgs with only one active user are not billable. Additionally, it's generally a nicer experience for users not to have extra admin accounts in their organizations.
+
+If you have an architecture scenario that isn't covered here or feel that it's critical to create organizations using an admin account, contact [support@clerk.com](mailto:support@clerk.com) for help.
+
+## Grant a user access to all orgs
+
+The simplest way to grant someone on your team access to all orgs in your app is to add them as a member to your [organization workspace](/docs/organizations/organization-workspaces) in the Clerk Dashboard. Members of your organization workspace, also known as collaborators, can view all of the orgs for each of your apps and perform administrative actions, such as adding or removing members, renaming an org, or deleting an org.
+
+If this isn't an option, you can use the [backend API](/docs/reference/backend-api) or a backend SDK, such as the [JS Backend SDK](/docs/references/backend/overview), along with [roles and permissions](/docs/organizations/roles-permissions) to create a custom admin dashboard where authorized users can take adminstrative actions for orgs.

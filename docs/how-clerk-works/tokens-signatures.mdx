@@ -1,0 +1,65 @@
+---
+title: 'How Clerk Works: Tokens & Signatures'
+description: Learn about JWTs, digital signtures, and how Clerk uses them to securely authenticate users.
+---
+
+## Digital Signatures
+
+Digital signatures are a mathematical process that can be used to guarantee that a message sent from one person to another in public is genuine. In other words, it can guarantee for the recipient of a message that:
+
+1. The message definitely came from a specific sender (authenticity)
+2. The message’s contents were not modified from how they were written by the sender (integrity)
+
+It’s important to note that signatures do not actually encrypt a message - anyone can read the message’s contents.
+
+The way this works is as such:
+
+- Some fancy math is used to generate a pair of keys: a public key and a private key. This process is referred to as "public key cryptography".
+- The two keys can both be used to encrypt messages such that only the sister key is able to decrypt it. So, for example, if you have a public key `a` and private key `b`, and you use the private key to encrypt a message as such: `b('hello world') -> '392r8fh8shs'`, you could then use the public key to decipher the message as such: `a('392r8fh8shs') → ‘hello world’`. It’s worth noting that this is just an example, and not a useful example of “encryption” technically, as anyone could read the contents of the message due to the decrypting key being public.
+- For creating a digital signature, this is more or less what is happening - given a private key and a message, a [hash](https://www.techtarget.com/searchdatamanagement/definition/hashing) of the message is created and encrypted (this is normally called "signed") using the private key. The message along with this signature is then sent out together. Anyone who has the public key can decrypt the signature using the public key, hash the message, and compare the resulting hash to the decrypted signature.
+- However, as implied by the name, typically the public key is public, meaning anyone has it, which means anyone can decode the signature, verifying that it was indeed produced by the owner of the public key, since they are the only ones who have access to the private key.
+- So, you will get a publicly readable message, like `hello world`, and if the message is “signed”, it will come with some gibberish called a “signature”, like `j2e80w8dj9f8`.
+- If you, a recipient of the message, would like to be sure that the message is genuine, and you have a copy of the sender’s public key, you can use this to decrypt the signature and make sure that it works. If it does, you know for sure who sent the message, and that nobody intercepted the message and messed with it in the middle, since part of the verification process involves hashing the message and comparing it to the decrypted signature.
+
+Typically you will see the following terminology used:
+
+- “sign” - the process by which someone has produced a digital signature using a private key and attached it to a message
+- “verify” - the process by which someone has used a public key to decrypt a signature and verified that the message was not tampered with, and was sent by a specified sender
+
+For Clerk, the primary implementation of digital signatures is with JWTs, which we will talk about in more detail below.
+
+## JWTs
+
+JSON Web Tokens (JWTs) are a lightweight format used to transmit digitally signed data over the internet. They sound and look kind of fancy, but really are very simple and what they are and how they work are easily understood, even if you are not technical. Here’s an example of a JWT:
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.Eci61G6w4zh_u9oOCk_v1M_sKcgk0svOmW4ZsL-rt4ojGUH2QY110bQTYNwbEVlowW7phCg7vluX_MCKVwJkxJT6tMk2Ij3Plad96Jf2G2mMsKbxkC-prvjvQkBFYWrYnKWClPBRCyIcG0dVfBvqZ8Mro3t5bX59IKwQ3WZ7AtGBYz5BSiBlrKkp6J1UmP_bFV3eEzIHEFgzRa3pbr4ol4TK6SnAoF88rLr2NhEz9vpdHglUMlOBQiqcZwqrI-Z4XDyDzvnrpujIToiepq9bCimPgVkP54VoZzy-mMSGbthYpLqsL_4MQXaI1Uf_wKFAUuAtzVn4-ebgsKOpvKNzVA
+```
+
+For easier transit, JWTs are [base64](https://builtin.com/software-engineering-perspectives/base64-encoding) encoded, which is very easy to decode. They are made up of three sections, separated by dots. Let’s split them apart:
+
+```
+Section 1: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9
+Section 2: eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ
+Section 3: Eci61G6w4zh_u9oOCk_v1M_sKcgk0svOmW4ZsL-rt4ojGUH2QY110bQTYNwbEVlowW7phCg7vluX_MCKVwJkxJT6tMk2Ij3Plad96Jf2G2mMsKbxkC-prvjvQkBFYWrYnKWClPBRCyIcG0dVfBvqZ8Mro3t5bX59IKwQ3WZ7AtGBYz5BSiBlrKkp6J1UmP_bFV3eEzIHEFgzRa3pbr4ol4TK6SnAoF88rLr2NhEz9vpdHglUMlOBQiqcZwqrI-Z4XDyDzvnrpujIToiepq9bCimPgVkP54VoZzy-mMSGbthYpLqsL_4MQXaI1Uf_wKFAUuAtzVn4-ebgsKOpvKNzVA
+```
+
+Then we can just decode the base64 for each section to see the contents
+
+```json
+{ "alg":"RS256", "typ":"JWT" }
+```
+
+```json
+{ "sub":"1234567890", "name":"John Doe", "iat":1516239022 }
+```
+
+```
+Error: The string is not correctly encoded
+```
+
+The first section, called the “header”, tells us that this is a JWT, and that the signature's hash was created using the “RS256” algorithm. There are several different hashing algorithms that can be used to digitally sign a JWT, so this tells you which one so you can use to verify the signature.
+
+The second section, called the “payload”, is the actual information that we want to send. In Clerk’s case, this is information about the logged in user. For the example above, it’s just example info. The “sub” and “iat” named fields might look confusing, but they are just shortened versions of standard pieces of info that are often in JWTs, called “registered claims”. You can see what they mean [in the JWT spec](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1) - in this case, “iat” is a timestamp for when the JWT was created, and “sub”, which stands for “subject”, is the user’s id.
+
+The last section delivered an error when we attempted to decode from base64, because it’s actually the signature! So we’d have to use the JWT issuer’s public key, along with the “RS256” algorithm, to verify the signature. Clerk's SDKs all ship with a method for verifying the signature of a Clerk JWT, [`authenticateRequest()`](/docs/references/backend/authenticate-request). But if you'd like to verify the signature yourself, you can manually verify it using Clerk's public key, which can be found at `<fapi_url>/.well-known/jwks.json`. You can also find the Clerk public key in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=customization/clerk-public-key).

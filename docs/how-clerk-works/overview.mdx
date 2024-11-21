@@ -33,21 +33,21 @@ While you could build out full authentication flows directly on top of your FAPI
 
 Our pre-built UI components, which we refer to as "all in one" (AIO) components, are our highest level of abstraction, that offer the lowest effort and most complete implementation of authentication for your app. While we strongly recommend using our AIO components due to the amount of research we have put into delivering an optimal experience, it's not the only option if you feel that you need more control over your authentication flows.
 
-IMAGE
-
 > **Customizability:** You can modify the CSS for any part of the AIO components, but not the html structure or the logic/ordering of how the authentication flow works.
+
+![Clerk's \<SignIn /> component](/docs/images/ui-components/sign-in.svg)
 
 The next level of abstraction is [Clerk Elements](/docs/customization/elements/overview). This is a headless UI library, and are the building blocks that make up our AIO components. They are a set of React components that you can use to build your own custom UI for authentication flows -- sort of like [Radix](https://www.radix-ui.com), [reach](https://reach.tech), or [Headless UI](https://headlessui.com), but specifically for Clerk. _Elements is still in beta_, and only currently supports Sign In and Sign Up flows, but we're excited to see what you build with them and to hear your feedback.
 
-IMAGE
-
 > **Customizability:** You have full control over both the CSS and the HTML structure of the components, but you can't change the logic/ordering of how the authentication flow works.
+
+![Clerk Elements](/images/elements/elements-hero-light.webp){{ dark: '/images/elements/elements-hero-dark.webp' }}
 
 Finally, if you feel like you need to implement your own custom authentication flow on top of Clerk primitives, you can do so directly using Clerk's primitives, which are light abstractions on top of API endpoints. We refer to these implementations as "custom flows". These are the most advanced level of abstraction, carries the largest implementation and maintenance burden, and we recommend using them only if you have a very specific use case that absolutely requires a custom implementation of an authentication flow.
 
-IMAGE
-
 > **Customizability:** You have full control over every part of the authentication flow, including HTML structure, CSS, and the logic/ordering of how the authentication flow works.
+
+![A custom designed login page by BaseHub](/images/how-clerk-works/basehub-login.png)
 
 ## Backend API
 
@@ -92,48 +92,77 @@ There is another authentication model, referred to as "stateless" authentication
 
 <Video src='/docs/images/how-clerk-works/stateless-auth-2.mp4' loop autoPlay muted />
 
-This model is substantially more complex to implement, but has a number of advantages. The primary advantage is that it eliminates the additional database lookup latency from the stateful model. It also eliminates any scaling issues due to the elimination of the database lookup. The only downside, aside from the additional complexity (which isn't a downside for you if you're using Clerk, since we handle that for you), is the fact that **JWTs cannot be revoked**, since they never "phone home".
+This model is substantially more complex to implement, but has a number of advantages. The primary advantage is that it eliminates the additional database lookup latency from the stateful model. It also eliminates any scaling issues due to the elimination of the database lookup. It doesn't come without downsides though. Aside from the additional implementation complexity (which isn't a downside for you if you're using Clerk, since we handle that for you), is the fact that **JWTs cannot be revoked**, since they never "phone home".
 
-This means that if you need to revoke a user's session, you'd need to either wait until the JWT expires on its own, or change your signing keys, which would sign out all your users, and also may not be that fast of a revocation method regardless depending on how long the public key is cached in your customers' apps.
+This means that if you need to revoke a user's session, you'd need to either wait until the JWT expires on its own, or change your signing keys, which would sign out all your users. Even if you do this, if the public key is cached within the implementing app, which is standard practice, the revocation wouldn't take effect until the cache expires.
 
-## Clerk's Authentication Model
+This is a substantial downside, as it puts you in a tough spot as a developer if you have a security issue of any sort that requires revoking any user's session.
 
----
-    
-- Clerk uses a different model for authentication called "stateless" authentication. This model works as follows:
-    - user sends credentials from client to server
-    - server creates a "session" for the user and returns a JWT containing a customizable payload of user data to the client
-    - client stores the JWT in a cookie, which is sent back to the server on every request
-        - side quest: what is a jwt?
-    - on each request where user data needs to be accessed or modified, you verify the JWT's signature to ensure it's valid before executing the operation
-    - Diagram of stateless auth
-    - This model is substantially more complex to implement, but has a number of advantages. The primary advantage is that it eliminates the additional database lookup latency from the stateful model. It also eliminates any scaling issues as part of eliminating the database lookup. The only downside, aside from the additional complexity (which isn't a downside for you if you're using Clerk, since we handle that for you), is the fact that JWTs cannot be revoked, since they never "phone home". This means that if you need to revoke a user's session, you'd need to either wait until the JWT expires on its own, or change your signing keys, which would sign out all your users, and also may not be that fast of a revokcation method regardless depending on how long the public key is cached in your customers' apps.
-    - Clerk's architecture innovates on this model and effectively entirely eliminates this downside while adding a really cool security feature that helps to prevent session hijacking by using a set of two different JWTs, one that is stored on FAPI and has its expiration set to the configured session length, and the other that is stored on the user's app as usual and has an expiration time of one minute.
-        - The one minute expiration time means that you can now revoke sessions again - the revocation won't be instant, but it will be pretty close, averaging 30 seconds before it happens.
-        - Also interestingly, this happens automatically for every token Clerk issues, so realistically this provides substantially improved security in cases where the app's developers do not recognize that a user's session has been hijacked and revoke the session in less than 30 seconds, which we think probably represents an overwhelming majority of cases.
-    - The downside of this model is that its substantially more difficult and complex to implement than the normal stateless model, however, as a Clerk user, this isn't a downside for you, since we are the ones who implement it for you 😁
+## Clerk's authentication model
 
-### how clerk does cookies
-- Let's break down the whole two token thing more specifically
-- When a user signs in, Clerk first creates what we call a "client JWT", which we set as http-only on the FAPI domain as `__client`. This helps to secure the token from being lifted by any sort of accidental vulnerability - for example, if your app's logs leaked, the cookie's value wouldn't be exposed since it's set on the FAPI domain, which is a clerk-owned application.
-- This token contains two values, a session id, and a rotating token. The rotating token is used to prevent session fixation attacks, and rotates any time a sign in flow occurs across any device.
-- With a client token present, Clerk is permitted to create a "session JWT", which is set as a normal cookie directly on your app's domain. This session JWT contains the user's data (you can customize the data you want in it on the dashboard), and is used to authenticate all requests to your backend API. It expires every minute.
-- With Clerk's frontend SDKs, we will run an interval timer every 50 seconds (leaving 10 seconds of buffer in case of slow network connections) after which it will make a request to FAPI with the current, valid session JWT, to get a new session JWT that is valid for another full minute. FAPI is happy to provide this since you already have a valid session JWT, which provides that you are authenticated.
-- When making a request from your frontend to your backend, it's as easy as verifying the signature of the session JWT using Clerk's public keys (normally using the `authenticateRequest` method from one of our backend SDKs), and if it passes, you know that the user is authorized to make the request.
+Clerk's authentication model is a hybrid of the stateful and stateless models. It almost entirely eliminates the JWT expiration downside of the stateless model, at the cost of adding a substantial amount of extra complexity to the implementation on Clerk's side. For a developer implementing Clerk, this is all upside since this complexity is handled internally by Clerk's software engineers. It's the exact same flow when signing in as the stateless flow, except that the signed token issued is **set to expire every 60 seconds**. Here are the steps
 
-### the handshake
-- savvy users might be wondering, what happens if i sign in to a clerk app, then close my tab and come back after 2 minutes?
-- that's a great question. at this point you have an expired JWT, so it's no good anymore
-- in order to get a new one, clerk runs a flow that we call the "handshake". the handshake will redirect to FAPI, which will be able to then check the client JWT to ensure it's still valid, and if it is, it will return a new session JWT that is valid and get your app back on track. If it's not, it means your session has expired, you've been signed out, etc.
-- we redirect because this is the only way to securely conduct this operation. making a fetch request to fapi would not send with the client JWT (even with credentials-include, since it's cross-origin, ref: https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#including_credentials), so we must redirect in order to make a credentialed request to fapi so it can check the client cookie.
-- i'm going to purposely not talk about how refresh tokens work, since it's not a super important detail for clerk users to understand, and since understanding exactly how they work honestly makes clerk slightly less secure
+- User goes to `example.com/login`, enters their credentials into the browser, and hits a "submit" button, which makes a request to the server with the credentials.
+- Server checks the credentials against a database, and if they are valid, creates a session in the database and a [signed token](/docs/how-clerk-works/tokens-signatures) containing some basic user data such as the user id. Notably, this token expires after **one minute**.
+- Server responds to the request from the browser with the token, normally in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
 
-### clerk's sign up flow
-- let's talk about how a sign up flow works with clerk
-- create a signup (https://clerk.com/docs/reference/frontend-api/tag/Sign-Ups#operation/createSignUps)
-- submit the info that's necessary for your app
-- if verification is required, run prepare verification and attempt verification
-- if the signup status is complete, you're good
-- if not, you need to update the signup with additional info based on the error message
-    - this is often missing fields - this can happen if you're implementing a custom flow and made a mistake or changed your authentication settings in the dashboard and didn't yet update your flow
+<Video src='/docs/images/how-clerk-works/hybrid-auth.mp4' loop autoPlay muted />
+
+- And just like stateless auth, the next time the browser sends a request to the server, it sends the cookie containing the token. The server can then verify the signature of the token to ensure that it's valid, and utilize the user id contained within the token to look up the user's data.
+
+<Video src='/docs/images/how-clerk-works/hybrid-auth-2.mp4' loop autoPlay muted />
+
+So far, this is the same as stateless auth, with the only difference being the short expiration time of the session token. Normally with stateless auth, the token's expiration is set to the session lifetime (normally a week or a month), so if the token expires, it means the session has expired and the user needs to sign in again. You have likely experienced this on many apps you have used, that every once in a while you need to re-authenticate naturally. In fact, Chrome has a limit to how long a cookie can exist (400 days at time of writing), after which users will be automatically signed out regardless of whether the app developer has set a longer session lifetime than that. Limiting session lifetime is [generally considered an important security practice](https://www.pingidentity.com/en/resources/blog/post/session-management.html#rte-33a93a79-b461-4b8e-9b7b-5b10a2777b70), and this is standard behavior for authentication.
+
+The problem with this is that since tokens can't be revoked, if a token is compromised, the attacker has the entirety of the session lifetime to be able to take over the user's account. This will be several days at least on average, if not several weeks. Clerk's model mitigates this issue by setting an extremely short session token lifetime of just a minute. Normally, a Clerk token will have already expired before an attacker gets the chance to even try to use it. This is great for security, but it does create a complication in the authentication flow, in that **it decouples token expiration from session lifetime**.
+
+<Video src='/docs/images/how-clerk-works/invalidation.mp4' loop autoPlay muted />
+
+Remember that normally with stateless authentication, when the token expires, it means the user needs to sign in again. With Clerk's model, this is not the case - forcing a user to re-authenticate every minute would be absurd. In order to make this change work, Clerk introduces a new "token refresh" flow that runs in the background that is responsible for refreshing the token every minute.
+
+In Clerk's frontend SDKs, this refresh flow runs on a timer that runs every 50 seconds, allowing 10 seconds for network latency. This ensures that the token is always valid while the user is actively using the application. The [`/client/sessions/<id>/tokens` endpoint](https://clerk.com/docs/reference/frontend-api/tag/Sessions#operation/createSessionToken) from FAPI is used for this. If you open the network tab in your browser's developer tools on a Clerk application, you will see this request being sent, and a session token being returned in the response.
+
+<Video src='/docs/images/how-clerk-works/renewal.mp4' loop autoPlay muted />
+
+## Clerk's cookies & tokens in detail
+
+> [!TIP]
+> To understand Clerk's architecture, it's important to have a solid foundational understanding of how browser cookies work at a detailed level. If you feel confident about your knowledge of cookies and their properties, read on. If not, [check out our cookies guide](/docs/how-clerk-works/cookies) first!
+
+You may be wondering, if the session token is only valid for a minute, how does Clerk know how long your entire session lifetime is? In order to make this work, Clerk generates **two different tokens** which we call the "client token" and the "session token". Let's break down each of these tokens and how they are configured as cookies for context. We'll start with the client token.
+
+- **Cookie name:** `__client`
+- **Contents:** A Clerk-signed JWT containing a `session_id` and a `rotating_token`. The rotating token is used to prevent [session fixation attacks](https://clerk.com/docs/security/fixation-protection), and rotates any time a sign in flow occurs across any device.
+- **Domain:** Set on your FAPI domain (`clerk.example.com` or `<slug>.accounts.dev`), rather than on your app domain. This is a security measure - for example if your app logs are leaked, they wouldn't contain client token values, since it's scoped to a different domain.
+- **Expiration:** Set to your session lifetime, which is 7 days by default, but can be configured in the Clerk dashboard.
+- **HttpOnly:** Yes
+- **SameSite:** Lax
+
+When you sign in to Clerk, a client token will be created and set as a cookie if there isn't already one present. If there is one already, the rotating token will update. As long as the client token is valid, Clerk can be confident that the user is authenticated, and will generate a short-lived session token to be returned directly to the application. More details about the session token:
+
+- **Cookie name:** `__session`
+- **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/backend-requests/resources/session-tokens#default-session-claims), which can also be customized to include additional claims via the Clerk dashboard.
+- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done for security, to prevent a security issue on a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries (like from `example.com` to `api.example.com`), you can [put the token in a request header instead](/docs/backend-requests/making/cross-origin).
+- **Expiration:** 60 seconds
+- **HttpOnly:** No - must be able to be accessed by client-side SDKs
+- **SameSite:** Lax
+
+The logistics of how these cookies are set and managed are handled by Clerk's frontend SDKs, as many of the details can't be handled purely by an API endpoint response. For this reason, we strongly recommend using one of Clerk'said frontend SDKs to implement authentication flows in general.
+
+With this setup complete, when your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will be sent along with the request. Your backend can then [verify the signature](/docs/backend-requests/handling/manual-jwt) of the session token to ensure it's valid, and utilize the user id contained within the token to take any actions on behalf of the user that are necessary.
+
+## The Handshake
+
+There is one more complication introduced to the architecture by the short-expiration session tokens. Imagine the following scenario: Your user signs in to your application, then closes the tab. Five minutes later, they open a new tab and go to your application again. At this point, your session token will have expired, since the refresh timer can't run while the application is closed. At this point, Clerk needs to figure out if the user is still authenticated, and if so, get a new session token.
+
+If your app is client-rendered, Clerk's frontend SDK can simply make a request to FAPI, which can check the client token to see if it's still valid. If it is, it can return a new session token. If it's not, Clerk will redirect the user to the sign in flow, and the user will be prompted to sign in again.
+
+However, if your app is server-rendered, making a request to FAPI would not include the client cookie, since cookies are stored in the browser and this would be a server-to-server request. In this case, Clerk will run a flow we call "handshake", in which we return a redirect to the browser that sends it to FAPI. This is now server -> browser -> fapi request, and therefore includes the client cookie, so FAPI is able to verify the user's auth state and issue a new session token securely.
+
+{/*
+  Future sections to add
+  - the anatomy of clerk's sign up and sign in flows
+  - subdomain session sharing
+  - satellite domains
+*/}
     

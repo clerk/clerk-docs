@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. Check out the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
 
 ## Written in MDX
 
@@ -224,6 +224,59 @@ description: Some brief, but effective description of the page's content.
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 These fields should be present on every documentation page.
+
+#### Search
+
+The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
+
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                           |
+| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
+| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users.                                                                                                    |
+
+You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
+
+##### Examples
+
+<details>
+<summary>Exclude a page from search</summary>
+
+```diff
+  ---
+  title: Example
++ search: false
+  ---
+```
+
+</details>
+
+<details>
+<summary>Boost a page in search results</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   rank: 1
+  ---
+```
+
+</details>
+
+<details>
+<summary>Show a page in results when searching for "supercalifragilisticexpialidocious"</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   keywords:
++     - supercalifragilisticexpialidocious
+  ---
+```
+
+</details>
 
 ### Headings
 
@@ -580,7 +633,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
 ```
@@ -602,7 +655,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>
@@ -625,7 +678,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>

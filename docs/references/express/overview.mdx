@@ -7,6 +7,11 @@ Clerk makes it simple to add authentication to your Express application. This do
 
 See the [quickstart](/docs/quickstarts/express) to get started.
 
+{/* TODO: Remove callout when Node SDK is removed from docs */}
+
+> [!IMPORTANT]
+> If you are upgrading from the Node SDK, see the [upgrade guide](/docs/upgrade-guides/node-to-express) for more information.
+
 ## Available methods
 
 ### `clerkMiddleware()`
@@ -98,7 +103,7 @@ const hasPermission = (req, res, next) => {
 
   // Handle if the user is not authorized
   if (!auth.has({ permission: 'org:admin:testpermission' })) {
-    return response.status(403).send('Forbidden')
+    return res.status(403).send('Forbidden')
   }
 
   return next()
@@ -114,7 +119,7 @@ app.listen(port, () => {
 
 ### `clerkClient`
 
-[Clerk's JavaScript Backend SDK](/docs/references/backend/overview) exposes Clerk's Backend API resources and low-level authentication utilities for JavaScript environments. For example, if you wanted to get a list of all users in your application, instead of creating a fetch to Clerk's `https://api.clerk.com/v1/users` endpoint, you can use the `users.getUserList()` method provided by the JavaScript Backend SDK.
+[Clerk's JavaScript Backend SDK](/docs/references/backend/overview) exposes the Backend API resources and low-level authentication utilities for JavaScript environments. For example, if you wanted to get a list of all users in your application, instead of creating a fetch to the `https://api.clerk.com/v1/users` endpoint, you can use the `users.getUserList()` method provided by the JavaScript Backend SDK.
 
 All resource operations are mounted as sub-APIs on the `clerkClient` object. See the [reference documentation](/docs/references/backend/overview#usage) for more information.
 
@@ -125,9 +130,17 @@ import express from 'express'
 const app = express()
 const port = 3000
 
-app.get('/users', requireAuth(), async (req, res) => {
-  const users = await clerkClient.users.getUserList()
-  return res.json(users)
+app.get('/users', async (req, res) => {
+  // Get the `userId` from the `Auth` object
+  const userId = req.auth.userId
+
+  if (!userId) {
+    return void res.status(400).json({ error: 'Error: No signed-in user' })
+  }
+
+  // Use the userId to get information about the user
+  const user = await clerkClient.users.getUser(userId)
+  return void res.status(200).json(user)
 })
 
 // Start the server and listen on the specified port

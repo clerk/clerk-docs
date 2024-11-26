@@ -12,13 +12,21 @@ Reverification allows you to prompt a user to verify their credentials before pe
 
 ## How to require reverification
 
-To reduce the risk of unauthorized access to a user's account during sensitive actions, you can periodically require users to reverify their active session by confirming their credentials. Reverification is triggered by implementing a check in your backend.
+To implement reverification, you need to handle it both on the server- and client-side.
 
-<Tabs items={["Next.js Server Action", "Next.js Route Handler", "Ruby & React", "Other"]}>
+### Handle reverification server-side
+
+To handle reverification server-side, use the [`auth.has()`](/docs/references/nextjs/auth-object#has) helper to check if the user has verified their credentials within a specific time period. Pass a [configuration](#supported-verification-configurations) to set the time period you would like. If the user hasn't verified their credentials within that time period, return either `reverificationError` or `reverificationErrorResponse`, depending on the framework you're using. Use the following tabs to see examples for different frameworks.
+
+> [!WARNING]
+> `reverificationErrorResponse` and `reverificationError` requires `@clerk/shared@2.17.0` or later, and `@clerk/clerk-js@5.35.0` or later.
+
+<Tabs items={["Next.js Server Action", "Next.js Route Handler", "Ruby", "Other"]}>
   <Tab>
-    ### Handle reverification server-side
+    The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) helper to check if the user has verified their credentials within a specific time period. The `strict` configuration sets the time period to 10 minutes. If the user hasn't verified their credentials within 10 minutes, the `reverificationError` utility is used to return an error.
 
-    The following example uses the [`has()`](/docs/references/nextjs/auth#has) helper to check if the user has verified their credentials within a specific time period. The `strict` configuration sets the time period to 10 minutes. If the user hasn't verified their credentials within 10 minutes, the `reverificationError` utility is used to return an error.
+    > [!NOTE]
+    > Next.js Server Actions use `reverificationError` instead of `reverificationErrorResponse` as they need to return a serializable object. A serializable object refers to data that can be safely converted to a JSON format for transmission between the server and client.
 
     ```ts {{ filename: '/app/actions.ts' }}
     'use server'
@@ -40,13 +48,89 @@ To reduce the risk of unauthorized access to a user's account during sensitive a
       return { success: true }
     }
     ```
+  </Tab>
 
-    ### Handle reverification client-side
+  <Tab>
+    <Include src="_partials/reverification-route-handler" />
+  </Tab>
 
-    After setting up reverification on the server-side, you must handle reverification on the client-side.
+  <Tab>
+    In your controller, add a filter that leverages the new helpers.
 
-    The following example demonstrates how to use the [`useReverification()`](/docs/references/react/use-reverification) hook to detect authorization errors and automatically display a modal that allows the user to verify their identity. Upon successful verification, the previously failed request is automatically retried.
+    ```ruby {{ filename: 'app/controllers/home_controller.rb' }}
+    class HomeController < ApplicationController
+      before_action :require_reverification, only: :foo
 
+      def foo
+        render json: { success: "true" }
+      end
+
+      private
+
+      # will halt the request and respond with a JSON that Clerk.js
+      # will read and kickstart a reverification flow
+      def require_reverification
+        clerk_render_reverification(Clerk::StepUp::PRESETS[:moderate]) if clerk_user_needs_reverification?(Clerk::StepUp::PRESETS[:moderate])
+      end
+    end
+    ```
+  </Tab>
+
+  <Tab>
+    - For a JavaScript or Typescript framework that supports the [Fetch API `Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response), use the `reverificationErrorResponse` to trigger reverification. For example:
+      <CodeBlockTabs options={["Astro"]}>
+        ```typescript {{ filename: 'src/api/reverification-example.ts' }}
+        import type { APIRoute } from 'astro'
+        import { reverificationErrorResponse } from '@clerk/shared/authorization-errors'
+
+        export const GET: APIRoute = async ({ locals }) => {
+          const { has } = locals.auth()
+
+          // Check if the user has *not* verified their credentials within the past 10 minutes
+          const shouldUserRevalidate = !has({ reverification: 'strict' })
+
+          // If the user hasn't reverified, return an error with the matching configuration (e.g. `strict`)
+          if (shouldUserRevalidate) {
+            return reverificationErrorResponse('strict')
+          }
+
+          return new Response('success', { status: 200 })
+        }
+        ```
+      </CodeBlockTabs>
+    - For a JavaScript or Typescript framework that provides its own utilities to handle responses, use `reverificationError`. For example:
+      <CodeBlockTabs options={["Hono"]}>
+        ```typescript {{ filename: 'src/api/hello.ts' }}
+        import { Hono } from 'hono'
+
+        const app = new Hono()
+
+        // POST request route
+        app.post('/api/hello', async (c) => {
+          return c.json(reverificationError('strict'))
+        })
+        ```
+      </CodeBlockTabs>
+    - Alternatively, if you're not using JavaScript or TypeScript, you can create a custom helper that returns the following JSON response (it's recommended to use a `403 Forbidden` status code in your response):
+      ```json
+      {
+        "clerk_error": {
+          "type": "forbidden",
+          "reason": "reverification-error"
+        }
+      }
+      ```
+  </Tab>
+</Tabs>
+
+### Handle reverification client-side
+
+After setting up reverification on the server-side, you must handle reverification on the client-side.
+
+The following example demonstrates how to use the [`useReverification()`](/docs/references/react/use-reverification) hook to detect authorization errors and automatically display a modal that allows the user to verify their identity. Upon successful verification, the previously failed request is automatically retried.
+
+<Tabs items={["Next.js Server Action", "Next.js Route Handler", "React"]}>
+  <Tab>
     ```tsx {{ filename: '/app/perform-action/page.tsx' }}
     'use client'
 
@@ -69,16 +153,6 @@ To reduce the risk of unauthorized access to a user's account during sensitive a
   </Tab>
 
   <Tab>
-    ### Handle reverification server-side
-
-    <Include src="_partials/reverification-route-handler" />
-
-    ### Handle reverification client-side
-
-    After setting up reverification on the server-side, you must handle reverification on the client-side.
-
-    The following example demonstrates how to use the [`useReverification()`](/docs/references/react/use-reverification) hook to detect authorization errors and automatically display a modal that allows the user to verify their identity. Upon successful verification, the previously failed request is automatically retried.
-
     ```tsx {{ filename: '/app/transfer/page.tsx' }}
     'use client'
 
@@ -86,7 +160,7 @@ To reduce the risk of unauthorized access to a user's account during sensitive a
 
     export default function Page({ amount_in_cents }: { amount_in_cents: number }) {
       const [transferMoney] = useReverification(() =>
-        fetch('/api/transfer-balance', {
+        fetch('/api/reverification-example', {
           method: 'POST',
           body: JSON.stringify({ amount_in_cents }),
         }),
@@ -98,39 +172,12 @@ To reduce the risk of unauthorized access to a user's account during sensitive a
   </Tab>
 
   <Tab>
-    ### Handle reverification server-side
-
-    In your controller add a filter that leverages the new helpers
-
-    ```ruby
-    # app/controllers/home_controller.rb
-    class HomeController < ApplicationController
-      before_action :require_reverification, only: :foo
-
-      def foo
-        render json: { sucess: "true" }
-      end
-
-      private
-
-      # will halt the request and respond with a JSON that Clerk.js
-      # will read and kickstart a reverification flow
-      def require_reverification
-        clerk_render_reverification(Clerk::StepUp::PRESETS[:moderate]) if clerk_user_needs_reverification?(Clerk::StepUp::PRESETS[:moderate])
-      end
-    end
-    ```
-
-    ### Handle reverification client-side
-
-    In your React application you can wrap your fetcher with `useReverification()`.
-
-    ```tsx
+    ```tsx {{ filename: '/src/components/TransferButton.js' }}
     import { useReverification } from '@clerk/react'
 
-    export function TransferButton({ amount_in_cents }) {
+    export function TransferButton({ amount_in_cents }: { amount_in_cents: number }) {
       const [transferMoney] = useReverification(() =>
-        fetch('/api/transfer-balance', {
+        fetch('/api/reverification-example', {
           method: 'POST',
           body: JSON.stringify({ amount_in_cents }),
         }),
@@ -139,24 +186,6 @@ To reduce the risk of unauthorized access to a user's account during sensitive a
       return <button onClick={transferMoney}>Transfer</button>
     }
     ```
-  </Tab>
-
-  <Tab>
-    > [!NOTE]
-    > `reverificationMismatchResponse` requires `@clerk/shared@2.17.0` or later, and `@clerk/clerk-js@5.35.0` or later.
-
-    You can use the `reverificationMismatchResponse` exported from `@clerk/shared/authorization-errors`. If you're not using JavaScript or TypeScript, you can create a custom helper that returns the following JSON response:
-
-    ```json
-    {
-      "clerk_error": {
-        "type": "forbidden",
-        "reason": "reverification-mismatch"
-      }
-    }
-    ```
-
-    It's recommended to use a `403 Forbidden` status code in your response.
   </Tab>
 </Tabs>
 

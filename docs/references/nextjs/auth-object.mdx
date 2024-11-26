@@ -3,7 +3,7 @@ title: '`Auth` object'
 description: The Auth object contains information about the current user's session.
 ---
 
-Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/references/nextjs/get-auth) return an `Auth` object. This JavaScript object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
+The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token. It's returned by the [`useAuth()`](/docs/references/react/use-auth) hook, the [`auth()`](/docs/references/nextjs/auth) and [`getAuth()`](/docs/references/nextjs/get-auth) helpers, and the `request` object in server contexts.
 
 ## `Auth` object properties
 
@@ -72,9 +72,9 @@ Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/reference
   ---
 
   - `factorVerificationAge`
-  - `[number, number] | undefined`
+  - `[number, number] | null`
 
-  An array that describes when a first factor and second factor were used to verify the user's identity.
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
 
   ---
 
@@ -105,15 +105,7 @@ The `orgPermissions` property on the `Auth` object has the type `OrganizationCus
 
 ### `has()`
 
-`has()` can be used on both the frontend and the backend to determine if the user _has_ a role or permission.
-
-You can use `has()` anywhere Clerk returns an [`Auth`](/docs/references/nextjs/auth-object) object:
-
-- [`auth()`](/docs/references/nextjs/auth) in Next.js App Router
-- [`useAuth()`](/docs/references/react/use-auth) in Client Components, including during SSR
-- [`getAuth(request)`](/docs/references/nextjs/get-auth) in server contexts outside of the App Router and SSR (Remix Loaders, Node, Express, Fastify, etc)
-
-`has()` has the following function signature:
+`has()` determines if the user _has_ a role or permission.
 
 ```ts
 function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
@@ -141,25 +133,51 @@ function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions):
   - `reverification?`
   - <code>[ReverificationConfig](#reverification-config)</code>
 
-  The reverification configuration to check for.
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
 </Properties>
 
-#### `ReverificationConfig`
+##### `ReverificationConfig`
 
-The type is an alias for `“strict_mfa” | “strict” | “moderate” | "lax”` or alternative it needs to match [this object](#object-variant-of-reverification-config).
+```ts
+type ReverificationConfig =
+  | SessionVerificationTypes
+  | {
+      level: SessionVerificationLevel
+      afterMinutes: SessionVerificationAfterMinutes
+    }
 
-| Level | Description |
-| - | - |
-| strict\_mfa | Requires the user to have verified their credentials within the past 10 minutes. If not, prompt for both the first and second factors. |
-| strict | Requires the user to have verified their credentials within the past 10 minutes. If not, prompt for the second factor. |
-| moderate | Requires the user to have verified their credentials within the past hour. If not, prompt for the second factor. |
-| lax | Requires the user to have verified their credentials within the past day. If not, prompt for the second factor. |
+type SessionVerificationTypes = 'strict_mfa' | 'strict' | 'moderate' | 'lax'
+```
 
-#### Object variant of `ReverificationConfig`
+The `ReverificationConfig` type has the following properties:
 
 <Properties>
+  - `strict_mfa`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for both the first and second factors.
+
+  ---
+
+  - `strict`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for the second factor.
+
+  ---
+
+  - `moderate`
+
+  Requires the user to verify their credentials within the past hour. If not verified, prompt for the second factor.
+
+  ---
+
+  - `lax`
+
+  Requires the user to verify their credentials within the past day. If not verified, prompt for the second factor.
+
+  ---
+
   - `level`
-  - `“first_factor”`, `“second_factor”`, `“multi_factor”`
+  - `"first_factor" | "second_factor" | "multi_factor"`
 
   The reverification level of credentials to check for.
 
@@ -168,7 +186,7 @@ The type is an alias for `“strict_mfa” | “strict” | “moderate” | "la
   - `afterMinutes`
   - `number`
 
-  The age of the factor level to check for. Value should be ≥ 1 \< 99\_999.
+  The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
 </Properties>
 
 #### `has()` permissions example
@@ -196,25 +214,12 @@ export default async function Page() {
 
 #### `has()` reverification example
 
-In the following example:
+> [!IMPORTANT]
+> This example demonstrates how to handle reverification **server-side**. For information on how to handle reverification on the **client-side**, see the [guide on reverification](/docs/guides/reverification).
 
-- The `has()` method checks whether the user has verified their credentials within the last 10 minutes.
-- If the user hasn’t, a specific response is returned to trigger the session reverification flow on the client side.
+You can use `has()` to check if a user has verified their credentials within a certain time frame.
 
-```tsx
-import { auth, reverificationErrorResponse } from '@clerk/nextjs/server'
-
-export const POST = async (req: Request) => {
-  const { has } = await auth()
-
-  const shouldUserRevalidate = !has({ reverification: 'strict' })
-  if (shouldUserRevalidate) {
-    return reverificationErrorResponse('strict')
-  }
-
-  return new Response({ success: true })
-}
-```
+<Include src="_partials/reverification-route-handler" />
 
 ### `getToken()`
 
@@ -338,8 +343,8 @@ The following is an example of the `Auth` object without an active organization:
 
 ```js {{ prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  sessionId: 'sess_123',
+  userId: 'user_123',
   orgId: null,
   orgRole: null,
   orgSlug: null,
@@ -352,8 +357,8 @@ The following is an example of the `Auth` object without an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```
@@ -364,9 +369,9 @@ The following is an example of the `Auth` object with an active organization:
 
 ```js {{ prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
-  orgId: 'org_2ZVFfVAkt4ocVjHL0KTdL94AhXK',
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: 'org_123',
   orgRole: 'org:admin',
   orgSlug: undefined,
   orgPermissions: ['org:team_settings:manage'], // Custom permissions
@@ -378,18 +383,18 @@ The following is an example of the `Auth` object with an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```
 
 ## `Auth` object example with valid factor age
 
-```js {{ prettier: false }}
+```js {{ mark: [8], prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  sessionId: 'sess_123',
+  userId: 'user_123',
   orgId: null,
   orgRole: null,
   orgSlug: null,
@@ -403,23 +408,23 @@ The following is an example of the `Auth` object with an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```
 
-## `Auth` object example of a user without a 2fa method registered.
+## `Auth` object example of a user without an MFA method registered
 
-```js {{ prettier: false }}
+```js {{ mark: [8], prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  sessionId: 'sess_123',
+  userId: 'user_123',
   orgId: null,
   orgRole: null,
   orgSlug: null,
   orgPermissions: null,
-  factorVerificationAge: [0,-1],
+  factorVerificationAge: [0, -1],
   has: [Function (anonymous)],
   getToken: [AsyncFunction (anonymous)],
   claims: {
@@ -428,8 +433,8 @@ The following is an example of the `Auth` object with an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```

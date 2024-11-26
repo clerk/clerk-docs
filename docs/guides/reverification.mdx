@@ -1,23 +1,24 @@
 ---
-title: Get started with reverification
-description: Learn how to leverage Clerk's reverification feature to protect sensitive actions within your application.
+title: Add reverification for sensitive actions
+description: Learn how to implement Clerk's reverification feature to protect sensitive actions in your application.
 ---
 
-Reverification allows you to prompt a user to verify their credentials before performing sensitive actions, even if they are already authenticated. For example, in a banking application, transferring money is considered a "sensitive action," and so you might want to force reverification to ensure the user is who they say they are.
+> [!WARNING]
+> This feature is currently in public beta. **It is not recommended for production use**.
+>
+> Depending on the SDK you're using, this feature requires `@clerk/nextjs@6.5.0` or later, `@clerk/clerk-sdk-ruby@3.3.0` or later, and `@clerk/clerk-js@5.35.0` or later.
 
-> [!NOTE]
-> This feature is currently in public beta.
+Reverification allows you to prompt a user to verify their credentials before performing sensitive actions, even if they're already authenticated. For example, in a banking application, transferring money is considered a "sensitive action." Reverification can be used to confirm the user's identity.
 
 ## How to require reverification
 
-To reduce the risk of unauthorized access to a user’s account during sensitive actions, you can periodically require users to reverify their active session by confirming their credentials. With Clerk, reverification is triggered by implementing a check in your backend.
+To reduce the risk of unauthorized access to a user's account during sensitive actions, you can periodically require users to reverify their active session by confirming their credentials. Reverification is triggered by implementing a check in your backend.
 
-<Tabs type="framework" items={["Next.js Server Action", "Next.js Route Handler", "Ruby & React", "Other"]}>
+<Tabs items={["Next.js Server Action", "Next.js Route Handler", "Ruby & React", "Other"]}>
   <Tab>
-    > [!NOTE]
-    > The utilities mentioned require `@clerk/nextjs@6.5.0` and above to be installed. Also be aware that using `@clerk/clerk-js@5.35.0` or above is also required for this feature.
+    ### Handle reverification server-side
 
-    ### Authorizing your server actions
+    The following example uses the [`has()`](/docs/references/nextjs/auth#has) helper to check if the user has verified their credentials within a specific time period. The `strict` configuration sets the time period to 10 minutes. If the user hasn't verified their credentials within 10 minutes, the `reverificationError` utility is used to return an error.
 
     ```ts {{ filename: '/app/actions.ts' }}
     'use server'
@@ -25,78 +26,65 @@ To reduce the risk of unauthorized access to a user’s account during sensitive
     import { auth, reverificationError } from '@clerk/nextjs/server'
 
     export const myAction = async () => {
-      const { orgId, has } = await auth.protect()
+      const { has } = await auth.protect()
 
+      // Check if the user has *not* verified their credentials within the past 10 minutes
       const shouldUserRevalidate = !has({ reverification: 'strict' })
 
+      // If the user hasn't reverified, return an error with the matching configuration (e.g. `strict`)
       if (shouldUserRevalidate) {
         return reverificationError('strict')
       }
 
+      // If the user has verified credentials, return a successful response
       return { success: true }
     }
     ```
 
-    ### Handling authorization errors on the client
+    ### Handle reverification client-side
 
-    Once our actions are authorized, we need to handle the authorization error that might reach the client. To do this, use the `useReverification` hook. This hook detects the authorization error and automatically displays a UI in a modal that enables the end-user to verify their identity. On success, the previously failed request will be retried automatically.
+    After setting up reverification on the server-side, you must handle reverification on the client-side.
+
+    The following example demonstrates how to use the [`useReverification()`](/docs/references/react/use-verification) hook to detect authorization errors and automatically display a modal that allows the user to verify their identity. Upon successful verification, the previously failed request is automatically retried.
 
     ```tsx {{ filename: '/app/perform-action/page.tsx' }}
     'use client'
 
     import { useReverification } from '@clerk/nextjs'
-    import { myAction } from '@/app/actions'
+    import { myAction } from '../actions'
 
-    export function MyButton() {
+    export default function Page() {
       const [performAction] = useReverification(myAction)
 
-      return (
-        <button
-          onClick={async () => {
-            const myData = await performAction()
-            if (!myData) return
-            console.log(myData)
-          }}
-        >
-          Perform Action
-        </button>
-      )
+      const handleClick = async () => {
+        const myData = await performAction()
+        // If `myData` is null, the user cancelled the reverification process
+        // You can choose how your app responds. This example returns null.
+        if (!myData) return
+      }
+
+      return <button onClick={handleClick}>Perform action</button>
     }
     ```
   </Tab>
 
   <Tab>
-    > [!NOTE]
-    > The utilities mentioned require `@clerk/nextjs@6.5.0` and above to be installed. Also be aware that using `@clerk/clerk-js@5.35.0` or above is also required for this feature.
+    ### Handle reverification server-side
 
-    ### Authorizing your route handlers
+    <Include src="_partials/reverification-route-handler" />
 
-    ```ts {{ filename: '/app/api/transfer-balance/route.ts' }}
-    import { auth, reverificationErrorResponse } from '@clerk/nextjs/server'
+    ### Handle reverification client-side
 
-    export const POST = async (req: Request) => {
-      const { has } = await auth.protect()
+    After setting up reverification on the server-side, you must handle reverification on the client-side.
 
-      const shouldUserRevalidate = !has({ reverification: 'strict' })
-
-      if (shouldUserRevalidate) {
-        return reverificationErrorResponse('strict')
-      }
-
-      return new Response(JSON.stringify({ success: true }))
-    }
-    ```
-
-    ### Handling authorization errors on the client
-
-    Once our actions are authorized, we need to handle the authorization error that might reach the client. To do this, use the `useReverification` hook. This hook detects the authorization error and automatically displays a UI in a modal that enables the end-user to verify their identity. On success, the previously failed request will be retried automatically.
+    The following example demonstrates how to use the [`useReverification()`](/docs/references/react/use-verification) hook to detect authorization errors and automatically display a modal that allows the user to verify their identity. Upon successful verification, the previously failed request is automatically retried.
 
     ```tsx {{ filename: '/app/transfer/page.tsx' }}
     'use client'
 
     import { useReverification } from '@clerk/nextjs'
 
-    export function TransferButton({ amount_in_cents }) {
+    export default function Page({ amount_in_cents }: { amount_in_cents: number }) {
       const [transferMoney] = useReverification(() =>
         fetch('/api/transfer-balance', {
           method: 'POST',
@@ -110,8 +98,7 @@ To reduce the risk of unauthorized access to a user’s account during sensitive
   </Tab>
 
   <Tab>
-    > [!NOTE]
-    > The utilities mentioned require version `3.3.0` of `clerk-sdk-ruby` and above to be installed. Also be aware that your frontend application should be using `@clerk/clerk-js@5.35.0` or above as it is also required for this feature.
+    ### Handle reverification server-side
 
     In your controller add a filter that leverages the new helpers
 
@@ -125,16 +112,16 @@ To reduce the risk of unauthorized access to a user’s account during sensitive
       end
 
       private
-      
+
       # will halt the request and respond with a JSON that Clerk.js
-      # will read and kickstart a reverification flow 
+      # will read and kickstart a reverification flow
       def require_reverification
         clerk_render_reverification(Clerk::StepUp::PRESETS[:moderate]) if clerk_user_needs_reverification?(Clerk::StepUp::PRESETS[:moderate])
       end
     end
     ```
 
-    ### Handling authorization errors on the client
+    ### Handle reverification client-side
 
     In your React application you can wrap your fetcher with `useReverification()`.
 
@@ -156,9 +143,9 @@ To reduce the risk of unauthorized access to a user’s account during sensitive
 
   <Tab>
     > [!NOTE]
-    > For `reverificationMismatchResponse` to be used it is required `@clerk/shared@2.17.0` and above to be installed. Also be aware that your frontend application should be using `@clerk/clerk-js@5.35.0` or above as it is also required for this feature.
+    > `reverificationMismatchResponse` requires `@clerk/shared@2.17.0` or later, and `@clerk/clerk-js@5.35.0` or later.
 
-    You can use the `reverificationMismatchResponse` exported from `@clerk/shared/authorization-errors` . If you are not using JavaScript / TypeScript, you can create your own helper that returns this JSON response:
+    You can use the `reverificationMismatchResponse` exported from `@clerk/shared/authorization-errors`. If you're not using JavaScript or TypeScript, you can create a custom helper that returns the following JSON response:
 
     ```json
     {
@@ -169,29 +156,20 @@ To reduce the risk of unauthorized access to a user’s account during sensitive
     }
     ```
 
-    It is also advised to use a 403 status code on your response.
+    It's recommended to use a `403 Forbidden` status code in your response.
   </Tab>
 </Tabs>
 
 ## Supported reverification configurations
 
-Clerk offers a few predefined configurations that support many real-world scenarios. You can choose between `“strict_mfa”`, `“strict”`, `“moderate”`, and `"lax”`.
-
-| Predefined Configurations | Description |
-| - | - |
-| strict\_mfa | Requires the user to have verified their credentials within the past 10 minutes. If not, prompt for both the first and second factors. |
-| strict | Requires the user to have verified their credentials within the past 10 minutes. If not, prompt for the second factor. |
-| moderate | Requires the user to have verified their credentials within the past hour. If not, prompt for the second factor. |
-| lax | Requires the user to have verified their credentials within the past day. If not, prompt for the second factor. |
-
-In case your application needs more customizability we allow for a configuration object to be used. You can explictly pass the desired `level` (appropriate values: `“first_factor”`, `“second_factor”`, `“multi_factor”`) and the duration that will you consider a factor age valid with `afterMinutes` (≥ 1 \< 99\_999).
+To define the time period of the reverification check, you can pass the one of the following configurations to the `has()` helper: `strict_mfa`, `strict`, `moderate`, and `lax`. See the [`has()` reference doc](/docs/references/nextjs/auth-object#check-authorization-params-with-custom-permissions) for more details.
 
 ## Caveats
 
-Before opting-in to this feature, there are a few important considerations:
+Before enabling this feature, consider the following:
 
-1. **Available Factors for Reverification**: Not all authentication factors can be used for reverification. The available options are:
-   - First factors: password, email code, phone code.
-   - Second factors: phone code, authenticator app, backup code.
-1. **Graceful Downgrade of Verification Level**: If you request a `second_factor` or `multi_factor` level of verification but the user does not have a second factor available, our utilities automatically downgrade the requested level to `first_factor`.
-1. **Eligibility for Sensitive Actions**: If a user does not have any of the above factors available, they will be unable to reverify. This is a concern for applications that do not require email addresses to sign up, and applications that have disabled email codes in favor of email links.
+1. **Available factors for reverification**: Not all authentication factors are supported for reverification. The available options are:
+   - First factors: password, email code, phone code
+   - Second factors: phone code, authenticator app, backup code
+1. **Graceful downgrade of verification level**: If you request a `second_factor` or `multi_factor` level of verification but the user lacks a second factor available, the utilities automatically downgrade the requested level to `first_factor`.
+1. **Eligibility for sensitive actions**: Users without any of the above factors cannot reverify. This can be an issue for apps that don't require email addresses to sign up or have disabled email codes in favor of email links.

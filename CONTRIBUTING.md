@@ -396,8 +396,8 @@ interface CodeBlockProps {
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
 
-- `{{pub_key}}` – Publishable key
-- `{{secret}}` – Secret key
+- `{{pub_key}}` – Publishable Key
+- `{{secret}}` – Secret Key
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx

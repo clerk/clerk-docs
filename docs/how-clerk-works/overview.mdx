@@ -71,7 +71,7 @@ In order to build a foundation for learning about how authentication works in Cl
 
 - The next time the browser sends a request to the server, it sends the cookie containing the session id. The server can then look up the session id in the database to verify that the user has a valid session, and get back the user id, which can be used to look up the user's data.
 
-<Video src="/docs/images/how-clerk-works/stateful-auth-2.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/stateful-auth-2.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 > [!NOTE]
 > You may wonder, what happens if an attacker gets their hands on your session id? Generally, the answer here is that you're in trouble - if an attacker gets your session ID, they can log in as you. For this reason, using [https](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS) (ensures attacker can't [sniff it](https://en.wikipedia.org/wiki/Sniffing_attack)) and ensuring the cookie is [set as `HttpOnly`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) (ensures attacker can't get it via remote javascript execution) are best practices.
@@ -86,11 +86,11 @@ There is another authentication model, referred to as "stateless" authentication
 - Server checks the credentials against a database, and if they are valid, creates a [signed token](/docs/how-clerk-works/tokens-signatures) containing some basic user data such as the user id.
 - Server responds to the request from the browser with the token, normally in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
 
-<Video src="/docs/images/how-clerk-works/stateless-auth.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/stateless-auth.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 - The next time the browser sends a request to the server, it sends the cookie containing the token. The server can then verify the signature of the token to ensure that it's valid, and utilize the user id contained within the token to look up the user's data.
 
-<Video src="/docs/images/how-clerk-works/stateless-auth-2.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/stateless-auth-2.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 This model is substantially more complex to implement, but has a number of advantages. The primary advantage is that it eliminates the additional database lookup latency from the stateful model. It also eliminates any scaling issues due to the elimination of the database lookup. It doesn't come without downsides though. Aside from the additional implementation complexity (which isn't a downside for you if you're using Clerk, since we handle that for you), is the fact that **JWTs cannot be revoked**, since they never "phone home".
 
@@ -106,23 +106,23 @@ Clerk's authentication model is a hybrid of the stateful and stateless models. I
 - Server checks the credentials against a database, and if they are valid, creates a session in the database and a [signed token](/docs/how-clerk-works/tokens-signatures) containing some basic user data such as the user id. Notably, this token expires after **one minute**.
 - Server responds to the request from the browser with the token, normally in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
 
-<Video src="/docs/images/how-clerk-works/hybrid-auth.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/hybrid-auth.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 - And just like stateless auth, the next time the browser sends a request to the server, it sends the cookie containing the token. The server can then verify the signature of the token to ensure that it's valid, and utilize the user id contained within the token to look up the user's data.
 
-<Video src="/docs/images/how-clerk-works/hybrid-auth-2.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/hybrid-auth-2.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 So far, this is the same as stateless auth, with the only difference being the short expiration time of the session token. Normally with stateless auth, the token's expiration is set to the session lifetime (normally a week or a month), so if the token expires, it means the session has expired and the user needs to sign in again. You have likely experienced this on many apps you have used, that every once in a while you need to re-authenticate naturally. In fact, Chrome has a limit to how long a cookie can exist (400 days at time of writing), after which users will be automatically signed out regardless of whether the app developer has set a longer session lifetime than that. Limiting session lifetime is [generally considered an important security practice](https://www.pingidentity.com/en/resources/blog/post/session-management.html#rte-33a93a79-b461-4b8e-9b7b-5b10a2777b70), and this is standard behavior for authentication.
 
 The problem with this is that since tokens can't be revoked, if a token is compromised, the attacker has the entirety of the session lifetime to be able to take over the user's account. This will be several days at least on average, if not several weeks. Clerk's model mitigates this issue by setting an extremely short session token lifetime of just a minute. Normally, a Clerk token will have already expired before an attacker gets the chance to even try to use it. This is great for security, but it does create a complication in the authentication flow, in that **it decouples token expiration from session lifetime**.
 
-<Video src="/docs/images/how-clerk-works/invalidation.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/invalidation.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 Remember that normally with stateless authentication, when the token expires, it means the user needs to sign in again. With Clerk's model, this is not the case - forcing a user to re-authenticate every minute would be absurd. In order to make this change work, Clerk introduces a new "token refresh" flow that runs in the background that is responsible for refreshing the token every minute.
 
 In Clerk's frontend SDKs, this refresh flow runs on a timer that runs every 50 seconds, allowing 10 seconds for network latency. This ensures that the token is always valid while the user is actively using the application. The [`/client/sessions/<id>/tokens` endpoint](https://clerk.com/docs/reference/frontend-api/tag/Sessions#operation/createSessionToken) from FAPI is used for this. If you open the network tab in your browser's developer tools on a Clerk application, you will see this request being sent, and a session token being returned in the response.
 
-<Video src="/docs/images/how-clerk-works/renewal.mp4" loop autoPlay muted />
+<Video src="/docs/images/how-clerk-works/renewal.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 ## Clerk's cookies & tokens in detail
 

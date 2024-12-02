@@ -1,0 +1,185 @@
+---
+title: Configure passkeys for Expo
+description: Learn how to configure passkeys for your Expo application.
+---
+
+This guide shows you how to configure passkeys for your Expo application.
+
+> [!WARNING]
+> This API is available only for [@clerk/clerk-expo v2](/docs/upgrade-guides/expo-v2/upgrade) >=2.2.0.
+
+## Configuration
+
+<Steps>
+  ### Enable passkeys
+
+  To use passkeys, first enable the strategy in the Clerk Dashboard.
+
+  1. Navigate to the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username).
+  1. In the navigation sidebar, select **User & Authentication > Email, Phone, and Username**.
+  1. In the **Authentication strategies** section of this page, ensure **Passkeys** is enabled.
+
+  ### Configure passkeys for iOS and Android
+
+  Use the following tabs to configure your passkeys for `iOS` or `Android`.
+
+  <Tabs items={['iOS', 'Android']}>
+    <Tab>
+      <Steps>
+        > [!WARNING]
+        > iOS supports passkeys from version iOS 16+
+
+        ### Get your App ID Prefix and Bundle ID from Apple
+
+        To get your **App ID Prefix** and **Bundle ID**, follow these steps:
+
+        1. Navigate to the [Apple Developer dashboard](https://developer.apple.com/account).
+        1. Under **Certificates, IDs and Profiles**, select [**Identifiers**](https://developer.apple.com/account/resources/identifiers/list).
+        1. In the top-right, select the dropdown and select **App IDs**.
+        1. Select the **App ID** you want to configure passkeys for. You'll be redirect to the **Edit your App ID Configuration** page.
+        1. At the top of the page, you'll see your **App ID Prefix** and **Bundle ID**. Save these values somewhere secure.
+
+        ### Set up your associated domain file in the Clerk Dashboard
+
+        1. In the Clerk Dashboard, navigate to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page.
+        1. Paste your **App ID Prefix** and **Bundle ID** into the respective fields. You'll be redirected to the **iOS association file**.
+        1. Look for the text that says "The association file has been hosted at" followed by a URL. This URL is your Clerk **Frontend API URL** - copy it as you'll need it in the next step.
+
+        ### Update `app.json` in your Expo app
+
+        1. In your app's `app.json` file, under the `ios` object, add the `associatedDomains` property as shown in the following example. Replace `<YOUR_FRONTEND_API>` with the value that you copied in the previous step.
+
+        ```json {{ filename: 'app.json', mark: [[14, 20]] }}
+        {
+          "expo": {
+            //...existing properties
+            "plugins": [
+              [
+                "expo-build-properties",
+                {
+                  "ios": {
+                    "deploymentTarget": "16.0" //  iOS Support passkeys from version iOS 16+
+                  }
+                }
+              ]
+            ],
+            "ios": {
+              //...existing properties
+              "associatedDomains": [
+                "applinks:<YOUR_FRONTEND_API_URL>",
+                "webcredentials:<YOUR_FRONTEND_API_URL>"
+              ]
+            }
+          }
+        }
+        ```
+      </Steps>
+    </Tab>
+
+    <Tab>
+      <Steps>
+        > [!WARNING]
+        > Android supports passkeys from version 9+
+
+        ### Set up your Android app links in the Clerk Dashboard
+
+        1. In the Clerk Dashboard, navigate to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page.
+        1. Select the **Android** tab.
+        1. Fill out the form with the following information:
+           - The `namespace` (use the default value: `android_app`)
+           - Your Android app's package name
+           - The `SHA256 certificate fingerprints`. If you don't know where to find the `SHA256 certificate fingerprints`, see the [Expo docs](https://docs.expo.dev/linking/android-app-links/#create-assetlinksjson-file).
+        1. After submitting the form, you'll be redirected to **Asset links**. You can verify that your `assetlinks.json` file is properly associated with your app by using [Google's **Statement List Generator and Tester**](https://developers.google.com/digital-asset-links/tools/generator).
+        1. Look for the text that says "The assetlinks.json has been hosted at" followed by a URL. This URL is your Clerk **Frontend API URL** - copy it as you'll need it in the next step.
+
+        ### Update `app.json` in your Expo application
+
+        1. In your app's `app.json` file, under `android`, add the `intentFilters` property as shown in the following example. Replace `<YOUR_FRONTEND_API>` with the value that you copied in the previous step.
+
+        ```json {{ filename: 'app.json', mark: [[5, 14]] }}
+        {
+          "expo": {
+            "android": {
+              //...existing properties
+              "intentFilters": [
+                {
+                  "action": "VIEW",
+                  "autoVerify": true,
+                  "data": [
+                    {
+                      "scheme": "https",
+                      "host": "<YOUR_FRONTEND_API>"
+                    }
+                  ],
+                  "category": ["BROWSABLE", "DEFAULT"]
+                }
+              ]
+            }
+          }
+        }
+        ```
+      </Steps>
+    </Tab>
+  </Tabs>
+
+  ### Prebuild Expo project
+
+  Run the following command to prebuild your Expo project:
+
+  ```bash {{ filename: 'terminal' }}
+  npx expo prebuild
+  ```
+
+  ### Install `@clerk/expo-passkeys`
+
+  Run the following command to install the `@clerk/expo-passkeys` package:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/expo-passkeys
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/expo-passkeys
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/expo-passkeys
+    ```
+  </CodeBlockTabs>
+
+  ### Update your `<ClerkProvider>`
+
+  Pass the `passkeys` object to the `__experimental__passkeys` property of your `<ClerkProvider>` component, as shown in the following example:
+
+  ```tsx {{ filename: 'app/_layout.tsx', mark: [3, 17] }}
+  import { tokenCache } from '@/cache'
+  import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo'
+  import { passkeys } from '@clerk/clerk-expo/passkeys'
+  import { Slot } from 'expo-router'
+
+  export default function RootLayout() {
+    const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!
+
+    if (!publishableKey) {
+      throw new Error('Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env')
+    }
+
+    return (
+      <ClerkProvider
+        tokenCache={tokenCache}
+        publishableKey={publishableKey}
+        __experimental__passkeys={passkeys}
+      >
+        <ClerkLoaded>
+          <Slot />
+        </ClerkLoaded>
+      </ClerkProvider>
+    )
+  }
+  ```
+</Steps>
+
+## Usage
+
+To learn how to use passkeys in your Expo application, such as creating, deleting, and authenticating users with passkeys, see the [custom flow guide](/docs/custom-flows/passkeys).

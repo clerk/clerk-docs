@@ -407,7 +407,7 @@ CLERK_SECRET_KEY={{secret}}
 ```
 ````
 
-The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's Secret Key.
 
 https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
 

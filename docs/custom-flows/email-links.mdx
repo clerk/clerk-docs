@@ -69,78 +69,224 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
 
   <CodeBlockTabs type="framework" options={["Next.js", "React", "JavaScript"]}>
     ```jsx {{ prettier: false }}
-    import React from "react";
-    import { useUser, useEmailLink } from "@clerk/nextjs";
+// /sign-in/page.tsx
 
-    // A page where users can add a new email address.
-    function NewEmailPage() {
-      const [email, setEmail] = React.useState('');
-      const [emailAddress, setEmailAddress] = React.useState(null);
-      const [verified, setVerified] = React.useState(false);
+'use client';
 
-      const { user } = useUser();
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  useSignIn,
+} from '@clerk/nextjs';
+import { EmailLinkFactor, SignInFirstFactor } from '@clerk/types';
 
-      async function submit(e) {
-        e.preventDefault();
-        const res = await user.createEmailAddress({ email });
-        setEmailAddress(res);
+export default function SignInPage() {
+  const [emailAddress, setEmailAddress] = React.useState('');
+  const [verified, setVerified] = React.useState(false);
+  const [verifying, setVerifying] = React.useState(false);
+  const { signIn, isLoaded } = useSignIn();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  const { startEmailLinkFlow } =
+    signIn.createEmailLinkFlow();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    // reset verified and expired state in case user resubmits form mid sign-in
+    setVerified(false);
+    setVerifying(true)
+
+
+    if (!isLoaded && !signIn) return null;
+
+    try {
+      // when the user submits the form with their email, start the in flow by creating a singIn object
+      const { supportedFirstFactors } = await signIn.create({
+        identifier: emailAddress,
+      });
+
+      // Filter the returned array to find the 'phone_code' entry
+      const isEmailCodeFactor = (
+        factor: SignInFirstFactor,
+      ): factor is EmailLinkFactor => {
+        return factor.strategy === 'email_link';
+      };
+      const emailLinkFactor = supportedFirstFactors?.find(isEmailCodeFactor);
+
+      // @ts-ignore
+      // TODO: Fix TS error
+      const { emailAddressId } = emailLinkFactor;
+
+      // You can use window.location.host to dynamically set the host domain for dev and prod 
+      // You could optionally use an environment variable or other source for the host domain
+      const protocol = window.location.protocol
+      const host = window.location.host
+
+      // Attempt the first factor verification by sending an email with an email link to the user
+      // TODO: Alexis -- the path should just be /sign-in for this component and /sign-in/verify for the url two lines down
+      const res = await startEmailLinkFlow({
+        emailAddressId,
+        redirectUrl: `${protocol}//${host}/custom-flows/sign-in/magic-link/verify`,
+      });
+
+      // Check the verification result.
+      const verification = res.firstFactorVerification;
+
+      // if the user has clicked on the link and completed sign in from /sign-in/verify this will return true
+      if (verification.verifiedFromTheSameClient()) {
+        // set 'verified' true to display a success message or redirect the user
+        setVerifying(false)
+        setVerified(true);
+        return;
+
       }
+    } catch (err: any) {
+      // TODO: Alexis -- swap out this for the standard 'error handling' from docs
+      console.error('error', err.errors[0].longMessage);
+    }
+  }
 
-      if (emailAddress && !verified) {
-        return (
-          <VerifyWithEmailLink
-            emailAddress={emailAddress}
-            onVerify={() => setVerified(true)}
-          />
-        );
-      }
+  async function reset(e: React.FormEvent) {
+    e.preventDefault();
+    setVerifying(false)
+  }
 
-      return (
-        <form onSubmit={submit}>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
+
+  if (verifying) {
+    return (
+      <div>
+        <p>Please check your email and click on the link that was sent to you</p>
+        <form onSubmit={reset}>
+          <button type="submit">Restart</button>
         </form>
-      );
-    }
+      </div>
+    )
+  }
 
-    // A page which verifies email addresses with email links.
-    function VerifyWithEmailLink({
-      emailAddress,
-      onVerify,
-    }) {
-      const { startEmailLinkFlow } = useEmailLink(emailAddress);
+  if (verified) {
+    // Repalce this with your own success message or a redirect to another page as desired
+    return <div>Signed in on other tab</div>;
+  }
 
-      React.useEffect(() => {
-        verify();
-      }, []);
+  return (
+    <div>
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          value={emailAddress}
+          onChange={(e) => setEmailAddress(e.target.value)}
+        />
+        <button type="submit">Sign in with magic link</button>
+      </form>
+    </div>
+  );
+}
 
-      async function verify() {
-        // Start the email link flow.
-        // Pass your app URL that users will be navigated
-        // when they click the email link from their
-        // email inbox.
-        const res = await startEmailLinkFlow({
-          redirectUrl: "https://redirect-from-email-email-link",
-        });
+// /sign-in/verify/page.tsx
+'use client'
 
-        // res will hold the updated EmailAddress object.
-        if (res.verification.status === "verified") {
-          onVerify();
-        } else {
-          // act accordingly
-        }
+import * as React from 'react'
+import { useClerk } from "@clerk/nextjs";
+import { EmailLinkErrorCode, isEmailLinkError } from "@clerk/nextjs/errors"
+import Link from 'next/link';
+// This can be used once @clerk/types is updated
+//import { VerificationStatus } from '@clerk/types';
+
+export type VerificationStatus =
+  | 'expired'
+  | 'failed'
+  | 'loading'
+  | 'verified'
+  | 'verified_switch_tab'
+  | 'client_mismatch';
+
+// verify the link when the user clicks on the link in their email
+export default function VerifyEmailLink() {
+  const [verificationStatus, setVerificationStatus] = React.useState('loading');
+
+  const { handleEmailLinkVerification } = useClerk()
+
+  async function verify() {
+    try {
+      // You can use window.location.host to dynamically set the host domain for dev and prod 
+      // You could optionally use an environment variable or other source for the host domain
+      const protocol = window.location.protocol
+      const host = window.location.host
+
+      await handleEmailLinkVerification({
+        // URL to navigate to if the sign-in flow needs more requirements (name, username for sign-up) or MFA/second-factor (for sign-in)
+        redirectUrl: `${protocol}//${host}/sign-in`,
+        // What do to when successful
+        redirectUrlComplete: `${protocol}//${host}/sign-in/verify`
+      });
+      // If we're not redirected at this point, it means
+      // that the flow has completed on another device.
+      setVerificationStatus('verified');
+    } catch (err: any) {
+      // Verification has failed.
+      let status: VerificationStatus = 'failed';
+      if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
+        status = 'expired';
       }
-
-      return (
-        <div>
-          Waiting for verification...
-        </div>
-      );
+      // This is only required if you have enabled 'Require the same device and browser' in Dashboard -> Auth -> Email, phone, username -> Email verification link settings -> 'Require the same device and brwoser'
+      if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.ClientMismatch) {
+        status = 'client_mismatch';
+      }
+      setVerificationStatus(status);
     }
-    ```
+  }
+
+  React.useEffect(() => {
+    verify();
+  }, [handleEmailLinkVerification]);
+
+  if (verificationStatus === 'loading') {
+    return <div>Loading...</div>;
+  }
+
+  if (verificationStatus === 'failed') {
+    return (
+      <div>
+        <p>Magic link verification failed</p>
+        <Link href="/sign-in">Sign In</Link>
+
+      </div>
+    )
+  }
+
+  if (verificationStatus === 'expired') {
+    return (
+
+      <div>
+        <p>Magic link expired</p>
+        <Link href="/sign-in">Sign In</Link>
+      </div>
+    )
+  }
+
+  // TODO: Alexis -- you may not to mention this is also optional, as per above comment
+  if (verificationStatus === 'client_mismatch') {
+    return (
+
+      <div>
+        <p>You must complete the Email Link sign-in on the same device and browser as you started it on</p>
+        <Link href="/sign-in">Sign In</Link>
+      </div>
+    )
+  }
+
+  return (
+    <div>Successfully signed in. Return to the original tab to continue.</div>
+  );
+}
+
+
+
+
+     ```
 
     ```jsx {{ prettier: false }}
     import React from "react";

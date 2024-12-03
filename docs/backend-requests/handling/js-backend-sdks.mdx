@@ -1,0 +1,89 @@
+---
+title: Handling requests with a JS Backend SDK
+description: Learn how to handle authenticated requests with one of Clerk's JS Backend SDKs.
+---
+
+To handle authenticated requests, use one of the following JS Backend SDKs.
+
+## Clerk Express SDK
+
+The `clerkMiddleware()` function checks the request's cookies and headers for a session JWT. If the user has a valid session, the `clerkMiddleware()` function attaches the [properties](/docs/references/nextjs/auth-object#auth-object-properties) of the authenticated user to the request object.
+
+```js
+import { clerkMiddleware } from '@clerk/express'
+
+const app = express()
+
+// Pass no parameters
+app.use(clerkMiddleware())
+
+// Pass options
+app.use(clerkMiddleware(options))
+```
+
+For more information on the Middleware functions and SDK features, see the [Express SDK](/docs/references/express/overview) page.
+
+## Clerk Fastify SDK
+
+The `clerkPlugin` checks the request's cookies and headers for a session JWT. If the user has a valid session, the `clerkPlugin` attaches the [properties](/docs/references/nextjs/auth-object#auth-object-properties) of the authenticated user to the request object.
+
+```ts
+import 'dotenv/config'
+import Fastify from 'fastify'
+import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
+
+const fastify = Fastify({ logger: true })
+
+fastify.register(clerkPlugin)
+
+fastify.get('/', async (request, reply) => {
+  const { userId } = getAuth(request)
+
+  // Protect the route from unauthenticated users
+  if (!userId) {
+    return reply.code(403).send({ error: 'Unauthorized request.' })
+  }
+
+  const user = userId ? await clerkClient.users.getUser(userId) : null
+
+  return reply.send({
+    message: 'User retrieved successfully.',
+    user,
+  })
+})
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: 8080 })
+  } catch (error) {
+    fastify.log.error(error)
+    process.exit(1)
+  }
+}
+
+start()
+```
+
+For more information on the Clerk plugin and SDK features, see the [Fastify SDK](/docs/quickstarts/fastify) page.
+
+## Clerk Backend SDK
+
+If you're not using Express or Fastify, use the `@clerk/backend` package to access `clerkClient`.
+
+```ts
+import { createClerkClient } from '@clerk/backend'
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+})
+
+const { isSignedIn } = await clerkClient.authenticateRequest(req, {
+  jwtKey: process.env.CLERK_JWT_KEY,
+  authorizedParties: ['https://example.com'],
+})
+
+if (!isSignedIn) {
+  return Response.json({ status: 401 })
+}
+```

@@ -1,19 +1,20 @@
 ---
+title: Authentication across different domains
 description: Learn how to share sessions across different domains by adding satellite domains to your application.
 ---
 
-# Authentication across different domains
-
-> [!IMPORTANT]
-> This guide addresses authentication across different domains with shared sessions, for example `example-site.com` and `example-site-admin.com`. Authentication across subdomains with shared sessions works by default with Clerk.
+> [!WARNING]
+> This guide addresses authentication across different domains with shared sessions. For example, `example-site.com` and `example-site-admin.com`.
+>
+> [Authentication across subdomains](/docs/deployments/overview#authentication-across-subdomains) with shared sessions works by default with Clerk.
 
 Clerk supports sharing sessions across different domains by adding one or many satellite domains to an application.
 
 Your "primary" domain is where the authentication state lives, and satellite domains are able to securely read that state from the primary domain, enabling a seamless authentication flow across domains.
 
-Users must complete the sign-in flow on the primary domain, either using Clerk’s [`<SignIn />`](/docs/components/authentication/sign-in) component or [`useSignIn()`](/docs/references/react/use-sign-in) hook.
+Users must complete both the sign-in and sign-up flows on the primary domain by using the [`<SignIn />`](/docs/components/authentication/sign-in) component or [`useSignIn()`](/docs/references/react/use-sign-in) hook for sign-in and [`<SignUp />`](/docs/components/authentication/sign-up) component or [`useSignUp()`](/docs/references/react/use-sign-up) hook for sign-up.
 
-To access authentication state from a satellite domain, users will be transparently redirected to the primary domain. If users need to sign in, they must be redirected to a sign in flow hosted on the primary domain, then redirected back to the originating satellite domain.
+To access authentication state from a satellite domain, users will be transparently redirected to the primary domain. If users need to sign in, they must be redirected to a sign in flow hosted on the primary domain, then redirected back to the originating satellite domain. The same redirection process applies to sign-up flows.
 
 ## How to add satellite domains
 
@@ -34,7 +35,7 @@ To access authentication state from a satellite domain, users will be transparen
   When building your sign-in flow, you must configure it to run within your primary application, e.g. on `/sign-in`.
 
   > [!NOTE]
-  > For more information about creating your application, check out Clerk's [detailed guide](/docs/quickstarts/setup-clerk).
+  > For more information about creating your application, see the [setup guide](/docs/quickstarts/setup-clerk).
 
   ### Add your first satellite domain
 
@@ -64,15 +65,16 @@ To access authentication state from a satellite domain, users will be transparen
       You can configure your satellite application by setting the following environment variables:
 
       > [!NOTE]
-      > In development, your publishable and secret keys will start with `pk_test_` and `sk_test` respectively.
+      > In development, your Publishable and Secret Keys will start with `pk_test_` and `sk_test` respectively.
 
       - In the `.env` file associated with your primary domain:
 
-        <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+        <CodeBlockTabs options={["Next.js", "Remix"]}>
           ```env {{ filename: '.env.local' }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
           CLERK_SECRET_KEY={{secret}}
           NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
           ```
 
           ```env {{ filename: '.env' }}
@@ -83,7 +85,7 @@ To access authentication state from a satellite domain, users will be transparen
         </CodeBlockTabs>
       - In the `.env` file associated with your other (satellite) domain:
 
-        <CodeBlockTabs type="framework" options={["Next.js", "Remix"]}>
+        <CodeBlockTabs options={["Next.js", "Remix"]}>
           ```env {{ filename: '.env.local' }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
           CLERK_SECRET_KEY={{secret}}
@@ -91,10 +93,12 @@ To access authentication state from a satellite domain, users will be transparen
           # Production example:
           NEXT_PUBLIC_CLERK_DOMAIN=satellite.dev
           NEXT_PUBLIC_CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL=https://primary.dev/sign-up
 
           # Development example:
           # NEXT_PUBLIC_CLERK_DOMAIN=http://localhost:3001
           # NEXT_PUBLIC_CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
+          # NEXT_PUBLIC_CLERK_SIGN_UP_URL=http://localhost:3000/sign-up
           ```
 
           ```env {{ filename: '.env' }}
@@ -104,10 +108,43 @@ To access authentication state from a satellite domain, users will be transparen
           # Production example:
           CLERK_DOMAIN=satellite.dev
           CLERK_SIGN_IN_URL=https://primary.dev/sign-in
+          CLERK_SIGN_UP_URL=https://primary.dev/sign-up
 
           # Development example:
           # CLERK_DOMAIN=http://localhost:3001
           # CLERK_SIGN_IN_URL=http://localhost:3000/sign-in
+          # CLERK_SIGN_UP_URL=http://localhost:3000/sign-up
+          ```
+        </CodeBlockTabs>
+      - You will also need to add the `allowedRedirectOrigins` property to `<ClerkProvider />` on your _primary domain app_ to ensure that the redirect back from primary to satellite domain works correctly. For example:
+
+        <CodeBlockTabs options={["Development", "Production"]}>
+          ```tsx {{ filename: 'app/layout.tsx' }}
+          import { ClerkProvider } from '@clerk/nextjs'
+
+          export default function RootLayout({ children }: { children: React.ReactNode }) {
+            return (
+              <html lang="en">
+                <body>
+                  <ClerkProvider allowedRedirectOrigins={['http://localhost:3001']}>{children}</ClerkProvider>
+                </body>
+              </html>
+            )
+          }
+          ```
+
+          ```tsx {{ filename: 'app/layout.tsx' }}
+          import { ClerkProvider } from '@clerk/nextjs'
+
+          export default function RootLayout({ children }: { children: React.ReactNode }) {
+            return (
+              <html lang="en">
+                <body>
+                  <ClerkProvider allowedRedirectOrigins={['https://satellite.dev']}>{children}</ClerkProvider>
+                </body>
+              </html>
+            )
+          }
           ```
         </CodeBlockTabs>
     </Tab>
@@ -116,13 +153,15 @@ To access authentication state from a satellite domain, users will be transparen
       You can configure your satellite application by setting the following properties:
 
       - `isSatellite` - Defines the app as a satellite app when `true`.
-      - `domain` - Sets the domain of the satellite application. This is required since we cannot figure this out by your publishable key, since it is the same for all of your multi-domain apps.
-      - `signInUrl` - This url will be used for any redirects that might happen and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `domain` - Sets the domain of the satellite application. This is required since we cannot figure this out by your Publishable Key, since it is the same for all of your multi-domain apps.
+      - `signInUrl` - This url will be used when signing in on your satellite application and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `signUpUrl` - This url will be used for signing up on your satellite application and needs to point to your primary application. This option is optional for production instances and required for development instances.
+      - `allowedRedirectOrigins` - This is a list of origins that are allowed to redirect back to from the primary domain.
 
       > [!TIP]
       > The `URL` parameter that can be passed to `isSatellite` and `domain` is the request url for server-side usage or the current location for client usage.
 
-      <Tabs type="framework" items={["Next.js", "Remix"]}>
+      <Tabs items={["Next.js", "Remix"]}>
         <Tab>
           In a Next.js application, you must set the properties in the [`<ClerkProvider>`](/docs/components/clerk-provider) component _and_ in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware#clerk-middleware).
 
@@ -137,12 +176,18 @@ To access authentication state from a satellite domain, users will be transparen
 
               export default function RootLayout({ children }: { children: React.ReactNode }) {
                 const primarySignInUrl = '/sign-in'
+                const primarySignUpUrl = '/sign-up'
+                const satelliteUrl = 'https://satellite.dev'
+
                 return (
                   <html lang="en">
                     <body>
-                      <ClerkProvider signInUrl={primarySignInUrl}>
-                        <title>Satellite Next.js app</title>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      <ClerkProvider
+                        signInUrl={primarySignInUrl}
+                        signUpUrl={primarySignUpUrl}
+                        allowedRedirectOrigins={[satelliteUrl]}
+                      >
+                        <p>Satellite Next.js app</p>
                         {children}
                       </ClerkProvider>
                     </body>
@@ -157,8 +202,16 @@ To access authentication state from a satellite domain, users will be transparen
 
               export default function App({ Component, pageProps }) {
                 const primarySignInUrl = '/sign-in'
+                const primarySignUpUrl = '/sign-up'
+                const satelliteUrl = 'https://satellite.dev'
+
                 return (
-                  <ClerkProvider signInUrl={primarySignInUrl} {...pageProps}>
+                  <ClerkProvider
+                    signInUrl={primarySignInUrl}
+                    signUpUrl={primarySignUpUrl}
+                    allowedRedirectOrigins={[satelliteUrl]}
+                    {...pageProps}
+                  >
                     <Head>
                       <title>Satellite Next.js app</title>
                       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -178,12 +231,20 @@ To access authentication state from a satellite domain, users will be transparen
 
               export default function RootLayout({ children }: { children: React.ReactNode }) {
                 const primarySignInUrl = 'https://primary.dev/sign-in'
+                const primarySignUpUrl = 'https://primary.dev/sign-up'
                 // Or, in development:
                 // const primarySignInUrl = 'http:localhost:3000/sign-in';
+                // const primarySignUpUrl = 'http:localhost:3000/sign-up';
+
                 return (
                   <html lang="en">
                     <body>
-                      <ClerkProvider isSatellite domain={(url) => url.host} signInUrl={primarySignInUrl}>
+                      <ClerkProvider
+                        isSatellite
+                        domain={(url) => url.host}
+                        signInUrl={primarySignInUrl}
+                        signUpUrl={primarySignUpUrl}
+                      >
                         <title>Satellite Next.js app</title>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                         {children}
@@ -200,13 +261,17 @@ To access authentication state from a satellite domain, users will be transparen
 
               export default function App({ Component, pageProps }) {
                 const primarySignInUrl = 'https://primary.dev/sign-in'
+                const primarySignUpUrl = 'https://primary.dev/sign-up'
                 // Or, in development:
                 // const primarySignInUrl = 'http:localhost:3000/sign-in';
+                // const primarySignUpUrl = 'http:localhost:3000/sign-up';
+
                 return (
                   <ClerkProvider
                     isSatellite
                     domain={(url) => url.host}
                     signInUrl={primarySignInUrl}
+                    signUpUrl={primarySignUpUrl}
                     {...pageProps}
                   >
                     <Head>
@@ -232,16 +297,18 @@ To access authentication state from a satellite domain, users will be transparen
           const options = {
             isSatellite: true,
             signInUrl: 'https://primary.dev/sign-in',
+            signUpUrl: 'https://primary.dev/sign-up',
             // Or, in development:
-            // signInUrl: 'http:localhost:3000/sign-in',
-            domain: 'https://primary.dev',
+            // signInUrl: 'http://localhost:3000/sign-in',
+            // signUpUrl: 'http://localhost:3000/sign-up',
+            domain: 'https://satellite.dev',
             // Or, in development:
-            // domain: 'http:localhost:3000',
+            // domain: 'http://localhost:3001',
           }
 
-          export default clerkMiddleware((auth, req) => {
+          export default clerkMiddleware(async (auth, req) => {
             if (isPublicRoute(req)) return // if it's a public route, do nothing
-            auth().protect() // for any other route, require auth
+            await auth.protect() // for any other route, require auth
           }, options)
 
           export const config = {
@@ -274,12 +341,15 @@ To access authentication state from a satellite domain, users will be transparen
                 {
                   loadUser: true,
                   signInUrl: '/sign-in',
+                  signUpUrl: '/sign-up',
+                  allowedRedirectOrigins: ['https://satellite.dev'],
                 } as const,
               )
             }
 
             export default ClerkApp(App, {
               signInUrl: '/sign-in',
+              signUpUrl: '/sign-up',
             })
             ```
 
@@ -299,8 +369,10 @@ To access authentication state from a satellite domain, users will be transparen
                 {
                   loadUser: true,
                   signInUrl: 'https://primary.dev/sign-in',
+                  signUpUrl: 'https://primary.dev/sign-up',
                   // Or, in development:
                   // signInUrl: 'http:localhost:3000/sign-in',
+                  // signUpUrl: 'http:localhost:3000/sign-up',
                   isSatellite: true,
                   domain: (url) => url.host,
                 } as const,
@@ -311,8 +383,10 @@ To access authentication state from a satellite domain, users will be transparen
               isSatellite: true,
               domain: (url) => url.host,
               signInUrl: 'https://primary.dev/sign-in',
+              signUpUrl: 'https://primary.dev/sign-up',
               // Or, in development:
               // signInUrl: 'http:localhost:3000/sign-in',
+              // signUpUrl: 'http:localhost:3000/sign-up',
             })
             ```
         </Tab>
@@ -333,4 +407,4 @@ To access authentication state from a satellite domain, users will be transparen
   You can repeat this process and create as many satellite applications as you need.
 </Steps>
 
-If you have any questions about satellite domains, or you're having any trouble setting this up, please contact [support@clerk.com](mailto:support@clerk.com)
+If you have any questions about satellite domains, or you're having any trouble setting this up, contact [support@clerk.com](mailto:support@clerk.com)

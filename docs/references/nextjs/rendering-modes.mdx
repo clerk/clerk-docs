@@ -1,0 +1,56 @@
+---
+title: Next.js rendering modes and Clerk
+description: Learn how Clerk's SDK interacts with Next.js's different rendering modes.
+---
+
+By default, Next.js attempts to optimize your application by statically generating pages at build-time that do not depend on data from the request. Authentication data is inherently dynamic and requires that rendering happens during request-time, so static generation is not possible in this scenario.
+
+To facilitate Next.js's default behavior, Clerk provides an opt-in approach to accessing authentication data during render:
+
+- The `auth()` helper to access auth data in server components
+- The `<ClerkProvider dynamic>` component that makes auth data available to wrapped client components
+
+The upcoming [Partial Prerendering (PPR)](https://nextjs.org/docs/app/building-your-application/rendering/partial-prerendering) feature in Next.js gives more control over static and dynamic rendering. Wrapping components that access auth data with `<Suspense>` allows pages to be prerender up to the `<Suspense>` boundaries.
+
+## Accessing data with `auth()` (recommended)
+
+Clerk's `auth()` helper is a dynamic API that relies on request-time data. Using `auth()` will opt your entire route into dynamic rendering. `auth()` is only available for use in Server Components, but the data can be passed to Client Components if desired.
+
+```tsx
+import { auth } from '@clerk/nextjs/server'
+
+// This page will be dynamically rendered at request time
+export default async function Page() {
+  const { userId } = await auth()
+
+  return <p>Hello, {userId}</p>
+}
+```
+
+## Accessing data with `<ClerkProvider dynamic>` and `useAuth()`
+
+If you rely on `useAuth()` in Client Components that are also server-side rendered, you can wrap your components with `<ClerkProvider dynamic>`. As a best practice, also consider wrapping `<ClerkProvider dynamic>` in `<Suspense>` to setup your application to take advantage of PPR.
+
+```tsx
+import { ClerkProvider } from '@clerk/nextjs'
+
+export default async function Page() {
+  return (
+    <>
+      <header>
+        <Logo />
+        <Suspense fallback={<Skeleton />}>
+          <ClerkProvider dynamic>
+            <UserGreeting />
+          </ClerkProvider>
+        </Suspense>
+      </header>
+      <main>Hello world!</main>
+    </>
+  )
+}
+```
+
+### Make auth data available globally with `<ClerkProvider dynamic>` (not recommended)
+
+If you wish to make auth data available to all of your components, pass the `dynamic` prop to your root `<ClerkProvider>`. This is not recommended, as you lose the ability to granularly opt-in specific routes based on their data needs.

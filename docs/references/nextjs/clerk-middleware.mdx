@@ -1,9 +1,7 @@
 ---
-title: clerkMiddleware() | Next.js
+title: '`clerkMiddleware()` | Next.js'
 description: The `clerkMiddleware()` function allows you to protect your Next.js application using Middleware.
 ---
-
-# `clerkMiddleware()`
 
 The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through Middleware. `clerkMiddleware()` is compatible with both the App and Pages routers.
 
@@ -56,17 +54,17 @@ You can protect routes based on user authentication status by checking if the us
 
 There are two methods that you can use:
 
-- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
+- Use [`auth.protect()`](/docs/references/nextjs/auth#protect) if you want to redirect unauthenticated users to the sign-in route automatically.
 - Use [`auth().userId`](/docs/references/nextjs/auth#retrieving-user-id) if you want more control over what your app does based on user authentication status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().userId()"]}>
+<CodeBlockTabs options={["auth.protect()", "auth().userId()"]}>
   ```tsx {{ filename: 'middleware.ts' }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
   const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    if (isProtectedRoute(req)) auth().protect()
+  export default clerkMiddleware(async (auth, req) => {
+    if (isProtectedRoute(req)) await auth.protect()
   })
 
   export const config = {
@@ -84,11 +82,13 @@ There are two methods that you can use:
 
   const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    if (!auth().userId && isProtectedRoute(req)) {
+  export default clerkMiddleware(async (auth, req) => {
+    const { userId, redirectToSignIn } = await auth()
+
+    if (!userId && isProtectedRoute(req)) {
       // Add custom logic to run before redirecting
 
-      return auth().redirectToSignIn()
+      return redirectToSignIn()
     }
   })
 
@@ -109,19 +109,19 @@ You can protect routes based on user authorization status by checking if the use
 
 There are two methods that you can use:
 
-- Use [`auth().protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
+- Use [`auth.protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
 - Use [`auth().has()`](/docs/references/nextjs/auth-object#has) if you want more control over what your app does based on the authorization status.
 
-<CodeBlockTabs options={["auth().protect()", "auth().has()"]}>
+<CodeBlockTabs options={["auth.protect()", "auth().has()"]}>
   ```tsx {{ filename: 'middleware.ts' }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
   const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
+  export default clerkMiddleware(async (auth, req) => {
     // Restrict admin routes to users with specific permissions
     if (isProtectedRoute(req)) {
-      auth().protect((has) => {
+      await auth.protect((has) => {
         return (
           has({ permission: 'org:sys_memberships:manage' }) ||
           has({ permission: 'org:sys_domains_manage' })
@@ -145,8 +145,8 @@ There are two methods that you can use:
 
   const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware((auth, req) => {
-    const { has, redirectToSignIn } = auth()
+  export default clerkMiddleware(async (auth, req) => {
+    const { has, redirectToSignIn } = await auth()
     // Restrict admin routes to users with specific permissions
     if (
       (isProtectedRoute(req) && !has({ permission: 'org:sys_memberships:manage' })) ||
@@ -173,7 +173,7 @@ There are two methods that you can use:
 
 You can use more than one `createRouteMatcher()` in your application if you have two or more groups of routes.
 
-The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) method from Clerk's `auth()` helper.
+The following example uses the [`has()`](/docs/references/nextjs/auth-object#has) method from the `auth()` helper.
 
 ```tsx {{ filename: 'middleware.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
@@ -182,10 +182,10 @@ const isTenantRoute = createRouteMatcher(['/organization-selector(.*)', '/orgid/
 
 const isTenantAdminRoute = createRouteMatcher(['/orgId/(.*)/memberships', '/orgId/(.*)/domain'])
 
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   // Restrict admin routes to users with specific permissions
   if (isTenantAdminRoute(req)) {
-    auth().protect((has) => {
+    await auth.protect((has) => {
       return (
         has({ permission: 'org:sys_memberships:manage' }) ||
         has({ permission: 'org:sys_domains_manage' })
@@ -193,7 +193,7 @@ export default clerkMiddleware((auth, req) => {
     })
   }
   // Restrict organization routes to signed in users
-  if (isTenantRoute(req)) auth().protect()
+  if (isTenantRoute(req)) await auth.protect()
 })
 
 export const config = {
@@ -215,9 +215,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
 
-export default clerkMiddleware((auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
-    auth().protect()
+    await auth.protect()
   }
 })
 
@@ -233,9 +233,9 @@ export const config = {
 
 ## Debug your Middleware
 
-If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddlware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddleware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
 
-```tsx {{ filename: 'middleware.ts', mark: [7] }}
+```tsx {{ filename: 'middleware.ts', mark: [[4, 7]] }}
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
 export default clerkMiddleware(
@@ -275,8 +275,8 @@ const intlMiddleware = createMiddleware({
 
 const isProtectedRoute = createRouteMatcher(['dashboard/(.*)'])
 
-export default clerkMiddleware((auth, req) => {
-  if (isProtectedRoute(req)) auth().protect()
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) await auth.protect()
 
   return intlMiddleware(req)
 })
@@ -362,17 +362,36 @@ The `clerkMiddleware()` function accepts an optional object. The following optio
   - `publishableKey`
   - `string`
 
-  The Clerk publishable key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
+  The Clerk Publishable Key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page.
 
   ---
 
   - `secretKey?`
   - `string`
 
-  The Clerk secret key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. The `CLERK_ENCRYPTION_KEY` environment variable must be set when providing `secretKey` as an option, refer to [Dynamic keys](#dynamic-keys).
+  The Clerk Secret Key for your instance. This can be found in your Clerk Dashboard on the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys)** page. The `CLERK_ENCRYPTION_KEY` environment variable must be set when providing `secretKey` as an option, refer to [Dynamic keys](#dynamic-keys).
 </Properties>
 
+It's also possible to dynamically set options based on the incoming request:
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => ({
+    // Provide `domain` based on the request host
+    domain: req.nextUrl.host,
+  }),
+)
+```
+
 ### Dynamic keys
+
+> [!NOTE]
+> Dynamic keys are not accessible on the client-side.
 
 The following options, known as "Dynamic Keys," are shared to the Next.js application server through `clerkMiddleware`, enabling access by server-side helpers like [`auth()`](/docs/references/nextjs/auth):
 
@@ -389,5 +408,25 @@ When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-b
 openssl rand --hex 32
 ```
 
-> [!NOTE]
-> Dynamic keys are not accessible on the client-side.
+For multi-tenant applications, you can dynamically define Clerk keys depending on the incoming request. Here's an example:
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// You would typically fetch these keys from a external store or environment variables.
+const tenantKeys = {
+  tenant1: { publishableKey: 'pk_tenant1...', secretKey: 'sk_tenant1...' },
+  tenant2: { publishableKey: 'pk_tenant2...', secretKey: 'sk_tenant2...' },
+}
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => {
+    // Resolve tenant based on the request
+    const tenant = getTenant(req)
+    return tenantKeys[tenant]
+  },
+)
+```

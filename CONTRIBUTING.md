@@ -1,12 +1,14 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute updates and fixes to the documentation content located in this repository.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
 
 ## Written in MDX
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
 
 Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
+
+MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `npm run format`.
 
 ## Project setup
 
@@ -218,16 +220,71 @@ description: Some brief, but effective description of the page's content.
 ---
 ```
 
-- **`title`** - The title of the page. Used to populate the HTML `<title>` tag
+- **`title`** - The title of the page. Used to populate the HTML `<title>` tag and the h1 of the page. Supports markdown e.g. ``title: '`<SignUp>`'``
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 These fields should be present on every documentation page.
+
+#### Search
+
+The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
+
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                           |
+| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
+| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users.                                                                                                    |
+
+You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
+
+##### Examples
+
+<details>
+<summary>Exclude a page from search</summary>
+
+```diff
+  ---
+  title: Example
++ search: false
+  ---
+```
+
+</details>
+
+<details>
+<summary>Boost a page in search results</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   rank: 1
+  ---
+```
+
+</details>
+
+<details>
+<summary>Show a page in results when searching for "supercalifragilisticexpialidocious"</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   keywords:
++     - supercalifragilisticexpialidocious
+  ---
+```
+
+</details>
 
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.
 
-Headings should be written in sentence-casing, where only the first word of the heading is capitalized. E.g. "This is a heading".
+Headings should be written in **sentence-casing**, where only the first word of the heading is capitalized. E.g. "This is a heading".
+
+h1's are not necessary and are considered tech-debt, as the `title` property in the [frontmatter](#file-metadata) will set the h1.
 
 `h2` and `h3` headings are automatically included in the table of contents. You can control this behaviour by using the `toc` prop:
 
@@ -339,8 +396,8 @@ interface CodeBlockProps {
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
 
-- `{{pub_key}}` – Publishable key
-- `{{secret}}` – Secret key
+- `{{pub_key}}` – Publishable Key
+- `{{secret}}` – Secret Key
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx
@@ -350,13 +407,15 @@ CLERK_SECRET_KEY={{secret}}
 ```
 ````
 
-The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's Secret Key.
 
 https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
 
 #### Prettier integration
 
-Code within code blocks is automatically formatted by Prettier when the containing MDX file is formatted. Formatting can be disabled for a code block by setting the `prettier` prop to `false`:
+Code within code blocks is automatically formatted by Prettier when the containing MDX file is formatted. Formatting errors may occur due to invalid syntax and these will cause the "Lint" GitHub action to fail and prevent pull requests from being merged. This is a deliberate tool to help prevent syntax errors from finding their way into code examples.
+
+Formatting can be disabled for a code block by setting the `prettier` prop to `false`, but this should only be used when absolutely necessary:
 
 ````mdx
 ```tsx {{ prettier: false }}
@@ -364,7 +423,7 @@ Code within code blocks is automatically formatted by Prettier when the containi
 ```
 ````
 
-["prettier-ignore" comments](https://prettier.io/docs/en/ignore.html) are also supported to ignore _parts_ of a code block:
+["prettier-ignore" comments](https://prettier.io/docs/en/ignore.html) are also supported to ignore _parts_ of a code block. This is preferred over the `prettier` prop where possible:
 
 ````mdx
 ```tsx
@@ -574,7 +633,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
 ```
@@ -596,7 +655,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>
@@ -619,7 +678,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>
@@ -636,7 +695,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <Cards variant="image">
 
 - [What is Clerk authentication?](/docs/authentication/overview)
-- Clerk offers multiple authentication strategies to identify legitimate users of your appication, and to allow them to make authenticated requests to your backend.
+- Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---

@@ -437,11 +437,11 @@ Be sure to use the correct term with components vs functions.
 
 ### 4.10 Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
-When telling learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard". Then, end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
 
 #### Do
 
-> In the Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+> In the Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)** page.
 
 > To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
 

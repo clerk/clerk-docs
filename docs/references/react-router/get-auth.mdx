@@ -27,24 +27,86 @@ The `getAuth()` helper retrieves authentication state from the request object.
 
 ## Usage
 
-### Basic usage
+### Server data loading
 
-TODO
+In the following example, the `userId` is passed to the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method to get the user's full `User` object. For information on how to use the Backend SDK, see the [Backend SDK documentation](/docs/references/backend/overview){{ target: '_blank' }}. If no `userId` can be found the user is redirected to the `/sign-in` page.
 
-### Protect API routes
+```tsx {{ filename: 'app/routes/profile.tsx' }}
+import { redirect } from "react-router";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { createClerkClient } from "@clerk/react-router/api.server";
+import type { Route } from "./+types/profile";
 
-It is important to protect your API routes to ensure that only authenticated users can access them. You can do this by checking if the `userId` is present in the `getAuth()` response, as shown in the following example:
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args)
 
-TODO
+  if (!userId) {
+    return redirect("/sign-in?redirect_url=" + args.request.url)
+  }
 
-### Usage with `getToken()`
+  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(userId)
 
-`getAuth()` returns `getToken()`, which is a method that returns the current user's session token. You can also use this function to retrieve a token from a custom JWT template and use it to fetch data from an external source, as shown in the following example:
+  return {
+    user: JSON.stringify(user),
+  }
+}
 
-TODO
+export default function Profile({ loaderData }: Route.ComponentProps) {
+  return (
+    <h1>Profile Data</h1>
+    <pre>
+      <code>
+        {JSON.stringify(loaderData, null, 2)}
+      </code>
+    </pre>
+  )
+}
+```
 
-### Usage with `clerkClient()`
+### Server action
 
-`clerkClient` is used to access the [Backend SDK](/docs/references/backend/overview), which exposes Clerk's backend API resources. You can use `getAuth()` to pass authentication information that many of the Backend SDK methods require, like in the following example:
+The example is similar to the server data loading one, except that the data is now only requested once the form inside the page is submitted through a server action.
 
-TODO
+```tsx {{ filename: 'app/routes/profile-form.tsx' }}
+import { redirect, Form } from "react-router";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { createClerkClient } from "@clerk/react-router/api.server";
+import type { Route } from "./+types/profile";
+
+export async function action(args: Route.ActionArgs) {
+  const { userId } = await getAuth(args)
+
+  if (!userId) {
+    return redirect("/sign-in?redirect_url=" + args.request.url)
+  }
+
+  const formData = await args.request.formData()
+  const name = await formData.get('name')
+  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(userId)
+
+  return {
+    name,
+    user: JSON.stringify(user),
+  }
+}
+
+export default function ProfileForm({ actionData }: Route.ComponentProps) {
+  return (
+    <div>
+      <h1>Profile Data</h1>
+      <Form method="post">
+        <label htmlFor="name">Name</label>
+        <input type="text" name="name" id="name" />
+        <button type="submit">Submit</button>
+      </Form>
+      {actionData ? (
+        <pre>
+        <code>
+          {JSON.stringify(actionData, null, 2)}
+        </code>
+      </pre>
+      ) : null}
+    </div>
+  )
+}
+```

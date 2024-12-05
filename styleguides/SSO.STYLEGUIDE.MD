@@ -31,7 +31,7 @@ These are the guidelines we use to write our SSO guides.
 
   For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your <SSO_PROVIDER> account.
 
-  To make the setup process easier, it's recommended to keep two browser tabs open: one for your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
+  To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps

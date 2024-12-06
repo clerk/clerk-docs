@@ -165,6 +165,14 @@ Use "ensure" instead of "make sure."
 > ✅
 > Ensure you have the correct permissions.
 
+### Syntax for code example explanations
+
+Code examples should always have an explanation preceding them. Typically, they begin with something along the lines of "The following example demonstrates..."
+
+> ❌ You might have already configured `<ConvexProvider>`. Ensure that `<ClerkProvider>` wraps `ConvexProviderWithClerk` and that `useAuth` is passed to `ConvexProviderWithClerk`.
+
+> ✅ The following example demonstrates how to configure Clerk and Convex's providers. Clerk's `useAuth()` hook must be passed to `<ConvexProviderWithClerk>` and Clerk's `<ClerkProvider>` must be wrapped around it.
+
 ## Accessibility
 
 ### Do not assume proficiency

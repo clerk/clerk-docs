@@ -1,0 +1,294 @@
+---
+title: Chrome Extension Quickstart
+description: Add authentication and user management to your Chrome Extension with Clerk.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    }
+  ]}
+  exampleRepo={[
+    {
+      title: "Chrome Extension Quickstart Repo",
+      link: "https://github.com/clerk/clerk-chrome-extension-quickstart"
+    }
+  ]}
+>
+  - Create a new app with Plasmo
+  - Install `@clerk/chrome-extension`
+  - Set your Clerk API keys
+  - Add `<ClerkProvider />` and Clerk components to your app
+  - Configure your app to use a consistent CRX ID
+  - Build, load, and test your Chrome Extension
+</TutorialHero>
+
+<Steps>
+  ### Configure your authentication options
+
+  When creating your Clerk application in the Clerk Dashboard, your authentication options will depend on how you configure your Chrome Extension. Chrome Extensions can be used as a popup, a side panel, or in conjunction with a web app. Popups and side panels have limited authentication options. [Learn more about what options are available.](/docs/references/chrome-extension/overview#authenication-options)
+
+  This guide will use a popup.
+
+  ### Create a new app using the Plasmo framework
+
+  [Plasmo](https://docs.plasmo.com/framework) is a browser extension framework that includes hot reloading and creating development and production extension builds easily from the same code.
+
+  Plasmo strongly recommends using `pnpm`, so this guide will only use `pnpm`-based examples.
+
+  The following command creates an app with Tailwind CSS preconfigured and with a `src/` directory. You can choose to remove one or both of those options.
+
+  ```bash {{ filename: 'terminal' }}
+  pnpm create plasmo --with-tailwindcss --with-src clerk-chrome-extension
+  cd clerk-chrome-extension
+  ```
+
+  ### Install `@clerk/chrome-extension`
+
+  Clerk's [Chrome Extension SDK](/docs/references/chrome-extension/overview) gives you access to prebuilt components, React hooks, and helpers to make user authentication easier.
+
+  Add the SDK to your project:
+
+  ```bash {{ filename: 'terminal' }}
+  pnpm add @clerk/chrome-extension
+  ```
+
+  ### Set your Clerk API keys
+
+  Plasmo offers [several options](https://docs.plasmo.com/framework/env) for environment variable files, as the same codebase can be used for development and production builds, as well as for targeting different browsers. This guide uses `.env.development` and `.env.chrome` files.
+
+  <SignedIn>
+    Add the following keys to your `.env.development` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  </SignedIn>
+
+  <SignedOut>
+    1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+    1. In the **Quick Copy** section, select **Chrome Extension** and copy your Clerk Publishable Key and Frontend API URL.
+    1. Paste your keys into your `.env.development` file.
+
+    The final result should resemble the following:
+  </SignedOut>
+
+  ```env {{ filename: '.env.development' }}
+  PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_FRONTEND_API={{fapi_url}}
+  ```
+
+  ### Add `<ClerkProvider>` to your app
+
+  All Clerk hooks and components must be children of the [`<ClerkProvider>`](/docs/components/clerk-provider) component, which provides active session and user context. Wrap your app in the `<ClerkProvider>` component and pass your Publishable Key as a prop.
+
+  ```tsx {{ filename: 'src/popup.tsx', mark: [1, [7, 11], 15, 19] }}
+  import { ClerkProvider } from '@clerk/chrome-extension'
+
+  import { CountButton } from '~features/count-button'
+
+  import '~style.css'
+
+  const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
+  }
+
+  function IndexPopup() {
+    return (
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+        <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-16 plasmo-w-40">
+          <CountButton />
+        </div>
+      </ClerkProvider>
+    )
+  }
+
+  export default IndexPopup
+  ```
+
+  ### Create a header with Clerk components
+
+  You can control what content signed in and signed out users can see with Clerk's [prebuilt components](/docs/components/overview). Create a header with the following Clerk components. (With Chrome Extensions, you can also add this logic to a footer).
+
+  - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
+  - [`<UserButton />`](/docs/components/user/user-button): A prebuilt component that comes styled out-of-the-box to show the avatar from the account the user is signed in with.
+  - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page. For this example, because you have not specified any props or [environment variables](/docs/deployments/clerk-environment-variables) for the sign-in URL, the component will link to the [Account Portal sign-in page.](/docs/customization/account-portal/overview)
+
+  ```tsx {{ filename: 'src/popup.tsx', mark: [[1, 7], [22, 29]] }}
+  import {
+    ClerkProvider,
+    SignInButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from '@clerk/chrome-extension'
+  import { CountButton } from '~features/count-button'
+
+  import '~style.css'
+
+  const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
+  }
+
+  function IndexPopup() {
+    return (
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+        <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-[600px] plasmo-w-[800px] plasmo-flex plasmo-flex-col">
+          <header className="plasmo-w-full">
+            <SignedOut>
+              <SignInButton mode="modal" />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main className="plasmo-grow">
+            <CountButton />
+          </main>
+        </div>
+      </ClerkProvider>
+    )
+  }
+
+  export default IndexPopup
+  ```
+
+  ### Update `<ClerkProvider>` props for Chrome Extension navigation
+
+  To avoid navigation errors, set the `afterSignOutUrl`, `signInFallbackRedirectUrl` and `signUpFallbackRedirectUrl` props for `<ClerkProvider>`. Chrome Extensions don't use an `http` URL, such as `http://localhost:3000`. Instead, they use a `chrome-extension://` URL appended with an unique extension ID called a CRX ID. This URL is what you will pass to these props.
+
+  ```tsx {{ filename: 'src/popup.tsx', mark: [14, [24, 26]] }}
+  import {
+    ClerkProvider,
+    SignInButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from '@clerk/chrome-extension'
+
+  import { CountButton } from '~features/count-button'
+
+  import '~style.css'
+
+  const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+  const EXTENSION_URL = chrome.runtime.getURL('.')
+
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file')
+  }
+
+  function IndexPopup() {
+    return (
+      <ClerkProvider
+        publishableKey={PUBLISHABLE_KEY}
+        afterSignOutUrl={`${EXTENSION_URL}/popup.html`}
+        signInFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
+        signUpFallbackRedirectUrl={`${EXTENSION_URL}/popup.html`}
+      >
+        <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-[600px] plasmo-w-[800px] plasmo-flex-col">
+          <header className="plasmo-w-full">
+            <SignedOut>
+              <SignInButton mode="modal" />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main className="plasmo-grow">
+            <CountButton />
+          </main>
+        </div>
+      </ClerkProvider>
+    )
+  }
+
+  export default IndexPopup
+  ```
+
+  ### Create a consistent CRX ID for your extension
+
+  Chrome Extensions have a unique CRX ID that rotates by default, which can cause errors with the Clerk integration. To avoid these problems, ensure that you have a **consistent** CRX ID in both development and production for your extension by following these steps:
+
+  1. Visit Plasmo Itero's [Generate Keypairs](https://itero.plasmo.com/tools/generate-keypairs) tool.
+  1. Select **Generate KeyPairs**.
+  1. Save the **Private Key** somewhere secure in case you need it in the future. Save the **Public Key** and the **CRX ID** for the next steps.
+
+  ### Create an `.env.chrome` file to store your public key
+
+  Create an `.env.chrome` file and add your public key to it, as shown in the following example:
+
+  ```env {{ filename: '.env.chrome' }}
+  CRX_PUBLIC_KEY=<YOUR_PUBLIC_KEY>
+  ```
+
+  ### Edit your `package.json` to use the new public key
+
+  Plasmo [uses the `package.json` to generate a `manifest.json` on build](https://docs.plasmo.com/framework#where-is-the-manifestjson-file), and allows for the use of environment variables in `package.json`.
+
+  In your `package.json`, in the `manifest` object:
+
+  - Set the `key` value to `"$CRX_PUBLIC_KEY"`. This helps configure the consistent CRX ID for your extension.
+  - Set the `permissions` array to include `"cookies"` and `"storage"`. `permissions` specifies which permissions your extension requires.
+  - Set/update the `host_permissions` array to include `"http://localhost/*"` and `"$CLERK_FRONTEND_API/*"`. `host_permissions` specifies which hosts, or websites, will have permission to sync auth state with your app.
+
+  ```json {{ filename: 'package.json' }}
+  {
+    // The rest of your package.json file
+    "manifest": {
+      "key": "$CRX_PUBLIC_KEY",
+      "permissions": ["cookies", "storage"],
+      "host_permissions": ["http://localhost/*", "$CLERK_FRONTEND_API/*"]
+    }
+  }
+  ```
+
+  ### Use `pnpm dev` to start your development server and create a build
+
+  Plasmo facilitates Chrome Extension development by automatically "hot loading" the app whenever you save a changed file in the project. This ensures the `build/chrome-mv3-dev` folder remains up to date. Without the plugin, you would need to manually execute the build command and reload your Chrome Extension after each change. Plasmo automates this process, streamlining development.
+
+  Run the following command to start your development environment. This also creates the build in `build/chrome-mv3-dev`, and rebuilds when you make changes to the extension.
+
+  ```bash {{ filename: 'terminal' }}
+  pnpm dev
+  ```
+
+  ### Load your Chrome Extension into your Chromium-based browser
+
+  To load your Chrome Extension, follow these steps:
+
+  1. Open Chrome or a Chromium-based browser and navigate to `chrome://extensions`.
+  1. In the top-right, enable **Developer mode**.
+  1. In the top-left, select **Load unpacked**.
+  1. Navigate to where your project is located and select the `build/chrome-mv3-dev` folder. Then select **Select**. Your extension will now be loaded and shown in the list of extensions.
+  1. Confirm that the ID shown in your extension matches the CRX ID you saved [earlier](#create-a-consistent-crx-id-for-your-extension).
+
+  ### Test your Chrome Extension
+
+  In your Chrome browser, open the extension popup. Ensure that the `<SignInButton>` appears, and that selecting it opens the `<SignIn />` modal. Sign in and ensure that the `<UserButton />` appears in the header.
+
+  > [!WARNING]
+  > After signing up or signing in, your popup may appear to crash. Closing and reopening the popup should restart the extension and you should be signed in.
+  >
+  > Your extension does not yet have anything to handle routing, and by default, the Clerk components attempt to redirect the user. See [the guide on adding React Router to your Chrome Extension](/docs/references/chrome-extension/add-react-router) to add routing to your extension.
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Add React Router](/docs/references/chrome-extension/add-react-router)
+  - Learn how to add React Router to your Chrome Extension.
+
+  ---
+
+  - [Sync your Chrome Extension with your web app](/docs/references/chrome-extension/sync-host)
+  - Learn how to configure your Chrome Extension to sync user authentication with your web application.
+
+  ---
+
+  - [createClerkClient()](/docs/references/chrome-extension/create-clerk-client)
+  - For Chrome Extension's configured as popups, learn how to use Clerk's `createClerkClient()` function in a background service worker to ensure that the user's session is always fresh.
+</Cards>

@@ -3,7 +3,7 @@ title: '`Auth` object'
 description: The Auth object contains information about the current user's session.
 ---
 
-Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/references/nextjs/get-auth) return an `Auth` object. This JavaScript object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
+The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token. It's returned by the [`useAuth()`](/docs/references/react/use-auth) hook, the [`auth()`](/docs/references/nextjs/auth) and [`getAuth()`](/docs/references/nextjs/get-auth) helpers, and the `request` object in server contexts.
 
 ## `Auth` object properties
 
@@ -71,6 +71,13 @@ Both [`auth()`](/docs/references/nextjs/auth) and  [`getAuth()`](/docs/reference
 
   ---
 
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
+
+  ---
+
   - [`getToken()`](#get-token)
   - [`ServerGetToken`](#server-get-token)
 
@@ -98,15 +105,7 @@ The `orgPermissions` property on the `Auth` object has the type `OrganizationCus
 
 ### `has()`
 
-`has()` can be used on both the frontend and the backend to determine if the user _has_ a role or permission.
-
-You can use `has()` anywhere Clerk returns an [`Auth`](/docs/references/nextjs/auth-object) object:
-
-- [`auth()`](/docs/references/nextjs/auth) in Next.js App Router
-- [`useAuth()`](/docs/references/react/use-auth) in Client Components, including during SSR
-- [`getAuth(request)`](/docs/references/nextjs/get-auth) in server contexts outside of the App Router and SSR (Remix Loaders, Node, Express, Fastify, etc)
-
-`has()` has the following function signature:
+`has()` determines if the user _has_ a role or permission.
 
 ```ts
 function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
@@ -128,9 +127,69 @@ function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions):
   - `string`
 
   The permission to check for.
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](#reverification-config)</code>
+
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
 </Properties>
 
-#### `has()` example
+##### `ReverificationConfig`
+
+```ts
+type ReverificationConfig =
+  | SessionVerificationTypes
+  | {
+      level: SessionVerificationLevel
+      afterMinutes: SessionVerificationAfterMinutes
+    }
+
+type SessionVerificationTypes = 'strict_mfa' | 'strict' | 'moderate' | 'lax'
+```
+
+The `ReverificationConfig` type has the following properties:
+
+<Properties>
+  - `strict_mfa`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for both the first and second factors.
+
+  ---
+
+  - `strict`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for the second factor.
+
+  ---
+
+  - `moderate`
+
+  Requires the user to verify their credentials within the past hour. If not verified, prompt for the second factor.
+
+  ---
+
+  - `lax`
+
+  Requires the user to verify their credentials within the past day. If not verified, prompt for the second factor.
+
+  ---
+
+  - `level`
+  - `"first_factor" | "second_factor" | "multi_factor"`
+
+  The reverification level of credentials to check for.
+
+  ---
+
+  - `afterMinutes`
+  - `number`
+
+  The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
+</Properties>
+
+#### `has()` permissions example
 
 You can use `has()` to check if a user is authorized to access a component.
 
@@ -152,6 +211,15 @@ export default async function Page() {
   return <h1>Team Settings</h1>
 }
 ```
+
+#### `has()` reverification example
+
+> [!IMPORTANT]
+> This example demonstrates how to handle reverification **server-side**. For information on how to handle reverification on the **client-side**, see the [guide on reverification](/docs/guides/reverification).
+
+You can use `has()` to check if a user has verified their credentials within a certain time frame.
+
+<Include src="_partials/reverification-route-handler" />
 
 ### `getToken()`
 
@@ -185,14 +253,14 @@ The `Auth` object is not available in the frontend. To use the `getToken()` meth
 
 #### Use `getToken()` in the backend
 
-<Tabs type="framework" items={["Next.js", "Node", "Remix"]}>
+<Tabs items={["Next.js", "Node", "Remix"]}>
   <Tab>
     To use the `getToken()` method in the backend:
 
     - In App Router applications, use the [`auth()`](/docs/references/nextjs/auth) helper.
     - In Pages Router applications, use the [`getAuth()`](/docs/references/nextjs/get-auth) helper.
 
-    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
       ```js {{ filename: 'app/api/get-token-example/route.ts' }}
       import { auth } from '@clerk/nextjs/server'
 
@@ -275,8 +343,8 @@ The following is an example of the `Auth` object without an active organization:
 
 ```js {{ prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+  sessionId: 'sess_123',
+  userId: 'user_123',
   orgId: null,
   orgRole: null,
   orgSlug: null,
@@ -289,8 +357,8 @@ The following is an example of the `Auth` object without an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```
@@ -301,9 +369,9 @@ The following is an example of the `Auth` object with an active organization:
 
 ```js {{ prettier: false }}
 {
-  sessionId: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-  userId: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
-  orgId: 'org_2ZVFfVAkt4ocVjHL0KTdL94AhXK',
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: 'org_123',
   orgRole: 'org:admin',
   orgSlug: undefined,
   orgPermissions: ['org:team_settings:manage'], // Custom permissions
@@ -315,8 +383,58 @@ The following is an example of the `Auth` object with an active organization:
     iat: 1666622547,
     iss: 'https://clerk.quiet.muskox-85.lcl.dev',
     nbf: 1666622537,
-    sid: 'sess_2GaMqUCB3Sc1WNAkWuNzsnYVVEy',
-    sub: 'user_2F2u1wtUyUlxKgFkKqtJNtpJJWj',
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```
+
+## `Auth` object example with valid factor age
+
+```js {{ mark: [8], prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorVerificationAge: [0,0],
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```
+
+## `Auth` object example of a user without an MFA method registered
+
+```js {{ mark: [8], prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorVerificationAge: [0, -1],
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
   },
 }
 ```

@@ -65,10 +65,10 @@ Although the administrative features of BAPI are vital for many applications, th
 
 To understand how authentication works in Clerk, it's important to first understand how the most common implementation of authentication logic works: the traditional "stateful authentication" model, also known as "session token authentication".
 
-The flow works as follows:
+A user's process of signing in would work as follows:
 
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. Upon successful validation, it creates a new session in the database associated with the user, typically containing information about the session such as the session ID, user ID, expiration time, and session status.
+1. The server validates the credentials against a database. This is normally done by [hashing](TODO) the password and comparing it with a stored password hash. Upon successful validation, it creates a new [session](TODO) in the database associated with the user. The session represents an instance in which a given user has signed in, and typically contains information such as a session ID, the user's ID, an expiration time, and session status (active, revoked, expired, etc.).
 1. The server responds to the browser's request by setting the session ID in a [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header in the response. This cookie will be automatically included in future requests from the browser in order to authenticate the user.
    <Video
      src="/docs/images/how-clerk-works/stateful-auth.mp4"
@@ -79,7 +79,7 @@ The flow works as follows:
      loop
      playsInline
    />
-1. The next time the browser sends a request to the server, it automatically includes the session cookie. The server checks the database for the session ID and retrieves the associated user ID and session metadata. If the session is valid and active, the server can then use the user ID to fetch any required user data and process the request.
+1. The next time the browser sends a request to the server, it automatically includes the session cookie. The server checks the database for the session ID and retrieves the associated user ID and session metadata. If the session is valid and active, the server has verified that the user has authenticated, andcan then use the user ID to fetch any required user data and process the request.
    <Video
      src="/docs/images/how-clerk-works/stateful-auth-2.mp4"
      width="1600"
@@ -91,7 +91,7 @@ The flow works as follows:
    />
 
 > [!NOTE]
-> If an attacker obtains your session ID, they can fully impersonate your session. To mitigate this risk, Clerk implements the following security measures: 1. [HTTPS](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS) is enforced to prevent [man-in-the-middle attacks](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) that could intercept session IDs in transit, and 2. the [`HttpOnly` flag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) is set on session cookies to prevent malicious JavaScript from accessing them through cross-site scripting (XSS) attacks. [Read more about Clerk's security measures](/docs/security/overview).
+> If an attacker obtains your session ID, they can fully you as a user and take over your account. To mitigate this risk, Clerk implements the following security measures: 1. [HTTPS](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS) is enforced to prevent [man-in-the-middle attacks](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) that could intercept session IDs in transit, and 2. the [`HttpOnly` flag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) is set on session cookies to prevent malicious JavaScript from accessing them through cross-site scripting (XSS) attacks. [Read more about Clerk's security measures](/docs/security/overview).
 
 This is a perfectly reasonable authentication model and works great for most apps as it's straightforward to understand and implement. Additionally, since it checks the database for _every request_ that requires authentication, sessions can be instantly revoked if needed (by setting the state to `revoked` and adding a check in the server logic). However, because it requires every request to query the database, it introduces additional latency and can be difficult to scale as you start to shard out your database.
 
@@ -100,7 +100,7 @@ This is a perfectly reasonable authentication model and works great for most app
 An alternative approach is "stateless" authentication, which addresses the scalability and latency challenges of stateful authentication while introducing different tradeoffs. The stateless authentication flow operates as follows:
 
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. Upon successful validation, it generates a cryptographically [signed token](/docs/how-clerk-works/tokens-signatures) containing essential user data like the user ID and any relevant claims.
+1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/how-clerk-works/tokens-signatures) containing essential user data like the user ID and any relevant [claims](TODO).
 1. The server responds to the browser's request by sending the token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response. This token serves as a self-contained proof of authentication, and will be included in future requests from the browser in order to authenticate the user.
    <Video
      src="/docs/images/how-clerk-works/stateless-auth.mp4"
@@ -122,14 +122,14 @@ An alternative approach is "stateless" authentication, which addresses the scala
      playsInline
    />
 
-While more complex to implement, this stateless model offers significant advantages. Most notably, it eliminates the latency overhead of database lookups required in the stateful model, leading to faster request processing. It also provides better horizontal scalability since there's no need to coordinate database access across multiple server instances.
+While more complex to implement, this stateless model offers significant advantages. Most notably, **it eliminates the latency overhead of database lookups** required in the stateful model, leading to faster request processing. It also provides better horizontal scalability since there's no need to coordinate database access across multiple server instances.
 
-However, this approach comes with important technical tradeoffs. The most significant limitation is that **JWTs cannot be revoked** due to their self-contained nature. Since JWT validation happens locally without consulting a central authority (i.e., they never "phone home"), there's no direct mechanism to invalidate them before their natural expiration.
+However, this approach also comes with important technical tradeoffs. The most significant limitation is that **JWTs cannot be revoked** due to their self-contained nature. Since JWT validation happens locally without consulting a central authority (i.e., they never "phone home"), there's no direct mechanism to invalidate them before their natural expiration.
 
-This creates challenges for session management. To forcibly terminate a user's session, you have two suboptimal options:
+This creates challenges for session management. To forcibly terminate a user's session, you have two suboptimal choices:
 
 1. Wait for the JWT to expire naturally.
-1. Rotate the signing keys, which effectively invalidates all active sessions across your entire user base, signing out all of your users.
+1. Rotate the signing keys, which invalidates all active sessions across your entire user base, signing out all of your users.
 
 Furthermore, even after rotating keys, the revocation may be delayed if your application caches the public key used for verification - a common practice for performance optimization. The cached key would continue to validate the old tokens until the cache expires.
 
@@ -137,7 +137,7 @@ This limitation poses significant security risks, as it hampers your ability to 
 
 ## Clerk's authentication model
 
-Clerk implements a hybrid authentication model that combines the benefits of both stateful and stateless approaches while mitigating their respective drawbacks, at the cost of adding a substantial amount of complexity to the implementation on Clerk's side. For a developer implementing Clerk, like you, this is all upside since the complexity is handled internally by Clerk. The hybrid model incorporates the same flow when signing in as the stateless flow, but with a few key innovations:
+Clerk implements a hybrid authentication model that combines the benefits of both stateful and stateless approaches while mitigating their respective drawbacks, at the cost of adding a substantial amount of complexity to the implementation on Clerk's side. However, for a developer implementing Clerk, like you, this is all upside since the complexity is handled internally by Clerk. The hybrid model incorporates the same flow when signing in as the stateless flow, but with a few key innovations:
 
 - A short-lived **session token** (60 seconds) combined with a background token refresh mechanism.
 - A **client token** to verify the user's authentication state, in conjunction with the session token.

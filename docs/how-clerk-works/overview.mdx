@@ -69,7 +69,7 @@ A user's process of signing in would work as follows:
 
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
 1. The server validates the credentials against a database. This is normally done by [hashing](TODO) the password and comparing it with a stored password hash. Upon successful validation, it creates a new [session](TODO) in the database associated with the user. The session represents an instance in which a given user has signed in, and typically contains information such as a session ID, the user's ID, an expiration time, and session status (active, revoked, expired, etc.).
-1. The server responds to the browser's request by setting the session ID in a [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header in the response. This cookie will be automatically included in future requests from the browser in order to authenticate the user.
+1. The server responds to the browser's request by setting the session ID in a [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header in the response, which sets a cookie with this value in the browser. This cookie will be automatically included in future requests from the browser in order to authenticate the user.
    <Video
      src="/docs/images/how-clerk-works/stateful-auth.mp4"
      width="1600"
@@ -147,9 +147,9 @@ Clerk implements a hybrid authentication model that combines the benefits of bot
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
 1. The server validates the credentials against a database and, upon successful validation:
    - Creates a session record in the database (stateful component)
-   - Generates a [signed JWT](/docs/how-clerk-works/tokens-signatures) containing essential user data like the user ID and any relevant claims (stateless component)
-   - Sets the token's expiration to 60 seconds
-1. The server responds to the browser's request by sending the token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response.
+   - Generates a [signed JWT](/docs/how-clerk-works/tokens-signatures) with its expiration set to the session lifetime (stateless component) - this JWT is stored on FAPI, and is not accessible to the application. This JWT is called the **client token**.
+   - Generates a **second** signed JWT that expires after 60 seconds which is returned directly to the application and contains user data like the user ID and other claims. This JWT is called the **session token**.
+1. The server responds to the browser's request by sending the client token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response, which is set on the FAPI domain. Clerk's client side SDK then makes a request to FAPI to get a session token and sets it on the app domain.
    <Video
      src="/docs/images/how-clerk-works/hybrid-auth.mp4"
      width="1600"
@@ -170,13 +170,10 @@ Clerk implements a hybrid authentication model that combines the benefits of bot
      playsInline
    />
 
-So far, this is the same as stateless auth, with one key distinction: the session token's expiration time. This is because normally, in stateless authentication implementations, the token's expiration is typically set to match the intended session duration - commonly ranging from one week to one month. Since tokens can't be revoked, if a token is compromised, the attacker has the entirety of the session lifetime to be able to take over the user's account. This will be several days at least on average, if not several weeks. Clerk's model mitigates this issue by setting an extremely short session token lifetime of 60 seconds. Normally, a Clerk token will have already expired before an attacker gets the chance to even try to use it. This is great for security, but it does create a complication in the authentication flow: **it decouples token expiration from session lifetime**.
+So far, this is the same as stateless auth, with one key distinction: the session token's expiration time. This is because normally, in stateless authentication implementations, the token's expiration is set to match the intended session duration - commonly ranging from one week to one month. But since JWTs can't be revoked, if a token is compromised, the attacker has the entirety of the session lifetime to be able to take over the user's account. This will be several days at least on average, if not several weeks.
 
-<Video src="/docs/images/how-clerk-works/invalidation.mp4" width="1600" height="900" autoPlay muted loop playsInline />
+Clerk's model mitigates this issue by setting an extremely short session token lifetime of 60 seconds. Normally, a Clerk token will have already expired before an attacker gets the chance to even try to use it. This is great for security, but it does create a complication in the authentication flow, as signing users out every 60 seconds would not be an acceptable user experience.  So, in order to make this architecture work, **it must decouple token expiration from session lifetime**. To make this happen, Clerk introduces a new "token refresh" flow that runs in the background and is responsible for refreshing the token every minute.
 
-Setting the session token lifetime to 60 seconds also creates another complication. When a token expires, it signifies the end of the session, requiring the user to re-authenticate. You have likely experienced this in many apps you have used, where every once in a while you need to re-authenticate. Modern browsers also enforce their own limitations on session persistence - for instance, Chrome implements a maximum cookie lifetime of 400 days, after which users are automatically signed out regardless of application-level session settings. These enforced session boundaries align with industry best practices for [secure session management](https://www.pingidentity.com/en/resources/blog/post/session-management.html#rte-33a93a79-b461-4b8e-9b7b-5b10a2777b70) and represent standard authentication behavior.
-
-With Clerk's model, forcing a user to re-authenticate every 60 seconds would not be a good user experience. In order to make this change work, Clerk introduces a new "token refresh" flow that runs in the background and is responsible for refreshing the token every minute.
 
 ### Token refresh mechanism
 
@@ -195,6 +192,8 @@ This approach provides several security benefits:
 - Minimizes the window of opportunity for token misuse
 - Maintains the ability to revoke sessions quickly
 - Preserves the performance benefits of stateless authentication
+
+<Video src="/docs/images/how-clerk-works/invalidation.mp4" width="1600" height="900" autoPlay muted loop playsInline />
 
 ## Clerk's cookies & tokens in detail
 
@@ -235,11 +234,11 @@ When your app makes a request from the frontend to your backend, if the backend 
 
 ## The Handshake
 
-The short-lived nature of session tokens introduces an edge case that requires special handling. Consider this scenario: A user signs in to your application and then closes their browser tab. When they return after five minutes by opening a new tab, their session token will have expired since the refresh mechanism could not run while the application was closed. At this point, Clerk needs to determine the user's authentication status and potentially issue a new session token.
+The short-lived nature of session tokens introduces an edge case that requires special handling. Consider this scenario: A user signs in to your application and then closes their browser tab. When they return after five minutes by opening a new tab, their session token will have expired since the refresh mechanism could not run while the tab was closed. At this point, Clerk needs to determine the user's authentication status and potentially issue a new session token.
 
-For client-rendered applications, this process is straightforward. Clerk's frontend SDK makes a direct request to the Frontend API (FAPI), which validates the client token. If the token is valid, FAPI issues a new session token. If invalid, the user is redirected to the sign-in flow.
+For client-rendered applications, this process is straightforward. Clerk's frontend SDK makes a direct request to the Frontend API (FAPI), which validates the client token. If the token is valid, FAPI issues and returns a new session token. If invalid, the user is redirected to the sign-in flow.
 
-However, server-rendered applications present a unique challenge. Server-to-server requests cannot include browser cookies, as they are accessible to the browser and not the server, meaning the client token would not be available when the server attempts to communicate with FAPI. To solve this, Clerk implements a "handshake" flow:
+However, server-rendered applications present a unique challenge. Server-to-server requests cannot include browser cookies, as cookies are stored by the browser. This means that, if your app's backend made a request directly to FAPI, the client token would not be available with that request, as the request would not flow through the browser. To solve this problem, Clerk implements a "handshake" flow:
 
 1. The server returns a redirect response to the browser
 1. The browser follows the redirect to FAPI

@@ -18,7 +18,7 @@ Metadata allows for custom data to be saved on the [`User` object](/docs/users/o
 
 Private metadata is only accessible by the backend, which makes this useful for storing sensitive data that you don't want to expose to the frontend. For example, you could store a user's Stripe customer ID.
 
-### Setting private metadata
+### Set private metadata
 
 <Tabs items={["Next.js", "Node", "Go", "Ruby", "cURL"]}>
   <Tab>
@@ -109,9 +109,9 @@ Private metadata is only accessible by the backend, which makes this useful for 
   </Tab>
 </Tabs>
 
-### Retrieving private metadata
+### Retrieve private metadata
 
-You can retrieve the private metadata for a user by using the [`getUser`](/docs/references/backend/user/get-user) method. This method will return the `User` object which contains the private metadata.
+You can retrieve the private metadata for a user by using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. This method will return the `User` object which contains the private metadata.
 
 <Tabs items={["Next.js", "Node", "cURL", "Go", "Ruby"]}>
   <Tab>
@@ -184,7 +184,7 @@ You can retrieve the private metadata for a user by using the [`getUser`](/docs/
 
 Public metadata is accessible by both the frontend and the backend, but can only be set on the backend. This is useful for storing data that you want to expose to the frontend, but don't want the user to be able to modify. For example, you could store a custom role for a user.
 
-### Setting public metadata
+### Set public metadata
 
 <Tabs items={["Next.js", "Node", "Go", "Ruby", "cURL"]}>
   <Tab>
@@ -198,7 +198,7 @@ Public metadata is accessible by both the frontend and the backend, but can only
       const client = await clerkClient()
 
       await client.users.updateUserMetadata(userId, {
-        privateMetadata: {
+        publicMetadata: {
           stripeId: stripeId,
         },
       })
@@ -275,25 +275,25 @@ Public metadata is accessible by both the frontend and the backend, but can only
   </Tab>
 </Tabs>
 
-### Retrieving public metadata
+### Retrieve public metadata
 
-There are multiple ways to retrieve public metadata. It is available on the `User` object returned by the [`useUser`](/docs/references/react/use-user) hook, and it can also be attached to the session token to be retrieved with [`auth()`](/docs/references/nextjs/auth) and [`useAuth()`](/docs/references/react/use-auth). If you need to retrieve public metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token.
+There are multiple ways to retrieve public metadata.
 
-To read about customizing your session token and retrieving that data, check out our [session token customization guide](/docs/backend-requests/making/custom-session-token).
+On the frontend, it's available on the [`User`](/docs/references/javascript/user/user) object which can be accessed using the [`useUser()`](/docs/references/react/use-user) hook.
+
+On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. It can also be attached to a session token, and the `sessionClaims` of the session token can be retrieved on the [`Auth`](/docs/references/nextjs/auth-object) object. If you need to retrieve public metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token. See the [guide on customizing your session token](/docs/backend-requests/making/custom-session-token).
 
 ## Unsafe metadata
 
-If you need to implement custom fields that will be attached to the `User` object from the frontend (using our ClerkJS library or the [Frontend API](/docs/reference/frontend-api){{ target: '_blank' }}), you should choose the `unsafeMetadata` property.
+Unsafe metadata can be both read and set from the frontend and the backend. It's called "unsafe" metadata because it can be modified directly from the frontend, which means malicious users could potentially tamper with these values.
 
-One common use case for this attribute is to implement custom fields that will be attached to the `User` object.
+Unsafe metadata is the only metadata property that can be set during sign-up, so a common use case is to use it in [custom onboarding flows](/docs/guides/add-onboarding-flow). Custom data collected during the onboarding (sign-up) flow can be stored in the [`SignUp`](/docs/references/javascript/sign-up/sign-up) object. After a successful sign-up, `SignUp.unsafeMetadata` is copied to the `User` object as `User.unsafeMetadata`. From that point on, the unsafe metadata is accessible as a direct attribute of the `User` object.
 
-Clerk has named this type of metadata "unsafe" since it can be set and accessed by both the Frontend API and the Backend API. This provides a quick method to add custom attributes to a user. These attributes will be stored on the `User` object and will be available for access at all times.
+### Set unsafe metadata
 
-The "unsafe" custom attributes can be set upon sign-up when creating or updating a [`SignUp`](/docs/references/javascript/sign-up/sign-up) object. After a successful sign-up, these attributes will be copied to the `User` object. From that point on they can be accessed as a direct attribute of the `User` object.
+The following examples demonstrate how to update unsafe metadata for an existing user. Updating `unsafeMetadata` replaces the previous value; it doesn't perform a merge. To merge data, you can pass a combined object such as `{ …user.unsafeMetadata, …newData }` to the `unsafeMetadata` parameter.
 
-### Setting unsafe metadata
-
-Updating this value overrides the previous value; it does not merge. To perform a merge, you can pass something like `{ …user.unsafeMetadata, …newData }` to this parameter.
+The following examples demonstrate how to update `unsafeMetadata` using [the Backend API](#using-the-backend-api) or [the Frontend SDKs](#using-the-frontend-sdks).
 
 #### Using the Backend API
 
@@ -361,7 +361,6 @@ Updating this value overrides the previous value; it does not merge. To perform 
 
   <Tab>
     ```ruby {{ filename: 'private.rb' }}
-    # ruby json example with a private metadata and stripe id
     require 'clerk'
     require 'json'
 
@@ -370,7 +369,7 @@ Updating this value overrides the previous value; it does not merge. To perform 
     }
 
     clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-    clerk.users.updateMetadata("user_xyz", unsafe_metadata: unsafeMetadata)
+    clerk.users.updateMetadata("user_123", unsafe_metadata: unsafeMetadata)
     ```
   </Tab>
 
@@ -507,8 +506,10 @@ Updating this value overrides the previous value; it does not merge. To perform 
   </Tab>
 </Tabs>
 
-### Retrieving unsafe metadata
+### Retrieve unsafe metadata
 
-There are multiple ways to retrieve unsafe metadata. It is available in the `User` object returned by the [`useUser()`](/docs/references/react/use-user) hook. It can also be attached to a session token, which can be retrieved with the [`auth()`](/docs/references/nextjs/auth) helper in Next.js applications, or with the [`useAuth()`](/docs/references/react/use-auth) hook. If you need to retrieve unsafe metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token.
+There are multiple ways to retrieve unsafe metadata.
 
-To read about customization your session token and retrieving that data, check out our [session token customization guide](/docs/backend-requests/making/custom-session-token).
+On the frontend, it is available on the [`User`](/docs/references/javascript/user/user) object, which you can access by using the [`useUser()`](/docs/references/react/use-user) hook.
+
+On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. It can also be attached to a session token, and the `sessionClaims` of the session token can be retrieved on the [`Auth`](/docs/references/nextjs/auth-object) object. If you need to retrieve unsafe metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token. See the [guide on customizing your session token](/docs/backend-requests/making/custom-session-token).

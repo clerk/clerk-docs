@@ -1,6 +1,6 @@
 ---
 title: '`getAuth()`'
-description: The getAuth() helper retrieves the authentication state allowing you to protect your API routes or gather relevant data.
+description: The getAuth() helper retrieves authentication state from the request object.
 ---
 
 The `getAuth()` helper retrieves authentication state from the request object.
@@ -29,7 +29,9 @@ The `getAuth()` helper retrieves authentication state from the request object.
 
 ### Server data loading
 
-In the following example, the `userId` is passed to the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method to get the user's full `User` object. For information on how to use the Backend SDK, see the [Backend SDK documentation](/docs/references/backend/overview){{ target: '_blank' }}. If no `userId` can be found the user is redirected to the `/sign-in` page.
+The following example demonstrates how to use `getAuth()` to protect a profile page route and load user data.
+
+The `userId` is passed to the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method to authenticate the user. If no `userId` is found, the user is redirected to the `/sign-in` page.
 
 ```tsx {{ filename: 'app/routes/profile.tsx' }}
 import { redirect } from 'react-router'
@@ -67,7 +69,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
 
 ### Server action
 
-The example is similar to the server data loading one, except that the data is now only requested once the form inside the page is submitted through a server action.
+Unlike the previous example that loads data when the page loads, the following example uses `getAuth()` to only fetch user data after submitting the form. The helper runs on form submission, authenticates the user, and processes the form data.
 
 ```tsx {{ filename: 'app/routes/profile-form.tsx' }}
 import { redirect, Form } from 'react-router'
@@ -83,10 +85,11 @@ export async function action(args: Route.ActionArgs) {
   }
 
   const formData = await args.request.formData()
-  const name = await formData.get('name')
-  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
-    userId,
-  )
+  const name = formData.get('name')?.toString()
+
+  const user = await createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }).users.getUser(userId)
 
   return {
     name,
@@ -98,11 +101,13 @@ export default function ProfileForm({ actionData }: Route.ComponentProps) {
   return (
     <div>
       <h1>Profile Data</h1>
+
       <Form method="post">
         <label htmlFor="name">Name</label>
         <input type="text" name="name" id="name" />
         <button type="submit">Submit</button>
       </Form>
+
       {actionData ? (
         <pre>
           <code>{JSON.stringify(actionData, null, 2)}</code>

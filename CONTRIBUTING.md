@@ -575,7 +575,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 
 - Install `@clerk/nextjs`
 - Set up your environment keys to test your app locally
-- Add `<ClerkProvider />` to your application
+- Add `<ClerkProvider>` to your application
 - Use Clerk middleware to implement route-specific authentication
 - Create a header with Clerk components for users to sign in and out
 

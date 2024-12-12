@@ -439,18 +439,18 @@ console.log('ignored')
 
 ### `<Steps />`
 
-The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h3` headings.
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h2` and `h3` headings.
 
 ```mdx
 <Steps>
 
-### Step 1
+## Step 1
 
 Do these actions to complete Step 1.
 
-### Another step
+## Another step
 
-#### A heading inside a step
+### A heading inside a step
 
 Do these actions to complete Step 2.
 

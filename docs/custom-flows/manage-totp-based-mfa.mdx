@@ -36,7 +36,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
       <Tabs items={["Manage MFA page", "Add TOTP page"]}>
         <Tab>
-          ```tsx {{ filename: '/app/account/manage-mfa/page.tsx', collapsible: true }}
+          ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
           'use client'
 
           import * as React from 'react'
@@ -158,7 +158,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
         </Tab>
 
         <Tab>
-          ```tsx {{ filename: '/app/account/manage-mfa/add/page.tsx', collapsible: true }}
+          ```tsx {{ filename: 'app/account/manage-mfa/add/page.tsx', collapsible: true }}
           'use client'
 
           import { useUser } from '@clerk/nextjs'
@@ -305,6 +305,54 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           ```
         </Tab>
       </Tabs>
+
+      #### Force MFA (optional)
+
+      While Clerk does not natively enforce MFA for all users, you can implement this functionality by using `clerkMiddleware()` to check whether a user has MFA enabled.
+
+      The following example demonstrates how to force MFA for all users. It uses `clerkMiddleware()` to intercept all requests and check whether a user has MFA enabled. If the user does not have MFA enabled, `clerkMiddleware()` redirects them to the `/mfa` page where they can set up MFA.
+
+      ```tsx {{ filename: 'middleware.ts', collapsible: true }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+      import { NextResponse } from 'next/server'
+
+      const isMFARoute = createRouteMatcher(['/account/manage-mfa/add(.*)'])
+      const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+
+      export default clerkMiddleware(async (auth, req) => {
+        const { userId } = await auth()
+
+        // Redirect to homepage if the user is signed in and on the sign-in page
+        if (userId !== null && isSignInRoute(req) && !isMFARoute(req)) {
+          return NextResponse.redirect(new URL('/', req.url))
+        }
+
+        // Check if the user is signed in and not on the MFA page
+        if (userId !== null && !isMFARoute(req)) {
+          const res = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+            headers: {
+              Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+            },
+          })
+
+          const userData = await res.json()
+
+          // Redirect to MFA setup page if MFA is not enabled
+          if (userData.two_factor_enabled === false) {
+            return NextResponse.redirect(new URL('/account/manage-mfa/add', req.url))
+          }
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
     </Tab>
 
     <Tab>

@@ -397,7 +397,7 @@ Component references should be wrapped in `< />` if they are self closing. Other
 
 The last case is incorrect because the `<SignIn />` component will never wrap children, and therefore, should have a self-closing tag.
 
-> Use the `<ClerkProvider />` component.
+> Use the `<ClerkProvider>` component.
 
 The last case is incorrect because the `<ClerkProvider>` component will always wrap children and will never be self-closing.
 

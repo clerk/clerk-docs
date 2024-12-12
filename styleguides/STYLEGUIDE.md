@@ -278,13 +278,13 @@ For many years it was common to write with "he/him/his" pronouns in English tech
 
 #### Do
 
-> In your Clerk Dashboard, go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings** tab.
+> In the Clerk Dashboard, go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings** tab.
 
 > In your browser, open [`http://localhost:3000/`](http://localhost:3000/).
 
 #### Don't
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to `User & Authentication > Social Connections` and open the "Settings tab."
+> In the [Clerk Dashboard](https://dashboard.clerk.com/), go to `User & Authentication > Social Connections` and open the "Settings tab."
 
 > In your browser, open [`http://localhost:3000/`](http://localhost:3000/).
 
@@ -294,11 +294,11 @@ Use carets to nest operations of the same type like menu navigation.
 
 #### Do
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings tab.**
+> In the [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication > [Social Connections](https://dashboard.clerk.com/last-active?path=user-authentication/social-connections)** and open the **Settings tab.**
 
 #### Don't
 
-> In your [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication**, click on **Social Connections**, and open the **Settings tab.**
+> In the [Clerk Dashboard](https://dashboard.clerk.com/), go to **User & Authentication**, click on **Social Connections**, and open the **Settings tab.**
 
 ### 4.3 Write compliant JSON: no single quotes, no comments
 
@@ -365,13 +365,13 @@ When presenting things in a series of tabs, ensure that similar things are group
 
 #### Do
 
-![App Router and Pages Router exist as two tabs, side by side.](/.github/media/uncrowded-tabs.png)
+![App Router and Pages Router exist as two tabs, side by side](/.github/media/uncrowded-tabs.png)
 
 Next.js is a platform with two different implementations grouped underneath it.
 
 #### Don't
 
-![App Router and Pages Router are sitting alongside other very different methods of retrieving data.](/.github/media/crowded-tabs.png)
+![App Router and Pages Router are sitting alongside other very different methods of retrieving data](/.github/media/crowded-tabs.png)
 
 Next.js's two implementations are given equal weight to the other members of the tab bar. Someone unfamiliar with Next.js may become confused, and the ever growing tab bar is harder to navigate at smaller sizes.
 
@@ -437,11 +437,11 @@ Be sure to use the correct term with components vs functions.
 
 ### 4.10 Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
-When telling learners to perform an operation in the Clerk Dashboard, begin with "In your Clerk Dashboard". Then, end with a link to the page you are directing them to with this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
 
 #### Do
 
-> In your Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)**.
+> In the Clerk Dashboard, navigate to **[User & Authentication](https://dashboard.clerk.com/last-active?path=user-authentication)** page.
 
 > To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
 

@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. Check out the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
 
 ## Written in MDX
 
@@ -396,8 +396,8 @@ interface CodeBlockProps {
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
 
-- `{{pub_key}}` – Publishable key
-- `{{secret}}` – Secret key
+- `{{pub_key}}` – Publishable Key
+- `{{secret}}` – Secret Key
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx
@@ -407,7 +407,7 @@ CLERK_SECRET_KEY={{secret}}
 ```
 ````
 
-The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's Secret Key.
 
 https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
 

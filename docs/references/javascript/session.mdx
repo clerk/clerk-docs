@@ -1,5 +1,5 @@
 ---
-title: '`Session`'
+title: Session
 description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
 ---
 
@@ -14,7 +14,7 @@ In certain scenarios, a session might be replaced by another one. This is often 
 All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
 
 > [!NOTE]
-> For more details regarding the different session states, see our documentation on [session management](/docs/authentication/configuration/session-options).
+> For more information regarding the different session states, see the [guide on session management](/docs/authentication/configuration/session-options).
 
 ## Properties
 
@@ -93,6 +93,13 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `string | null`
 
   The last active organization identifier
+
+  ---
+
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
 
   ---
 
@@ -182,7 +189,7 @@ function getToken(options?: GetTokenOptions): Promise<string | null>
 ```js {{ filename: 'main.js', mark: [10, 11] }}
 import { Clerk } from '@clerk/clerk-js'
 
-// Initialize Clerk with your Clerk publishable key
+// Initialize Clerk with your Clerk Publishable Key
 const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 const clerk = new Clerk(pubKey)
@@ -238,6 +245,141 @@ type CheckAuthorizationParams =
   - `string`
 
   Accepts [permission](/docs/organizations/roles-permissions#permissions) key
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](/docs/references/nextjs/auth-object#reverification-config)</code>
+
+  The reverification configuration to check for.
 </Properties>
+
+### `startVerification()`
+
+Initiates the reverification flow. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function startVerification(params: SessionVerifyCreateParams): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyCreateParams`
+
+```typescript
+type SessionVerifyCreateParams = {
+  status: 'pending' | 'verified' | 'failed'
+}
+```
+
+### `prepareFirstFactorVerification()`
+
+Initiates the first factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareFirstFactorVerification(
+  params: SessionVerifyPrepareFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareFirstFactorParams`
+
+```ts
+type SessionVerifyPrepareFirstFactorParams = EmailCodeConfig | PhoneCodeConfig
+
+type EmailCodeConfig = {
+  strategy: 'email_code'
+  primary?: boolean | undefined
+  emailAddressId: string
+}
+
+type PhoneCodeConfig = {
+  strategy: 'phone_code'
+  phoneNumberId: string
+  primary?: boolean
+  default?: boolean
+}
+```
+
+### `attemptFirstFactorVerification()`
+
+Attempts to complete the first factor verification process. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptFirstFactorVerification(
+  params: SessionVerifyAttemptFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptFirstFactorParams`
+
+```ts
+type SessionVerifyAttemptFirstFactorParams = EmailCodeAttempt | PhoneCodeAttempt | PasswordAttempt
+
+type EmailCodeAttempt = {
+  strategy: 'email_code'
+  code: string
+}
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type PasswordAttempt = {
+  strategy: 'password'
+  password: string
+}
+```
+
+### `prepareSecondFactorVerification()`
+
+Initiates the second factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareSecondFactorVerification(
+  params: SessionVerifyPrepareSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareSecondFactorParams`
+
+```ts
+type SessionVerifyPrepareSecondFactorParams = PhoneCodeSecondFactorConfig
+
+type PhoneCodeSecondFactorConfig = {
+  strategy: 'phone_code'
+  phoneNumberId?: string
+}
+```
+
+### `attemptSecondFactorVerification()`
+
+Attempts to complete the second factor verification process. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptSecondFactorVerification(
+  params: SessionVerifyAttemptSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptSecondFactorParams`
+
+```ts
+type SessionVerifyAttemptSecondFactorParams = PhoneCodeAttempt | TOTPAttempt | BackupCodeAttempt
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type TOTPAttempt = {
+  strategy: 'totp'
+  code: string
+}
+
+type BackupCodeAttempt = {
+  strategy: 'backup_code'
+  code: string
+}
+```
 
 [client-ref]: /docs/references/javascript/client

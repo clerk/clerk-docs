@@ -1,11 +1,11 @@
 ---
-title: '`useOrganization()`'
+title: useOrganization()
 description: Clerk's useOrganization() composable retrieves attributes of the currently active organization.
 ---
 
 The `useOrganization()` composable is used to retrieve attributes of the currently active organization.
 
-## `useOrganization()` returns
+## Returns
 
 <Properties>
   - `isLoaded`
@@ -34,12 +34,15 @@ The following example shows how to use the `useOrganization()` composable to acc
 
 ```vue {{ filename: 'home.vue' }}
 <script setup>
-import { useOrganization } from '@clerk/vue'
+import { OrganizationSwitcher, useOrganization } from '@clerk/vue'
 
 const { organization, isLoaded } = useOrganization()
 </script>
 
 <template>
+  <div v-if="!organization">
+    <OrganizationSwitcher />
+  </div>
   <div v-if="isLoaded">
     <p>This current organization is {{ organization.name }}</p>
   </div>
@@ -59,13 +62,13 @@ You can implement this pattern to any Clerk function that returns a [`ClerkPagin
 ```vue {{ filename: 'member-list.vue' }}
 <script setup>
 import { ref, watchEffect } from 'vue'
-import { useOrganization } from '@clerk/vue'
+import { OrganizationSwitcher, useOrganization } from '@clerk/vue'
 
 const memberships = ref([])
 const currentPage = ref(1)
-const { organization, isLoading } = useOrganization()
+const { organization, isLoaded } = useOrganization()
 
-const pageSize = 10
+const pageSize = 5
 
 async function fetchMemberships() {
   if (!organization.value) {
@@ -74,7 +77,7 @@ async function fetchMemberships() {
 
   const { data } = await organization.value.getMemberships({
     initialPage: currentPage.value,
-    pageSize: 5,
+    pageSize: pageSize,
   })
   memberships.value = data
 }
@@ -92,7 +95,10 @@ const fetchNext = () => currentPage.value++
 </script>
 
 <template>
-  <div v-if="isLoading">
+  <div v-if="!organization">
+    <OrganizationSwitcher />
+  </div>
+  <div v-else-if="isLoaded">
     <h2>Organization members</h2>
     <ul>
       <li v-for="membership in memberships" :key="membership.id">
@@ -103,7 +109,7 @@ const fetchNext = () => currentPage.value++
     </ul>
     <div>
       <button :disabled="currentPage === 1" @click="fetchPrevious">Previous</button>
-      <button @click="fetchNext">Next</button>
+      <button :disabled="memberships.length < pageSize" @click="fetchNext">Next</button>
     </div>
   </div>
   <div v-else>

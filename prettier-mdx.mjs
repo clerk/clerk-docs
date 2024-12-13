@@ -192,8 +192,8 @@ function remarkAddCalloutMarkers() {
     visit(tree, 'blockquote', (node) => {
       if (node.children[0]?.type === 'paragraph' && node.children[0].children[0]?.type === 'text') {
         node.children[0].children[0].value = node.children[0].children[0].value.replace(
-          /^\[\s*!\s*([A-Z]+)\s*\]/,
-          '__CALLOUT_MARKER__!$1]',
+          /^\[\s*!\s*([A-Z]+)(\s+[0-9a-z-]+)?\s*\]/,
+          (_, type, id) => `__CALLOUT_MARKER__!${type}${id ? ` ${id.trim()}` : ''}]`,
         )
       }
     })

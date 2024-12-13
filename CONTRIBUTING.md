@@ -468,7 +468,7 @@ A callout draws attention to something learners should slow down and read.
 > [!NOTE]
 > Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed!
 
-Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. Five types of callouts are available:
+Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. Six types of callouts are available:
 
 ```mdx
 > [!NOTE]
@@ -485,11 +485,34 @@ Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/
 
 > [!CAUTION]
 > Advises about risks or negative outcomes of certain actions.
+
+> [!QUIZ]
+> An opportunity for users to check their understanding.
 ```
 
 The image below shows what this example looks like once rendered.
 
-![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION](/.github/media/callouts.png)
+![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](/.github/media/callouts.png)
+
+You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g. `/docs/example#useful-info`:
+
+```mdx
+> [!NOTE useful-info]
+> Useful information that users should know, even when skimming content.
+```
+
+You can create a collapsible section within a callout by using a thematic break (`---`). Content following the break is hidden by default and can be toggled by the user:
+
+```mdx
+> [!QUIZ]
+> Why does handshake do a redirect? Why can’t it make a fetch request to FAPI and get a new token back that way? Not needing to redirect would be a better user experience.
+>
+> ---
+>
+> Occaecati esse ut iure in quam praesentium nesciunt nemo. Repellat aperiam eaque quia. Aperiam voluptatem consequuntur numquam tenetur. Quibusdam repellat modi qui dolor ducimus ut neque adipisci dolorem. Voluptates dolores nisi est fuga.
+```
+
+![An example of a collapsible section inside a quiz callout](/.github/media/callout-details.png)
 
 ### `<CodeBlockTabs />`
 

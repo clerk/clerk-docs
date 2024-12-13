@@ -125,15 +125,63 @@ function remarkFormatCodeBlocks(prettierOptions) {
         let parser = inferParser(prettierOptions, { language: node.lang })
 
         if (parser) {
+          let code = node.value
+          let hasMarks = /^[-+>]( |$)/m.test(code) && !['md', 'markdown', 'mdx'].includes(node.lang)
+          let del = []
+          let ins = []
+          let mark = []
+
+          if (hasMarks) {
+            let lines = code.split('\n')
+            let newLines = []
+
+            for (let l = 0; l < lines.length; l++) {
+              let line = lines[l]
+
+              if (/^-( |$)/.test(line)) {
+                del.push(l)
+              } else if (/^\+( |$)/.test(line)) {
+                ins.push(l)
+              } else if (/^>( |$)/.test(line)) {
+                mark.push(l)
+              }
+
+              newLines.push(line.replace(/^[-+> ]( |$)/, ''))
+            }
+
+            code = newLines.join('\n')
+          }
+
           promises.push(
             prettier
-              .format(node.value, {
+              .format(code, {
                 ...prettierOptions,
                 parser,
                 printWidth: 100,
               })
               .then((formatted) => {
                 let newValue = formatted.trimEnd()
+
+                if (hasMarks) {
+                  let lines = newValue.split('\n')
+                  let newLines = []
+                  for (let l = 0; l < lines.length; l++) {
+                    let line = lines[l]
+                    if (del.includes(l)) {
+                      newLines.push(`- ${line}`)
+                    } else if (ins.includes(l)) {
+                      newLines.push(`+ ${line}`)
+                    } else if (mark.includes(l)) {
+                      newLines.push(`> ${line}`)
+                    } else if (line.trim()) {
+                      newLines.push(`  ${line}`)
+                    } else {
+                      newLines.push('')
+                    }
+                  }
+                  newValue = newLines.join('\n')
+                }
+
                 /**
                  * If the formatter added a semi-colon to the start then remove it.
                  * Prevents `<Example />` from becoming `;<Example />`
@@ -192,8 +240,8 @@ function remarkAddCalloutMarkers() {
     visit(tree, 'blockquote', (node) => {
       if (node.children[0]?.type === 'paragraph' && node.children[0].children[0]?.type === 'text') {
         node.children[0].children[0].value = node.children[0].children[0].value.replace(
-          /^\[\s*!\s*([A-Z]+)\s*\]/,
-          '__CALLOUT_MARKER__!$1]',
+          /^\[\s*!\s*([A-Z]+)(\s+[0-9a-z-]+)?\s*\]/,
+          (_, type, id) => `__CALLOUT_MARKER__!${type}${id ? ` ${id.trim()}` : ''}]`,
         )
       }
     })

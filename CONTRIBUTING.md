@@ -468,7 +468,7 @@ A callout draws attention to something learners should slow down and read.
 > [!NOTE]
 > Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed!
 
-Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. Six types of callouts are available:
+Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. The following types of callouts are available:
 
 ```mdx
 > [!NOTE]

@@ -38,7 +38,7 @@ These are the guidelines we use to write our SSO guides.
 - The `Test your OAuth` section should be included in the `<Steps />` and formatted as follows:
 
   ```mdx
-  ### Test your OAuth
+  ## Test your OAuth
 
   The simplest way to test your OAuth is to visit your Clerk app's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk apps out-of-the-box.
 

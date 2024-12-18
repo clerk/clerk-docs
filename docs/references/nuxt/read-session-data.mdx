@@ -3,65 +3,68 @@ title: Read session and user data in your Nuxt app with Clerk
 description: Learn how to use Clerk's composables and helpers to access the active session and user data in your Nuxt application.
 ---
 
-Clerk provides helpers that you can use to access the active session and user data in your Nuxt application.
-
-## Server-side
-
-The following example uses the `auth` event context to validate an authenticated user and the [`clerkClient`](/docs/references/backend/overview) helper to get the full [`User`](/docs/references/backend/types/backend-user) object.
-
-```ts {{ filename: 'server/api/me.ts' }}
-import { clerkClient } from '@clerk/nuxt/server'
-
-export default eventHandler(async (event) => {
-  const { userId } = event.context.auth
-
-  if (!userId) {
-    throw createError({
-      statusCode: 401,
-      statusMessage: 'Unauthorized',
-    })
-  }
-
-  const user = await clerkClient(event).users.get(userId)
-
-  return user
-})
-```
+Clerk provides [composables and helpers](/docs/references/nuxt/overview#client-side-helpers) to access the session and user data in your Nuxt application.
 
 ## Client-side
 
-### `useAuth()`
+### How to use the `useAuth()` composable
 
-The `useAuth()` composable provides information about the current auth state, as well as helper methods to manage the current active session. The composable returns `userId`, which can be used to protect your pages.
+The `useAuth()` composable provides access to the current authentication state and methods to manage the active session. You can use this composable to protect [routes](/docs/references/nuxt/clerk-middleware) or [pages](/docs/references/nuxt/protecting-pages).
 
-```vue {{ filename: 'pages/example.vue' }}
+In the following example, the `useAuth()` composable is used to access the current authentication state. The `isLoaded` property checks if Clerk has finished initializing, and the `userId` property returns the ID of the currently signed in user, or `null` if no user is signed in.
+
+```vue {{ filename: 'pages/protected-page.vue' }}
 <script setup>
-const { userId } = useAuth()
+const { userId, isLoaded } = useAuth()
 </script>
 
 <template>
   <div v-if="!isLoaded">Loading...</div>
-  <div v-else-if="!userId">
-    <!-- Do something if the user is not signed in -->
-  </div>
+  <div v-else-if="!userId">Sign in to access this page</div>
   <div v-else>Hello, {{ userId }}!</div>
 </template>
 ```
 
-### `useUser()`
+## How to use the `useUser()` composable
 
-The `useUser()` composable provides the current user's [`User`](/docs/references/javascript/user/user) object, which holds all of the information for a user of your application and provides a set of methods to manage their account.
+The `useUser()` composable provides access to the current user's [`User`](/docs/references/javascript/user/user) object, which holds all of the data for a user of your application and provides a set of methods to manage their account.
 
-```vue {{ filename: 'pages/example.vue' }}
+In the following example, the `useUser()` composable is used to access the current user's data. The `isLoaded` property checks if Clerk has finished initializing, and the `isSignedIn` property checks if a user is currently signed in. If the user is signed in, display the user's first name from the `user` property.
+
+```vue {{ filename: 'pages/protected-page.vue' }}
 <script setup>
 const { isLoaded, isSignedIn, user } = useUser()
 </script>
 
 <template>
   <div v-if="!isLoaded">Loading...</div>
-  <div v-else-if="!isSignedIn">
-    <!-- Do something if the user is not signed in -->
-  </div>
+  <div v-else-if="!isSignedIn">Sign in to access this page</div>
   <div v-else>Hello, {{ user.firstName }}!</div>
 </template>
+```
+
+## Server-Side
+
+### How to use the `clerkClient()` helper
+
+In the following example, the `auth` object is used to get the `userId` to check if the user is signed in. The [`clerkClient()`](/docs/references/backend/overview#clerkclient) helper retrieves the full [`User`](/docs/references/javascript/user/user) object.
+
+```ts {{ filename: 'server/api/auth/index.ts' }}
+import { clerkClient } from '@clerk/nuxt/server'
+
+export default defineEventHandler(async (event) => {
+  const { userId } = event.context.auth
+
+  // Check if the user is signed in
+  if (!userId) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized: No user ID provided',
+    })
+  }
+
+  // Retrieve the user data
+  const user = await clerkClient(event).users.getUser(userId)
+  return user
+})
 ```

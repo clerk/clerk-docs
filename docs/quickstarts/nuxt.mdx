@@ -27,14 +27,15 @@ description: Add authentication and user management to your Nuxt app with Clerk.
 >
   - Install `@clerk/nuxt`
   - Set your Clerk API keys
-  - Add module
-  - Create a header with Clerk components for users to sign in and out
+  - Configure `nuxt.config.ts`
+  - Create a header with Clerk components
+  - Protect your API routes
 </TutorialHero>
 
 <Steps>
-  ### Install `@clerk/nuxt`
+  ## Install `@clerk/nuxt`
 
-  Clerk's Nuxt SDK gives you access to prebuilt components, Vue composables, and helpers to make user authentication easier.
+  Clerk's [Nuxt SDK](/docs/references/nuxt/overview) gives you access to prebuilt components, Vue composables, and helpers to make user authentication easier.
 
   Run the following command to install the SDK:
 
@@ -52,10 +53,10 @@ description: Add authentication and user management to your Nuxt app with Clerk.
     ```
   </CodeBlockTabs>
 
-  ### Set your Clerk API keys
+  ## Set your Clerk API keys
 
   <SignedIn>
-    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API Keys**](https://dashboard.clerk.com/last-active?path=api-keys) page of your Clerk Dashboard.
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in your Clerk Dashboard.
   </SignedIn>
 
   <SignedOut>
@@ -71,9 +72,9 @@ description: Add authentication and user management to your Nuxt app with Clerk.
   NUXT_CLERK_SECRET_KEY={{secret}}
   ```
 
-  ### Update `nuxt.config.ts`
+  ## Configure `nuxt.config.ts`
 
-  To enable Clerk in your Nuxt app, add `@clerk/nuxt` to your modules array in `nuxt.config.ts`.
+  To enable Clerk in your Nuxt app, add `@clerk/nuxt` to your modules array in `nuxt.config.ts`. This automatically configures Clerk's middleware and plugins, and imports Clerk's components.
 
   ```ts {{ filename: 'nuxt.config.ts', mark: [2] }}
   export default defineNuxtConfig({
@@ -81,20 +82,24 @@ description: Add authentication and user management to your Nuxt app with Clerk.
   })
   ```
 
-  ### Protect your pages
+  ## Create a header with Clerk components
 
-  #### Client-side
+  [Nuxt 3](https://nuxt.com/docs/migration/auto-imports) automatically imports and makes available all components in the `components/` directory globally, without requiring explicit imports. See the [Nuxt docs](https://nuxt.com/docs/guide/concepts/auto-imports) for details.
 
-  To protect your pages on the client-side, you can use Clerk's [prebuilt control components](/docs/components/overview#what-are-control-components) that control the visibility of content based on the user's authentication state.
+  You can control which content signed-in and signed-out users can see with Clerk's [prebuilt control components](/docs/components/overview#what-are-control-components).
 
-  The following example uses the following components:
+  The following example creates a header using the following components:
 
   - [`<SignedIn>`](/docs/components/control/signed-in): Children of this component can only be seen while **signed in**.
   - [`<SignedOut>`](/docs/components/control/signed-out): Children of this component can only be seen while **signed out**.
   - [`<UserButton />`](/docs/components/user/user-button): Shows the signed-in user's avatar. Selecting it opens a dropdown menu with account management options.
   - [`<SignInButton />`](/docs/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page or displays the sign-in modal.
 
-  ```vue {{ filename: 'app.vue' }}
+  ```vue {{ filename: 'app.vue', mark: [2, [6, 13]] }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
   <template>
     <header>
       <SignedOut>
@@ -104,18 +109,23 @@ description: Add authentication and user management to your Nuxt app with Clerk.
         <UserButton />
       </SignedIn>
     </header>
+
     <main>
       <NuxtPage />
     </main>
   </template>
   ```
 
-  #### Server-side
+  ## Protect your API routes
 
-  To protect your API routes, use the `event.context.auth` object in your event handlers. This object exposes the `Auth` object containing the `userId`, allowing you to determine if the user is authenticated.
+  API routes in Nuxt 3 are handled by [`eventHandler`](https://nuxt.com/docs/guide/directory-structure/server) functions in the `server/api` directory. Files in this directory automatically become API endpoints matching their path (e.g., `server/api/user.ts` becomes `/api/user`).
 
-  ```ts {{ filename: 'server/api/user.ts' }}
-  export default eventHandler((event) => {
+  To protect your API routes, use the `event.context.auth` object in your event handlers. This object is automatically injected by Clerk and contains authentication information about the current request.
+
+  The following example protects an API route by checking if a user is authenticated. If the user isn't authenticated, the route returns a 401 Unauthorized error.
+
+  ```ts {{ filename: 'server/api/auth/index.ts' }}
+  export default defineEventHandler((event) => {
     const { userId } = event.context.auth
 
     if (!userId) {
@@ -129,7 +139,7 @@ description: Add authentication and user management to your Nuxt app with Clerk.
   })
   ```
 
-  ### Create your first user
+  ## Create your first user
 
   Run your project with the following command:
 

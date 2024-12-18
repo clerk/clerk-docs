@@ -1,0 +1,105 @@
+---
+title: Build a custom flow for managing external accounts
+description: Learn how to use the Clerk API to build a custom flow for adding and managing OAuth accounts
+---
+
+```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
+'use client'
+
+import { UserButton, useUser } from '@clerk/nextjs'
+import { OAuthStrategy } from '@clerk/types'
+import { useRouter } from 'next/navigation'
+
+const capitalizeProvider = (provider: string) => {
+  return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
+}
+
+export default function AddAccount() {
+  const { isLoaded, user } = useUser()
+  const router = useRouter()
+
+  // list the options that the user can click on when adding a new external account
+  const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
+
+  // handle adding the new external account
+  const addOAuth = async (strategy: OAuthStrategy) => {
+    await user
+      ?.createExternalAccount({
+        strategy,
+        redirectUrl: '/external-accounts',
+      })
+      .then((res) => {
+        if (res.verification?.externalVerificationRedirectURL) {
+          router.push(res.verification.externalVerificationRedirectURL.href)
+        }
+      })
+      .catch((err) => {
+        console.log('ERROR', err)
+      })
+      .finally(() => {
+        console.log('redirected user to oauth provider')
+      })
+  }
+
+  // show a loading message until Clerk loads
+  if (!isLoaded) return <p>Loading...</p>
+
+  // find the external accounts from the options array that the user has not yet added to their account
+  // this prevents showing an 'add' button for existing external account types
+  const unconnectedOptions = options.filter(
+    (option) =>
+      !user?.externalAccounts.some((account) => account.provider === option.replace('oauth_', '')),
+  )
+
+  return (
+    <>
+      <div>
+        <p>Connected accounts</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Scopes</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {user?.externalAccounts.map((account) => {
+              return (
+                <tr key={account.id}>
+                  <td>{capitalizeProvider(account.provider)}</td>
+                  <td>{account.approvedScopes}</td>
+                  <td>
+                    {account.verification?.status &&
+                      capitalizeProvider(account.verification?.status)}
+                  </td>
+                  <td>
+                    <button onClick={() => account.destroy()}>Remove</button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {unconnectedOptions.length > 0 && (
+        <div>
+          <p>Add a new external account</p>
+          <ul>
+            {unconnectedOptions.map((strategy) => {
+              return (
+                <li key={strategy}>
+                  <button onClick={() => addOAuth(strategy)}>
+                    Add {capitalizeProvider(strategy.split('_')[1])}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+      <UserButton />
+    </>
+  )
+}
+```

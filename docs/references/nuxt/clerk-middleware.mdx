@@ -62,11 +62,9 @@ export default clerkMiddleware((event) => {
 
 ### Authorization-based protection
 
-To protect routes based on user authorization status, you can check if the user has the required organization roles or permissions. Organizations have two default roles: **Admin** (`org:admin`) and **Member** (`org:member`). You can also create custom roles and permissions. See the [dedicated guide](/docs/organizations/roles-permissions#permissions).
+To protect routes based on user authorization status, you can use the `has()` helper to check if the user has the required [organization roles or custom permissions](/docs/organizations/roles-permissions). It is available on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
 #### Protecting routes using custom permissions
-
-To protect a route based on a custom permission, you can use the `has()` helper to check if a user _has_ an organization role or custom permission. It is available on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
 In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks if the user has the required custom permission. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
@@ -95,24 +93,25 @@ export default clerkMiddleware((event) => {
 
 #### Protecting routes using default roles
 
-To protect a route based on a default role, you can check the `orgRole` property on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
-
 > [!WARNING]
 > It's best practice to use permission-based authorization over role-based authorization, as it reduces complexity and increases security. Usually, complex role checks can be refactored with a single permission check.
 
-In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks the `orgRole` property to ensure the user has the required admin role. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
+In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks if the user has the required admin role. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
 import { clerkMiddleware } from '@clerk/nuxt/server'
 
 export default clerkMiddleware((event) => {
-  const { orgRole } = event.context.auth
+  const { has } = event.context.auth
   const isAdminRoute = event.path.startsWith('/api/admin')
+  const isAdmin = has({
+    role: 'org:admin',
+  })
 
   // Check if the user is trying to access a protected route
   if (isAdminRoute) {
     // Check if the user has the required admin role
-    if (orgRole !== 'org:admin') {
+    if (!isAdmin) {
       throw createError({
         statusCode: 403,
         statusMessage: 'Unauthorized: Admin access required',

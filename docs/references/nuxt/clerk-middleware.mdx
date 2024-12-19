@@ -1,11 +1,12 @@
 ---
-title: Protecting API routes with clerkMiddleware() | Nuxt
-description: Learn how to protect your Nuxt API routes using Clerk's middleware.
+title: clerkMiddleware() | Nuxt
+description: The clerkMiddleware() helper allows you to protect your Nuxt application using middleware.
 ---
 
-The `clerkMiddleware()` helper integrates Clerk authentication into your Nuxt application through middleware to protect API routes by validating authentication server-side. You can protect API routes based on user authentication status or authorization status.
+The `clerkMiddleware()` helper allows you to protect your Nuxt application **on the server-side**. It can be used to validate a user's authentication status or authorization status.
 
-To learn how to protect pages, see the [dedicated guide](/docs/references/nuxt/protecting-pages).
+> [!NOTE]
+> To learn how to protect pages, see the [dedicated guide](/docs/references/nuxt/protect-pages).
 
 ## Configure `clerkMiddleware()`
 
@@ -13,7 +14,7 @@ By default, the Nuxt SDK **automatically** adds the `clerkMiddleware()` helper t
 
 To **manually** configure the middleware:
 
-1. In your `nuxt.config.ts` file, set `skipServerMiddleware: true` under the `clerk` property.
+1. In your `nuxt.config.ts` file, under the `clerk` property, set `skipServerMiddleware: true`.
 
    ```ts {{ filename: 'nuxt.config.ts', mark: [[3, 5]] }}
    export default defineNuxtConfig({
@@ -23,25 +24,25 @@ To **manually** configure the middleware:
      },
    })
    ```
-1. In your `server/middleware/` directory, create a file named `clerk.ts`:
+1. In your `server/middleware/` directory, create a file named `clerk.ts` with the following code:
 
    ```ts {{ filename: 'src/middleware/clerk.ts' }}
    import { clerkMiddleware } from '@clerk/nuxt/server'
    export default clerkMiddleware()
    ```
 
-## Protecting API routes with `clerkMiddleware()`
+## Protect API routes
 
 You can protect routes using either or both of the following:
 
-- [Authentication-based protection](#authentication-based-protection): Verify if the user is signed in
-- [Authorization-based protection](#authorization-based-protection): Verify if the user has the required organization roles or custom permissions
+- [Authentication-based protection](#authentication-based-protection): Verify if the user is signed in.
+- [Authorization-based protection](#authorization-based-protection): Verify if the user has the required organization roles or custom permissions.
 
 ### Authentication-based protection
 
-To protect routes based on user authentication status, you can check if the user is signed in by accessing the `userId` on the `auth` object.
+To protect routes based on user authentication status, you can check if the user is signed in by checking the `userId` on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
-In the following example, the `clerkMiddleware()` helper verifies if the user is accessing an authenticated route. If the user is not signed in, an error is thrown using Nuxt's [`createError`](https://nuxt.com/docs/api/utils/create-error) utility.
+In the following example, the `clerkMiddleware()` helper checks if the user is signed in and accessing a protected route. If they aren't signed in, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
 ```tsx {{ filename: 'server/middleware/clerk.ts' }}
 import { clerkMiddleware } from '@clerk/nuxt/server'
@@ -50,7 +51,6 @@ export default clerkMiddleware((event) => {
   const { userId } = event.context.auth
   const isAdminRoute = event.path.startsWith('/api/admin')
 
-  // Check if the user is trying to access a protected route without authentication
   if (!userId && isAdminRoute) {
     throw createError({
       statusCode: 401,
@@ -64,35 +64,11 @@ export default clerkMiddleware((event) => {
 
 To protect routes based on user authorization status, you can check if the user has the required organization roles or permissions. Organizations have two default roles: **Admin** (`org:admin`) and **Member** (`org:member`). You can also create custom roles and permissions. See the [dedicated guide](/docs/organizations/roles-permissions#permissions).
 
-#### Protecting routes using default roles
-
-In the following example, the `clerkMiddleware()` helper verifies if the user is accessing an admin route. If so, it checks the `userId` and `orgRole` properties to ensure the user is both signed in and has the required admin role. If either check fails, an error is thrown using Nuxt's [`createError`](https://nuxt.com/docs/api/utils/create-error) utility.
-
-```ts {{ filename: 'server/middleware/clerk.ts' }}
-import { clerkMiddleware } from '@clerk/nuxt/server'
-
-export default clerkMiddleware((event) => {
-  const { userId, orgRole } = event.context.auth
-  const isAdminRoute = event.path.startsWith('/api/admin')
-
-  // Check if the user is trying to access a protected route
-  if (isAdminRoute) {
-    // Check if the user is signed in and has the required admin role
-    if (!userId || orgRole !== 'org:admin') {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Forbidden: Admin access required',
-      })
-    }
-  }
-})
-```
-
 #### Protecting routes using custom permissions
 
-System permissions (e.g., `org:sys_domains:manage`) aren't included in session claims and can't be used with `auth.has()` on the server-side. To perform permission checks in middleware, **you must create and use custom permissions**. See the [dedicated guide](/docs/organizations/roles-permissions#permissions).
+To protect a route based on a custom permission, you can use the `has()` helper to check if a user _has_ an organization role or custom permission. It is available on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
-In the following example, the `clerkMiddleware()` helper verifies if the user is accessing an invoices route. If so, it checks if the user has the required custom permission. If not, an error is thrown using Nuxt's [`createError`](https://nuxt.com/docs/api/utils/create-error) utility.
+In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks if the user has the required custom permission. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
 ```ts {{ filename: 'server/middleware/clerk.ts' }}
 import { clerkMiddleware } from '@clerk/nuxt/server'
@@ -110,7 +86,36 @@ export default clerkMiddleware((event) => {
     if (!canCreateInvoices) {
       throw createError({
         statusCode: 403,
-        statusMessage: 'Forbidden: Missing invoice creation permission',
+        statusMessage: 'Unauthorized: Missing permission to create invoices',
+      })
+    }
+  }
+})
+```
+
+#### Protecting routes using default roles
+
+To protect a route based on a default role, you can check the `orgRole` property on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
+
+> [!WARNING]
+> It's best practice to use permission-based authorization over role-based authorization, as it reduces complexity and increases security. Usually, complex role checks can be refactored with a single permission check.
+
+In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks the `orgRole` property to ensure the user has the required admin role. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
+
+```ts {{ filename: 'server/middleware/clerk.ts' }}
+import { clerkMiddleware } from '@clerk/nuxt/server'
+
+export default clerkMiddleware((event) => {
+  const { orgRole } = event.context.auth
+  const isAdminRoute = event.path.startsWith('/api/admin')
+
+  // Check if the user is trying to access a protected route
+  if (isAdminRoute) {
+    // Check if the user has the required admin role
+    if (orgRole !== 'org:admin') {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Unauthorized: Admin access required',
       })
     }
   }

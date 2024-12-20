@@ -5,8 +5,6 @@ description: Provide your users with useful information about the errors being r
 
 Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/references/javascript/types/clerk-api-error) objects. These errors contain a `code`, `message`, `longMessage` and `meta` property. These properties can be used to provide your users with useful information about the errors being returned from sign-up and sign-in requests.
 
-This guide demonstrates how to handle Clerk-related errors when building custom flows.
-
 > [!TIP]
 > To see a list of all possible errors, refer to the [Errors](/docs/errors/overview) documentation.
 
@@ -18,7 +16,7 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
   <Tab>
     This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix.
 
-    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', mark: [[6, 7], 13, [21, 22], [45, 48], [79, 85]] }}
     'use client'
 
     import * as React from 'react'
@@ -39,7 +37,7 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
       const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        // clear any errors that may have occured during previous form submission
+        // Clear any errors that may have occurred during previous form submission
         setErrors(undefined)
 
         if (!isLoaded) {
@@ -48,21 +46,20 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
 
         // Start the sign-in process using the email and password provided
         try {
-          const completeSignIn = await signIn.create({
+          const signInAttempt = await signIn.create({
             identifier: email,
             password,
           })
 
-          // This is mainly for debugging while developing.
-          if (completeSignIn.status !== 'complete') {
-            console.log(JSON.stringify(completeSignIn, null, 2))
-          }
-
           // If sign-in process is complete, set the created session as active
           // and redirect the user
-          if (completeSignIn.status === 'complete') {
-            await setActive({ session: completeSignIn.createdSessionId })
+          if (signInAttempt.status === 'complete') {
+            await setActive({ session: signInAttempt.createdSessionId })
             router.push('/')
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(signInAttempt, null, 2))
           }
         } catch (err) {
           if (isClerkAPIResponseError(err)) setErrors(err.errors)
@@ -113,7 +110,7 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
 
   <Tab>
     <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html' }}
+      ```html {{ filename: 'index.html', mark: [22] }}
       <!doctype html>
       <html lang="en">
         <head>
@@ -124,23 +121,16 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
         <body>
           <div id="signed-in"></div>
 
-          <div id="sign-up">
-            <h2>Sign up</h2>
-            <form id="sign-up-form">
+          <div id="sign-in">
+            <h2>Sign in</h2>
+            <form id="sign-in-form">
               <label for="email">Enter email address</label>
-              <input type="email" name="email" id="sign-up-email" />
+              <input name="email" id="sign-in-email" />
               <label for="password">Enter password</label>
-              <input type="password" name="password" id="sign-up-password" />
+              <input name="password" id="sign-in-password" />
               <button type="submit">Continue</button>
             </form>
           </div>
-
-          <form id="verifying" hidden>
-            <h2>Verify your email</h2>
-            <label for="code">Enter your verification code</label>
-            <input id="code" name="code" />
-            <button type="submit" id="verify-button">Verify</button>
-          </form>
 
           <p id="error"></p>
 
@@ -149,7 +139,7 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
       </html>
       ```
 
-      ```js {{ filename: 'main.js' }}
+      ```js {{ filename: 'main.js', mark: [[43, 49]] }}
       import { Clerk } from '@clerk/clerk-js'
 
       const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -160,15 +150,15 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
       if (clerk.user) {
         // Mount user button component
         document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
+            <div id="user-button"></div>
+          `
 
         const userbuttonDiv = document.getElementById('user-button')
 
         clerk.mountUserButton(userbuttonDiv)
       } else {
-        // Handle the sign-up form
-        document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
+        // Handle the sign-in form
+        document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
           e.preventDefault()
 
           const formData = new FormData(e.target)
@@ -176,36 +166,23 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
           const password = formData.get('password')
 
           try {
-            // Start the sign-up process using the phone number method
-            await clerk.client.signUp.create({ emailAddress, password })
-            await clerk.client.signUp.prepareEmailAddressVerification()
-            // Hide sign-up form
-            document.getElementById('sign-up').setAttribute('hidden', '')
-            // Show verification form
-            document.getElementById('verifying').removeAttribute('hidden')
-          } catch (err) {
-            if (isClerkAPIResponseError(err)) {
-              const errors = err.errors
-              document.getElementById('error').textContent = errors[0].longMessage
-            }
-            console.error(JSON.stringify(err, null, 2))
-          }
-        })
-
-        // Handle the verification form
-        document.getElementById('verifying').addEventListener('submit', async (e) => {
-          const formData = new FormData(e.target)
-          const code = formData.get('code')
-
-          try {
-            // Verify the phone number
-            const verify = await clerk.client.signUp.attemptEmailAddressVerification({
-              code,
+            // Start the sign-in process
+            const signInAttempt = await clerk.client.signIn.create({
+              identifier: emailAddress,
+              password,
             })
 
-            // Now that the user is created, set the session to active.
-            await clerk.setActive({ session: verify.createdSessionId })
-          } catch (err) {
+            // If the sign-in is complete, set the user as active
+            if (signInAttempt.status === 'complete') {
+              await clerk.setActive({ session: signInAttempt.createdSessionId })
+
+              location.reload()
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(signInAttempt, null, 2))
+            }
+          } catch (error) {
             if (isClerkAPIResponseError(err)) {
               const errors = err.errors
               document.getElementById('error').textContent = errors[0].longMessage
@@ -223,7 +200,7 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
 
 ### User locked
 
-If you have [Account Lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/security/user-lock-guide#related-actions)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
+If you have [account lockout](/docs/security/user-lock-guide) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/security/user-lock-guide#related-actions)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
 
 ```json
 {

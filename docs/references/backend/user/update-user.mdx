@@ -77,10 +77,6 @@ function updateUser(userId: string, params: UpdateUserParams): Promise<User>
 
   ---
 
-  - be used when providing a `password`.
-
-  ---
-
   - `profileImageID?`
   - `string`
 
@@ -126,7 +122,7 @@ function updateUser(userId: string, params: UpdateUserParams): Promise<User>
   - `signOutOfOtherSessions?`
   - `boolean`
 
-  Set to `true` to sign out the user from all their active sessions once their password is updated. This parameter can only be used when providing a `password`.
+  Set to `true` to sign out the user from all their active sessions once their password is updated. Can only be used when providing the `password` parameter.
 
   ---
 
@@ -145,23 +141,23 @@ function updateUser(userId: string, params: UpdateUserParams): Promise<User>
   ---
 
   - `publicMetadata?`
-  - `Record<string, unknown>`
+  - [`UserPublicMetadata`](/docs/references/javascript/types/metadata#user-public-metadata)
 
-  Metadata saved on the user, that is visible to both your Frontend and Backend APIs.
+  Metadata that can be read from the Frontend API and [Backend API](/docs/reference/backend-api){{ target: '_blank' }} and can be set only from the Backend API. Updating this property will override the existing metadata. To merge metadata, use [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata).
 
   ---
 
   - `privateMetadata?`
-  - `Record<string, unknown>`
+  - [`UserPrivateMetadata`](/docs/references/javascript/types/metadata#user-private-metadata)
 
-  Metadata saved on the user that is only visible to your Backend API.
+  Metadata that can be read and set only from the [Backend API](/docs/reference/backend-api){{ target: '_blank' }}. Updating this property will override the existing metadata. To merge metadata, use [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata).
 
   ---
 
   - `unsafeMetadata?`
-  - `Record<string, unknown>`
+  - [`UserUnsafeMetadata`](/docs/references/javascript/types/metadata#user-unsafe-metadata)
 
-  Metadata saved on the user, that can be updated from both the Frontend and Backend APIs. **Note:** Since this data can be modified from the frontend, it is not guaranteed to be safe.
+  Metadata that can be read and set from the Frontend API. It's considered unsafe because it can be modified from the frontend.
 
   ---
 
@@ -186,10 +182,38 @@ function updateUser(userId: string, params: UpdateUserParams): Promise<User>
 
   ---
 
+  - `legalAcceptedAt?`
+  - `Date`
+
+  The date when the user accepted the legal documents. `null` if [**Require express consent to legal documents**](/docs/authentication/configuration/legal-compliance) is not enabled.
+
+  ---
+
+  - `skipLegalChecks?`
+  - `boolean`
+
+  When set to `true` all legal checks are skipped. It is not recommended to skip legal checks unless you are migrating a user to Clerk.
+
+  ---
+
   - `createdAt?`
   - `Date`
 
-  A custom date/time denoting when the user signed up to the application, specified in RFC3339 format<br /><br />For example: `2012-10-20T07:15:20.902Z`.
+  A custom date/time denoting when the user signed up to the application, specified in RFC3339 format. For example: `2012-10-20T07:15:20.902Z`.
+
+  ---
+
+  - `skipLegalChecks?`
+  - `boolean`
+
+  When set to `true` all legal checks are skipped. It is not recommended to skip legal checks unless you are migrating a user to Clerk.
+
+  ---
+
+  - `legalAcceptedAt?`
+  - `Date`
+
+  A custom date/time denoting when the user accepted legal requirements, specified in RFC3339 format. For example: `2012-10-20T07:15:20.902Z`.
 </Properties>
 
 ## Example
@@ -257,115 +281,11 @@ _User {
   ],
   samlAccounts: [],
   lastActiveAt: 1720205704451,
-  createOrganizationEnabled: true
+  createOrganizationEnabled: true,
+  legalAcceptedAt: null
 }
 */
 ```
-
-### Examples with frameworks
-
-<Tabs type="framework" items={["Next.js", "Node", "Remix"]}>
-  <Tab>
-    <CodeBlockTabs type="router" options={["App Router", "Pages Router"]}>
-      ```tsx {{ filename: 'app/api/update-user-example/route.ts' }}
-      import { auth, clerkClient } from '@clerk/nextjs/server'
-
-      export async function POST() {
-        // Get the user ID from the session
-        const { userId } = await auth()
-
-        if (!userId) return Response.redirect('/sign-in')
-
-        // The user attributes to update
-        const params = { firstName: 'John', lastName: 'Wick' }
-
-        const client = await clerkClient()
-
-        const updatedUser = await client.users.updateUser(userId, params)
-
-        return Response.json({ updatedUser })
-      }
-      ```
-
-      ```tsx {{ filename: 'pages/api/updateUser.tsx' }}
-      import { clerkClient, getAuth } from '@clerk/nextjs/server'
-      import type { NextApiRequest, NextApiResponse } from 'next'
-
-      export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-        // Get the user ID from the session
-        const { userId } = getAuth(req)
-
-        if (!userId) {
-          return res.status(500).json({ error: 'No valid user' })
-        }
-
-        // The user attributes to update
-        const params = { firstName: 'John', lastName: 'Wick' }
-
-        const client = await clerkClient()
-
-        const updatedUser = await client.users.updateUser(userId, params)
-
-        return res.status(200).json({ updatedUser })
-      }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-
-  <Tab>
-    > [!CAUTION]
-    > On January 8, 2025, the Node SDK will no longer be available. [Upgrade to the Express SDK](/docs/upgrade-guides/node-to-express).
-
-    {/* TODO: Update Node example - SDK is being deprecated */}
-
-    ```js {{ filename: 'updateUser.js' }}
-    import { clerkClient } from '@clerk/clerk-sdk-node'
-
-    app.post(
-      '/api/update-user',
-      // ClerkExpressRequireAuth returns an error for unauthorized requests
-      ClerkExpressRequireAuth(),
-
-      // Optionally ClerkExpressWithAuth returns an empty user with no error
-      // ClerkExpressWithAuth(),
-
-      async (req, res) => {
-        // Get the user ID from req.auth
-        const userId = req.auth.userId
-
-        // The user attributes to update
-        const params = { firstName: 'John', lastName: 'Wick' }
-
-        const updatedUser = await clerkClient.users.updateUser(userId, params)
-
-        res.json({ updatedUser })
-      },
-    )
-    ```
-  </Tab>
-
-  <Tab>
-    ```tsx {{ filename: 'app/routes/profile.tsx' }}
-    import { createClerkClient } from '@clerk/remix/api.server'
-    import { getAuth } from '@clerk/remix/ssr.server'
-    import { ActionFunction, json } from '@remix-run/node'
-
-    export const action: ActionFunction = async (req) => {
-      // Get the user ID from the session
-      const { userId } = await getAuth(req)
-
-      // The user attributes to update
-      const params = { firstName: 'John', lastName: 'Wick' }
-
-      const updatedUser = await createClerkClient({
-        secretKey: process.env.CLERK_SECRET_KEY,
-      }).users.updateUser(userId, params)
-
-      return json({ updatedUser })
-    }
-    ```
-  </Tab>
-</Tabs>
 
 ## Backend API (BAPI) endpoint
 

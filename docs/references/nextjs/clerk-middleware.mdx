@@ -112,59 +112,65 @@ There are two methods that you can use:
 - Use [`auth.protect()`](/docs/references/nextjs/auth#protect) if you want Clerk to return a `404` if the user does not have the role or permission.
 - Use [`auth().has()`](/docs/references/backend/types/auth-object#has) if you want more control over what your app does based on the authorization status.
 
-<CodeBlockTabs options={["auth.protect()", "auth().has()"]}>
-  ```tsx {{ filename: 'middleware.ts' }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+<Tabs items={["auth.protect()", "auth().has()"]}>
+  <Tab>
+    ```tsx {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-  const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+    const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware(async (auth, req) => {
-    // Restrict admin routes to users with specific permissions
-    if (isProtectedRoute(req)) {
-      await auth.protect((has) => {
-        return has({ permission: 'org:admin:example1' }) || has({ permission: 'org:admin:example2' })
-      })
+    export default clerkMiddleware(async (auth, req) => {
+      // Restrict admin routes to users with specific permissions
+      if (isProtectedRoute(req)) {
+        await auth.protect((has) => {
+          return has({ permission: 'org:admin:example1' }) || has({ permission: 'org:admin:example2' })
+        })
+      }
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
     }
-  })
+    ```
+  </Tab>
 
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-    ],
-  }
-  ```
+  <Tab>
+    <Include src="_partials/has-warning" />
 
-  ```tsx {{ filename: 'middleware.ts' }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+    ```tsx {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-  const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+    const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
 
-  export default clerkMiddleware(async (auth, req) => {
-    const { has, redirectToSignIn } = await auth()
-    // Restrict admin routes to users with specific permissions
-    if (
-      (isProtectedRoute(req) && !has({ permission: 'org:sys_memberships:manage' })) ||
-      !has({ permission: 'org:sys_domains_manage' })
-    ) {
-      // Add logic to run if the user does not have the required permissions
+    export default clerkMiddleware(async (auth, req) => {
+      const { has, redirectToSignIn } = await auth()
+      // Restrict admin routes to users with specific permissions
+      if (
+        (isProtectedRoute(req) && !has({ permission: 'org:admin:example1' })) ||
+        !has({ permission: 'org:admin:example2' })
+      ) {
+        // Add logic to run if the user does not have the required permissions
 
-      return redirectToSignIn()
+        return redirectToSignIn()
+      }
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
     }
-  })
-
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-    ],
-  }
-  ```
-</CodeBlockTabs>
+    ```
+  </Tab>
+</Tabs>
 
 ## Protect multiple groups of routes
 
@@ -183,10 +189,7 @@ export default clerkMiddleware(async (auth, req) => {
   // Restrict admin routes to users with specific permissions
   if (isTenantAdminRoute(req)) {
     await auth.protect((has) => {
-      return (
-        has({ permission: 'org:sys_memberships:manage' }) ||
-        has({ permission: 'org:sys_domains_manage' })
-      )
+      return has({ permission: 'org:admin:example1' }) || has({ permission: 'org:admin:example2' })
     })
   }
   // Restrict organization routes to signed in users

@@ -3,9 +3,24 @@ title: Auth object
 description: The Auth object contains information about the current user's session.
 ---
 
-The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token. It's returned by the [`useAuth()`](/docs/references/react/use-auth) hook, the [`auth()`](/docs/references/nextjs/auth) and `getAuth()` helpers, and the `request` object in server contexts.
+The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
 
-## `Auth` object properties
+## How to access the `Auth` object
+
+The `Auth` object is available on the `request` object in server contexts. Some frameworks provide a helper that returns the `Auth` object; see the following table for more information.
+
+| Framework | How to access the `Auth` object |
+| - | - |
+| Next.js App Router | [`auth()`](/docs/references/nextjs/auth) |
+| Next.js Pages Router | [`getAuth()`](/docs/references/nextjs/get-auth) |
+| Astro | [`locals.auth()`](/docs/references/astro/locals#locals-auth) |
+| Express | [`req.auth`](/docs/references/express/overview) |
+| React Router | [`getAuth()`](/docs/references/react-router/get-auth) |
+| Remix | [`getAuth()`](/docs/references/remix/read-session-data#get-auth) |
+| Tanstack Start | [`getAuth()`](/docs/references/tanstack-start/get-auth) |
+| Other | `request.auth` |
+
+## Properties
 
 <Properties>
   - `sessionId`
@@ -101,11 +116,11 @@ The `orgRole` property on the `Auth` object has the type `OrganizationCustomRole
 
 The `orgPermissions` property on the `Auth` object has the type `OrganizationCustomPermissionKey`.
 
-`OrganizationCustomPermissionKey` is a string that represents the permission of the user in the organization. Clerk provides [default System Permissions](/docs/organizations/roles-permissions#system-permissions), and you can create [custom permissions](/docs/organizations/create-roles-permissions#create-a-new-permission-for-your-organization).
+`OrganizationCustomPermissionKey` is a string that represents the permission of the user in the organization. Clerk provides [default system permissions](/docs/organizations/roles-permissions#system-permissions), and you can create [custom permissions](/docs/organizations/create-roles-permissions#create-a-new-permission-for-your-organization).
 
 ### `has()`
 
-`has()` determines if the user _has_ a role or permission.
+`has()` determines if the user _has_ a role or permission and returns a boolean value.
 
 ```ts
 function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
@@ -189,20 +204,20 @@ The `ReverificationConfig` type has the following properties:
   The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
 </Properties>
 
-#### `has()` permissions example
+#### `has()` authorization example
 
 You can use `has()` to check if a user is authorized to access a component.
 
-In the following example:
+> [!WARNING]
+> When using `has()` on the **server-side**, it checks the `orgs_permissions` property in the user's `auth.sessionClaims`. [**System** permissions](/docs/organizations/roles-permissions#system-permissions) aren't included in session claims and therefore, can't be used to perform authorization checks. **You must use custom permissions instead**.
 
-- `has()` is used to check if the user has the `org:team_settings:manage` permission.
-- If the user does not have the permission, `null` is returned and the "Team Settings" component is not rendered.
+In the following example, `has()` is used to check if the user has the `org:team_settings:manage` permission. If the user does not have the permission, `null` is returned and the page is not rendered.
 
 ```tsx {{ filename: 'app/page.tsx' }}
 import { auth } from '@clerk/nextjs/server'
 
 export default async function Page() {
-  const { has } = await auth()
+  const { has } = await auth() // Accessing the `auth` object will depend on the framework you're using
 
   const canManage = has({ permission: 'org:team_settings:manage' })
 
@@ -219,30 +234,21 @@ export default async function Page() {
 
 You can use `has()` to check if a user has verified their credentials within a certain time frame.
 
-<Include src="_partials/reverification-route-handler" />
+<Include src="_partials/nextjs/reverification-route-handler" />
 
 ### `getToken()`
 
-You can use `getToken()` on an `Auth` object to retrieve the user's session token. You can also use this method to retrieve a custom JWT template.
-
-Tokens can only be generated if the user is signed in.
-
-#### `ServerGetToken`
+`getToken()` retrieves the user's session token or a [custom JWT template](/docs/backend-requests/making/jwt-templates). It has the following signature:
 
 ```typescript
+const getToken: ServerGetToken
+
 type ServerGetToken = (options?: ServerGetTokenOptions) => Promise<string | null>
+
+type ServerGetTokenOptions = {
+  template?: string // The name of the custom JWT template to retrieve.
+}
 ```
-
-#### `ServerGetTokenOptions`
-
-`getToken()` accepts an optional `options` parameter, which has the following properties:
-
-<Properties>
-  - `template?`
-  - `string`
-
-  The name of the custom JWT template to retrieve.
-</Properties>
 
 #### Use `getToken()` in the frontend
 

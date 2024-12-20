@@ -1,0 +1,70 @@
+---
+title: Force MFA for all users
+description: Learn how to force Multi-Factor Authentication in your Clerk application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Customize your session token",
+      link: "/docs/backend-requests/making/custom-session-token",
+      icon: "clerk",
+    },
+    {
+      title: "Build a custom flow for managing TOTP-based multi-factor authentication",
+      link: "/docs/custom-flows/manage-totp-based-mfa",
+      icon: "globe",
+    }
+  ]}
+>
+  - Detect if a user has MFA enabled or not
+  - Redirect users to set up MFA if it is not enabled
+</TutorialHero>
+
+While Clerk does not natively enforce MFA for all users, you can implement this functionality by using `clerkMiddleware()` to check whether a user has MFA enabled.
+
+The following example demonstrates how to force MFA for all users. It uses `clerkMiddleware()` to intercept all requests and check whether a user has MFA enabled. If the user does not have MFA enabled, `clerkMiddleware()` redirects them to the `/mfa` page where they can set up MFA.
+
+<Steps>
+  ## Customize the Session Token to Include `two_factor_enabled` Property
+
+  1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions) page.
+  1. In the **Customize your session token** section, click the **Edit** button.
+  1. In the modal that opens, add the `two_factor_enabled` property to the session token.
+
+  ![Clerk Dashboard showing the custom claim modal](/docs/images/guides/force-mfa/edit-custom-session-token.png)
+
+  ## Create a Middleware to Check if MFA is Enabled
+
+  After you followed this guide [here](/docs/backend-requests/making/custom-session-token), you should have a middleware that checks if a user is logged in. You can add the following code to that middleware to check if the user has MFA enabled.
+
+  ```tsx {{ filename: 'middleware.ts', collapsible: true }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+  import { NextResponse } from 'next/server'
+
+  const isMFARoute = createRouteMatcher(['/mfa(.*)'])
+  const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+  export default clerkMiddleware(async (auth, req) => {
+    const { userId, sessionClaims } = await auth()
+
+    if (userId !== null && isSignInRoute(req) && !isMFARoute(req)) {
+      // redirect to root if logged in
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+    if (userId !== null && !isMFARoute(req)) {
+      if (sessionClaims.isMfa === false) {
+        return NextResponse.redirect(new URL('/mfa', req.url))
+      }
+    }
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+</Steps>

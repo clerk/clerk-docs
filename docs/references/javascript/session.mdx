@@ -1,5 +1,5 @@
 ---
-title: '`Session`'
+title: Session
 description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
 ---
 
@@ -14,7 +14,7 @@ In certain scenarios, a session might be replaced by another one. This is often 
 All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
 
 > [!NOTE]
-> For more details regarding the different session states, see our documentation on [session management](/docs/authentication/configuration/session-options).
+> For more information regarding the different session states, see the [guide on session management](/docs/authentication/configuration/session-options).
 
 ## Properties
 
@@ -22,7 +22,7 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `id`
   - `string`
 
-  A unique identifier for the session.
+  The unique identifier for the session.
 
   ---
 
@@ -78,7 +78,7 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `createdAt`
   - `Date`
 
-  The time the session was created.
+  The date when the session was created.
 
   ---
 
@@ -93,6 +93,13 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `string | null`
 
   The last active organization identifier
+
+  ---
+
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
 
   ---
 
@@ -130,7 +137,7 @@ function touch(): Promise<Session>
 
 ### `getToken()`
 
-Retrieves the user's session token for the default Clerk token or the given template.
+Retrieves the current user's [session token](/docs/backend-requests/resources/session-tokens) or a [custom JWT template](/docs/backend-requests/making/jwt-templates).
 
 This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute.
 
@@ -179,71 +186,28 @@ function getToken(options?: GetTokenOptions): Promise<string | null>
 
 #### Example
 
-<CodeBlockTabs options={['NPM module', '<script>']}>
-  ```js {{ filename: 'main.js', mark: [8, 9] }}
-  import { Clerk } from '@clerk/clerk-js'
+```js {{ filename: 'main.js', mark: [10, 11] }}
+import { Clerk } from '@clerk/clerk-js'
 
-  // Initialize Clerk with your Clerk publishable key
-  const clerk = new Clerk('{{pub_key}}')
-  await clerk.load()
+// Initialize Clerk with your Clerk Publishable Key
+const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-  if (clerk.user) {
-    await clerk.session
-      .getToken({ template: 'Test' })
-      .then((res) => console.log(res))
-      .catch((error) => console.log('An error occurred:', error.errors))
-  } else {
-    document.getElementById('app').innerHTML = `
-      <div id="sign-in"></div>
-    `
+const clerk = new Clerk(pubKey)
+await clerk.load()
 
-    const signInDiv = document.getElementById('sign-in')
+if (clerk.user) {
+  await clerk.session
+    .getToken({ template: 'Test' })
+    .then((res) => console.log(res))
+    .catch((error) => console.log('An error occurred:', error.errors))
+} else {
+  document.getElementById('app').innerHTML = `
+    <div id="sign-in"></div>
+  `
 
-    clerk.mountSignIn(signInDiv)
-  }
-  ```
+  const signInDiv = document.getElementById('sign-in')
 
-  ```html {{ filename: 'index.html', mark: [18, 19] }}
-  <div id="app"></div>
-
-  <!-- Initialize Clerk with your
-  Clerk Publishable key and Frontend API URL -->
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="{{pub_key}}"
-    src="https://{{fapi_url}}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
-    type="text/javascript"
-  ></script>
-
-  <script>
-    window.addEventListener('load', async function () {
-      await Clerk.load()
-
-      if (Clerk.user) {
-        await Clerk.session
-          .getToken({ template: 'Test' })
-          .then((res) => console.log(res))
-          .catch((error) => console.log('An error occurred:', error.errors))
-      } else {
-        document.getElementById('app').innerHTML = `
-          <div id="sign-in"></div>
-        `
-
-        const signInDiv = document.getElementById('sign-in')
-
-        Clerk.mountSignIn(signInDiv)
-      }
-    })
-  </script>
-  ```
-</CodeBlockTabs>
-
-```js
-try {
-  await Clerk.session.getToken({ template: 'my-template-1' }) // => "eyJhbGciOiJSUzI1NiIsImtpZC..."
-} catch (e) {
-  // handle error
+  clerk.mountSignIn(signInDiv)
 }
 ```
 
@@ -281,6 +245,141 @@ type CheckAuthorizationParams =
   - `string`
 
   Accepts [permission](/docs/organizations/roles-permissions#permissions) key
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](/docs/references/backend/types/auth-object#reverification-config)</code>
+
+  The reverification configuration to check for.
 </Properties>
+
+### `startVerification()`
+
+Initiates the reverification flow. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function startVerification(params: SessionVerifyCreateParams): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyCreateParams`
+
+```typescript
+type SessionVerifyCreateParams = {
+  status: 'pending' | 'verified' | 'failed'
+}
+```
+
+### `prepareFirstFactorVerification()`
+
+Initiates the first factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareFirstFactorVerification(
+  params: SessionVerifyPrepareFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareFirstFactorParams`
+
+```ts
+type SessionVerifyPrepareFirstFactorParams = EmailCodeConfig | PhoneCodeConfig
+
+type EmailCodeConfig = {
+  strategy: 'email_code'
+  primary?: boolean | undefined
+  emailAddressId: string
+}
+
+type PhoneCodeConfig = {
+  strategy: 'phone_code'
+  phoneNumberId: string
+  primary?: boolean
+  default?: boolean
+}
+```
+
+### `attemptFirstFactorVerification()`
+
+Attempts to complete the first factor verification process. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptFirstFactorVerification(
+  params: SessionVerifyAttemptFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptFirstFactorParams`
+
+```ts
+type SessionVerifyAttemptFirstFactorParams = EmailCodeAttempt | PhoneCodeAttempt | PasswordAttempt
+
+type EmailCodeAttempt = {
+  strategy: 'email_code'
+  code: string
+}
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type PasswordAttempt = {
+  strategy: 'password'
+  password: string
+}
+```
+
+### `prepareSecondFactorVerification()`
+
+Initiates the second factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareSecondFactorVerification(
+  params: SessionVerifyPrepareSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareSecondFactorParams`
+
+```ts
+type SessionVerifyPrepareSecondFactorParams = PhoneCodeSecondFactorConfig
+
+type PhoneCodeSecondFactorConfig = {
+  strategy: 'phone_code'
+  phoneNumberId?: string
+}
+```
+
+### `attemptSecondFactorVerification()`
+
+Attempts to complete the second factor verification process. Returns a [`SessionVerification`](/docs/references/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptSecondFactorVerification(
+  params: SessionVerifyAttemptSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptSecondFactorParams`
+
+```ts
+type SessionVerifyAttemptSecondFactorParams = PhoneCodeAttempt | TOTPAttempt | BackupCodeAttempt
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type TOTPAttempt = {
+  strategy: 'totp'
+  code: string
+}
+
+type BackupCodeAttempt = {
+  strategy: 'backup_code'
+  code: string
+}
+```
 
 [client-ref]: /docs/references/javascript/client

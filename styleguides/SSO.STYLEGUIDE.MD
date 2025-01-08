@@ -35,20 +35,20 @@ These are the guidelines we use to write our SSO guides.
   ```
 
 - Use `<Steps />` to lay out the steps
-- The `Test your OAuth` section should be included in the `<Steps />` and formatted as follows:
+- If there is a "Set the Client ID and Client Secret in the Clerk Dashboard" section, it should be included in the `<Steps />` and formatted as follows:
 
   ```mdx
-  ## Test your OAuth
+  ### Set the Client ID and Client Secret in the Clerk Dashboard
 
-  The simplest way to test your OAuth is to visit your Clerk app's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk apps out-of-the-box.
+  <Include src="_partials/authentication/set-client-id-secret" />
+  ```
 
-  1. In the Clerk Dashboard, navigate to the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page.
-  1. Next to the **Sign-in** URL, select **Visit**. The URL should resemble:
+- The `Test your connection` section should be included in the `<Steps />` and formatted as follows:
 
-  - **For development** – `https://your-domain.accounts.dev/sign-in`
-  - **For production** – `https://accounts.your-domain.com/sign-in`
+  ```mdx
+  ### Test your connection
 
-  1. Sign in with your <INSERT_PROVIDER> account.
+  <Include src="_partials/authentication/test-your-connection" />
   ```
 
 ## No screenshots: writing copy that references the UI

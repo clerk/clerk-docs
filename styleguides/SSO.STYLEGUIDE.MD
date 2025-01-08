@@ -29,19 +29,33 @@ These are the guidelines we use to write our SSO guides.
 
   ## Configure for your production instance
 
-  For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your <SSO_PROVIDER> account.
+  For _production instances_, you must provide custom credentials.
 
   To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps
-- If there is a "Set the Client ID and Client Secret in the Clerk Dashboard" section, it should be included in the `<Steps />` and formatted as follows:
+- For the "Set the Client ID and Client Secret in the Clerk Dashboard" step, it can be formatted in one of two ways:
 
-  ```mdx
-  ### Set the Client ID and Client Secret in the Clerk Dashboard
+  1. With a partial. Use this method if the provider uses "Client ID" and "Client Secret" for their terminology.
 
-  <Include src="_partials/authentication/set-client-id-secret" />
-  ```
+     ```mdx
+     ### Set the Client ID and Client Secret in the Clerk Dashboard
+
+     <Include src="_partials/authentication/set-client-id-secret" />
+     ```
+
+  1. With a full step. Use this method if the provider uses a different terminology, such as "Key" instead of "Client ID". Note how the title of the section and the copy of the first step depends on the terminology.
+
+     ```mdx
+     ### Set the Key and Client Secret in the Clerk Dashboard
+
+     1. Navigate back to the Clerk Dashboard where the modal should still be open. Paste the **Key** and **Client Secret** values that you saved into the respective fields.
+     1. Select **Add connection**.
+
+     > [!NOTE]
+     > If the modal or page is not still open, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, you can paste the values into their respective fields.
+     ```
 
 - The `Test your connection` section should be included in the `<Steps />` and formatted as follows:
 

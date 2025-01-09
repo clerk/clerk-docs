@@ -1,0 +1,147 @@
+---
+title: Fastify SDK
+description: Learn how to integrate Clerk into your Fastify application using the Clerk Fastify SDK.
+---
+
+The Clerk Fastify SDK is the recommended method for integrating Clerk into your Express application.
+
+See the [quickstart](/docs/quickstarts/fastify) to get started.
+
+## Methods
+
+### `clerkPlugin()`
+
+The `clerkPlugin()` is a Fastify plugin provided by Clerk to integrate authentication into your Fastify application. To ensure that Clerk's authentication and user management features are applied across your Fastify application, configure the `clerkPlugin` to handle all routes or limit it to specific ones.
+
+The `clerkPlugin()` function checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object) object to the request object under the `auth` key.
+
+```ts
+// dotenv must be imported before @clerk/fastify
+import "dotenv/config";
+import Fastify from "fastify";
+import { clerkPlugin } from '@clerk/fastify'
+
+const fastify = Fastify({ logger: true });
+
+fastify.register(clerkPlugin);
+```
+
+You can also pass options to the plugin:
+
+```ts
+import "dotenv/config";
+import Fastify from "fastify";
+import { clerkClient, clerkPlugin, getAuth } from "@clerk/fastify";
+
+const fastify = Fastify({ logger: true });
+
+fastify.register(clerkPlugin, {
+  hookName: "preHandler"
+});
+```
+
+#### Options
+
+The `clerkPlugin()` function accepts [these options](/docs/references/backend/overview) plus the following:
+
+<Properties>
+  - `hookName`
+  - `'onRequest' | 'preHandler'`
+
+  Decide on which of Fastify's [request/reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/#requestreply-hooks) Clerk should run. Default: `'preHandler'`
+</Properties>
+
+### `getAuth()`
+
+The following example uses [`getAuth()`](/docs/references/nextjs/get-auth){{ target: '_blank' }} to retrieve the `userId`, which is used to protect the route and is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to retrieve the current user's `User` object.
+
+```ts
+import 'dotenv/config'
+import Fastify from 'fastify'
+import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
+
+const fastify = Fastify({ logger: true })
+
+fastify.register(clerkPlugin)
+
+fastify.get('/', async (request, reply) => {
+  const { userId } = getAuth(request)
+
+  // Protect the route from unauthenticated users
+  if (!userId) {
+    return reply.code(403).send({ error: 'Unauthorized request.' })
+  }
+
+  const user = userId ? await clerkClient.users.getUser(userId) : null
+
+  return reply.send({
+    message: 'User retrieved successfully.',
+    user,
+  })
+})
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: 8080 })
+  } catch (error) {
+    fastify.log.error(error)
+    process.exit(1)
+  }
+}
+
+start()
+```
+
+## Configure `clerkPlugin()` for specific routes
+
+If you want to use Clerk for specific pages only, you can register the plugin for specific routes. In the following example, the routes are split into protected and public routes.
+
+```ts {{ filename: 'index.ts' }}
+import 'dotenv/config'
+import Fastify, { FastifyPluginCallback } from 'fastify'
+import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
+
+const fastify = Fastify({ logger: true })
+
+const protectedRoutes: FastifyPluginCallback = (instance, options, done) => {
+  instance.register(clerkPlugin)
+
+  instance.get('/protected', async (request, reply) => {
+    const { userId } = getAuth(request)
+
+    // Protect the route from unauthenticated users
+    if (!userId) {
+      return reply.code(403).send({ message: 'Access denied. Authentication required.' })
+    }
+
+    const user = await clerkClient.users.getUser(userId)
+
+    // Only authenticated users will see the following message
+    reply.send({ message: 'This is a protected route.', user })
+  })
+
+  done()
+}
+
+const publicRoutes: FastifyPluginCallback = (instance, options, done) => {
+  instance.get('/', async (request, reply) => {
+    reply.send({ message: 'This is a public route.' })
+  })
+
+  done()
+}
+
+fastify.register(protectedRoutes)
+fastify.register(publicRoutes)
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: 8080 })
+  } catch (error) {
+    fastify.log.error(error)
+    process.exit(1)
+  }
+}
+
+start()
+```

@@ -54,7 +54,7 @@ These are the guidelines we use to write our SSO guides.
      1. Select **Add connection**.
 
      > [!NOTE]
-     > If the modal or page is not still open, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, you can paste the values into their respective fields.
+     > If the modal or page is no longer open, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, paste the values into their respective fields.
      ```
 
 - The `Test your connection` section should be included in the `<Steps />` and formatted as follows:

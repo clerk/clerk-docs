@@ -82,7 +82,7 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
 
   The `clerkPlugin` is a Fastify plugin provided by Clerk to integrate authentication into your Fastify application. To ensure that Clerk's authentication and user management features are applied across your Fastify application, configure the `clerkPlugin` to handle all routes or limit it to specific ones.
 
-  The following example registers the plugin for all routes. To register the plugin for specific routes only, refer to the [**Using Clerk for specific pages only**](/docs/quickstarts/fastify#using-clerk-for-specific-routes-only) section.
+  The following example registers the plugin for all routes. To register the plugin for specific routes only, refer to the [**Using Clerk for specific pages only**](/docs/references/fastify/overview#configure-clerk-plugin-for-specific-routes){{ target: '_blank' }} section.
 
   > [!IMPORTANT]
   > The `dotenv/config` module must be imported before any Clerk modules. This order is important because Clerk instances are created during the import process and rely on environment variables, such as API keys, to be initialized correctly. For more information, refer to the [Fastify docs](https://fastify.dev/docs/latest/Guides/Getting-Started/#loading-order-of-your-plugins).
@@ -149,57 +149,3 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
   start()
   ```
 </Steps>
-
-## Configure `clerkPlugin` for specific routes
-
-If you want to use Clerk for specific pages only, you can register the plugin for specific routes. In the following example, the routes are split into protected and public routes.
-
-```ts {{ filename: 'index.ts' }}
-import 'dotenv/config'
-import Fastify, { FastifyPluginCallback } from 'fastify'
-import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
-
-const fastify = Fastify({ logger: true })
-
-const protectedRoutes: FastifyPluginCallback = (instance, options, done) => {
-  instance.register(clerkPlugin)
-
-  instance.get('/protected', async (request, reply) => {
-    const { userId } = getAuth(request)
-
-    // Protect the route from unauthenticated users
-    if (!userId) {
-      return reply.code(403).send({ message: 'Access denied. Authentication required.' })
-    }
-
-    const user = await clerkClient.users.getUser(userId)
-
-    // Only authenticated users will see the following message
-    reply.send({ message: 'This is a protected route.', user })
-  })
-
-  done()
-}
-
-const publicRoutes: FastifyPluginCallback = (instance, options, done) => {
-  instance.get('/', async (request, reply) => {
-    reply.send({ message: 'This is a public route.' })
-  })
-
-  done()
-}
-
-fastify.register(protectedRoutes)
-fastify.register(publicRoutes)
-
-const start = async () => {
-  try {
-    await fastify.listen({ port: 8080 })
-  } catch (error) {
-    fastify.log.error(error)
-    process.exit(1)
-  }
-}
-
-start()
-```

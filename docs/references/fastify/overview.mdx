@@ -1,19 +1,19 @@
 ---
-title: Fastify SDK
+title: Clerk Fastify SDK
 description: Learn how to integrate Clerk into your Fastify application using the Clerk Fastify SDK.
 ---
 
-The Clerk Fastify SDK is the recommended method for integrating Clerk into your Express application.
+The Clerk Fastify SDK is the recommended method for integrating Clerk into your Express application. Refer to the [quickstart guide](/docs/quickstarts/fastify) to get started.
 
-See the [quickstart](/docs/quickstarts/fastify) to get started.
 
 ## Methods
 
 ### `clerkPlugin()`
 
-The `clerkPlugin()` is a Fastify plugin provided by Clerk to integrate authentication into your Fastify application. To ensure that Clerk's authentication and user management features are applied across your Fastify application, configure the `clerkPlugin` to handle all routes or limit it to specific ones.
+The `clerkPlugin()` is a Fastify plugin that integrates Clerk's authentication into your application. The function checks request cookies and headers for a session JWT. If valid and if valid, attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object) object to the request object under the `auth` key. You can configure it to handle all routes or limit it to specific ones.
 
-The `clerkPlugin()` function checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object) object to the request object under the `auth` key.
+
+#### Example: Register `clerkPlugin()`
 
 ```ts
 // dotenv must be imported before @clerk/fastify
@@ -26,34 +26,35 @@ const fastify = Fastify({ logger: true })
 fastify.register(clerkPlugin)
 ```
 
+### Configure `clerkPlugin()`
+
+The `clerkPlugin()` function accepts the [Backend API options](/docs/references/backend/overview#options) and the following additional options:
+
 You can also pass options to the plugin:
 
-```ts
-import 'dotenv/config'
-import Fastify from 'fastify'
-import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
-
-const fastify = Fastify({ logger: true })
-
-fastify.register(clerkPlugin, {
-  hookName: 'preHandler',
-})
-```
-
-#### Options
-
-The `clerkPlugin()` function accepts [these options](/docs/references/backend/overview) plus the following:
 
 <Properties>
   - `hookName`
   - `'onRequest' | 'preHandler'`
 
-  Decide on which of Fastify's [request/reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/#requestreply-hooks) Clerk should run. Default: `'preHandler'`
+  Determines which of Fastify's [Request/Reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/#requestreply-hooks) Clerk should run. Default: `'preHandler'`
 </Properties>
+
+#### Example: Pass `hookName` in `clerkPlugin()` options
+
+```ts
+fastify.register(clerkPlugin, {
+  hookName: 'preHandler',
+})
+```
 
 ### `getAuth()`
 
-The following example uses [`getAuth()`](/docs/references/nextjs/get-auth){{ target: '_blank' }} to retrieve the `userId`, which is used to protect the route and is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to retrieve the current user's `User` object.
+The `getAuth()` function retrieves the current user's authentication state from the request object.
+
+#### Example: Use `getAuth()` to retrieve the `userId`
+
+The following example demonstrates how to use `getAuth()` to protect a route and load user data. If the user is authenticated, their `userId` is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to retrieve the user's information. If not authenticated, the request is rejected with a 403 status code.
 
 ```ts
 import 'dotenv/config'
@@ -94,7 +95,10 @@ start()
 
 ## Configure `clerkPlugin()` for specific routes
 
-If you want to use Clerk for specific pages only, you can register the plugin for specific routes. In the following example, the routes are split into protected and public routes.
+To apply Clerk authentication only to specific routes, register the plugin in the scope of those routes.
+
+In the following example, the application is split into protected and public routes:
+
 
 ```ts {{ filename: 'index.ts' }}
 import 'dotenv/config'

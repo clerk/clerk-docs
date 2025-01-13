@@ -29,26 +29,40 @@ These are the guidelines we use to write our SSO guides.
 
   ## Configure for your production instance
 
-  For _production instances_, you must provide custom credentials, which involves generating your own **Client ID** and **Client Secret** using your <SSO_PROVIDER> account.
+  For _production instances_, you must provide custom credentials.
 
   To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [<SSO_PROVIDER>](SSO_PROVIDER_URL).
   ```
 
 - Use `<Steps />` to lay out the steps
-- The `Test your OAuth` section should be included in the `<Steps />` and formatted as follows:
+- For the "Set the Client ID and Client Secret in the Clerk Dashboard" step, it can be formatted in one of two ways:
+
+  1. With a partial. Use this method if the provider uses "Client ID" and "Client Secret" for their terminology.
+
+     ```mdx
+     ### Set the Client ID and Client Secret in the Clerk Dashboard
+
+     <Include src="_partials/authentication/set-client-id-secret" />
+     ```
+
+  1. With a full step. Use this method if the provider uses a different terminology, such as "Key" instead of "Client ID". Note how the title of the section and the copy of the first step depends on the terminology.
+
+     ```mdx
+     ### Set the Key and Client Secret in the Clerk Dashboard
+
+     1. Navigate back to the Clerk Dashboard where the modal should still be open. Paste the **Key** and **Client Secret** values that you saved into the respective fields.
+     1. Select **Add connection**.
+
+     > [!NOTE]
+     > If the modal or page is no longer open, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page in the Clerk Dashboard. Select the connection. Under **Use custom credentials**, paste the values into their respective fields.
+     ```
+
+- The `Test your connection` section should be included in the `<Steps />` and formatted as follows:
 
   ```mdx
-  ## Test your OAuth
+  ### Test your connection
 
-  The simplest way to test your OAuth is to visit your Clerk app's [Account Portal](/docs/customization/account-portal/overview), which is available for all Clerk apps out-of-the-box.
-
-  1. In the Clerk Dashboard, navigate to the [**Account Portal**](https://dashboard.clerk.com/last-active?path=account-portal) page.
-  1. Next to the **Sign-in** URL, select **Visit**. The URL should resemble:
-
-  - **For development** – `https://your-domain.accounts.dev/sign-in`
-  - **For production** – `https://accounts.your-domain.com/sign-in`
-
-  1. Sign in with your <INSERT_PROVIDER> account.
+  <Include src="_partials/authentication/test-your-connection" />
   ```
 
 ## No screenshots: writing copy that references the UI

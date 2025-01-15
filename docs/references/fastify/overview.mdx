@@ -5,13 +5,13 @@ description: Learn how to integrate Clerk into your Fastify application using th
 
 The Clerk Fastify SDK is the recommended method for integrating Clerk into your Express application. Refer to the [quickstart guide](/docs/quickstarts/fastify) to get started.
 
-## Methods
+## `clerkPlugin()`
 
-### `clerkPlugin()`
+The `clerkPlugin()` function is a Fastify plugin that integrates Clerk's authentication into your application. The function checks request cookies and headers for a session JWT. If valid, it attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object){{ target: '_blank' }} object to the `request` object under the `auth` key.
 
-The `clerkPlugin()` is a Fastify plugin that integrates Clerk's authentication into your application. The function checks request cookies and headers for a session JWT. If valid, it attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object) object to the request object under the `auth` key. You can configure it to handle all routes or limit it to specific ones.
+You can register the plugin for [all routes](#example-register-clerk-plugin-for-all-routes) or [limit it to specific ones](#example-register-clerk-plugin-for-specific-routes).
 
-#### Example: Register `clerkPlugin()`
+### Example: Register `clerkPlugin()` for all routes
 
 ```ts
 // dotenv must be imported before @clerk/fastify
@@ -22,59 +22,6 @@ import { clerkPlugin } from '@clerk/fastify'
 const fastify = Fastify({ logger: true })
 
 fastify.register(clerkPlugin)
-```
-
-### Configure `clerkPlugin()`
-
-The `clerkPlugin()` function accepts the [Backend API options](/docs/references/backend/overview#options) in addition to the following:
-
-<Properties>
-  - `hookName`
-  - `'onRequest' | 'preHandler'`
-
-  Determines which of Fastify's [Request/Reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/#requestreply-hooks) Clerk should run. Default: `'preHandler'`
-</Properties>
-
-#### Example: Pass `hookName` in `clerkPlugin()` options
-
-```ts
-fastify.register(clerkPlugin, {
-  hookName: 'preHandler',
-})
-```
-
-### `getAuth()`
-
-The `getAuth()` function retrieves the current user's authentication state from the request object.
-
-#### Example: Use `getAuth()` to retrieve the `userId`
-
-The following example uses `getAuth()` to protect a route and load user data. If the user is authenticated, their `userId` is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to retrieve the user's information. If not authenticated, the request is rejected with a 403 status code.
-
-```ts
-import 'dotenv/config'
-import Fastify from 'fastify'
-import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
-
-const fastify = Fastify({ logger: true })
-
-fastify.register(clerkPlugin)
-
-fastify.get('/', async (request, reply) => {
-  const { userId } = getAuth(request)
-
-  // Protect the route from unauthenticated users
-  if (!userId) {
-    return reply.code(403).send({ error: 'Unauthorized request.' })
-  }
-
-  const user = userId ? await clerkClient.users.getUser(userId) : null
-
-  return reply.send({
-    message: 'User retrieved successfully.',
-    user,
-  })
-})
 
 const start = async () => {
   try {
@@ -88,13 +35,13 @@ const start = async () => {
 start()
 ```
 
-## Configure `clerkPlugin()` for specific routes
+### Example: Register `clerkPlugin()` for specific routes
 
 To apply Clerk authentication only to specific routes, register the plugin in the scope of those routes.
 
 In the following example, the application is split into protected and public routes:
 
-```ts {{ filename: 'index.ts' }}
+```ts {{ filename: 'index.ts', collapsible: true }}
 import 'dotenv/config'
 import Fastify, { FastifyPluginCallback } from 'fastify'
 import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
@@ -143,3 +90,32 @@ const start = async () => {
 
 start()
 ```
+
+### `clerkPlugin()` options
+
+The `clerkPlugin()` function accepts the following options:
+
+<Include src="_partials/clerk-options" />
+
+<Properties>
+  - `hookName`
+  - `'onRequest' | 'preHandler'`
+
+  Determines which of Fastify's [Request/Reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/#requestreply-hooks) Clerk should run. Default: `'preHandler'`
+</Properties>
+
+#### Example: Pass `hookName` in `clerkPlugin()` options
+
+```ts
+fastify.register(clerkPlugin, {
+  hookName: 'preHandler',
+})
+```
+
+## `getAuth()`
+
+The `getAuth()` helper retrieves the current user's authentication state from the `request` object. It returns the [`Auth` object](/docs/references/backend/types/auth-object#auth-object){{ target: '_blank' }}. See the [Next.js reference documentation](/docs/references/nextjs/get-auth){{ target: '_blank' }} for more examples on how to use the returned `Auth` object.
+
+### Example: Use `getAuth()` to retrieve the `userId`
+
+<Include src="_partials/fastify/get-auth" />

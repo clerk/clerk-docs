@@ -22,7 +22,6 @@ When mentioning a documented component, function, etc, multiple times on a page,
 > ✅
 > How to set up custom pages
 
-
 ### Use backticks for component references in MDX page titles
 
 When writing titles that contain component references in MDX pages, wrap the component name in backticks and escape any angle brackets.

@@ -1,5 +1,5 @@
 ---
-title: '`useSSO()`'
+title: useSSO()
 description: Clerk's useSSO() hook is used to create a new SSO flow.
 ---
 
@@ -9,19 +9,14 @@ The `useSSO()` hook is used to create a new SSO flow. It can be used in both web
 
 <Properties>
   - `strategy`
-
   - [`OAuthStrategy`](/docs/references/javascript/types/sso#o-auth-strategy)
-
   - [`EnterpriseSSOStrategy`](/docs/references/javascript/types/sso#enterprise-sso-strategy)
 
-  - `strategy?`
-
-    - `string`
-
-    Select the SSO strategy. The `enterprise_sso` value depends on the object's `identifier` value. Possible `strategy` values are:
-
-    - `oauth_<provider>`: The user will be authenticated with their social sign-in account. [See available social providers](/docs/references/javascript/types/oauth#o-auth-provider).
-    - `enterprise_sso`: The user will be authenticated either through SAML or OIDC, depending on the configuration of the [enterprise connection](/docs/authentication/enterprise-connections/overview) matching the identifier.
+    - `strategy?`
+      - `string`
+        Select the SSO strategy. The `enterprise_sso` value depends on the object's `identifier` value. Possible `strategy` values are:
+      - `oauth_<provider>`: The user will be authenticated with their social sign-in account. [See available social providers](/docs/references/javascript/types/oauth#o-auth-provider).
+      - `enterprise_sso`: The user will be authenticated either through SAML or OIDC, depending on the configuration of the [enterprise connection](/docs/authentication/enterprise-connections/overview) matching the identifier.
 
     ---
 
@@ -78,39 +73,42 @@ It accepts the following parameters (`StartSSOFlowParams`):
     The following example demonstrates how to create a custom SSO sign-in flow for [Google accounts](/docs/authentication/social-connections/google).
 
     ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-    import React from 'react'
+    import React, { useCallback, useEffect } from 'react'
     import * as WebBrowser from 'expo-web-browser'
-    import { Text, View, Button } from 'react-native'
-    import { Link } from 'expo-router'
-    import { useSSO } from '@clerk/clerk-expo'
     import * as Linking from 'expo-linking'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button } from 'react-native'
 
     export const useWarmUpBrowser = () => {
-      React.useEffect(() => {
-        // Warm up the android browser to improve UX
-        // https://docs.expo.dev/guides/authentication/#improving-user-experience
+      useEffect(() => {
+        // Preloads the browser for Android devices to reduce authentication load time
+        // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
         void WebBrowser.warmUpAsync()
         return () => {
+          // Cleanup: closes browser when component unmounts
           void WebBrowser.coolDownAsync()
         }
       }, [])
     }
 
+    // Handle any pending authentication sessions
     WebBrowser.maybeCompleteAuthSession()
 
     export default function Page() {
       useWarmUpBrowser()
 
-      const { useSSOFlow } = useSSO({ strategy: 'oauth_google' })
+      const { startSSOFlow } = useSSO({ strategy: 'oauth_google' })
 
-      const onPress = React.useCallback(async () => {
+      const onPress = useCallback(async () => {
         try {
-          const { createdSessionId, signIn, signUp, setActive } = await useSSOFlow({
+          const { createdSessionId, setActive } = await startSSOFlow({
+            // Specify redirect URL after successful authentication
+            // Must match the scheme defined in app.json
             redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
           })
 
-          // If sign in was successful, set the active session
           if (createdSessionId) {
+            // If sign in was successful, set the active session
             setActive!({ session: createdSessionId })
           } else {
             // Use signIn or signUp returned from startOAuthFlow
@@ -133,44 +131,47 @@ It accepts the following parameters (`StartSSOFlowParams`):
   </Tab>
 
   <Tab>
-    The following example demonstrates how to create a custom SSO sign-in flow with [SAML](/authentication/enterprise-connections/overview#saml).
+    The following example demonstrates how to create a custom SSO sign-in flow with [SAML](docs/authentication/enterprise-connections/overview#saml).
 
     ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-    import React from 'react'
+    import React, { useCallback, useEffect } from 'react'
     import * as WebBrowser from 'expo-web-browser'
-    import { Text, View, Button } from 'react-native'
-    import { Link } from 'expo-router'
-    import { useSSO } from '@clerk/clerk-expo'
     import * as Linking from 'expo-linking'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button } from 'react-native'
 
     export const useWarmUpBrowser = () => {
-      React.useEffect(() => {
-        // Warm up the android browser to improve UX
-        // https://docs.expo.dev/guides/authentication/#improving-user-experience
+      useEffect(() => {
+        // Preloads the browser for Android devices to reduce authentication load time
+        // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
         void WebBrowser.warmUpAsync()
         return () => {
+          // Cleanup: closes browser when component unmounts
           void WebBrowser.coolDownAsync()
         }
       }, [])
     }
 
+    // Handle any pending authentication sessions
     WebBrowser.maybeCompleteAuthSession()
 
     export default function Page() {
       useWarmUpBrowser()
 
-      const { useSSOFlow } = useSSO({ strategy: 'enterprise_sso' })
+      const { startSSOFlow } = useSSO({ strategy: 'enterprise_sso' })
 
-      const onPress = React.useCallback(async () => {
+      const onPress = useCallback(async () => {
         try {
-          const { createdSessionId, signIn, signUp, setActive } = await useSSOFlow({
+          const { createdSessionId, setActive } = await startSSOFlow({
+            // Specify redirect URL after successful authentication
+            // Must match the scheme defined in app.json
             redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
             // User identifier with a email domain that matches a enterprise connection
-            identifier: 'foo@corp.com',
+            identifier: 'email',
           })
 
-          // If sign in was successful, set the active session
           if (createdSessionId) {
+            // If sign in was successful, set the active session
             setActive!({ session: createdSessionId })
           } else {
             // Use signIn or signUp returned from startOAuthFlow

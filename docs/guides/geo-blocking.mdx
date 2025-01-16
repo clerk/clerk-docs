@@ -7,141 +7,133 @@ While Clerk does not provide a geo blocking feature, deployment platforms, such 
 
 <Tabs items={["Vercel", "Render"]}>
   <Tab>
-    <Tabs items={["Next.js", "Other"]}>
-      <Tab>
-        The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) using [Vercel's `geolocation()` function](https://vercel.com/guides/geo-ip-headers-geolocation-vercel-functions). If a user visits a route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
+    The following example shows how to implement basic geo blocking in an API route handler using [Vercel's `geolocation()` function](https://vercel.com/guides/geo-ip-headers-geolocation-vercel-functions). If a user makes a request to the API route, the client's country is checked and a 401 error is returned if the country is not allowed.
 
-        ```tsx {{ filename: 'middleware.ts' }}
-        import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-        import { geolocation } from '@vercel/functions'
-        import { NextResponse } from 'next/server'
+    ```tsx {{ filename: 'api/example.ts' }}
+    import { geolocation } from '@vercel/functions'
 
-        // Define your protected and blocked routes
-        const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
-        const isBlockRoute = createRouteMatcher(['/block(.*)'])
+    // Define the countries you want to allow
+    const allowedCountries = ['US']
 
-        // Define the countries you want to allow
-        const allowedCountries = ['US']
+    export async function GET(req: Request) {
+      // Use Vercel's `geolocation()` function to get the client's country
+      const { country } = geolocation(req)
 
-        export default clerkMiddleware(async (auth, req) => {
-          if (isBlockRoute(req)) {
-            return
-          }
+      // If the country is not allowed, return a 401 error
+      // You could also redirect to a custom page depending on your use case
+      if (country && !allowedCountries.includes(country)) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
 
-          // Use Vercel's `geolocation()` function to get the client's country
-          const { country } = geolocation(req)
+      // Add your data fetching logic here
 
-          // Redirect if the client's country is not allowed
-          if (country && !allowedCountries.includes(country)) {
-            return NextResponse.redirect(new URL('/block', req.url))
-          }
+      return Response.json({ data: 'Hello world!' })
+    }
+    ```
 
-          // Protect routes based on authentication status
-          if (isProtectedRoute(req)) await auth.protect()
-        })
+    For Next.js applications, this logic can be applied to your `clerkMiddleware()` to protect routes based on the client's country.
 
-        export const config = {
-          matcher: [
-            // Skip Next.js internals and all static files, unless found in search params
-            '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-            // Always run for API routes
-            '/(api|trpc)(.*)',
-          ],
-        }
-        ```
-      </Tab>
+    The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) using [Vercel's `geolocation()` function](https://vercel.com/guides/geo-ip-headers-geolocation-vercel-functions). If a user visits any route that is not a `/block` route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
 
-      <Tab>
-        The following example shows how to implement geo blocking in an API route handler using [Vercel's `geolocation()` function](https://vercel.com/guides/geo-ip-headers-geolocation-vercel-functions). If a user tries to make a request to the API route, their client's country is checked and a 401 error is returned if the country is not allowed.
+    ```tsx {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+    import { geolocation } from '@vercel/functions'
+    import { NextResponse } from 'next/server'
 
-        ```tsx {{ filename: 'api/example.ts' }}
-        import { geolocation } from '@vercel/functions'
+    // Define your protected and blocked routes
+    const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+    const isBlockRoute = createRouteMatcher(['/block(.*)'])
 
-        // Define the countries you want to allow
-        const allowedCountries = ['US']
+    // Define the countries you want to allow
+    const allowedCountries = ['US']
 
-        export async function GET(req: Request) {
-          // Use Vercel's `geolocation()` function to get the client's country
-          const { country } = geolocation(req)
+    export default clerkMiddleware(async (auth, req) => {
+      if (isBlockRoute(req)) {
+        return
+      }
 
-          // If the country is not allowed, return a 401 error
-          // You could also redirect to a custom page depending on your use case
-          if (country && !allowedCountries.includes(country)) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 })
-          }
+      // Use Vercel's `geolocation()` function to get the client's country
+      const { country } = geolocation(req)
 
-          // Add your data fetching logic here
+      // Redirect if the client's country is not allowed
+      if (country && !allowedCountries.includes(country)) {
+        return NextResponse.redirect(new URL('/block', req.url))
+      }
 
-          return Response.json({ data: 'Hello world!' })
-        }
-        ```
-      </Tab>
-    </Tabs>
+      // Protect routes based on authentication status
+      if (isProtectedRoute(req)) await auth.protect()
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
   </Tab>
 
   <Tab>
-    <Tabs items={["Next.js", "Other"]}>
-      <Tab>
-        The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) using [Render's `cf-ipcountry` header](TODO). If a user visits a route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
+    The following example shows how to implement basic geo blocking in an API route handler using [Render's `cf-ipcountry` header](TODO). If a user tries to make a request to the API route, their client's country is checked and a 401 error is returned if the country is not allowed.
 
-        ```tsx {{ filename: 'middleware.ts' }}
-        import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-        import { NextResponse } from 'next/server'
+    ```tsx {{ filename: 'api/example.ts' }}
+    const allowedCountries = ['US']
 
-        const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
-        const isBlockRoute = createRouteMatcher(['/block(.*)'])
+    export async function GET(req: Request) {
+      const country = req.headers.get('cf-ipcountry')
 
-        const allowedCountries = ['US']
+      // If the country is not allowed, return a 401 error
+      // You could also redirect to a custom page depending on your use case
+      if (country && !allowedCountries.includes(country)) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
 
-        export default clerkMiddleware(async (auth, req) => {
-          if (isBlockRoute(req)) {
-            return
-          }
+      // Add your data fetching logic here
 
-          // Use Render's `cf-ipcountry` header to get the client's country
-          const country = req.headers.get('cf-ipcountry')
+      return Response.json({ data: 'Hello world!' })
+    }
+    ```
 
-          // Redirect if the client's country is not allowed
-          if (country && !allowedCountries.includes(country)) {
-            return NextResponse.redirect(new URL('/block', req.url))
-          }
+    For Next.js applications, this logic can be applied to your `clerkMiddleware()` to protect routes based on the client's country.
 
-          // Protect routes based on authentication status
-          if (isProtectedRoute(req)) await auth.protect()
-        })
+    The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) using [Render's `cf-ipcountry` header](TODO). If a user visits any route that is not a `/block` route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
 
-        export const config = {
-          matcher: [
-            // Skip Next.js internals and all static files, unless found in search params
-            '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-            // Always run for API routes
-            '/(api|trpc)(.*)',
-          ],
-        }
-        ```
-      </Tab>
+    ```tsx {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+    import { NextResponse } from 'next/server'
 
-      <Tab>
-        The following example shows how to implement geo blocking in an API route handler using [Render's `cf-ipcountry` header](TODO). If a user tries to make a request to the API route, their client's country is checked and a 401 error is returned if the country is not allowed.
+    const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+    const isBlockRoute = createRouteMatcher(['/block(.*)'])
 
-        ```tsx {{ filename: 'api/example.ts' }}
-        const allowedCountries = ['US']
+    const allowedCountries = ['US']
 
-        export async function GET(req: Request) {
-          const country = req.headers.get('cf-ipcountry')
+    export default clerkMiddleware(async (auth, req) => {
+      if (isBlockRoute(req)) {
+        return
+      }
 
-          // If the country is not allowed, return a 401 error
-          // You could also redirect to a custom page depending on your use case
-          if (country && !allowedCountries.includes(country)) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 })
-          }
+      // Use Render's `cf-ipcountry` header to get the client's country
+      const country = req.headers.get('cf-ipcountry')
 
-          // Add your data fetching logic here
+      // Redirect if the client's country is not allowed
+      if (country && !allowedCountries.includes(country)) {
+        return NextResponse.redirect(new URL('/block', req.url))
+      }
 
-          return Response.json({ data: 'Hello world!' })
-        }
-        ```
-      </Tab>
-    </Tabs>
+      // Protect routes based on authentication status
+      if (isProtectedRoute(req)) await auth.protect()
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
   </Tab>
 </Tabs>

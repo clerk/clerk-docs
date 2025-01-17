@@ -58,7 +58,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
   <Tabs items={["Next.js"]}>
     <Tab>
       <CodeBlockTabs options={["/sign-up/page.tsx", "/sign-up/verify/page.tsx"]}>
-        ```tsx {{ filename: '/sign-up/page.tsx' }}
+        ```tsx {{ filename: '/sign-up/page.tsx', collapsible: true }}
         'use client'
 
         import * as React from 'react'
@@ -143,6 +143,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
               <form onSubmit={submit}>
                 <input
                   type="email"
+                  placeholder="Enter email address"
                   value={emailAddress}
                   onChange={(e) => setEmailAddress(e.target.value)}
                 />
@@ -153,7 +154,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
         }
         ```
 
-        ```tsx {{ filename: '/sign-up/verify/page.tsx' }}
+        ```tsx {{ filename: '/sign-up/verify/page.tsx', collapsible: true }}
         'use client'
 
         import * as React from 'react'
@@ -271,7 +272,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
   <Tabs items={["Next.js"]}>
     <Tab>
       <CodeBlockTabs options={["/sign-in/page.tsx", "/sign-in/verify/page.tsx"]}>
-        ```tsx {{ filename: '/sign-in/page.tsx' }}
+        ```tsx {{ filename: '/sign-in/page.tsx', collapsible: true }}
         'use client'
 
         import * as React from 'react'
@@ -292,53 +293,52 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
 
           async function submit(e: React.FormEvent) {
             e.preventDefault()
-            // reset verified and expired state in case user resubmits form mid sign-in
+            // Reset states in case user resubmits form mid sign-up
             setVerified(false)
             setVerifying(true)
 
             if (!isLoaded && !signIn) return null
 
+            // Start the sign-up process using the email provided
             try {
-              // when the user submits the form with their email, start the in flow by creating a singIn object
               const { supportedFirstFactors } = await signIn.create({
                 identifier: emailAddress,
               })
 
-              // Filter the returned array to find the 'phone_code' entry
-              const isEmailCodeFactor = (factor: SignInFirstFactor): factor is EmailLinkFactor => {
+              // Filter the returned array to find the 'email_link' entry
+              const isEmailLinkFactor = (factor: SignInFirstFactor): factor is EmailLinkFactor => {
                 return factor.strategy === 'email_link'
               }
-              const emailLinkFactor = supportedFirstFactors?.find(isEmailCodeFactor)
+              const emailLinkFactor = supportedFirstFactors?.find(isEmailLinkFactor)
 
               // @ts-ignore
               // TODO: Fix TS error
               const { emailAddressId } = emailLinkFactor
 
-              // You can use window.location.host to dynamically set the host domain for dev and prod
-              // You could optionally use an environment variable or other source for the host domain
+              // Dynamically set the host domain for dev and prod
+              // You could instead use an environment variable or other source for the host domain
               const protocol = window.location.protocol
               const host = window.location.host
 
-              // Attempt the first factor verification by sending an email with an email link to the user
-              // TODO: Alexis -- the path should just be /sign-in for this component and /sign-in/verify for the url two lines down
+              // Send the user an email with the email link
               const res = await startEmailLinkFlow({
                 emailAddressId,
-                redirectUrl: `${protocol}//${host}/custom-flows/sign-in/magic-link/verify`,
+                redirectUrl: `${protocol}//${host}/sign-in/verify`,
               })
 
-              // Check the verification result.
+              // Check the verification result
               const verification = res.firstFactorVerification
 
-              // if the user has clicked on the link and completed sign in from /sign-in/verify this will return true
+              // Handle if user visited the link and completed sign-up from /sign-in/verify
               if (verification.verifiedFromTheSameClient()) {
-                // set 'verified' true to display a success message or redirect the user
                 setVerifying(false)
                 setVerified(true)
                 return
               }
             } catch (err: any) {
-              // TODO: Alexis -- swap out this for the standard 'error handling' from docs
-              console.error('error', err.errors[0].longMessage)
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2))
             }
           }
 
@@ -350,7 +350,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
           if (verifying) {
             return (
               <div>
-                <p>Please check your email and click on the link that was sent to you</p>
+                <p>Check your email and visit the link that was sent to you.</p>
                 <form onSubmit={reset}>
                   <button type="submit">Restart</button>
                 </form>
@@ -359,8 +359,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
           }
 
           if (verified) {
-            // Repalce this with your own success message or a redirect to another page as desired
-            return <div>Signed in on other tab</div>
+            return <div>Signed up successfully!</div>
           }
 
           return (
@@ -368,26 +367,28 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
               <form onSubmit={submit}>
                 <input
                   type="email"
+                  placeholder="Enter email address"
                   value={emailAddress}
                   onChange={(e) => setEmailAddress(e.target.value)}
                 />
-                <button type="submit">Sign in with magic link</button>
+                <button type="submit">Continue</button>
               </form>
             </div>
           )
         }
         ```
 
-        ```tsx {{ filename: '/sign-in/verify/page.tsx' }}
+        ```tsx {{ filename: '/sign-in/verify/page.tsx', collapsible: true }}
         'use client'
 
         import * as React from 'react'
         import { useClerk } from '@clerk/nextjs'
         import { EmailLinkErrorCode, isEmailLinkError } from '@clerk/nextjs/errors'
         import Link from 'next/link'
-        // This can be used once @clerk/types is updated
-        //import { VerificationStatus } from '@clerk/types';
+        // TODO: Use once @clerk/types is updated
+        // import { VerificationStatus } from '@clerk/types';
 
+        // TODO: Remove once @clerk/types is updated
         export type VerificationStatus =
           | 'expired'
           | 'failed'
@@ -396,7 +397,6 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
           | 'verified_switch_tab'
           | 'client_mismatch'
 
-        // verify the link when the user clicks on the link in their email
         export default function VerifyEmailLink() {
           const [verificationStatus, setVerificationStatus] = React.useState('loading')
 
@@ -404,30 +404,36 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
 
           async function verify() {
             try {
-              // You can use window.location.host to dynamically set the host domain for dev and prod
-              // You could optionally use an environment variable or other source for the host domain
+              // Dynamically set the host domain for dev and prod
+              // You could instead use an environment variable or other source for the host domain
               const protocol = window.location.protocol
               const host = window.location.host
 
               await handleEmailLinkVerification({
-                // URL to navigate to if the sign-in flow needs more requirements (name, username for sign-up) or MFA/second-factor (for sign-in)
+                // URL to navigate to if sign-up flow needs more requirements
                 redirectUrl: `${protocol}//${host}/sign-in`,
-                // What do to when successful
+                // URL to navigate to if sign-up flow is complete
                 redirectUrlComplete: `${protocol}//${host}/sign-in/verify`,
               })
-              // If we're not redirected at this point, it means
-              // that the flow has completed on another device.
+              // If not redirected at this point,
+              // the flow has completed (email was verified) on another device.
               setVerificationStatus('verified')
             } catch (err: any) {
-              // Verification has failed.
+              // Set status to failed
               let status: VerificationStatus = 'failed'
+
+              // If link expired, set status to expired
               if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.Expired) {
                 status = 'expired'
               }
-              // This is only required if you have enabled 'Require the same device and browser' in Dashboard -> Auth -> Email, phone, username -> Email verification link settings -> 'Require the same device and brwoser'
+
+              // OPTIONAL: This check is only required if you have
+              // the 'Require the same device and browser' setting
+              // enabled in the Clerk Dashboard
               if (isEmailLinkError(err) && err.code === EmailLinkErrorCode.ClientMismatch) {
                 status = 'client_mismatch'
               }
+
               setVerificationStatus(status)
             }
           }
@@ -443,7 +449,8 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
           if (verificationStatus === 'failed') {
             return (
               <div>
-                <p>Magic link verification failed</p>
+                <h1>Verify your email</h1>
+                <p>The email link verification failed.</p>
                 <Link href="/sign-in">Sign In</Link>
               </div>
             )
@@ -452,13 +459,16 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
           if (verificationStatus === 'expired') {
             return (
               <div>
-                <p>Magic link expired</p>
+                <h1>Verify your email</h1>
+                <p>The email link has expired.</p>
                 <Link href="/sign-in">Sign In</Link>
               </div>
             )
           }
 
-          // TODO: Alexis -- you may not to mention this is also optional, as per above comment
+          // OPTIONAL: This check is only required if you have
+          // the 'Require the same device and browser' setting
+          // enabled in the Clerk Dashboard
           if (verificationStatus === 'client_mismatch') {
             return (
               <div>
@@ -471,7 +481,12 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
             )
           }
 
-          return <div>Successfully signed in. Return to the original tab to continue.</div>
+          return (
+            <div>
+              <h1>Verify your email</h1>
+              <p>Successfully signed in. Return to the original tab to continue.</p>
+            </div>
+          )
         }
         ```
       </CodeBlockTabs>
@@ -483,9 +498,9 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
   In the following example, the user is prompted to enter their email address and then click a button to verify their email address using an email link. The user is then redirected to a verification page where they can see the result of the email link verification.
 
   {/* <Tabs items={["Next.js"]}>
-            <Tab>
-              ```tsx
-              ```
-            </Tab>
-          </Tabs> */}
+                      <Tab>
+                        ```tsx
+                        ```
+                      </Tab>
+                    </Tabs> */}
 </Steps>

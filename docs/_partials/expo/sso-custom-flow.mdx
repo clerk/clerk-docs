@@ -1,0 +1,125 @@
+<Tabs items={["With OAuth", "With SAML"]}>
+  <Tab>
+    The following example demonstrates how to create a custom SSO sign-in flow for [Google accounts](/docs/authentication/social-connections/google).
+
+    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+    import React, { useCallback, useEffect } from 'react'
+    import * as WebBrowser from 'expo-web-browser'
+    import * as Linking from 'expo-linking'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button } from 'react-native'
+
+    export const useWarmUpBrowser = () => {
+      useEffect(() => {
+        // Preloads the browser for Android devices to reduce authentication load time
+        // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+        void WebBrowser.warmUpAsync()
+        return () => {
+          // Cleanup: closes browser when component unmounts
+          void WebBrowser.coolDownAsync()
+        }
+      }, [])
+    }
+
+    // Handle any pending authentication sessions
+    WebBrowser.maybeCompleteAuthSession()
+
+    export default function Page() {
+      useWarmUpBrowser()
+
+      const { startSSOFlow } = useSSO({ strategy: 'oauth_google' })
+
+      const onPress = useCallback(async () => {
+        try {
+          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+            // URL to redirect to after successful authentication
+            // Must match the scheme defined in app.json
+            redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
+          })
+
+          // If sign in was successful, set the active session
+          if (createdSessionId) {
+            setActive!({ session: createdSessionId })
+          } else {
+            // Use `signIn` or `signUp` returned from `startSSOFlow`
+            // for next steps, such as MFA
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }, [])
+
+      return (
+        <View>
+          <Button title="Sign in with Google" onPress={onPress} />
+        </View>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The following example demonstrates how to create a custom SSO sign-in flow with [SAML](docs/authentication/enterprise-connections/overview#saml).
+
+    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+    import React, { useCallback, useEffect } from 'react'
+    import * as WebBrowser from 'expo-web-browser'
+    import * as Linking from 'expo-linking'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button } from 'react-native'
+
+    export const useWarmUpBrowser = () => {
+      useEffect(() => {
+        // Preloads the browser for Android devices to reduce authentication load time
+        // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+        void WebBrowser.warmUpAsync()
+        return () => {
+          // Cleanup: closes browser when component unmounts
+          void WebBrowser.coolDownAsync()
+        }
+      }, [])
+    }
+
+    // Handle any pending authentication sessions
+    WebBrowser.maybeCompleteAuthSession()
+
+    export default function Page() {
+      useWarmUpBrowser()
+
+      const { startSSOFlow } = useSSO({ strategy: 'enterprise_sso', identifier: 'email' })
+
+      const onPress = useCallback(async () => {
+        try {
+          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+            // URL to redirect to after successful authentication
+            // Must match the scheme defined in app.json
+            redirectUrl: Linking.createURL('/dashboard', { scheme: 'myapp' }),
+            // User identifier with a email domain that matches a enterprise connection
+            identifier: 'email',
+          })
+
+          // If sign in was successful, set the active session
+          if (createdSessionId) {
+            setActive!({ session: createdSessionId })
+          } else {
+            // Use `signIn` or `signUp` returned from `startSSOFlow`
+            // for next steps, such as MFA
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }, [])
+
+      return (
+        <View>
+          <Button title="Sign in with Google" onPress={onPress} />
+        </View>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

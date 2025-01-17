@@ -1,0 +1,86 @@
+---
+title: Rack Middleware
+description: The Clerk SDK Rack middleware can be used in any Rack-based application.
+---
+
+To use Clerk in a Rack application, you must `use` the `Clerk::Rack` middleware.
+
+```ruby
+# config.ru
+require "rack"
+require "clerk/rack"
+
+require_relative "app"
+
+use Clerk::Rack::Middleware
+run App.new
+```
+
+```ruby
+# app.rb
+require "erb"
+require "clerk"
+
+class App
+  def call(env)
+    clerk = env["clerk"]
+
+    return "Authenticated User: #{clerk.user.first_name}" if clerk.session
+    return "Not Authenticated"
+  end
+end
+```
+
+This gives your actions and views access to the `env['clerk']` object.
+
+
+## Re-verification actions
+
+There are two ways to handle reverification in a Rack application:
+
+1. Use the `Clerk::Rack::Reverification` middleware.
+2. Handle reverification in your application logic.
+
+### Using the `Clerk::Rack::Reverification` middleware
+
+```ruby
+# config.ru
+require "rack"
+require "clerk/rack"
+
+require_relative "app"
+
+use Clerk::Rack
+use Clerk::Rack::Reverification,
+  preset: Clerk::StepUp::Preset::LAX, # defaults to `Clerk::StepUp::Preset::STRICT
+  routes: ["/*"]
+
+run App.new
+```
+
+### Handle Re-verification in your application logic.
+
+```ruby
+# app.rb
+require "erb"
+require "clerk"
+
+STEP_UP_PRESET = Clerk::StepUp::Preset::LAX
+
+class App
+  def call(env)
+    clerk = env["clerk"]
+
+    if clerk.user_needs_reverification?(STEP_UP_PRESET)
+      return clerk.user_reverification_rack_response(STEP_UP_PRESET)
+    end
+
+    return "Authenticated User: #{clerk.user.first_name}" if clerk.session
+    return "Not Authenticated"
+  end
+end
+```
+
+If you want to protect an action, you can add the `auth` filter to the action you're looking to protect.
+
+If you would like to require the user to reverify their session, if necessary, you can add the `reverify` filter to the action you're looking to protect. The `reverify` filter can accept a boolean (defaults to `Clerk::StepUp::Preset::STRICT`) or a preset, such as `Clerk::StepUp::Preset::LAX`

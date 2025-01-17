@@ -69,18 +69,7 @@ These are the guidelines we use to write our SSO guides.
 
 Screenshots should be used little to none in the docs. The instructions should be explicit and include all necessary details without the need for a visual reference. The instructions should be laid out as numbered lists to make the content more palatable to readers. Links should be added on their first reference.
 
-### Do
-
-```mdx
-1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
-1. Select **Add connection** and select **For all users**.
-1. In the **Choose provider** dropdown, select **Microsoft**.
-1. Select **Add connection**.
-```
-
-### Don't
-
-In this example, the instructions are not explicit, as it tells the reader to select **Microsoft** but doesn't specify where to find it.
+> ❌ In the example below, the instructions are not explicit, as it tells the reader to select **Microsoft** but doesn't specify where to find it.
 
 ```mdx
 1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
@@ -89,162 +78,59 @@ In this example, the instructions are not explicit, as it tells the reader to se
 1. Select **Microsoft**.
 ```
 
-## Bold proper nouns
-
-Bold proper nouns found in the UI, such as titles, headings, product names, etc.
-
-An exception to this rule is the Clerk Dashboard, which doesn't need to be bolded to enforce consistency across the docs.
-
-### Do
+> ✅ In the example below, the instructions are explicit and include all necessary details without the need for a visual reference.
 
 ```mdx
-In the **Azure services** section, select **Microsoft Entra ID**.
-```
-
-### Don't
-
-```mdx
-In the Azure services section, select Microsoft Entra ID.
+1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+1. Select **Add connection** and select **For all users**.
+1. In the **Choose provider** dropdown, select **Microsoft**.
+1. Select **Add connection**.
 ```
 
 ## Writing about redirects
 
 If the step ends with a redirect, include the redirect instructions in the step.
 
-### Do
+> ❌
 
-1. Select **New application**. You'll be redirected to the <SSO_PROVIDER_DASHBOARD>.
-1. Select **Create your own application**.
-
-### Don't
-
+```mdx
 1. Select **New application**.
 1. In the **<SSO_PROVIDER_DASHBOARD>**, select **Create your own application**.
-
-## Component naming
-
-The proper names for the components are:
-
-- Dashboard: refers to a control panel or central hub where users can interact with multiple tools or view data
-- Panel: drawer
-- Modal: popup
-- Dropdown
-
-## Use conjunctions
-
-Use conjunctions in the copy to make the copy more colloquial.
-
-### Do
-
-"You'll"
-
-### Don't
-
-"You will"
-
-## Avoid using "button"
-
-### Do
-
-```mdx
-1. Select **New client secret**.
 ```
 
-### Don't
+> ✅
 
 ```mdx
-1. Select the **New client secret** button.
+1. Select **New application**. You'll be redirected to the <SSO_PROVIDER_DASHBOARD>.
+1. Select **Create your own application**.
 ```
 
-## Avoid using "click"
-
-### Do
-
-```mdx
-1. Select **New client secret**.
-```
-
-### Don't
-
-```mdx
-1. Click **New client secret**.
-```
-
-## Avoid using "appears"
-
-### Do
-
-```mdx
-In the panel that opens
-```
-
-### Don't
-
-```mdx
-In the panel that appears
-```
-
-## Action verbs
-
-- Add: general use (e.g., Add your app information)
-- Enter: general typing (e.g., Enter your email address)
-- Paste: to copy and paste values (e.g., Paste the Client ID you copied from the Clerk Dashboard)
-- Complete: to fill out forms
-
-## Application vs. app
-
-Use "application" for the first instance where it's used and then "app" for the rest of the guide.
-
-## Redirected to vs. taken to
-
-Use "redirected to" instead of "taken to."
-
-## Ensure vs. make sure
-
-Use "ensure" instead of "make sure."
-
-### Do
-
-```mdx
-On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be redirected to the **Certificate & secrets** page.
-```
-
-### Don't
-
-```mdx
-On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be taken to the **Certificate & secrets** page.
-```
-
-## Page vs. Tab
+## Page vs. tab
 
 Assume users are opening windows versus browser tabs. Use active voice (e.g., "keep" vs. "leave).
 
-### Do
-
-```mdx
-Keep the page open.
-```
-
-### Don't
-
-```mdx
-Leave the page open.
-```
+> ❌ The first example is wrong because it uses "leave" instead of "keep" and "tab" instead of "page."
 
 ```mdx
 Leave the tab open.
 ```
 
-## Complete vs. Fill out
-
-### Do
+> ✅ This example is correct because it uses "keep" and "page".
 
 ```mdx
-Complete the form as follows
+Keep the page open.
 ```
 
-### Don't
+## Complete vs. fill out
+
+> ❌
 
 ```mdx
 Fill out the form as follows
+```
+
+> ✅
+
+```mdx
+Complete the form as follows
 ```

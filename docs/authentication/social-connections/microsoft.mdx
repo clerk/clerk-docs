@@ -34,10 +34,7 @@ For _development instances_, Clerk uses preconfigured shared OAuth credentials a
 
 ## Configure for your production instance
 
-For _production instances_, you must provide custom credentials.
-
-> [!WARNING]
-> Microsoft requires an expiration time for client secrets. The default is 6 months, and the maximum is 24 months. When your secret expires, your social connection will stop working until you generate a new secret. It's recommended to set a reminder before the expiration date to avoid disruption to your sign-in flow.
+For _production instances_, you must provide custom credentials. If you already [configured Microsoft as an EASIE connection](/docs/authentication/enterprise-connections/easie/microsoft), you can skip this step. EASIE SSO will automatically use the credentials you configured for your enterprise connection.
 
 To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [Microsoft Azure portal](https://portal.azure.com).
 
@@ -52,51 +49,19 @@ To make the setup process easier, it's recommended to keep two browser tabs open
 
   ### Create a Microsoft Entra ID app
 
-  > [!TIP]
-  > If you already have a Microsoft Entra ID app you'd like to connect to Clerk, select your app from the [Microsoft Azure portal](https://portal.azure.com/#home) and skip to [the next step in this tutorial](#get-your-client-id-and-client-secret).
-
-  1. On the homepage of the [Microsoft Azure portal](https://portal.azure.com/#home), in the **Azure services** section, select **[Microsoft Entra ID](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview)**. If you don't see this option, select **More services**. You'll be redirected to the [All Services](https://portal.azure.com/#allservices) page.
-  1. In the sidebar, open the **Manage** dropdown and select **[App registrations](https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps)**.
-  1. Select **New Registration**. You'll be redirected to the **Register an application** page.
-  1. Complete the form as follows:
-     1. Under **Name**, enter your app name.
-     1. Under **Supported account types**, select **Accounts in any organizational directory (Any Microsoft Entra ID tenant – Multitenant) and personal Microsoft accounts (e.g. Skype, Xbox)**.
-     1. Under **Redirect URI (Optional)**, select **Web** as the platform and enter the **Redirect URI** you saved from the Clerk Dashboard.
-     1. Select **Register** to submit the form. You'll be redirected to the **Overview** page of your new app. Keep this page open.
+  <Include src="_partials/authentication/microsoft/create-app" />
 
   ### Get your Client ID and Client Secret
 
-  1. From your app's **Overview** page, save the **Application (client) ID** somewhere secure.
-  1. In the sidebar, select **Certificates & secrets**.
-  1. Select **New client secret**.
-  1. In the modal that opens, enter a description and set an expiration time for your secret.
-     > [!WARNING]
-     > Microsoft requires an expiration time for client secrets. The default is 6 months, and the maximum is 24 months. When your secret expires, your social connection will stop working until you generate a new secret. It's recommended to set a reminder before the expiration date to avoid disruption to your sign-in flow.
-  1. Select **Add**.
-  1. Save the **Value** somewhere secure. You'll add this secret and your client ID to your Clerk app later.
-
-  ### Connect your Entra ID app and get your redirect URI
-
-  1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
-  1. Select **Add connection** and select **For all users**.
-  1. In the **Choose provider** dropdown, select **Microsoft**.
-  1. Ensure that both **Enable for sign-up and sign-in** and **Use custom credentials** are toggled on. Then:
-     - Under **Client ID**, paste the value you copied from **Application (client) ID** in the Microsoft Azure portal.
-     - Under **Client Secret**, paste the client secret value you generated.
-     - Save the **Redirect URI** somewhere secure.
-     - Select **Add connection**.
+  <Include src="_partials/authentication/microsoft/get-client-id-secret" />
 
   ### Enable OpenID
 
-  To connect your Clerk app to your Microsoft app, set the **Redirect URI** in your Microsoft Azure portal.
+  <Include src="_partials/authentication/microsoft/enable-openid" />
 
-  1. Navigate back to the Microsoft Azure portal.
-  1. In the sidebar, open the **Manage** dropdown and select **Authentication**.
-  1. Select **Add a platform**.
-  1. Select **Web**.
-  1. In the **Redirect URIs** field and the **Front-channel logout URL** field, paste the **Redirect URI** you copied from the Clerk Dashboard.
-  1. Under **Implicit grant and hybrid flows**, check both **Access tokens** and **ID tokens**.
-  1. Select **Configure** to save the changes.
+  ### Secure your app against the nOAuth vulnerability
+
+  <Include src="_partials/authentication/microsoft/noauth" />
 
   ### Set the Client ID and Client Secret in the Clerk Dashboard
 
@@ -105,30 +70,6 @@ To make the setup process easier, it's recommended to keep two browser tabs open
   ### Test your connection
 
   <Include src="_partials/authentication/test-your-connection" />
-
-  ### Secure your app against the nOAuth vulnerability
-
-  [nOAuth](https://www.descope.com/blog/post/noauth) is an exploit in Microsoft Entra ID OAuth apps that can lead to account takeovers via email address spoofing. Clerk mitigates this risk by enforcing stricter checks on verified email addresses.
-
-  For further security, Microsoft offers an optional `xms_edov` claim, which provides additional context to determine whether the returned email is verified.
-
-  To enable this optional claim, you must:
-
-  1. In the Microsoft Azure portal, navigate to your app.
-  1. In the sidebar, select **Token configuration**.
-  1. Select **Add optional claim**.
-  1. For the **Token type**, select **ID**. Then, in the table that opens, enable the `email` and `xms_pdl` claims.
-  1. At the bottom of the modal, select **Add**. A new modal will prompt you to turn on the Microsoft Graph email permission. Enable it, then select **Add** to complete the form.
-     > [!NOTE]
-     > At the time of writing, the `xms_edov` claim is still in preview and may not be available for all apps. We'll choose another claim and rename it in the manifest later.
-  1. Repeat the previous steps for **Token type**, but select **Access** instead of **ID**. The **Optional claims** list should now show two claims for `email` and two for `xms_pdl`: one each for **ID** and **Access**.
-  1. In the sidebar, go to **Manifest**.
-  1. In the text editor, search for `"acceptMappedClaims"` and set its value from `null` to `true`.
-  1. Search for `"optionalClaims"`, where you'll find the `idToken` and `accessToken` arrays. Each array has an object with the name `xms_pdl`. Change the name to `xms_edov`.
-  1. At the top of the page, select **Save**.
-  1. In the sidebar, navigate back to **Token configuration** and confirm that the **Optional claims** list includes two claims for `email` and two for `xms_edov`: one each for **ID** and **Access**.
-
-  With these steps complete, Microsoft will send the `xms_edov` claim in the token, which Clerk will use to determine whether the email is verified, even when used with Microsoft Entra ID.
 </Steps>
 
 ## Limitations

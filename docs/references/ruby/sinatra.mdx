@@ -1,11 +1,11 @@
 ---
 title: Sinatra integration
-description: The Clerk SDK comes with a Sinatra extension.
+description: The Clerk Ruby SDK provides a Sinatra extension to integrate Clerk into your Sinatra app.
 ---
 
-To use Clerk in Sinatra, you must `register` the `Sinatra::Clerk` extension.
+The Clerk Ruby SDK provides a Sinatra extension to integrate Clerk into your Sinatra app. To get started, you must `register` the `Sinatra::Clerk` extension. This gives your actions and views access to the `clerk` method.
 
-```ruby
+```ruby {{ filename: 'app.rb' }}
 require "clerk/sinatra"
 require "sinatra/base"
 
@@ -21,13 +21,26 @@ class App < Sinatra::Base
 end
 ```
 
-This gives your actions and views access to the `clerk` method.
-
 ## Protected & Re-verification actions
 
-If you want to protect an action, you can add the `auth` filter to the action you're looking to protect.
+The `auth` filter can be added to any route to protect it from unauthorized access. When applied, this filter ensures that only authenticated users can access the route.
 
-If you would like to require the user to reverify their session, if necessary, you can add the `reverify` filter to the action you're looking to protect. The `reverify` filter can accept a boolean (defaults to `Clerk::StepUp::Preset::STRICT`) or a preset, such as `Clerk::StepUp::Preset::LAX`
+The `reverify` filter provides an additional layer of security by requiring users to re-verify their session before accessing sensitive routes. This filter accepts either:
+
+- A boolean value (defaults to `Clerk::StepUp::Preset::STRICT` when `true`)
+- A specific preset like `Clerk::StepUp::Preset::LAX`, `Clerk::StepUp::Preset::MODERATE`, or `Clerk::StepUp::Preset::STRICT_MFA`
+
+The presets determine how recently a user must have verified their session:
+
+- `LAX`: Within the past day
+- `MODERATE`: Within the past hour
+- `STRICT`: Within the past 10 minutes
+- `STRICT_MFA`: Within the past 10 minutes, requiring both first and second factors
+
+{/* TODO: How is the preset used here?
+  also, I think these can be two separate examples
+  also note: /docs/references/backend/types/auth-object#reverification-config
+*/}
 
 ```ruby
 require "clerk/sinatra"
@@ -40,11 +53,15 @@ class App < Sinatra::Base
     erb :index, format: :html5
   end
 
+  # Protect the "/admin" route with the `auth` filter
+  # If the user is not authenticated, they will be redirected to the sign-in page
   get "/admin", auth: true do
     @user = clerk.user
     erb :admin, format: :html5
   end
 
+  # Protect the "/admin" route with the `auth` and `reverify` filters
+  # If the user is authenticated, require re-verification before accessing the "/admin" route
   post "/admin", auth: true, reverify: true do
     {message: clerk.user? ? "Valid session" : "Not logged in"}.to_json
   end
@@ -53,13 +70,13 @@ class App < Sinatra::Base
 end
 ```
 
-Don't forget to set the environment variable `CLERK_SIGN_IN_URL` or the method `clerk_sign_in_url` will fail.
-
 ### Overriding the default behavior of the `auth` filter
 
-By default, the `auth` filter will redirect to the sign-in page if the user is not logged in. You can override the default behavior of the `auth` filter:
+By default, the `auth` filter will redirect to the sign-in page if the user is not authenticated. You can override this behavior by setting a custom redirect URL using the [`CLERK_SIGN_IN_URL` environment variable](/docs/quickstarts/ruby#environment-variables).
 
-```ruby
+{/* TODO: This confuses me, the `auth` filter redirects to the sign-in page. But doesn't the `sign_in_url` point to the sign-in page? so it's still redirecting to the sign-in page? */}
+
+```ruby {{ filename: 'app.rb' }}
 require "clerk/sinatra"
 require "sinatra/base"
 
@@ -68,7 +85,8 @@ class App < Sinatra::Base
 
   set(:auth) do |active|
     condition do
-      # Don't forget to set the environment variable `CLERK_SIGN_IN_URL` or the method `sign_in_url` will fail.
+      # If the user is not authenticated, redirect to the custom URL
+      # The `CLERK_SIGN_IN_URL` env var must be set or the `sign_in_url` method will fail
       redirect clerk.sign_in_url if active && !clerk.session
     end
   end
@@ -77,11 +95,15 @@ class App < Sinatra::Base
     erb :index, format: :html5
   end
 
+  # Protect the "/admin" route with the `auth` filter
+  # If the user is not authenticated, they will be redirected to the custom URL
   get "/admin", auth: true do
     @user = clerk.user
     erb :admin, format: :html5
   end
 
+  # Protect the "/admin" route with the `auth` and `reverify` filters
+  # If the user is authenticated, require re-verification before accessing the "/admin" route
   post "/admin", auth: true, reverify: true do
     {message: clerk.user? ? "Valid session" : "Not logged in"}.to_json
   end

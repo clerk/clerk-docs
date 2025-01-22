@@ -1,71 +1,101 @@
 ---
 title: Use Clerk as an OAuth 2.0 provider
-description: Learn how to use Clerk to facilitate Single Sign-On (SSO) with other Clients that support the OAuth 2.0 protocol.
+description: Learn how to use Clerk to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 protocol.
 ---
 
 > [!WARNING]
 > **This feature is not designed for handling authentication directly in your application.** To handle authentication _in your_ application, you can [configure one of the many social providers that Clerk offers](/docs/authentication/social-connections/oauth#configuration), such as Google.
 
-Clerk can be configured as an OAuth 2.0 provider to facilitate Single Sign-On (SSO) with other Clients that support the OAuth 2.0 protocol. This feature allows users to authenticate to other applications using their Clerk credentials, enabling user information sharing between your Clerk application and OAuth Clients.
+Clerk can be configured as an OAuth 2.0 provider to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 protocol. This feature allows users to authenticate to other applications using their Clerk credentials, enabling user information sharing between your Clerk application and OAuth clients.
 
 ## When should you use Clerk as an OAuth 2.0 provider?
 
-You can use Clerk as an OAuth 2.0 provider if you want your users to authenticate to a third party site or a tool using their credentials from your application. **This is not the same as supporting an OAuth provider, such as Google, in your application. If you want your users to be able to sign in to your application with an OAuth provider, see the [dedicated guide](/docs/authentication/social-connections/oauth#configuration).**
+You can use Clerk as an OAuth 2.0 provider if you want your users to authenticate to a third party site or a tool using their credentials from your application. **This is not the same as supporting an OAuth provider, such as Google, in your application. If you want your users to be able to sign in to your application with an OAuth provider, see the [dedicated guide](/docs/authentication/social-connections/oauth).**
 
 ## How it works
 
-In order to make your Clerk instance operate as an OAuth 2.0 provider, you just need to create an OAuth application. Then, you will need to configure the external service to work with your Clerk instance, using the necessary data from your OAuth application.
+Clerk is the OAuth 2.0 provider for your application. The "client" is the third party site or tool that you want your users to authenticate to.
 
-### Create an OAuth application in Clerk
+In order to make your Clerk instance operate as an OAuth 2.0 provider, create an OAuth application in the Clerk Dashboard. Then, configure the client to work with your Clerk instance, using the necessary data from your Clerk OAuth application.
 
-In order to create an OAuth application, in the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
+### Create a Clerk OAuth application
 
-You will have to provide a `Name` which helps you to identify your application, a `Callback URL` which you will need to retrieve from the OAuth Client and lastly to select the `Scopes` that would like to leverage.
+To create an OAuth application,
 
-Optionally, you can also enable the `Public` mode, which means that you will be able to use the OAuth 2.0 PKCE flow.
+1. In the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
+1. Select the **Add OAuth application** button. A modal will open.
+1. Complete the following fields:
+   - `Name` - Helps you to identify your application.
+   - `Callback URL` - The URL that Clerk will redirect to after the user has authenticated. You will need to retrieve this value from the client.
+   - `Scopes` - The scopes that you would like to leverage.
+   - `Public` - Whether you would like to use the OAuth 2.0 PKCE flow.
+1. Select the **Create** button. You'll be redirected to your app's settings page.
 
 > [!WARNING]
 > For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so we recommend you download the secret and store it someplace secure.
 
-Now that you have set up an OAuth application in Clerk, you will need to configure these settings in your OAuth Client.
+### Configure your client
 
-- **Client ID**: Public identifier of your OAuth application
-- **Client Secret**: Confidential secret used to authenticate your OAuth application
-- **Authorize URL**: Used by the Client to request authorization from your user
-- **Token URL**: Used by the Client to exchange an Authorization Code for an Access Token and a Refresh Token
-- **User Info URL**: Used by the Client to retrieve additional user data upon authentication
-- **Discovery URL**: Used by the Client to retrieve the configuration data of the OAuth 2.0 provider
+Now that you have set up a Clerk OAuth application, you will need to configure the following settings in your client.
+
+- **Client ID**: Public identifier of your Clerk OAuth application.
+- **Client Secret**: Confidential secret used to authenticate your Clerk OAuth application.
+- **Authorize URL**: Used by the client to request authorization from your user.
+- **Token URL**: Used by the client to exchange an authorization code for an access token and a refresh token.
+- **User Info URL**: Used by the client to retrieve additional user data upon authentication.
+- **Discovery URL**: Used by the client to retrieve the configuration data of the Clerk OAuth application.
 
 ### OAuth 2.0 Scopes
 
-Scopes let you specify exactly which user data to make available and what type of access you need. Currently, the following are supported:
+OAuth 2.0 scopes define the level of access and specific user data that will be shared with the client application during authentication. The following scopes are currently supported:
 
 | Scope | Access |
 | - | - |
-| profile | Grant access to the user personal information, such as first and last name, avatar and username |
-| email | Grant access to the user email address |
-| public\_metadata | Grant access to the user public and unsafe metadata |
-| private\_metadata | Grant access to the user private metadata |
+| `profile` | Grant access to the user personal information, such as first and last name, avatar and username |
+| `email` | Grant access to the user email address |
+| `public_metadata` | Grant access to the user public and unsafe metadata |
+| `private_metadata` | Grant access to the user private metadata |
 
-### User Info
+### Retrieve user information
 
-After a user has successfully completed an OAuth 2.0 flow, you can use the obtained Access Token, in the Authorization header, to retrieve additional user information from the User Info endpoint (`/oauth/userinfo`) based on the granted scopes.
+After a user has successfully completed an OAuth 2.0 flow, you can use the obtained access token to retrieve additional user information from Clerk's `/oauth/userinfo` endpoint, based on the granted scopes.
 
-The User Info endpoint makes available the following user properties:
+```tsx {{ filename: '/api/get-clerk-user-info.tsx' }}
+export async function GET() {
+  // Get the access token
+  // insert code...
+
+  // Fetch the user data from Clerk's `/oauth/userinfo` endpoint
+  const clerkUrl = 'https://api.clerk.com/v1/oauth/userinfo'
+
+  const clerkResponse = await fetch(clerkUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  // Handle the response from Clerk's `/oauth/userinfo` endpoint
+  const clerkData = await clerkResponse.json()
+
+  return Response.json({ message: clerkData })
+}
+```
+
+The `/oauth/userinfo` endpoint provides the following user properties, depending on the granted scopes:
 
 | Property | Description |
 | - | - |
-| user\_id | The ID of the user |
-| given\_name | The first name of the user |
-| family\_name | The last name of the user |
-| name | The full name of the user |
-| picture | The avatar URL of the user |
-| preferred\_username | The username of the user |
-| email | The primary email address of the user |
-| email\_verified | Whether the primary email address of the user is verified |
-| public\_metadata | The public metadata of the user |
-| private\_metadata | The private metadata of the user |
-| unsafe\_metadata | The unsafe metadata of the user |
+| `user_id` | The ID of the user |
+| `given_name` | The first name of the user |
+| `family_name` | The last name of the user |
+| `name` | The full name of the user |
+| `picture` | The avatar URL of the user |
+| `preferred_username` | The username of the user |
+| `email` | The primary email address of the user |
+| `email_verified` | Whether the primary email address of the user is verified |
+| `public_metadata` | The public metadata of the user |
+| `private_metadata` | The private metadata of the user |
+| `unsafe_metadata` | The unsafe metadata of the user |
 
 ### Token Introspection Endpoint
 
@@ -87,8 +117,8 @@ Clerk OAuth 2.0 provider supports the following flows and grant types:
 
 ### When do the tokens expire?
 
-Access Tokens expire after 2 hours, Refresh Tokens expire after 3 days and Authorization Codes expire after 10 minutes.
+Authorization codes expire after 10 minutes. Access tokens expire after 2 hours. Refresh tokens expire after 3 days.
 
-### Is OpenID Connect supported?
+### Is OpenID Connect (OIDC) supported?
 
 At this time, OIDC is not supported.

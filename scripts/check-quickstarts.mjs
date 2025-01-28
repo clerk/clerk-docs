@@ -32,6 +32,8 @@ try {
         }
       })
 
+    // Keep empty string to make the output more readable in the GH Actions comment
+    console.log('')
     console.log('⚠️  Please update the corresponding quickstarts in the Dashboard')
     process.exit(0)
   }

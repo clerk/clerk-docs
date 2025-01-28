@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       needs_update: ${{ steps.check.outputs.needs_update }}
+      changed_files: ${{ steps.check.outputs.changed_files }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -30,6 +31,9 @@ jobs:
         run: |
           OUTPUT=$(npm run lint:check-quickstarts)
           echo "Output from check-quickstarts: $OUTPUT"
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           if [[ "$OUTPUT" == *"Please update the corresponding quickstarts in the Dashboard"* ]]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
           else
@@ -44,9 +48,10 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
+            const changedFiles = `${{ needs.check_quickstarts.outputs.changed_files }}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '⚠️  Please update the corresponding quickstarts in the Dashboard',
+              body: '⚠️  Please update the corresponding quickstarts in the Dashboard\n\nChanged files:\n```\n' + changedFiles + '\n```'
             })

@@ -7,7 +7,30 @@ on:
 jobs:
   trigger_lint:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v3
-      - run: npm i
-      - run: npm run lint
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run lint
+        id: lint
+        run: |
+          npm i
+          npm run lint
+          # Capture the output of the quickstart check script
+          # and store it in a Github Actions output file
+          # to be used in the next step's conditional
+          echo "quickstart_changes=$(node scripts/check-quickstarts.mjs | grep -c '⚠️  Please update the corresponding quickstarts in the Dashboard' || true)" >> $GITHUB_OUTPUT
+
+      - name: Share lint results
+        if: steps.lint.outputs.quickstart_changes > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️  Please update the corresponding quickstarts in the Dashboard',
+            })

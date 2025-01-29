@@ -9,7 +9,105 @@ Clerk provides a set of [hooks and helpers](/docs/references/react-router/overvi
 
 To access active session and user data on the server-side, use the [`getAuth()`](/docs/references/react-router/get-auth) helper.
 
-<Include src="_partials/react-router/get-auth-examples" />
+### Server data loading
+
+The [`getAuth()`](/docs/references/tanstack-start/get-auth) helper returns the [`Auth`](/docs/references/backend/types/auth-object) object of the currently active user, which contains important information like the current user's session ID, user ID, and organization ID. The `userId` can be used to protect your API routes.
+
+In some cases, you may need the full [`Backend User`](/docs/references/backend/types/backend-user) object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server. The `clerkClient()` helper returns an instance of the [JavaScript Backend SDK](/docs/references/backend/overview), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
+
+In the following example, the `userId` is passed to the Backend SDK's `getUser()` method to get the user's full `Backend User` object.
+
+```tsx {{ filename: 'app/routes/profile.tsx' }}
+import { redirect } from 'react-router'
+import { getAuth } from '@clerk/react-router/ssr.server'
+import { createClerkClient } from '@clerk/react-router/api.server'
+import type { Route } from './+types/profile'
+
+export async function loader(args: Route.LoaderArgs) {
+  // Use `getAuth()` to get the user's ID
+  const { userId } = await getAuth(args)
+
+  // Protect the route by checking if the user is signed in
+  if (!userId) {
+    return redirect('/sign-in?redirect_url=' + args.request.url)
+  }
+
+  // Instantiate the Backend SDK and get the user's full `Backend User` object
+  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
+    userId,
+  )
+
+  return {
+    user: JSON.stringify(user),
+  }
+}
+
+export default function Profile({ loaderData }: Route.ComponentProps) {
+  return (
+    <div>
+      <h1>Profile Data</h1>
+      <pre>
+        <code>{JSON.stringify(loaderData, null, 2)}</code>
+      </pre>
+    </div>
+  )
+}
+```
+
+### Server action
+
+Unlike the previous example that loads data when the page loads, the following example uses `getAuth()` to only fetch user data after submitting the form. The helper runs on form submission, authenticates the user, and processes the form data.
+
+```tsx {{ filename: 'app/routes/profile-form.tsx' }}
+import { redirect, Form } from 'react-router'
+import { getAuth } from '@clerk/react-router/ssr.server'
+import { createClerkClient } from '@clerk/react-router/api.server'
+import type { Route } from './+types/profile-form'
+
+export async function action(args: Route.ActionArgs) {
+  // Use `getAuth()` to get the user's ID
+  const { userId } = await getAuth(args)
+
+  // Protect the route by checking if the user is signed in
+  if (!userId) {
+    return redirect('/sign-in?redirect_url=' + args.request.url)
+  }
+
+  // Get the form data
+  const formData = await args.request.formData()
+  const name = formData.get('name')?.toString()
+
+  // Instantiate the Backend SDK and get the user's full `Backend User` object
+  const user = await createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }).users.getUser(userId)
+
+  return {
+    name,
+    user: JSON.stringify(user),
+  }
+}
+
+export default function ProfileForm({ actionData }: Route.ComponentProps) {
+  return (
+    <div>
+      <h1>Profile Data</h1>
+
+      <Form method="post">
+        <label htmlFor="name">Name</label>
+        <input type="text" name="name" id="name" />
+        <button type="submit">Submit</button>
+      </Form>
+
+      {actionData ? (
+        <pre>
+          <code>{JSON.stringify(actionData, null, 2)}</code>
+        </pre>
+      ) : null}
+    </div>
+  )
+}
+```
 
 ## Client-side
 

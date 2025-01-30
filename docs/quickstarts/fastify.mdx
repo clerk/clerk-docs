@@ -43,7 +43,7 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
 
   [Clerk's Fastify SDK](https://github.com/clerk/javascript/tree/main/packages/fastify) provides a range of backend utilities to simplify user authentication and management in your application.
 
-  To get started using Clerk with Fastify, add the SDK to your project:
+  Run the following command to install the SDK:
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
     ```bash {{ filename: 'terminal' }}
@@ -62,7 +62,7 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
   ## Set your Clerk API keys
 
   <SignedIn>
-    Add the following keys to your `.env.local` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
   </SignedIn>
 
   <SignedOut>
@@ -78,11 +78,11 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
   CLERK_SECRET_KEY={{secret}}
   ```
 
-  ## Configure `clerkPlugin` for all routes
+  ## Configure `clerkPlugin()` for all routes
 
-  The `clerkPlugin` is a Fastify plugin provided by Clerk to integrate authentication into your Fastify application. To ensure that Clerk's authentication and user management features are applied across your Fastify application, configure the `clerkPlugin` to handle all routes or limit it to specific ones.
+  The `clerkPlugin()` function is a Fastify plugin provided by Clerk to integrate authentication into your Fastify application. To ensure that Clerk's authentication and user management features are applied across your Fastify application, configure the `clerkPlugin()` to handle all routes or limit it to specific ones.
 
-  The following example registers the plugin for all routes. To register the plugin for specific routes only, refer to the [**Using Clerk for specific pages only**](/docs/quickstarts/fastify#using-clerk-for-specific-routes-only) section.
+  The following example registers the plugin for all routes. To register the plugin for specific routes, see the [reference docs](/docs/references/fastify/overview#configure-clerk-plugin-for-specific-routes).
 
   > [!IMPORTANT]
   > The `dotenv/config` module must be imported before any Clerk modules. This order is important because Clerk instances are created during the import process and rely on environment variables, such as API keys, to be initialized correctly. For more information, refer to the [Fastify docs](https://fastify.dev/docs/latest/Guides/Getting-Started/#loading-order-of-your-plugins).
@@ -108,98 +108,9 @@ Learn how to integrate Clerk into your Fastify backend for secure user authentic
   start()
   ```
 
-  ## Use `getAuth()` to access the auth state and protect routes
+  ## Protect your routes using `getAuth()`
 
-  The following example uses [`getAuth()`](/docs/references/nextjs/get-auth){{ target: '_blank' }} to retrieve the `userId`, which is used to protect the route and is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to retrieve the current user's `User` object.
+  The [`getAuth()`](/docs/references/fastify/overview#get-auth) helper retrieves the current user's authentication state from the `request` object. It returns the [`Auth` object](/docs/references/backend/types/auth-object#auth-object){{ target: '_blank' }}.
 
-  ```ts {{ filename: 'index.ts' }}
-  import 'dotenv/config'
-  import Fastify from 'fastify'
-  import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
-
-  const fastify = Fastify({ logger: true })
-
-  fastify.register(clerkPlugin)
-
-  fastify.get('/', async (request, reply) => {
-    const { userId } = getAuth(request)
-
-    // Protect the route from unauthenticated users
-    if (!userId) {
-      return reply.code(403).send({ error: 'Unauthorized request.' })
-    }
-
-    const user = userId ? await clerkClient.users.getUser(userId) : null
-
-    return reply.send({
-      message: 'User retrieved successfully.',
-      user,
-    })
-  })
-
-  const start = async () => {
-    try {
-      await fastify.listen({ port: 8080 })
-    } catch (error) {
-      fastify.log.error(error)
-      process.exit(1)
-    }
-  }
-
-  start()
-  ```
+  <Include src="_partials/fastify/get-auth" />
 </Steps>
-
-## Configure `clerkPlugin` for specific routes
-
-If you want to use Clerk for specific pages only, you can register the plugin for specific routes. In the following example, the routes are split into protected and public routes.
-
-```ts {{ filename: 'index.ts' }}
-import 'dotenv/config'
-import Fastify, { FastifyPluginCallback } from 'fastify'
-import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
-
-const fastify = Fastify({ logger: true })
-
-const protectedRoutes: FastifyPluginCallback = (instance, options, done) => {
-  instance.register(clerkPlugin)
-
-  instance.get('/protected', async (request, reply) => {
-    const { userId } = getAuth(request)
-
-    // Protect the route from unauthenticated users
-    if (!userId) {
-      return reply.code(403).send({ message: 'Access denied. Authentication required.' })
-    }
-
-    const user = await clerkClient.users.getUser(userId)
-
-    // Only authenticated users will see the following message
-    reply.send({ message: 'This is a protected route.', user })
-  })
-
-  done()
-}
-
-const publicRoutes: FastifyPluginCallback = (instance, options, done) => {
-  instance.get('/', async (request, reply) => {
-    reply.send({ message: 'This is a public route.' })
-  })
-
-  done()
-}
-
-fastify.register(protectedRoutes)
-fastify.register(publicRoutes)
-
-const start = async () => {
-  try {
-    await fastify.listen({ port: 8080 })
-  } catch (error) {
-    fastify.log.error(error)
-    process.exit(1)
-  }
-}
-
-start()
-```

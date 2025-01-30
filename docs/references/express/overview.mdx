@@ -1,20 +1,14 @@
 ---
 title: Clerk Express SDK
-description: Learn how to integrate Clerk into your Express application using the Clerk Express SDK.
+description: The Clerk Express SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and organization management into your Express application.
 ---
 
-The Clerk Express SDK is the recommended method for integrating Clerk into your Express application.
-
-See the [quickstart](/docs/quickstarts/express) to get started.
-
-{/* TODO: Remove callout when Node SDK is removed from docs */}
+The Clerk Express SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and organization management into your Express application. Refer to the [quickstart](/docs/quickstarts/express) to get started.
 
 > [!IMPORTANT]
 > If you are upgrading from the Node SDK, see the [upgrade guide](/docs/upgrade-guides/node-to-express) for more information.
 
-## Methods
-
-### `clerkMiddleware()`
+## `clerkMiddleware()`
 
 The `clerkMiddleware()` function checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object) object to the request object under the `auth` key.
 
@@ -30,60 +24,74 @@ app.use(clerkMiddleware())
 app.use(clerkMiddleware(options))
 ```
 
-#### Options
+### `clerkMiddleware()` options
 
-The `clerkMiddleware()` function accepts [these options](https://clerk.com/docs/references/nextjs/clerk-middleware#clerk-middleware-options) plus the following:
+<Include src="_partials/clerk-middleware-options" />
 
 <Properties>
   - `clerkClient`
   - [`ClerkClient`](/docs/references/backend/overview#create-clerk-client-options)
 
-  An instance of the ClerkClient class. This is used to interact with the Clerk API.
+  An instance of the `ClerkClient` class. This is used to interact with the Clerk API.
 
   ---
 
   - `debug`
   - `boolean`
 
-  A flag to enable debug mode. When enabled, the middleware will log debug information to the console.
+  A flag to enable debug mode. When set to `true`, the middleware will log debug information to the console. Defaults to `false`.
 
   ---
 
   - `enableHandshake`
   - `boolean`
 
-  Enables Clerk's handshake flow, which helps verify the session state when a session JWT has expired. It issues a 307 redirect to refresh the session JWT if the user is still logged in. Defaults to `true`.
+  A flag to enable Clerk's handshake flow, which helps verify the session state when a session JWT has expired. It issues a `307` redirect to refresh the session JWT if the user is still logged in. Defaults to `true`.
 </Properties>
 
-### `requireAuth()`
+## `requireAuth()`
 
-The `requireAuth()` middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the sign-in page. It will look for a `CLERK_SIGN_IN_URL` environment variable and use that by default. If not present, you must pass a sign in URL to the middleware as an option.
+The `requireAuth()` middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the homepage. It accepts the same [options](/docs/references/express/overview#options) as `clerkMiddleware()`.
+
+You can also specify a custom sign-in URL to redirect unauthenticated users to by setting the `CLERK_SIGN_IN_URL` environment variable or by passing a `signInUrl` option to the middleware. It's recommended to set the environment variable.
 
 ```js
 import { requireAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
+const PORT = 3000
 
 // Apply middleware to all routes
 app.use(requireAuth())
 
-// Apply middleware to a specific route - requires `process.env.CLERK_SIGN_IN_URL` to be present
+// Apply middleware to a specific route
+// Redirects to the homepage if the user is not authenticated
 app.get('/protected', requireAuth(), (req, res) => {
-  res.send('This is a protected route')
+  res.send('This is a protected route.')
 })
 
-// Use a custom sign-in URL instead of the environment variable
+// Redirects to a custom URL if the user is not authenticated
+// Requires `CLERK_SIGN_IN_URL` to be set in env vars
+app.get('/protected', requireAuth({ signInUrl: process.env.CLERK_SIGN_IN_URL }), (req, res) => {
+  res.send('This is a protected route.')
+})
+
+// Redirects to a custom URL if the user is not authenticated
+// Uses the `signInUrl` option instead of the environment variable
 app.get('/protected', requireAuth({ signInUrl: '/sign-in' }), (req, res) => {
-  res.send('This is a protected route')
+  res.send('This is a protected route.')
+})
+
+// Start the server and listen on the specified port
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`)
 })
 ```
 
-This middleware accepts the same [options](/docs/references/express/overview#options) as `clerkMiddleware()`.
+## `getAuth()`
 
-### `getAuth()`
-
-The `getAuth()` helper retrieves authentication state from the request object. See the [Next.js reference documentation](https://clerk.com/docs/references/nextjs/get-auth) for more information on how to use the returned `auth` object.
+The `getAuth()` helper retrieves authentication state from the request object. See the [Next.js reference documentation](https://clerk.com/docs/references/nextjs/get-auth) for more examples on how to use the returned `auth` object.
 
 The following example uses `requireAuth()` to protect the route based on _authentication_ status, and then uses `getAuth()` to protect the route based on _authorization_ status.
 
@@ -92,12 +100,12 @@ import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
-const port = 3000
+const PORT = 3000
 
-// Apply centralized middleware
+// Apply `clerkMiddleware()` to all routes
 app.use(clerkMiddleware())
 
-// Protect a route based on authorization status
+// Use `getAuth()` to protect a route based on authorization status
 const hasPermission = (req, res, next) => {
   const auth = getAuth(req)
 
@@ -109,42 +117,51 @@ const hasPermission = (req, res, next) => {
   return next()
 }
 
+// Use `requireAuth()` to protect this route
+// If user is not authenticated, requireAuth() will redirect back to the homepage
 app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
 
 // Start the server and listen on the specified port
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`)
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`)
 })
 ```
 
-### `clerkClient`
+## `clerkClient`
 
-[Clerk's JavaScript Backend SDK](/docs/references/backend/overview) exposes the Backend API resources and low-level authentication utilities for JavaScript environments. For example, if you wanted to get a list of all users in your application, instead of creating a fetch to the `https://api.clerk.com/v1/users` endpoint, you can use the `users.getUserList()` method provided by the JavaScript Backend SDK.
+[Clerk's JavaScript Backend SDK](/docs/references/backend/overview) provides access to Backend API resources and low-level authentication utilities for JavaScript environments. For example, to retrieve a list of all users in your application, you can use the `users.getUserList()` method from the JavaScript Backend SDK instead of manually making a fetch request to the `https://api.clerk.com/v1/users` endpoint.
 
-All resource operations are mounted as sub-APIs on the `clerkClient` object. See the [reference documentation](/docs/references/backend/overview#usage) for more information.
+All resource operations are mounted as sub-APIs on the `clerkClient` object. See the [reference documentation](/docs/references/backend/overview#usage){{ target: '_blank' }} for more information.
+
+### Example: Use `clerkClient` to get a user's information
+
+The following example uses `clerkClient` to get information about the currently signed-in user. If the user is authenticated, their `userId` is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to get the current user's [`User`](/docs/references/javascript/user/user){{ target: '_blank' }} object. If not authenticated, the request is rejected with a `401` status code.
 
 ```js
 import { clerkClient, requireAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
-const port = 3000
+const PORT = 3000
 
-app.get('/users', async (req, res) => {
+app.get('/user', async (req, res) => {
   // Get the `userId` from the `Auth` object
   const userId = req.auth.userId
 
+  // If user isn't authenticated, return a 401 error
   if (!userId) {
-    return void res.status(400).json({ error: 'Error: No signed-in user' })
+    res.status(401).json({ error: 'User not authenticated' })
   }
 
-  // Use the userId to get information about the user
+  // Use `clerkClient` to access Clerk's Backend SDK methods
+  // and get the user's User object
   const user = await clerkClient.users.getUser(userId)
-  return void res.status(200).json(user)
+
+  res.json(user)
 })
 
 // Start the server and listen on the specified port
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`)
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`)
 })
 ```

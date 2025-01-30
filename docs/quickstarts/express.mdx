@@ -30,14 +30,14 @@ description: Learn how to use Clerk to quickly and easily add secure authenticat
   - Protect your routes using `requireAuth()`
 </TutorialHero>
 
-Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide covers backend implementation only and requires a Clerk frontend SDK in order for any of this to work.
+Learn how to integrate Clerk into your Express backend for secure user authentication and management. This guide focuses on backend implementation and requires a Clerk frontend SDK to function correctly.
 
 <Steps>
   ## Install `@clerk/express`
 
-  Clerk's [Express SDK](/docs/references/express/overview) ships with a variety of helpers for the backend to make user authentication easier.
+  The [Clerk Express SDK](/docs/references/express/overview) provides a range of backend utilities to simplify user authentication and management in your application.
 
-  To get started using Clerk with Express, add the SDK to your project:
+  Run the following command to install the SDK:
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
     ```bash {{ filename: 'terminal' }}
@@ -88,20 +88,22 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
     ```
   </CodeBlockTabs>
 
-  ## Add `clerkMiddleware()` to your application
+  ## Add `clerkMiddleware()` to your app
 
   The [`clerkMiddleware()`](/docs/references/express/overview#clerk-middleware) function checks the request's cookies and headers for a session JWT and, if found, attaches the [`Auth`](/docs/references/backend/types/auth-object#auth-object){{ target: '_blank' }} object to the `request` object under the `auth` key.
 
-  ```ts {{ filename: 'index.ts', mark: [3, 7] }}
+  ```ts {{ filename: 'index.ts', mark: [3, 8] }}
   import 'dotenv/config'
   import express from 'express'
   import { clerkMiddleware } from '@clerk/express'
 
   const app = express()
+  const PORT = 3000
 
   app.use(clerkMiddleware())
 
-  app.listen(3000, () => {
+  // Start the server and listen on the specified port
+  app.listen(PORT, () => {
     console.log(`Example app listening at http://localhost:${PORT}`)
   })
   ```
@@ -110,29 +112,43 @@ Learn how to integrate Clerk into your Express backend for secure user authentic
 
   To protect your routes, use the [`requireAuth()`](/docs/references/express/overview#require-auth) middleware. This middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the sign-in page.
 
-  In the following example, `requireAuth()` is used to protect the `/protected` route. If the user is not authenticated, they are redirected to the '/sign-in' route. If the user is authenticated, the `req.auth` object is used to get the `userId`, which is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to fetch the current user's `User` object.
+  In the following example, `requireAuth()` is used to protect the `/protected` route. If the user isn't authenticated, they're redirected to the homepage. If the user is authenticated, the [`getAuth()`](/docs/references/express/overview#get-auth) function is used to get the `userId`, which is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to fetch the current user's `User` object.
 
-  ```ts {{ filename: 'index.ts', mark: [3, [7, 11], [13, 16]] }}
+  ```ts {{ filename: 'index.ts' }}
   import 'dotenv/config'
   import express from 'express'
   import { clerkClient, requireAuth } from '@clerk/express'
 
   const app = express()
+  const PORT = 3000
 
-  app.get('/protected', requireAuth({ signInUrl: '/sign-in' }), async (req, res) => {
-    const { userId } = req.auth
+  // Use requireAuth() to protect this route
+  // If user isn't authenticated, requireAuth() will redirect back to the homepage
+  app.get('/protected', requireAuth(), async (req, res) => {
+    // Use `getAuth()` to get the user's `userId`
+    const { userId } = getAuth(req)
+
+    // Use Clerk's JavaScript Backend SDK to get the user's User object
     const user = await clerkClient.users.getUser(userId)
+
     return res.json({ user })
   })
 
-  app.get('/sign-in', (req, res) => {
-    // Assuming you have a template engine installed and are using a Clerk JavaScript SDK on this page
-    res.render('sign-in')
-  })
-
-  app.listen(3000, () => {
+  // Start the server and listen on the specified port
+  app.listen(PORT, () => {
     console.log(`Example app listening at http://localhost:${PORT}`)
   })
+  ```
+
+  ## Add global TypeScript type (optional)
+
+  If you're using TypeScript, add a global type reference to your project to enable auto-completion and type checking for the `auth` object in Express request handlers.
+
+  1. In your application's root folder, create a `types/` directory.
+  1. Inside this directory, create a `globals.d.ts` file with the following code.
+
+  ```ts {{ filename: 'types/globals.d.ts' }}
+  /// <reference types="@clerk/express/env" />
   ```
 </Steps>
 

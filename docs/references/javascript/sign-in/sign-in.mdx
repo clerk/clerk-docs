@@ -22,11 +22,11 @@ The following steps outline the sign-in process:
 
   The current status of the sign-in. `SignInStatus` supports the following values:
 
-  - `complete`: The user is signed in and the custom flow can proceed to `setActive()` to create a session.
-  - `needs_identifier`: The user's identifier (e.g., email address, phone number, username) hasn't been provided.
-  - `needs_first_factor`: One of the following [first factor verification strategies](/docs/references/javascript/sign-in/first-factor) is missing: `email_link`, `email_code`, `phone_code`, `web3_metamask_signature`, `web3_coinbase_wallet_signature` or `oauth_provider`.
-  - `needs_second_factor`: One of the following [second factor verification strategies](/docs/references/javascript/sign-in/second-factor) is missing: `phone_code` or `totp`.
-  - `needs_new_password`: The user needs to set a new password.
+  - `'complete'`: The user is signed in and the custom flow can proceed to `setActive()` to create a session.
+  - `'needs_identifier'`: The user's identifier (e.g., email address, phone number, username) hasn't been provided.
+  - `'needs_first_factor'`: One of the following [first factor verification strategies](/docs/references/javascript/sign-in/first-factor) is missing: `'email_link'`, `'email_code'`, `'phone_code'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'` or `'oauth_provider'`.
+  - `'needs_second_factor'`: One of the following [second factor verification strategies](/docs/references/javascript/sign-in/second-factor) is missing: `'phone_code'` or `'totp'`.
+  - `'needs_new_password'`: The user needs to set a new password.
 
   ---
 
@@ -35,17 +35,17 @@ The following steps outline the sign-in process:
 
   Array of all the authentication identifiers that are supported for this sign in. `SignInIdentifier` supports the following values:
 
-  - `email_address`
-  - `phone_number`
-  - `web3_wallet`
-  - `username`
+  - `'email_address'`
+  - `'phone_number'`
+  - `'web3_wallet'`
+  - `'username'`
 
   ---
 
   - `identifier`
   - `string | null`
 
-  The authentication identifier value for the current sign-in.
+  **Optional** if the `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. **Required** otherwise. The authentication identifier value for the current sign-in.
 
   ---
 
@@ -87,7 +87,7 @@ The following steps outline the sign-in process:
   - `createdSessionId`
   - `string | null`
 
-  The identifier of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `complete`.
+  The identifier of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `'complete'`.
 </Properties>
 
 ## Methods
@@ -110,77 +110,82 @@ function create(params: SignInCreateParams): Promise<SignIn>
 #### `SignInCreateParams`
 
 <Properties>
-  - `identifier`
-  - `string`
+  - `strategy?`
+  - `'password' | 'email_link' | 'email_code' | 'phone_code' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'passkey' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'ticket' | 'google_one_tap'`
 
-  The authentication identifier for the sign-in. This can be the value of the user's email address, phone number or username.
+  The first factor verification strategy to use in the sign-in flow. Depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
+
+  - `'password'`: The verification will attempt to be completed using the user's password.
+  - `'email_link'`: User will receive an email magic link via email. The `identifier` parameter can also be specified to select one of the user's known email addresses. The `redirectUrl` parameter can also be specified.
+  - `'email_code'`: User will receive a one-time authentication code via email. The `identifier` parameter can also be specified to select one of the user's known email addresses.
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. The `identifier` parameter can also be specified to select one of the user's known phone numbers.
+  - `'oauth_<provider>'`: The user will be authenticated with their [social connection account](/docs/authentication/social-connections/overview). See a list of [supported values for `<provider>`](/docs/references/javascript/types/oauth).
+  - `'saml'` (deprecated): **Deprecated in favor of `'enterprise_sso'`.** The user will be authenticated with their [SAML account](/docs/authentication/enterprise-connections/overview#saml).
+  - `'enterprise_sso'`: The user will be authenticated either through SAML or OIDC depending on the configuration of their [enterprise SSO account](/docs/authentication/enterprise-connections/overview).
+  - `'passkey'`: The user will be authenticated with their [passkey](/docs/authentication/configuration/sign-up-sign-in-options#passkeys).
+  - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](/docs/authentication/web3/metamask). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](/docs/authentication/web3/coinbase-wallet). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](/docs/authentication/web3/okx-wallet). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'ticket'`: The user will be authenticated via the ticket _or token_ generated from the Backend API.
+  - `'google_one_tap'`: The user will be authenticated with the Google One Tap UI. It's recommended to use [`authenticateWithGoogleOneTap()`](/docs/components/authentication/google-one-tap#authenticate-with-google-one-tap) instead, as it will also set the user's current session as active for you.
 
   ---
 
-  - `strategy?`
+  - `identifier`
   - `string`
 
-  Select the first factor verification strategy. The `strategy` value depends on the object's `identifier` value. Each authentication identifier supports different verification strategies. Possible `strategy` values are:
-
-  - `password`: The verification will attempt to be completed using the user's password.
-  - `email_link`: User will receive an email magic link via email. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.
-  - `email_code`: User will receive a one-time authentication code via email. At least one email address should be on file for the user. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.
-  - `phone_code`: User will receive a one-time authentication code in their phone, via SMS. At least one phone number should be on file for the user. The `phone_number_id` parameter can also be specified to select which of the user's known phone numbers the SMS will go to.
-  - `web3_metamask_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `web3_coinbase_wallet_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `web3_okx_wallet_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `oauth_<provider>`: The user will be authenticated with their social sign-in account. [See available social providers](/docs/references/javascript/types/oauth#o-auth-provider).
-  - `ticket`: The user will be authenticated via the ticket _or token_ generated from the Backend API.
-  - `google_one_tap`: The user will be authenticated with the Google One Tap UI. It's recommended to use [`authenticateWithGoogleOneTap()`](/docs/components/authentication/google-one-tap#authenticate-with-google-one-tap) instead, as it will also set the user's current session as active for you.
+  The authentication identifier for the sign-in. This can be the value of the user's email address, phone number, username, or Web3 wallet address.
 
   ---
 
   - `password?`
   - `string`
 
-  Supply the user's password. This parameter is required only if `strategy` is set to  `password`.
+  The user's password. Only supported if `strategy` is set to `'password'` and [password](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies) is enabled.
 
   ---
 
   - `ticket?`
   - `string`
 
-  Provide the ticket _or token_ generated from the Backend API. This parameter is required only if `strategy` is set to `ticket`.
+  **Required** if `strategy` is set to `'ticket'`. The [ticket _or token_](/docs/custom-flows/embedded-email-links#generate-a-sign-in-token) generated from the Backend API.
 
   ---
 
   - `redirectUrl?`
   - `string`
 
-  The URL that the OAuth provider should redirect to, on successful authorization on their part. This parameter is required only if `strategy` is set to an OAuth strategy like `oauth_<provider>`. If you set the `strategy` param to `email_link`, this parameter is optional.
+  If `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`, this specifies the full URL or path that the OAuth provider should redirect to after successful authorization on their part. Typically, this will be a simple `/sso-callback` route that either calls [`Clerk.handleRedirectCallback`](/docs/references/javascript/clerk/handle-navigation#handle-redirect-callback) or mounts the [`<AuthenticateWithRedirectCallback />`](/docs/components/control/authenticate-with-callback) component. See the [custom flow](/docs/custom-flows/oauth-connections) for implementation details.
+
+  If `strategy` is set to `'email_link'`, this specifies the URL that the user will be redirected to when they visit the email link. See the [custom flow](/docs/custom-flows/email-links) for implementation details.
 
   ---
 
   - `actionCompleteRedirectUrl?`
   - `string`
 
-  The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign in. This parameter is required only if `strategy` is set to an OAuth strategy like `oauth_<provider>`.
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign-in.
 
   ---
 
   - `transfer?`
   - `boolean`
 
-  Transfer the user to a dedicated sign-in for an OAuth flow.
+  When set to `true`, the `SignIn` will attempt to retrieve information from the active `SignUp` instance and use it to complete the sign-in process. This is useful when you want to seamlessly transition a user from a sign-up attempt to a sign-in attempt.
 
   ---
 
   - `oidcPrompt?`
   - `string`
 
-  The value to pass to the [OIDC `prompt` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=prompt,reauthentication%20and%20consent.) in the generated OAuth redirect URL. **Optional** if `strategy` is set to `oauth_<provider>` or `enterprise_sso`.
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The value to pass to the [OIDC `prompt` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=prompt,reauthentication%20and%20consent.) in the generated OAuth redirect URL.
 
   ---
 
   - `oidcLoginHint?`
   - `string`
 
-  The value to pass to the [OIDC `login_hint` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=login_hint,in%20\(if%20necessary\).) in the generated OAuth redirect URL. **Optional** if `strategy` is set to `oauth_<provider>` or `enterprise_sso`.
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The value to pass to the [OIDC `login_hint` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=login_hint,in%20\(if%20necessary\).) in the generated OAuth redirect URL.
 </Properties>
 
 ### `resetPassword()`
@@ -251,7 +256,7 @@ function createEmailLinkFlow(): {
   - `redirectUrl`
   - `string`
 
-  The email link target URL. Users will be redirected here once they click the email link from their email.
+  The full URL that the user will be redirected to when they visit the email link.
 </Properties>
 
 ## Additional methods
@@ -278,4 +283,4 @@ In addition to the methods listed above, the `SignIn` class also has the followi
 
 ## Example
 
-For examples of how to access the `SignUp` object and use the associated methods, see the [custom flow guides](/docs/custom-flows/overview).
+For examples of how to access the `SignIn` object and use the associated methods, see the [custom flow guides](/docs/custom-flows/overview).

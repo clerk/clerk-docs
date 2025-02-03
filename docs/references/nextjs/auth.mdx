@@ -3,11 +3,19 @@ title: '`auth()`'
 description: Access minimal authentication data for managing sessions and data fetching.
 ---
 
-The `auth()` helper returns the [`Auth`](/docs/references/backend/types/auth-object) object of the currently active user, as well as the [`redirectToSignIn()`](#redirect-to-sign-in) method.
+The `auth()` helper returns the [`Auth`](/docs/references/backend/types/auth-object) object of the currently active user, as well as the [`redirectToSignIn()`](#redirect-to-sign-in) method. For machine requests, it returns the machine's auth object.
 
 - Only available for App Router.
 - Only works on the server-side, such as in Server Components, Route Handlers, and Server Actions.
 - Requires [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) to be configured.
+
+## `auth({ entity })`
+
+The `auth()` helper needs to know if it should authenticate a [session request](/docs/session-requests/overview) or a [machine request](/docs/machine-requests/overview).
+By passing in the `entity` parameter, you can specify the type of request you want to authenticate. By default, it will authenticate a session request.
+
+> [!NOTE]
+> If you wnat to check **both** session and machine requests, you can pass in the `entity` parameter as `'any'`.
 
 ## `auth.protect()`
 
@@ -151,3 +159,44 @@ export async function GET() {
   }
 }
 ```
+
+### Use `auth()` for machine requests
+
+For machine requests, the `auth()` helper returns the machine's auth object.
+
+ ```tsx import { auth } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import { runCronJob } from './cronJob';
+
+export const POST = async () => {
+  const { isMachineAuthenticated } = await auth({ entity: 'machine' });
+
+  if (!isMachineAuthenticated) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  await runCronJob();
+
+  return NextResponse.json({ message: 'Cron job ran' });
+};
+```
+
+### Use `auth()` for both session and machine requests
+
+For machine requests, the `auth()` helper returns the machine's auth object.
+
+ ```tsx import { auth } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import { runCronJob } from './cronJob';
+
+export const POST = async () => {
+  const { isMachineAuthenticated, isSignedIn } = await auth({ entity: 'any' });
+
+  if (isMachineAuthenticated || isSignedIn) {
+    return NextResponse.json({ message: 'You are either a user or a machine!' }, { status: 200 });
+  }
+
+  return NextResponse.json({ message: 'You are not signed in!' }, { status: 401 });
+};
+```
+

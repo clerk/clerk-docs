@@ -3,8 +3,6 @@ title: Machine-to-Machine Requests
 description: Learn how to use machine tokens to make and verify authenticated requests.
 ---
 
-## Introduction
-
 Machine-to-machine (M2M) authentication allows services, scripts, or devices to securely communicate with each other without the need for a user's session.
 
 For example, you might need machine tokens for:
@@ -15,7 +13,7 @@ For example, you might need machine tokens for:
 
 ## Creating Machine Requests
 
-If your client is a backend service, you can create a machine token using the [clerk backend api](https://clerk.com/docs/reference/backend-api/tag/machine-tokens). Then use the created token in the `Authorization` header of outgoing request.
+You can create a machine token using the [clerk backend api](https://clerk.com/docs/reference/backend-api/tag/machine-tokens). Then use the created token in the `Authorization` header of outgoing request.
 
 > [!WARNING]
 > Because creating machine tokens using [clerk backend api](https://clerk.com/docs/reference/backend-api/tag/machine-tokens), it is subject to the [Backend API rate limits](/docs/rate-limits).
@@ -57,12 +55,20 @@ You can verify machine tokens in two ways:
 1. Using Clerk's Backend SDKs (recommended)
 2. Manually verifying the machine token JWT using your instance's public key.
 
-### Examples Using Clerk's Backend SDKs
+### Using Clerk's Backend SDKs
 
-  <Tabs items={['Next.js Middleware', 'Next.js API Route', 'Node.js HTTP Server']}>
+By default, authenticating requests, will default to authenticating user [session requests](/docs/session-requests/overview).
+
+For machine requests, you can use the `entity: 'machine'` option to authenticate requests.
+
+> [!WARNING]
+> The `entity: 'machine'` option is only available in the Clerk Next.js SDK and Clerk Backend Javascript SDK during the beta.
+
+#### Examples
+
+  <Tabs items={['Next.js Middleware', 'Next.js API Route']}>
     <Tab>
       ```tsx import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-
       const isMachineRoute = createRouteMatcher(["/api/cron"]);
 
       export default clerkMiddleware(async (auth, req) => {
@@ -85,54 +91,21 @@ You can verify machine tokens in two ways:
     import { NextResponse } from 'next/server';
     import { runCronJob } from './cronJob';
 
-      export const POST = async () => {
-        const { isMachineAuthenticated } = await auth({ entity: 'machine' });
+    export const POST = async () => {
+      const { isMachineAuthenticated } = await auth({ entity: 'machine' });
 
-        if (!isMachineAuthenticated) {
-          return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-        }
+      if (!isMachineAuthenticated) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      }
 
-        await runCronJob();
+      await runCronJob();
 
-        return NextResponse.json({ message: 'Cron job ran' });
-      };
+      return NextResponse.json({ message: 'Cron job ran' });
+    };
     ```
-    </Tab>
-
-    <Tab>
-      ```tsx
-      import { createClerkClient } from '@clerk/backend';
-      import http from 'http';
-
-      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-
-      const server = http.createServer(async (req, res) => {
-        try {
-          const { isValid } = await clerk.authenticateRequest(req, { 
-            entity: 'machine',
-          });
-
-          if (!isValid) {
-            res.writeHead(401);
-            res.end(JSON.stringify({ message: 'Unauthorized' }));
-            return;
-          }
-
-          await runCronJob();
-          
-          res.writeHead(200);
-          res.end(JSON.stringify({ message: 'Success' }));
-        } catch (err) {
-          res.writeHead(500);
-          res.end(JSON.stringify({ message: 'Internal Server Error' }));
-        }
-      });
-
-      server.listen(3000, () => {
-        console.log('Server running on port 3000');
-      });
-      ```
     </Tab>
   </Tabs>
 
+### Manually verifying the machine token JWT
 
+See the [manual JWT verification](/docs/machine-requests/manual-jwt) guide for more information.

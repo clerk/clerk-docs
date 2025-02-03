@@ -1,0 +1,134 @@
+---
+title: Manual JWT verification
+description: Learn how to manually verify Clerk-generated machine tokens (JWTs).
+---
+
+Your Clerk-generated [machine tokens](/docs/machine-requests/machine-tokens) are essentially JWTs which are signed using your instance's private key and can be verified using your instance's public key.
+
+For every machine request, you must validate the token to ensure it hasn't expired or been tampered with (i.e., it's authentic and secure). Additionally, you likely want to differentiate between machine and user requests. If these validations succeed, then the machine is authenticated to your application. 
+
+> [!TIP]
+> To differentiate between a machine token and user token, the `sub` claim in a machine token starts with `mch_` instead of `user_` on a session token.
+
+The `authenticateRequest()` method from the JavaScript Backend SDK handles these validations for you. Alternatively, you can manually verify the token without using the SDK. See the following sections for more information.
+
+## Use `authenticateRequest()` to verify a machine token
+
+The [`authenticateRequest()`](/docs/references/backend/authenticate-request) method from the JavaScript Backend SDK accepts the `request` object, and by using the `entity: "machine"` option, you can authenticate the request *as a machine request* instead of the default *user request*.
+
+For more information, including usage with higher-level SDKs, see the [`authenticateRequest()` reference](/docs/references/backend/authenticate-request).
+
+For example, the following code snippet uses the `authenticateRequest()` method to verify a machine token in a simple node http server.
+
+```tsx
+import { createClerkClient } from '@clerk/backend';
+import http from 'http';
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const { isMachineAuthenticated } = await clerk.authenticateRequest(req, { 
+      entity: 'machine',
+    });
+
+    if (!isMachineAuthenticated) {
+      res.writeHead(401);
+      res.end(JSON.stringify({ message: 'Unauthorized' }));
+      return;
+    }
+
+    await runCronJob();
+    
+    res.writeHead(200);
+    res.end(JSON.stringify({ message: 'Success' }));
+  } catch (err) {
+    res.writeHead(500);
+    res.end(JSON.stringify({ message: 'Internal Server Error' }));
+  }
+});
+
+server.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
+```
+
+
+## Manually verify a machine token
+
+<Steps>
+  ### Retrieve the machine token
+
+  Retrieve the machine token from the `Authorization` header.
+
+  ### Get your instance's public key
+
+  Use one of the three ways to obtain your public key:
+
+  1. Use the Backend API in JSON Web Key Set (JWKS) format at the following endpoint [https://api.clerk.com/v1/jwks](https://clerk.com/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
+  1. Use your **Frontend API URL** in JWKS format, also known as **JWKS URL**. The format is `https://<YOUR_FRONTEND_API>/.well-known/jwks.json`. To retrieve your **JWKS URL**, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard and select **Show JWT public key**.
+  1. Use your **PEM Public Key**. To retrieve it, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard and select **Show JWT Public Key**.
+
+  ### Verify the token signature
+
+  To verify the token signature:
+
+  1. Use your instance's public key to verify the token's signature.
+  1. Validate that the token isn't expired by checking the `exp` ([expiration time](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4)) and `nbf` ([not before](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5)) claims.
+  1. Validate that the `sub` (subject) claim starts with `mch_`. This ensures the token is a machine token and not a session token.
+
+  ### Finished
+
+  If the above process succeeds, the machine is considered authenticated to make requests to your application. You can also retrieve the machine ID from the token's `sub` claim.
+</Steps>
+
+### Example
+
+The following example manually verifies a machine token.
+
+```tsx
+import jwt from 'jsonwebtoken'
+
+export default async function (req: Request, res: Response) {
+  // Your public key should be set as an environment variable
+  const publicKey = process.env.CLERK_PEM_PUBLIC_KEY
+  
+  // Get the machine token from the Authorization header
+  const authHeader = req.headers.authorization
+  if (!authHeader) {
+    res.status(401).json({ error: 'No machine token provided' })
+    return
+  }
+
+  // Remove 'Bearer ' prefix if present
+  const token = authHeader.replace('Bearer ', '')
+
+  try {
+    const options = { algorithms: ['RS256'] }
+    const decoded = jwt.verify(token, publicKey, options)
+
+    // Validate the token's expiration (exp) and not before (nbf) claims
+    const currentTime = Math.floor(Date.now() / 1000)
+    if (decoded.exp < currentTime || decoded.nbf > currentTime) {
+      throw new Error('Token is expired or not yet valid')
+    }
+
+    // Validate that this is a machine token by checking the sub claim
+    if (!decoded.sub?.startsWith('mch_')) {
+      throw new Error('Not a valid machine token')
+    }
+
+    // The machine is authenticated. You can get the machine ID from the sub claim
+    const machineId = decoded.sub
+
+    res.status(200).json({ 
+      machineId,
+      claims: decoded
+    })
+  } catch (error) {
+    res.status(401).json({
+      error: error.message,
+    })
+  }
+}
+```

@@ -1,0 +1,207 @@
+{/* Adds an email address to a user's account, and verifies it using an email link. */}
+
+<Tabs items={["Next.js"]}>
+  <Tab>
+    <CodeBlockTabs options={["Add email page", "Verify page"]}>
+      ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
+      'use client'
+
+      import * as React from 'react'
+      import { useUser } from '@clerk/nextjs'
+
+      export default function Page() {
+        const { isLoaded, user } = useUser()
+        const [email, setEmail] = React.useState('')
+        const [verifying, setVerifying] = React.useState(false)
+        const [error, setError] = React.useState('')
+
+        if (!isLoaded) return null
+
+        if (isLoaded && !user?.id) {
+          return <p>You must be signed in to access this page</p>
+        }
+
+        // Handle addition of the email address
+        const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault()
+
+          try {
+            setVerifying(true)
+
+            // Add an unverified email address to user
+            const res = await user.createEmailAddress({ email })
+            // Reload user to get updated User object
+            await user.reload()
+
+            // Find the email address that was just added
+            const emailAddress = user.emailAddresses.find((a) => a.id === res.id)
+
+            if (!emailAddress) {
+              setError('Email address not found')
+              return
+            }
+
+            const { startEmailLinkFlow } = emailAddress.createEmailLinkFlow()
+
+            // Dynamically set the host domain for dev and prod
+            // You could instead use an environment variable or other source for the host domain
+            const protocol = window.location.protocol
+            const host = window.location.host
+
+            // Send the user an email with the verification link
+            startEmailLinkFlow({ redirectUrl: `${protocol}//${host}/account/add-email/verify` })
+          } catch (err) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+            setError('An error occurred.')
+          }
+        }
+
+        async function reset(e: React.FormEvent) {
+          e.preventDefault()
+          setVerifying(false)
+        }
+
+        if (error) {
+          return (
+            <div>
+              <p>Error: {error}</p>
+              <button onClick={() => setError('')}>Try again</button>
+            </div>
+          )
+        }
+
+        if (verifying) {
+          return (
+            <div>
+              <p>Check your email and visit the link that was sent to you.</p>
+              <form onSubmit={reset}>
+                <button type="submit">Restart</button>
+              </form>
+            </div>
+          )
+        }
+
+        // Display the initial form to capture the email address
+        return (
+          <>
+            <h1>Add email</h1>
+            <div>
+              <form onSubmit={(e) => handleSubmit(e)}>
+                <input
+                  placeholder="Enter email address"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
+          </>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: 'app/account/add-email/verify/page.tsx', collapsible: true }}
+      'use client'
+
+      import * as React from 'react'
+      import { useClerk } from '@clerk/nextjs'
+      import { EmailLinkErrorCode, isEmailLinkError } from '@clerk/nextjs/errors'
+      import Link from 'next/link'
+
+      export type VerificationStatus =
+        | 'expired'
+        | 'failed'
+        | 'loading'
+        | 'verified'
+        | 'verified_switch_tab'
+        | 'client_mismatch'
+
+      export default function VerifyEmailLink() {
+        const [verificationStatus, setVerificationStatus] = React.useState('loading')
+
+        const { handleEmailLinkVerification, loaded } = useClerk()
+
+        async function verify() {
+          try {
+            await handleEmailLinkVerification({})
+            setVerificationStatus('verified')
+          } catch (err: any) {
+            let status: VerificationStatus = 'failed'
+
+            if (isEmailLinkError(err)) {
+              // If link expired, set status to expired
+              if (err.code === EmailLinkErrorCode.Expired) {
+                status = 'expired'
+              } else if (err.code === EmailLinkErrorCode.ClientMismatch) {
+                // OPTIONAL: This check is only required if you have
+                // the 'Require the same device and browser' setting
+                // enabled in the Clerk Dashboard
+                status = 'client_mismatch'
+              }
+            }
+
+            setVerificationStatus(status)
+            return
+          }
+        }
+
+        React.useEffect(() => {
+          if (!loaded) return
+
+          verify()
+        }, [handleEmailLinkVerification, loaded])
+
+        if (verificationStatus === 'loading') {
+          return <div>Loading...</div>
+        }
+
+        if (verificationStatus === 'failed') {
+          return (
+            <div>
+              <h1>Verify your email</h1>
+              <p>The email link verification failed.</p>
+              <Link href="/account/add-email">Return to add email</Link>
+            </div>
+          )
+        }
+
+        if (verificationStatus === 'expired') {
+          return (
+            <div>
+              <h1>Verify your email</h1>
+              <p>The email link has expired.</p>
+              <Link href="/account/add-email">Return to add email</Link>
+            </div>
+          )
+        }
+
+        // OPTIONAL: This check is only required if you have
+        // the 'Require the same device and browser' setting
+        // enabled in the Clerk Dashboard
+        if (verificationStatus === 'client_mismatch') {
+          return (
+            <div>
+              <h1>Verify your email</h1>
+              <p>
+                You must complete the email link verification on the same device and browser as you
+                started it on.
+              </p>
+              <Link href="/account/add-email">Return to add email</Link>
+            </div>
+          )
+        }
+
+        return (
+          <div>
+            <h1>Verify your email</h1>
+            <p>Successfully added email!</p>
+          </div>
+        )
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

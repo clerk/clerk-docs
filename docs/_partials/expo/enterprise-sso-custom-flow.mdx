@@ -1,10 +1,17 @@
 > [!IMPORTANT]
-> Expo supports SAML Enterprise SSO, but does not support EASIE or OIDC.
+> Expo supports [SAML](/docs/authentication/enterprise-connections/overview#saml) Enterprise SSO, but does not support [OIDC](/docs/authentication/enterprise-connections/overview#oidc).
 
-The following example demonstrates how to create a custom SSO flow with [SAML](docs/authentication/enterprise-connections/overview#saml). In the following example, when the user selects the "Sign in with SAML" button, they'll be redirected to the provider's authentication page. Once they authenticate, they'll be redirected back to your app. If there are missing requirements, like needing to completeMFA, then the `createdSessionId` will remain `null`, and you'll need to add logic to handle the missing requirements. If there are no missing requirements, then the user will be signed in.
+The following example **will both sign up _and_ sign in users**, eliminating the need for a separate sign-up page.
+
+The following example:
+
+1. Accesses the `startSSOFlow()` method using the [`useSSO()`](/docs/references/expo/use-sso) hook.
+1. Calls the `startSSOFlow()` method with the `strategy` param set to `enterprise_sso` and the `identifier` param set to the user's email address that they provided.
+   - If authentication is successful, the `setActive()` method is called to set the active session with the new `createdSessionId`.
+   - If authentication is not successful, you can handle the missing requirements, such as MFA, using the [`signIn`](/docs/references/javascript/sign-in/sign-in) or [`signUp`](/docs/references/javascript/sign-up/sign-up) object returned from `startSSOFlow()`, depending on if the user is signing in or signing up. These objects include properties, like `status`, that can be used to determine the next steps. See the respective linked references for more information.
 
 ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import * as WebBrowser from 'expo-web-browser'
 import { useSSO } from '@clerk/clerk-expo'
 import { View, Button, TextInput } from 'react-native'
@@ -29,10 +36,12 @@ export default function Page() {
 
   const [email, setEmail] = useState('')
 
+  // Use the `useSSO()` hook to access the `startSSOFlow()` method
   const { startSSOFlow } = useSSO()
 
-  const onPress = useCallback(async () => {
+  const onPress = async () => {
     try {
+      // Start the authentication process by calling `startSSOFlow()`
       const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
         strategy: 'enterprise_sso',
         identifier: email,
@@ -52,7 +61,7 @@ export default function Page() {
       // for more info on error handling
       console.error(JSON.stringify(err, null, 2))
     }
-  }, [])
+  }
 
   return (
     <View>

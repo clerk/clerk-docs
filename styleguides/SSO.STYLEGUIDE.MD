@@ -42,7 +42,7 @@ These are the guidelines we use to write our SSO guides.
      ```mdx
      ### Set the Client ID and Client Secret in the Clerk Dashboard
 
-     <Include src="_partials/authentication/set-client-id-secret" />
+     <Include src="_partials/authentication/social-connections/set-client-id-secret" />
      ```
 
   1. With a full step. Use this method if the provider uses a different terminology, such as "Key" instead of "Client ID". Note how the title of the section and the copy of the first step depends on the terminology.
@@ -62,7 +62,7 @@ These are the guidelines we use to write our SSO guides.
   ```mdx
   ### Test your connection
 
-  <Include src="_partials/authentication/test-your-connection" />
+  <Include src="_partials/authentication/social-connections/test-your-connection" />
   ```
 
 ## No screenshots: writing copy that references the UI

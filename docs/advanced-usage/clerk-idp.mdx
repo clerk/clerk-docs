@@ -1,22 +1,22 @@
 ---
-title: Use Clerk as an OAuth 2.0 provider
-description: Learn how to use Clerk to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 protocol.
+title: Clerk as an Identity provider: OAuth 2.0 & OpenID Connect
+description: Learn how to use Clerk to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 and OpenID Connect protocol.
 ---
 
 > [!WARNING]
 > **This feature is not designed for handling authentication directly in your application.** To handle authentication _in your_ application, you can [configure one of the many social providers that Clerk offers](/docs/authentication/social-connections/oauth#configuration), such as Google.
 
-Clerk can be configured as an OAuth 2.0 provider to facilitate Single Sign-On (SSO) with other clients that support the OAuth 2.0 protocol. This feature allows users to authenticate to other applications using their Clerk credentials, enabling user information sharing between your Clerk application and OAuth clients.
+Clerk can be configured as an OAuth 2.0 and OpenID Connect provider to facilitate Single Sign-On (SSO) with other clients that support the protocols. This feature allows users to authenticate to other applications using their Clerk credentials, enabling user information sharing between your Clerk application and OAuth clients.
 
-## When should you use Clerk as an OAuth 2.0 provider?
+## When should you use Clerk as an Identity provider?
 
-You can use Clerk as an OAuth 2.0 provider if you want your users to authenticate to a third party site or a tool using their credentials from your application. **This is not the same as supporting an OAuth provider, such as Google, in your application. If you want your users to be able to sign in to your application with an OAuth provider, see the [dedicated guide](/docs/authentication/social-connections/oauth).**
+You can use Clerk as an Identity provider if you want your users to authenticate to a third party site or a tool using their credentials from your application. **This is not the same as supporting an OAuth provider, such as Google, in your application. If you want your users to be able to sign in to your application with an OAuth provider, see the [dedicated guide](/docs/authentication/social-connections/oauth).**
 
 ## How it works
 
-Clerk is the OAuth 2.0 provider for your application. The "client" is the third party site or tool that you want your users to authenticate to.
+Clerk is the OAuth 2.0 and OpenID Connect provider for your application. The "client" is the third party site or tool that you want your users to authenticate to.
 
-In order to make your Clerk instance operate as an OAuth 2.0 provider, create an OAuth application in the Clerk Dashboard. Then, configure the client to work with your Clerk instance, using the necessary data from your Clerk OAuth application.
+In order to make your Clerk instance operate as a provider, create an OAuth application in the Clerk Dashboard. Then, configure the client to work with your Clerk instance, using the necessary data from your Clerk OAuth application.
 
 ### Create a Clerk OAuth application
 
@@ -39,10 +39,10 @@ Now that you have set up a Clerk OAuth application, you will need to configure a
 
 - **Client ID**: Public identifier of your Clerk OAuth application.
 - **Client Secret**: Confidential secret used to authenticate your Clerk OAuth application.
+- **Discovery URL**: Used by the client to retrieve the configuration data of the Clerk OAuth application.
 - **Authorize URL**: Used by the client to request authorization from your user.
 - **Token URL**: Used by the client to exchange an authorization code for an access token and a refresh token.
 - **User Info URL**: Used by the client to retrieve additional user data upon authentication.
-- **Discovery URL**: Used by the client to retrieve the configuration data of the Clerk OAuth application.
 
 ### OAuth 2.0 Scopes
 
@@ -54,6 +54,7 @@ OAuth 2.0 scopes define the level of access and specific user data that will be 
 | `email` | Grant access to the user email address |
 | `public_metadata` | Grant access to the user public and unsafe metadata |
 | `private_metadata` | Grant access to the user private metadata |
+| `openid` | Enables the OpenID Connect flow |
 
 ### Get user information
 
@@ -66,6 +67,42 @@ The `/oauth/userinfo` endpoint provides the following user properties, depending
 | `user_id` | The ID of the user |
 | `given_name` | The first name of the user |
 | `family_name` | The last name of the user |
+| `name` | The full name of the user |
+| `picture` | The avatar URL of the user |
+| `preferred_username` | The username of the user |
+| `email` | The primary email address of the user |
+| `email_verified` | Whether the primary email address of the user is verified |
+| `public_metadata` | The public metadata of the user |
+| `private_metadata` | The private metadata of the user |
+| `unsafe_metadata` | The unsafe metadata of the user |
+
+### ID Token
+
+The ID Token is a regular JSON Web Token (JWT) that contains user profile information. After a user successfully authenticates using the OpenID Connect flow, they receive an ID Token along with other tokens.
+
+> [!WARNING]
+> You MUST validate the ID Token, before using any of the user information that contains. To do that, you can use your instance's public key.
+
+It follows the format of JSON Web Tokens (JWTs), which includes the standard JWT claims, along with some additional claims representing the authenticated user profile information.
+
+The standard claims are the following:
+
+| Standard claim | Description |
+| - | - |
+| `iss` | The Issuer of the token, which matches your Clerk Frontend API url |
+| `sub` | The Subject of the token, which matches the authenticated user ID |
+| `aud` | The intended Audience of the token, which matches the used Client ID |
+| `exp` | The Expiration Time of the token |
+| `iat` | At which time the token was Issued At |
+| `jti` | A unique identifier for the token |
+
+Depending on the granted scopes, the extra claims are the following:
+
+| Additional claim | Description |
+| - | - |
+| `nonce` | The nonce provided and used during the request |
+| `family_name` | The last name of the user |
+| `given_name` | The first name of the user |
 | `name` | The full name of the user |
 | `picture` | The avatar URL of the user |
 | `preferred_username` | The username of the user |
@@ -92,12 +129,15 @@ Clerk OAuth 2.0 provider supports the following flows and grant types:
 - [PKCE](https://oauth.net/2/pkce/)
 - [Refresh token](https://oauth.net/2/grant-types/refresh-token/)
 
+### OpenID Connect prompt
+
+As part of an OpenID Connect request, you can indicate the desired sign in experience for the user, by using the `prompt` parameter. We are currently supporting the following values:
+
+1. `none`: The user doesn't interact with the provider, thus they need to have an active session already. If not, the provider responds with an error
+1. `login`: The user is forced to re-authenticate, even if they have already an active session. If there was already an active session, the provider ends it
+
 ## Frequently asked questions (FAQ)
 
 ### When do the tokens expire?
 
-Authorization codes expire after 10 minutes. Access tokens expire after 2 hours. Refresh tokens expire after 3 days.
-
-### Is OpenID Connect (OIDC) supported?
-
-At this time, OIDC is not supported.
+Authorization codes expire after 10 minutes. Access tokens expire after 2 hours. Refresh tokens expire after 3 days. ID Tokens expire after 1 hour.

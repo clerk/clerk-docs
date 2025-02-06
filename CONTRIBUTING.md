@@ -823,11 +823,12 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 This component will only show its contents when the users active SDK (selected up in the top left selector) matches the specified SDK:
 
 It accepts either a "sdk" or "sdks" prop, the available sdks are:
+
 <details>
 <summary>Expand to see available SDKs</summary>
 
 | SDK                    | Key                   |
-|------------------------|-----------------------|
+| ---------------------- | --------------------- |
 | Next.js                | "nextjs"              |
 | React                  | "react"               |
 | Javascript             | "javascript-frontend" |
@@ -852,30 +853,27 @@ It accepts either a "sdk" or "sdks" prop, the available sdks are:
 </details>
 
 #### Filtered to a single sdk
+
 ```mdx
-<SDKFilter sdk="nextjs">
-  This content will only be rendered if the active sdk is Next.js
-</SDKFilter>
+<SDKFilter sdk="nextjs">This content will only be rendered if the active sdk is Next.js</SDKFilter>
 ```
 
 #### Filtered to either the astro or react active sdk
+
 ```mdx
-<SDKFilter sdks={["astro", "react"]}>
-  This content will only be rendered if the active sdk is Astro or React
-</SDKFilter>
+<SDKFilter sdks={['astro', 'react']}>This content will only be rendered if the active sdk is Astro or React</SDKFilter>
 ```
 
 #### Filter within a Filter
+
 ```mdx
-<SDKFilter sdks={["nextjs", "remix"]}>
+<SDKFilter sdks={['nextjs', 'remix']}>
   Hello to Nextjs and Remix Devs
-  <SDKFilter sdk="nextjs">
-    Only Nextjs devs get to see this part
-  </SDKFilter>
+  <SDKFilter sdk="nextjs">Only Nextjs devs get to see this part</SDKFilter>
 </SDKFilter>
 ```
 
-Note: This component cannot be within code blocks. 
+Note: This component cannot be within code blocks.
 
 ### Images and static assets
 

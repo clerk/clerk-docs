@@ -875,6 +875,8 @@ It accepts either a "sdk" or "sdks" prop, the available sdks are:
 </SDKFilter>
 ```
 
+Note: This component cannot be within code blocks. 
+
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.

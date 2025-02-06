@@ -12,12 +12,12 @@ MDX files ([including any code blocks](#prettier-integration)) are formatted usi
 
 ## Project setup
 
-1.  Fork and clone the repo
-2.  Run `npm install` to install dependencies
-3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`
+1.  Fork or clone the repo.
+2.  Run `npm install` to install dependencies.
+3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
-> Tip: Keep your `main` branch pointing at the original repository and make pull
-> requests from branches on your fork. To do this, run:
+> Tip: If you forked the repo, keep your `main` branch pointing at the original repository
+> and make pull requests from branches on your fork. To do this, run:
 >
 >     git remote add upstream https://github.com/clerk/clerk-docs.git
 >     git fetch upstream
@@ -40,7 +40,7 @@ The structure of the issue should be:
 - **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav"
 - **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
-## Creating a Pull Request
+## Creating a pull request
 
 When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerk/clerk-docs/pulls), also referred to as a PR.
 
@@ -67,6 +67,8 @@ Clerk employees can run the application and preview their documentation changes 
 Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
 
 - **Check for broken links.** If your change contains URLs that are not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
+- **Check that files are formatted with the prettier configuration settings.**
+- **Check for changes to quickstarts.**
 
 To run all linting steps:
 
@@ -90,9 +92,9 @@ The documentation content is located in the [`/docs` directory](./docs/). Each M
 
 For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
 
-### Navigation manifest
+### Sidenav
 
-The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
+The side navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered sidenav.
 
 [Manifest JSON schema →](./docs/manifest.schema.json)
 

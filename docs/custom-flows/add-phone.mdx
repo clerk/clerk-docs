@@ -152,7 +152,7 @@ The following example demonstrates how to build a custom user interface that all
   <Tab>
     ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
     import SwiftUI
-    import ClerkSDK
+    import Clerk
 
     struct AddPhoneView: View {
       @State private var phone = ""
@@ -160,12 +160,12 @@ The following example demonstrates how to build a custom user interface that all
       @State private var isVerifying = false
       // Create a reference to the phone number that we'll be creating
       @State private var newPhoneNumber: PhoneNumber?
-
+      
       var body: some View {
         if newPhoneNumber?.verification?.status == .verified {
           Text("Phone added!")
         }
-
+        
         if isVerifying {
           TextField("Enter code", text: $code)
           Button("Verify") {
@@ -181,19 +181,17 @@ The following example demonstrates how to build a custom user interface that all
     }
 
     extension AddPhoneView {
-
+      
       func createPhone(_ phone: String) async {
         do {
           guard let user = Clerk.shared.user else { return }
-
-          // Add an unverified phone number to user
-          self.newPhoneNumber = try await user.createPhoneNumber(phone)
-
-          guard let newphoneNumber = self.newPhoneNumber else { return }
-
-          // Send the user an sms message with the verification code
-          try await newphoneNumber.prepareVerification()
-
+          
+          // Add an unverified phone number to user,
+          // then send the user an sms message with the verification code
+          self.newPhoneNumber = try await user
+            .createPhoneNumber(phone)
+            .prepareVerification()
+                    
           // Set to true to display second form
           // and capture the OTP code
           isVerifying = true
@@ -203,14 +201,14 @@ The following example demonstrates how to build a custom user interface that all
           dump(error)
         }
       }
-
+      
       func verifyCode(_ code: String) async {
         do {
           guard let newPhoneNumber else { return }
-
+          
           // Verify that the code entered matches the code sent to the user
           self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
-
+          
           // If the status is not complete, check why. User may need to
           // complete further steps.
           dump(self.newPhoneNumber?.verification?.status)

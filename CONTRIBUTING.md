@@ -818,14 +818,20 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 <Include src="_partials/oauth-instructions" />
 ```
 
-### `<SDKFilter />`
+### `<If />`
 
-This component will only show its contents when the users active SDK (selected up in the top left selector) matches the specified SDK:
+This component if simply for conditional rendering, when the conditions are true it will display its contents, when its false it will be hidden.
 
-It accepts either a "sdk" or "sdks" prop, the available sdks are:
+| Props     | Optional | Type               | Comment                                               |
+|-----------|----------|--------------------|-------------------------------------------------------|
+| children  | false    | React.ReactNode    | The content that will be conditionally rendered       |
+| condition | true     | boolean            | Evaluate to true or false                             |
+| sdk       | true     | string \| string[] | Filter the content to only display on the passed sdks |
 
 <details>
-<summary>Expand to see available SDKs</summary>
+<summary>Expand to see examples of using sdk prop</summary>
+
+#### Available SDK keys
 
 | SDK                    | Key                   |
 | ---------------------- | --------------------- |
@@ -850,28 +856,29 @@ It accepts either a "sdk" or "sdks" prop, the available sdks are:
 | SDK Development        | "sdk-development"     |
 | Community SDKs         | "community-sdk"       |
 
-</details>
 
 #### Filtered to a single sdk
 
 ```mdx
-<SDKFilter sdk="nextjs">This content will only be rendered if the active sdk is Next.js</SDKFilter>
+<If sdk="nextjs">This content will only be rendered if the active sdk is Next.js</If>
 ```
 
 #### Filtered to either the astro or react active sdk
 
 ```mdx
-<SDKFilter sdks={['astro', 'react']}>This content will only be rendered if the active sdk is Astro or React</SDKFilter>
+<If sdk={['astro', 'react']}>This content will only be rendered if the active sdk is Astro or React</If>
 ```
 
 #### Filter within a Filter
 
 ```mdx
-<SDKFilter sdks={['nextjs', 'remix']}>
+<If sdk={['nextjs', 'remix']}>
   Hello to Nextjs and Remix Devs
-  <SDKFilter sdk="nextjs">Only Nextjs devs get to see this part</SDKFilter>
-</SDKFilter>
+  <If sdk="nextjs">Only Nextjs devs get to see this part</If>
+</If>
 ```
+
+</details>
 
 Note: This component cannot be within code blocks.
 

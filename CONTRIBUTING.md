@@ -823,7 +823,7 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 This component if simply for conditional rendering, when the conditions are true it will display its contents, when its false it will be hidden.
 
 | Props     | Optional | Type               | Comment                                               |
-|-----------|----------|--------------------|-------------------------------------------------------|
+| --------- | -------- | ------------------ | ----------------------------------------------------- |
 | children  | false    | React.ReactNode    | The content that will be conditionally rendered       |
 | condition | true     | boolean            | Evaluate to true or false                             |
 | sdk       | true     | string \| string[] | Filter the content to only display on the passed sdks |
@@ -855,7 +855,6 @@ This component if simply for conditional rendering, when the conditions are true
 | JS Backend SDK         | "javascript-backend"  |
 | SDK Development        | "sdk-development"     |
 | Community SDKs         | "community-sdk"       |
-
 
 #### Filtered to a single sdk
 

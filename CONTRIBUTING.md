@@ -810,30 +810,30 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file:
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
 
 ```mdx
-{/* Render `docs/_partials/oauth-instructions.mdx` */}
+{/* Render `docs/_partials/code-example.mdx` */}
 
-<Include src="_partials/oauth-instructions" />
+<Include src="_partials/code-example" />
 ```
 
 ### `<If />`
 
-This component if simply for conditional rendering, when the conditions are true it will display its contents, when its false it will be hidden.
+The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidebar.
 
-| Props     | Optional | Type               | Comment                                               |
-| --------- | -------- | ------------------ | ----------------------------------------------------- |
-| children  | false    | React.ReactNode    | The content that will be conditionally rendered       |
-| condition | true     | boolean            | Evaluate to true or false                             |
-| sdk       | true     | string \| string[] | Filter the content to only display on the passed sdks |
+> [!IMPORTANT]
+> This component cannot be used within code blocks.
 
-<details>
-<summary>Expand to see examples of using sdk prop</summary>
+| Props                   | Type                 | Comment                                                                                                                                                                                                     |
+| ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                            |
+| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                   |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. |
 
-#### Available SDK keys
+Available values for the `sdk` prop:
 
-| SDK                    | Key                   |
+| SDK                    | Value                 |
 | ---------------------- | --------------------- |
 | Next.js                | "nextjs"              |
 | React                  | "react"               |
@@ -856,30 +856,37 @@ This component if simply for conditional rendering, when the conditions are true
 | SDK Development        | "sdk-development"     |
 | Community SDKs         | "community-sdk"       |
 
-#### Filtered to a single sdk
+#### Examples
+
+<details>
+<summary>Filtered to a single SDK</summary>
 
 ```mdx
-<If sdk="nextjs">This content will only be rendered if the active sdk is Next.js</If>
-```
-
-#### Filtered to either the astro or react active sdk
-
-```mdx
-<If sdk={['astro', 'react']}>This content will only be rendered if the active sdk is Astro or React</If>
-```
-
-#### Filter within a Filter
-
-```mdx
-<If sdk={['nextjs', 'remix']}>
-  Hello to Nextjs and Remix Devs
-  <If sdk="nextjs">Only Nextjs devs get to see this part</If>
-</If>
+<If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
 ```
 
 </details>
 
-Note: This component cannot be within code blocks.
+<details>
+<summary>Filtered to either the Astro or React active SDK</summary>
+
+```mdx
+<If sdk={['astro', 'react']}>This content will only be rendered if the active SDK is Astro or React</If>
+```
+
+</details>
+
+<details>
+<summary>Filter within a filter</summary>
+
+```mdx
+<If sdk={['nextjs', 'remix']}>
+  This content will only be rendered if the active SDK is Next.js or Remix.
+  <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
+</If>
+```
+
+</details>
 
 ### Images and static assets
 

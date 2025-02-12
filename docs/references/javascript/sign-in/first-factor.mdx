@@ -11,6 +11,8 @@ Begins the first factor verification process. This is a required step in order t
 
 Common scenarios are one-time code (OTP) or social account (SSO) verification. This is determined by the accepted `strategy` parameter values. Each authentication identifier supports different strategies.
 
+Returns a [`SignIn`][signin-ref] object. Check the `firstFactorVerification` attribute for the status of the first factor verification process.
+
 ```typescript
 function prepareFirstFactor(params: PrepareFirstFactorParams): Promise<SignIn>
 ```
@@ -19,59 +21,60 @@ function prepareFirstFactor(params: PrepareFirstFactorParams): Promise<SignIn>
 
 <Properties>
   - `strategy`
-  - `string`
+  - `'email_link' | 'email_code' | 'phone_code' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'passkey' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'reset_password_phone_code' | 'reset_password_email_code'`
 
-  The `strategy` value depends on the object's `identifier` value. Each authentication identifier supports different verification strategies. Possible `strategy` values are:
+  The `strategy` value depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
 
-  - `email_link`: User will receive an email magic link via email. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.
-  - `email_code`: User will receive a one-time authentication code via email. At least one email address should be on file for the user. The `email_address_id` parameter can also be specified to select one of the user's known email addresses.
-  - `phone_code`: User will receive a one-time authentication code in their phone, via SMS. At least one phone number should be on file for the user. The `phone_number_id` parameter can also be specified to select which of the user's known phone numbers the SMS will go to.
-  - `web3_metamask_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `web3_coinbase_wallet_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `web3_okx_wallet_signature`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
-  - `oauth_<provider>`: The user will be authenticated with their social sign-in account. [See available social providers](/docs/references/javascript/types/oauth#o-auth-provider).
+  - `'email_link'`: User will receive an email magic link via email.
+  - `'email_code'`: User will receive a one-time authentication code via email. Requires `emailAddressId` parameter to be set.
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. Requires `phoneNumberId` parameter to be set.
+  - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). Requires `web3WalletId` parameter to be set.
+  - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). Requires `web3WalletId` parameter to be set.
+  - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). Requires `web3WalletId` parameter to be set.
+  - `'passkey'`: The verification will attempt to be completed using the user's passkey.
+  - `'oauth_<provider>'`: The user will be authenticated with their [social connection account](/docs/authentication/social-connections/overview). See a list of [supported values for `<provider>`](/docs/references/javascript/types/sso).
+  - `'saml'` (deprecated): **Deprecated in favor of `'enterprise_sso'`.** The user will be authenticated with their [SAML account](/docs/authentication/enterprise-connections/overview#saml).
+  - `'enterprise_sso'`: The user will be authenticated either through SAML or OIDC depending on the configuration of their [enterprise SSO account](/docs/authentication/enterprise-connections/overview).
+  - `'reset_password_phone_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via SMS. Requires `phoneNumberId` parameter to be set.
+  - `'reset_password_email_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via email. Requires `emailAddressId` parameter to be set.
 
   ---
 
   - `emailAddressId?`
   - `string`
 
-  Unique identifier for the user's email address that will receive an email message with the one-time authentication code. This parameter will work only when the `email_code` strategy is specified.
+  **Required** if `strategy` is set to `'email_code'` or `'reset_password_email_code'`. The ID for the user's email address that will receive an email with the one-time authentication code.
 
   ---
 
   - `phoneNumberId?`
   - `string`
 
-  Unique identifier for the user's phone number that will receive an SMS message with the one-time authentication code. This parameter will work only when the `phone_code` strategy is specified.
+  **Required** if `strategy` is set to `'phone_code'` or `'reset_password_phone_code'`. The ID for the user's phone number that will receive an SMS message with the one-time authentication code.
 
   ---
 
   - `web3WalletId?`
   - `string`
 
-  Unique identifier for the user's Web3 wallet address. This parameter will work only when the `strategy` is set to `web3_metamask_signature`, `web3_coinbase_wallet_signature`, or `web3_okx_wallet_signature`.
+  **Required** if `strategy` is set to `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, or `'web3_okx_wallet_signature'`. The ID for the user's Web3 wallet address.
 
   ---
 
   - `redirectUrl?`
   - `string`
 
-  The URL that the OAuth provider should redirect to, on successful authorization on their part. This parameter is required only if you set the `strategy` param to an OAuth strategy like `oauth_<provider>`.
+  **Required** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The full URL or path that the OAuth provider should redirect to after successful authorization on their part. Typically, this will be a simple `/sso-callback` route that either calls [`Clerk.handleRedirectCallback`](/docs/references/javascript/clerk/handle-navigation#handle-redirect-callback) or mounts the [`<AuthenticateWithRedirectCallback />`](/docs/components/control/authenticate-with-callback) component. See the [custom flow](/docs/custom-flows/oauth-connections) for implementation details.
+
+  **Required** if `strategy` is set to `'email_link'`. The full URL that the user will be redirected to when they visit the email link. See the [custom flow](/docs/custom-flows/email-links) for implementation details.
 
   ---
 
   - `actionCompleteRedirectUrl?`
   - `string`
 
-  The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign in. This parameter is required only if you set the `strategy` param to an OAuth strategy like `oauth_<provider>`.
+  **Required** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The URL that the user will be redirected to once the first factor verification is complete.
 </Properties>
-
-### Returns
-
-| Type | Description |
-| - | - |
-| <code>Promise\<[SignIn][signin-ref]></code> | A `Promise` which resolves with a [`SignIn`][signin-ref] object. Check the `firstFactorVerification` attribute for the status of the first factor verification process. |
 
 ## `attemptFirstFactor()`
 
@@ -81,6 +84,8 @@ Make sure that a [`SignIn`][signin-ref] object already exists before you call th
 
 Depending on the strategy that was selected when the verification was prepared, the method parameters should be different.
 
+Returns a [`SignIn`][signin-ref] object. Check the `firstFactorVerification` attribute for the status of the first factor verification process.
+
 ```typescript
 function attemptFirstFactor(params: AttemptFirstFactorParams): Promise<SignIn>
 ```
@@ -89,9 +94,9 @@ function attemptFirstFactor(params: AttemptFirstFactorParams): Promise<SignIn>
 
 <Properties>
   - `strategy`
-  - `string`
+  - `'email_code' | 'phone_code' | 'password' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'passkey' | 'reset_password_phone_code' | 'reset_password_email_code'`
 
-  The `strategy` value depends on the object's `identifier` value. Each authentication identifier supports different verification strategies. Possible `strategy` values are:
+  The `strategy` value depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
 
   - `'email_code'`: User will receive a one-time authentication code via email. At least one email address should be on file for the user.
   - `'phone_code'`: User will receive a one-time code via SMS. At least one phone number should be on file for the user.
@@ -108,27 +113,21 @@ function attemptFirstFactor(params: AttemptFirstFactorParams): Promise<SignIn>
   - `code?`
   - `string`
 
-  The one-time code that was sent to the user as part of this verification step. This parameter is required only when `strategy` is set to `'email_code'`, `'phone_code'`, `'reset_password_phone_code'`, or `'reset_password_email_code'`.
+  **Required** if `strategy` is set to `'email_code'`, `'phone_code'`, `'reset_password_phone_code'`, or `'reset_password_email_code'`. The one-time code that was sent to the user.
 
   ---
 
   - `password?`
   - `string`
 
-  The user's password string. This parameter is required only when `strategy` is set to `password`.
+  **Required** if `strategy` is set to `'password'`. The user's password string to be verified.
 
   ---
 
   - `signature?`
   - `string`
 
-  Web3 wallet generated signature to be verified. This parameter is required only for Web3 verification strategies.
+  **Required** if `strategy` is set to `web3_metamask_signature`, `web3_coinbase_wallet_signature`, or `web3_okx_wallet_signature`. The Web3 wallet generated signature to be verified.
 </Properties>
-
-### Returns
-
-| Type | Description |
-| - | - |
-| <code>Promise\<[SignIn][signin-ref]></code> | A `Promise` which resolves with a [`SignIn`][signin-ref] object. Check the `firstFactorVerification` attribute for the status of the first factor verification process. |
 
 [signin-ref]: /docs/references/javascript/sign-in/sign-in

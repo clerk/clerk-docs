@@ -1,0 +1,78 @@
+> [!IMPORTANT]
+> Expo supports [SAML](/docs/authentication/enterprise-connections/overview#saml) Enterprise SSO, but does not support [OIDC](/docs/authentication/enterprise-connections/overview#oidc).
+
+The following example **will both sign up _and_ sign in users**, eliminating the need for a separate sign-up page.
+
+The following example:
+
+1. Accesses the `startSSOFlow()` method using the [`useSSO()`](/docs/references/expo/use-sso) hook.
+1. Calls the `startSSOFlow()` method with the `strategy` param set to `enterprise_sso` and the `identifier` param set to the user's email address that they provided.
+   - If authentication is successful, the `setActive()` method is called to set the active session with the new `createdSessionId`.
+   - If authentication is not successful, you can handle the missing requirements, such as MFA, using the [`signIn`](/docs/references/javascript/sign-in/sign-in) or [`signUp`](/docs/references/javascript/sign-up/sign-up) object returned from `startSSOFlow()`, depending on if the user is signing in or signing up. These objects include properties, like `status`, that can be used to determine the next steps. See the respective linked references for more information.
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+import React, { useEffect, useState } from 'react'
+import * as WebBrowser from 'expo-web-browser'
+import { useSSO } from '@clerk/clerk-expo'
+import { View, Button, TextInput } from 'react-native'
+
+export const useWarmUpBrowser = () => {
+  useEffect(() => {
+    // Preloads the browser for Android devices to reduce authentication load time
+    // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+    void WebBrowser.warmUpAsync()
+    return () => {
+      // Cleanup: closes browser when component unmounts
+      void WebBrowser.coolDownAsync()
+    }
+  }, [])
+}
+
+// Handle any pending authentication sessions
+WebBrowser.maybeCompleteAuthSession()
+
+export default function Page() {
+  useWarmUpBrowser()
+
+  const [email, setEmail] = useState('')
+
+  // Use the `useSSO()` hook to access the `startSSOFlow()` method
+  const { startSSOFlow } = useSSO()
+
+  const onPress = async () => {
+    try {
+      // Start the authentication process by calling `startSSOFlow()`
+      const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+        strategy: 'enterprise_sso',
+        identifier: email,
+      })
+
+      // If sign in was successful, set the active session
+      if (createdSessionId) {
+        setActive!({ session: createdSessionId })
+      } else {
+        // If there is no `createdSessionId`,
+        // there are missing requirements, such as MFA
+        // Use the `signIn` or `signUp` returned from `startSSOFlow`
+        // to handle next steps
+      }
+    } catch (err) {
+      // See https://clerk.com/docs/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2))
+    }
+  }
+
+  return (
+    <View>
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="Enter email"
+        placeholderTextColor="#666666"
+      />
+      <Button title="Sign in with SAML" onPress={onPress} />
+    </View>
+  )
+}
+```

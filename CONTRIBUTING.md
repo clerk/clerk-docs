@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/styleguide.md) for more information on our guidelines for writing content.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
 ## Written in MDX
 
@@ -12,12 +12,12 @@ MDX files ([including any code blocks](#prettier-integration)) are formatted usi
 
 ## Project setup
 
-1.  Fork and clone the repo
-2.  Run `npm install` to install dependencies
-3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`
+1.  Fork or clone the repo.
+2.  Run `npm install` to install dependencies.
+3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
-> Tip: Keep your `main` branch pointing at the original repository and make pull
-> requests from branches on your fork. To do this, run:
+> Tip: If you forked the repo, keep your `main` branch pointing at the original repository
+> and make pull requests from branches on your fork. To do this, run:
 >
 >     git remote add upstream https://github.com/clerk/clerk-docs.git
 >     git fetch upstream
@@ -40,7 +40,7 @@ The structure of the issue should be:
 - **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav"
 - **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
-## Creating a Pull Request
+## Creating a pull request
 
 When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerk/clerk-docs/pulls), also referred to as a PR.
 
@@ -67,6 +67,8 @@ Clerk employees can run the application and preview their documentation changes 
 Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
 
 - **Check for broken links.** If your change contains URLs that are not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
+- **Check that files are formatted with the prettier configuration settings.**
+- **Check for changes to quickstarts.**
 
 To run all linting steps:
 
@@ -90,9 +92,9 @@ The documentation content is located in the [`/docs` directory](./docs/). Each M
 
 For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
 
-### Navigation manifest
+### Sidenav
 
-The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
+The side navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered sidenav.
 
 [Manifest JSON schema →](./docs/manifest.schema.json)
 
@@ -810,13 +812,83 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file:
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
 
 ```mdx
-{/* Render `docs/_partials/oauth-instructions.mdx` */}
+{/* Render `docs/_partials/code-example.mdx` */}
 
-<Include src="_partials/oauth-instructions" />
+<Include src="_partials/code-example" />
 ```
+
+### `<If />`
+
+The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidebar.
+
+> [!IMPORTANT]
+> This component cannot be used within code blocks.
+
+| Props                   | Type                 | Comment                                                                                                                                                                                                     |
+| ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                            |
+| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                   |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. |
+
+Available values for the `sdk` prop:
+
+| SDK                    | Value                 |
+| ---------------------- | --------------------- |
+| Next.js                | "nextjs"              |
+| React                  | "react"               |
+| Javascript             | "javascript-frontend" |
+| Chrome Extension       | "chrome-extension"    |
+| Expo                   | "expo"                |
+| iOS                    | "ios"                 |
+| Express                | "expressjs"           |
+| Fastify                | "fastify"             |
+| React Router           | "react-router"        |
+| Remix                  | "remix"               |
+| Tanstack Start         | "tanstack-start"      |
+| Go                     | "go"                  |
+| Astro                  | "astro"               |
+| Nuxt                   | "nuxt"                |
+| Vue                    | "vue"                 |
+| Ruby / Rails / Sinatra | "ruby"                |
+| Python                 | "python"              |
+| JS Backend SDK         | "javascript-backend"  |
+| SDK Development        | "sdk-development"     |
+| Community SDKs         | "community-sdk"       |
+
+#### Examples
+
+<details>
+<summary>Filtered to a single SDK</summary>
+
+```mdx
+<If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
+```
+
+</details>
+
+<details>
+<summary>Filtered to either the Astro or React active SDK</summary>
+
+```mdx
+<If sdk={['astro', 'react']}>This content will only be rendered if the active SDK is Astro or React</If>
+```
+
+</details>
+
+<details>
+<summary>Filter within a filter</summary>
+
+```mdx
+<If sdk={['nextjs', 'remix']}>
+  This content will only be rendered if the active SDK is Next.js or Remix.
+  <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
+</If>
+```
+
+</details>
 
 ### Images and static assets
 

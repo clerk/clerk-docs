@@ -7,23 +7,13 @@ description: Learn how to use the Clerk API to build a custom sign-up and sign-i
 
 ## Before you start
 
-You must configure your application instance through the Clerk Dashboard for the social connection(s) that you want to use, as described at [the top of the OAuth guide](/docs/authentication/social-connections/oauth#configuration).
+You must configure your application instance through the Clerk Dashboard for the social connection(s) that you want to use. Visit [the appropriate guide for your platform](/docs/authentication/social-connections/overview) to learn how to configure your instance.
 
 ## Create the sign-up and sign-in flow
 
-When using OAuth, the sign-up and sign-in flows are equivalent.
-
-<Tabs items={["Next.js", "Expo", "iOS (Beta)"]}>
+<Tabs items={["Next.js", "Expo", "iOS (beta)"]}>
   <Tab>
-    A successful OAuth flow consists of the following steps:
-
-    1. Start the OAuth flow by calling [`SignIn.authenticateWithRedirect(params)`](/docs/references/javascript/sign-in/authenticate-with#authenticate-with-redirect) or [`SignUp.authenticateWithRedirect(params)`](/docs/references/javascript/sign-up/authenticate-with#authenticate-with-redirect). Both of these methods require a `redirectUrl` param, which is the URL that the browser will be redirected to once the user authenticates with the OAuth provider.
-    1. Create a route at the URL that the `redirectUrl` param points to. The following example names this route `/sso-callback`. This route should call the [`Clerk.handleRedirectCallback()`](/docs/references/javascript/clerk/handle-navigation#handle-redirect-callback) method or simply render the prebuilt [`<AuthenticateWithRedirectCallback/>`](/docs/components/control/authenticate-with-callback) component.
-
-    The following example shows two files:
-
-    1. The sign-in page where the user can start the OAuth flow.
-    1. The SSO callback page where the OAuth flow is completed.
+    <Include src="_partials/custom-flows/sso-connections" />
 
     <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
       ```tsx {{ filename: 'app/sign-in/page.tsx' }}
@@ -39,11 +29,21 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
         if (!signIn) return null
 
         const signInWith = (strategy: OAuthStrategy) => {
-          return signIn.authenticateWithRedirect({
-            strategy,
-            redirectUrl: '/sign-up/sso-callback',
-            redirectUrlComplete: '/',
-          })
+          return signIn
+            .authenticateWithRedirect({
+              strategy,
+              redirectUrl: '/sign-up/sso-callback',
+              redirectUrlComplete: '/',
+            })
+            .then((res) => {
+              console.log(res)
+            })
+            .catch((err: any) => {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.log(err.errors)
+              console.error(err, null, 2)
+            })
         }
 
         // Render a button for each supported OAuth provider
@@ -60,8 +60,8 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
       import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
 
       export default function SSOCallback() {
-        // Handle the redirect flow by rendering the
-        // prebuilt AuthenticateWithRedirectCallback component.
+        // Handle the redirect flow by calling the Clerk.handleRedirectCallback() method
+        // or rendering the prebuilt <AuthenticateWithRedirectCallback/> component.
         // This is the final step in the custom OAuth flow.
         return <AuthenticateWithRedirectCallback />
       }
@@ -70,33 +70,13 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
   </Tab>
 
   <Tab>
-    ### Before you start
-
-    Install `expo-linking` to handle linking.
-
-    <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
-      ```bash {{ filename: 'terminal' }}
-      npm install expo-linking
-      ```
-
-      ```bash {{ filename: 'terminal' }}
-      yarn add expo-linking
-      ```
-
-      ```bash {{ filename: 'terminal' }}
-      pnpm add expo-linking
-      ```
-    </CodeBlockTabs>
-
-    ### Build the flow
-
     <Include src="_partials/expo/oauth-custom-flow" />
   </Tab>
 
   <Tab>
     ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
     import SwiftUI
-    import ClerkSDK
+    import Clerk
 
     struct OAuthView: View {
       var body: some View {
@@ -113,18 +93,15 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
       func signInWithOAuth(provider: OAuthProvider) async {
         do {
           // Start the sign-in process using the selected OAuth provider.
-          let signIn = try await SignIn.create(strategy: .oauth(provider))
-
-          // Start the OAuth process
-          let externalAuthResult = try await signIn.authenticateWithRedirect()
+          let result = try await SignIn.authenticateWithRedirect(strategy: .oauth(provider: provider))
 
           // It is common for users who are authenticating with OAuth to use
           // a sign-in button when they mean to sign-up, and vice versa.
           // Clerk will handle this transfer for you if possible.
-          // Therefore, an ExternalAuthResult can contain either a SignIn or SignUp.
+          // Therefore, a TransferFlowResult can be either a SignIn or SignUp.
 
-          // Check if the result of the OAuth was a sign in
-          if let signIn = externalAuthResult?.signIn {
+          switch result {
+          case .signIn(let signIn):
             switch signIn.status {
             case .complete:
               // If sign-in process is complete, navigate the user as needed.
@@ -134,10 +111,7 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
               // complete further steps.
               dump(signIn.status)
             }
-          }
-
-          // Check if the result of the OAuth was a sign up
-          if let signUp = externalAuthResult?.signUp {
+          case .signUp(let signUp):
             switch signUp.status {
             case .complete:
               // If sign-up process is complete, navigate the user as needed.
@@ -148,117 +122,13 @@ When using OAuth, the sign-up and sign-in flows are equivalent.
               dump(signUp.status)
             }
           }
+
         } catch {
           // See https://clerk.com/docs/custom-flows/error-handling
           // for more info on error handling.
           dump(error)
         }
       }
-    }
-    ```
-  </Tab>
-</Tabs>
-
-## OAuth account transfer flows
-
-It is common for users who are authenticating with OAuth to use a sign-in button when they mean to sign-up, and vice versa. For those cases, the `SignIn` and `SignUp` objects have a `transferable` status that indicates whether the user can be transferred to the other flow.
-
-**If you would like to keep your sign-in and sign-up flows completely separate, then you can skip this section.**
-
-The following example demonstrates how to handle these cases in your sign-in flow. To apply the same logic to the sign-up flow, simply replace `signIn.authenticateWithRedirect()` with `signUp.authenticateWithRedirect()` in your code.
-
-<Tabs items={["Next.js", "iOS (Beta)"]}>
-  <Tab>
-    ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-    'use client'
-
-    import * as React from 'react'
-    import { OAuthStrategy } from '@clerk/types'
-    import { useSignIn, useSignUp } from '@clerk/nextjs'
-
-    export default function OauthSignIn() {
-      const { signIn } = useSignIn()
-      const { signUp, setActive } = useSignUp()
-
-      if (!signIn || !signUp) return null
-
-      const signInWith = (strategy: OAuthStrategy) => {
-        return signIn.authenticateWithRedirect({
-          strategy,
-          redirectUrl: '/sign-up/sso-callback',
-          redirectUrlComplete: '/',
-        })
-      }
-
-      async function handleSignIn(strategy: OAuthStrategy) {
-        if (!signIn || !signUp) return null
-
-        // If the user has an account in your application, but does not yet
-        // have an OAuth account connected to it, you can transfer the OAuth
-        // account to the existing user account.
-        const userExistsButNeedsToSignIn =
-          signUp.verifications.externalAccount.status === 'transferable' &&
-          signUp.verifications.externalAccount.error?.code === 'external_account_exists'
-
-        if (userExistsButNeedsToSignIn) {
-          const res = await signIn.create({ transfer: true })
-
-          if (res.status === 'complete') {
-            setActive({
-              session: res.createdSessionId,
-            })
-          }
-        }
-
-        // If the user has an OAuth account but does not yet
-        // have an account in your app, you can create an account
-        // for them using the OAuth information.
-        const userNeedsToBeCreated = signIn.firstFactorVerification.status === 'transferable'
-
-        if (userNeedsToBeCreated) {
-          const res = await signUp.create({
-            transfer: true,
-          })
-
-          if (res.status === 'complete') {
-            setActive({
-              session: res.createdSessionId,
-            })
-          }
-        } else {
-          // If the user has an account in your application
-          // and has an OAuth account connected to it, you can sign them in.
-          signInWith(strategy)
-        }
-      }
-
-      // Render a button for each supported OAuth provider
-      // you want to add to your app. This example uses only Google.
-      return (
-        <div>
-          <button onClick={() => handleSignIn('oauth_google')}>Sign in with Google</button>
-        </div>
-      )
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
-    // If a user attempted to sign in but doesn't have an account,
-    // Clerk will try to handle the transfer to sign up for you.
-    // If that's not possible (i.e. maybe signing up requires a CAPTCHA Token),
-    // authenticateWithRedirect() will return the original sign in to you
-    // so you can manually perform the transfer to sign up.
-
-    // Check if the sign in needs to be transferred to a sign up
-    if let signIn = externalAuthResult?.signIn,
-      signIn.firstFactorVerification?.status == .transferable {
-        // Create a new sign up with the strategy `.transfer`
-        let signUp = try await SignUp.create(
-          strategy: .transfer,
-          captchaToken: "TOKEN"
-        )
     }
     ```
   </Tab>

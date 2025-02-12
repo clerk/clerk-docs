@@ -9,7 +9,7 @@ The recommended approach is to wrap your entire app with `<ClerkProvider>` at th
 
 ## Usage
 
-<Tabs items={["Next.js", "React"]}>
+<Tabs items={["Next.js", "React", "Expo", "React Router", "Tanstack Start"]}>
   <Tab>
     <CodeBlockTabs options={["App Router", "Pages Router"]}>
       ```tsx {{ filename: 'app/layout.tsx' }}
@@ -47,248 +47,116 @@ The recommended approach is to wrap your entire app with `<ClerkProvider>` at th
   <Tab>
     ```tsx {{ filename: 'index.tsx' }}
     import React from 'react'
-    import ReactDOM from 'react-dom'
+    import ReactDOM from 'react-dom/client'
+    import App from './App.tsx'
     import { ClerkProvider } from '@clerk/clerk-react'
-    import App from './App'
 
-    const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY
+    // Import your Publishable Key
+    const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-    ReactDOM.render(
+    if (!PUBLISHABLE_KEY) {
+      throw new Error('Add your Clerk Publishable Key to the .env.local file')
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
-        <ClerkProvider publishableKey={publishableKey}>
+        <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
           <App />
         </ClerkProvider>
       </React.StrictMode>,
-      document.getElementById('root'),
     )
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/_layout.tsx' }}
+    import { ClerkProvider } from '@clerk/clerk-expo'
+    import { Slot } from 'expo-router'
+
+    export default function Layout() {
+      const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+      if (publishableKey === undefined) {
+        throw new Error('Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file')
+      }
+
+      return (
+        <ClerkProvider publishableKey={publishableKey}>
+          <Slot />
+        </ClerkProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/root.tsx' }}
+    // Other imports
+
+    import { ClerkProvider, SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/react-router'
+
+    export default function App({ loaderData }: Route.ComponentProps) {
+      return (
+        <ClerkProvider
+          loaderData={loaderData}
+          signUpFallbackRedirectUrl="/"
+          signInFallbackRedirectUrl="/"
+        >
+          <header className="flex items-center justify-center py-8 px-4">
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main>
+            <Outlet />
+          </main>
+        </ClerkProvider>
+      )
+    }
+
+    // Rest of the root.tsx code
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/routes/__root.tsx', ins: [4, 18, 29] }}
+    import { Outlet, createRootRoute } from '@tanstack/react-router'
+    import { Meta, Scripts } from '@tanstack/start'
+    import * as React from 'react'
+    import { ClerkProvider } from '@clerk/tanstack-start'
+
+    export const Route = createRootRoute({
+      component: () => {
+        return (
+          <RootDocument>
+            <Outlet />
+          </RootDocument>
+        )
+      },
+    })
+
+    function RootDocument({ children }: { children: React.ReactNode }) {
+      return (
+        <ClerkProvider>
+          <html>
+            <head>
+              <Meta />
+            </head>
+            <body>
+              {children}
+              <Scripts />
+            </body>
+          </html>
+        </ClerkProvider>
+      )
+    }
     ```
   </Tab>
 </Tabs>
 
-{/* TODO: Make dedicated docs pages for these meta-frameworks */}
-
-> [!NOTE]
-> Other meta-frameworks, like [Remix](/docs/quickstarts/remix#configure-clerk-app), have wrappers around `<ClerkProvider>` to make their integrations tighter.
-
 ## Properties
 
-<Properties>
-  - `afterMultiSessionSingleSignOutUrl`
-  - `string`
-
-  The full URL or path to navigate to after a signing out from a currently active account in a multi-session app.
-
-  ---
-
-  - `afterSignOutUrl`
-  - `string`
-
-  The full URL or path to navigate to after a successful sign-out.
-
-  ---
-
-  - `allowedRedirectOrigins?`
-  - `Array<string | RegExp>`
-
-  An optional array of domains to validate user-provided redirect URLs against. If no match is made, the redirect is considered unsafe and the default redirect will be used with a warning logged in the console.
-
-  ---
-
-  - `allowedRedirectProtocols?`
-  - `Array<string>`
-
-  An optional array of protocols to validate user-provided redirect URLs against. If no match is made, the redirect is considered unsafe and the default redirect will be used with a warning logged in the console.
-
-  ---
-
-  - `appearance?`
-  - <code>[Appearance](/docs/customization/overview) | undefined</code>
-
-  Optional object to style your components. Will only affect [Clerk components][components-ref] and not [Account Portal][ap-ref] pages.
-
-  ---
-
-  - `clerkJSUrl?`
-  - `string`
-
-  Define the URL that `@clerk/clerk-react` should hot-load `@clerk/clerk-js` from.
-
-  ---
-
-  - `clerkJSVariant?`
-  - `string`
-
-  If your web application only uses Control components, you can set this value to `headless` and load a minimal ClerkJS bundle for optimal page performance.
-
-  ---
-
-  - `clerkJSVersion?`
-  - `string`
-
-  Define the npm version for `@clerk/clerk-js`.
-
-  ---
-
-  - `domain?`
-  - `string | ((url: URL) => boolean)`
-
-  This option sets the domain of the satellite application. If your application is a satellite application, this option is required.
-
-  ---
-
-  - `isSatellite?`
-  - `boolean | ((url: URL) => boolean)`
-
-  This option defines that the application is a satellite application.
-
-  ---
-
-  - `localization`
-  - <code>[Localization](/docs/customization/localization) | undefined</code>
-
-  Optional object to localize your components. Will only affect [Clerk components][components-ref] and not [Account Portal][ap-ref] pages.
-
-  ---
-
-  - `publishableKey`
-  - `string`
-
-  The Clerk Publishable Key for your instance. This can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
-
-  ---
-
-  - `routerPush?`
-  - `(to: string) => Promise<unknown> | void`
-
-  A function which takes the destination path as an argument and performs a "push" navigation.
-
-  ---
-
-  - `routerReplace?`
-  - `(to: string) => Promise<unknown> | void`
-
-  A function which takes the destination path as an argument and performs a "replace" navigation.
-
-  ---
-
-  - `signInFallbackRedirectUrl?`
-  - `string`
-
-  The fallback URL to redirect to after the user signs in, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `signUpFallbackRedirectUrl?`
-  - `string`
-
-  The fallback URL to redirect to after the user signs up, if there's no `redirect_url` in the path already. Defaults to `/`. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `signInForceRedirectUrl?`
-  - `string`
-
-  If provided, this URL will always be redirected to after the user signs in. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `signUpForceRedirectUrl?`
-  - `string`
-
-  If provided, this URL will always be redirected to after the user signs up. It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `signInUrl`
-  - `string`
-
-  This URL will be used for any redirects that might happen and needs to point to your primary application on the client-side. This option is optional for production instances. **It is required to be set for a satellite application in a development instance.** It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `signUpUrl`
-  - `string`
-
-  This URL will be used for any redirects that might happen and needs to point to your primary application on the client-side. This option is optional for production instances but **must be set for a satellite application in a development instance.** It's recommended to use [the environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects) instead.
-
-  ---
-
-  - `supportEmail?`
-  - `string`
-
-  Optional support email for display in authentication screens. Will only affect [Clerk components][components-ref] and not [Account Portal][ap-ref] pages.
-
-  ---
-
-  - `telemetry?`
-  - `false | { disabled?: boolean; debug?: boolean } | undefined`
-
-  Controls whether or not Clerk will collect [telemetry data](/docs/telemetry).
-
-  ---
-
-  - `syncHost`
-  - `string`
-
-  **Chrome Extension only** To enable, pass the URL of the web application that the extension will sync the authentication state from. See the [dedicated guide](/docs/references/chrome-extension/sync-host) for more information.
-
-  ---
-
-  - `nonce?`
-  - `string`
-
-  This nonce value will be passed to the `@clerk/clerk-js` script tag. Use it to implement a [strict-dynamic CSP](/docs/security/clerk-csp#implementing-a-strict-dynamic-csp). Requires the `dynamic` prop to also be set.
-
-  ---
-
-  - `sdkMetadata?`
-  - `{ name: string; version: string; environment?: string }`
-
-  Contains information about the SDK that the host application is using. You don't need to set this value yourself unless you're [developing an SDK](/docs/references/sdk/overview).
-
-  ---
-
-  - `standardBrowser?`
-  - `boolean`
-
-  By default, ClerkJS is loaded with the assumption that cookies can be set (browser setup). On native platforms this value must be set to `false`. You don't need to set this value yourself unless you're [developing an SDK](/docs/references/sdk/overview).
-
-  ---
-
-  - `selectInitialSession?`
-  - `(client: ClientResource) => ActiveSessionResource | null`
-
-  By default, the last active session is used during client initialization. This option allows you to override that behavior, e.g. by selecting a specific session. You don't need to set this value yourself unless you're [developing an SDK](/docs/references/sdk/overview).
-
-  ---
-
-  - `touchSession?`
-  - `boolean`
-
-  By default, [the Clerk Frontend API `touch` endpoint](/docs/reference/frontend-api/tag/Sessions#operation/touchSession){{ target: '_blank' }} is called during page focus to keep the last active session alive. This option allows you to disable this behavior. You don't need to set this value yourself unless you're [developing an SDK](/docs/references/sdk/overview).
-
-  ---
-
-  - `initialState?`
-  - `InitialState`
-
-  Provide an initial state of the Clerk client during server-side rendering. You don't need to set this value yourself unless you're [developing an SDK](/docs/references/sdk/overview).
-
-  ---
-
-  - `dynamic?`
-  - `boolean`
-
-  (For Next.js only) Indicates whether or not Clerk should make dynamic auth data available based on the current request. Defaults to `false`. Opts the application into dynamic rendering when `true`. For more information, see [Next.js rendering modes and Clerk](/docs/references/nextjs/rendering-modes).
-
-  ---
-
-  - `waitlistUrl?`
-  - `string`
-
-  Full URL or path to the waitlist page. If `undefined`, will redirect to the [Account Portal waitlist page](/docs/customization/account-portal/overview#waitlist).
-</Properties>
-
-[components-ref]: /docs/components/overview
-
-[ap-ref]: /docs/customization/account-portal/overview
+<Include src="_partials/clerk-provider/properties" />

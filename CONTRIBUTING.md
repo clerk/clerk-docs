@@ -394,6 +394,23 @@ interface CodeBlockProps {
 
 </details>
 
+You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
+
+| Type     | Character |
+| -------- | --------- |
+| Deleted  | `-`       |
+| Inserted | `+`       |
+| Marked   | `=`       |
+
+````mdx
+```tsx
+  export function App() {
+-   return <Foo />
++   return <Bar />
+  }
+```
+````
+
 #### Code block shortcodes
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:

@@ -3,12 +3,15 @@ title: '`EmailAddress`'
 description: The EmailAddress object is a model around an email address.
 ---
 
-The `EmailAddress` object is a model around an email address. Email addresses are used to provide identification for users.
+The `EmailAddress` object is a model around an email address. Email addresses are one of the [identifiers](/docs/authentication/configuration/sign-up-sign-in-options#identifiers) used to provide identification for users.
 
-Email addresses must be **verified** to ensure that they can be assigned to their rightful owners. The `EmailAddress` object holds all necessary state around the verification process.
+Email addresses must be **verified** to ensure that they are assigned to their rightful owners. The `EmailAddress` object holds all necessary state around the verification process. The following steps outline the verification process:
 
-- The verification process always starts with the [`prepareVerification()`](#prepare-verification) method, which will send a one-time verification code via an email message.
-- The second and final step involves an attempt to complete the verification by calling the [`attemptVerification()`](#attempt-verification) method, passing the one-time code as a parameter.
+1. Initiate the verification process by collecting the user's email address.
+1. Prepare the verification process by calling the [`prepareVerification()`](#prepare-verification) method, which will send a one-time verification code via an email link or code, depending on what parameters are passed to the method and the settings in the Clerk Dashboard.
+1. Attempt to complete the verification by calling the [`attemptVerification()`](#attempt-verification) method, passing the one-time code as a parameter.
+
+For implementation examples for adding and verifying email addresses, see the [email link custom flow](/docs/custom-flows/email-links) and [email code custom flow](/docs/custom-flows/add-email) guides.
 
 ## Properties
 
@@ -16,28 +19,28 @@ Email addresses must be **verified** to ensure that they can be assigned to thei
   - `id`
   - `string`
 
-  The unique identifier for this email address.
+  The unique identifier for the email address.
 
   ---
 
   - `emailAddress`
   - `string`
 
-  The value of this email address.
+  The value of the email address.
 
   ---
 
   - `verification`
   - [`Verification`](/docs/references/javascript/types/verification)
 
-  An object holding information on the verification of this email address.
+  An object holding information on the verification of the email address.
 
   ---
 
   - `linkedTo`
   - `Array<{id: string, type: string}>`
 
-  An array of objects containing information about any identifications that might be linked to this email address.
+  An array of objects containing information about any identifications that might be linked to the email address.
 </Properties>
 
 ## Methods
@@ -52,7 +55,7 @@ function create(): Promise<EmailAddress>
 
 ### `destroy()`
 
-Deletes this email address.
+Deletes the email address.
 
 ```typescript
 function destroy(): Promise<void>
@@ -60,7 +63,7 @@ function destroy(): Promise<void>
 
 ### `toString()`
 
-Returns the value for this email address. Can also be accessed via the `EmailAddress.emailAddress` attribute.
+Returns the value for the email address. Can also be accessed via the `EmailAddress.emailAddress` attribute.
 
 ```typescript
 function toString(): string
@@ -68,7 +71,7 @@ function toString(): string
 
 ### `prepareVerification()`
 
-Kick off the verification process for this email address. An email message with a one-time code or an email-link will be sent to the email address box.
+Initiates the email address verification process. Based on the specified strategy, sends either a one-time verification code or a verification link to the email address. The verification status can be tracked through the `verification` property of the `EmailAddress` object.
 
 ```typescript
 function prepareVerification(params: PrepareEmailAddressVerificationParams): Promise<EmailAddress>
@@ -95,7 +98,7 @@ function prepareVerification(params: PrepareEmailAddressVerificationParams): Pro
 
 ### `attemptVerification()`
 
-Attempts to verify this email address, passing the one-time code that was sent as an email message. The code will be sent when calling the [EmailAddress.prepareVerification()](#prepare-verification) method.
+Attempts to verify an email address using a one-time code. The code must have been previously sent to the email address via the [EmailAddress.prepareVerification()](#prepare-verification) method with `strategy: 'email_code'`. Returns the updated `EmailAddress` object if verification is successful.
 
 ```typescript
 function attemptVerification(params: AttemptEmailAddressVerificationParams): Promise<EmailAddress>
@@ -114,10 +117,6 @@ function attemptVerification(params: AttemptEmailAddressVerificationParams): Pro
 
 Sets up an email verification with email link flow. Calling `createEmailLinkFlow()` will return two functions.
 
-The first function is async and starts the email link flow, preparing a email link verification. It sends the email link email and starts polling for verification results. The signature is `startEmailLinkFlow({ redirectUrl: string }) => Promise<EmailAddress>`.
-
-The second function can be used to stop polling at any time, allowing for full control of the flow and cleanup. The signature is `cancelEmailLinkFlow() => void`.
-
 ```typescript
 function createEmailLinkFlow(): {
   startEmailLinkFlow: (params: StartEmailLinkFlowParams) => Promise<EmailAddress>
@@ -125,22 +124,20 @@ function createEmailLinkFlow(): {
 }
 ```
 
-#### Returns
-
 `createEmailLinkFlow` returns an object with two functions:
 
 <Properties>
   - `startEmailLinkFlow`
   - <code>(params: [StartEmailLinkFlowParams](#start-email-link-flow-params)) => Promise\<EmailAddress></code>
 
-  Function to start the email link flow. It prepares a email link verification and polls for the verification result.
+  Function to start the email link flow. It sends the email with the email link and polls for the verification result.
 
   ---
 
   - `cancelEmailLinkFlow`
   - `() => void`
 
-  Function to cleanup the email link flow. Stops waiting for verification results.
+  Function to stop polling for the verification result, allowing for full control of the flow and cleanup.
 </Properties>
 
 #### `StartEmailLinkFlowParams`

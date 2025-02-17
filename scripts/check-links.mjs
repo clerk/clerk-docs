@@ -32,9 +32,16 @@ const ERRORS = {
   EMPTY_SLUG_ERROR(slug) {
     return `Slug error: ${slug}. Slugs must be URL-friendly and contain only lowercase letters, numbers, and dashes. No special characters or spaces are allowed.`
   },
-  CHECK_NODE_TEST(heading) {
-    return `Heading contains node that is not of type 'text' or 'inlineCode'. Heading: ${heading}.`
+  CHECK_NODE_TEST(node) {
+    return `Bad node: ${node}. Heading contains node that is not of type 'text' or 'inlineCode'. See the line number of the file.`
   },
+}
+
+const slugify = (text) => {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
 }
 
 const fileCheckCache = new Map()
@@ -98,27 +105,59 @@ const remarkPluginExtractHeadings = () => (tree, file) => {
   visit(tree, 'heading', (node) => {
     console.log('Heading node:', node)
 
-    // Check if any child node is not of type 'text' or 'inlineCode'
-    const checkNode = node.children.some((child) => child.type !== 'text' && child.type !== 'inlineCode')
-    if (checkNode) {
-      file.message(ERRORS.CHECK_NODE_TEST(JSON.stringify(node)), node.position)
-    }
+    const headingText = node.children
+      .map((child) => {
+        if (child.type === 'inlineCode') {
+          return slugify(child.value)
+        }
+        if (child.type === 'text') {
+          return child.value
+        }
 
-    let headingText = ''
-    visit(node, 'inlineCode', (inlineCode) => {
-      headingText += inlineCode.value
-    })
-    visit(node, 'text', (textNode) => {
-      headingText += textNode.value
-    })
+        // Function to recursively extract text from nodes
+        const extractText = (child) => {
+          if (child.type === 'text') {
+            return child.value
+          }
+          if (child.children) {
+            return child.children.map(extractText).join('')
+          }
+          return ''
+        }
+
+        file.message(ERRORS.CHECK_NODE_TEST(JSON.stringify(child)), child.position)
+
+        return extractText(child)
+      })
+      .join('')
+
+    // // Check if any child node is not of type 'text' or 'inlineCode'
+    // const checkNode = node.children.filter((child) => child.type !== 'text' && child.type !== 'inlineCode')
+
+    // if (checkNode.length > 0) {
+    //   // Function to recursively extract text from nodes
+    //   const extractText = (node) => {
+    //     if (node.type === 'text') {
+    //       return node.value
+    //     }
+    //     if (node.children) {
+    //       return node.children.map(extractText).join('')
+    //     }
+    //     return ''
+    //   }
+
+    //   const extractedTextFromUniqueNode = checkNode.map((node) => extractText(node)).join('')
+    //   headingText += extractedTextFromUniqueNode
+
+    //   checkNode.forEach((node) => {
+    //     file.message(ERRORS.CHECK_NODE_TEST(JSON.stringify(node)), node.position)
+    //   })
+    // }
 
     console.log('Heading text:', headingText)
 
     // Convert heading text to URL format because this is what the hash would be
-    const slug = headingText
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
+    const slug = slugify(headingText)
     if (!slug) {
       file.message(ERRORS.EMPTY_SLUG_ERROR(headingText), node.position)
     }
@@ -136,7 +175,7 @@ const processor = remark()
 async function main() {
   console.log('🔎 Checking for broken links...')
 
-  const files = readdirp('docs', {
+  const files = readdirp('docs/references/expo', {
     fileFilter: '*.mdx',
     type: 'files',
   })

@@ -29,6 +29,9 @@ const ERRORS = {
   FILE_NOT_FOUND(url) {
     return `Matching file not found for path: ${url}. Expected file to exist at \`${url.split('#')[0]}.mdx\`.`
   },
+  SLUG_ERROR(slug, file) {
+    return `Slug error: ${slug}. Slugs must be URL-friendly and contain only lowercase letters, numbers, and dashes. No special characters or spaces are allowed.`
+  },
 }
 
 const fileCheckCache = new Map()
@@ -88,13 +91,42 @@ const remarkPluginValidateLinks = () => (tree, file) => {
   )
 }
 
-const processor = remark().use(remarkFrontmatter).use(remarkMdx).use(remarkPluginValidateLinks)
+const remarkPluginExtractHeadings = () => (tree, file) => {
+  visit(tree, 'heading', (node) => {
+    console.log('Heading node:', node)
+
+    let headingText = ''
+    visit(node, 'text', (textNode) => {
+      headingText += textNode.value
+    })
+
+    console.log('Heading text:', headingText)
+
+    // Convert heading text to URL format because this is what the hash would be
+    const slug = headingText
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+    if (!slug) {
+      file.message(ERRORS.SLUG_ERROR(headingText), node.position)
+    }
+
+    console.log('Slug:', slug)
+  })
+}
+
+const processor = remark()
+  .use(remarkFrontmatter)
+  .use(remarkMdx)
+  .use(remarkPluginValidateLinks)
+  .use(remarkPluginExtractHeadings)
 
 async function main() {
   console.log('🔎 Checking for broken links...')
 
   const files = readdirp('docs', {
     fileFilter: '*.mdx',
+    directoryFilter: ['upgrade-guides/core-2'],
     type: 'files',
   })
 

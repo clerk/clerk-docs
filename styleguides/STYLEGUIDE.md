@@ -267,7 +267,7 @@ The last case is incorrect because the `<SignIn />` component will never wrap ch
 
 ### Specify syntax and filename for terminal commands
 
-If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh filename="terminal"`.
+If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh {{ filename: 'terminal' }}`.
 
 > ❌
 

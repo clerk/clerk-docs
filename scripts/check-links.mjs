@@ -29,8 +29,11 @@ const ERRORS = {
   FILE_NOT_FOUND(url) {
     return `Matching file not found for path: ${url}. Expected file to exist at \`${url.split('#')[0]}.mdx\`.`
   },
-  SLUG_ERROR(slug, file) {
+  EMPTY_SLUG_ERROR(slug) {
     return `Slug error: ${slug}. Slugs must be URL-friendly and contain only lowercase letters, numbers, and dashes. No special characters or spaces are allowed.`
+  },
+  CHECK_NODE_TEST(heading) {
+    return `Heading contains node that is not of type 'text' or 'inlineCode'. Heading: ${heading}.`
   },
 }
 
@@ -95,7 +98,16 @@ const remarkPluginExtractHeadings = () => (tree, file) => {
   visit(tree, 'heading', (node) => {
     console.log('Heading node:', node)
 
+    // Check if any child node is not of type 'text' or 'inlineCode'
+    const checkNode = node.children.some((child) => child.type !== 'text' && child.type !== 'inlineCode')
+    if (checkNode) {
+      file.message(ERRORS.CHECK_NODE_TEST(JSON.stringify(node)), node.position)
+    }
+
     let headingText = ''
+    visit(node, 'inlineCode', (inlineCode) => {
+      headingText += inlineCode.value
+    })
     visit(node, 'text', (textNode) => {
       headingText += textNode.value
     })
@@ -108,7 +120,7 @@ const remarkPluginExtractHeadings = () => (tree, file) => {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')
     if (!slug) {
-      file.message(ERRORS.SLUG_ERROR(headingText), node.position)
+      file.message(ERRORS.EMPTY_SLUG_ERROR(headingText), node.position)
     }
 
     console.log('Slug:', slug)
@@ -126,7 +138,6 @@ async function main() {
 
   const files = readdirp('docs', {
     fileFilter: '*.mdx',
-    directoryFilter: ['upgrade-guides/core-2'],
     type: 'files',
   })
 

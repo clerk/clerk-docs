@@ -7,12 +7,25 @@ import remarkFrontmatter from 'remark-frontmatter'
 import yaml from "yaml"
 import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
+import reporter from 'vfile-reporter'
 
 const BASE_PATH = process.cwd()
 const MANIFEST_FILE_PATH = path.join(BASE_PATH, './docs/manifest.json')
 const DIST_PATH = path.join(BASE_PATH, './dist')
 const CLERK_PATH = path.join(BASE_PATH, "../clerk")
-const IGNORE = ["/docs/core-1"]
+const IGNORE = [
+  "/docs/core-1",
+  '/pricing',
+  '/docs/reference/backend-api',
+  '/docs/reference/frontend-api',
+  '/support',
+  '/discord',
+  '/contact',
+  '/contact/sales',
+  '/contact/support',
+  '/blog',
+  '/changelog/2024-04-19',
+]
 
 const VALID_SDKS = [
   "nextjs",
@@ -111,7 +124,6 @@ const writeDistFile = async (filePath: string, contents: string) => {
   const fullPath = path.join(DIST_PATH, filePath)
   await ensureDirectory(path.dirname(fullPath))
   await fs.writeFile(fullPath, contents, { "encoding": "utf-8" })
-  // console.log(`wrote ${fullPath}`)
 }
 
 const writeSDKFile = async (sdk: SDK, filePath: string, contents: string) => {
@@ -152,17 +164,39 @@ const traverseTree = async <
   return result.map(group => group.filter((item): item is NonNullable<typeof item> => item !== null)) as unknown as OutTree;
 };
 
-const scopeHrefToSDK = (item: Omit<ManifestItem, 'sdk'>, targetSDK: SDK) => {
+function flattenTree<
+  Tree extends BlankTree<any, any>,
+  InItem extends Extract<Tree[number][number], { href: string }>,
+  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>
+>(tree: Tree): InItem[] {
+  const result: InItem[] = [];
+
+  for (const group of tree) {
+    for (const itemOrGroup of group) {
+      if ("href" in itemOrGroup) {
+        // It's an item
+        result.push(itemOrGroup);
+      } else if ("items" in itemOrGroup && Array.isArray(itemOrGroup.items)) {
+        // It's a group with its own sub-tree, flatten it
+        result.push(...flattenTree(itemOrGroup.items));
+      }
+    }
+  }
+
+  return result;
+}
+
+const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
 
   // This is external so can't change it
-  if (item.href.startsWith('/docs') === false) return item.href
+  if (href.startsWith('/docs') === false) return href
 
-  const hrefSegments = item.href.split('/')
+  const hrefSegments = href.split('/')
 
   // This is a little hacky so we might change it
   // if the url already contains the sdk, we don't need to change it
   if (hrefSegments.includes(targetSDK)) {
-    return item.href
+    return href
   }
 
   // Add the sdk to the url
@@ -182,7 +216,9 @@ const main = async () => {
 
       if (!item.href?.startsWith('/docs/')) return item
       if (item.target !== undefined) return item
-      if (IGNORE.includes(item.href)) return item
+
+      const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
+      if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
       const fileContent = await readMarkdownFile(item.href)
 
@@ -257,51 +293,58 @@ const main = async () => {
     }
   )
 
-  await traverseTree(fullManifest,
-    async (item) => {
-      if (item.sdk === undefined && "fileContent" in item) {
+  const flatManifest = flattenTree(fullManifest)
 
-        let updatedFileContent: string | null = null
+  const vfiles = (await Promise.all(flatManifest.map(async (item) => {
+    if ("fileContent" in item) {
 
-        markdownProcessor()
-          .use(() => (tree, vfile) => {
-            visit(tree,
-              node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
-              node => {
-                if ("url" in node && typeof node.url === "string") {
-                  const [url, hash] = node.url.split("#")
+      const vfile = await markdownProcessor()
+        .use(() => (tree, vfile) => {
+          visit(tree,
+            node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
+            node => {
+              if ("url" in node && typeof node.url === "string") {
+                const [url, hash] = node.url.split("#")
 
-                  const guide = guides.get(url)
+                const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
+                if (ignore === true) return;
 
-                  if (guide === undefined) {
-                    throw new Error(`Guide not found for ${url} in ${item.href}`)
+                const guide = guides.get(url)
+
+                if (guide === undefined) {
+                  vfile.message(`Guide ${url} not found`, node.position)
+                  return;
+                }
+
+                if (hash !== undefined) {
+                  const hasHash = guide.headingsHashs.includes(hash)
+
+                  if (hasHash === false) {
+                    vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+                    return;
                   }
-
-                  if (hash !== undefined) {
-                    const hasHash = guide.headingsHashs.includes(hash)
-
-                    if (hasHash === false) {
-                      throw new Error(`Heading "${hash}" not found in ${url} linked from ${item.href.replace('/', '')}${node.position?.start.line ? `:${node.position?.start.line}` : ''}`)
-                    }
-                  }
-
-                  // update the links if they need to point to scoped hrefs
-                  // I am thinking /docs/:sdk:/*.mdx then `clerk` can pick that up and put in the users current sdk
-                  // but it needs to know what sdks it can fallback to
-
                 }
               }
-            )
-          }).process(item.fileContent)
+            }
+          )
+        }).process({
+          path: `${item.href.startsWith('/') ? item.href.slice(1) : item.href}.mdx`,
+          value: item.fileContent
+        })
 
-        if (updatedFileContent === null) {
-          throw new Error(`Frontmatter parsing failed for ${item.href}`)
-        }
-
-        await writeDistFile(`${item.href.replace("/docs/", "")}.mdx`, updatedFileContent)
+      if (item.sdk === undefined) {
+        await writeDistFile(`${item.href.replace("/docs/", "")}.mdx`, item.fileContent)
       }
-      return null
-    })
+
+      return vfile
+    }
+  }))).filter((item): item is NonNullable<typeof item> => item !== undefined)
+
+  const output = reporter(vfiles, { quiet: true })
+
+  if (output !== "") {
+    console.info(output)
+  }
 
   for (const targetSdk of VALID_SDKS) {
 
@@ -320,7 +363,7 @@ const main = async () => {
         // This is a scoped item and its scoped to our target sdk
         return {
           ...item,
-          scopedHref: scopeHrefToSDK(item, targetSdk)
+          scopedHref: scopeHrefToSDK(item.href, targetSdk)
         }
       },
       async ({ sdk, ...group }) => {
@@ -336,38 +379,6 @@ const main = async () => {
     await traverseTree(sdkFilteredManifest,
       async (item) => {
         if ("fileContent" in item && "scopedHref" in item) {
-
-          markdownProcessor()
-            .use(() => (tree, vfile) => {
-              visit(tree,
-                node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
-                node => {
-                  if ("url" in node && typeof node.url === "string") {
-                    const [url, hash] = node.url.split("#")
-
-                    const guide = guides.get(url)
-
-                    if (guide === undefined) {
-                      throw new Error(`Guide not found for ${url} in ${item.href}`)
-                    }
-
-                    if (hash !== undefined) {
-                      const hasHash = guide.headingsHashs.includes(hash)
-
-                      if (hasHash === false) {
-                        throw new Error(`Heading "${hash}" not found in ${url} linked from ${item.href.replace('/', '')}${node.position?.start.line ? `:${node.position?.start.line}` : ''}`)
-                      }
-                    }
-
-                    // update the links if they need to point to scoped hrefs
-                    // Should just be able to point to the targetSDK but need to look in to that
-
-                  }
-                }
-              )
-            }).process(item.fileContent)
-
-
           const filePath = `${item.href.replace("/docs/", "")}.mdx`
           await writeSDKFile(targetSdk, filePath, item.fileContent)
         }

@@ -1,3 +1,13 @@
+// Things this build script does
+// - [x] Copies all "core" docs to the dist folder
+//  - [ ] Copies over Partials
+// - [x] Duplicates out the sdk specific docs to their respective folders
+//  - [ ] stripping filtered content
+// - [x] Checks that links (including hashes) between docs are valid
+// - [x] Generates a manifest that is specific to each SDK
+// - [x] Checks sdk key in frontmatter to ensure its valid
+// - [x] Pares the markdown files, ensures they are valid
+
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import remarkMdx from 'remark-mdx'
@@ -8,11 +18,13 @@ import yaml from "yaml"
 import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
 import reporter from 'vfile-reporter'
+import readdirp from 'readdirp'
 
 const BASE_PATH = process.cwd()
-const MANIFEST_FILE_PATH = path.join(BASE_PATH, './docs/manifest.json')
+const DOCS_FOLDER = path.join(BASE_PATH, './docs')
+const MANIFEST_FILE_PATH = path.join(DOCS_FOLDER, './manifest.json')
 const DIST_PATH = path.join(BASE_PATH, './dist')
-const CLERK_PATH = path.join(BASE_PATH, "../clerk")
+// const CLERK_PATH = path.join(BASE_PATH, "../clerk")
 const IGNORE = [
   "/docs/core-1",
   '/pricing',
@@ -25,6 +37,7 @@ const IGNORE = [
   '/contact/support',
   '/blog',
   '/changelog/2024-04-19',
+  "/docs/_partials"
 ]
 
 const VALID_SDKS = [
@@ -87,6 +100,13 @@ const readMarkdownFile = async (docPath: string): Promise<string> => {
   return fileContent
 }
 
+const readInDocsFolder = () => {
+  return readdirp.promise(DOCS_FOLDER, {
+    type: 'files',
+    fileFilter: (entry) => IGNORE.some((ignoreItem) => `/docs/${entry.path}`.startsWith(ignoreItem)) === false && entry.path.endsWith('.mdx')
+  })
+}
+
 const markdownProcessor = remark()
   .use(remarkFrontmatter)
   .use(remarkMdx)
@@ -128,6 +148,13 @@ const writeDistFile = async (filePath: string, contents: string) => {
 
 const writeSDKFile = async (sdk: SDK, filePath: string, contents: string) => {
   await writeDistFile(path.join(sdk, filePath), contents)
+}
+
+const removeMdxSuffix = (filePath: string) => {
+  if (filePath.endsWith('.mdx')) {
+    return filePath.slice(0, -4)
+  }
+  return filePath
 }
 
 type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Array<Item | Group>>;
@@ -203,12 +230,63 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
   return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
 }
 
+const parseInMarkdownFile = async (item: ManifestItem) => {
+
+  const fileContent = await readMarkdownFile(item.href)
+
+  const slugify = slugifyWithCounter()
+
+  const headingsHashs: Array<string> = []
+
+  markdownProcessor()
+    .use(() => (tree) => {
+      visit(tree,
+        node => node.type === "heading",
+        node => {
+          const slug = slugify(toString(node).trim())
+          headingsHashs.push(slug)
+        }
+      )
+    })
+    .process(fileContent)
+
+  const frontmatter = parseFrontmatter<"name" | "description" | "sdk">(fileContent)
+
+  if (frontmatter === undefined) {
+    throw new Error(`Frontmatter parsing failed for ${item.href}`)
+  }
+
+  if (frontmatter.sdk === undefined) {
+    return {
+      ...item,
+      fileContent,
+      headingsHashs,
+      frontmatter
+    }
+  }
+
+  const sdks = frontmatter.sdk.split(', ')
+
+  if (isValidSdks(sdks) === false) {
+    throw new Error(`Invalid SDK ${JSON.stringify(sdks)} found in: ${item.href}`)
+  }
+
+  return {
+    ...item,
+    sdk: sdks,
+    fileContent,
+    headingsHashs,
+    frontmatter
+  }
+}
+
 const main = async () => {
   await ensureDirectory(DIST_PATH)
 
   const manifest = await readManifest()
+  const docsFiles = await readInDocsFolder()
 
-  const guides = new Map<string, ManifestItem & { fileContent: string, headingsHashs: Array<string> }>()
+  const guides = new Map<string, ManifestItem & { fileContent: string, headingsHashs: Array<string>, inManifest: boolean }>()
 
   // This first pass goes through and grabs the sdk scoping out of the markdown files frontmatter
   const fullManifest = await traverseTree(manifest,
@@ -220,63 +298,15 @@ const main = async () => {
       const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
-      const fileContent = await readMarkdownFile(item.href)
-
-      const slugify = slugifyWithCounter()
-
-      const headingsHashs: Array<string> = []
-
-      markdownProcessor()
-        .use(() => (tree) => {
-          visit(tree,
-            node => node.type === "heading",
-            node => {
-              const slug = slugify(toString(node).trim())
-              headingsHashs.push(slug)
-            }
-          )
-        })
-        .process(fileContent)
-
-      const frontmatter = parseFrontmatter<"name" | "description" | "sdk">(fileContent)
-
-      if (frontmatter === undefined) {
-        throw new Error(`Frontmatter parsing failed for ${item.href}`)
-      }
-
-      if (frontmatter.sdk === undefined) {
-        guides.set(item.href, {
-          ...item,
-          fileContent,
-          headingsHashs
-        })
-
-        return {
-          ...item,
-          fileContent,
-          frontmatter
-        }
-      }
-
-      const sdks = frontmatter.sdk.split(', ')
-
-      if (isValidSdks(sdks) === false) {
-        throw new Error(`Invalid SDK ${JSON.stringify(sdks)} found in: ${item.href}`)
-      }
+      const markdownFile = await parseInMarkdownFile(item)
 
       guides.set(item.href, {
-        ...item,
-        sdk: sdks,
-        fileContent,
-        headingsHashs
+        ...markdownFile,
+        inManifest: true
       })
 
-      return {
-        ...item,
-        sdk: sdks,
-        fileContent,
-        frontmatter
-      }
+      return { ...markdownFile } as const
+
     },
     async (group) => {
       const itemsSDKs = Array.from(new Set(group.items?.flatMap((item) => item.flatMap((item) => item.sdk)))).filter((sdk): sdk is SDK => sdk !== undefined)
@@ -292,6 +322,23 @@ const main = async () => {
       }
     }
   )
+
+  await Promise.all(docsFiles.map(async (file) => {
+    const href = removeMdxSuffix(`/docs/${file.path}`)
+    if (guides.has(href) === false) {
+      console.log(`Guide /docs/${file.path} not found in manifest`)
+
+      const markdownFile = await parseInMarkdownFile({
+        title: "Unknown Title (Not referenced in manifest)",
+        href
+      })
+
+      guides.set(href, {
+        ...markdownFile,
+        inManifest: false
+      })
+    }
+  }))
 
   const flatManifest = flattenTree(fullManifest)
 

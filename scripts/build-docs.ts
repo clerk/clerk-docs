@@ -94,10 +94,15 @@ const readManifest = async (): Promise<Manifest> => {
   return JSON.parse(manifest).navigation
 }
 
-const readMarkdownFile = async (docPath: string): Promise<string> => {
+const readMarkdownFile = async (docPath: string) => {
   const filePath = path.join(BASE_PATH, `${docPath}.mdx`)
-  const fileContent = await fs.readFile(filePath, { "encoding": "utf-8" })
-  return fileContent
+
+  try {
+    const fileContent = await fs.readFile(filePath, { "encoding": "utf-8" })
+    return [null, fileContent] as const
+  } catch (error) {
+    return [new Error(`file ${filePath} doesn't exist`, { cause: error }), null] as const
+  }
 }
 
 const readInDocsFolder = () => {
@@ -232,7 +237,11 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
 
 const parseInMarkdownFile = async (item: ManifestItem) => {
 
-  const fileContent = await readMarkdownFile(item.href)
+  const [error, fileContent] = await readMarkdownFile(item.href)
+
+  if (error !== null) {
+    throw new Error(`Attempting to read in "${item.title}" from ${item.href}.mdx failed, with error message: ${error.message}`, { cause: error })
+  }
 
   const slugify = slugifyWithCounter()
 

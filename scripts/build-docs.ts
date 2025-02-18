@@ -1,4 +1,5 @@
 // Things this build script does
+// - [x] Validates the Manifest
 // - [x] Copies all "core" docs to the dist folder
 //  - [ ] Copies over Partials
 // - [x] Duplicates out the sdk specific docs to their respective folders
@@ -19,6 +20,7 @@ import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
+import { z } from "zod"
 
 const BASE_PATH = process.cwd()
 const DOCS_FOLDER = path.join(BASE_PATH, './docs')
@@ -66,13 +68,11 @@ const VALID_SDKS = [
 
 type SDK = typeof VALID_SDKS[number]
 
-const isValidSdk = (sdk: string): sdk is SDK => {
-  return VALID_SDKS.includes(sdk as SDK)
-}
+const sdk = z.enum(VALID_SDKS)
 
-const isValidSdks = (sdks: string[]): sdks is SDK[] => {
-  return sdks.every(isValidSdk)
-}
+const icon = z.enum(["apple", "application-2", "arrow-up-circle", "astro", "angular", "block", "bolt", "book", "box", "c-sharp", "chart", "checkmark-circle", "chrome", "clerk", "code-bracket", "cog-6-teeth", "door", "elysia", "expressjs", "globe", "go", "home", "hono", "javascript", "koa", "link", "linkedin", "lock", "nextjs", "nodejs", "plug", "plus-circle", "python", "react", "redwood", "remix", "react-router", "rocket", "route", "ruby", "rust", "speedometer", "stacked-rectangle", "solid", "svelte", "tanstack", "user-circle", "user-dotted-circle", "vue", "x", "expo", "nuxt", "fastify"])
+
+const tag = z.enum(["(Beta)", "(Community)"])
 
 type ManifestItem = {
   title: string
@@ -81,17 +81,54 @@ type ManifestItem = {
   sdk?: SDK[]
 }
 
+const manifestItem: z.ZodType<ManifestItem> = z.object({
+  title: z.string(),
+  href: z.string(),
+  tag: tag.optional(),
+  wrap: z.boolean().default(true),
+  icon: icon.optional(),
+  target: z.enum(["_blank"]).optional()
+}).strict()
+
 type ManifestGroup = {
   title: string
   items: Manifest
   sdk?: SDK[]
 }
 
+const manifestGroup: z.ZodType<ManifestGroup> = z.object({
+  title: z.string(),
+  items: z.lazy(() => manifestSchema),
+  collapse: z.boolean().default(false),
+  tag: tag.optional(),
+  wrap: z.boolean().default(true),
+  icon: icon.optional(),
+  hideTitle: z.boolean().default(false),
+  sdk: z.array(sdk).optional()
+}).strict()
+
 type Manifest = (ManifestItem | ManifestGroup)[][]
+
+const manifestSchema: z.ZodType<Manifest> = z.array(
+  z.array(
+    z.union([
+      manifestItem,
+      manifestGroup
+    ])
+  )
+)
+
+const isValidSdk = (sdk: string): sdk is SDK => {
+  return VALID_SDKS.includes(sdk as SDK)
+}
+
+const isValidSdks = (sdks: string[]): sdks is SDK[] => {
+  return sdks.every(isValidSdk)
+}
 
 const readManifest = async (): Promise<Manifest> => {
   const manifest = await fs.readFile(MANIFEST_FILE_PATH, { "encoding": "utf-8" })
-  return JSON.parse(manifest).navigation
+  return await manifestSchema.parseAsync(JSON.parse(manifest).navigation)
 }
 
 const readMarkdownFile = async (docPath: string) => {

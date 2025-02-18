@@ -1,7 +1,7 @@
 // Things this build script does
 // - [x] Validates the Manifest
 // - [x] Copies all "core" docs to the dist folder
-//  - [ ] Copies over Partials
+//  - [ ] Compile partials in to docs
 // - [x] Duplicates out the sdk specific docs to their respective folders
 //  - [ ] stripping filtered content
 // - [x] Checks that links (including hashes) between docs are valid
@@ -23,8 +23,10 @@ import readdirp from 'readdirp'
 import { z } from "zod"
 
 const BASE_PATH = process.cwd()
-const DOCS_FOLDER = path.join(BASE_PATH, './docs')
+const DOCS_FOLDER_RELATIVE = './docs'
+const DOCS_FOLDER = path.join(BASE_PATH, DOCS_FOLDER_RELATIVE)
 const MANIFEST_FILE_PATH = path.join(DOCS_FOLDER, './manifest.json')
+const PARTIALS_PATH = './_partials'
 const DIST_PATH = path.join(BASE_PATH, './dist')
 // const CLERK_PATH = path.join(BASE_PATH, "../clerk")
 const IGNORE = [
@@ -132,7 +134,7 @@ const readManifest = async (): Promise<Manifest> => {
 }
 
 const readMarkdownFile = async (docPath: string) => {
-  const filePath = path.join(BASE_PATH, `${docPath}.mdx`)
+  const filePath = path.join(BASE_PATH, docPath)
 
   try {
     const fileContent = await fs.readFile(filePath, { "encoding": "utf-8" })
@@ -142,11 +144,35 @@ const readMarkdownFile = async (docPath: string) => {
   }
 }
 
-const readInDocsFolder = () => {
+const readDocsFolder = () => {
   return readdirp.promise(DOCS_FOLDER, {
     type: 'files',
     fileFilter: (entry) => IGNORE.some((ignoreItem) => `/docs/${entry.path}`.startsWith(ignoreItem)) === false && entry.path.endsWith('.mdx')
   })
+}
+
+const readPartialsFolder = () => {
+  return readdirp.promise(path.join(DOCS_FOLDER, './_partials'), {
+    type: 'files',
+    fileFilter: '*.mdx',
+  })
+}
+
+const readPartialsMarkdown = (paths: string[]) => {
+  return Promise.all(paths.map(async (markdownPath) => {
+    const fullPath = path.join(DOCS_FOLDER_RELATIVE, PARTIALS_PATH, markdownPath)
+
+    const [error, content] = await readMarkdownFile(fullPath)
+
+    if (error) {
+      throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
+    }
+
+    return {
+      path: markdownPath,
+      content,
+    }
+  }))
 }
 
 const markdownProcessor = remark()
@@ -272,9 +298,12 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
   return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
 }
 
-const parseInMarkdownFile = async (item: ManifestItem) => {
+const parseInMarkdownFile = async (item: ManifestItem, partials: {
+  path: string;
+  content: string;
+}[]) => {
 
-  const [error, fileContent] = await readMarkdownFile(item.href)
+  const [error, fileContent] = await readMarkdownFile(`${item.href}.mdx`)
 
   if (error !== null) {
     throw new Error(`Attempting to read in "${item.title}" from ${item.href}.mdx failed, with error message: ${error.message}`, { cause: error })
@@ -330,7 +359,8 @@ const main = async () => {
   await ensureDirectory(DIST_PATH)
 
   const manifest = await readManifest()
-  const docsFiles = await readInDocsFolder()
+  const docsFiles = await readDocsFolder()
+  const partials = await readPartialsMarkdown((await readPartialsFolder()).map(item => item.path))
 
   const guides = new Map<string, ManifestItem & { fileContent: string, headingsHashs: Array<string>, inManifest: boolean }>()
 
@@ -344,7 +374,7 @@ const main = async () => {
       const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
-      const markdownFile = await parseInMarkdownFile(item)
+      const markdownFile = await parseInMarkdownFile(item, partials)
 
       guides.set(item.href, {
         ...markdownFile,
@@ -377,12 +407,16 @@ const main = async () => {
       const markdownFile = await parseInMarkdownFile({
         title: "Unknown Title (Not referenced in manifest)",
         href
-      })
+      }, partials)
 
       guides.set(href, {
         ...markdownFile,
         inManifest: false
       })
+
+      if (markdownFile.sdk === undefined) {
+        await writeDistFile(`${markdownFile.href.replace("/docs/", "")}.mdx`, markdownFile.fileContent)
+      }
     }
   }))
 

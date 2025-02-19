@@ -1,7 +1,7 @@
 // Things this build script does
 // - [x] Validates the Manifest
 // - [x] Copies all "core" docs to the dist folder
-//  - [ ] Compile partials in to docs
+//  - [x] Compile partials in to docs
 // - [x] Duplicates out the sdk specific docs to their respective folders
 //  - [ ] stripping filtered content
 // - [x] Checks that links (including hashes) between docs are valid
@@ -74,11 +74,18 @@ const sdk = z.enum(VALID_SDKS)
 
 const icon = z.enum(["apple", "application-2", "arrow-up-circle", "astro", "angular", "block", "bolt", "book", "box", "c-sharp", "chart", "checkmark-circle", "chrome", "clerk", "code-bracket", "cog-6-teeth", "door", "elysia", "expressjs", "globe", "go", "home", "hono", "javascript", "koa", "link", "linkedin", "lock", "nextjs", "nodejs", "plug", "plus-circle", "python", "react", "redwood", "remix", "react-router", "rocket", "route", "ruby", "rust", "speedometer", "stacked-rectangle", "solid", "svelte", "tanstack", "user-circle", "user-dotted-circle", "vue", "x", "expo", "nuxt", "fastify"])
 
+type Icon = z.infer<typeof icon>
+
 const tag = z.enum(["(Beta)", "(Community)"])
+
+type Tag = z.infer<typeof tag>
 
 type ManifestItem = {
   title: string
   href: string
+  tag?: Tag
+  wrap?: boolean
+  icon?: Icon
   target?: '_blank'
   sdk?: SDK[]
 }
@@ -89,12 +96,18 @@ const manifestItem: z.ZodType<ManifestItem> = z.object({
   tag: tag.optional(),
   wrap: z.boolean().default(true),
   icon: icon.optional(),
-  target: z.enum(["_blank"]).optional()
+  target: z.enum(["_blank"]).optional(),
+  sdk: z.array(sdk).optional()
 }).strict()
 
 type ManifestGroup = {
   title: string
   items: Manifest
+  collapse?: boolean
+  tag?: Tag
+  wrap?: boolean
+  icon?: Icon
+  hideTitle?: boolean
   sdk?: SDK[]
 }
 
@@ -180,10 +193,12 @@ const markdownProcessor = remark()
   .use(remarkMdx)
   .freeze()
 
-const parseFrontmatter = <Keys extends string>(fileContent: string): Record<Keys, string | undefined> | undefined => {
+type VFile = Awaited<ReturnType<typeof markdownProcessor.process>>
+
+const parseFrontmatter = async <Keys extends string>(fileContent: string): Promise<Record<Keys, string | undefined> | undefined> => {
   let frontmatter: Record<Keys, string | undefined> | undefined = undefined
 
-  markdownProcessor()
+  await markdownProcessor()
     .use(() => (tree, vfile) => {
       visit(tree,
         node => node.type === 'yaml' && "value" in node,
@@ -309,11 +324,19 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
     throw new Error(`Attempting to read in "${item.title}" from ${item.href}.mdx failed, with error message: ${error.message}`, { cause: error })
   }
 
+  const frontmatter = await parseFrontmatter<"name" | "description" | "sdk">(fileContent)
+
+  if (frontmatter === undefined) {
+    throw new Error(`Frontmatter parsing failed for ${item.href}`)
+  }
+
   const slugify = slugifyWithCounter()
 
   const headingsHashs: Array<string> = []
 
-  markdownProcessor()
+  let editableFileContent = fileContent
+
+  const fileWarnings = await markdownProcessor()
     .use(() => (tree) => {
       visit(tree,
         node => node.type === "heading",
@@ -323,20 +346,89 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
         }
       )
     })
-    .process(fileContent)
+    .use(() => (tree, vfile) => {
+      let offset = 0
 
-  const frontmatter = parseFrontmatter<"name" | "description" | "sdk">(fileContent)
+      visit(tree,
+        node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
+        node => {
 
-  if (frontmatter === undefined) {
-    throw new Error(`Frontmatter parsing failed for ${item.href}`)
-  }
+          if (node.position === undefined) {
+            vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
+            return;
+          }
+
+          if (node.position.start.offset === undefined || node.position.end.offset === undefined) {
+            vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
+            return;
+          }
+
+          if (!("attributes" in node)) {
+            vfile.message(`<Include /> node has no props`, node.position)
+            return;
+          }
+
+          if (!Array.isArray(node.attributes)) {
+            vfile.message(`<Include /> node attributes is not an array (this is a bug with the build script, please report)`, node.position)
+            return;
+          }
+
+          const srcAttribute = node.attributes.find((attribute) => attribute.name === "src")
+
+          if (srcAttribute === undefined) {
+            vfile.message(`<Include /> node has no "src" attribute`, node.position)
+            return;
+          }
+
+          const partialSrc = srcAttribute.value
+
+          if (partialSrc === undefined) {
+            vfile.message(`<Include /> attribute "src" has no value (this is a bug with the build script, please report)`, node.position)
+            return;
+          }
+
+          if (typeof partialSrc !== "string") {
+            vfile.message(`<Include /> attribute "src" is not a string`, node.position)
+            return;
+          }
+
+          if (partialSrc.startsWith('_partials/') === false) {
+            vfile.message(`<Include /> attribute "src" must start with "_partials/"`, node.position)
+            return;
+          }
+
+          const partial = partials.find((partial) => `_partials/${partial.path}` === `${partialSrc.replace(/\.mdx$/, '')}.mdx`)
+
+          if (partial === undefined) {
+            vfile.message(`Partial /docs/${partialSrc.replace(/\.mdx$/, '')}.mdx not found`, node.position)
+            return;
+          }
+
+          // This takes the position offset of the <Include /> and appends it to each line of the partial content
+          const tabbedPartial = partial.content.split('\n').map((line, index) => (index === 0 || line === "") ? line : `${" ".repeat(node.position?.start.column ? node.position?.start.column - 1 : 0)}${line}`).join('\n')
+
+          // We must keep a record of the offset we adjust the file by, as the node.position doesn't update when we insert content.
+          editableFileContent = editableFileContent.slice(0, offset + node.position.start.offset) + tabbedPartial + editableFileContent.slice(offset + node.position.end.offset)
+
+          offset += (tabbedPartial.length - (node.position.end.offset - node.position.start.offset))
+
+        }
+      )
+    })
+    .process({
+      path: `${item.href}.mdx`,
+      value: fileContent
+    })
 
   if (frontmatter.sdk === undefined) {
     return {
-      ...item,
-      fileContent,
-      headingsHashs,
-      frontmatter
+      file: {
+        ...item,
+        fileContent: editableFileContent,
+        headingsHashs,
+        frontmatter
+      },
+      fileWarnings
     }
   }
 
@@ -347,11 +439,14 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
   }
 
   return {
-    ...item,
-    sdk: sdks,
-    fileContent,
-    headingsHashs,
-    frontmatter
+    file: {
+      ...item,
+      sdk: sdks,
+      fileContent: editableFileContent,
+      headingsHashs,
+      frontmatter
+    },
+    fileWarnings
   }
 }
 
@@ -363,6 +458,7 @@ const main = async () => {
   const partials = await readPartialsMarkdown((await readPartialsFolder()).map(item => item.path))
 
   const guides = new Map<string, ManifestItem & { fileContent: string, headingsHashs: Array<string>, inManifest: boolean }>()
+  const markdownFileWarnings: VFile[] = []
 
   // This first pass goes through and grabs the sdk scoping out of the markdown files frontmatter
   const fullManifest = await traverseTree(manifest,
@@ -374,12 +470,14 @@ const main = async () => {
       const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
-      const markdownFile = await parseInMarkdownFile(item, partials)
+      const { file: markdownFile, fileWarnings } = await parseInMarkdownFile(item, partials)
 
       guides.set(item.href, {
         ...markdownFile,
         inManifest: true
       })
+
+      markdownFileWarnings.push(fileWarnings)
 
       return { ...markdownFile } as const
 
@@ -404,7 +502,7 @@ const main = async () => {
     if (guides.has(href) === false) {
       console.log(`Guide /docs/${file.path} not found in manifest`)
 
-      const markdownFile = await parseInMarkdownFile({
+      const { file: markdownFile, fileWarnings } = await parseInMarkdownFile({
         title: "Unknown Title (Not referenced in manifest)",
         href
       }, partials)
@@ -413,6 +511,8 @@ const main = async () => {
         ...markdownFile,
         inManifest: false
       })
+
+      markdownFileWarnings.push(fileWarnings)
 
       if (markdownFile.sdk === undefined) {
         await writeDistFile(`${markdownFile.href.replace("/docs/", "")}.mdx`, markdownFile.fileContent)
@@ -467,7 +567,7 @@ const main = async () => {
     }
   }))).filter((item): item is NonNullable<typeof item> => item !== undefined)
 
-  const output = reporter(vfiles, { quiet: true })
+  const output = reporter([...vfiles, ...markdownFileWarnings], { quiet: true })
 
   if (output !== "") {
     console.info(output)

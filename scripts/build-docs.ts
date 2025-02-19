@@ -397,11 +397,31 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
             return;
           }
 
-          const partial = partials.find((partial) => `_partials/${partial.path}` === `${partialSrc.replace(/\.mdx$/, '')}.mdx`)
+          const partial = partials.find((partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`)
 
           if (partial === undefined) {
-            vfile.message(`Partial /docs/${partialSrc.replace(/\.mdx$/, '')}.mdx not found`, node.position)
+            vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
             return;
+          }
+
+          const partialContentVFile = markdownProcessor()
+            .use(() => (tree, vfile) => {
+              visit(tree,
+                node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
+                () => {
+                  vfile.fail("Partials inside of partials is not yet supported, please report if you are seeing this error", node.position)
+                }
+              )
+            })
+            .processSync({
+              path: partial.path,
+              value: partial.content
+            })
+
+          const partialContentReport = reporter([partialContentVFile], { quiet: true })
+
+          if (partialContentReport !== "") {
+            console.error(partialContentReport)
           }
 
           // This takes the position offset of the <Include /> and appends it to each line of the partial content

@@ -4,6 +4,10 @@ These are the guidelines we use to write our docs.
 
 ## Content (grammar/structure)
 
+### Alphabetize
+
+Try to keep things in alphabetic order, except Next.js, React, and JavaScript are prioritized as these are our core SDKs. For example, our SDK selector prioritizes Next.js, React, and Javascript, and then alphabetizes the rest of the SDK's. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
+
 ### De-dupe reference links
 
 When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the **first mention** of that item. The exception to this rule is when the reference is mentioned under a different heading. In that case, link to the reference documentation again.
@@ -43,7 +47,7 @@ When writing titles that contain component references in MDX pages, wrap the com
 > ✅
 > Add it to your app's Middleware.
 
-### Use "Sign in", not "Log in"
+### Use "sign in" instead of "log in"
 
 Use "sign in" and "sign out" rather than "log in" or "log out".
 
@@ -73,7 +77,7 @@ We refer to the reader with "you/your/yours." We objectively refer to Clerk as "
 > ✅
 > Clerk's `<ClerkProvider>` provides active session and user context to Clerk's hooks and other components. Import it into your app by adding `import { ClerkProvider } from '@clerk/nextjs'` at the top of your file.
 
-## Use conjunctions
+### Use conjunctions
 
 Use conjunctions in the copy to make the copy more colloquial.
 
@@ -166,7 +170,7 @@ On this same page, under **Client credentials**, select **Add a certificate or s
 On this same page, under **Client credentials**, select **Add a certificate or secret** to generate a Client Secret. You'll be redirected to the **Certificate & secrets** page.
 ```
 
-## Ensure vs. make sure
+### Ensure vs. make sure
 
 Use "ensure" instead of "make sure."
 
@@ -263,7 +267,7 @@ The last case is incorrect because the `<SignIn />` component will never wrap ch
 
 ### Specify syntax and filename for terminal commands
 
-If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh filename="terminal"`.
+If the code should run in a terminal, set the code block's syntax highlighting and filename with `sh {{ filename: 'terminal' }}`.
 
 > ❌
 

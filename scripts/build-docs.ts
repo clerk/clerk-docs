@@ -3,17 +3,21 @@
 // - [x] Copies all "core" docs to the dist folder
 //  - [x] Compile partials in to docs
 // - [x] Duplicates out the sdk specific docs to their respective folders
-//  - [ ] stripping filtered content
+//  - [x] stripping filtered out content
 // - [x] Checks that links (including hashes) between docs are valid
 // - [x] Generates a manifest that is specific to each SDK
 // - [x] Checks sdk key in frontmatter to ensure its valid
 // - [x] Pares the markdown files, ensures they are valid
+// - [ ] Updates the links in the content to point to the sdk specific docs
+// - [x] Checks that filters used in <If /> are available sdks defined by the frontmatter sdk (if the frontmatter sdk is set)
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import remarkMdx from 'remark-mdx'
 import { remark } from 'remark'
-import { visit } from 'unist-util-visit'
+import { visit as mdastVisit } from 'unist-util-visit'
+import { filter as mdastFilter } from 'unist-util-filter'
+import { map as mdastMap } from 'unist-util-map'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from "yaml"
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -21,6 +25,7 @@ import { toString } from 'mdast-util-to-string'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
 import { z } from "zod"
+import { Node } from 'unist'
 
 const BASE_PATH = process.cwd()
 const DOCS_FOLDER_RELATIVE = './docs'
@@ -200,7 +205,7 @@ const parseFrontmatter = async <Keys extends string>(fileContent: string): Promi
 
   await markdownProcessor()
     .use(() => (tree, vfile) => {
-      visit(tree,
+      mdastVisit(tree,
         node => node.type === 'yaml' && "value" in node,
         node => {
           if (!("value" in node)) return;
@@ -331,14 +336,11 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
   }
 
   const slugify = slugifyWithCounter()
-
   const headingsHashs: Array<string> = []
-
-  let editableFileContent = fileContent
 
   const fileWarnings = await markdownProcessor()
     .use(() => (tree) => {
-      visit(tree,
+      mdastVisit(tree,
         node => node.type === "heading",
         node => {
           const slug = slugify(toString(node).trim())
@@ -347,71 +349,84 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
       )
     })
     .use(() => (tree, vfile) => {
-      let offset = 0
-
-      visit(tree,
-        node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
+      return mdastMap(tree,
         node => {
+
+          if (node.type !== "mdxJsxFlowElement") {
+            return node
+          }
+
+          if (!("name" in node)) {
+            return node
+          }
+
+          if (node.name !== "Include") {
+            return node
+          }
 
           if (node.position === undefined) {
             vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
-            return;
+            return node
           }
 
           if (node.position.start.offset === undefined || node.position.end.offset === undefined) {
             vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
-            return;
+            return node
           }
 
           if (!("attributes" in node)) {
-            vfile.message(`<Include /> node has no props`, node.position)
-            return;
+            vfile.message(`<Include /> component has no props`, node.position)
+            return node
           }
 
           if (!Array.isArray(node.attributes)) {
             vfile.message(`<Include /> node attributes is not an array (this is a bug with the build script, please report)`, node.position)
-            return;
+            return node
           }
 
           const srcAttribute = node.attributes.find((attribute) => attribute.name === "src")
 
           if (srcAttribute === undefined) {
-            vfile.message(`<Include /> node has no "src" attribute`, node.position)
-            return;
+            vfile.message(`<Include /> component has no "src" attribute`, node.position)
+            return node
           }
 
           const partialSrc = srcAttribute.value
 
           if (partialSrc === undefined) {
             vfile.message(`<Include /> attribute "src" has no value (this is a bug with the build script, please report)`, node.position)
-            return;
+            return node
           }
 
           if (typeof partialSrc !== "string") {
-            vfile.message(`<Include /> attribute "src" is not a string`, node.position)
-            return;
+            vfile.message(`<Include /> prop "src" is not a string`, node.position)
+            return node
           }
 
           if (partialSrc.startsWith('_partials/') === false) {
-            vfile.message(`<Include /> attribute "src" must start with "_partials/"`, node.position)
-            return;
+            vfile.message(`<Include /> prop "src" must start with "_partials/"`, node.position)
+            return node
           }
 
           const partial = partials.find((partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`)
 
           if (partial === undefined) {
             vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
-            return;
+            return node
           }
+
+          let partialNode: Node | null = null
 
           const partialContentVFile = markdownProcessor()
             .use(() => (tree, vfile) => {
-              visit(tree,
+              mdastVisit(tree,
                 node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
                 () => {
                   vfile.fail("Partials inside of partials is not yet supported, please report if you are seeing this error", node.position)
                 }
               )
+
+              partialNode = tree
             })
             .processSync({
               path: partial.path,
@@ -424,13 +439,12 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
             console.error(partialContentReport)
           }
 
-          // This takes the position offset of the <Include /> and appends it to each line of the partial content
-          const tabbedPartial = partial.content.split('\n').map((line, index) => (index === 0 || line === "") ? line : `${" ".repeat(node.position?.start.column ? node.position?.start.column - 1 : 0)}${line}`).join('\n')
+          if (partialNode === null) {
+            vfile.fail(`Failed to parse the content of ${partial.path}`, node.position)
+            return node
+          }
 
-          // We must keep a record of the offset we adjust the file by, as the node.position doesn't update when we insert content.
-          editableFileContent = editableFileContent.slice(0, offset + node.position.start.offset) + tabbedPartial + editableFileContent.slice(offset + node.position.end.offset)
-
-          offset += (tabbedPartial.length - (node.position.end.offset - node.position.start.offset))
+          return partialNode
 
         }
       )
@@ -444,7 +458,7 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
     return {
       file: {
         ...item,
-        fileContent: editableFileContent,
+        fileContent: String(fileWarnings),
         headingsHashs,
         frontmatter
       },
@@ -455,14 +469,15 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
   const sdks = frontmatter.sdk.split(', ')
 
   if (isValidSdks(sdks) === false) {
-    throw new Error(`Invalid SDK ${JSON.stringify(sdks)} found in: ${item.href}`)
+    const invalidSDKs = sdks.filter(sdk => isValidSdk(sdk) === false)
+    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${item.href}`)
   }
 
   return {
     file: {
       ...item,
       sdk: sdks,
-      fileContent: editableFileContent,
+      fileContent: String(fileWarnings),
       headingsHashs,
       frontmatter
     },
@@ -547,7 +562,7 @@ const main = async () => {
 
       const vfile = await markdownProcessor()
         .use(() => (tree, vfile) => {
-          visit(tree,
+          mdastVisit(tree,
             node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
             node => {
               if ("url" in node && typeof node.url === "string") {
@@ -587,11 +602,7 @@ const main = async () => {
     }
   }))).filter((item): item is NonNullable<typeof item> => item !== undefined)
 
-  const output = reporter([...vfiles, ...markdownFileWarnings], { quiet: true })
-
-  if (output !== "") {
-    console.info(output)
-  }
+  const sdkSpecificMarkdownFileWarnings: VFile[] = []
 
   for (const targetSdk of VALID_SDKS) {
 
@@ -623,19 +634,175 @@ const main = async () => {
       }
     )
 
+    // Here we are filtering out content for different sdks, and updating links to make them scoped to the sdk when necessary
     await traverseTree(sdkFilteredManifest,
       async (item) => {
-        if ("fileContent" in item && "scopedHref" in item) {
+        if ("fileContent" in item) {
           const filePath = `${item.href.replace("/docs/", "")}.mdx`
-          await writeSDKFile(targetSdk, filePath, item.fileContent)
+
+          const vfile = await markdownProcessor()
+            .use(() => (tree, vfile) => {
+              return mdastFilter(tree,
+                node => {
+
+                  if (node.type !== "mdxJsxFlowElement") {
+                    return true
+                  }
+
+                  if (!("name" in node)) {
+                    return true
+                  }
+
+                  if (node.name !== "If") {
+                    return true
+                  }
+
+                  if (node.position === undefined) {
+                    vfile.message(`<If /> node has no position (this is a bug with the build script, please report)`, node.position)
+                    return true
+                  }
+
+                  if (node.position.start.offset === undefined || node.position.end.offset === undefined) {
+                    vfile.message(`<If /> node has no position (this is a bug with the build script, please report)`, node.position)
+                    return true
+                  }
+
+                  if (!("attributes" in node)) {
+                    vfile.message(`<If /> component has no props`, node.position)
+                    return true
+                  }
+
+                  if (!Array.isArray(node.attributes)) {
+                    vfile.message(`<If /> node attributes is not an array (this is a bug with the build script, please report)`, node.position)
+                    return true
+                  }
+
+                  const sdkAttribute = node.attributes.find((attribute) => attribute.name === "sdk")
+
+                  if (sdkAttribute === undefined) {
+                    vfile.message(`<If /> component has no "sdk" attribute`, node.position)
+                    return true
+                  }
+
+                  const sdk = sdkAttribute.value
+
+                  if (sdk === undefined) {
+                    vfile.message(`<If /> attribute "sdk" has no value (this is a bug with the build script, please report)`, node.position)
+                    return true
+                  }
+
+                  const sdks = (() => {
+
+                    if (typeof sdk === "string") {
+                      if (isValidSdk(sdk)) {
+                        return [sdk]
+                      } else {
+                        vfile.message(`sdk "${sdk}" in <If /> component is not a valid SDK`, node.position)
+                      }
+                    }
+
+                    else if (typeof sdk === "object") {
+                      const sdks = JSON.parse(sdk.value)
+                      if (isValidSdks(sdks)) {
+                        return sdks
+                      } else {
+                        vfile.message(`sdks "${sdk.value}" in <If /> are not valid all SDKs`, node.position)
+                      }
+                    }
+
+                  })()
+
+                  if (sdks === undefined) {
+                    vfile.message(`SDKs not found in <If /> (this is a bug with the build script, please report)`, node.position)
+                    return true
+                  }
+
+                  if (sdks.length === 0) {
+                    vfile.message(`No SDKs found in <If />`, node.position)
+                    return true
+                  }
+
+                  console.log({
+                    sdks,
+                    targetSdk,
+                    href: item.href,
+                  })
+
+                  if (sdks.includes(targetSdk)) {
+
+                    const guide = guides.get(item.href)
+
+                    if (guide === undefined) {
+                      vfile.fail(`Guide not found for ${item.href}, (this is a bug, please report it)`, node.position)
+                      return;
+                    }
+
+                    console.log(guide.sdk)
+
+                    if (guide.sdk === undefined) {
+                      vfile.fail(`Guide "${guide.title}" (${item.href}) is generic to all sdks, but we are doing checks in a sdk specific context, (this is a bug, please report it)`, node.position)
+                      return true
+                    }
+
+                    sdks.forEach(sdk => {
+                      if (guide.sdk === undefined) {
+                        vfile.fail('Guide.sdk is undefined, (this is a bug, please report it)', node.position)
+                        return;
+                      }
+
+                      const available = guide.sdk.includes(sdk)
+
+                      if (available === false) {
+                        vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${guide.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
+                      }
+
+                    })
+
+                    return true
+                  }
+
+                  return false
+
+                }
+              )
+            })
+            // .use(() => (tree, vfile) => {
+            //   let offset = 0
+
+            //   visit(tree,
+            //     node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
+            //     node => {
+
+            //       if (!("url" in node)) {
+
+            //       }
+
+            //       console.log(node)
+            //     }
+            //   )
+            // })
+            .process({
+              path: filePath,
+              value: item.fileContent
+            })
+
+          sdkSpecificMarkdownFileWarnings.push(vfile)
+
+          await writeSDKFile(targetSdk, filePath, String(vfile))
         }
         return null
       })
 
+    // const report = reporter(markdownFileWarnings, { quiet: true })
+
+    // if (report !== "") {
+    //   console.info(report)
+    // }
+
     const navigation = await traverseTree(sdkFilteredManifest,
       async (item) => {
         // @ts-expect-error - simplest way to remove these properties
-        const { scopedHref, fileContent, frontmatter, ...details } = item
+        const { scopedHref, fileContent, frontmatter, headingsHashs, ...details } = item
 
         return {
           ...details,
@@ -646,6 +813,14 @@ const main = async () => {
 
     await writeSDKFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
   }
+
+  const output = reporter([...vfiles, ...markdownFileWarnings, ...sdkSpecificMarkdownFileWarnings], { quiet: true })
+
+  if (output !== "") {
+    console.info(output)
+  }
+
+
 }
 
 main()

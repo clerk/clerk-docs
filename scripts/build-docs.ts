@@ -599,7 +599,7 @@ const main = async () => {
       const guide = guides.get(item.href)
 
       if (guide === undefined) {
-        throw new Error(`Guide ${item.href} not found`)
+        throw new Error(`Guide "${item.title}" not found in the docs folder at ${item.href}.mdx`)
       }
 
       return {

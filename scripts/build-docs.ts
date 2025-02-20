@@ -1,15 +1,18 @@
 // Things this build script does
-// - [x] Validates the Manifest
-// - [x] Copies all "core" docs to the dist folder
-//  - [x] Compile partials in to docs
-// - [x] Duplicates out the sdk specific docs to their respective folders
-//  - [x] stripping filtered out content
-// - [x] Checks that links (including hashes) between docs are valid
+
+// - [x] Validates the manifest
+// - [x] Validates the markdown files contents
+// - [x] Validates links (including hashes) between docs are valid
+// - [x] Validates the sdk filtering in the manifest
+// - [x] Validates the sdk filtering in the frontmatter
+// - [x] Validates the sdk filtering in the <If /> component
+
+// - [x] Embeds the includes in the markdown files
+// - [x] Copies over "core" docs to the dist folder
+//   - [ ] Updates the links in the content if they point to the sdk specific docs
 // - [x] Generates a manifest that is specific to each SDK
-// - [x] Checks sdk key in frontmatter to ensure its valid
-// - [x] Pares the markdown files, ensures they are valid
-// - [ ] Updates the links in the content to point to the sdk specific docs
-// - [x] Checks that filters used in <If /> are available sdks defined by the frontmatter sdk (if the frontmatter sdk is set)
+// - [x] Duplicates out the sdk specific docs to their respective folders
+//   - [x] stripping filtered out content
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -25,6 +28,7 @@ import { toString } from 'mdast-util-to-string'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
 import { z } from "zod"
+import { fromError } from 'zod-validation-error';
 import { Node } from 'unist'
 
 const BASE_PATH = process.cwd()
@@ -138,6 +142,8 @@ const manifestSchema: z.ZodType<Manifest> = z.array(
   )
 )
 
+const pleaseReport = "(this is a bug with the build script, please report)"
+
 const isValidSdk = (sdk: string): sdk is SDK => {
   return VALID_SDKS.includes(sdk as SDK)
 }
@@ -147,8 +153,15 @@ const isValidSdks = (sdks: string[]): sdks is SDK[] => {
 }
 
 const readManifest = async (): Promise<Manifest> => {
-  const manifest = await fs.readFile(MANIFEST_FILE_PATH, { "encoding": "utf-8" })
-  return await manifestSchema.parseAsync(JSON.parse(manifest).navigation)
+  const unsafe_manifest = await fs.readFile(MANIFEST_FILE_PATH, { "encoding": "utf-8" })
+
+  const manifest = await manifestSchema.safeParseAsync(JSON.parse(unsafe_manifest).navigation)
+
+  if (manifest.success === true) {
+    return manifest.data
+  }
+
+  throw new Error(`Failed to parse manifest: ${fromError(manifest.error)}`)
 }
 
 const readMarkdownFile = async (docPath: string) => {
@@ -279,28 +292,6 @@ const traverseTree = async <
   return result.map(group => group.filter((item): item is NonNullable<typeof item> => item !== null)) as unknown as OutTree;
 };
 
-function flattenTree<
-  Tree extends BlankTree<any, any>,
-  InItem extends Extract<Tree[number][number], { href: string }>,
-  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>
->(tree: Tree): InItem[] {
-  const result: InItem[] = [];
-
-  for (const group of tree) {
-    for (const itemOrGroup of group) {
-      if ("href" in itemOrGroup) {
-        // It's an item
-        result.push(itemOrGroup);
-      } else if ("items" in itemOrGroup && Array.isArray(itemOrGroup.items)) {
-        // It's a group with its own sub-tree, flatten it
-        result.push(...flattenTree(itemOrGroup.items));
-      }
-    }
-  }
-
-  return result;
-}
-
 const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
 
   // This is external so can't change it
@@ -320,43 +311,23 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
 
 const extractComponentPropValueFromNode = (
   node: Node,
-  vfile: VFile,
+  vfile: VFile | undefined,
   componentName: string,
-  propName: string
+  propName: string,
 ): string | undefined => {
+
   // Check if it's an MDX component
   if (node.type !== "mdxJsxFlowElement") {
     return undefined;
   }
 
   // Check if it's the correct component
-  if (!("name" in node) || node.name !== componentName) {
-    return undefined;
-  }
-
-  // Validate node position for error reporting
-  if (node.position === undefined) {
-    vfile.message(
-      `<${componentName} /> node has no position (this is a bug with the build script, please report)`,
-      node.position
-    );
-    return undefined;
-  }
-
-  if (
-    node.position.start.offset === undefined ||
-    node.position.end.offset === undefined
-  ) {
-    vfile.message(
-      `<${componentName} /> node has no position offsets (this is a bug with the build script, please report)`,
-      node.position
-    );
-    return undefined;
-  }
+  if (!("name" in node)) return undefined;
+  if (node.name !== componentName) return undefined;
 
   // Check for attributes
   if (!("attributes" in node)) {
-    vfile.message(
+    vfile?.message(
       `<${componentName} /> component has no props`,
       node.position
     );
@@ -364,7 +335,7 @@ const extractComponentPropValueFromNode = (
   }
 
   if (!Array.isArray(node.attributes)) {
-    vfile.message(
+    vfile?.message(
       `<${componentName} /> node attributes is not an array (this is a bug with the build script, please report)`,
       node.position
     );
@@ -377,7 +348,7 @@ const extractComponentPropValueFromNode = (
   );
 
   if (propAttribute === undefined) {
-    vfile.message(
+    vfile?.message(
       `<${componentName} /> component has no "${propName}" attribute`,
       node.position
     );
@@ -387,7 +358,7 @@ const extractComponentPropValueFromNode = (
   const value = propAttribute.value;
 
   if (value === undefined) {
-    vfile.message(
+    vfile?.message(
       `<${componentName} /> attribute "${propName}" has no value (this is a bug with the build script, please report)`,
       node.position
     );
@@ -401,74 +372,70 @@ const extractComponentPropValueFromNode = (
     return value.value;
   }
 
-  vfile.message(
+  vfile?.message(
     `<${componentName} /> attribute "${propName}" has an unsupported value type`,
     node.position
   );
   return undefined;
 }
 
-const extractSDKsFromIfProp = (node: Node, vfile: VFile, sdkProp: string) => {
-  if (sdkProp.includes(', ')) {
-    const sdks = sdkProp.split(', ')
+const extractSDKsFromIfProp = (node: Node, vfile: VFile | undefined, sdkProp: string) => {
+  if (sdkProp.includes('", "')) {
+    const sdks = JSON.parse(sdkProp)
     if (isValidSdks(sdks)) {
       return sdks
     } else {
       const invalidSDKs = sdks.filter(sdk => !isValidSdk(sdk))
-      vfile.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
+      vfile?.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
     }
   } else {
     if (isValidSdk(sdkProp)) {
       return [sdkProp]
     } else {
-      vfile.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
+      vfile?.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
     }
   }
 
 }
 
-const parseInMarkdownFile = async (item: ManifestItem, partials: {
+const parseInMarkdownFile = async (href: string, partials: {
   path: string;
   content: string;
-}[]) => {
-
-  const [error, fileContent] = await readMarkdownFile(`${item.href}.mdx`)
+}[], inManifest: boolean) => {
+  const [error, fileContent] = await readMarkdownFile(`${href}.mdx`)
 
   if (error !== null) {
-    throw new Error(`Attempting to read in "${item.title}" from ${item.href}.mdx failed, with error message: ${error.message}`, { cause: error })
+    throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, { cause: error })
   }
 
   const frontmatter = await parseFrontmatter<"name" | "description" | "sdk">(fileContent)
 
   if (frontmatter === undefined) {
-    throw new Error(`Frontmatter parsing failed for ${item.href}`)
+    throw new Error(`Frontmatter parsing failed for ${href}`)
   }
 
   const frontmatterSDKs = frontmatter.sdk?.split(', ')
 
   if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
     const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
-    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${item.href}`)
+    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${href}`)
   }
 
   const slugify = slugifyWithCounter()
   const headingsHashs: Array<string> = []
 
-  const fileWarnings = await markdownProcessor()
-    .use(() => (tree) => {
-      mdastVisit(tree,
-        node => node.type === "heading",
-        node => {
-          const slug = slugify(toString(node).trim())
-          headingsHashs.push(slug)
-        }
-      )
+  const vfile = await markdownProcessor()
+    .use(() => (tree, vfile) => {
+      if (inManifest === false) {
+        vfile.message("This guide is not in the manifest.json, but will still be publicly accessible and other guides can link to it")
+      }
     })
+    // Validate and embed the <Include />
     .use(() => (tree, vfile) => {
       return mdastMap(tree,
         node => {
 
-          const partialSrc = extractComponentPropValueFromNode(tree, vfile, "Include", "src")
+          const partialSrc = extractComponentPropValueFromNode(node, vfile, "Include", "src")
 
           if (partialSrc === undefined) {
             return node
@@ -515,18 +482,26 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
             return node
           }
 
-          return partialNode
+          return Object.assign(node, partialNode)
 
         }
       )
     })
+    // extract out the headings to check hashes in links
+    .use(() => (tree) => {
+      mdastVisit(tree,
+        node => node.type === "heading",
+        node => {
+          const slug = slugify(toString(node).trim())
+          headingsHashs.push(slug)
+        }
+      )
+    })
+    // Validate the <If /> components
     .use(() => (tree, vfile) => {
 
-      // We are only checking files that have opted in to sdk filtering by frontmatter
-      if (frontmatterSDKs === undefined) return;
-
       mdastVisit(tree,
-        node => {
+        (node) => {
           const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
 
           if (sdk === undefined) return;
@@ -534,6 +509,7 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
           const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
 
           if (sdksFilter === undefined) return
+          if (frontmatterSDKs === undefined) return;
 
           sdksFilter.forEach(sdk => {
             const available = frontmatterSDKs.includes(sdk)
@@ -547,34 +523,71 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
       )
     })
     .process({
-      path: `${item.href}.mdx`,
+      path: `${href}.mdx`,
       value: fileContent
     })
 
   return {
-    file: {
-      ...item,
-      sdk: frontmatterSDKs,
-      fileContent: String(fileWarnings),
-      headingsHashs,
-      frontmatter
-    },
-    fileWarnings
+    href,
+    sdk: frontmatterSDKs,
+    vfile,
+    headingsHashs,
+    frontmatter
   }
 }
 
 const main = async () => {
   await ensureDirectory(DIST_PATH)
 
-  const manifest = await readManifest()
+  const userManifest = await readManifest()
+  console.info('✔️ Read Manifest')
+
   const docsFiles = await readDocsFolder()
+  console.info('✔️ Read Docs Folder')
+
   const partials = await readPartialsMarkdown((await readPartialsFolder()).map(item => item.path))
+  console.info('✔️ Read Partials')
 
-  const guides = new Map<string, ManifestItem & { fileContent: string, headingsHashs: Array<string>, inManifest: boolean }>()
-  const markdownFileWarnings: VFile[] = []
+  const guides = new Map<string, Awaited<ReturnType<typeof parseInMarkdownFile>>>()
+  const guidesInManifest = new Set<string>()
 
-  // This first pass goes through and grabs the sdk scoping out of the markdown files frontmatter
-  const fullManifest = await traverseTree(manifest,
+  // Grab all the docs links in the manifest
+  await traverseTree(userManifest,
+    async (item) => {
+      if (!item.href?.startsWith('/docs/')) return item
+      if (item.target !== undefined) return item
+
+      const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
+      if (ignore === true) return item
+
+      guidesInManifest.add(item.href)
+
+      return item
+    }
+  )
+  console.info('✔️ Parsed in Manifest')
+
+  // Read in all the guides
+  const docs = (await Promise.all(docsFiles.map(async (file) => {
+    const href = removeMdxSuffix(`/docs/${file.path}`)
+
+    const alreadyLoaded = guides.get(href)
+
+    if (alreadyLoaded) return null // already processed
+
+    const inManifest = guidesInManifest.has(href)
+
+    // we aren't awaiting here so we can move on while IO processes
+    const markdownFile = await parseInMarkdownFile(href, partials, inManifest)
+
+    guides.set(href, markdownFile)
+
+    return markdownFile
+  }))).filter((item): item is NonNullable<typeof item> => item !== null)
+  console.info('✔️ Loaded in guides')
+
+  // Goes through and grabs the sdk scoping out of the manifest
+  const sdkScopedManifest = await traverseTree(userManifest,
     async (item) => {
 
       if (!item.href?.startsWith('/docs/')) return item
@@ -583,17 +596,16 @@ const main = async () => {
       const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
-      const { file: markdownFile, fileWarnings } = await parseInMarkdownFile(item, partials)
+      const guide = guides.get(item.href)
 
-      guides.set(item.href, {
-        ...markdownFile,
-        inManifest: true
-      })
+      if (guide === undefined) {
+        throw new Error(`Guide ${item.href} not found`)
+      }
 
-      markdownFileWarnings.push(fileWarnings)
-
-      return { ...markdownFile } as const
-
+      return {
+        ...item,
+        sdk: guide.sdk
+      }
     },
     async (group) => {
       const itemsSDKs = Array.from(new Set(group.items?.flatMap((item) => item.flatMap((item) => item.sdk)))).filter((sdk): sdk is SDK => sdk !== undefined)
@@ -609,99 +621,87 @@ const main = async () => {
       }
     }
   )
+  console.info('✔️ Applied manifest sdk scoping')
 
-  await Promise.all(docsFiles.map(async (file) => {
-    const href = removeMdxSuffix(`/docs/${file.path}`)
-    if (guides.has(href) === false) {
-      console.log(`Guide /docs/${file.path} not found in manifest`)
+  await writeDistFile('m.json', JSON.stringify(sdkScopedManifest, null, 2))
 
-      const { file: markdownFile, fileWarnings } = await parseInMarkdownFile({
-        title: "Unknown Title (Not referenced in manifest)",
-        href
-      }, partials)
+  const coreVFiles = docs.map(async (doc) => {
+    const vfile = await markdownProcessor()
+      // Validate links between guides are valid
+      .use(() => (tree: Node, vfile: VFile) => {
+        mdastVisit(tree,
 
-      guides.set(href, {
-        ...markdownFile,
-        inManifest: false
-      })
+          // Get all the relative links
+          node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
 
-      markdownFileWarnings.push(fileWarnings)
+          node => {
+            if ("url" in node && typeof node.url === "string") {
+              const [url, hash] = node.url.split("#")
 
-      if (markdownFile.sdk === undefined) {
-        await writeDistFile(`${markdownFile.href.replace("/docs/", "")}.mdx`, markdownFile.fileContent)
-      }
-    }
-  }))
+              const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
+              if (ignore === true) return;
 
-  const flatManifest = flattenTree(fullManifest)
+              const guide = guides.get(url)
 
-  const vfiles = (await Promise.all(flatManifest.map(async (item) => {
-    if ("fileContent" in item) {
+              if (guide === undefined) {
+                vfile.message(`Guide ${url} not found`, node.position)
+                return;
+              }
 
-      const vfile = await markdownProcessor()
-        .use(() => (tree, vfile) => {
-          mdastVisit(tree,
-            node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
-            node => {
-              if ("url" in node && typeof node.url === "string") {
-                const [url, hash] = node.url.split("#")
+              if (hash === undefined) return; // We only need the markdown contents if we are checking the link hash
 
-                const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
-                if (ignore === true) return;
+              const hasHash = guide.headingsHashs.includes(hash)
 
-                const guide = guides.get(url)
-
-                if (guide === undefined) {
-                  vfile.message(`Guide ${url} not found`, node.position)
-                  return;
-                }
-
-                if (hash !== undefined) {
-                  const hasHash = guide.headingsHashs.includes(hash)
-
-                  if (hasHash === false) {
-                    vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
-                    return;
-                  }
-                }
+              if (hasHash === false) {
+                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+                return;
               }
             }
-          )
-        }).process({
-          path: `${item.href.startsWith('/') ? item.href.slice(1) : item.href}.mdx`,
-          value: item.fileContent
-        })
+          }
+        )
+      })
+      // to do - update links to sdk specific docs
+      .process(doc.vfile)
 
-      if (item.sdk === undefined) {
-        await writeDistFile(`${item.href.replace("/docs/", "")}.mdx`, item.fileContent)
-      }
+    if (doc.sdk !== undefined) return vfile; // skip sdk specific docs
 
-      return vfile
-    }
-  }))).filter((item): item is NonNullable<typeof item> => item !== undefined)
+    await writeDistFile(`${doc.href.replace("/docs/", "")}.mdx`, String(vfile))
 
-  const sdkSpecificMarkdownFileWarnings: VFile[] = []
+    return vfile
+  })
 
-  for (const targetSdk of VALID_SDKS) {
+  Promise.all(coreVFiles).then(() => console.info('✔️ Wrote out core docs'))
 
-    // This second pass goes through and removes any items that are not scoped to the target sdk
-    const sdkFilteredManifest = await traverseTree(fullManifest,
+  const sdkSpecificVFiles = Promise.all(VALID_SDKS.map(async (targetSdk) => {
+
+    // Goes through and removes any items that are not scoped to the target sdk
+    const navigation = await traverseTree(sdkScopedManifest,
       async ({ sdk, ...item }) => {
 
         // This means its generic, not scoped to a specific sdk, so we keep it
         if (sdk === undefined) return {
-          ...item,
-        }
+          title: item.title,
+          href: item.href,
+          tag: item.tag,
+          wrap: item.wrap,
+          icon: item.icon,
+          target: item.target
+        } as const
 
         // This item is not scoped to the target sdk, so we remove it
         if (sdk.includes(targetSdk) === false) return null
 
         // This is a scoped item and its scoped to our target sdk
         return {
-          ...item,
-          scopedHref: scopeHrefToSDK(item.href, targetSdk)
-        }
+          title: item.title,
+          href: scopeHrefToSDK(item.href, targetSdk),
+          tag: item.tag,
+          wrap: item.wrap,
+          icon: item.icon,
+          target: item.target
+        } as const
       },
+      // @ts-expect-error - This traverseTree function might just be the death of me
       async ({ sdk, ...group }) => {
 
         if (sdk === undefined) return group
@@ -712,87 +712,88 @@ const main = async () => {
       }
     )
 
-    // Here we are filtering out content for different sdks, and updating links to make them scoped to the sdk when necessary
-    await traverseTree(sdkFilteredManifest,
-      async (item) => {
-        if ("fileContent" in item) {
-          const filePath = `${item.href.replace("/docs/", "")}.mdx`
+    const sdkSpecificVFiles = await Promise.all(docs.map(async (doc) => {
+      if (doc.sdk === undefined) return null; // skip core docs
 
-          const vfile = await markdownProcessor()
-            .use(() => (tree, vfile) => {
-              return mdastFilter(tree,
-                node => {
-                  const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
+      const vfile = await markdownProcessor()
+        // filter out content that is only available to other sdk's
+        .use(() => (tree, vfile) => {
+          return mdastFilter(tree,
+            node => {
 
-                  if (sdk === undefined) return;
+              // We aren't passing the vfile here as the as the warning
+              // should have already been reported above when we initially
+              // parsed the file
 
-                  const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
+              const sdk = extractComponentPropValueFromNode(node, undefined, "If", "sdk")
 
-                  if (sdksFilter === undefined) return
+              if (sdk === undefined) return true
 
-                  if (sdksFilter.includes(targetSdk)) {
-                    return true
-                  }
+              const sdksFilter = extractSDKsFromIfProp(node, undefined, sdk)
 
-                  return false
+              if (sdksFilter === undefined) return true
 
-                }
-              )
-            })
-            // .use(() => (tree, vfile) => {
-            //   let offset = 0
+              if (sdksFilter.includes(targetSdk)) {
+                return true
+              }
 
-            //   visit(tree,
-            //     node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
-            //     node => {
+              return false
 
-            //       if (!("url" in node)) {
+            }
+          )
+        })
+        // scope urls so they point to the current sdk
+        .use(() => (tree, vfile) => {
+          return mdastMap(tree,
+            node => {
+              if (node.type !== "link") return node
+              if (!("url" in node)) {
+                vfile.fail(`Link node does not have a url property ${pleaseReport}`, node.position)
+                return node
+              }
+              if (typeof node.url !== "string") {
+                vfile.fail(`Link node url must be a string ${pleaseReport}`, node.position)
+                return node
+              }
+              if (!node.url.startsWith("/docs/")) {
+                return node
+              }
 
-            //       }
+              const guide = guides.get(node.url)
 
-            //       console.log(node)
-            //     }
-            //   )
-            // })
-            .process({
-              path: filePath,
-              value: item.fileContent
-            })
+              if (guide === undefined) { }
 
-          sdkSpecificMarkdownFileWarnings.push(vfile)
+              return node
+            }
+          )
+        })
+        .process({
+          ...doc.vfile, messages: [] // reset the messages 
+        })
 
-          await writeSDKFile(targetSdk, filePath, String(vfile))
-        }
-        return null
-      })
+      await writeSDKFile(targetSdk, `${doc.href.replace("/docs/", "")}.mdx`, String(vfile))
 
-    // const report = reporter(markdownFileWarnings, { quiet: true })
-
-    // if (report !== "") {
-    //   console.info(report)
-    // }
-
-    const navigation = await traverseTree(sdkFilteredManifest,
-      async (item) => {
-        // @ts-expect-error - simplest way to remove these properties
-        const { scopedHref, fileContent, frontmatter, headingsHashs, ...details } = item
-
-        return {
-          ...details,
-          href: scopedHref ?? details.href,
-        }
-      },
-    )
+      return vfile
+    }))
 
     await writeSDKFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
-  }
 
-  const output = reporter([...vfiles, ...markdownFileWarnings, ...sdkSpecificMarkdownFileWarnings], { quiet: true })
+    return sdkSpecificVFiles
+  }))
+
+  const [awaitedCoreVFiles, awaitedSdkSpecificVFiles] = await Promise.all([Promise.all(coreVFiles), sdkSpecificVFiles])
+
+  const flatSdkSpecificVFiles = awaitedSdkSpecificVFiles.flat()
+
+  const output = reporter([
+    ...awaitedCoreVFiles.filter((item): item is NonNullable<typeof item> => item !== null),
+    ...flatSdkSpecificVFiles.filter((item): item is NonNullable<typeof item> => item !== null)
+  ],
+    { quiet: true })
 
   if (output !== "") {
     console.info(output)
   }
-
 
 }
 

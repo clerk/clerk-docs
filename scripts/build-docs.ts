@@ -380,8 +380,8 @@ const extractComponentPropValueFromNode = (
 }
 
 const extractSDKsFromIfProp = (node: Node, vfile: VFile | undefined, sdkProp: string) => {
-  if (sdkProp.includes('", "')) {
-    const sdks = JSON.parse(sdkProp)
+  if (sdkProp.includes('", "') || sdkProp.includes("', '")) {
+    const sdks = JSON.parse(sdkProp.replaceAll("'", '"'))
     if (isValidSdks(sdks)) {
       return sdks
     } else {

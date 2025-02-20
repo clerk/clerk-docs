@@ -318,6 +318,115 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
   return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
 }
 
+const extractComponentPropValueFromNode = (
+  node: Node,
+  vfile: VFile,
+  componentName: string,
+  propName: string
+): string | undefined => {
+  // Check if it's an MDX component
+  if (node.type !== "mdxJsxFlowElement") {
+    return undefined;
+  }
+
+  // Check if it's the correct component
+  if (!("name" in node) || node.name !== componentName) {
+    return undefined;
+  }
+
+  // Validate node position for error reporting
+  if (node.position === undefined) {
+    vfile.message(
+      `<${componentName} /> node has no position (this is a bug with the build script, please report)`,
+      node.position
+    );
+    return undefined;
+  }
+
+  if (
+    node.position.start.offset === undefined ||
+    node.position.end.offset === undefined
+  ) {
+    vfile.message(
+      `<${componentName} /> node has no position offsets (this is a bug with the build script, please report)`,
+      node.position
+    );
+    return undefined;
+  }
+
+  // Check for attributes
+  if (!("attributes" in node)) {
+    vfile.message(
+      `<${componentName} /> component has no props`,
+      node.position
+    );
+    return undefined;
+  }
+
+  if (!Array.isArray(node.attributes)) {
+    vfile.message(
+      `<${componentName} /> node attributes is not an array (this is a bug with the build script, please report)`,
+      node.position
+    );
+    return undefined;
+  }
+
+  // Find the requested prop
+  const propAttribute = node.attributes.find(
+    (attribute) => attribute.name === propName
+  );
+
+  if (propAttribute === undefined) {
+    vfile.message(
+      `<${componentName} /> component has no "${propName}" attribute`,
+      node.position
+    );
+    return undefined;
+  }
+
+  const value = propAttribute.value;
+
+  if (value === undefined) {
+    vfile.message(
+      `<${componentName} /> attribute "${propName}" has no value (this is a bug with the build script, please report)`,
+      node.position
+    );
+    return undefined;
+  }
+
+  // Handle both string values and object values (like JSX expressions)
+  if (typeof value === "string") {
+    return value;
+  } else if (typeof value === "object" && "value" in value) {
+    return value.value;
+  }
+
+  vfile.message(
+    `<${componentName} /> attribute "${propName}" has an unsupported value type`,
+    node.position
+  );
+  return undefined;
+}
+
+const extractSDKsFromIfProp = (node: Node, vfile: VFile, sdkProp: string) => {
+  if (sdkProp.includes(', ')) {
+    const sdks = sdkProp.split(', ')
+    if (isValidSdks(sdks)) {
+      return sdks
+    } else {
+      const invalidSDKs = sdks.filter(sdk => !isValidSdk(sdk))
+      vfile.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
+    }
+  } else {
+    if (isValidSdk(sdkProp)) {
+      return [sdkProp]
+    } else {
+      vfile.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
+    }
+  }
+
+}
+
 const parseInMarkdownFile = async (item: ManifestItem, partials: {
   path: string;
   content: string;
@@ -333,6 +442,13 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
 
   if (frontmatter === undefined) {
     throw new Error(`Frontmatter parsing failed for ${item.href}`)
+  }
+
+  const frontmatterSDKs = frontmatter.sdk?.split(', ')
+
+  if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
+    const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
+    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${item.href}`)
   }
 
   const slugify = slugifyWithCounter()
@@ -352,54 +468,9 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
       return mdastMap(tree,
         node => {
 
-          if (node.type !== "mdxJsxFlowElement") {
-            return node
-          }
-
-          if (!("name" in node)) {
-            return node
-          }
-
-          if (node.name !== "Include") {
-            return node
-          }
-
-          if (node.position === undefined) {
-            vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
-            return node
-          }
-
-          if (node.position.start.offset === undefined || node.position.end.offset === undefined) {
-            vfile.message(`<Include /> node has no position (this is a bug with the build script, please report)`, node.position)
-            return node
-          }
-
-          if (!("attributes" in node)) {
-            vfile.message(`<Include /> component has no props`, node.position)
-            return node
-          }
-
-          if (!Array.isArray(node.attributes)) {
-            vfile.message(`<Include /> node attributes is not an array (this is a bug with the build script, please report)`, node.position)
-            return node
-          }
-
-          const srcAttribute = node.attributes.find((attribute) => attribute.name === "src")
-
-          if (srcAttribute === undefined) {
-            vfile.message(`<Include /> component has no "src" attribute`, node.position)
-            return node
-          }
-
-          const partialSrc = srcAttribute.value
+          const partialSrc = extractComponentPropValueFromNode(tree, vfile, "Include", "src")
 
           if (partialSrc === undefined) {
-            vfile.message(`<Include /> attribute "src" has no value (this is a bug with the build script, please report)`, node.position)
-            return node
-          }
-
-          if (typeof partialSrc !== "string") {
-            vfile.message(`<Include /> prop "src" is not a string`, node.position)
             return node
           }
 
@@ -449,34 +520,41 @@ const parseInMarkdownFile = async (item: ManifestItem, partials: {
         }
       )
     })
+    .use(() => (tree, vfile) => {
+
+      // We are only checking files that have opted in to sdk filtering by frontmatter
+      if (frontmatterSDKs === undefined) return;
+
+      mdastVisit(tree,
+        node => {
+          const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
+
+          if (sdk === undefined) return;
+
+          const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
+
+          if (sdksFilter === undefined) return
+
+          sdksFilter.forEach(sdk => {
+            const available = frontmatterSDKs.includes(sdk)
+
+            if (available === false) {
+              vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${frontmatterSDKs.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
+            }
+
+          })
+        }
+      )
+    })
     .process({
       path: `${item.href}.mdx`,
       value: fileContent
     })
 
-  if (frontmatter.sdk === undefined) {
-    return {
-      file: {
-        ...item,
-        fileContent: String(fileWarnings),
-        headingsHashs,
-        frontmatter
-      },
-      fileWarnings
-    }
-  }
-
-  const sdks = frontmatter.sdk.split(', ')
-
-  if (isValidSdks(sdks) === false) {
-    const invalidSDKs = sdks.filter(sdk => isValidSdk(sdk) === false)
-    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${item.href}`)
-  }
-
   return {
     file: {
       ...item,
-      sdk: sdks,
+      sdk: frontmatterSDKs,
       fileContent: String(fileWarnings),
       headingsHashs,
       frontmatter
@@ -644,120 +722,15 @@ const main = async () => {
             .use(() => (tree, vfile) => {
               return mdastFilter(tree,
                 node => {
+                  const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
 
-                  if (node.type !== "mdxJsxFlowElement") {
-                    return true
-                  }
+                  if (sdk === undefined) return;
 
-                  if (!("name" in node)) {
-                    return true
-                  }
+                  const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
 
-                  if (node.name !== "If") {
-                    return true
-                  }
+                  if (sdksFilter === undefined) return
 
-                  if (node.position === undefined) {
-                    vfile.message(`<If /> node has no position (this is a bug with the build script, please report)`, node.position)
-                    return true
-                  }
-
-                  if (node.position.start.offset === undefined || node.position.end.offset === undefined) {
-                    vfile.message(`<If /> node has no position (this is a bug with the build script, please report)`, node.position)
-                    return true
-                  }
-
-                  if (!("attributes" in node)) {
-                    vfile.message(`<If /> component has no props`, node.position)
-                    return true
-                  }
-
-                  if (!Array.isArray(node.attributes)) {
-                    vfile.message(`<If /> node attributes is not an array (this is a bug with the build script, please report)`, node.position)
-                    return true
-                  }
-
-                  const sdkAttribute = node.attributes.find((attribute) => attribute.name === "sdk")
-
-                  if (sdkAttribute === undefined) {
-                    vfile.message(`<If /> component has no "sdk" attribute`, node.position)
-                    return true
-                  }
-
-                  const sdk = sdkAttribute.value
-
-                  if (sdk === undefined) {
-                    vfile.message(`<If /> attribute "sdk" has no value (this is a bug with the build script, please report)`, node.position)
-                    return true
-                  }
-
-                  const sdks = (() => {
-
-                    if (typeof sdk === "string") {
-                      if (isValidSdk(sdk)) {
-                        return [sdk]
-                      } else {
-                        vfile.message(`sdk "${sdk}" in <If /> component is not a valid SDK`, node.position)
-                      }
-                    }
-
-                    else if (typeof sdk === "object") {
-                      const sdks = JSON.parse(sdk.value)
-                      if (isValidSdks(sdks)) {
-                        return sdks
-                      } else {
-                        vfile.message(`sdks "${sdk.value}" in <If /> are not valid all SDKs`, node.position)
-                      }
-                    }
-
-                  })()
-
-                  if (sdks === undefined) {
-                    vfile.message(`SDKs not found in <If /> (this is a bug with the build script, please report)`, node.position)
-                    return true
-                  }
-
-                  if (sdks.length === 0) {
-                    vfile.message(`No SDKs found in <If />`, node.position)
-                    return true
-                  }
-
-                  console.log({
-                    sdks,
-                    targetSdk,
-                    href: item.href,
-                  })
-
-                  if (sdks.includes(targetSdk)) {
-
-                    const guide = guides.get(item.href)
-
-                    if (guide === undefined) {
-                      vfile.fail(`Guide not found for ${item.href}, (this is a bug, please report it)`, node.position)
-                      return;
-                    }
-
-                    console.log(guide.sdk)
-
-                    if (guide.sdk === undefined) {
-                      vfile.fail(`Guide "${guide.title}" (${item.href}) is generic to all sdks, but we are doing checks in a sdk specific context, (this is a bug, please report it)`, node.position)
-                      return true
-                    }
-
-                    sdks.forEach(sdk => {
-                      if (guide.sdk === undefined) {
-                        vfile.fail('Guide.sdk is undefined, (this is a bug, please report it)', node.position)
-                        return;
-                      }
-
-                      const available = guide.sdk.includes(sdk)
-
-                      if (available === false) {
-                        vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${guide.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
-                      }
-
-                    })
-
+                  if (sdksFilter.includes(targetSdk)) {
                     return true
                   }
 

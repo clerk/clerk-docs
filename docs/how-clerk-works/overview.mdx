@@ -1,9 +1,9 @@
 ---
 title: How Clerk works
-description: Learn how Clerk is architected and how it works under the hood.
+description: Learn about the main concepts and objects that drive Clerk's powerful authentication and user management system.
 ---
 
-This guide provides a deep dive into Clerk's architecture and internal workings. For developers who are simply looking to add authentication to their app, see the [quickstart guides](/docs/quickstarts/overview).
+Before building your application, it's important to understand the core concepts and objects that drive Clerk's powerful authentication and user management system.
 
 ## The frontend API
 
@@ -37,7 +37,11 @@ FAPI is the lowest level of abstraction that authentication flows can be built o
 
 ### Clerk's prebuilt components
 
-Clerk's [prebuilt UI components](/docs/components/overview) are Clerk's highest level of abstraction. They are "all in one" components, offering the most complete implementation of authentication with the least amount of effort. While it's strongly recommended to use these components, due to the amount of research we have put into delivering an optimal experience, it's not the only option if you feel that you need more control over your authentication flows.
+Clerk's [prebuilt UI components](/docs/components/overview) are Clerk's highest level of abstraction, offering the most complete implementation of authentication with the least amount of effort. Components, like `<SignIn />`, `<UserButton />`, and `<OrganizationSwitcher />`, are all-in-one solutions that handle the full lifecycle of the user experience, from sign-up/sign-in to user profile management to organization management. While it's strongly recommended to use these components, due to the amount of research we have put into delivering an optimal experience, it's not the only option if you feel that you need more control over your authentication flows.
+
+Out-of-the-box, every Clerk application has the [Account Portal](/docs/customization/account-portal/overview) enabled. The Account Portal uses Clerk's [prebuilt components](/docs/components/overview) on dedicated pages that are hosted on Clerk servers.
+
+When you are ready to migrate away from the Account Portal, you simply use Clerk's prebuilt components on your own pages in your application.
 
 > **Customizability:** You can [modify the CSS for any part of the prebuilt components](/docs/customization/overview), but not the HTML structure or the logic/ordering of how the authentication flow works.
 
@@ -63,257 +67,40 @@ Although the administrative features of BAPI are useful for many applications, i
 
 Like FAPI, while you can interact directly with BAPI, most developers opt to use Clerk's SDKs for smoother integration with their preferred language or framework. Documentation for Clerk's SDKs is available in [the left sidebar of the docs](https://clerk.com/docs). That being said, FAPI is a much more complex and nuanced API that relies on more custom logic outside of its endpoints to create a functional SDK on top of it. As such, **interacting directly with FAPI is not recommended**, whereas interacting directly with BAPI is generally reasonable.
 
-## Stateful authentication
+## Configuring your application
 
-To understand how authentication works in Clerk, it's important to first understand how the most common implementation of authentication logic works: the traditional "stateful authentication" model, also known as "session token authentication".
+Configuring your application is done through the Clerk Dashboard. The Clerk Dashboard is where you, as the application owner, can manage your application's settings, users, and organizations. For example, if you want to enable phone number authentication, multi-factor authentication, social providers like Google, delete users, or create organizations, you can do all of this and more in the Clerk Dashboard. You can even invite other users to join your [organization workspace](/docs/organizations/organization-workspaces) and help configure and manage your application with you.
 
-A user's process of signing in would work as follows. This example assumes that the user already signed up and their credentials are stored in a database.
+To get started configuring your application, see the [configuration docs](/docs/authentication/overview). There are many guides dedicated to specific configuration options.
 
-1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. This is normally done by [hashing](https://clerk.com/glossary#hash) the password and comparing it with a stored password hash. Upon successful validation, it creates a new [session](https://clerk.com/glossary#session) in the database associated with the user.
-1. The server responds to the browser's request by setting the session ID in a [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header in the response, which sets a cookie with this value in the browser. This cookie will be automatically included in future requests from the browser in order to authenticate the user.
-   <Video
-     src="/docs/images/how-clerk-works/stateful-auth.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
-1. The next time the browser sends a request to the server, it [automatically includes](/docs/how-clerk-works/cookies) the session cookie. The server checks the database for the session ID and retrieves the associated user ID and session metadata. If the session is valid and active, the server has verified that the user has authenticated, and can then use the user ID to fetch any required user data and process the request.
-   <Video
-     src="/docs/images/how-clerk-works/stateful-auth-2.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
+## Building your application
 
-> [!NOTE]
-> What happens if an attacker gets their hands on your session ID? Generally, the answer here is that you're in trouble. If an attacker gets your session ID, they can sign in as you. Therefore, it's best practice to use [HTTPS](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS) (ensures attacker can't [sniff it](https://en.wikipedia.org/wiki/Sniffing_attack)) and ensure the cookie is [set as `HttpOnly`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#httponly) (ensures attacker can't get it via remote JavaScript execution).
+The Clerk JavaScript SDK, or ClerkJS, is where Clerk all started. It is the foundational SDK that powers the other JavaScript SDKs, such as the React and Next.js SDKs. The following sections will introduce you to the main objects that power ClerkJS.
 
-This is a perfectly reasonable authentication model and works great for most apps as it's straightforward to understand and implement. Additionally, since it checks the database for _every request_ that requires authentication, sessions can be instantly revoked if needed (by setting the state to `revoked` and adding a check in the server logic). However, because it requires every request to query the database, it introduces additional latency and can be difficult to scale as you start to shard out your database.
+### Clerk
 
-## Stateless authentication
+The [`Clerk`](/docs/references/javascript/clerk/clerk) class is the main entry point for the Clerk JavaScript SDK. All other objects are accessible from the `Clerk` object. As you're building your application, you'll likely interact with these objects, either directly or through helpers provided by the other SDKs, like React hooks or Vue composables.
 
-An alternative approach is "stateless" authentication, which addresses the scalability and latency challenges of stateful authentication while introducing different tradeoffs.
+### Client
 
-The stateless authentication flow operates as follows. This example assumes that the user already signed up and their credentials are stored in a database.
+A client represents the current device or software accessing an application such as your web browser, native application, or Chrome Extension. It is represented by the [`Client`](/docs/references/javascript/client) object.
 
-1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/how-clerk-works/tokens-signatures) containing essential user data like the user ID and any relevant [claims](https://clerk.com/glossary#claim).
-1. The server responds to the browser's request by sending the token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response. This token serves as a self-contained proof of authentication, and will be included in future requests from the browser in order to authenticate the user.
-   <Video
-     src="/docs/images/how-clerk-works/stateless-auth.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
-1. The next time the browser sends a request to the server, it sends the cookie containing the token. The server verifies the signature of the token to ensure that it's valid, and then uses the user ID within the token to fetch any required user data and process the request.
-   <Video
-     src="/docs/images/how-clerk-works/stateless-auth-2.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
+### Session
 
-While more complex to implement, this stateless model offers significant advantages. Because verifying the JWT doesn't require interacting with a database, the latency overhead and scaling challenges caused by database lookups are eliminated, leading to faster request processing.
+A session is a secure representation of the authentication state of the current user. Each client can hold multiple sessions on the same device. It is represented by the [`Session`](/docs/references/javascript/session) object.
 
-> [!QUIZ]
-> How exactly does stateless authenticate mitigate database scaling challenges?
->
-> ---
->
-> When you are first building an application, a single database instance is often sufficient to handle your traffic. As your application grows, you'll need to scale your database to manage increased load. This typically involves creating multiple database copies or splitting the database into multiple instances through a process called [sharding](https://en.wikipedia.org/wiki/Shard_\(database_architecture\)).
->
-> Sharding involves dividing a database into smaller, more manageable databases (called shards), each handling a subset of the total data. To manage this complexity, a [load balancer](https://en.wikipedia.org/wiki/Load_balancing_\(computing\)) often serves as an entry point that directs traffic to ensure no single database instance becomes overwhelmed.
->
-> Keeping multiple database instances synchronized is a challenging problem that software engineers have grappled with for decades. The potential consequences of unsynchronized instances can be significant. For example, if a user signs in on one database instance and a subsequent request for that user's data is routed to an unsynchronized instance, the user might encounter a confusing authentication error.
->
-> Stateless authentication offers an elegant solution. By using [signed tokens](/docs/how-clerk-works/tokens-signatures) that contain all necessary authentication information, the server can verify a user's credentials **without direct database interaction**, effectively bypassing the synchronization complexities that arise in traditional, stateful authentication methods.
+### User
 
-However, this approach also comes with important technical tradeoffs. The most significant limitation is that **JWTs cannot be revoked** due to their self-contained nature. Since JWT validation happens locally without consulting a central authority (i.e., they never "phone home"), there's no direct mechanism to invalidate them before their natural expiration.
+The [`User`](/docs/references/javascript/user) object represents the current user of the session. It holds all the basic user information such as the user's name, email addresses, and phone numbers, and including their public, private, and unsafe metadata.
 
-This creates challenges for session management. To forcibly terminate a user's session, you have two suboptimal choices:
+### Organization
 
-1. Wait for the JWT to expire naturally.
-1. Rotate the signing keys, which invalidates all active sessions across your entire user base, signing out all of your users.
+Organizations are a flexible and scalable way to manage users and their access to resources within your Clerk application. With organizations, you can assign specific roles and permissions to users, making them useful for managing projects, coordinating teams, or facilitating partnerships. Users can belong to many organizations. One of them will be the ["active organization"](/docs/organizations/overview#active-organization) of the session. It is represented by the [`Organization`](/docs/references/javascript/organization) object. To learn about organizations, see the [dedicated guide](/docs/organizations/overview).
 
-Furthermore, even after rotating keys, the revocation may be delayed if your application caches the public key used for verification - a common practice for performance optimization. The cached key would continue to validate the old tokens until the cache expires.
+### Sign in
 
-This limitation poses significant security risks, as it hampers your ability to quickly respond to security incidents that require immediate session termination for specific users.
+The [`SignIn`](/docs/references/javascript/sign-in/sign-in) object holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process. It is used to manage the sign-in lifecycle, including the first and second factor verification, and the creation of a new session.
 
-## Clerk's authentication model
+### Sign up
 
-Clerk implements a hybrid authentication model that combines the benefits of both stateful and stateless approaches while mitigating their respective drawbacks, at the cost of adding a substantial amount of complexity to the implementation on Clerk's side. However, for a developer implementing Clerk, like you, this is all upside since the complexity is handled internally by Clerk.
-
-The hybrid model incorporates the same flow when signing in as the stateless flow, but with a key change: **the session token's expiration is decoupled from the session lifetime**. See the following section for more details.
-
-### Authentication flow
-
-This example assumes that the user already signed up and their credentials are stored in a database.
-
-1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database and, upon successful validation:
-   - Creates a session record in the database (stateful component).
-   - Generates a [signed JWT](/docs/how-clerk-works/tokens-signatures) with its expiration set to the session lifetime (stateless component) - this JWT is stored on FAPI, and is not accessible to the application. Clerk calls this the **client token**.
-   - Generates a **second** signed JWT that expires after 60 seconds which is returned directly to the application and contains user data like the user ID and other claims. Clerk calls this the **session token**.
-1. The server responds to the browser's request by sending the **client token** in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response, which is set on the FAPI domain. Clerk's client-side SDK then makes a request to FAPI to get a **session token** and sets it on your app's domain.
-
-   > [!QUIZ]
-   > Why doesn't Clerk set a **session token** using the `Set-Cookie` header when its setting the **client token**?
-   >
-   > ---
-   >
-   > This is a great test of your mastery of [how cookies work](/docs/how-clerk-works/cookies)!
-   >
-   > Remember, **the domain of a cookie can only be set as the domain of the server that set the cookie**. In this case, the server returning the request to your app is FAPI. For the **client cookie**, this is ok, since the **client cookie** needs to be set on FAPI. However, the **session cookie** needs to be set on your app's domain, not on FAPI. So, FAPI returns the **JWT value** of the session cookie in its response, and when the Clerk client-side SDK integrated in your app receives the response, it gets the **JWT value** and uses JavaScript to set the **session cookie** on your app directly, since the JavaScript is running on your app's domain.
-
-   <Video
-     src="/docs/images/how-clerk-works/hybrid-auth.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
-1. And just like stateless auth, the next time the browser sends a request to the server, it sends the cookie containing the token. The server verifies the signature of the token to ensure that it's valid, and then uses the user ID within the token to fetch any required user data and process the request.
-   <Video
-     src="/docs/images/how-clerk-works/hybrid-auth-2.mp4"
-     width="1600"
-     height="900"
-     autoPlay
-     muted
-     loop
-     playsInline
-     controls
-   />
-
-So far, this is the same as stateless auth, with one key distinction: the session token's expiration time. This is because normally, in stateless authentication implementations, the token's expiration is set to match the intended session duration - commonly ranging from one week to one month. But since JWTs can't be revoked, if a token is compromised, the attacker has the entirety of the session lifetime to be able to take over the user's account. This will be several days at least on average, if not several weeks.
-
-Clerk's model mitigates this issue by setting an extremely short session token lifetime of 60 seconds. Normally, a Clerk token will have already expired before an attacker gets the chance to even try to use it. This is great for security, but it does create a complication in the authentication flow, as signing users out every 60 seconds would not be an acceptable user experience. So, for this architecture to work, **it must decouple token expiration from session lifetime**. To make this happen, Clerk introduces a new "token refresh" mechanism that runs in the background and is responsible for refreshing the token every minute.
-
-### Token refresh mechanism
-
-To maintain session continuity despite the 60-second token lifetime, Clerk's frontend SDKs implement an automatic refresh mechanism that:
-
-- Runs on a 50-second interval (allowing 10 seconds for network latency).
-- Makes requests to the [`/client/sessions/<id>/tokens` endpoint](https://clerk.com/docs/reference/frontend-api/tag/Sessions#operation/createSessionToken).
-- Updates the session token before expiration.
-
-If you open the network tab in your browser's developer tools on a Clerk application, you will see this request being sent, and a session token being returned in the response.
-
-This approach provides several security benefits:
-
-- Minimizes the window of opportunity for token misuse
-- Maintains the ability to revoke sessions quickly
-- Preserves the performance benefits of stateless authentication
-
-<Video src="/docs/images/how-clerk-works/renewal.mp4" width="1600" height="900" autoPlay muted loop playsInline />
-
-<br />
-
-<Video src="/docs/images/how-clerk-works/invalidation.mp4" width="1600" height="900" autoPlay muted loop playsInline />
-
-## Clerk's cookies & tokens in detail
-
-> [!TIP]
-> To understand Clerk's architecture, it's important to have a solid foundational understanding of how browser cookies work at a detailed level. If you need a refresher on cookie fundamentals, including domain scoping, `SameSite` policies, and `HttpOnly` flags, see the [guide on cookies](/docs/how-clerk-works/cookies).
-
-If the token lifetime is 60 seconds, how does Clerk know how long your entire session lifetime is?
-
-Clerk's authentication model relies on two distinct tokens - a "client token" and a "session token". Let's break down each of these tokens and how they are configured as cookies.
-
-### Client token
-
-- **Cookie name:** `__client`
-- **Contents:** A Clerk-signed JWT containing:
-  - `session_id`: Unique session identifier
-  - `rotating_token`: [Anti-session-fixation](/docs/security/fixation-protection) token that rotates on each sign-in across any device
-- **Domain:** Set on your FAPI domain (`clerk.example.com` or `<slug>.accounts.dev`), rather than on your app domain. This is a security measure - for example if your app logs are leaked, they wouldn't contain client token values, since it's scoped to a different domain.
-- **Expiration:** Set to your session lifetime, which is 7 days by default. Can be configured in the Clerk Dashboard.
-- **HttpOnly:** Yes
-- **SameSite:** Lax
-
-The client token serves as the source of truth for authentication state. When a user signs in, Clerk either creates a new client token or rotates the existing token's `rotating_token` value. A valid client token enables Clerk to generate short-lived session tokens for the application.
-
-### Session token
-
-- **Cookie name:** `__session`
-- **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/backend-requests/resources/session-tokens#default-session-claims). Can be customized in the Clerk Dashboard to include additional claims.
-- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/backend-requests/making/cross-origin).
-- **Expiration:** 60 seconds
-- **HttpOnly:** No - must be able to be accessed by client-side SDKs
-- **SameSite:** Lax
-
-When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/handling/manual-jwt) the session token's signature and extract the user ID and other claims.
-
-## The Handshake
-
-The short-lived nature of session tokens introduces a case that requires special handling. Consider this scenario: A user signs in to your application and then closes their browser tab. When they return after five minutes by opening a new tab, their session token will have expired since the refresh mechanism could not run while the tab was closed. At this point, Clerk needs to determine the user's authentication status and potentially issue a new session token.
-
-For client-rendered applications, this process is straightforward. Clerk's frontend SDK makes a direct request to FAPI, which validates the client token. If the token is valid, FAPI issues and returns a new session token. If invalid, the user is redirected to the sign-in flow.
-
-However, server-rendered applications present a unique challenge. Server-to-server requests cannot include browser cookies, as cookies are stored by the browser. This means that, if your app's backend made a request directly to FAPI, the client token would not be available with that request, as the request would not flow through the browser. To solve this problem, Clerk implements a "handshake" flow:
-
-1. The server returns a **redirect response** to the browser
-1. The browser follows the redirect to FAPI
-1. FAPI receives the request with the client cookie
-1. FAPI validates the authentication state and issues a new session token
-
-This server -> browser -> FAPI request includes the client token, so FAPI is able to verify the user's auth state and issue a new session token securely. This handshake ensures secure token renewal while maintaining the benefits of server-side rendering.
-
-> [!QUIZ]
-> Why does handshake do a redirect? Why can’t it make a fetch request to FAPI and get a new token back that way? Not needing to redirect would be a better user experience.
->
-> ---
->
-> Imagine this scenario: you make a request to your frontend and you have an expired session token. You need a new valid session token.
->
-> Normally, to refresh your session token, you need to send your _valid_ session token to clerk, which it will verify, then send you a new valid one. This is _secure by default_, because anyone who has a valid session token is authenticated as you, as we have learned in the rest of this guide.
->
-> But in this scenario, you have only an invalid (expired) session token, so the question becomes this: how do you get a new token without making it such that anyone with an invalid token can produce a new valid token, which would be a security problem?
->
-> - You could send the expired session token, but then any attacker with an expired session token would be able to mint a new one and hijack your session.
-> - You could verify that the request only comes from your application's domain, but then any attacker could just send an `http` request with a spoofed domain value and get a token on your behalf.
->
-> Remember, with Clerk, the **session token** is the short-lived one that is currently expired, and the **client token** is the long-lived one whose expiration is your session's lifetime. So, the best solution is to check if there's a valid **client token** set on FAPI with a session that's still active. If there is, it would be safe to mint a new **session token** and send that back.
->
-> However, if your app is rendered on the server, your hands are tied. If your app's server makes an API request to FAPI, it will not be able to check the **client token**, because the **client token** is stored in a cookie and **cookies live in the browser**.
->
-> This is where handshake comes in.
->
-> 1. Request is made to an application that uses Clerk.
-> 1. Clerk SDK determines the authentication state of the request (`signed-in`, `signed-out`, or `handshake`).
-> 1. If the authentication state is `handshake` (i.e. unknown), Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
-> 1. The handshake endpoint gets information about the current session and returns a handshake payload. The encoded handshake payload contains a list of `Set-Cookie` header directives to be passed along with the final response.
->    1. If the session is active, a fresh session JWT cookie is returned.
->    1. If the session is inactive, the session JWT cookie is wiped and the request will be treated as signed out.
-> 1. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development) or as a cookie (production).
-> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response
-> 1. If an updated session JWT is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
-> 1. If an updated session JWT is not returned, the request is treated as signed out.
->
-> This makes it such that you can't provide proof of authentication via an API call - the proof comes from the **client cookie** on FAPI which can't be tampered with by attackers since it's not set on the application domain and is `HttpOnly`.
-
-{/*
-  Future sections to add
-  - the anatomy of clerk's sign up and sign in flows
-  - subdomain session sharing
-  - satellite domains
-*/}
+The [`SignUp`](/docs/references/javascript/sign-up/sign-up) object holds the state of the current sign-up and provides helper methods to navigate and complete the sign-up process. Once a sign-up is complete, a new user is created.

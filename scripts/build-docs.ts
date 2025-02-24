@@ -287,7 +287,7 @@ const traverseTree = async <
   return result.map(group => group.filter((item): item is NonNullable<typeof item> => item !== null)) as unknown as OutTree;
 };
 
-const scopeHrefToSDK = (href: string, targetSDK: SDK) => {
+const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
 
   // This is external so can't change it
   if (href.startsWith('/docs') === false) return href
@@ -705,13 +705,11 @@ const main = async () => {
                 attributes: [
                   mdastBuilder('mdxJsxAttribute', {
                     name: 'href',
-                    value: url
+                    value: scopeHrefToSDK(url, ':sdk:')
                   }),
                   mdastBuilder('mdxJsxAttribute', {
                     name: 'sdks',
-                    // value: `['${guide.sdk.join("', '")}']`
                     value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                      // value: `["${guide.sdk.join('", "')}"]`
                       value: JSON.stringify(guide.sdk)
                     })
                   })

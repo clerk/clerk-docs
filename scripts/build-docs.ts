@@ -250,22 +250,31 @@ const traverseTree = async <
 >(
   tree: Tree,
   itemCallback: (item: InItem) => Promise<OutItem | null> = async (item) => item,
-  groupCallback: (group: InGroup) => Promise<OutGroup | null> = async (group) => group
+  groupCallback: (group: InGroup) => Promise<OutGroup | null> = async (group) => group,
+  errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
 ): Promise<OutTree> => {
   const result = await Promise.all(tree.map(async (group) => {
     return await Promise.all(group.map(async (item) => {
-      if ('href' in item) {
-        return await itemCallback(item);
-      }
+      try {
+        if ('href' in item) {
+          return await itemCallback(item);
+        }
 
-      if ('items' in item && Array.isArray(item.items)) {
-        return await groupCallback({
-          ...item,
-          items: (await traverseTree(item.items, itemCallback, groupCallback)).map(group => group.filter((item): item is NonNullable<typeof item> => item !== null))
-        });
-      }
+        if ('items' in item && Array.isArray(item.items)) {
+          return await groupCallback({
+            ...item,
+            items: (await traverseTree(item.items, itemCallback, groupCallback, errorCallback)).map(group => group.filter((item): item is NonNullable<typeof item> => item !== null))
+          });
+        }
 
-      return item as OutItem;
+        return item as OutItem;
+      } catch (error) {
+        if (error instanceof Error && errorCallback !== undefined) {
+          errorCallback(item, error);
+        } else {
+          throw error
+        }
+      }
     }));
   }));
 
@@ -616,7 +625,7 @@ const main = async () => {
       const guide = guides.get(item.href)
 
       if (guide === undefined) {
-        throw new Error(`Guide "${item.title}" not found in the docs folder at ${item.href}.mdx`)
+        throw new Error(`Guide "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
       }
 
       return {
@@ -636,6 +645,10 @@ const main = async () => {
         sdk: Array.from(new Set([...details.sdk ?? [], ...itemsSDKs])) ?? [],
         items
       }
+    },
+    (item, error) => {
+      console.error('↳', item.title)
+      throw error
     }
   )
   console.info('✔️ Applied manifest sdk scoping')
@@ -683,7 +696,13 @@ const main = async () => {
 
     if (doc.sdk !== undefined) return vfile; // skip sdk specific docs
 
-    await writeDistFile(`${doc.href.replace("/docs/", "")}.mdx`, String(vfile))
+    const distFilePath = `${doc.href.replace("/docs/", "")}.mdx`
+
+    if (isValidSdk(distFilePath.split('/')[0])) {
+      throw new Error(`Attempting to write out a core doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`)
+    }
+
+    await writeDistFile(distFilePath, String(vfile))
 
     return vfile
   })
@@ -730,7 +749,7 @@ const main = async () => {
       }
     )
 
-    const sdkSpecificVFiles = await Promise.all(docs.map(async (doc) => {
+    const vFiles = await Promise.all(docs.map(async (doc) => {
       if (doc.sdk === undefined) return null; // skip core docs
 
       const vfile = await markdownProcessor()
@@ -796,7 +815,7 @@ const main = async () => {
 
     await writeSDKFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
 
-    return sdkSpecificVFiles
+    return vFiles
   }))
 
   const [awaitedCoreVFiles, awaitedSdkSpecificVFiles] = await Promise.all([Promise.all(coreVFiles), sdkSpecificVFiles])

@@ -788,6 +788,7 @@ const main = async () => {
 
     const vFiles = await Promise.all(docs.map(async (doc) => {
       if (doc.sdk === undefined) return null; // skip core docs
+      if (doc.sdk.includes(targetSdk) === false) return null; // skip docs that are not for the target sdk
 
       const vfile = await markdownProcessor()
         // filter out content that is only available to other sdk's

@@ -1,7 +1,7 @@
 // Things this build script does
 
 // - [x] Validates the manifest
-// - [x] Validates the markdown files contents
+// - [x] Validates the markdown files contents (including frontmatter)
 // - [x] Validates links (including hashes) between docs are valid
 // - [x] Validates the sdk filtering in the manifest
 // - [x] Validates the sdk filtering in the frontmatter

@@ -660,38 +660,41 @@ const main = async () => {
     const vfile = await markdownProcessor()
       // Validate links between guides are valid
       .use(() => (tree: Node, vfile: VFile) => {
-        mdastVisit(tree,
-
-          // Get all the relative links
-          node => node.type === "link" && "url" in node && typeof node.url === "string" && node.url.startsWith("/docs/"),
-
+        return mdastMap(tree,
           node => {
-            if ("url" in node && typeof node.url === "string") {
-              const [url, hash] = node.url.split("#")
 
-              const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
-              if (ignore === true) return;
+            if (node.type !== "link") return node
+            if (!("url" in node)) return node
+            if (typeof node.url !== "string") return node
+            if (!node.url.startsWith("/docs/")) return node
 
-              const guide = guides.get(url)
+            node.url = removeMdxSuffix(node.url)
 
-              if (guide === undefined) {
-                vfile.message(`Guide ${url} not found`, node.position)
-                return;
-              }
+            const [url, hash] = (node.url as string).split("#")
 
-              if (hash === undefined) return; // We only need the markdown contents if we are checking the link hash
+            const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
+            if (ignore === true) return node;
 
-              const hasHash = guide.headingsHashs.includes(hash)
+            const guide = guides.get(url)
 
-              if (hasHash === false) {
-                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
-                return;
-              }
+            if (guide === undefined) {
+              vfile.message(`Guide ${url} not found`, node.position)
+              return node;
             }
+
+            if (hash === undefined) return node; // We only need the markdown contents if we are checking the link hash
+
+            const hasHash = guide.headingsHashs.includes(hash)
+
+            if (hasHash === false) {
+              vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+              return node;
+            }
+
+            return node;
           }
         )
       })
-      // to do - update links to sdk specific docs
       .process(doc.vfile)
 
     if (doc.sdk !== undefined) return vfile; // skip sdk specific docs

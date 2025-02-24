@@ -91,6 +91,10 @@ const tag = z.enum(["(Beta)", "(Community)"])
 
 type Tag = z.infer<typeof tag>
 
+const MANIFEST_WRAP_DEFAULT = true
+const MANIFEST_COLLAPSE_DEFAULT = false
+const MANIFEST_HIDE_TITLE_DEFAULT = false
+
 type ManifestItem = {
   title: string
   href: string
@@ -105,7 +109,7 @@ const manifestItem: z.ZodType<ManifestItem> = z.object({
   title: z.string(),
   href: z.string(),
   tag: tag.optional(),
-  wrap: z.boolean().default(true),
+  wrap: z.boolean().default(MANIFEST_WRAP_DEFAULT),
   icon: icon.optional(),
   target: z.enum(["_blank"]).optional(),
   sdk: z.array(sdk).optional()
@@ -125,11 +129,11 @@ type ManifestGroup = {
 const manifestGroup: z.ZodType<ManifestGroup> = z.object({
   title: z.string(),
   items: z.lazy(() => manifestSchema),
-  collapse: z.boolean().default(false),
+  collapse: z.boolean().default(MANIFEST_COLLAPSE_DEFAULT),
   tag: tag.optional(),
-  wrap: z.boolean().default(true),
+  wrap: z.boolean().default(MANIFEST_WRAP_DEFAULT),
   icon: icon.optional(),
-  hideTitle: z.boolean().default(false),
+  hideTitle: z.boolean().default(MANIFEST_HIDE_TITLE_DEFAULT),
   sdk: z.array(sdk).optional()
 }).strict()
 
@@ -612,7 +616,7 @@ const main = async () => {
 
     return markdownFile
   }))).filter((item): item is NonNullable<typeof item> => item !== null)
-  console.info('✔️ Loaded in guides')
+  console.info(`✔️ Loaded in ${docs.length} guides`)
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifest = await traverseTree(userManifest,
@@ -744,7 +748,7 @@ const main = async () => {
     return vfile
   })
 
-  Promise.all(coreVFiles).then(() => console.info('✔️ Wrote out core docs'))
+  Promise.all(coreVFiles).then((docs) => console.info(`✔️ Wrote out ${docs.length} core docs`))
 
   const sdkSpecificVFiles = Promise.all(VALID_SDKS.map(async (targetSdk) => {
 
@@ -757,7 +761,7 @@ const main = async () => {
           title: item.title,
           href: item.href,
           tag: item.tag,
-          wrap: item.wrap,
+          wrap: item.wrap === MANIFEST_WRAP_DEFAULT ? undefined : item.wrap,
           icon: item.icon,
           target: item.target
         } as const
@@ -770,7 +774,7 @@ const main = async () => {
           title: item.title,
           href: scopeHrefToSDK(item.href, targetSdk),
           tag: item.tag,
-          wrap: item.wrap,
+          wrap: item.wrap === MANIFEST_WRAP_DEFAULT ? undefined : item.wrap,
           icon: item.icon,
           target: item.target
         } as const
@@ -778,11 +782,27 @@ const main = async () => {
       // @ts-expect-error - This traverseTree function might just be the death of me
       async ({ sdk, ...group }) => {
 
-        if (sdk === undefined) return group
+        if (sdk === undefined) return {
+          title: group.title,
+          collapse: group.collapse === MANIFEST_COLLAPSE_DEFAULT ? undefined : group.collapse,
+          tag: group.tag,
+          wrap: group.wrap === MANIFEST_WRAP_DEFAULT ? undefined : group.wrap,
+          icon: group.icon,
+          hideTitle: group.hideTitle === MANIFEST_HIDE_TITLE_DEFAULT ? undefined : group.hideTitle,
+          items: group.items,
+        }
 
         if (sdk.includes(targetSdk) === false) return null
 
-        return group
+        return {
+          title: group.title,
+          collapse: group.collapse === MANIFEST_COLLAPSE_DEFAULT ? undefined : group.collapse,
+          tag: group.tag,
+          wrap: group.wrap === MANIFEST_WRAP_DEFAULT ? undefined : group.wrap,
+          icon: group.icon,
+          hideTitle: group.hideTitle === MANIFEST_HIDE_TITLE_DEFAULT ? undefined : group.hideTitle,
+          items: group.items,
+        }
       }
     )
 
@@ -853,12 +873,14 @@ const main = async () => {
 
     await writeSDKFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
 
-    return vFiles
+    return { targetSdk, vFiles }
   }))
+
+  sdkSpecificVFiles.then((sdk) => sdk.forEach(({ targetSdk, vFiles }) => console.info(`✔️ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific guides`)))
 
   const [awaitedCoreVFiles, awaitedSdkSpecificVFiles] = await Promise.all([Promise.all(coreVFiles), sdkSpecificVFiles])
 
-  const flatSdkSpecificVFiles = awaitedSdkSpecificVFiles.flat()
+  const flatSdkSpecificVFiles = awaitedSdkSpecificVFiles.flatMap(({ vFiles }) => vFiles)
 
   const output = reporter([
     ...awaitedCoreVFiles.filter((item): item is NonNullable<typeof item> => item !== null),

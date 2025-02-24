@@ -213,26 +213,6 @@ const markdownProcessor = remark()
 
 type VFile = Awaited<ReturnType<typeof markdownProcessor.process>>
 
-const parseFrontmatter = async <Keys extends string>(fileContent: string): Promise<Record<Keys, string | undefined> | undefined> => {
-  let frontmatter: Record<Keys, string | undefined> | undefined = undefined
-
-  await markdownProcessor()
-    .use(() => (tree, vfile) => {
-      mdastVisit(tree,
-        node => node.type === 'yaml' && "value" in node,
-        node => {
-          if (!("value" in node)) return;
-          if (typeof node.value !== "string") return;
-
-          frontmatter = yaml.parse(node.value)
-        }
-      )
-    })
-    .process(fileContent)
-
-  return frontmatter
-}
-
 const ensureDirectory = async (path: string): Promise<void> => {
   try {
     await fs.access(path)
@@ -336,7 +316,7 @@ const extractComponentPropValueFromNode = (
 
   if (!Array.isArray(node.attributes)) {
     vfile?.message(
-      `<${componentName} /> node attributes is not an array (this is a bug with the build script, please report)`,
+      `<${componentName} /> node attributes is not an array ${pleaseReport}`,
       node.position
     );
     return undefined;
@@ -359,7 +339,7 @@ const extractComponentPropValueFromNode = (
 
   if (value === undefined) {
     vfile?.message(
-      `<${componentName} /> attribute "${propName}" has no value (this is a bug with the build script, please report)`,
+      `<${componentName} /> attribute "${propName}" has no value ${pleaseReport}`,
       node.position
     );
     return undefined;
@@ -408,18 +388,13 @@ const parseInMarkdownFile = async (href: string, partials: {
     throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, { cause: error })
   }
 
-  const frontmatter = await parseFrontmatter<"name" | "description" | "sdk">(fileContent)
-
-  if (frontmatter === undefined) {
-    throw new Error(`Frontmatter parsing failed for ${href}`)
+  type Frontmatter = {
+    title: string;
+    description?: string;
+    sdk?: SDK[]
   }
 
-  const frontmatterSDKs = frontmatter.sdk?.split(', ')
-
-  if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
-    const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
-    throw new Error(`Invalid SDK ${JSON.stringify(invalidSDKs)} found in: ${href}`)
-  }
+  let frontmatter: Frontmatter | undefined = undefined
 
   const slugify = slugifyWithCounter()
   const headingsHashs: Array<string> = []
@@ -429,6 +404,42 @@ const parseInMarkdownFile = async (href: string, partials: {
       if (inManifest === false) {
         vfile.message("This guide is not in the manifest.json, but will still be publicly accessible and other guides can link to it")
       }
+    })
+    .use(() => (tree, vfile) => {
+      mdastVisit(tree,
+        node => node.type === 'yaml' && "value" in node,
+        node => {
+          if (!("value" in node)) return;
+          if (typeof node.value !== "string") return;
+
+          const frontmatterYaml: Record<"title" | "description" | "sdk", string | undefined> = yaml.parse(node.value)
+
+          const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
+
+          if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
+            const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
+            vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}`, node.position)
+            return;
+          }
+
+          if (frontmatterYaml.title === undefined) {
+            vfile.fail(`Frontmatter must have a "title" property`, node.position)
+            return;
+          }
+
+          frontmatter = {
+            title: frontmatterYaml.title,
+            description: frontmatterYaml.description,
+            sdk: frontmatterSDKs
+          }
+        }
+      )
+
+      if (frontmatter === undefined) {
+        vfile.fail(`Frontmatter parsing failed for ${href}`)
+        return;
+      }
+
     })
     // Validate and embed the <Include />
     .use(() => (tree, vfile) => {
@@ -460,7 +471,7 @@ const parseInMarkdownFile = async (href: string, partials: {
               mdastVisit(tree,
                 node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
                 () => {
-                  vfile.fail("Partials inside of partials is not yet supported, please report if you are seeing this error", node.position)
+                  vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
                 }
               )
 
@@ -509,13 +520,15 @@ const parseInMarkdownFile = async (href: string, partials: {
           const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
 
           if (sdksFilter === undefined) return
-          if (frontmatterSDKs === undefined) return;
+          if (frontmatter?.sdk === undefined) return;
 
           sdksFilter.forEach(sdk => {
-            const available = frontmatterSDKs.includes(sdk)
+            if (frontmatter?.sdk === undefined) return;
+
+            const available = frontmatter.sdk.includes(sdk)
 
             if (available === false) {
-              vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${frontmatterSDKs.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
+              vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${frontmatter.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
             }
 
           })
@@ -527,12 +540,16 @@ const parseInMarkdownFile = async (href: string, partials: {
       value: fileContent
     })
 
+  if (frontmatter === undefined) {
+    throw new Error(`Frontmatter parsing failed for ${href}`)
+  }
+
   return {
     href,
-    sdk: frontmatterSDKs,
+    sdk: (frontmatter as Frontmatter).sdk,
     vfile,
     headingsHashs,
-    frontmatter
+    frontmatter: frontmatter as Frontmatter
   }
 }
 
@@ -623,8 +640,9 @@ const main = async () => {
   )
   console.info('✔️ Applied manifest sdk scoping')
 
-  await writeDistFile('m.json', JSON.stringify(sdkScopedManifest, null, 2))
-
+  // It would definitely be preferable we didn't need to do this markdown processing twice
+  // But because we need a full list / hashmap of all the existing docs, we can't
+  // Unless maybe we do some kind of lazy loading of the docs, but this would add complexity
   const coreVFiles = docs.map(async (doc) => {
     const vfile = await markdownProcessor()
       // Validate links between guides are valid

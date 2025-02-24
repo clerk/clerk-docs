@@ -8,8 +8,9 @@
 // - [x] Validates the sdk filtering in the <If /> component
 
 // - [x] Embeds the includes in the markdown files
+// - [x] Updates the links in the content if they point to the sdk specific docs
 // - [x] Copies over "core" docs to the dist folder
-//   - [ ] Updates the links in the content if they point to the sdk specific docs
+// - [x] Generates "landing" pages for the sdk specific docs at the original url
 // - [x] Generates a manifest that is specific to each SDK
 // - [x] Duplicates out the sdk specific docs to their respective folders
 //   - [x] stripping filtered out content
@@ -21,6 +22,7 @@ import { remark } from 'remark'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { map as mdastMap } from 'unist-util-map'
+import { u as mdastBuilder } from 'unist-builder'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from "yaml"
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -427,7 +429,7 @@ const parseInMarkdownFile = async (href: string, partials: {
 
           if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
             const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
-            vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}`, node.position)
+            vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(VALID_SDKS)}`, node.position)
             return;
           }
 
@@ -667,6 +669,7 @@ const main = async () => {
             if (!("url" in node)) return node
             if (typeof node.url !== "string") return node
             if (!node.url.startsWith("/docs/")) return node
+            if (!("children" in node)) return node
 
             node.url = removeMdxSuffix(node.url)
 
@@ -682,13 +685,34 @@ const main = async () => {
               return node;
             }
 
-            if (hash === undefined) return node; // We only need the markdown contents if we are checking the link hash
+            if (hash !== undefined) {
+              const hasHash = guide.headingsHashs.includes(hash)
 
-            const hasHash = guide.headingsHashs.includes(hash)
+              if (hasHash === false) {
+                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+              }
+            }
 
-            if (hasHash === false) {
-              vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
-              return node;
+            if (guide.sdk !== undefined) {
+              // we are going to swap it for the sdk link component to give the users a great experience
+
+              return mdastBuilder('mdxJsxFlowElement', {
+                name: 'SDKLink',
+                attributes: [
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'href',
+                    value: url
+                  }),
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'sdks',
+                    // value: `['${guide.sdk.join("', '")}']`
+                    value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                      // value: `["${guide.sdk.join('", "')}"]`
+                      value: JSON.stringify(guide.sdk)
+                    })
+                  })
+                ]
+              })
             }
 
             return node;
@@ -697,12 +721,22 @@ const main = async () => {
       })
       .process(doc.vfile)
 
-    if (doc.sdk !== undefined) return vfile; // skip sdk specific docs
-
     const distFilePath = `${doc.href.replace("/docs/", "")}.mdx`
 
     if (isValidSdk(distFilePath.split('/')[0])) {
       throw new Error(`Attempting to write out a core doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`)
+    }
+
+    if (doc.sdk !== undefined) {
+      // This is a sdk specific guide, so we want to put a landing page here to redirect the user to a guide customised to their sdk.
+
+      await writeDistFile(
+        distFilePath,
+        // It's possible we will want to / need to put some frontmatter here
+        `<SDKDocRedirectPage title="${doc.frontmatter.title}" url="${doc.href}" sdk={${JSON.stringify(doc.sdk)}} />`
+      )
+
+      return vfile
     }
 
     await writeDistFile(distFilePath, String(vfile))
@@ -808,7 +842,7 @@ const main = async () => {
           )
         })
         .process({
-          ...doc.vfile, messages: [] // reset the messages 
+          ...doc.vfile, messages: [] // reset the messages, otherwise they will be duplicated
         })
 
       await writeSDKFile(targetSdk, `${doc.href.replace("/docs/", "")}.mdx`, String(vfile))

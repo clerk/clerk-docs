@@ -102,10 +102,10 @@ English gerunds ("-ing" words like "running") turn verbs into nouns ("run" becom
 When learners are performing an order of operations, it helps for them to start with _where_ they need to be to perform the action.
 
 > ❌
-> Open your `.env.local file` in your Next.js project's folder.
+> Open your `.env file` in your Next.js project's folder.
 
 > ✅
-> In your Next.js project's root folder, open your `.env.local file`.
+> In your Next.js project's root folder, open your `.env file`.
 
 ### Use an active voice vs. passive voice
 

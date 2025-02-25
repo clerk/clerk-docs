@@ -420,7 +420,7 @@ You can use the following shortcodes within a code block to inject information f
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx
-```sh {{ filename: '.env.local' }}
+```sh {{ filename: '.env' }}
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```

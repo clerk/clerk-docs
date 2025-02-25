@@ -180,6 +180,16 @@ Use "ensure" instead of "make sure."
 > ✅
 > Ensure you have the correct permissions.
 
+### Sidenav vs. sidebar
+
+Use "sidenav" instead of "sidebar."
+
+> ❌
+> In the left sidebar, select **Users**.
+
+> ✅
+> In the left sidenav, select **Users**.
+
 ### Syntax for code example explanations
 
 Code examples should always have an explanation preceding them. Typically, they begin with something along the lines of "The following example demonstrates..."

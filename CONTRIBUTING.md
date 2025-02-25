@@ -839,7 +839,7 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 ### `<If />`
 
-The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidebar.
+The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
 
 > [!IMPORTANT]
 > This component cannot be used within code blocks.

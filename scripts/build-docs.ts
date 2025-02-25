@@ -33,6 +33,7 @@ import readdirp from 'readdirp'
 import { z } from "zod"
 import { fromError } from 'zod-validation-error';
 import { Node } from 'unist'
+import chok from 'chokidar'
 
 const BASE_PATH = process.cwd()
 const DOCS_FOLDER_RELATIVE = './docs'
@@ -569,7 +570,12 @@ const parseInMarkdownFile = async (href: string, partials: {
   }
 }
 
-const main = async () => {
+
+const createBlankStore = () => ({
+  markdownFiles: new Map<string, Awaited<ReturnType<typeof parseInMarkdownFile>>>()
+})
+
+const build = async (store: ReturnType<typeof createBlankStore>) => {
   await ensureDirectory(DIST_PATH)
 
   const userManifest = await readManifest()
@@ -610,8 +616,17 @@ const main = async () => {
 
     const inManifest = guidesInManifest.has(href)
 
-    // we aren't awaiting here so we can move on while IO processes
-    const markdownFile = await parseInMarkdownFile(href, partials, inManifest)
+    let markdownFile: Awaited<ReturnType<typeof parseInMarkdownFile>>;
+
+    const cachedMarkdownFile = store.markdownFiles.get(href)
+
+    if (cachedMarkdownFile) {
+      markdownFile = structuredClone(cachedMarkdownFile)
+    } else {
+      markdownFile = await parseInMarkdownFile(href, partials, inManifest)
+
+      store.markdownFiles.set(href, structuredClone(markdownFile))
+    }
 
     guides.set(href, markdownFile)
 
@@ -889,6 +904,60 @@ const main = async () => {
 
   if (output !== "") {
     console.info(output)
+  }
+}
+
+const watchAndRebuild = (store: ReturnType<typeof createBlankStore>) => {
+
+  const watcher = chok.watch(
+    [
+      DOCS_FOLDER,
+    ],
+    {
+      alwaysStat: true,
+      ignored: (filePath, stats) => {
+        if (stats === undefined) return false
+        if (stats.isDirectory()) return false
+
+        const relativePath = path.relative(DOCS_FOLDER, filePath)
+
+        const isManifest = relativePath === 'manifest.json'
+        const isMarkdown = relativePath.endsWith('.mdx')
+
+        return !(isManifest || isMarkdown)
+      },
+      ignoreInitial: true,
+    }
+  )
+
+  watcher.on("all", async (event, filePath) => {
+
+    console.info(`File ${filePath} changed`, { event })
+
+    const href = removeMdxSuffix(`/${path.relative(BASE_PATH, filePath)}`)
+
+    store.markdownFiles.delete(href)
+
+    await build(store)
+
+  })
+
+}
+
+const main = async () => {
+
+  const store = createBlankStore()
+
+  await build(store)
+
+  const args = process.argv.slice(2)
+  const watchFlag = args.includes('--watch')
+
+  if (watchFlag) {
+
+    console.info(`Watching for changes...`)
+
+    watchAndRebuild(store)
   }
 
 }

@@ -14,6 +14,7 @@
 // - [x] Generates a manifest that is specific to each SDK
 // - [x] Duplicates out the sdk specific docs to their respective folders
 //   - [x] stripping filtered out content
+// - [x] Removes .mdx from the end of docs markdown links
 
 import fs from 'node:fs/promises'
 import path from 'node:path'

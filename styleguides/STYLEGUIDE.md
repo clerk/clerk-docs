@@ -13,10 +13,10 @@ Try to keep things in alphabetic order, except Next.js, React, and JavaScript ar
 When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the **first mention** of that item. The exception to this rule is when the reference is mentioned under a different heading. In that case, link to the reference documentation again.
 
 > ❌
-> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user/user) object for the authenticated user.
+> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user) object of the currently active user. The following example uses the [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper to access the [`User`](https://clerk.com/docs/references/javascript/user) object for the authenticated user.
 
 > ✅
-> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
+> The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
 
 ### Use sentence-case for titles
 
@@ -102,10 +102,10 @@ English gerunds ("-ing" words like "running") turn verbs into nouns ("run" becom
 When learners are performing an order of operations, it helps for them to start with _where_ they need to be to perform the action.
 
 > ❌
-> Open your `.env.local file` in your Next.js project's folder.
+> Open your `.env file` in your Next.js project's folder.
 
 > ✅
-> In your Next.js project's root folder, open your `.env.local file`.
+> In your Next.js project's root folder, open your `.env file`.
 
 ### Use an active voice vs. passive voice
 
@@ -179,6 +179,16 @@ Use "ensure" instead of "make sure."
 
 > ✅
 > Ensure you have the correct permissions.
+
+### Sidenav vs. sidebar
+
+Use "sidenav" instead of "sidebar."
+
+> ❌
+> In the left sidebar, select **Users**.
+
+> ✅
+> In the left sidenav, select **Users**.
 
 ### Syntax for code example explanations
 

@@ -1,0 +1,97 @@
+---
+title: Manual JWT verification
+description: Learn how to manually verify Clerk-generated session tokens (JWTs).
+---
+
+Your Clerk-generated [session tokens](/docs/backend-requests/resources/session-tokens) are essentially JWTs which are signed using your instance's private key and can be verified using your instance's public key. Depending on your architecture, these tokens will be in your backend requests either via a cookie named `__session` or via the Authorization header.
+
+For every request, you must validate the token to ensure it hasn't expired or been tampered with (i.e., it's authentic and secure). If these validations succeed, then the user is authenticated to your application and should be considered signed in. The `authenticateRequest()` method from the JavaScript Backend SDK handles these validations for you. Alternatively, you can manually verify the token without using the SDK. See the following sections for more information.
+
+## Use `authenticateRequest()` to verify a session token
+
+The [`authenticateRequest()`](/docs/references/backend/authenticate-request) method from the JavaScript Backend SDK accepts the `request` object and authenticates the session token in it.
+
+The following example uses the `authenticateRequest()` method to verify the session token. It also performs networkless authentication by passing `jwtKey`. This verifies if the user is signed into the application. For more information, including usage with higher-level SDKs, see the [`authenticateRequest()` reference](/docs/references/backend/authenticate-request).
+
+<Include src="_partials/authenticate-req" />
+
+## Manually verify a session token
+
+<Steps>
+  ### Retrieve the session token
+
+  Retrieve the session token from either `__session` cookie for a same-origin request or from the `Authorization` header for cross-origin requests.
+
+  ### Get your instance's public key
+
+  Use one of the three ways to obtain your public key:
+
+  1. Use the Backend API in JSON Web Key Set (JWKS) format at the following endpoint [https://api.clerk.com/v1/jwks](https://clerk.com/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
+  1. Use your **Frontend API URL** in JWKS format, also known as the **JWKS URL**. The format is your Frontend API URL with `/.well-known/jwks.json` appended to it. Your **Frontend API URL** or **JWKS URL** can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  1. Use your **JWKS Public Key**, which can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+
+  ### Verify the token signature
+
+  To verify the token signature:
+
+  1. Use your instance's public key to verify the token's signature.
+  1. Validate that the token isn't expired by checking the `exp` ([expiration time](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4)) and `nbf` ([not before](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5)) claims.
+  1. Validate that the `azp` (authorized parties) claim equals any of your known origins permitted to generate those tokens. For better security, it's highly recommended to explicitly set the `authorizedParties` option when authorizing requests. The value should be a list of domains allowed to make requests to your application. Not setting this value can open your application to [CSRF attacks](https://owasp.org/www-community/attacks/csrf). For example, if you're permitting tokens retrieved from `http://localhost:3000`, then the `azp` claim should equal `http://localhost:3000`. You can also pass an array of strings, such as `['http://localhost:4003', 'https://clerk.dev']`. If the `azp` claim doesn't exist, you can skip this step.
+
+  ### Finished
+
+  If the above process succeeds, the user is considered signed in to your application and authenticated. You can also retrieve the session ID and user ID from of the token's claims.
+</Steps>
+
+### Example
+
+The following example manually verifies a session token.
+
+```tsx
+import Cookies from 'cookies'
+import jwt from 'jsonwebtoken'
+
+export default async function (req: Request, res: Response) {
+  // Your public key should be set as an environment variable
+  const publicKey = process.env.CLERK_PEM_PUBLIC_KEY
+  // Retrieve session token from either `__session` cookie for a same-origin request
+  // or from the `Authorization` header for cross-origin requests
+  const cookies = new Cookies(req, res)
+  const tokenSameOrigin = cookies.get('__session')
+  const tokenCrossOrigin = req.headers.authorization
+
+  if (!tokenSameOrigin && !tokenCrossOrigin) {
+    res.status(401).json({ error: 'Not signed in' })
+    return
+  }
+
+  try {
+    let decoded
+    const options = { algorithms: ['RS256'] } // The algorithm used to sign the token. Optional.
+    const permittedOrigins = ['http://localhost:3000', 'https://example.com'] // Replace with your permitted origins
+
+    if (tokenSameOrigin) {
+      decoded = jwt.verify(tokenSameOrigin, publicKey, options)
+    } else {
+      decoded = jwt.verify(tokenCrossOrigin, publicKey, options)
+    }
+
+    // Validate the token's expiration (exp) and not before (nbf) claims
+    const currentTime = Math.floor(Date.now() / 1000)
+    if (decoded.exp < currentTime || decoded.nbf > currentTime) {
+      throw new Error('Token is expired or not yet valid')
+    }
+
+    // Validate the token's authorized party (azp) claim
+    if (decoded.azp && !permittedOrigins.includes(decoded.azp)) {
+      throw new Error("Invalid 'azp' claim")
+    }
+
+    res.status(200).json({ sessionToken: decoded })
+  } catch (error) {
+    res.status(400).json({
+      error: error.message,
+    })
+  }
+}
+```

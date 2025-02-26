@@ -6,6 +6,8 @@
 // - [x] Validates the sdk filtering in the manifest
 // - [x] Validates the sdk filtering in the frontmatter
 // - [x] Validates the sdk filtering in the <If /> component
+//   - [x] Checks that the sdk is available in the manifest
+//   - [x] Checks that the sdk is available in the frontmatter
 
 // - [x] Embeds the includes in the markdown files
 // - [x] Updates the links in the content if they point to the sdk specific docs
@@ -249,30 +251,36 @@ const removeMdxSuffix = (filePath: string) => {
 type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Array<Item | Group>>;
 
 const traverseTree = async <
-  Tree extends BlankTree<any, any>,
-  InItem extends Extract<Tree[number][number], { href: string }>,
-  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>,
+  Tree extends { items: BlankTree<any, any> },
+  InItem extends Extract<Tree["items"][number][number], { href: string }>,
+  InGroup extends Extract<Tree["items"][number][number], { items: BlankTree<InItem, InGroup> }>,
   OutItem extends { href: string },
   OutGroup extends { items: BlankTree<OutItem, OutGroup> },
   OutTree extends BlankTree<OutItem, OutGroup>
 >(
   tree: Tree,
-  itemCallback: (item: InItem) => Promise<OutItem | null> = async (item) => item,
-  groupCallback: (group: InGroup) => Promise<OutGroup | null> = async (group) => group,
+  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | null> = async (item) => item,
+  groupCallback: (group: InGroup, tree: Tree) => Promise<OutGroup | null> = async (group) => group,
   errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
 ): Promise<OutTree> => {
-  const result = await Promise.all(tree.map(async (group) => {
+  const result = await Promise.all(tree.items.map(async (group) => {
     return await Promise.all(group.map(async (item) => {
       try {
         if ('href' in item) {
-          return await itemCallback(item);
+          return await itemCallback(item, tree);
         }
 
         if ('items' in item && Array.isArray(item.items)) {
-          return await groupCallback({
-            ...item,
-            items: (await traverseTree(item.items, itemCallback, groupCallback, errorCallback)).map(group => group.filter((item): item is NonNullable<typeof item> => item !== null))
-          });
+          const newGroup = await groupCallback(item, tree);
+
+          if (newGroup === null) return null;
+
+          const newItems = (await traverseTree(newGroup, itemCallback, groupCallback, errorCallback)).map(group => group.filter((item): item is NonNullable<typeof item> => item !== null))
+
+          return {
+            ...newGroup,
+            items: newItems
+          }
         }
 
         return item as OutItem;
@@ -288,6 +296,28 @@ const traverseTree = async <
 
   return result.map(group => group.filter((item): item is NonNullable<typeof item> => item !== null)) as unknown as OutTree;
 };
+
+function flattenTree<
+  Tree extends BlankTree<any, any>,
+  InItem extends Extract<Tree[number][number], { href: string }>,
+  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>
+>(tree: Tree): InItem[] {
+  const result: InItem[] = [];
+
+  for (const group of tree) {
+    for (const itemOrGroup of group) {
+      if ("href" in itemOrGroup) {
+        // It's an item
+        result.push(itemOrGroup);
+      } else if ("items" in itemOrGroup && Array.isArray(itemOrGroup.items)) {
+        // It's a group with its own sub-tree, flatten it
+        result.push(...flattenTree(itemOrGroup.items));
+      }
+    }
+  }
+
+  return result;
+}
 
 const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
 
@@ -314,7 +344,7 @@ const extractComponentPropValueFromNode = (
 ): string | undefined => {
 
   // Check if it's an MDX component
-  if (node.type !== "mdxJsxFlowElement") {
+  if (node.type !== "mdxJsxFlowElement" && node.type !== "mdxJsxTextElement") {
     return undefined;
   }
 
@@ -486,7 +516,7 @@ const parseInMarkdownFile = async (href: string, partials: {
           const partialContentVFile = markdownProcessor()
             .use(() => (tree, vfile) => {
               mdastVisit(tree,
-                node => node.type === "mdxJsxFlowElement" && "name" in node && node.name === "Include",
+                node => (node.type === "mdxJsxFlowElement" || node.type === "mdxJsxTextElement") && "name" in node && node.name === "Include",
                 () => {
                   vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
                 }
@@ -522,33 +552,6 @@ const parseInMarkdownFile = async (href: string, partials: {
         node => {
           const slug = slugify(toString(node).trim())
           headingsHashs.push(slug)
-        }
-      )
-    })
-    // Validate the <If /> components
-    .use(() => (tree, vfile) => {
-
-      mdastVisit(tree,
-        (node) => {
-          const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
-
-          if (sdk === undefined) return;
-
-          const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
-
-          if (sdksFilter === undefined) return
-          if (frontmatter?.sdk === undefined) return;
-
-          sdksFilter.forEach(sdk => {
-            if (frontmatter?.sdk === undefined) return;
-
-            const available = frontmatter.sdk.includes(sdk)
-
-            if (available === false) {
-              vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${frontmatter.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
-            }
-
-          })
         }
       )
     })
@@ -591,7 +594,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
   const guidesInManifest = new Set<string>()
 
   // Grab all the docs links in the manifest
-  await traverseTree(userManifest,
+  await traverseTree({ items: userManifest },
     async (item) => {
       if (!item.href?.startsWith('/docs/')) return item
       if (item.target !== undefined) return item
@@ -635,8 +638,8 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
   console.info(`✔️ Loaded in ${docs.length} guides`)
 
   // Goes through and grabs the sdk scoping out of the manifest
-  const sdkScopedManifest = await traverseTree(userManifest,
-    async (item) => {
+  const sdkScopedManifest = await traverseTree({ items: userManifest },
+    async (item, tree) => {
 
       if (!item.href?.startsWith('/docs/')) return item
       if (item.target !== undefined) return item
@@ -650,17 +653,33 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
         throw new Error(`Guide "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
       }
 
+      const sdk = guide.sdk ?? tree.sdk
+
+      if (guide.sdk !== undefined) {
+        if (guide.sdk.every(sdk => tree.sdk?.includes(sdk)) === false) {
+          throw new Error(`Guide "${item.title}" is attempting to use ${JSON.stringify(guide.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`)
+        }
+      }
+
       return {
         ...item,
-        sdk: guide.sdk
+        sdk,
+        frontmatterIncludesManifestSDKs: guide.frontmatter.sdk?.includes(sdk) ?? false
       }
     },
-    async (group) => {
+    async (group, tree) => {
+
       const itemsSDKs = Array.from(new Set(group.items?.flatMap((item) => item.flatMap((item) => item.sdk)))).filter((sdk): sdk is SDK => sdk !== undefined)
 
       const { items, ...details } = group
 
-      if (itemsSDKs.length === 0) return { ...details, items }
+      if (details.sdk !== undefined) {
+        if (details.sdk.every(sdk => tree.sdk?.includes(sdk)) === false) {
+          throw new Error(`Group "${details.title}" is attempting to use ${JSON.stringify(details.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`)
+        }
+      }
+
+      if (itemsSDKs.length === 0) return { ...details, sdk: details.sdk ?? tree.sdk, items }
 
       return {
         ...details,
@@ -674,6 +693,8 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
     }
   )
   console.info('✔️ Applied manifest sdk scoping')
+
+  const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
   // It would definitely be preferable we didn't need to do this markdown processing twice
   // But because we need a full list / hashmap of all the existing docs, we can't
@@ -737,6 +758,51 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
           }
         )
       })
+      // Validate the <If /> components
+      .use(() => (tree, vfile) => {
+
+        mdastVisit(tree,
+          (node) => {
+            const sdk = extractComponentPropValueFromNode(node, vfile, "If", "sdk")
+
+            if (sdk === undefined) return;
+
+            const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
+
+            if (sdksFilter === undefined) return
+
+            const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.href)
+
+            const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
+
+            // The doc doesn't exist in the manifest so we are skipping it
+            if (manifestItems.length === 0) return;
+
+            sdksFilter.forEach(sdk => {
+              (() => {
+                if (doc.sdk === undefined) return;
+
+                const available = doc.sdk.includes(sdk)
+
+                if (available === false) {
+                  vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${doc.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`, node.position)
+                }
+              })();
+
+              (() => {
+                // The doc is generic so we are skipping it
+                if (availableSDKs.length === 0) return;
+
+                const available = availableSDKs.includes(sdk)
+
+                if (available === false) {
+                  vfile.fail(`<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`, node.position)
+                }
+              })();
+            })
+          }
+        )
+      })
       .process(doc.vfile)
 
     const distFilePath = `${doc.href.replace("/docs/", "")}.mdx`
@@ -767,7 +833,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
   const sdkSpecificVFiles = Promise.all(VALID_SDKS.map(async (targetSdk) => {
 
     // Goes through and removes any items that are not scoped to the target sdk
-    const navigation = await traverseTree(sdkScopedManifest,
+    const navigation = await traverseTree({ items: sdkScopedManifest },
       async ({ sdk, ...item }) => {
 
         // This means its generic, not scoped to a specific sdk, so we keep it

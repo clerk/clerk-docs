@@ -61,7 +61,7 @@ To maintain security, these administrative tasks should only be executed on the 
 
 Although the administrative features of BAPI are useful for many applications, it's most commonly used to verify a user's authentication state when processing requests from your app's frontend. For instance, if a user submits a request to update some data associated with their account, **your server must ensure the user is authenticated and authorized to make this change.** Without proper validation, malicious actors could potentially take over user accounts.
 
-Like FAPI, while you can interact directly with BAPI, most developers opt to use Clerk's SDKs for smoother integration with their preferred language or framework. Documentation for Clerk's SDKs is available in [the left sidebar of the docs](https://clerk.com/docs). That being said, FAPI is a much more complex and nuanced API that relies on more custom logic outside of its endpoints to create a functional SDK on top of it. As such, **interacting directly with FAPI is not recommended**, whereas interacting directly with BAPI is generally reasonable.
+Like FAPI, while you can interact directly with BAPI, most developers opt to use Clerk's SDKs for smoother integration with their preferred language or framework. Documentation for Clerk's SDKs is available in [the left sidenav of the docs](https://clerk.com/docs). That being said, FAPI is a much more complex and nuanced API that relies on more custom logic outside of its endpoints to create a functional SDK on top of it. As such, **interacting directly with FAPI is not recommended**, whereas interacting directly with BAPI is generally reasonable.
 
 ## Stateful authentication
 
@@ -82,7 +82,7 @@ A user's process of signing in would work as follows. This example assumes that 
      playsInline
      controls
    />
-1. The next time the browser sends a request to the server, it [automatically includes](/docs/how-clerk-works/cookies) the session cookie. The server checks the database for the session ID and retrieves the associated user ID and session metadata. If the session is valid and active, the server has verified that the user has authenticated, and can then use the user ID to fetch any required user data and process the request.
+1. The next time the browser sends a request to the server, it [automatically includes](/docs/backend-requests/resources/cookies) the session cookie. The server checks the database for the session ID and retrieves the associated user ID and session metadata. If the session is valid and active, the server has verified that the user has authenticated, and can then use the user ID to fetch any required user data and process the request.
    <Video
      src="/docs/images/how-clerk-works/stateful-auth-2.mp4"
      width="1600"
@@ -106,7 +106,7 @@ An alternative approach is "stateless" authentication, which addresses the scala
 The stateless authentication flow operates as follows. This example assumes that the user already signed up and their credentials are stored in a database.
 
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
-1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/how-clerk-works/tokens-signatures) containing essential user data like the user ID and any relevant [claims](https://clerk.com/glossary#claim).
+1. The server validates the credentials against a database. Upon successful validation, it generates a [cryptographically signed token](/docs/backend-requests/resources/tokens-and-signatures) containing essential user data like the user ID and any relevant [claims](https://clerk.com/glossary#claim).
 1. The server responds to the browser's request by sending the token in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response. This token serves as a self-contained proof of authentication, and will be included in future requests from the browser in order to authenticate the user.
    <Video
      src="/docs/images/how-clerk-works/stateless-auth.mp4"
@@ -143,7 +143,7 @@ While more complex to implement, this stateless model offers significant advanta
 >
 > Keeping multiple database instances synchronized is a challenging problem that software engineers have grappled with for decades. The potential consequences of unsynchronized instances can be significant. For example, if a user signs in on one database instance and a subsequent request for that user's data is routed to an unsynchronized instance, the user might encounter a confusing authentication error.
 >
-> Stateless authentication offers an elegant solution. By using [signed tokens](/docs/how-clerk-works/tokens-signatures) that contain all necessary authentication information, the server can verify a user's credentials **without direct database interaction**, effectively bypassing the synchronization complexities that arise in traditional, stateful authentication methods.
+> Stateless authentication offers an elegant solution. By using [signed tokens](/docs/backend-requests/resources/tokens-and-signatures) that contain all necessary authentication information, the server can verify a user's credentials **without direct database interaction**, effectively bypassing the synchronization complexities that arise in traditional, stateful authentication methods.
 
 However, this approach also comes with important technical tradeoffs. The most significant limitation is that **JWTs cannot be revoked** due to their self-contained nature. Since JWT validation happens locally without consulting a central authority (i.e., they never "phone home"), there's no direct mechanism to invalidate them before their natural expiration.
 
@@ -169,7 +169,7 @@ This example assumes that the user already signed up and their credentials are s
 1. The user initiates authentication by navigating to `example.com/sign-in`, entering their credentials (e.g. username/password), and submitting the form, usually by clicking a "submit" button. This makes a request to the server with the credentials.
 1. The server validates the credentials against a database and, upon successful validation:
    - Creates a session record in the database (stateful component).
-   - Generates a [signed JWT](/docs/how-clerk-works/tokens-signatures) with its expiration set to the session lifetime (stateless component) - this JWT is stored on FAPI, and is not accessible to the application. Clerk calls this the **client token**.
+   - Generates a [signed JWT](/docs/backend-requests/resources/tokens-and-signatures) with its expiration set to the session lifetime (stateless component) - this JWT is stored on FAPI, and is not accessible to the application. Clerk calls this the **client token**.
    - Generates a **second** signed JWT that expires after 60 seconds which is returned directly to the application and contains user data like the user ID and other claims. Clerk calls this the **session token**.
 1. The server responds to the browser's request by sending the **client token** in a [`Set-Cookie` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) in the response, which is set on the FAPI domain. Clerk's client-side SDK then makes a request to FAPI to get a **session token** and sets it on your app's domain.
 
@@ -178,7 +178,7 @@ This example assumes that the user already signed up and their credentials are s
    >
    > ---
    >
-   > This is a great test of your mastery of [how cookies work](/docs/how-clerk-works/cookies)!
+   > This is a great test of your mastery of [how cookies work](/docs/backend-requests/resources/cookies)!
    >
    > Remember, **the domain of a cookie can only be set as the domain of the server that set the cookie**. In this case, the server returning the request to your app is FAPI. For the **client cookie**, this is ok, since the **client cookie** needs to be set on FAPI. However, the **session cookie** needs to be set on your app's domain, not on FAPI. So, FAPI returns the **JWT value** of the session cookie in its response, and when the Clerk client-side SDK integrated in your app receives the response, it gets the **JWT value** and uses JavaScript to set the **session cookie** on your app directly, since the JavaScript is running on your app's domain.
 
@@ -233,7 +233,7 @@ This approach provides several security benefits:
 ## Clerk's cookies & tokens in detail
 
 > [!TIP]
-> To understand Clerk's architecture, it's important to have a solid foundational understanding of how browser cookies work at a detailed level. If you need a refresher on cookie fundamentals, including domain scoping, `SameSite` policies, and `HttpOnly` flags, see the [guide on cookies](/docs/how-clerk-works/cookies).
+> To understand Clerk's architecture, it's important to have a solid foundational understanding of how browser cookies work at a detailed level. If you need a refresher on cookie fundamentals, including domain scoping, `SameSite` policies, and `HttpOnly` flags, see the [guide on cookies](/docs/backend-requests/resources/cookies).
 
 If the token lifetime is 60 seconds, how does Clerk know how long your entire session lifetime is?
 
@@ -256,12 +256,12 @@ The client token serves as the source of truth for authentication state. When a 
 
 - **Cookie name:** `__session`
 - **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/backend-requests/resources/session-tokens#default-session-claims). Can be customized in the Clerk Dashboard to include additional claims.
-- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/backend-requests/making/cross-origin).
+- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/backend-requests/making-requests).
 - **Expiration:** 60 seconds
 - **HttpOnly:** No - must be able to be accessed by client-side SDKs
 - **SameSite:** Lax
 
-When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/handling/manual-jwt) the session token's signature and extract the user ID and other claims.
+When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
 
 ## The Handshake
 

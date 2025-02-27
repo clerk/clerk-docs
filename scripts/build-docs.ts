@@ -275,6 +275,7 @@ const traverseTree = async <
 
           if (newGroup === null) return null;
 
+          // @ts-expect-error - OutGroup should always contain "items" property, so this is safe
           const newItems = (await traverseTree(newGroup, itemCallback, groupCallback, errorCallback)).map(group => group.filter((item): item is NonNullable<typeof item> => item !== null))
 
           return {
@@ -638,7 +639,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
   console.info(`✔️ Loaded in ${docs.length} guides`)
 
   // Goes through and grabs the sdk scoping out of the manifest
-  const sdkScopedManifest = await traverseTree({ items: userManifest },
+  const sdkScopedManifest = await traverseTree({ items: userManifest, sdk: VALID_SDKS },
     async (item, tree) => {
 
       if (!item.href?.startsWith('/docs/')) return item
@@ -663,8 +664,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
 
       return {
         ...item,
-        sdk,
-        frontmatterIncludesManifestSDKs: guide.frontmatter.sdk?.includes(sdk) ?? false
+        sdk
       }
     },
     async (group, tree) => {
@@ -679,13 +679,13 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
         }
       }
 
-      if (itemsSDKs.length === 0) return { ...details, sdk: details.sdk ?? tree.sdk, items }
+      if (itemsSDKs.length === 0) return { ...details, sdk: details.sdk ?? tree.sdk, items } as ManifestGroup
 
       return {
         ...details,
         sdk: Array.from(new Set([...details.sdk ?? [], ...itemsSDKs])) ?? [],
         items
-      }
+      } as ManifestGroup
     },
     (item, error) => {
       console.error('↳', item.title)

@@ -37,22 +37,6 @@ import { fromError } from 'zod-validation-error';
 import { Node } from 'unist'
 import chok from 'chokidar'
 
-export type BuildConfig = {
-  basePath: string;
-  docsRelativePath: string;
-  docsFolder: string;
-  manifestFilePath: string;
-  partialsPath: string;
-  distPath: string;
-  ignorePaths: string[];
-  validSdks: readonly string[];
-  manifestOptions: {
-    wrapDefault: boolean;
-    collapseDefault: boolean;
-    hideTitleDefault: boolean;
-  };
-}
-
 const VALID_SDKS = [
   "nextjs",
   "react",
@@ -88,42 +72,6 @@ type Icon = z.infer<typeof icon>
 const tag = z.enum(["(Beta)", "(Community)"])
 
 type Tag = z.infer<typeof tag>
-
-// The default config the script will run under when using npm run build
-const createDefaultConfig = (): BuildConfig => {
-  const basePath = process.cwd();
-  const docsRelativePath = './docs';
-  const docsFolder = path.join(basePath, docsRelativePath);
-
-  return {
-    basePath,
-    docsRelativePath,
-    docsFolder,
-    manifestFilePath: path.join(docsFolder, './manifest.json'),
-    partialsPath: './_partials',
-    distPath: path.join(basePath, './dist'),
-    ignorePaths: [
-      "/docs/core-1",
-      '/pricing',
-      '/docs/reference/backend-api',
-      '/docs/reference/frontend-api',
-      '/support',
-      '/discord',
-      '/contact',
-      '/contact/sales',
-      '/contact/support',
-      '/blog',
-      '/changelog/2024-04-19',
-      "/docs/_partials"
-    ],
-    validSdks: VALID_SDKS,
-    manifestOptions: {
-      wrapDefault: true,
-      collapseDefault: false,
-      hideTitleDefault: false
-    }
-  };
-};
 
 type ManifestItem = {
   title: string
@@ -189,12 +137,12 @@ const createManifestSchema = (config: BuildConfig) => {
 
 const pleaseReport = "(this is a bug with the build script, please report)"
 
-const isValidSdk = (sdk: string): sdk is SDK => {
-  return VALID_SDKS.includes(sdk as SDK)
+const isValidSdk = (config: BuildConfig) => (sdk: string): sdk is SDK => {
+  return config.validSdks.includes(sdk as SDK)
 }
 
-const isValidSdks = (sdks: string[]): sdks is SDK[] => {
-  return sdks.every(isValidSdk)
+const isValidSdks = (config: BuildConfig) => (sdks: string[]): sdks is SDK[] => {
+  return sdks.every(isValidSdk(config))
 }
 
 const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
@@ -222,7 +170,7 @@ const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
 }
 
 const readDocsFolder = (config: BuildConfig) => async () => {
-  return readdirp.promise(config.docsFolder, {
+  return readdirp.promise(config.docsPath, {
     type: 'files',
     fileFilter: (entry) => config.ignorePaths.some((ignoreItem) =>
       `/docs/${entry.path}`.startsWith(ignoreItem)) === false && entry.path.endsWith('.mdx')
@@ -230,7 +178,7 @@ const readDocsFolder = (config: BuildConfig) => async () => {
 }
 
 const readPartialsFolder = (config: BuildConfig) => async () => {
-  return readdirp.promise(path.join(config.docsFolder, config.partialsPath), {
+  return readdirp.promise(path.join(config.docsPath, config.partialsRelativePath), {
     type: 'files',
     fileFilter: '*.mdx',
   })
@@ -240,7 +188,7 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
   const readFile = readMarkdownFile(config);
 
   return Promise.all(paths.map(async (markdownPath) => {
-    const fullPath = path.join(config.docsRelativePath, config.partialsPath, markdownPath)
+    const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, markdownPath)
 
     const [error, content] = await readFile(fullPath)
 
@@ -448,17 +396,17 @@ const extractComponentPropValueFromNode = (
   return undefined;
 }
 
-const extractSDKsFromIfProp = (node: Node, vfile: VFile | undefined, sdkProp: string) => {
+const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile | undefined, sdkProp: string) => {
   if (sdkProp.includes('", "') || sdkProp.includes("', '")) {
     const sdks = JSON.parse(sdkProp.replaceAll("'", '"'))
-    if (isValidSdks(sdks)) {
+    if (isValidSdks(config)(sdks)) {
       return sdks
     } else {
-      const invalidSDKs = sdks.filter(sdk => !isValidSdk(sdk))
+      const invalidSDKs = sdks.filter(sdk => !isValidSdk(config)(sdk))
       vfile?.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
     }
   } else {
-    if (isValidSdk(sdkProp)) {
+    if (isValidSdk(config)(sdkProp)) {
       return [sdkProp]
     } else {
       vfile?.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
@@ -506,8 +454,8 @@ const parseInMarkdownFile = (config: BuildConfig) => async (
 
           const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
 
-          if (frontmatterSDKs !== undefined && isValidSdks(frontmatterSDKs) === false) {
-            const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(sdk) === false)
+          if (frontmatterSDKs !== undefined && isValidSdks(config)(frontmatterSDKs) === false) {
+            const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(config)(sdk) === false)
             vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(VALID_SDKS)}`, node.position)
             return;
           }
@@ -712,7 +660,7 @@ export const build = async (
 
       const sdk = guide.sdk ?? tree.sdk
 
-      if (guide.sdk !== undefined) {
+      if (guide.sdk !== undefined && tree.sdk !== undefined) {
         if (guide.sdk.every(sdk => tree.sdk?.includes(sdk)) === false) {
           throw new Error(`Guide "${item.title}" is attempting to use ${JSON.stringify(guide.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`)
         }
@@ -729,7 +677,7 @@ export const build = async (
 
       const { items, ...details } = group
 
-      if (details.sdk !== undefined) {
+      if (details.sdk !== undefined && tree.sdk !== undefined) {
         if (details.sdk.every(sdk => tree.sdk?.includes(sdk)) === false) {
           throw new Error(`Group "${details.title}" is attempting to use ${JSON.stringify(details.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`)
         }
@@ -749,8 +697,6 @@ export const build = async (
     }
   )
   console.info('✔️ Applied manifest sdk scoping')
-
-  writeFile('m.json', JSON.stringify(sdkScopedManifest, null, 2))
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
@@ -825,7 +771,7 @@ export const build = async (
 
             if (sdk === undefined) return;
 
-            const sdksFilter = extractSDKsFromIfProp(node, vfile, sdk)
+            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk)
 
             if (sdksFilter === undefined) return
 
@@ -865,7 +811,7 @@ export const build = async (
 
     const distFilePath = `${doc.href.replace("/docs/", "")}.mdx`
 
-    if (isValidSdk(distFilePath.split('/')[0])) {
+    if (isValidSdk(config)(distFilePath.split('/')[0])) {
       throw new Error(`Attempting to write out a core doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`)
     }
 
@@ -888,7 +834,7 @@ export const build = async (
 
   Promise.all(coreVFiles).then((docs) => console.info(`✔️ Wrote out ${docs.length} core docs`))
 
-  const sdkSpecificVFiles = Promise.all(VALID_SDKS.map(async (targetSdk) => {
+  const sdkSpecificVFiles = Promise.all(config.validSdks.map(async (targetSdk) => {
 
     // Goes through and removes any items that are not scoped to the target sdk
     const navigation = await traverseTree({ items: sdkScopedManifest },
@@ -961,7 +907,7 @@ export const build = async (
 
               if (sdk === undefined) return true
 
-              const sdksFilter = extractSDKsFromIfProp(node, undefined, sdk)
+              const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk)
 
               if (sdksFilter === undefined) return true
 
@@ -1036,7 +982,7 @@ const watchAndRebuild = (
 ) => {
   const watcher = chok.watch(
     [
-      config.docsFolder,
+      config.docsPath,
     ],
     {
       alwaysStat: true,
@@ -1044,7 +990,7 @@ const watchAndRebuild = (
         if (stats === undefined) return false
         if (stats.isDirectory()) return false
 
-        const relativePath = path.relative(config.docsFolder, filePath)
+        const relativePath = path.relative(config.docsPath, filePath)
 
         const isManifest = relativePath === 'manifest.json'
         const isMarkdown = relativePath.endsWith('.mdx')
@@ -1069,9 +1015,83 @@ const watchAndRebuild = (
 
 }
 
+type BuildConfigOptions = {
+  basePath: string;
+  validSdks: readonly SDK[];
+  docsPath: string;
+  manifestPath: string;
+  partialsPath: string;
+  distPath: string;
+  ignorePaths: string[];
+  manifestOptions: {
+    wrapDefault: boolean;
+    collapseDefault: boolean;
+    hideTitleDefault: boolean;
+  };
+}
+
+type BuildConfig = ReturnType<typeof createConfig>
+
+export function createConfig(config: BuildConfigOptions) {
+  const resolve = (relativePath: string) => {
+    return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
+  }
+
+  return {
+    basePath: config.basePath,
+    validSdks: config.validSdks,
+
+    docsRelativePath: config.docsPath,
+    docsPath: resolve(config.docsPath),
+
+    manifestRelativePath: config.manifestPath,
+    manifestFilePath: resolve(config.manifestPath),
+
+    distRelativePath: config.distPath,
+    distPath: resolve(config.distPath),
+
+    partialsRelativePath: config.partialsPath,
+    partialsPath: resolve(config.partialsPath),
+
+    ignorePaths: config.ignorePaths,
+    manifestOptions: config.manifestOptions ?? {
+      wrapDefault: true,
+      collapseDefault: false,
+      hideTitleDefault: false
+    },
+  }
+}
+
 const main = async () => {
-  // Create default configuration
-  const config = createDefaultConfig();
+
+  const config = createConfig({
+    basePath: process.cwd(),
+    docsPath: './docs',
+    manifestPath: './docs/manifest.json',
+    partialsPath: './_partials',
+    distPath: './dist',
+    ignorePaths: [
+      "/docs/core-1",
+      '/pricing',
+      '/docs/reference/backend-api',
+      '/docs/reference/frontend-api',
+      '/support',
+      '/discord',
+      '/contact',
+      '/contact/sales',
+      '/contact/support',
+      '/blog',
+      '/changelog/2024-04-19',
+      "/docs/_partials"
+    ],
+    validSdks: VALID_SDKS,
+    manifestOptions: {
+      wrapDefault: true,
+      collapseDefault: false,
+      hideTitleDefault: false
+    }
+  })
+
   const store = createBlankStore();
 
   await build(store, config);

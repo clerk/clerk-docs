@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
+import {glob} from 'glob';
 
-import { expect, test } from 'vitest'
-import { build, createBlankStore } from './build-docs'
+
+import { expect, onTestFinished, test } from 'vitest'
+import { build, createBlankStore, createConfig } from './build-docs'
 
 async function createTempFiles(files: {
   path: string;
@@ -24,20 +26,18 @@ async function createTempFiles(files: {
     await fs.writeFile(filePath, file.content)
   }
 
+  onTestFinished(async () => {
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    } catch (error) {
+      console.warn(`Warning: Failed to clean up temp folder ${tempDir}:`, error)
+      throw error
+    }
+  })
+
   // Return the temp directory and cleanup function
   return {
-    files: files.reduce((acc, file) => {
-      acc[file.path] = file.content
-      return acc
-    }, {} as Record<string, string>),
     tempDir,
-    cleanup: async () => {
-      try {
-        await fs.rm(tempDir, { recursive: true, force: true })
-      } catch (error) {
-        console.warn(`Warning: Failed to clean up temp folder ${tempDir}:`, error)
-      }
-    },
     pathJoin: (...paths: string[]) => path.join(tempDir, ...paths)
   }
 }
@@ -59,9 +59,29 @@ function normalizeString(str: string): string {
   return str.replace(/\r\n/g, '\n').trim();
 }
 
+function treeDir(baseDir: string) {
+  return glob('**/*', { 
+    cwd: baseDir,
+    nodir: true // Only return files, not directories
+  });
+}
+
+const baseConfig = {
+  docsPath: './docs',
+  manifestPath: './docs/manifest.json',
+  partialsPath: './_partials',
+  distPath: './dist',
+  ignorePaths: ["/docs/_partials"],
+  manifestOptions: {
+    wrapDefault: true,
+    collapseDefault: false,
+    hideTitleDefault: false
+  }
+}
+
 test('Basic build test with simple files', async () => {
   // Create temp environment with minimal files array
-  const { files, tempDir, cleanup, pathJoin } = await createTempFiles([
+  const { tempDir, pathJoin } = await createTempFiles([
     {
       path: './docs/manifest.json',
       content: JSON.stringify({
@@ -80,26 +100,20 @@ Testing with a simple page.`
     }
   ])
 
-  const config = {
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
     basePath: tempDir,
-    docsRelativePath: './docs',
-    docsFolder: pathJoin('./docs'),
-    manifestFilePath: pathJoin('./docs/manifest.json'),
-    partialsPath: './_partials',
-    distPath: pathJoin('./dist'),
-    ignorePaths: ["/docs/_partials"],
     validSdks: ["nextjs", "react"],
-    manifestOptions: {
-      wrapDefault: true,
-      collapseDefault: false,
-      hideTitleDefault: false
-    }
-  }
-
-  await build(createBlankStore(), config)
+  }))
 
   expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
-  expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(files['./docs/simple-test.mdx'])
+  expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(`---
+title: Simple Test
+---
+
+# Simple Test Page
+
+Testing with a simple page.`)
 
   expect(await fileExists(pathJoin('./dist/nextjs/manifest.json'))).toBe(true)
   expect(await readFile(pathJoin('./dist/nextjs/manifest.json'))).toBe(JSON.stringify({
@@ -111,6 +125,98 @@ Testing with a simple page.`
     navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
   }))
 
-  await cleanup()
 })
 
+test('Two Docs, each grouped by a different SDK', async () => {
+  // Create temp environment with minimal files array
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            {
+              title: "React",
+              sdk: ["react"],
+              items: [
+                [
+                  { title: "Quickstart", href: "/docs/quickstart/react" }
+                ]
+              ]
+            },
+            {
+              title: "Vue",
+              sdk: ["vue"],
+              items: [
+                [
+                  { title: "Quickstart", href: "/docs/quickstart/vue" }
+                ]
+              ]
+            }
+          ],
+        ]
+      })
+    },
+    {
+      path: './docs/quickstart/react.mdx',
+      content: `---
+title: Quickstart
+---
+
+# React Quickstart`
+    },
+    {
+      path: './docs/quickstart/vue.mdx',
+      content: `---
+title: Quickstart
+---
+
+# Vue Quickstart`
+    }
+  ])
+
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react", "vue"]
+  }))
+
+  expect(await fileExists(pathJoin('./dist/react/manifest.json'))).toBe(true)
+  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(JSON.stringify({
+    navigation: [
+      [
+        {
+          title: "React",
+          items: [
+            [
+              { title: "Quickstart", href: "/docs/quickstart/react" }
+            ]
+          ]
+        },
+      ],
+    ]
+  }))
+  expect(await treeDir(pathJoin('./dist'))).toEqual([
+    'vue/manifest.json',
+    'react/manifest.json',
+    'quickstart/vue.mdx',
+    'quickstart/react.mdx',
+  ])
+
+  expect(await fileExists(pathJoin('./dist/vue/manifest.json'))).toBe(true)
+  expect(await readFile(pathJoin('./dist/vue/manifest.json'))).toBe(JSON.stringify({
+    navigation: [
+      [
+        {
+          title: "Vue",
+          items: [
+            [
+              { title: "Quickstart", href: "/docs/quickstart/vue" }
+            ]
+          ]
+        },
+      ],
+    ]
+  }))
+
+})

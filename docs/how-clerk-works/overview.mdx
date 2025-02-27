@@ -245,12 +245,16 @@ Clerk's authentication model relies on two distinct tokens - a "client token" an
 - **Contents:** A Clerk-signed JWT containing:
   - `session_id`: Unique session identifier
   - `rotating_token`: [Anti-session-fixation](/docs/security/fixation-protection) token that rotates on each sign-in across any device
-- **Domain:** Set on your FAPI domain (`clerk.example.com` or `<slug>.accounts.dev`), rather than on your app domain. This is a security measure - for example if your app logs are leaked, they wouldn't contain client token values, since it's scoped to a different domain.
+- **Domain:** Set on your FAPI domain (`clerk.example.com`), rather than on your app domain (`example.com`). It's set on the FAPI domain as a security measure - for example, if your app logs are leaked, they wouldn't contain client token values, since it's scoped to a different domain.
 - **Expiration:** Set to your session lifetime, which is 7 days by default. Can be configured in the Clerk Dashboard.
 - **HttpOnly:** Yes
 - **SameSite:** Lax
 
 The client token serves as the source of truth for authentication state. When a user signs in, Clerk either creates a new client token or rotates the existing token's `rotating_token` value. A valid client token enables Clerk to generate short-lived session tokens for the application.
+
+It's important to note that the client token is _only used in production environments_. In order to set up a production environment with Clerk, you alias Clerk's FAPI into your app's domain using a CNAME record (at the subdomain `clerk.yourdomain.com`), so this cookie does not need to be sent cross-domain.
+
+In development environments, FAPI _is_ cross-domain (`localhost` -> `<slug>.accounts.dev`), so a cookie would not work here since we do not allow cross-domain cookies for [security & privacy reasons](docs/backend-requests/resources/cookies#tracking-cookies-and-privacy-concerns). Instead, we use a different construct called the "dev browser" in order to maintain session state across the session lifetime. This method makes Clerk work smoothly in local development, but is not secure enough for production and you should never deploy a development environment to production for this reason. There's [more information on Clerk's environments here](/docs/deployments/environments) if you're curious. The dev browser object (`__clerk_db_jwt`) should not be relied on anywhere in your code, as it will break your app when you deploy to production.
 
 ### Session token
 

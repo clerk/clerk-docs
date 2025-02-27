@@ -695,7 +695,7 @@ export const build = async (
   console.info(`✔️ Loaded in ${docs.length} guides`)
 
   // Goes through and grabs the sdk scoping out of the manifest
-  const sdkScopedManifest = await traverseTree({ items: userManifest, sdk: VALID_SDKS },
+  const sdkScopedManifest = await traverseTree({ items: userManifest, sdk: undefined as undefined | SDK[] },
     async (item, tree) => {
 
       if (!item.href?.startsWith('/docs/')) return item
@@ -749,6 +749,8 @@ export const build = async (
     }
   )
   console.info('✔️ Applied manifest sdk scoping')
+
+  writeFile('m.json', JSON.stringify(sdkScopedManifest, null, 2))
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 

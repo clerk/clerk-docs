@@ -4,15 +4,47 @@ import os from 'node:os'
 import {glob} from 'glob';
 
 
-import { expect, onTestFinished, test } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vitest'
 import { build, createBlankStore, createConfig } from './build-docs'
 
-async function createTempFiles(files: {
-  path: string;
-  content: string;
-}[]) {
+const tempConfig = {
+  // Set to true to use local repo temp directory instead of system temp
+  useLocalTemp: false,
+  
+  // Local temp directory path (relative to project root)
+  localTempPath: './.temp-test',
+  
+  // Whether to preserve temp directories after tests
+  // (helpful for debugging, but requires manual cleanup)
+  preserveTemp: false
+}
+
+async function createTempFiles(
+  files: { path: string; content: string }[],
+  options?: { 
+    prefix?: string;         // Prefix for the temp directory name
+    preserveTemp?: boolean;  // Override global preserveTemp setting
+    useLocalTemp?: boolean;  // Override global useLocalTemp setting
+  }
+) {
+  const prefix = options?.prefix || 'clerk-docs-test-'
+  const preserve = options?.preserveTemp ?? tempConfig.preserveTemp
+  const useLocalTemp = options?.useLocalTemp ?? tempConfig.useLocalTemp
+  
+  // Determine base directory for temp files
+  let baseDir: string
+  
+  if (useLocalTemp) {
+    // Use local directory in the repo
+    baseDir = tempConfig.localTempPath
+    await fs.mkdir(baseDir, { recursive: true })
+  } else {
+    // Use system temp directory
+    baseDir = os.tmpdir()
+  }
+  
   // Create temp folder with unique name
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-test-'))
+  const tempDir = await fs.mkdtemp(path.join(baseDir, prefix))
 
   // Create all files
   for (const file of files) {
@@ -26,19 +58,37 @@ async function createTempFiles(files: {
     await fs.writeFile(filePath, file.content)
   }
 
-  onTestFinished(async () => {
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true })
-    } catch (error) {
-      console.warn(`Warning: Failed to clean up temp folder ${tempDir}:`, error)
-      throw error
-    }
-  })
+  // Register cleanup unless preserveTemp is true
+  if (!preserve) {
+    onTestFinished(async () => {
+      try {
+        await fs.rm(tempDir, { recursive: true, force: true })
+      } catch (error) {
+        console.warn(`Warning: Failed to clean up temp folder ${tempDir}:`, error)
+      }
+    })
+  } else {
+    // Log the location for manual inspection
+    console.log(`Preserving temp directory for inspection: ${tempDir}`)
+  }
 
-  // Return the temp directory and cleanup function
+  // Return useful helpers
   return {
     tempDir,
-    pathJoin: (...paths: string[]) => path.join(tempDir, ...paths)
+    pathJoin: (...paths: string[]) => path.join(tempDir, ...paths),
+    
+    // Get a list of all files in the temp directory
+    listFiles: async () => {
+      return glob('**/*', { 
+        cwd: tempDir,
+        nodir: true 
+      })
+    },
+    
+    // Read file contents
+    readFile: async (filePath: string): Promise<string> => {
+      return fs.readFile(path.join(tempDir, filePath), 'utf-8')
+    }
   }
 }
 
@@ -196,12 +246,6 @@ title: Quickstart
       ],
     ]
   }))
-  expect(await treeDir(pathJoin('./dist'))).toEqual([
-    'vue/manifest.json',
-    'react/manifest.json',
-    'quickstart/vue.mdx',
-    'quickstart/react.mdx',
-  ])
 
   expect(await fileExists(pathJoin('./dist/vue/manifest.json'))).toBe(true)
   expect(await readFile(pathJoin('./dist/vue/manifest.json'))).toBe(JSON.stringify({
@@ -218,6 +262,14 @@ title: Quickstart
       ],
     ]
   }))
+
+  const distFiles = await treeDir(pathJoin('./dist'))
+
+  expect(distFiles.length).toBe(4)
+  expect(distFiles).toContain('vue/manifest.json')
+  expect(distFiles).toContain('react/manifest.json')
+  expect(distFiles).toContain('quickstart/vue.mdx')
+  expect(distFiles).toContain('quickstart/react.mdx')
 
 })
 
@@ -262,11 +314,12 @@ Testing with a simple page.`)
 
   expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(`<SDKDocRedirectPage title="Simple Test" url="/docs/simple-test" sdk={["react"]} />`)
 
-  expect(await treeDir(pathJoin('./dist'))).toEqual([
-    'simple-test.mdx',
-    'react/simple-test.mdx',
-    'react/manifest.json',
-  ])
+  const distFiles = await treeDir(pathJoin('./dist'))
+
+  expect(distFiles.length).toBe(3)
+  expect(distFiles).toContain('simple-test.mdx')
+  expect(distFiles).toContain('react/simple-test.mdx')
+  expect(distFiles).toContain('react/manifest.json')
 })
 
 test('3 sdks in frontmatter generates 3 variants', async () => {
@@ -305,4 +358,123 @@ Testing with a simple page.`
   expect(await readFile(pathJoin('./dist/astro/manifest.json'))).toBe(JSON.stringify({
     navigation: [[{ title: "Simple Test", href: "/docs/astro/simple-test" }]]
   }))
+
+  const distFiles = await treeDir(pathJoin('./dist'))
+
+  expect(distFiles.length).toBe(7)
+  expect(distFiles).toContain('simple-test.mdx')
+  expect(distFiles).toContain('react/simple-test.mdx')
+  expect(distFiles).toContain('react/manifest.json')
+  expect(distFiles).toContain('vue/simple-test.mdx')
+  expect(distFiles).toContain('vue/manifest.json')
+  expect(distFiles).toContain('astro/simple-test.mdx')
+  expect(distFiles).toContain('astro/manifest.json')
 })
+
+test('<If> content filtered out when sdk is in frontmatter', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+      })
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+sdk: react, expo
+---
+
+# Simple Test Page
+
+<If sdk="react">
+  React Content
+</If>
+
+Testing with a simple page.`
+    }
+  ])
+
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react", "expo"]
+  }))
+
+  expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toContain('React Content')
+
+  expect(await readFile(pathJoin('./dist/expo/simple-test.mdx'))).not.toContain('React Content')
+})
+
+test('Invalid SDK in frontmatter fails the build', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+      })
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+sdk: react, expo, coffeescript
+---
+
+# Simple Test Page
+
+Testing with a simple page.`
+    }
+  ])
+
+  const promise = build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react", "expo"]
+  }))
+
+  await expect(promise).rejects.toThrow(`Invalid SDK ["coffeescript"], the valid SDKs are ["react","expo"]`)
+})
+
+test('Invalid SDK in <If> fails the build', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+      })
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+sdk: react, expo
+---
+
+# Simple Test Page
+
+<If sdk="astro">
+  astro Content
+</If>
+
+Testing with a simple page.`
+    }
+  ])
+
+  const logSpy = vi.spyOn(console, 'info')
+
+
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react", "expo"]
+  }))
+
+
+  expect(logSpy).toHaveBeenCalledWith(`/docs/simple-test.mdx
+8:1-10:6 warning sdk \"astro\" in <If /> is not a valid SDK
+
+⚠ 1 warning`)
+})
+

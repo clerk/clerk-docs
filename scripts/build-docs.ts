@@ -456,7 +456,7 @@ const parseInMarkdownFile = (config: BuildConfig) => async (
 
           if (frontmatterSDKs !== undefined && isValidSdks(config)(frontmatterSDKs) === false) {
             const invalidSDKs = frontmatterSDKs.filter(sdk => isValidSdk(config)(sdk) === false)
-            vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(VALID_SDKS)}`, node.position)
+            vfile.fail(`Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(config.validSdks)}`, node.position)
             return;
           }
 

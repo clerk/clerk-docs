@@ -220,3 +220,89 @@ title: Quickstart
   }))
 
 })
+
+test('sdk in frontmatter filters the docs', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+      })
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+sdk: react
+---
+
+# Simple Test Page
+
+Testing with a simple page.`
+      }])
+
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react"]
+  }))
+
+  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(JSON.stringify({
+    navigation: [[{ title: "Simple Test", href: "/docs/react/simple-test" }]]
+  }))
+
+  expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
+title: Simple Test
+sdk: react
+---
+
+# Simple Test Page
+
+Testing with a simple page.`)
+
+  expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(`<SDKDocRedirectPage title="Simple Test" url="/docs/simple-test" sdk={["react"]} />`)
+
+  expect(await treeDir(pathJoin('./dist'))).toEqual([
+    'simple-test.mdx',
+    'react/simple-test.mdx',
+    'react/manifest.json',
+  ])
+})
+
+test('3 sdks in frontmatter generates 3 variants', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+      })
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+sdk: react, vue, astro
+---
+
+# Simple Test Page
+
+Testing with a simple page.`
+    }
+  ])
+
+  await build(createBlankStore(), createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ["react", "vue", "astro"]
+  }))
+
+  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(JSON.stringify({
+    navigation: [[{ title: "Simple Test", href: "/docs/react/simple-test" }]]
+  }))
+  expect(await readFile(pathJoin('./dist/vue/manifest.json'))).toBe(JSON.stringify({
+    navigation: [[{ title: "Simple Test", href: "/docs/vue/simple-test" }]]
+  }))
+  expect(await readFile(pathJoin('./dist/astro/manifest.json'))).toBe(JSON.stringify({
+    navigation: [[{ title: "Simple Test", href: "/docs/astro/simple-test" }]]
+  }))
+})

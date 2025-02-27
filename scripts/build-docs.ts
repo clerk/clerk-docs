@@ -37,27 +37,21 @@ import { fromError } from 'zod-validation-error';
 import { Node } from 'unist'
 import chok from 'chokidar'
 
-const BASE_PATH = process.cwd()
-const DOCS_FOLDER_RELATIVE = './docs'
-const DOCS_FOLDER = path.join(BASE_PATH, DOCS_FOLDER_RELATIVE)
-const MANIFEST_FILE_PATH = path.join(DOCS_FOLDER, './manifest.json')
-const PARTIALS_PATH = './_partials'
-const DIST_PATH = path.join(BASE_PATH, './dist')
-// const CLERK_PATH = path.join(BASE_PATH, "../clerk")
-const IGNORE = [
-  "/docs/core-1",
-  '/pricing',
-  '/docs/reference/backend-api',
-  '/docs/reference/frontend-api',
-  '/support',
-  '/discord',
-  '/contact',
-  '/contact/sales',
-  '/contact/support',
-  '/blog',
-  '/changelog/2024-04-19',
-  "/docs/_partials"
-]
+export type BuildConfig = {
+  basePath: string;
+  docsRelativePath: string;
+  docsFolder: string;
+  manifestFilePath: string;
+  partialsPath: string;
+  distPath: string;
+  ignorePaths: string[];
+  validSdks: readonly string[];
+  manifestOptions: {
+    wrapDefault: boolean;
+    collapseDefault: boolean;
+    hideTitleDefault: boolean;
+  };
+}
 
 const VALID_SDKS = [
   "nextjs",
@@ -95,9 +89,41 @@ const tag = z.enum(["(Beta)", "(Community)"])
 
 type Tag = z.infer<typeof tag>
 
-const MANIFEST_WRAP_DEFAULT = true
-const MANIFEST_COLLAPSE_DEFAULT = false
-const MANIFEST_HIDE_TITLE_DEFAULT = false
+// The default config the script will run under when using npm run build
+const createDefaultConfig = (): BuildConfig => {
+  const basePath = process.cwd();
+  const docsRelativePath = './docs';
+  const docsFolder = path.join(basePath, docsRelativePath);
+
+  return {
+    basePath,
+    docsRelativePath,
+    docsFolder,
+    manifestFilePath: path.join(docsFolder, './manifest.json'),
+    partialsPath: './_partials',
+    distPath: path.join(basePath, './dist'),
+    ignorePaths: [
+      "/docs/core-1",
+      '/pricing',
+      '/docs/reference/backend-api',
+      '/docs/reference/frontend-api',
+      '/support',
+      '/discord',
+      '/contact',
+      '/contact/sales',
+      '/contact/support',
+      '/blog',
+      '/changelog/2024-04-19',
+      "/docs/_partials"
+    ],
+    validSdks: VALID_SDKS,
+    manifestOptions: {
+      wrapDefault: true,
+      collapseDefault: false,
+      hideTitleDefault: false
+    }
+  };
+};
 
 type ManifestItem = {
   title: string
@@ -108,16 +134,6 @@ type ManifestItem = {
   target?: '_blank'
   sdk?: SDK[]
 }
-
-const manifestItem: z.ZodType<ManifestItem> = z.object({
-  title: z.string(),
-  href: z.string(),
-  tag: tag.optional(),
-  wrap: z.boolean().default(MANIFEST_WRAP_DEFAULT),
-  icon: icon.optional(),
-  target: z.enum(["_blank"]).optional(),
-  sdk: z.array(sdk).optional()
-}).strict()
 
 type ManifestGroup = {
   title: string
@@ -130,27 +146,46 @@ type ManifestGroup = {
   sdk?: SDK[]
 }
 
-const manifestGroup: z.ZodType<ManifestGroup> = z.object({
-  title: z.string(),
-  items: z.lazy(() => manifestSchema),
-  collapse: z.boolean().default(MANIFEST_COLLAPSE_DEFAULT),
-  tag: tag.optional(),
-  wrap: z.boolean().default(MANIFEST_WRAP_DEFAULT),
-  icon: icon.optional(),
-  hideTitle: z.boolean().default(MANIFEST_HIDE_TITLE_DEFAULT),
-  sdk: z.array(sdk).optional()
-}).strict()
-
 type Manifest = (ManifestItem | ManifestGroup)[][]
 
-const manifestSchema: z.ZodType<Manifest> = z.array(
-  z.array(
-    z.union([
-      manifestItem,
-      manifestGroup
-    ])
+// Create manifest schema based on config
+const createManifestSchema = (config: BuildConfig) => {
+  const manifestItem: z.ZodType<ManifestItem> = z.object({
+    title: z.string(),
+    href: z.string(),
+    tag: tag.optional(),
+    wrap: z.boolean().default(config.manifestOptions.wrapDefault),
+    icon: icon.optional(),
+    target: z.enum(["_blank"]).optional(),
+    sdk: z.array(sdk).optional()
+  }).strict()
+
+  const manifestGroup: z.ZodType<ManifestGroup> = z.object({
+    title: z.string(),
+    items: z.lazy(() => manifestSchema),
+    collapse: z.boolean().default(config.manifestOptions.collapseDefault),
+    tag: tag.optional(),
+    wrap: z.boolean().default(config.manifestOptions.wrapDefault),
+    icon: icon.optional(),
+    hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
+    sdk: z.array(sdk).optional()
+  }).strict()
+
+  const manifestSchema: z.ZodType<Manifest> = z.array(
+    z.array(
+      z.union([
+        manifestItem,
+        manifestGroup
+      ])
+    )
   )
-)
+
+  return {
+    manifestItem,
+    manifestGroup,
+    manifestSchema
+  }
+}
 
 const pleaseReport = "(this is a bug with the build script, please report)"
 
@@ -162,8 +197,9 @@ const isValidSdks = (sdks: string[]): sdks is SDK[] => {
   return sdks.every(isValidSdk)
 }
 
-const readManifest = async (): Promise<Manifest> => {
-  const unsafe_manifest = await fs.readFile(MANIFEST_FILE_PATH, { "encoding": "utf-8" })
+const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
+  const { manifestSchema } = createManifestSchema(config)
+  const unsafe_manifest = await fs.readFile(config.manifestFilePath, { "encoding": "utf-8" })
 
   const manifest = await manifestSchema.safeParseAsync(JSON.parse(unsafe_manifest).navigation)
 
@@ -174,8 +210,8 @@ const readManifest = async (): Promise<Manifest> => {
   throw new Error(`Failed to parse manifest: ${fromError(manifest.error)}`)
 }
 
-const readMarkdownFile = async (docPath: string) => {
-  const filePath = path.join(BASE_PATH, docPath)
+const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
+  const filePath = path.join(config.basePath, docPath)
 
   try {
     const fileContent = await fs.readFile(filePath, { "encoding": "utf-8" })
@@ -185,25 +221,28 @@ const readMarkdownFile = async (docPath: string) => {
   }
 }
 
-const readDocsFolder = () => {
-  return readdirp.promise(DOCS_FOLDER, {
+const readDocsFolder = (config: BuildConfig) => async () => {
+  return readdirp.promise(config.docsFolder, {
     type: 'files',
-    fileFilter: (entry) => IGNORE.some((ignoreItem) => `/docs/${entry.path}`.startsWith(ignoreItem)) === false && entry.path.endsWith('.mdx')
+    fileFilter: (entry) => config.ignorePaths.some((ignoreItem) =>
+      `/docs/${entry.path}`.startsWith(ignoreItem)) === false && entry.path.endsWith('.mdx')
   })
 }
 
-const readPartialsFolder = () => {
-  return readdirp.promise(path.join(DOCS_FOLDER, './_partials'), {
+const readPartialsFolder = (config: BuildConfig) => async () => {
+  return readdirp.promise(path.join(config.docsFolder, config.partialsPath), {
     type: 'files',
     fileFilter: '*.mdx',
   })
 }
 
-const readPartialsMarkdown = (paths: string[]) => {
-  return Promise.all(paths.map(async (markdownPath) => {
-    const fullPath = path.join(DOCS_FOLDER_RELATIVE, PARTIALS_PATH, markdownPath)
+const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+  const readFile = readMarkdownFile(config);
 
-    const [error, content] = await readMarkdownFile(fullPath)
+  return Promise.all(paths.map(async (markdownPath) => {
+    const fullPath = path.join(config.docsRelativePath, config.partialsPath, markdownPath)
+
+    const [error, content] = await readFile(fullPath)
 
     if (error) {
       throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
@@ -223,22 +262,24 @@ const markdownProcessor = remark()
 
 type VFile = Awaited<ReturnType<typeof markdownProcessor.process>>
 
-const ensureDirectory = async (path: string): Promise<void> => {
+const ensureDirectory = (config: BuildConfig) => async (dirPath: string): Promise<void> => {
   try {
-    await fs.access(path)
+    await fs.access(dirPath)
   } catch {
-    await fs.mkdir(path, { recursive: true })
+    await fs.mkdir(dirPath, { recursive: true })
   }
 }
 
-const writeDistFile = async (filePath: string, contents: string) => {
-  const fullPath = path.join(DIST_PATH, filePath)
-  await ensureDirectory(path.dirname(fullPath))
+const writeDistFile = (config: BuildConfig) => async (filePath: string, contents: string) => {
+  const ensureDir = ensureDirectory(config);
+  const fullPath = path.join(config.distPath, filePath)
+  await ensureDir(path.dirname(fullPath))
   await fs.writeFile(fullPath, contents, { "encoding": "utf-8" })
 }
 
-const writeSDKFile = async (sdk: SDK, filePath: string, contents: string) => {
-  await writeDistFile(path.join(sdk, filePath), contents)
+const writeSDKFile = (config: BuildConfig) => async (sdk: SDK, filePath: string, contents: string) => {
+  const writeFile = writeDistFile(config);
+  await writeFile(path.join(sdk, filePath), contents)
 }
 
 const removeMdxSuffix = (filePath: string) => {
@@ -423,14 +464,15 @@ const extractSDKsFromIfProp = (node: Node, vfile: VFile | undefined, sdkProp: st
       vfile?.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
     }
   }
-
 }
 
-const parseInMarkdownFile = async (href: string, partials: {
-  path: string;
-  content: string;
-}[], inManifest: boolean) => {
-  const [error, fileContent] = await readMarkdownFile(`${href}.mdx`)
+const parseInMarkdownFile = (config: BuildConfig) => async (
+  href: string,
+  partials: { path: string; content: string; }[],
+  inManifest: boolean,
+) => {
+  const readFile = readMarkdownFile(config);
+  const [error, fileContent] = await readFile(`${href}.mdx`)
 
   if (error !== null) {
     throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, { cause: error })
@@ -574,24 +616,38 @@ const parseInMarkdownFile = async (href: string, partials: {
   }
 }
 
-
-const createBlankStore = () => ({
-  markdownFiles: new Map<string, Awaited<ReturnType<typeof parseInMarkdownFile>>>()
+export const createBlankStore = () => ({
+  markdownFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>()
 })
 
-const build = async (store: ReturnType<typeof createBlankStore>) => {
-  await ensureDirectory(DIST_PATH)
+export const build = async (
+  store: ReturnType<typeof createBlankStore>,
+  config: BuildConfig
+) => {
+  // Apply currying to create functions pre-configured with config
+  const ensureDir = ensureDirectory(config);
+  const getManifest = readManifest(config);
+  const getDocsFolder = readDocsFolder(config);
+  const getPartialsFolder = readPartialsFolder(config);
+  const getPartialsMarkdown = readPartialsMarkdown(config);
+  const parseMarkdownFile = parseInMarkdownFile(config);
+  const writeFile = writeDistFile(config);
+  const writeSdkFile = writeSDKFile(config);
 
-  const userManifest = await readManifest()
+  await ensureDir(config.distPath)
+
+  const userManifest = await getManifest()
   console.info('✔️ Read Manifest')
 
-  const docsFiles = await readDocsFolder()
+  const docsFiles = await getDocsFolder()
   console.info('✔️ Read Docs Folder')
 
-  const partials = await readPartialsMarkdown((await readPartialsFolder()).map(item => item.path))
+  const partials = await getPartialsMarkdown(
+    (await getPartialsFolder()).map(item => item.path)
+  )
   console.info('✔️ Read Partials')
 
-  const guides = new Map<string, Awaited<ReturnType<typeof parseInMarkdownFile>>>()
+  const guides = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const guidesInManifest = new Set<string>()
 
   // Grab all the docs links in the manifest
@@ -600,7 +656,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
       if (!item.href?.startsWith('/docs/')) return item
       if (item.target !== undefined) return item
 
-      const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
+      const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item
 
       guidesInManifest.add(item.href)
@@ -620,14 +676,14 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
 
     const inManifest = guidesInManifest.has(href)
 
-    let markdownFile: Awaited<ReturnType<typeof parseInMarkdownFile>>;
+    let markdownFile: Awaited<ReturnType<typeof parseMarkdownFile>>;
 
     const cachedMarkdownFile = store.markdownFiles.get(href)
 
     if (cachedMarkdownFile) {
       markdownFile = structuredClone(cachedMarkdownFile)
     } else {
-      markdownFile = await parseInMarkdownFile(href, partials, inManifest)
+      markdownFile = await parseMarkdownFile(href, partials, inManifest)
 
       store.markdownFiles.set(href, structuredClone(markdownFile))
     }
@@ -645,7 +701,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
       if (!item.href?.startsWith('/docs/')) return item
       if (item.target !== undefined) return item
 
-      const ignore = IGNORE.some((ignoreItem) => item.href.startsWith(ignoreItem))
+      const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
       const guide = guides.get(item.href)
@@ -716,7 +772,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
 
             const [url, hash] = (node.url as string).split("#")
 
-            const ignore = IGNORE.some((ignoreItem) => url.startsWith(ignoreItem))
+            const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
             if (ignore === true) return node;
 
             const guide = guides.get(url)
@@ -814,7 +870,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
     if (doc.sdk !== undefined) {
       // This is a sdk specific guide, so we want to put a landing page here to redirect the user to a guide customised to their sdk.
 
-      await writeDistFile(
+      await writeFile(
         distFilePath,
         // It's possible we will want to / need to put some frontmatter here
         `<SDKDocRedirectPage title="${doc.frontmatter.title}" url="${doc.href}" sdk={${JSON.stringify(doc.sdk)}} />`
@@ -823,7 +879,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
       return vfile
     }
 
-    await writeDistFile(distFilePath, String(vfile))
+    await writeFile(distFilePath, String(vfile))
 
     return vfile
   })
@@ -841,7 +897,7 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
           title: item.title,
           href: item.href,
           tag: item.tag,
-          wrap: item.wrap === MANIFEST_WRAP_DEFAULT ? undefined : item.wrap,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
           icon: item.icon,
           target: item.target
         } as const
@@ -854,21 +910,20 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
           title: item.title,
           href: scopeHrefToSDK(item.href, targetSdk),
           tag: item.tag,
-          wrap: item.wrap === MANIFEST_WRAP_DEFAULT ? undefined : item.wrap,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
           icon: item.icon,
           target: item.target
         } as const
       },
       // @ts-expect-error - This traverseTree function might just be the death of me
       async ({ sdk, ...group }) => {
-
         if (sdk === undefined) return {
           title: group.title,
-          collapse: group.collapse === MANIFEST_COLLAPSE_DEFAULT ? undefined : group.collapse,
+          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
           tag: group.tag,
-          wrap: group.wrap === MANIFEST_WRAP_DEFAULT ? undefined : group.wrap,
+          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
-          hideTitle: group.hideTitle === MANIFEST_HIDE_TITLE_DEFAULT ? undefined : group.hideTitle,
+          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
           items: group.items,
         }
 
@@ -876,11 +931,11 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
 
         return {
           title: group.title,
-          collapse: group.collapse === MANIFEST_COLLAPSE_DEFAULT ? undefined : group.collapse,
+          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
           tag: group.tag,
-          wrap: group.wrap === MANIFEST_WRAP_DEFAULT ? undefined : group.wrap,
+          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
-          hideTitle: group.hideTitle === MANIFEST_HIDE_TITLE_DEFAULT ? undefined : group.hideTitle,
+          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
           items: group.items,
         }
       }
@@ -946,12 +1001,12 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
           ...doc.vfile, messages: [] // reset the messages, otherwise they will be duplicated
         })
 
-      await writeSDKFile(targetSdk, `${doc.href.replace("/docs/", "")}.mdx`, String(vfile))
+      await writeSdkFile(targetSdk, `${doc.href.replace("/docs/", "")}.mdx`, String(vfile))
 
       return vfile
     }))
 
-    await writeSDKFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
+    await writeSdkFile(targetSdk, 'manifest.json', JSON.stringify({ navigation }))
 
     return { targetSdk, vFiles }
   }))
@@ -973,11 +1028,13 @@ const build = async (store: ReturnType<typeof createBlankStore>) => {
   }
 }
 
-const watchAndRebuild = (store: ReturnType<typeof createBlankStore>) => {
-
+const watchAndRebuild = (
+  store: ReturnType<typeof createBlankStore>,
+  config: BuildConfig
+) => {
   const watcher = chok.watch(
     [
-      DOCS_FOLDER,
+      config.docsFolder,
     ],
     {
       alwaysStat: true,
@@ -985,7 +1042,7 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>) => {
         if (stats === undefined) return false
         if (stats.isDirectory()) return false
 
-        const relativePath = path.relative(DOCS_FOLDER, filePath)
+        const relativePath = path.relative(config.docsFolder, filePath)
 
         const isManifest = relativePath === 'manifest.json'
         const isMarkdown = relativePath.endsWith('.mdx')
@@ -1000,21 +1057,22 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>) => {
 
     console.info(`File ${filePath} changed`, { event })
 
-    const href = removeMdxSuffix(`/${path.relative(BASE_PATH, filePath)}`)
+    const href = removeMdxSuffix(`/${path.relative(config.basePath, filePath)}`)
 
     store.markdownFiles.delete(href)
 
-    await build(store)
+    await build(store, config)
 
   })
 
 }
 
 const main = async () => {
+  // Create default configuration
+  const config = createDefaultConfig();
+  const store = createBlankStore();
 
-  const store = createBlankStore()
-
-  await build(store)
+  await build(store, config);
 
   const args = process.argv.slice(2)
   const watchFlag = args.includes('--watch')
@@ -1023,9 +1081,12 @@ const main = async () => {
 
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store)
+    watchAndRebuild(store, config);
   }
 
 }
 
-main()
+// Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
+if (require.main === module) {
+  main();
+}

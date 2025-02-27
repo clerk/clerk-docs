@@ -1,19 +1,19 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import {glob} from 'glob';
+import { glob } from 'glob';
 
 
-import { expect, onTestFinished, test, vi } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build, createBlankStore, createConfig } from './build-docs'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
   useLocalTemp: false,
-  
+
   // Local temp directory path (relative to project root)
   localTempPath: './.temp-test',
-  
+
   // Whether to preserve temp directories after tests
   // (helpful for debugging, but requires manual cleanup)
   preserveTemp: false
@@ -21,7 +21,7 @@ const tempConfig = {
 
 async function createTempFiles(
   files: { path: string; content: string }[],
-  options?: { 
+  options?: {
     prefix?: string;         // Prefix for the temp directory name
     preserveTemp?: boolean;  // Override global preserveTemp setting
     useLocalTemp?: boolean;  // Override global useLocalTemp setting
@@ -30,10 +30,10 @@ async function createTempFiles(
   const prefix = options?.prefix || 'clerk-docs-test-'
   const preserve = options?.preserveTemp ?? tempConfig.preserveTemp
   const useLocalTemp = options?.useLocalTemp ?? tempConfig.useLocalTemp
-  
+
   // Determine base directory for temp files
   let baseDir: string
-  
+
   if (useLocalTemp) {
     // Use local directory in the repo
     baseDir = tempConfig.localTempPath
@@ -42,7 +42,7 @@ async function createTempFiles(
     // Use system temp directory
     baseDir = os.tmpdir()
   }
-  
+
   // Create temp folder with unique name
   const tempDir = await fs.mkdtemp(path.join(baseDir, prefix))
 
@@ -76,15 +76,15 @@ async function createTempFiles(
   return {
     tempDir,
     pathJoin: (...paths: string[]) => path.join(tempDir, ...paths),
-    
+
     // Get a list of all files in the temp directory
     listFiles: async () => {
-      return glob('**/*', { 
+      return glob('**/*', {
         cwd: tempDir,
-        nodir: true 
+        nodir: true
       })
     },
-    
+
     // Read file contents
     readFile: async (filePath: string): Promise<string> => {
       return fs.readFile(path.join(tempDir, filePath), 'utf-8')
@@ -110,7 +110,7 @@ function normalizeString(str: string): string {
 }
 
 function treeDir(baseDir: string) {
-  return glob('**/*', { 
+  return glob('**/*', {
     cwd: baseDir,
     nodir: true // Only return files, not directories
   });
@@ -291,7 +291,7 @@ sdk: react
 # Simple Test Page
 
 Testing with a simple page.`
-      }])
+    }])
 
   await build(createBlankStore(), createConfig({
     ...baseConfig,
@@ -478,3 +478,267 @@ Testing with a simple page.`
 ⚠ 1 warning`)
 })
 
+describe('Includes and Partials', () => {
+  test('<Include /> Component embeds content in to guide', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+        })
+      },
+      {
+        path: './docs/_partials/test-partial.mdx',
+        content: `Test Partial Content`
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+<Include src="_partials/test-partial" />
+
+# Simple Test Page`
+      }
+    ])
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toContain('Test Partial Content')
+  })
+
+  test('Invalid partial src fails the build', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+        })
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+<Include src="_partials/test-partial" />
+
+# Simple Test Page`
+      }
+    ])
+
+    const logSpy = vi.spyOn(console, 'info')
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    expect(logSpy).toHaveBeenCalledWith(`/docs/simple-test.mdx
+5:1-5:41 warning Partial /docs/_partials/test-partial.mdx not found
+
+⚠ 1 warning`)
+  })
+
+  test('Fail if partial is within a partial', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+        })
+      },
+      {
+        path: './docs/_partials/test-partial-1.mdx',
+        content: `<Include src="_partials/test-partial-2" />`
+      },
+      {
+        path: './docs/_partials/test-partial-2.mdx',
+        content: `Test Partial Content`
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+<Include src="_partials/test-partial-1" />
+
+# Simple Test Page`
+      }
+    ])
+
+    const promise = build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    await expect(promise).rejects.toThrow(`Partials inside of partials is not yet supported`)
+  })
+})
+
+describe('Link Validation and Processing', () => {
+  test('Fail if link is to non-existent page', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+        })
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+[Non Existent Page](/docs/non-existent-page)
+
+# Simple Test Page`
+      }
+    ])
+
+    const logSpy = vi.spyOn(console, 'info')
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    expect(logSpy).toHaveBeenCalledWith(`/docs/simple-test.mdx
+5:1-5:45 warning Guide /docs/non-existent-page not found
+
+⚠ 1 warning`)
+  })
+
+  test('Warn if link is to existent page but with invalid hash', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
+        })
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+[Simple Test](/docs/simple-test#non-existent-hash)  
+
+# Simple Test Page`
+      }
+    ])
+
+    const logSpy = vi.spyOn(console, 'info')
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    expect(logSpy).toHaveBeenCalledWith(`/docs/simple-test.mdx
+5:1-5:51 warning Hash "non-existent-hash" not found in /docs/simple-test
+
+⚠ 1 warning`)
+  })
+
+
+  test('Pick up on id in heading for hash alias', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[
+            { title: "Simple Test", href: "/docs/simple-test" },
+            { title: "Headings", href: "/docs/headings" }
+          ]]
+        })
+      },
+      {
+        path: './docs/headings.mdx',
+        content: `---
+title: Headings
+---
+
+# test {{ id: 'my-heading' }}`
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+[Headings](/docs/headings#my-heading)`
+      }
+    ])
+
+    const logSpy = vi.spyOn(console, 'info')
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react"]
+    }))
+
+    expect(logSpy).toHaveBeenCalledWith(`/docs/simple-test.mdx
+5:1-5:38 warning Hash "my-heading" not found in /docs/headings
+
+⚠ 1 warning`)
+  })
+
+
+  test('Swap out links for <SDKLink /> when a link points to an sdk generated guide', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: "SDK Filtered Page", href: "/docs/sdk-filtered-page" }, { title: "Core Page", href: "/docs/core-page" }]]
+        })
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+sdk: react, nextjs
+---
+
+SDK filtered page`
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+---
+
+# Core page
+
+[SDK Filtered Page](/docs/sdk-filtered-page)
+`
+      }
+    ])
+
+    await build(createBlankStore(), createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ["react", "nextjs"]
+    }))
+
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(`<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>
+  SDK Filtered Page
+</SDKLink>`)
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(`<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>
+  SDK Filtered Page
+</SDKLink>`)
+  })
+})

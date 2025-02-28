@@ -397,16 +397,20 @@ const extractComponentPropValueFromNode = (
 }
 
 const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile | undefined, sdkProp: string) => {
-  if (sdkProp.includes('", "') || sdkProp.includes("', '")) {
+
+  const isValidItem = isValidSdk(config)
+  const isValidItems = isValidSdks(config)
+
+  if (sdkProp.includes('", "') || sdkProp.includes("', '") || sdkProp.includes('["') || sdkProp.includes('"]')) {
     const sdks = JSON.parse(sdkProp.replaceAll("'", '"'))
-    if (isValidSdks(config)(sdks)) {
+    if (isValidItems(sdks)) {
       return sdks
     } else {
-      const invalidSDKs = sdks.filter(sdk => !isValidSdk(config)(sdk))
+        const invalidSDKs = sdks.filter(sdk => !isValidItem(sdk))
       vfile?.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
     }
   } else {
-    if (isValidSdk(config)(sdkProp)) {
+    if (isValidItem(sdkProp)) {
       return [sdkProp]
     } else {
       vfile?.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
@@ -974,6 +978,8 @@ export const build = async (
   if (output !== "") {
     console.info(output)
   }
+
+  return output
 }
 
 const watchAndRebuild = (

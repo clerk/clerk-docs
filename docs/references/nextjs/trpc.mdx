@@ -1,6 +1,6 @@
 ---
-title: Integrate Clerk into your Next.js Pages Router app with tRPC
-description: Learn how to integrate Clerk into your Next.js Pages Router application using tRPC.
+title: Integrate Clerk into your Next.js + tRPC app
+description: Learn how to integrate Clerk into your Next.js app using tRPC.
 ---
 
 <TutorialHero
@@ -13,8 +13,8 @@ description: Learn how to integrate Clerk into your Next.js Pages Router applica
   ]}
   exampleRepo={[
     {
-      title: "Minimal Clerk + tRPC + Next.js Pages Router Example",
-      link: "https://github.com/perkinsjr/t3-app-clerk-minimal"
+      title: "Clerk, Next.js, tRPC Demo",
+      link: "TODO"
 
     }
   ]}
@@ -26,77 +26,121 @@ description: Learn how to integrate Clerk into your Next.js Pages Router applica
   - Use your protected procedure
 </TutorialHero>
 
+Clerk's [`Auth`](/docs/references/backend/types/auth-object) object includes important authentication information like the current user's session ID, user ID, and organization ID. It also contains methods to check for the current user's permissions and to retrieve their session token. You can use the `Auth` object to access the user's authentication information in your tRPC queries.
+
+This guide demonstrates how to create a Clerk authentication context and use it in a tRPC query. It assumes that you have already integrated Clerk into your app by following the [quickstart](/docs/quickstarts/nextjs).
+
 <Steps>
-  ## Create Clerk authentication context
+  ## Update your providers
 
-  Clerk's [`Auth`](/docs/references/backend/types/auth-object) object includes important authentication information like the current user's session ID, user ID, and organization ID. It also contains methods to check for the current user's permissions and to retrieve their session token.
+  When creating your tRPC client, you create a tRPC provider in order to use the tRPC client in your app. Your tRPC provider must be wrapped by Clerk's `<ClerkProvider>` component in order for tRPC to have access to Clerk's authentication context.
 
-  To add Clerk's authentication context (`Auth` object) to your tRPC server, create a context file that will be used to create the context for every tRPC query sent to the server. This context file will use the [`getAuth()`](/docs/references/nextjs/get-auth) helper from Clerk to access the user's `Auth` object.
+  ```tsx {{ filename: 'app/layout.tsx', mark: [[9, 10], [26, 27]] }}
+  // ...Imports and other code...
 
-  ```ts {{ filename: 'src/server/context.ts' }}
-  import * as trpc from '@trpc/server'
-  import * as trpcNext from '@trpc/server/adapters/next'
-  import { getAuth } from '@clerk/nextjs/server'
+  export default function RootLayout({
+    children,
+  }: Readonly<{
+    children: React.ReactNode
+  }>) {
+    return (
+      <ClerkProvider>
+        <TRPCProvider>
+          <html lang="en">
+            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+              <header className="flex justify-end items-center p-4 gap-4 h-16">
+                <SignedOut>
+                  <SignInButton />
+                  <SignUpButton />
+                </SignedOut>
+                <SignedIn>
+                  <Link href="/">Home</Link>
+                  <UserButton />
+                </SignedIn>
+              </header>
+              {children}
+            </body>
+          </html>
+        </TRPCProvider>
+      </ClerkProvider>
+    )
+  }
+  ```
 
-  export const createContext = async (opts: trpcNext.CreateNextContextOptions) => {
-    return { auth: getAuth(opts.req) }
+  ## Create the tRPC context
+
+  Create a file that will be used to create the context for every tRPC query sent to the server. The context will use the [`auth()`](/docs/references/nextjs/auth) helper from Clerk to access the user's `Auth` object.
+
+  ```ts {{ filename: 'app/server/context.ts' }}
+  import { auth } from '@clerk/nextjs/server'
+
+  export const createContext = async () => {
+    return { auth: await auth() }
   }
 
-  export type Context = trpc.inferAsyncReturnType<typeof createContext>
+  export type Context = Awaited<ReturnType<typeof createContext>>
   ```
 
-  ## Create tRPC context
+  Then, in your tRPC server, pass the context to the `createContext` parameter in the `fetchRequestHandler()` function. For this guide, the context is named `createContext`, which is the same as the parameter name, so it's passed as a shorthand property. If you named the context something different, you would need to pass it as a named property, like `{ createContext: exampleContext }`.
 
-  Create the tRPC context to use the Clerk context in your tRPC queries.
+  ```ts {{ filename: 'app/api/trpc/[trpc]/route.ts', mark: [3, 10] }}
+  import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
+  import { appRouter } from '@/app/server/routers/posts'
+  import { createContext } from '@/app/server/context'
 
-  ```ts {{ filename: 'src/pages/api/trpc/[trpc].ts' }}
-  import { appRouter } from '@/server/routers'
-  import * as trpcNext from '@trpc/server/adapters/next'
-  import { createContext } from 'src/server/context'
+  const handler = (req: Request) =>
+    fetchRequestHandler({
+      endpoint: '/api/trpc',
+      req,
+      router: appRouter,
+      createContext,
+    })
 
-  export default trpcNext.createNextApiHandler({
-    router: appRouter,
-    createContext: createContext,
-  })
+  export { handler as GET, handler as POST }
   ```
 
-  ## Access the context data in your backend
+  ## Access the context data in your procedures
 
-  The tRPC context, or `ctx`, should now have access to the Clerk authentication context. Use `ctx` in your queries to access the context data in any procedure.
+  The tRPC context, or `ctx`, should now have access to the Clerk `Auth` object.
 
-  In the following example, the `ctx` is used to access the user's ID and return a greeting message. If the user is not signed in, the `greeting` will return `hello! undefined`.
+  In the following example, the `ctx` is used to access the user's ID and return a greeting message. If the user is not signed in, the `greeting` will return `Hello! You are not signed in.`.
 
-  ```ts {{ filename: 'src/server/routers/index.ts' }}
+  ```ts {{ filename: 'app/server/routers/index.ts' }}
   import { router, publicProcedure } from '../trpc'
 
   export const exampleRouter = router({
     hello: publicProcedure.query(({ ctx }) => {
+      const { userId } = ctx.auth
+
+      if (!userId) {
+        return {
+          greeting: 'Hello! You are not signed in.',
+        }
+      }
+
       return {
-        greeting: `hello! ${ctx.auth?.userId}`,
+        greeting: `Hello ${userId}!`,
       }
     }),
   })
+
+  export type exampleRouter = typeof exampleRouter
   ```
 
   ## Create a protected procedure
 
   In many applications, it's essential to restrict access to certain routes based on user authentication status. This ensures that sensitive data and functionality are only accessible to authorized users. tRPC middleware provides a powerful mechanism for implementing this protection within your application.
 
-  In the following example, tRPC middleware is used to access the `ctx`, which contains the user's authentication information. If the user's ID exists in the authentication context, this means that the user is signed in. If the user is not signed in, an `UNAUTHORIZED` error is thrown.
+  In the following example, tRPC middleware is used to access the `ctx`, which contains the user's authentication information. If the user's ID exists in the authentication context, this means that the user is signed in. If they are not signed in, an `UNAUTHORIZED` error is thrown.
 
-  ```ts {{ filename: 'src/server/trpc.ts' }}
+  ```ts {{ filename: 'app/server/trpc.ts', mark: [[6, 17], 21] }}
   import { initTRPC, TRPCError } from '@trpc/server'
-  import superjson from 'superjson'
-  import { type Context } from './context'
+  import { Context } from './context'
 
-  const t = initTRPC.context<Context>().create({
-    transformer: superjson,
-    errorFormatter({ shape }) {
-      return shape
-    },
-  })
+  const t = initTRPC.context<Context>().create()
 
-  // check if the user is signed in, otherwise throw an UNAUTHORIZED code
+  // Check if the user is signed in
+  // Otherwise, throw an UNAUTHORIZED code
   const isAuthed = t.middleware(({ next, ctx }) => {
     if (!ctx.auth.userId) {
       throw new TRPCError({ code: 'UNAUTHORIZED' })
@@ -109,10 +153,7 @@ description: Learn how to integrate Clerk into your Next.js Pages Router applica
   })
 
   export const router = t.router
-
   export const publicProcedure = t.procedure
-
-  // export this procedure to be used anywhere in your application
   export const protectedProcedure = t.procedure.use(isAuthed)
   ```
 
@@ -127,8 +168,10 @@ description: Learn how to integrate Clerk into your Next.js Pages Router applica
 
   export const protectedRouter = router({
     hello: protectedProcedure.query(({ ctx }) => {
+      const { userId } = ctx.auth
+
       return {
-        secret: `${ctx.auth?.userId} is using a protected procedure`,
+        secret: `${userId} is using a protected procedure`,
       }
     }),
   })

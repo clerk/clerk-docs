@@ -11,34 +11,43 @@ Learn more about how Clerk combines session token authentication and JWT authent
 
 Every generated token has default claims that cannot be overridden by templates. Clerk's default claims include:
 
-- `azp`: authorized party - the `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application. For example: `https://example.com`. This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null.
-- `exp`: expiration time - the time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4) for more information.
-- `iat`: issued at - the time at which the token was issued as a Unix timestamp. For example: `1516239022`. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6) for more information.
-- `iss`: issuer - the Frontend API URL of your instance. For example: `https://clerk.your-site.com` for a production instance or `https://your-site.clerk.accounts.dev` for a development instance. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1) for more information.
-- `nbf`: not before - the time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5) for more information.
-- `sid`: session ID - the ID of the current session For example: `sess_123`.
-- `sub`: subject - the ID of the current user of the session. For example: `user_123`. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information.
-- `act`: actor - will only be included if the user is [impersonating](/docs/users/user-impersonation) another user. It's an object that contains the following properties:
-  - `iss`: issuer - the referrer of the token. For example: `https://dashboard.clerk.com`.
-  - `sid`: session ID - the session ID of the impersonated session. For example: `sess_456`.
-  - `sub`: subject - the ID of the impersonator. For example: `user_456`.
+| Claim | Abbreviation expanded | Description | Example |
+| - | - | - | - |
+| `azp` | authorized party | The `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application. This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null. | `https://example.com` |
+| `exp` | expiration time | The time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4) for more information. | `1713158400` |
+| `fva` | factor verification age | Each item represents the minutes that have passed since the last time a first or second factor, respectively, was verified. | `[7, -1]` which means it has been 7 minutes since the first factor was verified, and there either is not a second factor or the second factor has never been verified. |
+| `iat` | issued at | The time at which the token was issued as a Unix timestamp. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6) for more information. | `1713158400` |
+| `iss` | issuer | The Frontend API URL of your instance. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1) for more information. | `https://clerk.your-site.com` for a production instance, `https://your-site.clerk.accounts.dev` for a development instance |
+| `nbf` | not before | The time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5) for more information. | `1713158400` |
+| `sid` | session ID | The ID of the current session. | `sess_123` |
+| `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
 
-The following claims are only included if the user is part of an organization:
+The **`act` (actor) claim** is only included if the user is [impersonating](/docs/users/user-impersonation) another user. It's value is an object that contains the following properties:
 
-- `org_id`: organization ID - the ID of the active organization that the user belongs to.
-- `org_permissions`: organization permissions - the permissions of the user in the currently active organization.
-- `org_slug`: organization slug - the slug of the currently active organization that the user belongs to.
-- `org_role`: organization role - the role of the user in the currently active organization.
+| Claim | Abbreviation expanded | Description | Example |
+| - | - | - | - |
+| `iss` | issuer | The referrer of the token. | `https://dashboard.clerk.com` |
+| `sid` | session ID | The session ID of the impersonated session. | `sess_456` |
+| `sub` | subject | The ID of the impersonator. | `user_456` |
 
-If you would like to add custom claims to your session token, you can [customize it](/docs/backend-requests/making/custom-session-token).
+The following claims are only included if the user is part of an [organization](/docs/organizations/overview):
 
-You can also create custom tokens using a [JWT template](/docs/backend-requests/making/jwt-templates).
+| Claim | Abbreviation expanded | Description | Example |
+| - | - | - | - |
+| `org_id` | organization ID | The ID of the active organization that the user belongs to. | `org_123` |
+| `org_permissions` | organization permissions | The permissions of the user in the currently active organization. | `["org:sys_profile:manage", "org:sys_profile:delete"]` |
+| `org_slug` | organization slug | The slug of the currently active organization that the user belongs to. | `org-slug` |
+| `org_role` | organization role | The role of the user in the currently active organization. | `org:admin` |
+
+If you would like to add custom claims to your session token, you can [customize it](/docs/backend-requests/custom-session-token).
+
+You can also create custom tokens using a [JWT template](/docs/backend-requests/jwt-templates).
 
 ## Size limitations
 
 The Clerk session token is stored in a cookie. All modern browsers [limit the maximum size of a cookie to 4kb](https://datatracker.ietf.org/doc/html/rfc2109#section-6.3). Exceeding this limit can have adverse effects, including a possible infinite redirect loop for users who exceed this size in Next.js applications.
 
-A session token with the [default session claims](#default-session-claims) won't run into this issue, as this configuration produces a cookie significantly smaller than 4kb. However, this limitation becomes relevant when implementing a [custom session token](/docs/backend-requests/making/custom-session-token). In this case, it's recommended to move particularly large claims out of the token and fetch these using a separate API call from your backend.
+A session token with the [default session claims](#default-session-claims) won't run into this issue, as this configuration produces a cookie significantly smaller than 4kb. However, this limitation becomes relevant when implementing a [custom session token](/docs/backend-requests/custom-session-token). In this case, it's recommended to move particularly large claims out of the token and fetch these using a separate API call from your backend.
 
 Claims to monitor for size limits:
 
@@ -51,10 +60,10 @@ Claims to monitor for size limits:
 If you include any of these claims in your token, use caution to ensure the stored data doesn't exceed the size limit.
 
 > [!NOTE]
-> If your application encounters this issue, the Clerk Dashboard will display a warning: **"Some users are exceeding cookie size limits"**. To resolve this, update your [custom session token](/docs/backend-requests/making/custom-session-token).
+> If your application encounters this issue, the Clerk Dashboard will display a warning: **"Some users are exceeding cookie size limits"**. To resolve this, update your [custom session token](/docs/backend-requests/custom-session-token).
 
 ## Validate session tokens
 
 If you're using the middleware provided by our Clerk SDKs, this is all handled automatically in every request. If you're not using the middleware, you can still use the respective helpers provided by the SDKs to validate the tokens.
 
-To learn how to manually verify a session token, refer to the [dedicated guide](/docs/backend-requests/handling/manual-jwt).
+To learn how to manually verify a session token, refer to the [dedicated guide](/docs/backend-requests/manual-jwt).

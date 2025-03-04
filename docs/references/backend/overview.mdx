@@ -13,7 +13,7 @@ For example, if you wanted to get a list of all users in your application, inste
   <Tab>
     If you are using the JavaScript Backend SDK on its own, you can install it using the following command:
 
-    <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
       ```bash {{ filename: 'terminal' }}
       npm install @clerk/backend
       ```
@@ -25,6 +25,10 @@ For example, if you wanted to get a list of all users in your application, inste
       ```bash {{ filename: 'terminal' }}
       pnpm add @clerk/backend
       ```
+
+      ```bash {{ filename: 'terminal' }}
+      bun add @clerk/backend
+      ```
     </CodeBlockTabs>
   </Tab>
 
@@ -35,7 +39,7 @@ For example, if you wanted to get a list of all users in your application, inste
 
 ## Usage
 
-All resource operations are mounted as sub-APIs on the `clerkClient` object. For example, if you would like to get a list of all of your application's users, you can use the `getUserList()` method on the `users` sub-API. You can find the full list of available sub-APIs and their methods in the sidebar.
+All resource operations are mounted as sub-APIs on the `clerkClient` object. For example, if you would like to get a list of all of your application's users, you can use the `getUserList()` method on the `users` sub-API. You can find the full list of available sub-APIs and their methods in the sidenav.
 
 To access a resource, you must first instantiate a `clerkClient` instance.
 
@@ -107,7 +111,9 @@ To access a resource, you must first instantiate a `clerkClient` instance.
 
         const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
-        const userList = await clerkClient.users.getUserList()
+        const client = await clerkClient()
+
+        const userList = await client.users.getUserList()
         ```
       </Tab>
 
@@ -289,42 +295,30 @@ The following options are available:
 
 ## Get the `userId` and other properties
 
-To access the [properties](/docs/references/backend/types/auth-object#auth-object-properties) of the authenticated user, such as their `userId` or `sessionId`, see the following examples:
+The [`Auth`](/docs/references/backend/types/auth-object) object contains important information like the current user's session ID, user ID, and organization ID.
 
-<Tabs items={["Next.js", "Backend SDKs"]}>
-  <Tab>
-    The following example uses the Next.js [`auth()`](/docs/references/nextjs/auth){{ target: '_blank' }} helper to access the `userId`.
+<Include src="_partials/auth-object-table" />
 
-    ```ts
-    import { auth, clerkClient } from '@clerk/nextjs/server'
+For example, in a Next.js App Router route handler, you can use the [`auth()`](/docs/references/nextjs/auth) helper to get the user's ID, and then use the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method to get the [Backend User object](/docs/references/backend/types/backend-user).
 
-    export async function GET() {
-      const { userId } = await auth()
+```tsx {{ filename: 'app/api/example/route.ts' }}
+import { auth, clerkClient } from '@clerk/nextjs/server'
 
-      if (!userId) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+export async function GET() {
+  // Use `auth()` to get the user's ID
+  const { userId } = await auth()
 
-      const client = await clerkClient()
+  // Protect the route by checking if the user is signed in
+  if (!userId) {
+    return new NextResponse('Unauthorized', { status: 401 })
+  }
 
-      const user = await client.users.getUser(userId)
+  const client = await clerkClient()
 
-      return Response.json({ user })
-    }
-    ```
-  </Tab>
+  // Use the Backend SDK's `getUser()` method to get the Backend User object
+  const user = await client.users.getUser(userId)
 
-  <Tab>
-    The following example uses `req.auth` to access the `userId`.
-
-    For some backend SDKs, such as Fastify, you will need to use `getAuth()` instead of `req.auth`.
-
-    ```ts
-    const { userId } = req.auth
-
-    const response = await clerkClient.users.getUser(userId)
-
-    console.log(response)
-    ```
-  </Tab>
-</Tabs>
+  // Return the Backend User object
+  return NextResponse.json({ user: user }, { status: 200 })
+}
+```

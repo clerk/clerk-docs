@@ -394,6 +394,23 @@ interface CodeBlockProps {
 
 </details>
 
+You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
+
+| Type     | Character |
+| -------- | --------- |
+| Deleted  | `-`       |
+| Inserted | `+`       |
+| Marked   | `=`       |
+
+````mdx
+```tsx
+  export function App() {
+-   return <Foo />
++   return <Bar />
+  }
+```
+````
+
 #### Code block shortcodes
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
@@ -403,7 +420,7 @@ You can use the following shortcodes within a code block to inject information f
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx
-```sh {{ filename: '.env.local' }}
+```sh {{ filename: '.env' }}
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```
@@ -822,7 +839,7 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 ### `<If />`
 
-The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidebar.
+The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
 
 > [!IMPORTANT]
 > This component cannot be used within code blocks.

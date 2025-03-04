@@ -70,21 +70,70 @@ To enable multi-session in your application, you need to configure it in the Cle
 
 ### Add multi-session support to your app
 
-<If sdk={['nextjs', 'react']}>
-  It's highly recommended to wrap your application in the [`<MultisessionAppSupport />`](/docs/components/control/multi-session) component. This guarantees a full rerendering cycle every time the current session and user changes.
-</If>
-
-<If sdk={["nextjs", "react", "expo", "react-router", "tanstack-start"]}>
-  You can pass the `afterMultiSessionSingleSignOutUrl` property to [`<ClerkProvider>`](/docs/components/clerk-provider) to specify where to navigate to after signing out from a currently active account in a multi-session app.
-</If>
-
 There are two main ways to add the multi-session feature to your application:
 
 - Use the [`<UserButton />`](/docs/components/user/user-button) component if you want to use a prebuilt UI.
 - [Build a custom flow](/docs/custom-flows/multi-session-applications) if you want to rebuild the existing Clerk flow using the Clerk API.
 
+It's highly recommended to wrap your application with the following `<MultisessionAppSupport />` component. The fragment's `key` is set to the session ID. Every time the session ID changes, the `key` changes, forcing React to recreate the entire component tree under the fragment and guaranteeing a full rerendering cycle.
+
+```tsx
+function MultisessionAppSupport({ children }: { children: React.ReactNode }) {
+  const { session } = useSession()
+
+  return <React.Fragment key={session ? session.id : 'no-users'}>{children}</React.Fragment>
+}
+```
+
+The following example demonstrates adding multi-session support to a Next.js App Router application. It requires creating the `<MultisessionAppSupport />` as a client component, and then using it in the `app/layout.tsx` file to wrap the entire application. This ensures the `layout.tsx` remains a server component.
+
+<CodeBlockTabs options={["app/layout.tsx", "MultisessionAppSupport.tsx"]}>
+  ```tsx {{ filename: 'app/layout.tsx' }}
+  import React from 'react'
+  import { ClerkProvider } from '@clerk/nextjs'
+  import { MultisessionAppSupport } from './components/MultisessionAppSupport'
+
+  export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+      <html lang="en">
+        <ClerkProvider afterMultiSessionSingleSignOutUrl="/">
+          <MultisessionAppSupport>
+            <body>{children}</body>
+          </MultisessionAppSupport>
+        </ClerkProvider>
+      </html>
+    )
+  }
+  ```
+
+  ```tsx {{ filename: 'app/components/MultisessionAppSupport.tsx' }}
+  'use client'
+
+  import React from 'react'
+  import { useSession } from '@clerk/nextjs'
+
+  export default function MultisessionAppSupport({ children }: { children: React.ReactNode }) {
+    const { session } = useSession()
+
+    return <React.Fragment key={session ? session.id : 'no-users'}>{children}</React.Fragment>
+  }
+  ```
+</CodeBlockTabs>
+
+### Sign out behavior
+
+By default, signing out from a currently active account in a multi-session app will navigate to the sign-in page's `/choose` route.
+
+If a sign-in URL is not set, signing out will navigate to Clerk's Account Portal `/sign-in/choose` page, allowing the user to choose which account to switch into.
+
+If a sign-in URL is set, either through the [`signInUrl`](/docs/components/clerk-provider#properties:~:text=Name-,signInUrl,-Type) prop on `<ClerkProvider>` or the [`CLERK_SIGN_IN_URL` environment variable](/docs/deployments/clerk-environment-variables#sign-in-and-sign-up-redirects), signing out will navigate to that URL's `/choose` route. For example, if `signInUrl` or `CLERK_SIGN_IN_URL` is set to `https://example.com/sign-in`, signing out of a multi-session app will navigate to `https://example.com/sign-in/choose`.
+
+<If sdk={["nextjs", "react", "expo", "react-router", "tanstack-start"]}>
+  To redirect to a custom route, pass the [`afterMultiSessionSingleSignOutUrl`](/docs/components/clerk-provider#properties:~:text=afterMultiSessionSingleSignOutUrl) property to `<ClerkProvider>`.
+</If>
+
 ## Customize session token
 
 Session tokens are JWTs that contain a set of [default claims](/docs/backend-requests/resources/session-tokens) required by Clerk. You can customize these tokens by providing additional claims of your own.
 
-To learn how to customize session tokens, see the [dedicated guide](/docs/backend-requests/making/custom-session-token).
+To learn how to customize session tokens, see the [dedicated guide](/docs/backend-requests/custom-session-token).

@@ -16,9 +16,14 @@ This guide uses Discord, Google, and GitHub as examples.
 
 ## Build the custom flow
 
-1. Edit the `options` array in the code below to add all of your enabled SSO connections.
-1. The `OAuthStrategy` lists all of the strategies for the pre-configured SSO connections.
-1. Custom SSO connections will use a strategy like `oauth_custom_<name>`. The `OAuthStrategy` type includes typing for custom providers. The code example below will need modifying to support custom providers.
+1. The [`useUser()`](/docs/references/react/use-user) hook is used to get the current user's [`User`](/docs/references/javacsript/user) object. The `isLoaded` boolean is used to ensure that Clerk is loaded.
+1. The `options` array is used to create a list of supported SSO connections. This example uses [OAuth strategies](/docs/authentication/social-connections/oauth). You can edit this array to include all of the SSO connections that you've enabled for your app in the Clerk Dashboard. You can also add [custom SSO connections](/docs/authentication/social-connections/custom-provider) by using the `oauth_custom_<name>` strategy.
+1. The `addSSO()` function is used to add a new external account using the `strategy` that is passed in.
+   - It uses the `user` object to access the `createExternalAccount()` method.
+   - The `createExternalAccount()` method is used to create a new external account using the `strategy` that is passed in.
+1. The `unconnectedOptions` array is used to filter out any existing external accounts from the `options` array.
+1. In the UI, the `unconnectedOptions` array is used to create a list of buttons for the user to add new external accounts.
+1. In the UI, the `User` object is used to access the `externalAccounts` property, which is mapped through to create a table of the user's existing external accounts. If there is an error, it is displayed to the user in the 'Status' column.
 
 ```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
 'use client'
@@ -27,13 +32,22 @@ import { useUser } from '@clerk/nextjs'
 import { OAuthStrategy } from '@clerk/types'
 import { useRouter } from 'next/navigation'
 
+// Capitalize the first letter of the provider name
+// E.g. 'discord' -> 'Discord'
 const capitalize = (provider: string) => {
   return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
 }
 
+// Remove the prefix from the provider name
+// E.g. 'oauth_discord' -> 'discord'
+const normalizeProvider = (provider: string) => {
+  return provider.split('_')[1]
+}
+
 export default function AddAccount() {
-  const { isLoaded, user } = useUser()
   const router = useRouter()
+  // Use Clerk's `useUser()` hook to get the current user's `User` object
+  const { isLoaded, user } = useUser()
 
   // List the options the user can select when adding a new external account
   // Edit this array to include all of your enabled SSO connections
@@ -55,7 +69,7 @@ export default function AddAccount() {
         console.log('ERROR', err)
       })
       .finally(() => {
-        console.log('redirected user to oauth provider')
+        console.log('Redirected user to oauth provider')
       })
   }
 
@@ -110,7 +124,7 @@ export default function AddAccount() {
               return (
                 <li key={strategy}>
                   <button onClick={() => addSSO(strategy)}>
-                    Add {capitalize(strategy.split('_')[1])}
+                    Add {capitalize(normalizeProvider(strategy))}
                   </button>
                 </li>
               )

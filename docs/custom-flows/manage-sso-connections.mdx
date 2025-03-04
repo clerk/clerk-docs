@@ -3,21 +3,22 @@ title: Build a custom flow for managing SSO connections
 description: Learn how to use the Clerk API to build a custom flow for adding and managing SSO connections
 ---
 
-<Steps>
-  ## Enable one or more SSO connections
+<Include src="_partials/custom-flows-callout" />
 
-  For your users to be able to add or manage OAuth connections, you will ned to enable one or more SSO connections.
+## Before you start
 
-  1. In the Clerk Dashboard, navigate to the [SSO connections](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
-  1. Ensure there is at least one enabled SSO connections.
-  1. Use the `Add connections` button to enable SSO connections.
+You must configure your application instance through the Clerk Dashboard for the SSO connections that you want to use.
 
-  ## Edit the `options` array
+- For social (OAuth) connection(s), see [the appropriate guide for your platform](/docs/authentication/social-connections/overview).
+- For enterprise connection(s), see [the appropriate guide for your platform](/docs/authentication/enterprise-connections/overview).
 
-  1. Edit the `options` array in the code below to add all of your enabled SSO connections.
-  1. The `OAuthStrategy` lists all of the strategies for the pre-configured SSO connections.
-  1. Custom SSO connections will use a strategy like `oauth_custom_<name>`. The `OAuthStrategy` type includes typing for custom providers. The code example below will need modifying to support custom providers.
-</Steps>
+This guide uses Discord, Google, and GitHub as examples.
+
+## Build the custom flow
+
+1. Edit the `options` array in the code below to add all of your enabled SSO connections.
+1. The `OAuthStrategy` lists all of the strategies for the pre-configured SSO connections.
+1. Custom SSO connections will use a strategy like `oauth_custom_<name>`. The `OAuthStrategy` type includes typing for custom providers. The code example below will need modifying to support custom providers.
 
 ```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
 'use client'
@@ -34,10 +35,11 @@ export default function AddAccount() {
   const { isLoaded, user } = useUser()
   const router = useRouter()
 
-  // list the options that the user can click on when adding a new external account
+  // List the options the user can select when adding a new external account
+  // Edit this array to include all of your enabled SSO connections
   const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
 
-  // handle adding the new external account
+  // Handle adding the new external account
   const addSSO = async (strategy: OAuthStrategy) => {
     await user
       ?.createExternalAccount({
@@ -57,11 +59,11 @@ export default function AddAccount() {
       })
   }
 
-  // show a loading message until Clerk loads
+  // Show a loading message until Clerk loads
   if (!isLoaded) return <p>Loading...</p>
 
-  // find the external accounts from the options array that the user has not yet added to their account
-  // this prevents showing an 'add' button for existing external account types
+  // Find the external accounts from the options array that the user has not yet added to their account
+  // This prevents showing an 'add' button for existing external account types
   const unconnectedOptions = options.filter(
     (option) =>
       !user?.externalAccounts.some((account) => account.provider === option.replace('oauth_', '')),
@@ -86,7 +88,10 @@ export default function AddAccount() {
                   <td>{capitalize(account.provider)}</td>
                   <td>{account.approvedScopes}</td>
                   <td>
-                    {account.verification?.status && capitalize(account.verification?.status)}
+                    {/* This example uses the `longMessage` returned by the API. You can use account.verification.error.code to determine the error and then provide your own message to the user. */}
+                    {account.verification?.status === 'verified'
+                      ? capitalize(account.verification?.status)
+                      : account.verification?.error?.longMessage}
                   </td>
                   <td>
                     <button onClick={() => account.destroy()}>Remove</button>

@@ -446,6 +446,10 @@ const parseInMarkdownFile = (config: BuildConfig) => async (
       if (inManifest === false) {
         vfile.message("This guide is not in the manifest.json, but will still be publicly accessible and other guides can link to it")
       }
+
+      if (href !== encodeURI(href)) {
+        vfile.fail(`Href "${href}" contains characters that will be encoded by the browser, please remove them`)
+      }
     })
     .use(() => (tree, vfile) => {
       mdastVisit(tree,
@@ -545,8 +549,18 @@ const parseInMarkdownFile = (config: BuildConfig) => async (
       mdastVisit(tree,
         node => node.type === "heading",
         node => {
-          const slug = slugify(toString(node).trim())
-          headingsHashs.push(slug)
+
+          // @ts-expect-error - If the heading has a id in it, this will pick it up
+          // eg # test {{ id: 'my-heading' }}
+          // This is for remapping the hash to the custom id
+          const id = node?.children?.[1]?.data?.estree?.body?.[0]?.expression?.properties?.[0]?.value?.value as string | undefined
+
+          if (id !== undefined) {
+            headingsHashs.push(id)
+          } else {
+            const slug = slugify(toString(node).trim())
+            headingsHashs.push(slug)
+          }
         }
       )
     })
@@ -707,7 +721,7 @@ export const build = async (
   // It would definitely be preferable we didn't need to do this markdown processing twice
   // But because we need a full list / hashmap of all the existing docs, we can't
   // Unless maybe we do some kind of lazy loading of the docs, but this would add complexity
-  const coreVFiles = docs.map(async (doc) => {
+  const coreVFiles = await Promise.all(docs.map(async (doc) => {
     const vfile = await markdownProcessor()
       // Validate links between guides are valid
       .use(() => (tree: Node, vfile: VFile) => {
@@ -745,7 +759,7 @@ export const build = async (
             if (guide.sdk !== undefined) {
               // we are going to swap it for the sdk link component to give the users a great experience
 
-              return mdastBuilder('mdxJsxFlowElement', {
+              return mdastBuilder('mdxJsxTextElement', {
                 name: 'SDKLink',
                 attributes: [
                   mdastBuilder('mdxJsxAttribute', {
@@ -834,11 +848,11 @@ export const build = async (
     await writeFile(distFilePath, String(vfile))
 
     return vfile
-  })
+  }))
 
-  Promise.all(coreVFiles).then((docs) => console.info(`✔️ Wrote out ${docs.length} core docs`))
+  console.info(`✔️ Wrote out ${docs.length} core docs`)
 
-  const sdkSpecificVFiles = Promise.all(config.validSdks.map(async (targetSdk) => {
+  const sdkSpecificVFiles = await Promise.all(config.validSdks.map(async (targetSdk) => {
 
     // Goes through and removes any items that are not scoped to the target sdk
     const navigation = await traverseTree({ items: sdkScopedManifest },
@@ -963,14 +977,12 @@ export const build = async (
     return { targetSdk, vFiles }
   }))
 
-  sdkSpecificVFiles.then((sdk) => sdk.forEach(({ targetSdk, vFiles }) => console.info(`✔️ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific guides`)))
+  sdkSpecificVFiles.forEach(({ targetSdk, vFiles }) => console.info(`✔️ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific guides`))
 
-  const [awaitedCoreVFiles, awaitedSdkSpecificVFiles] = await Promise.all([Promise.all(coreVFiles), sdkSpecificVFiles])
-
-  const flatSdkSpecificVFiles = awaitedSdkSpecificVFiles.flatMap(({ vFiles }) => vFiles)
+  const flatSdkSpecificVFiles = sdkSpecificVFiles.flatMap(({ vFiles }) => vFiles)
 
   const output = reporter([
-    ...awaitedCoreVFiles.filter((item): item is NonNullable<typeof item> => item !== null),
+    ...coreVFiles.filter((item): item is NonNullable<typeof item> => item !== null),
     ...flatSdkSpecificVFiles.filter((item): item is NonNullable<typeof item> => item !== null)
   ],
     { quiet: true })

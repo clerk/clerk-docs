@@ -864,7 +864,6 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                   )
                 }
               })()
-
               ;(() => {
                 // The doc is generic so we are skipping it
                 if (availableSDKs.length === 0) return

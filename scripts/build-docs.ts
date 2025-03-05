@@ -370,7 +370,7 @@ const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile
   const isValidItems = isValidSdks(config)
 
   if (sdkProp.includes('", "') || sdkProp.includes("', '") || sdkProp.includes('["') || sdkProp.includes('"]')) {
-    const sdks = JSON.parse(sdkProp.replaceAll("'", '"'))
+    const sdks = JSON.parse(sdkProp.replaceAll("'", '"')) as string[]
     if (isValidItems(sdks)) {
       return sdks
     } else {

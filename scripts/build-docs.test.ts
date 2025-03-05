@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { glob } from 'glob';
+import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { build, createBlankStore, createConfig } from './build-docs'
@@ -15,16 +15,16 @@ const tempConfig = {
 
   // Whether to preserve temp directories after tests
   // (helpful for debugging, but requires manual cleanup)
-  preserveTemp: false
+  preserveTemp: false,
 }
 
 async function createTempFiles(
   files: { path: string; content: string }[],
   options?: {
-    prefix?: string;         // Prefix for the temp directory name
-    preserveTemp?: boolean;  // Override global preserveTemp setting
-    useLocalTemp?: boolean;  // Override global useLocalTemp setting
-  }
+    prefix?: string // Prefix for the temp directory name
+    preserveTemp?: boolean // Override global preserveTemp setting
+    useLocalTemp?: boolean // Override global useLocalTemp setting
+  },
 ) {
   const prefix = options?.prefix || 'clerk-docs-test-'
   const preserve = options?.preserveTemp ?? tempConfig.preserveTemp
@@ -80,14 +80,14 @@ async function createTempFiles(
     listFiles: async () => {
       return glob('**/*', {
         cwd: tempDir,
-        nodir: true
+        nodir: true,
       })
     },
 
     // Read file contents
     readFile: async (filePath: string): Promise<string> => {
       return fs.readFile(path.join(tempDir, filePath), 'utf-8')
-    }
+    },
   }
 }
 
@@ -105,26 +105,26 @@ async function readFile(filePath: string): Promise<string> {
 }
 
 function normalizeString(str: string): string {
-  return str.replace(/\r\n/g, '\n').trim();
+  return str.replace(/\r\n/g, '\n').trim()
 }
 
 function treeDir(baseDir: string) {
   return glob('**/*', {
     cwd: baseDir,
-    nodir: true // Only return files, not directories
-  });
+    nodir: true, // Only return files, not directories
+  })
 }
 
 const baseConfig = {
   docsPath: './docs',
   manifestPath: './docs/manifest.json',
   partialsPath: './_partials',
-  ignorePaths: ["/docs/_partials"],
+  ignorePaths: ['/docs/_partials'],
   manifestOptions: {
     wrapDefault: true,
     collapseDefault: false,
-    hideTitleDefault: false
-  }
+    hideTitleDefault: false,
+  },
 }
 
 test('Basic build test with simple files', async () => {
@@ -133,8 +133,8 @@ test('Basic build test with simple files', async () => {
     {
       path: './docs/manifest.json',
       content: JSON.stringify({
-        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-      })
+        navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+      }),
     },
     {
       path: './docs/simple-test.mdx',
@@ -144,27 +144,29 @@ title: Simple Test
 
 # Simple Test Page
 
-Testing with a simple page.`
-    }
+Testing with a simple page.`,
+    },
   ])
 
-  const output = await build(createBlankStore(), createConfig({
-    ...baseConfig,
-    basePath: tempDir,
-    validSdks: ["nextjs", "react"],
-  }))
+  const output = await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['nextjs', 'react'],
+    }),
+  )
 
-  expect(output).toBe("")
+  expect(output).toBe('')
 })
-
 
 test('Invalid SDK in frontmatter fails the build', async () => {
   const { tempDir, pathJoin } = await createTempFiles([
     {
       path: './docs/manifest.json',
       content: JSON.stringify({
-        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-      })
+        navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+      }),
     },
     {
       path: './docs/simple-test.mdx',
@@ -175,15 +177,18 @@ sdk: react, expo, coffeescript
 
 # Simple Test Page
 
-Testing with a simple page.`
-    }
+Testing with a simple page.`,
+    },
   ])
 
-  const promise = build(createBlankStore(), createConfig({
-    ...baseConfig,
-    basePath: tempDir,
-    validSdks: ["react", "expo"]
-  }))
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'expo'],
+    }),
+  )
 
   await expect(promise).rejects.toThrow(`Invalid SDK ["coffeescript"], the valid SDKs are ["react","expo"]`)
 })
@@ -193,8 +198,8 @@ test('Invalid SDK in <If> fails the build', async () => {
     {
       path: './docs/manifest.json',
       content: JSON.stringify({
-        navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-      })
+        navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+      }),
     },
     {
       path: './docs/simple-test.mdx',
@@ -209,28 +214,30 @@ sdk: react, expo
   astro Content
 </If>
 
-Testing with a simple page.`
-    }
+Testing with a simple page.`,
+    },
   ])
 
-  const output = await build(createBlankStore(), createConfig({
-    ...baseConfig,
-    basePath: tempDir,
-    validSdks: ["react", "expo"]
-  }))
+  const output = await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'expo'],
+    }),
+  )
 
   expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
 })
 
 describe('Includes and Partials', () => {
-
   test('Invalid partial src fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/simple-test.mdx',
@@ -240,15 +247,18 @@ title: Simple Test
 
 <Include src="_partials/test-partial" />
 
-# Simple Test Page`
-      }
+# Simple Test Page`,
+      },
     ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).toContain(`warning Partial /docs/_partials/test-partial.mdx not found`)
   })
@@ -258,16 +268,16 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/_partials/test-partial-1.mdx',
-        content: `<Include src="_partials/test-partial-2" />`
+        content: `<Include src="_partials/test-partial-2" />`,
       },
       {
         path: './docs/_partials/test-partial-2.mdx',
-        content: `Test Partial Content`
+        content: `Test Partial Content`,
       },
       {
         path: './docs/simple-test.mdx',
@@ -277,15 +287,18 @@ title: Simple Test
 
 <Include src="_partials/test-partial-1" />
 
-# Simple Test Page`
-      }
+# Simple Test Page`,
+      },
     ])
 
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     await expect(promise).rejects.toThrow(`Partials inside of partials is not yet supported`)
   })
@@ -295,8 +308,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/simple-test.mdx',
@@ -306,15 +319,18 @@ title: Simple Test
 
 <Include src="test-partial" />
 
-# Simple Test Page`
-      }
+# Simple Test Page`,
+      },
     ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).toContain(`warning <Include /> prop "src" must start with "_partials/"`)
   })
@@ -326,8 +342,8 @@ describe('Link Validation and Processing', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/simple-test.mdx',
@@ -337,15 +353,18 @@ title: Simple Test
 
 [Non Existent Page](/docs/non-existent-page)
 
-# Simple Test Page`
-      }
+# Simple Test Page`,
+      },
     ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).toContain(`warning Guide /docs/non-existent-page not found`)
   })
@@ -355,8 +374,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/simple-test.mdx',
@@ -366,7 +385,7 @@ title: Simple Test
 
 [Core Page](/docs/core-page)
 
-# Simple Test Page`
+# Simple Test Page`,
       },
       {
         path: './docs/core-page.mdx',
@@ -374,15 +393,18 @@ title: Simple Test
 title: Core Page
 ---
 
-# Core Page`
-      }
+# Core Page`,
+      },
     ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).not.toContain(`warning Guide /docs/core-page not found`)
   })
@@ -392,8 +414,8 @@ title: Core Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Simple Test", href: "/docs/simple-test" }]]
-        })
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
       },
       {
         path: './docs/simple-test.mdx',
@@ -403,16 +425,18 @@ title: Simple Test
 
 [Simple Test](/docs/simple-test#non-existent-hash)  
 
-# Simple Test Page`
-      }
+# Simple Test Page`,
+      },
     ])
 
-
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).toContain(`warning Hash "non-existent-hash" not found in /docs/simple-test`)
   })
@@ -422,11 +446,13 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[
-            { title: "Simple Test", href: "/docs/simple-test" },
-            { title: "Headings", href: "/docs/headings" }
-          ]]
-        })
+          navigation: [
+            [
+              { title: 'Simple Test', href: '/docs/simple-test' },
+              { title: 'Headings', href: '/docs/headings' },
+            ],
+          ],
+        }),
       },
       {
         path: './docs/headings.mdx',
@@ -434,7 +460,7 @@ title: Simple Test
 title: Headings
 ---
 
-# test {{ id: 'my-heading' }}`
+# test {{ id: 'my-heading' }}`,
       },
       {
         path: './docs/simple-test.mdx',
@@ -442,30 +468,31 @@ title: Headings
 title: Simple Test
 ---
 
-[Headings](/docs/headings#my-heading)`
-      }
+[Headings](/docs/headings#my-heading)`,
+      },
     ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }))
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     expect(output).not.toContain(`warning Hash "my-heading" not found in /docs/headings`)
   })
-
 })
 
 describe('Path and File Handling', () => {
-
   test('should detect file path conflicts when a core doc path matches an SDK path', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "React Guide", href: "/docs/react/conflict" }]]
-        })
+          navigation: [[{ title: 'React Guide', href: '/docs/react/conflict' }]],
+        }),
       },
       {
         path: './docs/react/conflict.mdx',
@@ -473,30 +500,34 @@ describe('Path and File Handling', () => {
 title: React Guide
 ---
 
-# This will cause a conflict because it's in a path that starts with "react"`
-      }
-    ]);
+# This will cause a conflict because it's in a path that starts with "react"`,
+      },
+    ])
 
     // This should throw an error because the file path starts with an SDK name
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
-    await expect(promise).rejects.toThrow('Attempting to write out a core doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict');
-  });
-});
+    await expect(promise).rejects.toThrow(
+      'Attempting to write out a core doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict',
+    )
+  })
+})
 
 describe('Edge Cases', () => {
-
   test('should report errors for malformed frontmatter', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Malformed Frontmatter", href: "/docs/malformed-frontmatter" }]]
-        })
+          navigation: [[{ title: 'Malformed Frontmatter', href: '/docs/malformed-frontmatter' }]],
+        }),
       },
       {
         path: './docs/malformed-frontmatter.mdx',
@@ -505,27 +536,30 @@ title: Malformed Frontmatter
 description: \`This frontmatter has an unbalanced quote
 ---
 
-# Content with malformed frontmatter`
-      }
-    ]);
+# Content with malformed frontmatter`,
+      },
+    ])
 
     // This should throw a parsing error
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
-    await expect(promise).rejects.toThrow("Plain value cannot start with reserved character");
-  });
+    await expect(promise).rejects.toThrow('Plain value cannot start with reserved character')
+  })
 
   test('should require and validate mandatory frontmatter fields', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Missing Title", href: "/docs/missing-title" }]]
-        })
+          navigation: [[{ title: 'Missing Title', href: '/docs/missing-title' }]],
+        }),
       },
       {
         path: './docs/missing-title.mdx',
@@ -533,45 +567,51 @@ description: \`This frontmatter has an unbalanced quote
 description: This frontmatter is missing the required title field
 ---
 
-# Content with missing title in frontmatter`
-      }
-    ]);
+# Content with missing title in frontmatter`,
+      },
+    ])
 
     // This should throw an error about missing title
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
-    await expect(promise).rejects.toThrow('Frontmatter must have a "title" property');
-  });
+    await expect(promise).rejects.toThrow('Frontmatter must have a "title" property')
+  })
 
   test('should fail on special characters in paths', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[
-            { title: "Space in url", href: "/docs/space in url" },
-          ]]
-        })
+          navigation: [[{ title: 'Space in url', href: '/docs/space in url' }]],
+        }),
       },
       {
         path: './docs/space in url.mdx',
-        content: `---\ntitle: Space in url\n---`
-      }
-    ]);
+        content: `---\ntitle: Space in url\n---`,
+      },
+    ])
 
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
-    await expect(promise).rejects.toThrow('Href "/docs/space in url" contains characters that will be encoded by the browser, please remove them')
-  });
-});
+    await expect(promise).rejects.toThrow(
+      'Href "/docs/space in url" contains characters that will be encoded by the browser, please remove them',
+    )
+  })
+})
 
 describe('Error Reporting', () => {
   test('should produce clear and informative error messages for validation failures', async () => {
@@ -579,8 +619,8 @@ describe('Error Reporting', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: "Validation Error", href: "/docs/validation-error" }]]
-        })
+          navigation: [[{ title: 'Validation Error', href: '/docs/validation-error' }]],
+        }),
       },
       {
         path: './docs/validation-error.mdx',
@@ -591,30 +631,35 @@ sdk: react, invalid-sdk
 
 # Validation Error Page
 
-This page has an invalid SDK in frontmatter.`
-      }
-    ]);
+This page has an invalid SDK in frontmatter.`,
+      },
+    ])
 
     // This should throw an error with specific message about invalid SDK
-    const promise = build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const promise = build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
-    await expect(promise).rejects.toThrow('Invalid SDK ["invalid-sdk"], the valid SDKs are ["react"]');
-  });
+    await expect(promise).rejects.toThrow('Invalid SDK ["invalid-sdk"], the valid SDKs are ["react"]')
+  })
 
   test('should handle errors when a referenced document exists but is invalid', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[
-            { title: "Valid Document", href: "/docs/valid-document" },
-            { title: "Invalid Reference", href: "/docs/invalid-reference" }
-          ]]
-        })
+          navigation: [
+            [
+              { title: 'Valid Document', href: '/docs/valid-document' },
+              { title: 'Invalid Reference', href: '/docs/invalid-reference' },
+            ],
+          ],
+        }),
       },
       {
         path: './docs/valid-document.mdx',
@@ -624,7 +669,7 @@ title: Valid Document
 
 # Valid Document
 
-[Link to Invalid Reference](/docs/invalid-reference#non-existent-header)`
+[Link to Invalid Reference](/docs/invalid-reference#non-existent-header)`,
       },
       {
         path: './docs/invalid-reference.mdx',
@@ -634,31 +679,36 @@ title: Invalid Reference
 
 # Invalid Reference
 
-This document doesn't have the referenced header.`
-      }
-    ]);
+This document doesn't have the referenced header.`,
+      },
+    ])
 
     // Should complete with warnings
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     // Should report warning about missing hash
-    expect(output).toContain('warning Hash "non-existent-header" not found in /docs/invalid-reference');
-  });
+    expect(output).toContain('warning Hash "non-existent-header" not found in /docs/invalid-reference')
+  })
 
   test('should complete build workflow when errors are present in some files', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[
-            { title: "Valid Document", href: "/docs/valid-document" },
-            { title: "Document with Warnings", href: "/docs/document-with-warnings" }
-          ]]
-        })
+          navigation: [
+            [
+              { title: 'Valid Document', href: '/docs/valid-document' },
+              { title: 'Document with Warnings', href: '/docs/document-with-warnings' },
+            ],
+          ],
+        }),
       },
       {
         path: './docs/valid-document.mdx',
@@ -668,7 +718,7 @@ title: Valid Document
 
 # Valid Document
 
-This is a completely valid document.`
+This is a completely valid document.`,
       },
       {
         path: './docs/document-with-warnings.mdx',
@@ -682,22 +732,25 @@ title: Document with Warnings
 
 <If sdk="invalid-sdk">
   This content has an invalid SDK.
-</If>`
-      }
-    ]);
+</If>`,
+      },
+    ])
 
     // Should complete with warnings
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     // Check that warnings were reported
-    expect(output).toContain('warning Guide /docs/non-existent-document not found');
-    expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK');
-  });
-});
+    expect(output).toContain('warning Guide /docs/non-existent-document not found')
+    expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
+  })
+})
 
 describe('Advanced Features', () => {
   test('should correctly handle links with anchors to specific sections of documents', async () => {
@@ -705,11 +758,13 @@ describe('Advanced Features', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[
-            { title: "Source Document", href: "/docs/source-document" },
-            { title: "Target Document", href: "/docs/target-document" }
-          ]]
-        })
+          navigation: [
+            [
+              { title: 'Source Document', href: '/docs/source-document' },
+              { title: 'Target Document', href: '/docs/target-document' },
+            ],
+          ],
+        }),
       },
       {
         path: './docs/source-document.mdx',
@@ -721,7 +776,7 @@ title: Source Document
 
 [Link to Section 1](/docs/target-document#section-1)
 [Link to Section 2](/docs/target-document#section-2)
-[Link to Invalid Section](/docs/target-document#invalid-section)`
+[Link to Invalid Section](/docs/target-document#invalid-section)`,
       },
       {
         path: './docs/target-document.mdx',
@@ -737,22 +792,24 @@ Content for section 1.
 
 ## Section 2
 
-Content for section 2.`
-      }
-    ]);
+Content for section 2.`,
+      },
+    ])
 
-    const output = await build(createBlankStore(), createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ["react"]
-    }));
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
 
     // Valid links should work without warnings
-    expect(output).not.toContain('warning Hash "section-1" not found');
-    expect(output).not.toContain('warning Hash "section-2" not found');
-    
-    // Invalid link should produce a warning
-    expect(output).toContain('warning Hash "invalid-section" not found in /docs/target-document');
-  });
+    expect(output).not.toContain('warning Hash "section-1" not found')
+    expect(output).not.toContain('warning Hash "section-2" not found')
 
-});
+    // Invalid link should produce a warning
+    expect(output).toContain('warning Hash "invalid-section" not found in /docs/target-document')
+  })
+})

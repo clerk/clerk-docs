@@ -249,7 +249,7 @@ Authentication login documentation.`,
   )
 
   await expect(promise).rejects.toThrow(
-    'Guide "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+    'Doc "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
   )
 })
 
@@ -385,7 +385,7 @@ title: Simple Test
       }),
     )
 
-    expect(output).toContain(`warning Guide /docs/non-existent-page not found`)
+    expect(output).toContain(`warning Doc /docs/non-existent-page not found`)
   })
 
   test('Validate link between two pages is valid', async () => {
@@ -424,7 +424,7 @@ title: Core Page
       }),
     )
 
-    expect(output).not.toContain(`warning Guide /docs/core-page not found`)
+    expect(output).not.toContain(`warning Doc /docs/core-page not found`)
   })
 
   test('Warn if link is to existent page but with invalid hash', async () => {
@@ -507,13 +507,13 @@ describe('Path and File Handling', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'React Guide', href: '/docs/react/conflict' }]],
+          navigation: [[{ title: 'React Doc', href: '/docs/react/conflict' }]],
         }),
       },
       {
         path: './docs/react/conflict.mdx',
         content: `---
-title: React Guide
+title: React Doc
 ---
 
 # This will cause a conflict because it's in a path that starts with "react"`,
@@ -756,7 +756,7 @@ title: Document with Warnings
     )
 
     // Check that warnings were reported
-    expect(output).toContain('warning Guide /docs/non-existent-document not found')
+    expect(output).toContain('warning Doc /docs/non-existent-document not found')
     expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
   })
 })

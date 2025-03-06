@@ -465,7 +465,7 @@ const parseInMarkdownFile =
       .use(() => (tree, vfile) => {
         if (inManifest === false) {
           vfile.message(
-            'This guide is not in the manifest.json, but will still be publicly accessible and other guides can link to it',
+            'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
           )
         }
 
@@ -703,7 +703,7 @@ export const build = async (config: BuildConfig) => {
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
       const vfile = await markdownProcessor()
-        // Validate links between guides are valid
+        // Validate links between docs are valid
         .use(() => (tree: Node, vfile: VFile) => {
           return mdastVisit(tree, (node) => {
             if (node.type !== 'link') return
@@ -717,15 +717,15 @@ export const build = async (config: BuildConfig) => {
             const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
             if (ignore === true) return
 
-            const guide = docsMap.get(url)
+            const doc = docsMap.get(url)
 
-            if (guide === undefined) {
-              vfile.message(`Guide ${url} not found`, node.position)
+            if (doc === undefined) {
+              vfile.message(`Doc ${url} not found`, node.position)
               return
             }
 
             if (hash !== undefined) {
-              const hasHash = guide.headingsHashs.includes(hash)
+              const hasHash = doc.headingsHashs.includes(hash)
 
               if (hasHash === false) {
                 vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
@@ -759,7 +759,7 @@ export const build = async (config: BuildConfig) => {
 
                 if (available === false) {
                   vfile.fail(
-                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the guides frontmatter ["${doc.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
+                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${doc.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
                     node.position,
                   )
                 }

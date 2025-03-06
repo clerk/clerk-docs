@@ -4,7 +4,7 @@ import os from 'node:os'
 import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
-import { build, createBlankStore, createConfig } from './build-docs'
+import { build, createConfig } from './build-docs'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -91,30 +91,6 @@ async function createTempFiles(
   }
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function readFile(filePath: string): Promise<string> {
-  return normalizeString(await fs.readFile(filePath, 'utf-8'))
-}
-
-function normalizeString(str: string): string {
-  return str.replace(/\r\n/g, '\n').trim()
-}
-
-function treeDir(baseDir: string) {
-  return glob('**/*', {
-    cwd: baseDir,
-    nodir: true, // Only return files, not directories
-  })
-}
-
 const baseConfig = {
   docsPath: './docs',
   manifestPath: './docs/manifest.json',
@@ -149,7 +125,6 @@ Testing with a simple page.`,
   ])
 
   const output = await build(
-    createBlankStore(),
     createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -182,7 +157,6 @@ Testing with a simple page.`,
   ])
 
   const promise = build(
-    createBlankStore(),
     createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -219,7 +193,6 @@ Testing with a simple page.`,
   ])
 
   const output = await build(
-    createBlankStore(),
     createConfig({
       ...baseConfig,
       basePath: tempDir,
@@ -228,6 +201,56 @@ Testing with a simple page.`,
   )
 
   expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
+})
+
+test('should fail when child SDK is not in parent SDK list', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            {
+              title: 'Authentication',
+              sdk: ['react'],
+              items: [
+                [
+                  {
+                    title: 'Login',
+                    href: '/docs/auth/login',
+                    sdk: ['react', 'python'], // python not in parent
+                  },
+                ],
+              ],
+            },
+          ],
+        ],
+      }),
+    },
+    {
+      path: './docs/auth/login.mdx',
+      content: `---
+title: Login
+sdk: react, python
+---
+
+# Login Page
+
+Authentication login documentation.`,
+    },
+  ])
+
+  const promise = build(
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'python', 'nextjs'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow(
+    'Guide "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+  )
 })
 
 describe('Includes and Partials', () => {
@@ -252,7 +275,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -292,7 +314,6 @@ title: Simple Test
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -324,7 +345,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -358,7 +378,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -398,7 +417,6 @@ title: Core Page
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -430,7 +448,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -473,7 +490,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -506,7 +522,6 @@ title: React Guide
 
     // This should throw an error because the file path starts with an SDK name
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -515,7 +530,7 @@ title: React Guide
     )
 
     await expect(promise).rejects.toThrow(
-      'Attempting to write out a core doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict',
+      'Doc "/docs/react/conflict" is attempting to write out a doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict.',
     )
   })
 })
@@ -542,7 +557,6 @@ description: \`This frontmatter has an unbalanced quote
 
     // This should throw a parsing error
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -573,7 +587,6 @@ description: This frontmatter is missing the required title field
 
     // This should throw an error about missing title
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -599,7 +612,6 @@ description: This frontmatter is missing the required title field
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -637,7 +649,6 @@ This page has an invalid SDK in frontmatter.`,
 
     // This should throw an error with specific message about invalid SDK
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -685,7 +696,6 @@ This document doesn't have the referenced header.`,
 
     // Should complete with warnings
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -738,7 +748,6 @@ title: Document with Warnings
 
     // Should complete with warnings
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -797,7 +806,6 @@ Content for section 2.`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,

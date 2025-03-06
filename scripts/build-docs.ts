@@ -1,13 +1,14 @@
-// Things this build script does
+// Things this script does
 
-// - [x] Validates the manifest
-// - [x] Validates the markdown files contents (including frontmatter)
-// - [x] Validates links (including hashes) between docs are valid
-// - [x] Validates the sdk filtering in the manifest
-// - [x] Validates the sdk filtering in the frontmatter
-// - [x] Validates the sdk filtering in the <If /> component
-//   - [x] Checks that the sdk is available in the manifest
-//   - [x] Checks that the sdk is available in the frontmatter
+// Validates
+// - The manifest
+// - The markdown files contents (including frontmatter)
+// - Links (including hashes) between docs are valid
+// - The sdk filtering in the manifest
+// - The sdk filtering in the frontmatter
+// - The sdk filtering in the <If /> component
+//   - Checks that the sdk is available in the manifest
+//   - Checks that the sdk is available in the frontmatter
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -23,7 +24,6 @@ import readdirp from 'readdirp'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { Node } from 'unist'
-import chok from 'chokidar'
 
 const VALID_SDKS = [
   'nextjs',
@@ -178,15 +178,15 @@ const pleaseReport = '(this is a bug with the build script, please report)'
 
 const isValidSdk =
   (config: BuildConfig) =>
-  (sdk: string): sdk is SDK => {
-    return config.validSdks.includes(sdk as SDK)
-  }
+    (sdk: string): sdk is SDK => {
+      return config.validSdks.includes(sdk as SDK)
+    }
 
 const isValidSdks =
   (config: BuildConfig) =>
-  (sdks: string[]): sdks is SDK[] => {
-    return sdks.every(isValidSdk(config))
-  }
+    (sdks: string[]): sdks is SDK[] => {
+      return sdks.every(isValidSdk(config))
+    }
 
 const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
   const { manifestSchema } = createManifestSchema(config)
@@ -241,9 +241,35 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
         throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
       }
 
+      const partialContentVFile = markdownProcessor()
+        .use(() => (tree, vfile) => {
+          mdastVisit(
+            tree,
+            (node) =>
+              (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
+              'name' in node &&
+              node.name === 'Include',
+            (node) => {
+              vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
+            },
+          )
+        })
+        .processSync({
+          path: markdownPath,
+          value: content,
+        })
+
+      const partialContentReport = reporter([partialContentVFile], { quiet: true })
+
+      if (partialContentReport !== '') {
+        console.error(partialContentReport)
+        process.exit(1)
+      }
+
       return {
         path: markdownPath,
         content,
+        vfile: partialContentVFile,
       }
     }),
   )
@@ -338,22 +364,6 @@ function flattenTree<
   }
 
   return result
-}
-
-const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
-  // This is external so can't change it
-  if (href.startsWith('/docs') === false) return href
-
-  const hrefSegments = href.split('/')
-
-  // This is a little hacky so we might change it
-  // if the url already contains the sdk, we don't need to change it
-  if (hrefSegments.includes(targetSDK)) {
-    return href
-  }
-
-  // Add the sdk to the url
-  return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
 }
 
 const extractComponentPropValueFromNode = (
@@ -522,31 +532,6 @@ const parseInMarkdownFile =
             vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
             return
           }
-
-          // this could be done as part of the partial reading instead of here
-          const partialContentVFile = markdownProcessor()
-            .use(() => (tree, vfile) => {
-              mdastVisit(
-                tree,
-                (node) =>
-                  (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
-                  'name' in node &&
-                  node.name === 'Include',
-                () => {
-                  vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
-                },
-              )
-            })
-            .processSync({
-              path: partial.path,
-              value: partial.content,
-            })
-
-          const partialContentReport = reporter([partialContentVFile], { quiet: true })
-
-          if (partialContentReport !== '') {
-            console.error(partialContentReport)
-          }
         })
       })
       // extract out the headings to check hashes in links
@@ -589,11 +574,7 @@ const parseInMarkdownFile =
     }
   }
 
-export const createBlankStore = () => ({
-  markdownFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>(),
-})
-
-export const build = async (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
+export const build = async (config: BuildConfig) => {
   // Apply currying to create functions pre-configured with config
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
@@ -608,11 +589,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   console.info('✔️ Read Docs Folder')
 
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
-  console.info('✔️ Read Partials')
+  console.info(`✔️ Read ${partials.length} Partials`)
 
-  // slightly confusing variable naming
-  const guides = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
-  const guidesInManifest = new Set<string>()
+  const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
+  const docsInManifest = new Set<string>()
 
   // Grab all the docs links in the manifest
   await traverseTree({ items: userManifest }, async (item) => {
@@ -622,45 +602,27 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
     const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
     if (ignore === true) return item
 
-    guidesInManifest.add(item.href)
+    docsInManifest.add(item.href)
 
     return item
   })
   console.info('✔️ Parsed in Manifest')
 
-  // Read in all the guides
-  const docs = (
-    await Promise.all(
-      docsFiles.map(async (file) => {
-        const href = removeMdxSuffix(`/docs/${file.path}`)
+  // Read in all the docs
+  const docsArray = await Promise.all(
+    docsFiles.map(async (file) => {
+      const href = removeMdxSuffix(`/docs/${file.path}`)
 
-        // maybe don't need caching here?
-        const alreadyLoaded = guides.get(href)
+      const inManifest = docsInManifest.has(href)
 
-        if (alreadyLoaded) return null // already processed
+      const markdownFile = await parseMarkdownFile(href, partials, inManifest)
 
-        const inManifest = guidesInManifest.has(href)
+      docsMap.set(href, markdownFile)
 
-        let markdownFile: Awaited<ReturnType<typeof parseMarkdownFile>>
-
-        // maybe don't need caching here?
-        const cachedMarkdownFile = store.markdownFiles.get(href)
-
-        if (cachedMarkdownFile) {
-          markdownFile = structuredClone(cachedMarkdownFile)
-        } else {
-          markdownFile = await parseMarkdownFile(href, partials, inManifest)
-
-          store.markdownFiles.set(href, structuredClone(markdownFile))
-        }
-
-        guides.set(href, markdownFile)
-
-        return markdownFile
-      }),
-    )
-  ).filter((item): item is NonNullable<typeof item> => item !== null)
-  console.info(`✔️ Loaded in ${docs.length} guides`)
+      return markdownFile
+    }),
+  )
+  console.info(`✔️ Loaded in ${docsArray.length} docs`)
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifest = await traverseTree(
@@ -672,18 +634,18 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
-      const guide = guides.get(item.href)
+      const doc = docsMap.get(item.href)
 
-      if (guide === undefined) {
-        throw new Error(`Guide "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
+      if (doc === undefined) {
+        throw new Error(`Doc "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
       }
 
-      const sdk = guide.sdk ?? tree.sdk
+      const sdk = doc.sdk ?? tree.sdk
 
-      if (guide.sdk !== undefined && tree.sdk !== undefined) {
-        if (guide.sdk.every((sdk) => tree.sdk?.includes(sdk)) === false) {
+      if (doc.sdk !== undefined && tree.sdk !== undefined) {
+        if (doc.sdk.every((sdk) => tree.sdk?.includes(sdk)) === false) {
           throw new Error(
-            `Guide "${item.title}" is attempting to use ${JSON.stringify(guide.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`,
+            `Doc "${item.title}" is attempting to use ${JSON.stringify(doc.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`,
           )
         }
       }
@@ -693,26 +655,40 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         sdk,
       }
     },
-    async (group, tree) => {
-      const itemsSDKs = Array.from(new Set(group.items?.flatMap((item) => item.flatMap((item) => item.sdk)))).filter(
-        (sdk): sdk is SDK => sdk !== undefined,
-      )
+    async ({ items, ...details }, tree) => {
 
-      const { items, ...details } = group
+      // This takes all the children items, grabs the sdks out of them, and combines that in to a list
+      const groupsItemsCombinedSDKs = (() => {
+        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
 
-      if (details.sdk !== undefined && tree.sdk !== undefined) {
-        if (details.sdk.every((sdk) => tree.sdk?.includes(sdk)) === false) {
+        if (sdks === undefined) return []
+
+        return Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
+      })()
+
+      // This is the sdk of the group
+      const groupSDK = details.sdk
+
+      // This is the sdk of the parent group
+      const parentSDK = tree.sdk
+
+      if (groupSDK !== undefined && parentSDK !== undefined) {
+        if (groupSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
           throw new Error(
-            `Group "${details.title}" is attempting to use ${JSON.stringify(details.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`,
+            `Group "${details.title}" is attempting to use ${JSON.stringify(groupSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
           )
         }
       }
 
-      if (itemsSDKs.length === 0) return { ...details, sdk: details.sdk ?? tree.sdk, items } as ManifestGroup
+      // If there are no children items, then the we either use the group we are looking at sdks if its defined, or its parent group
+      if (groupsItemsCombinedSDKs.length === 0) {
+        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+      }
 
       return {
         ...details,
-        sdk: Array.from(new Set([...(details.sdk ?? []), ...itemsSDKs])) ?? [],
+        // If there are children items, then we combine the sdks of the group and the children items sdks
+        sdk: Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? [],
         items,
       } as ManifestGroup
     },
@@ -725,11 +701,8 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
-  // It would definitely be preferable we didn't need to do this markdown processing twice
-  // But because we need a full list / hashmap of all the existing docs, we can't
-  // Unless maybe we do some kind of lazy loading of the docs, but this would add complexity
   const coreVFiles = await Promise.all(
-    docs.map(async (doc) => {
+    docsArray.map(async (doc) => {
       const vfile = await markdownProcessor()
         // Validate links between guides are valid
         .use(() => (tree: Node, vfile: VFile) => {
@@ -740,14 +713,12 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             if (!node.url.startsWith('/docs/')) return
             if (!('children' in node)) return
 
-            node.url = removeMdxSuffix(node.url)
-
-            const [url, hash] = (node.url as string).split('#')
+            const [url, hash] = removeMdxSuffix(node.url).split('#')
 
             const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
             if (ignore === true) return
 
-            const guide = guides.get(url)
+            const guide = docsMap.get(url)
 
             if (guide === undefined) {
               vfile.message(`Guide ${url} not found`, node.position)
@@ -782,7 +753,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             if (manifestItems.length === 0) return
 
             sdksFilter.forEach((sdk) => {
-              ;(() => {
+              ; (() => {
                 if (doc.sdk === undefined) return
 
                 const available = doc.sdk.includes(sdk)
@@ -794,19 +765,19 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                   )
                 }
               })()
-              ;(() => {
-                // The doc is generic so we are skipping it
-                if (availableSDKs.length === 0) return
+                ; (() => {
+                  // The doc is generic so we are skipping it
+                  if (availableSDKs.length === 0) return
 
-                const available = availableSDKs.includes(sdk)
+                  const available = availableSDKs.includes(sdk)
 
-                if (available === false) {
-                  vfile.fail(
-                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
-                    node.position,
-                  )
-                }
-              })()
+                  if (available === false) {
+                    vfile.fail(
+                      `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+                      node.position,
+                    )
+                  }
+                })()
             })
           })
         })
@@ -816,7 +787,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
       if (isValidSdk(config)(distFilePath.split('/')[0])) {
         throw new Error(
-          `Attempting to write out a core doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`,
+          `Doc "${doc.href}" is attempting to write out a doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`,
         )
       }
 
@@ -824,62 +795,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
     }),
   )
 
-  console.info(`✔️ Wrote out ${docs.length} core docs`)
+  console.info(`✔️ Validated all docs`)
 
-  const sdkSpecificVFiles = await Promise.all(
-    config.validSdks.map(async (targetSdk) => {
-      const vFiles = await Promise.all(
-        docs.map(async (doc) => {
-          if (doc.sdk === undefined) return null // skip core docs
-          if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
-
-          const vfile = await markdownProcessor()
-            // scope urls so they point to the current sdk
-            .use(() => (tree, vfile) => {
-              return mdastVisit(tree, (node) => {
-                if (node.type !== 'link') return
-                if (!('url' in node)) {
-                  vfile.fail(`Link node does not have a url property ${pleaseReport}`, node.position)
-                  return
-                }
-                if (typeof node.url !== 'string') {
-                  vfile.fail(`Link node url must be a string ${pleaseReport}`, node.position)
-                  return
-                }
-              })
-            })
-            .process({
-              ...doc.vfile,
-              messages: [], // reset the messages, otherwise they will be duplicated
-            })
-
-          return vfile
-        }),
-      )
-
-      return { targetSdk, vFiles }
-    }),
-  )
-
-  sdkSpecificVFiles.forEach(({ targetSdk, vFiles }) =>
-    console.info(`✔️ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific guides`),
-  )
-
-  const flatSdkSpecificVFiles = sdkSpecificVFiles.flatMap(({ vFiles }) => vFiles)
-
-  const output = reporter(
-    [
-      ...coreVFiles.filter((item): item is NonNullable<typeof item> => item !== null),
-      ...flatSdkSpecificVFiles.filter((item): item is NonNullable<typeof item> => item !== null),
-    ],
-    { quiet: true },
-  )
-
-  if (output !== '') {
-    console.info(output)
-  }
-
-  return output
+  return reporter(coreVFiles, { quiet: true })
 }
 
 type BuildConfigOptions = {
@@ -898,7 +816,7 @@ type BuildConfigOptions = {
 
 type BuildConfig = ReturnType<typeof createConfig>
 
-// This is what this function does, and why!?
+// Takes the basePath and resolves the relative paths to be absolute paths
 export function createConfig(config: BuildConfigOptions) {
   const resolve = (relativePath: string) => {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
@@ -954,17 +872,16 @@ const main = async () => {
     },
   })
 
-  const store = createBlankStore()
-
-  return await build(store, config)
+  return await build(config)
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
-  (async () => {
+  ; (async () => {
     const output = await main()
 
     if (output !== '') {
+      console.info(output)
       process.exit(1)
     }
   })()

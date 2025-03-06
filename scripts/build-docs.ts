@@ -951,10 +951,16 @@ const main = async () => {
 
   const store = createBlankStore()
 
-  await build(store, config)
+  return await build(store, config)
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
-  main()
+  (async () => {
+    const output = await main()
+
+    if (output !== '') {
+      process.exit(1)
+    }
+  })()
 }

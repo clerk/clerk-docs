@@ -523,6 +523,7 @@ const parseInMarkdownFile =
             return
           }
 
+          // this could be done as part of the partial reading instead of here
           const partialContentVFile = markdownProcessor()
             .use(() => (tree, vfile) => {
               mdastVisit(
@@ -609,6 +610,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info('✔️ Read Partials')
 
+  // slightly confusing variable naming
   const guides = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const guidesInManifest = new Set<string>()
 
@@ -632,6 +634,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       docsFiles.map(async (file) => {
         const href = removeMdxSuffix(`/docs/${file.path}`)
 
+        // maybe don't need caching here?
         const alreadyLoaded = guides.get(href)
 
         if (alreadyLoaded) return null // already processed
@@ -640,6 +643,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
         let markdownFile: Awaited<ReturnType<typeof parseMarkdownFile>>
 
+        // maybe don't need caching here?
         const cachedMarkdownFile = store.markdownFiles.get(href)
 
         if (cachedMarkdownFile) {
@@ -894,6 +898,7 @@ type BuildConfigOptions = {
 
 type BuildConfig = ReturnType<typeof createConfig>
 
+// This is what this function does, and why!?
 export function createConfig(config: BuildConfigOptions) {
   const resolve = (relativePath: string) => {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)

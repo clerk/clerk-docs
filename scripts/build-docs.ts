@@ -178,15 +178,15 @@ const pleaseReport = '(this is a bug with the build script, please report)'
 
 const isValidSdk =
   (config: BuildConfig) =>
-    (sdk: string): sdk is SDK => {
-      return config.validSdks.includes(sdk as SDK)
-    }
+  (sdk: string): sdk is SDK => {
+    return config.validSdks.includes(sdk as SDK)
+  }
 
 const isValidSdks =
   (config: BuildConfig) =>
-    (sdks: string[]): sdks is SDK[] => {
-      return sdks.every(isValidSdk(config))
-    }
+  (sdks: string[]): sdks is SDK[] => {
+    return sdks.every(isValidSdk(config))
+  }
 
 const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
   const { manifestSchema } = createManifestSchema(config)
@@ -656,7 +656,6 @@ export const build = async (config: BuildConfig) => {
       }
     },
     async ({ items, ...details }, tree) => {
-
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
         const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
@@ -753,7 +752,7 @@ export const build = async (config: BuildConfig) => {
             if (manifestItems.length === 0) return
 
             sdksFilter.forEach((sdk) => {
-              ; (() => {
+              ;(() => {
                 if (doc.sdk === undefined) return
 
                 const available = doc.sdk.includes(sdk)
@@ -765,19 +764,19 @@ export const build = async (config: BuildConfig) => {
                   )
                 }
               })()
-                ; (() => {
-                  // The doc is generic so we are skipping it
-                  if (availableSDKs.length === 0) return
+              ;(() => {
+                // The doc is generic so we are skipping it
+                if (availableSDKs.length === 0) return
 
-                  const available = availableSDKs.includes(sdk)
+                const available = availableSDKs.includes(sdk)
 
-                  if (available === false) {
-                    vfile.fail(
-                      `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
-                      node.position,
-                    )
-                  }
-                })()
+                if (available === false) {
+                  vfile.fail(
+                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+                    node.position,
+                  )
+                }
+              })()
             })
           })
         })
@@ -877,7 +876,7 @@ const main = async () => {
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
-  ; (async () => {
+  ;(async () => {
     const output = await main()
 
     if (output !== '') {

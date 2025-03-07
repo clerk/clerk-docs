@@ -640,12 +640,19 @@ export const build = async (config: BuildConfig) => {
         throw new Error(`Doc "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
       }
 
-      const sdk = doc.sdk ?? tree.sdk
+      // This is the sdk of the doc
+      const docSDK = doc.sdk
 
-      if (doc.sdk !== undefined && tree.sdk !== undefined) {
-        if (doc.sdk.every((sdk) => tree.sdk?.includes(sdk)) === false) {
+      // This is the sdk of the parent group
+      const parentSDK = tree.sdk
+
+      // either use the defined sdk of the doc, or the parent group
+      const sdk = docSDK ?? parentSDK
+
+      if (docSDK !== undefined && parentSDK !== undefined) {
+        if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
           throw new Error(
-            `Doc "${item.title}" is attempting to use ${JSON.stringify(doc.sdk)} But its being filtered down to ${JSON.stringify(tree.sdk)} in the manifest.json`,
+            `Doc "${item.title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
           )
         }
       }
@@ -682,6 +689,14 @@ export const build = async (config: BuildConfig) => {
       // If there are no children items, then the we either use the group we are looking at sdks if its defined, or its parent group
       if (groupsItemsCombinedSDKs.length === 0) {
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+      }
+
+      if (groupSDK !== undefined && groupSDK.length > 0) {
+        return {
+          ...details,
+          sdk: groupSDK,
+          items,
+        } as ManifestGroup
       }
 
       return {

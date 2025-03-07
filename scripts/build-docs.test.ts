@@ -73,7 +73,7 @@ async function createTempFiles(
 
   // Return useful helpers
   return {
-    tempDir,
+    tempDir: path.join(tempDir, 'scripts'), // emulate that the base path is the scripts folder, to emulate __dirname
     pathJoin: (...paths: string[]) => path.join(tempDir, ...paths),
 
     // Get a list of all files in the temp directory
@@ -92,9 +92,9 @@ async function createTempFiles(
 }
 
 const baseConfig = {
-  docsPath: './docs',
-  manifestPath: './docs/manifest.json',
-  partialsPath: './_partials',
+  docsPath: '../docs',
+  manifestPath: '../docs/manifest.json',
+  partialsPath: '../docs/_partials',
   ignorePaths: ['/docs/_partials'],
   manifestOptions: {
     wrapDefault: true,

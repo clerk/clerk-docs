@@ -202,7 +202,7 @@ const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
 }
 
 const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
-  const filePath = path.join(config.basePath, docPath)
+  const filePath = path.join(config.docsPath, docPath)
 
   try {
     const fileContent = await fs.readFile(filePath, { encoding: 'utf-8' })
@@ -222,7 +222,7 @@ const readDocsFolder = (config: BuildConfig) => async () => {
 }
 
 const readPartialsFolder = (config: BuildConfig) => async () => {
-  return readdirp.promise(path.join(config.docsPath, config.partialsRelativePath), {
+  return readdirp.promise(config.partialsPath, {
     type: 'files',
     fileFilter: '*.mdx',
   })
@@ -447,7 +447,7 @@ const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile
 const parseInMarkdownFile =
   (config: BuildConfig) => async (href: string, partials: { path: string; content: string }[], inManifest: boolean) => {
     const readFile = readMarkdownFile(config)
-    const [error, fileContent] = await readFile(`${href}.mdx`)
+    const [error, fileContent] = await readFile(`${href}.mdx`.replace("/docs/", ""))
 
     if (error !== null) {
       throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, {
@@ -865,10 +865,10 @@ export function createConfig(config: BuildConfigOptions) {
 
 const main = async () => {
   const config = createConfig({
-    basePath: process.cwd(),
-    docsPath: './docs',
-    manifestPath: './docs/manifest.json',
-    partialsPath: './_partials',
+    basePath: __dirname,
+    docsPath: '../docs',
+    manifestPath: '../docs/manifest.json',
+    partialsPath: '../docs/_partials',
     ignorePaths: [
       '/docs/core-1',
       '/pricing',
@@ -890,6 +890,8 @@ const main = async () => {
       hideTitleDefault: false,
     },
   })
+
+  console.log(config)
 
   return await build(config)
 }

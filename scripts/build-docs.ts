@@ -371,6 +371,7 @@ const extractComponentPropValueFromNode = (
   vfile: VFile | undefined,
   componentName: string,
   propName: string,
+  required = true,
 ): string | undefined => {
   // Check if it's an MDX component
   if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') {
@@ -396,14 +397,18 @@ const extractComponentPropValueFromNode = (
   const propAttribute = node.attributes.find((attribute) => attribute.name === propName)
 
   if (propAttribute === undefined) {
-    vfile?.message(`<${componentName} /> component has no "${propName}" attribute`, node.position)
+    if (required === true) {
+      vfile?.message(`<${componentName} /> component has no "${propName}" attribute`, node.position)
+    }
     return undefined
   }
 
   const value = propAttribute.value
 
   if (value === undefined) {
-    vfile?.message(`<${componentName} /> attribute "${propName}" has no value ${pleaseReport}`, node.position)
+    if (required === true) {
+      vfile?.message(`<${componentName} /> attribute "${propName}" has no value ${pleaseReport}`, node.position)
+    }
     return undefined
   }
 
@@ -751,7 +756,7 @@ export const build = async (config: BuildConfig) => {
         // Validate the <If /> components
         .use(() => (tree, vfile) => {
           mdastVisit(tree, (node) => {
-            const sdk = extractComponentPropValueFromNode(node, vfile, 'If', 'sdk')
+            const sdk = extractComponentPropValueFromNode(node, vfile, 'If', 'sdk', false)
 
             if (sdk === undefined) return
 

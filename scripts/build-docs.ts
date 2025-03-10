@@ -891,19 +891,15 @@ const main = async () => {
     },
   })
 
-  console.log(config)
+  const output = await build(config)
 
-  return await build(config)
+  if (output !== '') {
+    console.info(output)
+    process.exit(1)
+  }
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
-  ;(async () => {
-    const output = await main()
-
-    if (output !== '') {
-      console.info(output)
-      process.exit(1)
-    }
-  })()
+  main()
 }

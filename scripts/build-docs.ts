@@ -566,7 +566,7 @@ const parseInMarkdownFile =
         )
       })
       .process({
-        path: `${href}.mdx`,
+        path: `${href.substring(1)}.mdx`,
         value: fileContent,
       })
 

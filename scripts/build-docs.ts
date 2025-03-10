@@ -447,7 +447,7 @@ const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile
 const parseInMarkdownFile =
   (config: BuildConfig) => async (href: string, partials: { path: string; content: string }[], inManifest: boolean) => {
     const readFile = readMarkdownFile(config)
-    const [error, fileContent] = await readFile(`${href}.mdx`.replace("/docs/", ""))
+    const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
     if (error !== null) {
       throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, {

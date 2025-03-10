@@ -15,6 +15,7 @@ import path from 'node:path'
 import remarkMdx from 'remark-mdx'
 import { remark } from 'remark'
 import { visit as mdastVisit } from 'unist-util-visit'
+import { map as mdastMap } from 'unist-util-map'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from 'yaml'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -241,7 +242,9 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
         throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
       }
 
-      const partialContentVFile = markdownProcessor()
+      let partialNode: Node | null = null
+
+      const partialContentVFile = await markdownProcessor()
         .use(() => (tree, vfile) => {
           mdastVisit(
             tree,
@@ -253,8 +256,10 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
               vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
             },
           )
+
+          partialNode = tree
         })
-        .processSync({
+        .process({
           path: markdownPath,
           value: content,
         })
@@ -266,10 +271,15 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
         process.exit(1)
       }
 
+      if (partialNode === null) {
+        throw new Error(`Failed to parse the content of ${markdownPath}`)
+      }
+
       return {
         path: markdownPath,
         content,
         vfile: partialContentVFile,
+        node: partialNode as Node,
       }
     }),
   )
@@ -445,7 +455,7 @@ const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile
 }
 
 const parseInMarkdownFile =
-  (config: BuildConfig) => async (href: string, partials: { path: string; content: string }[], inManifest: boolean) => {
+  (config: BuildConfig) => async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
     const readFile = readMarkdownFile(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
@@ -523,14 +533,14 @@ const parseInMarkdownFile =
       })
       // Validate the <Include />
       .use(() => (tree, vfile) => {
-        return mdastVisit(tree, (node) => {
+        return mdastMap(tree, (node) => {
           const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
 
-          if (partialSrc === undefined) return
+          if (partialSrc === undefined) return node
 
           if (partialSrc.startsWith('_partials/') === false) {
             vfile.message(`<Include /> prop "src" must start with "_partials/"`, node.position)
-            return
+            return node
           }
 
           const partial = partials.find(
@@ -539,8 +549,10 @@ const parseInMarkdownFile =
 
           if (partial === undefined) {
             vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
-            return
+            return node
           }
+
+          return Object.assign(node, partial.node)
         })
       })
       // extract out the headings to check hashes in links

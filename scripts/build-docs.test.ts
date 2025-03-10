@@ -532,6 +532,58 @@ title: Simple Test
 
     expect(output).not.toContain(`warning Hash "my-heading" not found in /docs/headings`)
   })
+
+  test('Check link and hash in partial is valid', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page 1', href: '/docs/page-1' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+---
+
+<Include src="_partials/links" />`,
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `---
+title: Links
+---
+
+[Page 2](/docs/page-2#my-heading)
+[Page 2](/docs/page-3)`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+---
+
+test`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(`warning Hash "my-heading" not found in /docs/page-2`)
+    expect(output).toContain(`warning Doc /docs/page-3 not found`)
+  })
 })
 
 describe('Path and File Handling', () => {

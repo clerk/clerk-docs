@@ -454,7 +454,8 @@ const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile
 }
 
 const parseInMarkdownFile =
-  (config: BuildConfig) => async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
+  (config: BuildConfig) =>
+  async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
     const readFile = readMarkdownFile(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
@@ -770,7 +771,7 @@ export const build = async (config: BuildConfig) => {
           })
         })
         .process(partial.vfile)
-    })
+    }),
   )
   console.info(`✔️ Validated all partials`)
 

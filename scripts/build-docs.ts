@@ -552,7 +552,7 @@ const parseInMarkdownFile =
             // @ts-expect-error - If the heading has a id in it, this will pick it up
             // eg # test {{ id: 'my-heading' }}
             // This is for remapping the hash to the custom id
-            const id = node?.children?.[1]?.data?.estree?.body?.[0]?.expression?.properties?.[0]?.value?.value as
+            const id = node?.children.find((child) => child.type === 'mdxTextExpression')?.data?.estree?.body.find((child) => child.type === 'ExpressionStatement')?.expression?.properties.find((prop) => prop.key.name === 'id').value.value as
               | string
               | undefined
 

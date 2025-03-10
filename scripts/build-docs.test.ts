@@ -510,7 +510,7 @@ title: Simple Test
 title: Headings
 ---
 
-# test {{ id: 'my-heading' }}`,
+# test {{ toc: false, id: 'my-heading' }}`,
       },
       {
         path: './docs/simple-test.mdx',

@@ -260,7 +260,7 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
           partialNode = tree
         })
         .process({
-          path: markdownPath,
+          path: `docs/_partials/${markdownPath}`,
           value: content,
         })
 
@@ -533,14 +533,14 @@ const parseInMarkdownFile =
       })
       // Validate the <Include />
       .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
+        return mdastVisit(tree, (node) => {
           const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
 
-          if (partialSrc === undefined) return node
+          if (partialSrc === undefined) return
 
           if (partialSrc.startsWith('_partials/') === false) {
             vfile.message(`<Include /> prop "src" must start with "_partials/"`, node.position)
-            return node
+            return
           }
 
           const partial = partials.find(
@@ -549,10 +549,10 @@ const parseInMarkdownFile =
 
           if (partial === undefined) {
             vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
-            return node
+            return
           }
 
-          return Object.assign(node, partial.node)
+          return
         })
       })
       // extract out the headings to check hashes in links
@@ -737,6 +737,44 @@ export const build = async (config: BuildConfig) => {
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
+  const partialsVFiles = await Promise.all(
+    partials.map(async (partial) => {
+      return await markdownProcessor()
+        // validate links in partials to docs are valid
+        .use(() => (tree, vfile) => {
+          return mdastVisit(tree, (node) => {
+            if (node.type !== 'link') return
+            if (!('url' in node)) return
+            if (typeof node.url !== 'string') return
+            if (!node.url.startsWith('/docs/')) return
+            if (!('children' in node)) return
+
+            const [url, hash] = removeMdxSuffix(node.url).split('#')
+
+            const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+            if (ignore === true) return
+
+            const doc = docsMap.get(url)
+
+            if (doc === undefined) {
+              vfile.message(`Doc ${url} not found`, node.position)
+              return
+            }
+
+            if (hash !== undefined) {
+              const hasHash = doc.headingsHashs.includes(hash)
+
+              if (hasHash === false) {
+                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+              }
+            }
+          })
+        })
+        .process(partial.vfile)
+    })
+  )
+  console.info(`✔️ Validated all partials`)
+
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
       const vfile = await markdownProcessor()
@@ -833,7 +871,7 @@ export const build = async (config: BuildConfig) => {
 
   console.info(`✔️ Validated all docs`)
 
-  return reporter(coreVFiles, { quiet: true })
+  return reporter([...coreVFiles, ...partialsVFiles], { quiet: true })
 }
 
 type BuildConfigOptions = {

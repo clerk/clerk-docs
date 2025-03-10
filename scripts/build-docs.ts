@@ -504,6 +504,10 @@ const parseInMarkdownFile =
               return
             }
 
+            if (frontmatterYaml.description === undefined) {
+              vfile.message(`Frontmatter should have a "description" property`, node.position)
+            }
+
             frontmatter = {
               title: frontmatterYaml.title,
               description: frontmatterYaml.description,

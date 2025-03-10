@@ -116,6 +116,7 @@ test('Basic build test with simple files', async () => {
       path: './docs/simple-test.mdx',
       content: `---
 title: Simple Test
+description: This is a simple test page
 ---
 
 # Simple Test Page
@@ -133,6 +134,38 @@ Testing with a simple page.`,
   )
 
   expect(output).toBe('')
+})
+
+test('Warning on missing description in frontmatter', async () => {
+    // Create temp environment with minimal files array
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+---
+
+# Simple Test Page
+
+Testing with a simple page.`,
+      },
+    ])
+  
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+  expect(output).toContain('warning Frontmatter should have a "description" property')
 })
 
 test('Invalid SDK in frontmatter fails the build', async () => {

@@ -1523,7 +1523,9 @@ title: Source Page
 # Source Page
 
 [Link to Target with .mdx](/docs/target-page.mdx)
-[Link to Target without .mdx](/docs/target-page)`,
+[Link to Target without .mdx](/docs/target-page)
+[Link to Target with hash](/docs/target-page#target-page-content)
+[Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
       },
       {
         path: './docs/target-page.mdx',
@@ -1550,6 +1552,10 @@ title: Target Page
     // The link should have .mdx removed
     expect(sourcePageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
     expect(sourcePageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+    expect(sourcePageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+    expect(sourcePageContent).toContain(
+      '[Link to Target with hash and .mdx](/docs/target-page#target-page-content)',
+    )
     expect(sourcePageContent).not.toContain('/docs/target-page.mdx')
   })
 })

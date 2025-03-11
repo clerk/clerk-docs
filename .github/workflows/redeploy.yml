@@ -12,9 +12,40 @@ on:
 jobs:
   redeploy:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     env:
       DEPLOY_HOOK: ${{ github.ref == 'refs/heads/main' && secrets.WEBSITE_DEPLOY_HOOK || secrets.WEBSITE_DEPLOY_HOOK_CORE_1 }}
     steps:
+      - name: Check for dont-redeploy label
+        id: check-label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // For workflow_dispatch or direct pushes without PRs, we should always deploy
+            if (!context.payload.pull_request) {
+              return {shouldDeploy: true};
+            }
+
+            // Get the PR associated with this commit (if any)
+            const associatedPRs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha
+            });
+
+            if (associatedPRs.data.length === 0) {
+              // No associated PR found, safe to deploy
+              return {shouldDeploy: true};
+            }
+
+            // Check the labels on the associated PR
+            const pr = associatedPRs.data[0];
+            const hasDoNotDeployLabel = pr.labels.some(label => label.name === 'dont-redeploy');
+
+            return {shouldDeploy: !hasDoNotDeployLabel};
+
       - name: Trigger redeploy
+        if: ${{ fromJSON(steps.check-label.outputs.result).shouldDeploy }}
         run: |
           curl -X POST ${{ env.DEPLOY_HOOK }}

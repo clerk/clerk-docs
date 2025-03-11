@@ -861,7 +861,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
-              vfile.message(`(Partials) Doc ${url} not found`, node.position)
+              vfile.message(`Doc ${url} not found`, node.position)
               return node
             }
 
@@ -924,7 +924,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
-              vfile.message(`(Core Docs) Doc ${url} not found`, node.position)
+              vfile.message(`Doc ${url} not found`, node.position)
               return node
             }
 

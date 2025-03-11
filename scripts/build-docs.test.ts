@@ -4,7 +4,7 @@ import os from 'node:os'
 import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
-import { build, createBlankStore, createConfig } from './build-docs'
+import { build, createConfig, createBlankStore } from './build-docs'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -73,7 +73,7 @@ async function createTempFiles(
 
   // Return useful helpers
   return {
-    tempDir,
+    tempDir: path.join(tempDir, 'scripts'), // emulate that the base path is the scripts folder, to emulate __dirname
     pathJoin: (...paths: string[]) => path.join(tempDir, ...paths),
 
     // Get a list of all files in the temp directory
@@ -116,10 +116,10 @@ function treeDir(baseDir: string) {
 }
 
 const baseConfig = {
-  docsPath: './docs',
-  manifestPath: './docs/manifest.json',
-  partialsPath: './_partials',
-  distPath: './dist',
+  docsPath: '../docs',
+  manifestPath: '../docs/manifest.json',
+  partialsPath: '../docs/_partials',
+  distPath: '../dist',
   ignorePaths: ['/docs/_partials'],
   manifestOptions: {
     wrapDefault: true,
@@ -141,6 +141,7 @@ test('Basic build test with simple files', async () => {
       path: './docs/simple-test.mdx',
       content: `---
 title: Simple Test
+description: This is a simple test page
 ---
 
 # Simple Test Page
@@ -149,7 +150,7 @@ Testing with a simple page.`,
     },
   ])
 
-  await build(
+  const output = await build(
     createBlankStore(),
     createConfig({
       ...baseConfig,
@@ -158,24 +159,20 @@ Testing with a simple page.`,
     }),
   )
 
+  expect(output).toBe('')
+
   expect(await fileExists(pathJoin('./dist/simple-test.mdx'))).toBe(true)
   expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(`---
 title: Simple Test
+description: This is a simple test page
 ---
 
 # Simple Test Page
 
 Testing with a simple page.`)
 
-  expect(await fileExists(pathJoin('./dist/nextjs/manifest.json'))).toBe(true)
-  expect(await readFile(pathJoin('./dist/nextjs/manifest.json'))).toBe(
-    JSON.stringify({
-      navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
-    }),
-  )
-
-  expect(await fileExists(pathJoin('./dist/react/manifest.json'))).toBe(true)
-  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(
+  expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
+  expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
     JSON.stringify({
       navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
     }),
@@ -231,28 +228,20 @@ title: Quickstart
     }),
   )
 
-  expect(await fileExists(pathJoin('./dist/react/manifest.json'))).toBe(true)
-  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(
+  expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
+  expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
     JSON.stringify({
       navigation: [
         [
           {
             title: 'React',
-            items: [[{ title: 'Quickstart', href: '/docs/quickstart/react' }]],
+            sdk: ['react'],
+            items: [[{ title: 'Quickstart', href: '/docs/:sdk:/quickstart/react', sdk: ['react'] }]],
           },
-        ],
-      ],
-    }),
-  )
-
-  expect(await fileExists(pathJoin('./dist/vue/manifest.json'))).toBe(true)
-  expect(await readFile(pathJoin('./dist/vue/manifest.json'))).toBe(
-    JSON.stringify({
-      navigation: [
-        [
           {
             title: 'Vue',
-            items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue' }]],
+            sdk: ['vue'],
+            items: [[{ title: 'Quickstart', href: '/docs/:sdk:/quickstart/vue', sdk: ['vue'] }]],
           },
         ],
       ],
@@ -261,9 +250,8 @@ title: Quickstart
 
   const distFiles = await treeDir(pathJoin('./dist'))
 
-  expect(distFiles.length).toBe(4)
-  expect(distFiles).toContain('vue/manifest.json')
-  expect(distFiles).toContain('react/manifest.json')
+  expect(distFiles.length).toBe(3)
+  expect(distFiles).toContain('manifest.json')
   expect(distFiles).toContain('quickstart/vue.mdx')
   expect(distFiles).toContain('quickstart/react.mdx')
 })
@@ -298,10 +286,8 @@ Testing with a simple page.`,
     }),
   )
 
-  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(
-    JSON.stringify({
-      navigation: [[{ title: 'Simple Test', href: '/docs/react/simple-test' }]],
-    }),
+  expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
+    JSON.stringify({ navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]] }),
   )
 
   expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
@@ -321,8 +307,8 @@ Testing with a simple page.`)
 
   expect(distFiles.length).toBe(3)
   expect(distFiles).toContain('simple-test.mdx')
+  expect(distFiles).toContain('manifest.json')
   expect(distFiles).toContain('react/simple-test.mdx')
-  expect(distFiles).toContain('react/manifest.json')
 })
 
 test('3 sdks in frontmatter generates 3 variants', async () => {
@@ -355,32 +341,20 @@ Testing with a simple page.`,
     }),
   )
 
-  expect(await readFile(pathJoin('./dist/react/manifest.json'))).toBe(
+  expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
     JSON.stringify({
-      navigation: [[{ title: 'Simple Test', href: '/docs/react/simple-test' }]],
-    }),
-  )
-  expect(await readFile(pathJoin('./dist/vue/manifest.json'))).toBe(
-    JSON.stringify({
-      navigation: [[{ title: 'Simple Test', href: '/docs/vue/simple-test' }]],
-    }),
-  )
-  expect(await readFile(pathJoin('./dist/astro/manifest.json'))).toBe(
-    JSON.stringify({
-      navigation: [[{ title: 'Simple Test', href: '/docs/astro/simple-test' }]],
+      navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
     }),
   )
 
   const distFiles = await treeDir(pathJoin('./dist'))
 
-  expect(distFiles.length).toBe(7)
+  expect(distFiles.length).toBe(5)
   expect(distFiles).toContain('simple-test.mdx')
+  expect(distFiles).toContain('manifest.json')
   expect(distFiles).toContain('react/simple-test.mdx')
-  expect(distFiles).toContain('react/manifest.json')
   expect(distFiles).toContain('vue/simple-test.mdx')
-  expect(distFiles).toContain('vue/manifest.json')
   expect(distFiles).toContain('astro/simple-test.mdx')
-  expect(distFiles).toContain('astro/manifest.json')
 })
 
 test('<If> content filtered out when sdk is in frontmatter', async () => {
@@ -490,6 +464,57 @@ Testing with a simple page.`,
   )
 
   expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
+})
+
+test('should fail when child SDK is not in parent SDK list', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            {
+              title: 'Authentication',
+              sdk: ['react'],
+              items: [
+                [
+                  {
+                    title: 'Login',
+                    href: '/docs/auth/login',
+                    sdk: ['react', 'python'], // python not in parent
+                  },
+                ],
+              ],
+            },
+          ],
+        ],
+      }),
+    },
+    {
+      path: './docs/auth/login.mdx',
+      content: `---
+title: Login
+sdk: react, python
+---
+
+# Login Page
+
+Authentication login documentation.`,
+    },
+  ])
+
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'python', 'nextjs'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow(
+    'Doc "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+  )
 })
 
 describe('Includes and Partials', () => {
@@ -664,7 +689,7 @@ title: Simple Test
       }),
     )
 
-    expect(output).toContain(`warning Guide /docs/non-existent-page not found`)
+    expect(output).toContain(`warning Doc /docs/non-existent-page not found`)
   })
 
   test('Validate link between two pages is valid', async () => {
@@ -704,7 +729,7 @@ title: Core Page
       }),
     )
 
-    expect(output).not.toContain(`warning Guide /docs/core-page not found`)
+    expect(output).not.toContain(`warning Doc /docs/core-page not found`)
   })
 
   test('Warn if link is to existent page but with invalid hash', async () => {
@@ -758,7 +783,7 @@ title: Simple Test
 title: Headings
 ---
 
-# test {{ id: 'my-heading' }}`,
+# test {{ toc: false, id: 'my-heading' }}`,
       },
       {
         path: './docs/simple-test.mdx',
@@ -1168,7 +1193,7 @@ describe('Manifest Handling', () => {
       }),
     )
 
-    const manifest = JSON.parse(await readFile(pathJoin('./dist/nextjs/manifest.json')))
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
     const groups = manifest.navigation[0]
 
     expect(groups[0].wrap).toBe(true)
@@ -1189,7 +1214,7 @@ describe('Manifest Handling', () => {
   })
 
   test('should properly inherit SDK filtering from parent groups to child items', async () => {
-    const { tempDir } = await createTempFiles([
+    const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -1266,31 +1291,114 @@ describe('Manifest Handling', () => {
       }),
     )
 
-    // Check nextjs manifest
-    const nextjsManifest = JSON.parse(await fs.readFile(path.join(tempDir, './dist/nextjs/manifest.json'), 'utf-8'))
-    const nextjsGroups = nextjsManifest.navigation[0]
+    // Check manifest
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
-    expect(nextjsGroups[0].items[0][0].items[0][0].title).toBe('SDK Item')
-    expect(nextjsGroups[0].items[0][0].items[0][1].title).toBe('Nested Group')
-    expect(nextjsGroups[1].items[0][0].items[0][0].title).toBe('Generic Item')
-    expect(nextjsGroups[2]).toBe(undefined)
+    expect(manifest).toEqual({
+      navigation: [
+        [
+          {
+            title: 'SDK Group',
+            sdk: ['nextjs', 'react'],
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  sdk: ['nextjs', 'react'],
+                  items: [
+                    [
+                      { title: 'SDK Item', sdk: ['nextjs', 'react'], href: '/docs/:sdk:/sdk-item' },
+                      {
+                        title: 'Nested Group',
+                        sdk: ['nextjs', 'react'],
+                        items: [[{ title: 'Nested Item', sdk: ['nextjs', 'react'], href: '/docs/:sdk:/nested-item' }]],
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          },
+          {
+            title: 'Generic Group',
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
+                },
+              ],
+            ],
+          },
+          {
+            title: 'Vue Group',
+            sdk: ['vue'],
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  sdk: ['vue'],
+                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/:sdk:/vue-item' }]],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
+  })
 
-    // Check react manifest
-    const reactManifest = JSON.parse(await fs.readFile(path.join(tempDir, './dist/react/manifest.json'), 'utf-8'))
-    const reactGroups = reactManifest.navigation[0]
+  test('Check link and hash in partial is valid', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page 1', href: '/docs/page-1' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+---
 
-    expect(reactGroups[0].items[0][0].items[0][0].title).toBe('SDK Item')
-    expect(reactGroups[0].items[0][0].items[0][1].title).toBe('Nested Group')
-    expect(reactGroups[1].items[0][0].items[0][0].title).toBe('Generic Item')
-    expect(reactGroups[2]).toBe(undefined)
+<Include src="_partials/links" />`,
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `---
+title: Links
+---
 
-    // Check vue manifest
-    const vueManifest = JSON.parse(await fs.readFile(path.join(tempDir, './dist/vue/manifest.json'), 'utf-8'))
-    const vueGroups = vueManifest.navigation[0]
+[Page 2](/docs/page-2#my-heading)
+[Page 2](/docs/page-3)`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+---
 
-    expect(vueGroups[0].items[0][0].items[0][0].title).toBe('Generic Item')
-    expect(vueGroups[1].items[0][0].items[0][0].title).toBe('Vue Item')
-    expect(vueGroups[2]).toBe(undefined)
+test`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(`warning Hash "my-heading" not found in /docs/page-2`)
+    expect(output).toContain(`warning Doc /docs/page-3 not found`)
   })
 })
 
@@ -1340,11 +1448,11 @@ title: Ignored Guide
     const distFiles = (await listFiles()).filter((file) => file.startsWith('dist/'))
 
     expect(distFiles).toContain('dist/regular-guide.mdx')
-    expect(distFiles).toContain('dist/react/manifest.json')
+    expect(distFiles).toContain('dist/manifest.json')
     expect(distFiles).not.toContain('dist/ignored/ignored-guide.mdx')
 
     // Verify that the manifest was filtered correctly
-    expect(JSON.parse(await readFile(pathJoin('./dist/react/manifest.json')))).toEqual({
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       navigation: [
         [
           {
@@ -1365,13 +1473,13 @@ title: Ignored Guide
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'React Guide', href: '/docs/react/conflict' }]],
+          navigation: [[{ title: 'React Doc', href: '/docs/react/conflict' }]],
         }),
       },
       {
         path: './docs/react/conflict.mdx',
         content: `---
-title: React Guide
+title: React Doc
 ---
 
 # This will cause a conflict because it's in a path that starts with "react"`,
@@ -1389,7 +1497,7 @@ title: React Guide
     )
 
     await expect(promise).rejects.toThrow(
-      'Attempting to write out a core doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict',
+      'Doc "/docs/react/conflict" is attempting to write out a doc to react/conflict.mdx but the first part of the path is a valid SDK, this causes a file path conflict.',
     )
   })
 
@@ -1677,7 +1785,7 @@ title: Document with Warnings
     expect(await fileExists(pathJoin('./dist/document-with-warnings.mdx'))).toBe(true)
 
     // Check that warnings were reported
-    expect(output).toContain('warning Guide /docs/non-existent-document not found')
+    expect(output).toContain('warning Doc /docs/non-existent-document not found')
     expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
   })
 })
@@ -1778,8 +1886,8 @@ This is a normal document.`,
     )
 
     // Check that the manifest contains the target="_blank" attribute
-    const reactManifest = JSON.parse(await readFile(pathJoin('./dist/react/manifest.json')))
-    expect(reactManifest).toEqual({
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+    expect(manifest).toEqual({
       navigation: [
         [
           { title: 'Normal Link', href: '/docs/normal-link' },

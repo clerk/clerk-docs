@@ -554,6 +554,43 @@ title: Simple Test
     expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toContain('Test Partial Content')
   })
 
+  test('<Include /> Component embeds content in to sdk scoped guide', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/test-partial.mdx',
+        content: `Test Partial Content`,
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+sdk: react
+---
+
+<Include src="_partials/test-partial" />
+
+# Simple Test Page`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toContain('Test Partial Content')
+  })
+
   test('Invalid partial src fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -1501,63 +1538,182 @@ title: React Doc
     )
   })
 
-  test('should remove .mdx suffix from markdown links', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              { title: 'Source Page', href: '/docs/source-page' },
-              { title: 'Target Page', href: '/docs/target-page' },
-            ],
+test('should remove .mdx suffix from links in standard pages', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Standard Page', href: '/docs/standard-page' },
           ],
-        }),
-      },
-      {
-        path: './docs/source-page.mdx',
-        content: `---
-title: Source Page
+        ],
+      }),
+    },
+    {
+      path: './docs/target-page.mdx',
+      content: `---
+title: Target Page
 ---
 
-# Source Page
+# Target Page Content`,
+    },
+    {
+      path: './docs/standard-page.mdx',
+      content: `---
+title: Standard Page
+---
+
+# Standard Page
 
 [Link to Target with .mdx](/docs/target-page.mdx)
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
-      },
-      {
-        path: './docs/target-page.mdx',
-        content: `---
+    },
+  ])
+
+  await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  // links should be processed to remove .mdx
+  const standardPageContent = await readFile(pathJoin('./dist/standard-page.mdx'))
+  expect(standardPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+  expect(standardPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+  expect(standardPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+  expect(standardPageContent).toContain(
+    '[Link to Target with hash and .mdx](/docs/target-page#target-page-content)',
+  )
+  expect(standardPageContent).not.toContain('/docs/target-page.mdx')
+})
+
+test('should remove .mdx suffix from links in pages with partials', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Partials Page', href: '/docs/partials-page' },
+          ],
+        ],
+      }),
+    },
+    {
+      path: './docs/target-page.mdx',
+      content: `---
 title: Target Page
 ---
 
 # Target Page Content`,
-      },
-    ])
+    },
+    {
+      path: "./docs/_partials/links.mdx",
+      content: `---
+title: Links
+---
 
-    await build(
-      createBlankStore(),
-      createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react'],
+[Link to Target with .mdx](/docs/target-page.mdx)
+[Link to Target without .mdx](/docs/target-page)
+[Link to Target with hash](/docs/target-page#target-page-content)
+[Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
+    },
+    {
+      path: './docs/partials-page.mdx',
+      content: `---
+title: Partials Page
+---
+
+<Include src="_partials/links" />`,
+    },
+  ])
+
+  await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  // Partials should be processed to remove .mdx
+  const partialsPageContent = await readFile(pathJoin('./dist/partials-page.mdx'))
+  expect(partialsPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+  expect(partialsPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+  expect(partialsPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+  expect(partialsPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
+  expect(partialsPageContent).not.toContain('/docs/target-page.mdx')
+})
+
+test('should remove .mdx suffix from links in scoped pages', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Scoped Page', href: '/docs/scoped-page' },
+          ],
+        ],
       }),
-    )
+    },
+    {
+      path: './docs/target-page.mdx',
+      content: `---
+title: Target Page
+---
 
-    // Both links should be processed to remove .mdx
-    const sourcePageContent = await readFile(pathJoin('./dist/source-page.mdx'))
+# Target Page Content`,
+    },
+    {
+      path: "./docs/_partials/links.mdx",
+      content: `---
+title: Links
+---
 
-    // The link should have .mdx removed
-    expect(sourcePageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
-    expect(sourcePageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
-    expect(sourcePageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
-    expect(sourcePageContent).toContain(
-      '[Link to Target with hash and .mdx](/docs/target-page#target-page-content)',
-    )
-    expect(sourcePageContent).not.toContain('/docs/target-page.mdx')
-  })
+[Link to Target with .mdx](/docs/target-page.mdx)
+[Link to Target without .mdx](/docs/target-page)
+[Link to Target with hash](/docs/target-page#target-page-content)
+[Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
+    },
+    {
+      path: './docs/scoped-page.mdx',
+      content: `---
+title: Scoped Page
+sdk: expo
+---
+
+<Include src="_partials/links" />`,
+    },
+  ])
+
+  await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['expo'],
+    }),
+  )
+
+  // Scoped page should be processed to remove .mdx
+  const scopedPageContent = await readFile(pathJoin('./dist/expo/scoped-page.mdx'))
+  expect(scopedPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+  expect(scopedPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+  expect(scopedPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+  expect(scopedPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
+  expect(scopedPageContent).not.toContain('/docs/target-page.mdx')
+})
 })
 
 describe('Edge Cases', () => {

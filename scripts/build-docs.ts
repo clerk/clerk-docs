@@ -257,6 +257,7 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
       let partialNode: Node | null = null
 
       const partialContentVFile = await markdownProcessor()
+        .use(() => tree => { partialNode = tree })
         .use(() => (tree, vfile) => {
           mdastVisit(
             tree,
@@ -268,8 +269,6 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
               vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
             },
           )
-
-          partialNode = tree
         })
         .process({
           path: `docs/_partials/${markdownPath}`,
@@ -540,6 +539,7 @@ const parseInMarkdownFile =
     const headingsHashs: Array<string> = []
 
     const vfile = await markdownProcessor()
+      // Some validation
       .use(() => (tree, vfile) => {
         if (inManifest === false) {
           vfile.message(
@@ -551,6 +551,7 @@ const parseInMarkdownFile =
           vfile.fail(`Href "${href}" contains characters that will be encoded by the browser, please remove them`)
         }
       })
+      // Pull out the frontmatter
       .use(() => (tree, vfile) => {
         mdastVisit(
           tree,
@@ -916,6 +917,22 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
       const vfile = await markdownProcessor()
+        // embed the partials into the doc
+        .use(() => (tree, vfile) => {
+          return mdastMap(tree, (node) => {
+            const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
+
+            if (partialSrc === undefined) return node
+
+            const partial = partials.find(
+              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
+            )
+
+            if (partial === undefined) return node // a warning will have already been reported
+
+            return Object.assign(node, partial.node)
+          })
+        })
         // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree: Node, vfile: VFile) => {
           return mdastMap(tree, (node) => {
@@ -1018,22 +1035,6 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             })
           })
         })
-        // embed the partials into the doc
-        .use(() => (tree, vfile) => {
-          return mdastMap(tree, (node) => {
-            const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
-
-            if (partialSrc === undefined) return node
-
-            const partial = partials.find(
-              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
-            )
-
-            if (partial === undefined) return node // a warning will have already been reported
-
-            return Object.assign(node, partial.node)
-          })
-        })
         .process(doc.vfile)
 
       const distFilePath = `${doc.href.replace('/docs/', '')}.mdx`
@@ -1110,7 +1111,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                   return node
                 }
 
-                const [url, hash] = node.url.split('#')
+                // we are overwriting the url with the mdx suffix removed
+                node.url = removeMdxSuffix(node.url)
+
+                const [url, hash] = (node.url as string).split('#')
 
                 const doc = docsMap.get(url)
 

@@ -28,7 +28,7 @@ import { Node } from 'unist'
 const VALID_SDKS = [
   'nextjs',
   'react',
-  'javascript-frontend',
+  'js-frontend',
   'chrome-extension',
   'expo',
   'ios',
@@ -44,7 +44,7 @@ const VALID_SDKS = [
   'vue',
   'ruby',
   'python',
-  'javascript-backend',
+  'js-backend',
   'sdk-development',
   'community-sdk',
 ] as const

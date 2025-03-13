@@ -1051,7 +1051,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         await writeFile(
           distFilePath,
           // It's possible we will want to / need to put some frontmatter here
-          `<SDKDocRedirectPage title="${doc.frontmatter.title}" url="${doc.href}" sdk={${JSON.stringify(doc.sdk)}} />`,
+          `<SDKDocRedirectPage title="${doc.frontmatter.title}" description="${doc.frontmatter.description}" href="${doc.href}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
 
         return vfile

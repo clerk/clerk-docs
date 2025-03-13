@@ -270,26 +270,20 @@ For more information on the differences between development and production envir
 - **HttpOnly:** No - must be able to be accessed by client-side SDKs
 - **SameSite:** Lax
 
-When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
+When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie, also referred to as the session token, will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
 
 > [!QUIZ]
 > Why are session tokens not `HttpOnly`? Is this a security issue?
 >
 > ---
 >
-> It is normally recommended to make session cookies `HttpOnly`. This flag prevents client-side JavaScript from accessing the cookie, which helps mitigate the risk of cross-site scripting (XSS) attacks.
+> Setting cookies as `HttpOnly` is generally recommended to prevent client-side JavaScript access, reducing the risk of cross-site scripting (XSS) attacks. However, due to Clerk's architecture, this approach wouldn't work.
 >
-> However, the way Clerk is architected makes this such that it would not work. Remember that FAPI is hosted on a different origin than your app (FAPI at `clerk.example.com` in production, and your app at `example.com`), and FAPI is responsile for handing authentication flows.
+> Remember that FAPI is hosted on a different origin than your app. Let's say, in production, your app is `example.com`. Then FAPI is `clerk.example.com`. If FAPI set the session cookie as `HttpOnly`, it would be scoped to `clerk.example.com`, preventing it from being sent to `example.com`. Since cookies are only sent to the domain that matches their domain value, which is the domain that sets them, this setup would block your app from accessing the cookie.
 >
-> If FAPI were to set the session cookie as `HttpOnly`, its domain value would be set to `clerk.example.com`, which would prevent it from being accessible to your app's domain (`example.com`). This is because the domain value of a cookie is set to the domain of the server that set the cookie. And as seen above, we strictly scope the domain of the session token so that it cannot be exfiltrated by a compromised app on a subdomain shared with your primary app. So, in this case, if the session cookie were set by FAPI as `HttpOnly`, it would be set with its domain value as `clerk.example.com`, and therefore would it not be sent from your client side to your app's server on `example.com`, since cookies are only sent to the domain that matches their domain value.
+> To work around this, Clerk returns the session token from FAPI after a user signs in, and the client-side SDK used by your app (e.g., React SDK) sets the cookie on your app's domain **via JavaScript**. A benefit of this is that it allows the token's value and session claims to be accessed on the client-side. This is often quite valuable, as it allows developers to send the session token as a custom header in requests and also makes it possible to use a subdomain (like `api.example.com`) for your backend. However, because it's set client-side, it cannot be `HttpOnly`, making it more vulnerable to XSS attacks.
 >
-> To get around this limitation, Clerk returns the value of the session token from FAPI after a user has signed in, and then the Clerk client-side SDK uses JavaScript to set the cookie on your app's domain. Since it's set by JavaScript, it cannot be set as `HttpOnly`.
->
-> A benefit of this is that it allows the token's value and session claims to be accessed on the client side, which is often quite valuable, and allows developers to send the session token as a custom header in requests. This makes it possible to use a different subdomain (like `api.example.com`) for your backend, a scenario in which the cookie would otherwise not be sent.
->
-> The drawback is that it does make the session token vulnerable to XSS attacks, since it's not `HttpOnly`. However, Clerk mitigates this risk substantially with the token's very fast expiration time of 60 seconds. In order for an XSS attack to be able to take advantage of this, the developer would need to ship a vulnerability on their site, and the attacker would need to exfiltrate users' tokens and use them to take over accounts in an average of less than 30 seconds. While this is absolutely possible for a very specific targeted attack, it's quite challenging, and extremely unlikely to be an issue for the most common type of XSS attacks, which are broad sweeps across many sites to harvest tokens, typically after a CVE is disclosed, that can take advantage of those who didn't patch their sites in time.
->
-> Additionally, there are a variety of ways that session tokens can be exfiltrated outside of only XSS attacks, and Clerk's fast-expiring token provides an extra layer of protection against these attacks that are not mitigated by using the `HttpOnly` flag on a long-lived session token.
+> Clerk mitigates this risk substantially by setting the session token's expiration to a very short duration of 60 seconds. For an XSS attack to succeed, the developer would need to ship a vulnerability on their site, and the attacker would need to exfiltrate users' tokens and use them to take over accounts in an average of less than 30 seconds, which is an extremely difficult scenario. Additionally, Clerk's fast-expiring token provides an extra layer of protection against other attacks that `HttpOnly` cookies alone wouldn't mitigate.
 
 ## The Handshake
 

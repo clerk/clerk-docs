@@ -257,7 +257,9 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
       let partialNode: Node | null = null
 
       const partialContentVFile = await markdownProcessor()
-        .use(() => tree => { partialNode = tree })
+        .use(() => (tree) => {
+          partialNode = tree
+        })
         .use(() => (tree, vfile) => {
           mdastVisit(
             tree,
@@ -323,7 +325,6 @@ const writeSDKFile = (config: BuildConfig) => async (sdk: SDK, filePath: string,
 }
 
 const removeMdxSuffix = (filePath: string) => {
-
   if (filePath.includes('#')) {
     const [url, hash] = filePath.split('#')
 
@@ -337,7 +338,7 @@ const removeMdxSuffix = (filePath: string) => {
   if (filePath.endsWith('.mdx')) {
     return filePath.slice(0, -4)
   }
-  
+
   return filePath
 }
 
@@ -743,7 +744,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         throw new Error(`Doc "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
       }
 
-      // This is the sdk of the doc
+      // This is the sdk of the doc as defined in the docs frontmatter
       const docSDK = doc.sdk
 
       // This is the sdk of the parent group
@@ -775,7 +776,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         return Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
       })()
 
-      // This is the sdk of the group
+      // This is the sdk of the group as defined in the manifest.json
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
@@ -821,19 +822,19 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
     JSON.stringify({
       navigation: await traverseTree(
         { items: sdkScopedManifest },
-        async ({ sdk, ...item }) => {
+        async (item) => {
           return {
             title: item.title,
-            href: sdk !== undefined ? scopeHrefToSDK(item.href, ':sdk:') : item.href,
+            href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(item.href, ':sdk:') : item.href,
             tag: item.tag,
             wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
             icon: item.icon,
             target: item.target,
-            sdk: sdk,
-          } as const
+            sdk: item.sdk,
+          }
         },
         // @ts-expect-error - This traverseTree function might just be the death of me
-        async ({ sdk, ...group }) => {
+        async (group) => {
           return {
             title: group.title,
             collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
@@ -841,9 +842,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
             icon: group.icon,
             hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-            sdk: sdk,
+            sdk: group.sdk,
             items: group.items,
-          } as const
+          }
         },
       ),
     }),
@@ -1051,7 +1052,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         await writeFile(
           distFilePath,
           // It's possible we will want to / need to put some frontmatter here
-          `<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : " "}href="${scopeHrefToSDK(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+          `<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
 
         return vfile

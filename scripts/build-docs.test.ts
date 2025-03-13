@@ -236,12 +236,12 @@ title: Quickstart
           {
             title: 'React',
             sdk: ['react'],
-            items: [[{ title: 'Quickstart', href: '/docs/:sdk:/quickstart/react', sdk: ['react'] }]],
+            items: [[{ title: 'Quickstart', href: '/docs/quickstart/react', sdk: ['react'] }]],
           },
           {
             title: 'Vue',
             sdk: ['vue'],
-            items: [[{ title: 'Quickstart', href: '/docs/:sdk:/quickstart/vue', sdk: ['vue'] }]],
+            items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue', sdk: ['vue'] }]],
           },
         ],
       ],
@@ -960,6 +960,55 @@ Content for React users.`,
       }),
     )
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      navigation: [
+        [
+          {
+            title: 'Top Level',
+            sdk: ['react', 'nextjs'],
+            items: [
+              [
+                {
+                  title: 'Mid Level',
+                  sdk: ['react', 'nextjs'],
+                  items: [
+                    [
+                      {
+                        title: 'Deep Level',
+                        sdk: ['nextjs'],
+                        items: [
+                          [
+                            {
+                              href: '/docs/:sdk:/deeply-nested-nextjs',
+                              sdk: ['nextjs'],
+                              title: 'Deeply Nested Page',
+                            },
+                          ],
+                        ],
+                      },
+                      {
+                        title: 'Deep Level',
+                        sdk: ['react'],
+                        items: [
+                          [
+                            {
+                              title: 'Deeply Nested Page',
+                              sdk: ['react'],
+                              href: '/docs/:sdk:/deeply-nested-react',
+                            },
+                          ],
+                        ],
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
+
     // Page should be available in nextjs (from manifest deep nesting)
     expect(await fileExists(pathJoin('./dist/nextjs/deeply-nested-nextjs.mdx'))).toBe(true)
     expect(await fileExists(pathJoin('./dist/nextjs/deeply-nested-react.mdx'))).toBe(false)
@@ -1344,11 +1393,11 @@ describe('Manifest Handling', () => {
                   sdk: ['nextjs', 'react'],
                   items: [
                     [
-                      { title: 'SDK Item', sdk: ['nextjs', 'react'], href: '/docs/:sdk:/sdk-item' },
+                      { title: 'SDK Item', sdk: ['nextjs', 'react'], href: '/docs/sdk-item' },
                       {
                         title: 'Nested Group',
                         sdk: ['nextjs', 'react'],
-                        items: [[{ title: 'Nested Item', sdk: ['nextjs', 'react'], href: '/docs/:sdk:/nested-item' }]],
+                        items: [[{ title: 'Nested Item', sdk: ['nextjs', 'react'], href: '/docs/nested-item' }]],
                       },
                     ],
                   ],
@@ -1375,7 +1424,7 @@ describe('Manifest Handling', () => {
                 {
                   title: 'Sub Group',
                   sdk: ['vue'],
-                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/:sdk:/vue-item' }]],
+                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }]],
                 },
               ],
             ],
@@ -1538,30 +1587,30 @@ title: React Doc
     )
   })
 
-test('should remove .mdx suffix from links in standard pages', async () => {
-  const { tempDir, pathJoin } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'Target Page', href: '/docs/target-page' },
-            { title: 'Standard Page', href: '/docs/standard-page' },
+  test('should remove .mdx suffix from links in standard pages', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Target Page', href: '/docs/target-page' },
+              { title: 'Standard Page', href: '/docs/standard-page' },
+            ],
           ],
-        ],
-      }),
-    },
-    {
-      path: './docs/target-page.mdx',
-      content: `---
+        }),
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
 title: Target Page
 ---
 
 # Target Page Content`,
-    },
-    {
-      path: './docs/standard-page.mdx',
-      content: `---
+      },
+      {
+        path: './docs/standard-page.mdx',
+        content: `---
 title: Standard Page
 ---
 
@@ -1571,53 +1620,51 @@ title: Standard Page
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
-    },
-  ])
+      },
+    ])
 
-  await build(
-    createBlankStore(),
-    createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react'],
-    }),
-  )
-
-  // links should be processed to remove .mdx
-  const standardPageContent = await readFile(pathJoin('./dist/standard-page.mdx'))
-  expect(standardPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
-  expect(standardPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
-  expect(standardPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
-  expect(standardPageContent).toContain(
-    '[Link to Target with hash and .mdx](/docs/target-page#target-page-content)',
-  )
-  expect(standardPageContent).not.toContain('/docs/target-page.mdx')
-})
-
-test('should remove .mdx suffix from links in pages with partials', async () => {
-  const { tempDir, pathJoin } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'Target Page', href: '/docs/target-page' },
-            { title: 'Partials Page', href: '/docs/partials-page' },
-          ],
-        ],
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
       }),
-    },
-    {
-      path: './docs/target-page.mdx',
-      content: `---
+    )
+
+    // links should be processed to remove .mdx
+    const standardPageContent = await readFile(pathJoin('./dist/standard-page.mdx'))
+    expect(standardPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+    expect(standardPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+    expect(standardPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+    expect(standardPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
+    expect(standardPageContent).not.toContain('/docs/target-page.mdx')
+  })
+
+  test('should remove .mdx suffix from links in pages with partials', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Target Page', href: '/docs/target-page' },
+              { title: 'Partials Page', href: '/docs/partials-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
 title: Target Page
 ---
 
 # Target Page Content`,
-    },
-    {
-      path: "./docs/_partials/links.mdx",
-      content: `---
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `---
 title: Links
 ---
 
@@ -1625,59 +1672,59 @@ title: Links
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
-    },
-    {
-      path: './docs/partials-page.mdx',
-      content: `---
+      },
+      {
+        path: './docs/partials-page.mdx',
+        content: `---
 title: Partials Page
 ---
 
 <Include src="_partials/links" />`,
-    },
-  ])
+      },
+    ])
 
-  await build(
-    createBlankStore(),
-    createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react'],
-    }),
-  )
-
-  // Partials should be processed to remove .mdx
-  const partialsPageContent = await readFile(pathJoin('./dist/partials-page.mdx'))
-  expect(partialsPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
-  expect(partialsPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
-  expect(partialsPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
-  expect(partialsPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
-  expect(partialsPageContent).not.toContain('/docs/target-page.mdx')
-})
-
-test('should remove .mdx suffix from links in scoped pages', async () => {
-  const { tempDir, pathJoin } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'Target Page', href: '/docs/target-page' },
-            { title: 'Scoped Page', href: '/docs/scoped-page' },
-          ],
-        ],
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
       }),
-    },
-    {
-      path: './docs/target-page.mdx',
-      content: `---
+    )
+
+    // Partials should be processed to remove .mdx
+    const partialsPageContent = await readFile(pathJoin('./dist/partials-page.mdx'))
+    expect(partialsPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+    expect(partialsPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+    expect(partialsPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+    expect(partialsPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
+    expect(partialsPageContent).not.toContain('/docs/target-page.mdx')
+  })
+
+  test('should remove .mdx suffix from links in scoped pages', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Target Page', href: '/docs/target-page' },
+              { title: 'Scoped Page', href: '/docs/scoped-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
 title: Target Page
 ---
 
 # Target Page Content`,
-    },
-    {
-      path: "./docs/_partials/links.mdx",
-      content: `---
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `---
 title: Links
 ---
 
@@ -1685,35 +1732,35 @@ title: Links
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
-    },
-    {
-      path: './docs/scoped-page.mdx',
-      content: `---
+      },
+      {
+        path: './docs/scoped-page.mdx',
+        content: `---
 title: Scoped Page
 sdk: expo
 ---
 
 <Include src="_partials/links" />`,
-    },
-  ])
+      },
+    ])
 
-  await build(
-    createBlankStore(),
-    createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['expo'],
-    }),
-  )
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['expo'],
+      }),
+    )
 
-  // Scoped page should be processed to remove .mdx
-  const scopedPageContent = await readFile(pathJoin('./dist/expo/scoped-page.mdx'))
-  expect(scopedPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
-  expect(scopedPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
-  expect(scopedPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
-  expect(scopedPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
-  expect(scopedPageContent).not.toContain('/docs/target-page.mdx')
-})
+    // Scoped page should be processed to remove .mdx
+    const scopedPageContent = await readFile(pathJoin('./dist/expo/scoped-page.mdx'))
+    expect(scopedPageContent).toContain('[Link to Target with .mdx](/docs/target-page)')
+    expect(scopedPageContent).toContain('[Link to Target without .mdx](/docs/target-page)')
+    expect(scopedPageContent).toContain('[Link to Target with hash](/docs/target-page#target-page-content)')
+    expect(scopedPageContent).toContain('[Link to Target with hash and .mdx](/docs/target-page#target-page-content)')
+    expect(scopedPageContent).not.toContain('/docs/target-page.mdx')
+  })
 })
 
 describe('Edge Cases', () => {

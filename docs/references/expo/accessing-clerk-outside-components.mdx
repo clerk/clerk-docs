@@ -1,0 +1,148 @@
+---
+title: Accessing Clerk Outside Components
+description: Learn how to access and use the Clerk instance outside of React components in Expo applications.
+---
+
+When building Expo applications, you might need to access the Clerk instance outside of React components, such as in utility functions or background tasks. This guide shows you how to set up and use the Clerk instance.
+
+First, create and export a Clerk instance using the `getClerkInstance` function:
+
+```ts {{ filename: 'lib/clerk.ts' }}
+import { getClerkInstance } from '@clerk/clerk-expo'
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+// Create a singleton instance with your publishable key
+export const clerkInstance = getClerkInstance({ publishableKey })
+```
+
+Then, pass the instance to `<ClerkProvider>` in your root layout:
+
+```tsx {{ filename: 'app/_layout.tsx' }}
+import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo'
+import { clerkInstance } from '@/lib/clerk'
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+export default function RootLayout() {
+  return (
+    <ClerkProvider 
+      publishableKey={publishableKey} 
+      Clerk={clerkInstance}
+    >
+      <ClerkLoaded>
+        <Slot />
+      </ClerkLoaded>
+    </ClerkProvider>
+  )
+}
+```
+
+You can now use this instance throughout your application. Here are some examples:
+
+<Tabs items={["Fetch", "Axios"]}>
+  <Tab>
+    ```ts {{ filename: 'lib/authenticatedFetch.ts' }}
+    import { clerkInstance } from './clerk'
+
+    export async function authenticatedFetch() {
+      // Use the Clerk instance to get the current session token
+      const token = await clerkInstance.session?.getToken()
+      
+      const response = await fetch('/api/foo', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`)
+      }
+
+      return response.json()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'lib/axios.ts' }}
+    import axios from 'axios'
+    import { clerkInstance } from './clerk'
+
+    // Create axios instance with custom config
+    export const axiosInstance = axios.create({
+      baseURL: 'https://api.example.com',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // Add current session token to requests
+    axiosInstance.interceptors.request.use(async (config) => {
+      const token = await clerkInstance.session?.getToken()
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      
+      return config
+    })
+    ```
+  </Tab>
+</Tabs>
+
+If you're certain that your code will run after the `<ClerkProvider>` component has rendered, you can call `getClerkInstance()` without options and without passing it to the `<ClerkProvider>` component. However, keep in mind that this will throw an error if called before the provider is rendered.
+
+<Tabs items={["Fetch", "Axios"]}>
+  <Tab>
+    ```ts {{ filename: 'lib/authenticatedFetch.ts' }}
+    import { getClerkInstance } from '@clerk/clerk-expo'
+
+    export async function authenticatedFetch() {
+      // Use the Clerk instance to get the current session token
+      const token = await getClerkInstance().session?.getToken()
+      
+      const response = await fetch('/api/foo', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`)
+      }
+
+      return response.json()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'lib/axios.ts' }}
+    import axios from 'axios'
+    import { getClerkInstance } from '@clerk/clerk-expo'
+
+    // Create axios instance with custom config
+    export const axiosInstance = axios.create({
+      baseURL: 'https://api.example.com',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // Add current session token to requests
+    axiosInstance.interceptors.request.use(async (config) => {
+      const clerkInstance = getClerkInstance()
+      const token = await clerkInstance.session?.getToken()
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+      
+      return config
+    })
+    ```
+  </Tab>
+</Tabs>

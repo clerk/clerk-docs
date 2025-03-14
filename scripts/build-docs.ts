@@ -1129,6 +1129,22 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 return node
               })
             })
+            // Insert the canonical link into the doc frontmatter
+            .use(() => (tree, vfile) => {
+              return mdastMap(tree, (node) => {
+                if (node.type !== 'yaml') return node
+                if (!('value' in node)) return node
+                if (typeof node.value !== 'string') return node
+
+                const frontmatter = yaml.parse(node.value)
+
+                frontmatter.canonical = doc.href
+
+                node.value = yaml.stringify(frontmatter).split('\n').slice(0, -1).join('\n')
+
+                return node
+              })
+            })
             .process({
               ...doc.vfile,
               messages: [], // reset the messages, otherwise they will be duplicated

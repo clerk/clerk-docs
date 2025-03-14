@@ -293,6 +293,7 @@ Testing with a simple page.`,
   expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
+canonical: /docs/simple-test
 ---
 
 # Simple Test Page
@@ -1216,6 +1217,45 @@ Common content for all SDKs.`,
     const jsOutput = await readFile(pathJoin('./dist/javascript-frontend/multiple-sdk-test.mdx'))
     expect(jsOutput).toContain('This content is for JavaScript Frontend users.')
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
+  })
+
+  test('should embed canonical link in frontmatter', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: fastify, expressjs
+---
+
+# Hello World`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['fastify', 'expressjs'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/fastify/overview.mdx'))).toContain('canonical: /docs/overview')
+    expect(await readFile(pathJoin('./dist/expressjs/overview.mdx'))).toContain('canonical: /docs/overview')
   })
 })
 

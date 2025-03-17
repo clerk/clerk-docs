@@ -293,7 +293,7 @@ Testing with a simple page.`,
   expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
-canonical: /docs/simple-test
+canonical: /docs/:sdk:/simple-test
 ---
 
 # Simple Test Page
@@ -1254,8 +1254,8 @@ sdk: fastify, expressjs
       }),
     )
 
-    expect(await readFile(pathJoin('./dist/fastify/overview.mdx'))).toContain('canonical: /docs/overview')
-    expect(await readFile(pathJoin('./dist/expressjs/overview.mdx'))).toContain('canonical: /docs/overview')
+    expect(await readFile(pathJoin('./dist/fastify/overview.mdx'))).toContain('canonical: /docs/:sdk:/overview')
+    expect(await readFile(pathJoin('./dist/expressjs/overview.mdx'))).toContain('canonical: /docs/:sdk:/overview')
   })
 })
 

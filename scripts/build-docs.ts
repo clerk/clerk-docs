@@ -1138,7 +1138,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
                 const frontmatter = yaml.parse(node.value)
 
-                frontmatter.canonical = doc.href
+                frontmatter.canonical = doc.sdk ? scopeHrefToSDK(doc.href, ':sdk:') : doc.href
 
                 node.value = yaml.stringify(frontmatter).split('\n').slice(0, -1).join('\n')
 

@@ -222,9 +222,9 @@ description: Add authentication and user management to your Expo app with Clerk.
 
   ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
   import * as React from 'react'
-  import { Text, TextInput, Button, View } from 'react-native'
+  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
   import { useSignUp } from '@clerk/clerk-expo'
-  import { useRouter } from 'expo-router'
+  import { Link, useRouter } from 'expo-router'
 
   export default function SignUpScreen() {
     const { isLoaded, signUp, setActive } = useSignUp()
@@ -238,6 +238,8 @@ description: Add authentication and user management to your Expo app with Clerk.
     // Handle submission of sign-up form
     const onSignUpPress = async () => {
       if (!isLoaded) return
+
+      console.log(emailAddress, password)
 
       // Start sign-up process using email and password provided
       try {
@@ -295,7 +297,9 @@ description: Add authentication and user management to your Expo app with Clerk.
             placeholder="Enter your verification code"
             onChangeText={(code) => setCode(code)}
           />
-          <Button title="Verify" onPress={onVerifyPress} />
+          <TouchableOpacity onPress={onVerifyPress}>
+            <Text>Verify</Text>
+          </TouchableOpacity>
         </>
       )
     }
@@ -316,7 +320,15 @@ description: Add authentication and user management to your Expo app with Clerk.
             secureTextEntry={true}
             onChangeText={(password) => setPassword(password)}
           />
-          <Button title="Continue" onPress={onSignUpPress} />
+          <TouchableOpacity onPress={onSignUpPress}>
+            <Text>Continue</Text>
+          </TouchableOpacity>
+          <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
+            <Text>Already have an account?</Text>
+            <Link href="/sign-in">
+              <Text>Sign in</Text>
+            </Link>
+          </View>
         </>
       </View>
     )
@@ -330,7 +342,7 @@ description: Add authentication and user management to your Expo app with Clerk.
   ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
   import { useSignIn } from '@clerk/clerk-expo'
   import { Link, useRouter } from 'expo-router'
-  import { Text, TextInput, Button, View } from 'react-native'
+  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
   import React from 'react'
 
   export default function Page() {
@@ -341,7 +353,7 @@ description: Add authentication and user management to your Expo app with Clerk.
     const [password, setPassword] = React.useState('')
 
     // Handle the submission of the sign-in form
-    const onSignInPress = async () => {
+    const onSignInPress = React.useCallback(async () => {
       if (!isLoaded) return
 
       // Start the sign-in process using the email and password provided
@@ -357,7 +369,7 @@ description: Add authentication and user management to your Expo app with Clerk.
           await setActive({ session: signInAttempt.createdSessionId })
           router.replace('/')
         } else {
-          // If the status isn't complete, check why. User might need to
+          // If the status is not complete, check why. User may need to
           // complete further steps.
           console.error(JSON.stringify(signInAttempt, null, 2))
         }
@@ -366,10 +378,11 @@ description: Add authentication and user management to your Expo app with Clerk.
         // for more info on error handling
         console.error(JSON.stringify(err, null, 2))
       }
-    }
+    }, [isLoaded, emailAddress, password])
 
     return (
       <View>
+        <Text>Sign in</Text>
         <TextInput
           autoCapitalize="none"
           value={emailAddress}
@@ -382,8 +395,10 @@ description: Add authentication and user management to your Expo app with Clerk.
           secureTextEntry={true}
           onChangeText={(password) => setPassword(password)}
         />
-        <Button title="Sign in" onPress={onSignInPress} />
-        <View>
+        <TouchableOpacity onPress={onSignInPress}>
+          <Text>Continue</Text>
+        </TouchableOpacity>
+        <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
           <Text>Don't have an account?</Text>
           <Link href="/sign-up">
             <Text>Sign up</Text>
@@ -395,6 +410,12 @@ description: Add authentication and user management to your Expo app with Clerk.
   ```
 
   For more information about building these custom flows, including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/custom-flows/email-password) guide.
+
+  ## Add a sign-out button
+
+  In the `components/` folder, create a `SignOutButton.tsx` file with the following code. The [`useClerk()`](/docs/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the "Sign out" button.
+
+  <Include src="_partials/expo/sign-out-custom-flow" />
 
   ## Conditionally render content
 
@@ -416,12 +437,13 @@ description: Add authentication and user management to your Expo app with Clerk.
   }
   ```
 
-  Then, in the same folder, create an `index.tsx` file with the following code. It displays the user's email if they're signed in, or sign-in and sign-up links if they're not:
+  Then, in the same folder, create an `index.tsx` file with the following code. If the user is signed in, it displays their email and a sign-out button. If they're not signed in, it displays sign-in and sign-up links.
 
   ```tsx {{ filename: 'app/(home)/index.tsx' }}
   import { SignedIn, SignedOut, useUser } from '@clerk/clerk-expo'
   import { Link } from 'expo-router'
   import { Text, View } from 'react-native'
+  import { SignOutButton } from '@/app/components/SignOutButton'
 
   export default function Page() {
     const { user } = useUser()
@@ -430,6 +452,7 @@ description: Add authentication and user management to your Expo app with Clerk.
       <View>
         <SignedIn>
           <Text>Hello {user?.emailAddresses[0].emailAddress}</Text>
+          <SignOutButton />
         </SignedIn>
         <SignedOut>
           <Link href="/(auth)/sign-in">

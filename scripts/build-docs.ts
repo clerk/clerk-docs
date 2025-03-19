@@ -36,7 +36,7 @@ import readdirp from 'readdirp'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { Node } from 'unist'
-import chok from 'chokidar'
+import watcher from '@parcel/watcher'
 
 const VALID_SDKS = [
   'nextjs',
@@ -1172,28 +1172,19 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 }
 
 const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
-  const watcher = chok.watch([config.docsPath], {
-    alwaysStat: true,
-    ignored: (filePath, stats) => {
-      if (stats === undefined) return false
-      if (stats.isDirectory()) return false
+  watcher.subscribe(config.docsPath, async (error, events) => {
+    if (error !== null) {
+      console.error(error)
+      return
+    }
 
-      const relativePath = path.relative(config.docsPath, filePath)
+    events.forEach((event) => {
+      const href = removeMdxSuffix(`/docs/${path.relative(config.docsPath, event.path)}`)
 
-      const isManifest = relativePath === 'manifest.json'
-      const isMarkdown = relativePath.endsWith('.mdx')
+      store.markdownFiles.delete(href)
 
-      return !(isManifest || isMarkdown)
-    },
-    ignoreInitial: true,
-  })
-
-  watcher.on('all', async (event, filePath) => {
-    console.info(`File ${filePath} changed`, { event })
-
-    const href = removeMdxSuffix(`/${path.relative(config.basePath, filePath)}`)
-
-    store.markdownFiles.delete(href)
+      console.log(store.markdownFiles.keys())
+    })
 
     const output = await build(store, config)
 
@@ -1286,7 +1277,6 @@ const main = async () => {
 
   if (output !== '') {
     console.info(output)
-    process.exit(1)
   }
 
   const args = process.argv.slice(2)
@@ -1296,6 +1286,8 @@ const main = async () => {
     console.info(`Watching for changes...`)
 
     watchAndRebuild(store, config)
+  } else if (output !== '') {
+    process.exit(1)
   }
 }
 

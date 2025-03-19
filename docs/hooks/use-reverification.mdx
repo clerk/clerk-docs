@@ -33,7 +33,7 @@ The `useReverification()` hook is used to handle a session's reverification flow
   - `boolean`
 
   Determines if the default UI should be used. Defaults to `true`.
- 
+
   ---
 
   - `throwOnError?`
@@ -50,40 +50,6 @@ The `useReverification()` hook is used to handle a session's reverification flow
 
   The action returns the response from the fetcher function.
 
-  ---
-
-  - `error`
-  - `Error`
-
-  The error object that is thrown when the user cancels the reverification process.
-
-  ---
-
-  - `inProgress`
-  - `boolean`
-
-  Determines if the action is in progress.
-
-  ---
-
-  - `level`
-  - `'first_factor' | 'second_factor' | 'multi_factor'`
-
-  Cancels the reverification process.
-
-  ---
-
-  - `cancel`
-  - `() => void`
-
-  Cancels the reverification process.
-
-  ---
-
-  - `complete`
-  - `() => void`
-
-  Completes the reverification process.
 </Properties>
 
 ## How to use the `useReverification()` hook
@@ -102,7 +68,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
 
     export function UpdateUserEmail() {
       const { user } = useUser()
-      const { action: changePrimaryEmail } = useReverification((emailAddressId: string) =>
+      const changePrimaryEmail = useReverification((emailAddressId: string) =>
         user?.update({ primaryEmailAddressId: emailAddressId }),
       )
 
@@ -138,51 +104,6 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
       )
     }
     ```
-
-    ### Use the `error` property to handle reverification errors
-
-    In this example, we use the `useReverification()` hook to enhance the user update action and we will disable throwing the error but instead we will use
-    the `error` property to handle the reverification cancellation.
-
-    ```tsx {{ filename: 'src/components/update-user-email.tsx' }}
-    import { useReverification, useUser } from '@clerk/clerk-react'
-    import { isClerkRuntimeError } from '@clerk/clerk-react/errors'
-
-    export function UpdateUserEmail() {
-      const { user } = useUser()
-      const { action: changePrimaryEmail, error } = useReverification((emailAddressId: string) =>
-        user?.update({ primaryEmailAddressId: emailAddressId }),
-        { throwOnError: false }
-      )
-
-      const handleClick = async (emailAddressId: string) => {
-        await changePrimaryEmail(emailAddressId)
-
-        if (error) {
-          // Handle if user cancels the reverification process
-          if (isClerkRuntimeError(error) && error.code === 'reverification_cancelled') {
-            console.error('User cancelled reverification', error.code)
-          }
-        }
-      }
-
-      return (
-        <div>
-          <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
-
-          <ul>
-            {user?.emailAddresses.map((email) => (
-              <li>
-                <span>{email.emailAddress}</span> -
-                <button onClick={() => handleClick(email.id)}>Make primary</button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )
-    }
-    ```
-
     ### Custom fetcher function
 
     In this example, we use the `useReverification()` hook to enhance a fetcher function that fetches data from a route that requires reverification. See the [guide on how to require reverification](/docs/guides/reverification) for more information.
@@ -194,7 +115,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
     export function UpdateUserEmail() {
       const { user } = useUser()
       const [balance, setBalance] = useState<number | null>(null)
-      const { action: accountBalace } = useReverification(() => fetch('/api/balance'))
+      const accountBalace = useReverification(() => fetch('/api/balance'))
 
       const handleClick = async () => {
         try {
@@ -218,7 +139,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
 
       return (
         <div>
-          <span>Your account balance is {balance ? `$${balance}` : '***'}</span>
+          <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
           <button onClick={() => handleClick()}>See account balance</button>
         </div>
       )
@@ -244,9 +165,22 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
 
       export function UpdateUserEmail() {
         const { user } = useUser()
-        const { action: changePrimaryEmail } = useReverification(
+        const [verificationState, setVerificationState] = useState<{
+          complete: () => void
+          cancel: () => void
+          level: SessionVerificationLevel | undefined
+        } | null>(null)
+        const changePrimaryEmail = useReverification(
           (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
-          { defaultUI: false }, // Disable the default UI
+          {
+            onNeedsReverification: ({ complete, cancel, level }) => {
+              setVerificationState({
+                complete,
+                cancel,
+                level,
+              })
+            },
+          },
         )
 
         const handleClick = async (emailAddressId: string) => {
@@ -277,6 +211,8 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
                 </li>
               ))}
             </ul>
+
+            <VerificationDialog {...verificationState} />
           </div>
         )
       }
@@ -350,67 +286,6 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
             <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
             <button onClick={async () => handleVerificationAttempt()}>Complete</button>
             <button onClick={() => cancel()}>Cancel</button>
-          </div>
-        )
-      }
-      ```
-
-      ### Use the custom verification component
-
-      Finally, you can use the custom verification component in the `UpdateUser` component.
-
-      ```tsx {{ filename: 'src/components/update-user-email.tsx', mark: [3, [7, 16], [34, 38]] }}
-      import { useReverification, useUser } from '@clerk/clerk-react'
-      import { isClerkRuntimeError } from '@clerk/clerk-react/errors'
-      import { VerificationComponent } from './VerificationComponent'
-
-      export function UpdateUserEmail() {
-        const { user } = useUser()
-        const {
-          action: changePrimaryEmail,
-          level,
-          cancel,
-          complete,
-          inProgress,
-        } = useReverification(
-          (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
-          { defaultUI: false },
-        )
-
-        const handleClick = async (emailAddressId: string) => {
-          try {
-            await changePrimaryEmail(emailAddressId)
-          } catch (e) {
-            // Handle if user cancels the reverification process
-            if (isClerkRuntimeError(e) && e.code === 'reverification_cancelled') {
-              console.error('User cancelled reverification', e.code)
-            }
-
-            /*
-             * You can also handle any error from the reverification process
-             * or any error coming from the user.update() function.
-             */
-          }
-        }
-
-        if (inProgress) {
-          return (
-            <VerificationComponent level={level} complete={() => complete()} cancel={() => cancel()} />
-          )
-        }
-
-        return (
-          <div>
-            <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
-
-            <ul>
-              {user?.emailAddresses.map((email) => (
-                <li>
-                  <span>{email.emailAddress}</span> -
-                  <button onClick={() => handleClick(email.id)}>Make primary</button>
-                </li>
-              ))}
-            </ul>
           </div>
         )
       }

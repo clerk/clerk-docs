@@ -241,62 +241,79 @@ const readPartialsFolder = (config: BuildConfig) => async () => {
   })
 }
 
-const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+const readPartial = (config: BuildConfig) => async (filePath: string) => {
   const readFile = readMarkdownFile(config)
 
-  return Promise.all(
-    paths.map(async (markdownPath) => {
-      const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, markdownPath)
+  const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, filePath)
 
-      const [error, content] = await readFile(fullPath)
+  const [error, content] = await readFile(fullPath)
 
-      if (error) {
-        throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
-      }
+  if (error) {
+    throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
+  }
 
-      let partialNode: Node | null = null
+  let partialNode: Node | null = null
 
-      const partialContentVFile = await markdownProcessor()
-        .use(() => (tree) => {
-          partialNode = tree
-        })
-        .use(() => (tree, vfile) => {
-          mdastVisit(
-            tree,
-            (node) =>
-              (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
-              'name' in node &&
-              node.name === 'Include',
-            (node) => {
-              vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
-            },
-          )
-        })
-        .process({
-          path: `docs/_partials/${markdownPath}`,
-          value: content,
-        })
+  const partialContentVFile = await markdownProcessor()
+    .use(() => (tree) => {
+      partialNode = tree
+    })
+    .use(() => (tree, vfile) => {
+      mdastVisit(
+        tree,
+        (node) =>
+          (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
+          'name' in node &&
+          node.name === 'Include',
+        (node) => {
+          vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
+        },
+      )
+    })
+    .process({
+      path: `docs/_partials/${filePath}`,
+      value: content,
+    })
 
-      const partialContentReport = reporter([partialContentVFile], { quiet: true })
+  const partialContentReport = reporter([partialContentVFile], { quiet: true })
 
-      if (partialContentReport !== '') {
-        console.error(partialContentReport)
-        process.exit(1)
-      }
+  if (partialContentReport !== '') {
+    console.error(partialContentReport)
+    process.exit(1)
+  }
 
-      if (partialNode === null) {
-        throw new Error(`Failed to parse the content of ${markdownPath}`)
-      }
+  if (partialNode === null) {
+    throw new Error(`Failed to parse the content of ${filePath}`)
+  }
 
-      return {
-        path: markdownPath,
-        content,
-        vfile: partialContentVFile,
-        node: partialNode as Node,
-      }
-    }),
-  )
+  return {
+    path: filePath,
+    content,
+    vfile: partialContentVFile,
+    node: partialNode as Node,
+  }
 }
+
+const readPartialsMarkdown =
+  (config: BuildConfig, store: ReturnType<typeof createBlankStore>) => async (paths: string[]) => {
+    const read = readPartial(config)
+
+    return Promise.all(
+      paths.map(async (markdownPath) => {
+        const cachedValue = store.partialsFiles.get(markdownPath)
+
+        if (cachedValue !== undefined) {
+          return cachedValue
+        }
+
+        const partial = await read(markdownPath)
+
+        store.partialsFiles.set(markdownPath, partial)
+
+        return partial
+      }),
+    )
+  }
 
 const markdownProcessor = remark().use(remarkFrontmatter).use(remarkMdx).freeze()
 
@@ -661,6 +678,7 @@ const parseInMarkdownFile =
 
 export const createBlankStore = () => ({
   markdownFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>(),
+  partialsFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof readPartial>>>>(),
 })
 
 export const build = async (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
@@ -669,7 +687,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
-  const getPartialsMarkdown = readPartialsMarkdown(config)
+  const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
@@ -1179,14 +1197,17 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: Bui
     }
 
     events.forEach((event) => {
-      const href = removeMdxSuffix(`/docs/${path.relative(config.docsPath, event.path)}`)
-
-      store.markdownFiles.delete(href)
-
-      console.log(store.markdownFiles.keys())
+      store.markdownFiles.delete(removeMdxSuffix(`/docs/${path.relative(config.docsPath, event.path)}`))
+      store.partialsFiles.delete(path.relative(config.partialsPath, event.path))
     })
 
+    const now = performance.now()
+
     const output = await build(store, config)
+
+    const after = performance.now()
+
+    console.log(`Rebuilt docs in ${after - now} milliseconds`)
 
     if (output !== '') {
       console.info(output)

@@ -169,7 +169,8 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
           complete: () => void
           cancel: () => void
           level: SessionVerificationLevel | undefined
-        } | null>(null)
+          inProgress: boolean
+        } | undefined>(undefined)
         const changePrimaryEmail = useReverification(
           (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
           {
@@ -178,6 +179,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
                 complete,
                 cancel,
                 level,
+                inProgress: true,
               })
             },
           },
@@ -212,7 +214,17 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
               ))}
             </ul>
 
-            <VerificationDialog {...verificationState} />
+            {verificationState?.inProgress && <VerificationDialog
+              level={verificationState?.level}
+              onComplete={() => {
+                verificationState.complete()
+                setVerificationState(undefined)
+              }}
+              onCancel={() => {
+                verificationState.cancel()
+                setVerificationState(undefined)
+              }}
+            />}
           </div>
         )
       }
@@ -227,12 +239,12 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
       ```tsx {{ filename: 'src/components/VerificationComponent.tsx' }}
       export function VerificationComponent({
         level = 'first_factor',
-        complete,
-        cancel,
+        onComplete,
+        onCancel,
       }: {
         level: SessionVerificationLevel | undefined
-        complete: () => void
-        cancel: () => void
+        onComplete: () => void
+        onCancel: () => void
       }) {
         const { user } = useUser()
         const { session } = useSession()
@@ -273,7 +285,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
               strategy: 'email_code',
               code,
             })
-            complete()
+            onComplete()
           } catch (e) {
             // Any error from the attempt to verify the session can be handled here
             console.error('Error verifying session', e)
@@ -285,7 +297,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
             <h1>Verification for {user?.primaryEmailAddress?.emailAddress || ''}</h1>
             <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
             <button onClick={async () => handleVerificationAttempt()}>Complete</button>
-            <button onClick={() => cancel()}>Cancel</button>
+            <button onClick={() => onCancel()}>Cancel</button>
           </div>
         )
       }

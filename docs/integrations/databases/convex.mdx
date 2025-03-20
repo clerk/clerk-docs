@@ -15,6 +15,11 @@ description: Learn how to integrate Clerk into your Convex application.
       link: "/docs/quickstarts/overview",
       icon: "code-bracket",
     },
+    {
+      title: "Integrate Convex into your app",
+      link: "https://docs.convex.dev/quickstarts",
+      icon: "code-bracket"
+    }
   ]}
   exampleRepo={[
     {
@@ -32,7 +37,7 @@ description: Learn how to integrate Clerk into your Convex application.
   - Configure the Clerk and Convex providers to work together
 </TutorialHero>
 
-With [Convex](https://www.convex.dev/), you can build a backend with a provided realtime database, file storage, text search, scheduling and more. Paired with Clerk's user authentication and management features, you can build a powerful application with minimal effort. This tutorial will show you how to integrate Clerk into your Convex application. It assumes that you have already integrated one of Clerk's SDKs into your application.
+With [Convex](https://www.convex.dev/), you can build a backend with a provided realtime database, file storage, text search, scheduling and more. Paired with Clerk's user authentication and management features, you can build a powerful application with minimal effort. This tutorial will show you how to integrate Clerk into your Convex application. It assumes that you have already integrated both Convex and one of Clerk's SDKs into your app.
 
 <Steps>
   ## Create a JWT template based on Convex
@@ -171,6 +176,109 @@ With [Convex](https://www.convex.dev/), you can build a backend with a provided 
       ```
     </Tab>
   </Tabs>
+
+  ## Show UI based on auth state
+
+  You can control which UI is shown when the user is signed in or signed out using Convex's `<Authenticated>`, `<Unauthenticated>` and `<AuthLoading>` helper components. These should be used instead of Clerk's `<SignedIn>`, `<SignedOut>` and `<ClerkLoading>` components, respectively.
+
+  It's important to use the [`useConvexAuth()`](/api/modules/react#useconvexauth) hook instead of
+  Clerk's `useAuth()` hook when you need to check whether the user is logged in or
+  not. The `useConvexAuth()` hook makes sure that the browser has fetched the auth
+  token needed to make authenticated requests to your Convex backend, and that the
+  Convex backend has validated it.
+
+  In the following example, the `<Content />` component is a child of `<Authenticated>`, so its content and any of its child components are guaranteed to have an authenticated user, and Convex queries can require authentication.
+
+  <Tabs items={["Next.js", "React"]}>
+    <Tab>
+      ```tsx title="app/page.tsx"
+      'use client'
+
+      import { Authenticated, Unauthenticated } from 'convex/react'
+      import { SignInButton, UserButton } from '@clerk/nextjs'
+      import { useQuery } from 'convex/react'
+      import { api } from '../convex/_generated/api'
+
+      export default function Home() {
+        return (
+          <>
+            <Authenticated>
+              <UserButton />
+              <Content />
+            </Authenticated>
+            <Unauthenticated>
+              <SignInButton />
+            </Unauthenticated>
+          </>
+        )
+      }
+
+      function Content() {
+        const messages = useQuery(api.messages.getForCurrentUser)
+        return <div>Authenticated content: {messages?.length}</div>
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx title="src/App.tsx"
+      import { SignInButton, UserButton } from '@clerk/clerk-react'
+      import { Authenticated, Unauthenticated, AuthLoading, useQuery } from 'convex/react'
+      import { api } from '../convex/_generated/api'
+
+      function App() {
+        return (
+          <main>
+            <Unauthenticated>
+              <SignInButton />
+            </Unauthenticated>
+            <Authenticated>
+              <UserButton />
+              <Content />
+            </Authenticated>
+            <AuthLoading>
+              <p>Still loading</p>
+            </AuthLoading>
+          </main>
+        )
+      }
+
+      function Content() {
+        const messages = useQuery(api.messages.getForCurrentUser)
+        return <div>Authenticated content: {messages?.length}</div>
+      }
+
+      export default App
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Use auth state in your Convex functions
+
+  If the client is authenticated, you can access the information stored in the JWT via `ctx.auth.getUserIdentity`.
+
+  If the client isn't authenticated, `ctx.auth.getUserIdentity` will return `null`.
+
+  **Make sure that the component calling this query is a child of `<Authenticated>` from
+  `convex/react`**. Otherwise, it will throw on page load.
+
+  ```ts {{ filename: 'convex/messages.ts' }}
+  import { query } from './_generated/server'
+
+  export const getForCurrentUser = query({
+    args: {},
+    handler: async (ctx) => {
+      const identity = await ctx.auth.getUserIdentity()
+      if (identity === null) {
+        throw new Error('Not authenticated')
+      }
+      return await ctx.db
+        .query('messages')
+        .filter((q) => q.eq(q.field('author'), identity.email))
+        .collect()
+    },
+  })
+  ```
 </Steps>
 
 ## Next steps

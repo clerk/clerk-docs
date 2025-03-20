@@ -30,7 +30,7 @@ The `useReverification()` hook is used to handle a session's reverification flow
 
 <Properties>
   - `onNeedsReverification?`
-  - `({ complete, cancel, level }: [NeedsReverificationParameters](NeedsReverificationParameters)) => void`
+  - `({ complete, cancel, level }: NeedsReverificationParameters) => void`
 
   Determines if the default UI should be used. Defaults to `true`.
 </Properties>
@@ -38,9 +38,24 @@ The `useReverification()` hook is used to handle a session's reverification flow
 ### `NeedsReverificationParameters`
 
 <Properties>
-  - `{ complete: () => void, cancel: () => void, level: SessionVerificationLevel | undefined }`
+  - `complete`
+  - `() => void`
 
-  Determines if the default UI should be used. Defaults to `true`.
+  Marks the reverification process as complete and retries the original request.
+
+  ---
+
+  - `cancel`
+  - `() => void`
+
+  Marks the reverification process as cancelled and rejects the original request.
+
+  ---
+
+  - `level`
+  - `SessionVerificationLevel | undefined`
+
+  The verification level required for the reverification process.
 </Properties>
 
 ## Returns
@@ -93,7 +108,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
 
           <ul>
             {user?.emailAddresses.map((email) => (
-              <li>
+              <li key={email.id}>
                 <span>{email.emailAddress}</span> -
                 <button onClick={() => handleClick(email.id)}>Make primary</button>
               </li>
@@ -111,9 +126,9 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
     ```tsx {{ filename: 'src/components/account-balance.tsx' }}
     import { useReverification, useUser } from '@clerk/clerk-react'
     import { isClerkRuntimeError } from '@clerk/clerk-react/errors'
+    import { useState } from 'react'
 
     export function UpdateUserEmail() {
-      const { user } = useUser()
       const [balance, setBalance] = useState<number | null>(null)
       const accountBalace = useReverification(() => fetch('/api/balance'))
 
@@ -121,9 +136,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
         try {
           const accountBalanceResponse = await accountBalace()
 
-          const body = await accountBalanceResponse.json()
-
-          setBalance(accountBalance.amount)
+          setBalance(accountBalanceResponse.amount)
         } catch (e) {
           // Handle if user cancels the reverification process
           if (isClerkRuntimeError(e) && e.code === 'reverification_cancelled') {
@@ -162,6 +175,8 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
       ```tsx {{ filename: 'src/components/update-user-email.tsx' }}
       import { useReverification, useUser } from '@clerk/clerk-react'
       import { isClerkRuntimeError } from '@clerk/clerk-react/errors'
+      import { useState } from 'react'
+      import { VerificationComponent } from './VerificationComponent'
 
       export function UpdateUserEmail() {
         const { user } = useUser()
@@ -210,7 +225,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
 
             <ul>
               {user?.emailAddresses.map((email) => (
-                <li>
+                <li key={email.id}>
                   <span>{email.emailAddress}</span> -
                   <button onClick={() => handleClick(email.id)}>Make primary</button>
                 </li>
@@ -218,7 +233,7 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
             </ul>
 
             {verificationState?.inProgress && (
-              <VerificationDialog
+              <VerificationComponent
                 level={verificationState?.level}
                 onComplete={() => {
                   verificationState.complete()
@@ -242,6 +257,10 @@ When using the `useReverification()` hook, we provide a prebuilt UI that handles
       In this example, we will build a custom verification component that handles first-factor verification using an email code. But you can build a custom UI that handles any type of verification level.
 
       ```tsx {{ filename: 'src/components/VerificationComponent.tsx' }}
+      import { useEffect, useState } from 'react'
+      import { useSession, useUser } from '@clerk/clerk-react'
+      import { SessionVerificationResource } from '@clerk/types'
+
       export function VerificationComponent({
         level = 'first_factor',
         onComplete,

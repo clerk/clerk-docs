@@ -38,6 +38,45 @@ export default function AddToCart() {
 }
 ```
 
+When performing organization-related operations, ensure you access the current user's organization membership using `auth().orgId` to prevent users from creating resources for other organizations they don't belong to.
+
+```tsx {{ filename: 'actions.ts' }}
+import { auth } from '@clerk/nextjs/server'
+import { clerkClient } from '@clerk/nextjs'
+
+export default function AddVerifiedDomain() {
+  async function addVerifiedDomain(formData: FormData) {
+    'use server'
+
+    const { userId, orgId } = await auth()
+
+    if (!userId || !orgId) {
+      throw new Error('You must be signed in with a valid organization membership')
+    }
+
+    const domain = formData.get('domain')?.toString()
+    if (!domain) {
+      throw new Error('Domain is required')
+    }
+
+    await clerkClient().organizations.createOrganizationDomain({
+      organizationId: orgId,
+      name: domain,
+      enrollmentMode: 'automatic_invitation',
+    })
+
+    console.log(`Added domain ${domain} to organization ${orgId}`)
+  }
+
+  return (
+    <form action={addVerifiedDomain}>
+      <input placeholder="example.com" type="text" name="domain" />
+      <button type="submit">Add Domain</button>
+    </form>
+  )
+}
+```
+
 ### Accessing the current user
 
 Current user data is important for data enrichment. You can use the [`currentUser()`](/docs/references/nextjs/current-user) helper to fetch the current user's data in your server actions.

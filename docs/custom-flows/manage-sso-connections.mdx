@@ -28,8 +28,8 @@ This guide uses Discord, Google, and GitHub as examples.
 ```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
 'use client'
 
-import { useUser } from '@clerk/nextjs'
-import { OAuthStrategy } from '@clerk/types'
+import { useUser, useReverification } from '@clerk/nextjs'
+import { CreateExternalAccountParams, ExternalAccountResource, OAuthStrategy } from '@clerk/types'
 import { useRouter } from 'next/navigation'
 
 // Capitalize the first letter of the provider name
@@ -48,6 +48,10 @@ export default function AddAccount() {
   const router = useRouter()
   // Use Clerk's `useUser()` hook to get the current user's `User` object
   const { isLoaded, user } = useUser()
+  const createExternalAccount = useReverification((params: CreateExternalAccountParams) =>
+    user?.createExternalAccount(params),
+  )
+  const accountDestroy = useReverification((account: ExternalAccountResource) => account.destroy())
 
   // List the options the user can select when adding a new external account
   // Edit this array to include all of your enabled SSO connections
@@ -55,13 +59,12 @@ export default function AddAccount() {
 
   // Handle adding the new external account
   const addSSO = async (strategy: OAuthStrategy) => {
-    await user
-      ?.createExternalAccount({
-        strategy,
-        redirectUrl: '/account/manage-external-accounts',
-      })
+    await createExternalAccount({
+      strategy,
+      redirectUrl: '/account/manage-external-accounts',
+    })
       .then((res) => {
-        if (res.verification?.externalVerificationRedirectURL) {
+        if (res?.verification?.externalVerificationRedirectURL) {
           router.push(res.verification.externalVerificationRedirectURL.href)
         }
       })
@@ -108,7 +111,7 @@ export default function AddAccount() {
                   </li>
                 )}
               <li>
-                <button onClick={() => account.destroy()}>
+                <button onClick={() => accountDestroy(account)}>
                   Remove {capitalize(account.provider)}
                 </button>
               </li>

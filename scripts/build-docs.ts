@@ -1201,16 +1201,22 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: Bui
       store.partialsFiles.delete(path.relative(config.partialsPath, event.path))
     })
 
-    const now = performance.now()
+    try {
+      const now = performance.now()
 
-    const output = await build(store, config)
+      const output = await build(store, config)
 
-    const after = performance.now()
+      const after = performance.now()
 
-    console.log(`Rebuilt docs in ${after - now} milliseconds`)
+      console.log(`Rebuilt docs in ${after - now} milliseconds`)
 
-    if (output !== '') {
-      console.info(output)
+      if (output !== '') {
+        console.info(output)
+      }
+    } catch (error) {
+      console.error(error)
+
+      return
     }
   })
 }

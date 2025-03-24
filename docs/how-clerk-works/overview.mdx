@@ -180,7 +180,7 @@ This example assumes that the user already signed up and their credentials are s
    >
    > This is a great test of your mastery of [how cookies work](/docs/backend-requests/resources/cookies)!
    >
-   > Remember, **the domain of a cookie can only be set as the domain of the server that set the cookie**. In this case, the server returning the request to your app is FAPI. For the **client cookie**, this is ok, since the **client cookie** needs to be set on FAPI. However, the **session cookie** needs to be set on your app's domain, not on FAPI. So, FAPI returns the **JWT value** of the session cookie in its response, and when the Clerk client-side SDK integrated in your app receives the response, it gets the **JWT value** and uses JavaScript to set the **session cookie** on your app directly, since the JavaScript is running on your app's domain.
+   > Remember, **the domain of a cookie can only be set as the domain of the server that set the cookie**. In this case, the server returning the request to your app is FAPI. For the **`__client` cookie**, this is ok, since the **`__client` cookie** needs to be set on FAPI. However, the **`__session` cookie** needs to be set on your app's domain, not on FAPI. So, FAPI returns the **JWT value** of the `__session` cookie in its response, and when the Clerk client-side SDK integrated in your app receives the response, it gets the **JWT value** and uses JavaScript to set the **`__session` cookie** on your app directly, since the JavaScript is running on your app's domain.
 
    <Video
      src="/docs/images/how-clerk-works/hybrid-auth.mp4"
@@ -241,6 +241,8 @@ Clerk's authentication model relies on two distinct tokens - a "client token" an
 
 ### Client token
 
+The client token is a long-lived token that is set on your FAPI domain and is stored in the `__client` cookie.
+
 - **Cookie name:** `__client`
 - **Contents:** A Clerk-signed JWT containing:
   - `session_id`: Unique session identifier
@@ -263,6 +265,8 @@ For more information on the differences between development and production envir
 
 ### Session token
 
+The session token is a short-lived token that is set on your app's domain and is stored in the `__session` cookie.
+
 - **Cookie name:** `__session`
 - **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/backend-requests/resources/session-tokens#default-session-claims). Can be customized in the Clerk Dashboard to include additional claims.
 - **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/backend-requests/making-requests).
@@ -270,22 +274,22 @@ For more information on the differences between development and production envir
 - **HttpOnly:** No - must be able to be accessed by client-side SDKs
 - **SameSite:** Lax
 
-When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie, also referred to as the session token, will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
+When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
 
 > [!QUIZ]
-> Why are session tokens not `HttpOnly`? Is this a security issue?
+> Why is the `__session` cookie not `HttpOnly`? Is this a security issue?
 >
 > ---
 >
 > Setting cookies as `HttpOnly` is generally recommended to prevent client-side JavaScript access, reducing the risk of cross-site scripting (XSS) attacks. However, due to Clerk's architecture, this approach wouldn't work.
 >
-> Remember that FAPI is hosted on a different origin than your app. Let's say, in production, your app is `example.com`. Then FAPI is `clerk.example.com`. If FAPI set the session cookie as `HttpOnly`, it would be scoped to `clerk.example.com`, preventing it from being sent to `example.com`. Since cookies are only sent to the domain that matches their domain value, which is the domain that sets them, this setup would block your app from accessing the cookie.
+> Remember that FAPI is hosted on a different origin than your app. Let's say, in production, your app is `example.com`. Then FAPI is `clerk.example.com`. If FAPI set the `__session` cookie as `HttpOnly`, it would be scoped to `clerk.example.com`, preventing it from being sent to `example.com`. Since cookies are only sent to the domain that matches their domain value, which is the domain that sets them, this setup would block your app from accessing the cookie.
 >
-> To work around this, Clerk returns the session token from FAPI after a user signs in, and the client-side SDK used by your app (e.g., React SDK) sets the cookie on your app's domain **via JavaScript**. A benefit of this is that it allows the token's value and session claims to be accessed on the client-side. This is often quite valuable, as it allows developers to send the session token as a custom header in requests and also makes it possible to use a subdomain (like `api.example.com`) for your backend. However, because it's set client-side, it cannot be `HttpOnly`, making it more vulnerable to XSS attacks.
+> To work around this, Clerk returns the session token from FAPI after a user signs in, and the client-side SDK used by your app (e.g., React SDK) sets the `__session` cookie containing the session token on your app's domain **via JavaScript**. A benefit of this is that it allows the token's value and session claims to be accessed on the client-side. This is often quite valuable, as it allows developers to send the session token as a custom header in requests and also makes it possible to use a subdomain (like `api.example.com`) for your backend. However, because it's set client-side, it cannot be `HttpOnly`, making it more vulnerable to XSS attacks.
 >
 > Clerk mitigates this risk substantially by setting the session token's expiration to a very short duration of 60 seconds. For an XSS attack to succeed, the developer would need to ship a vulnerability on their site, and the attacker would need to exfiltrate users' tokens and use them to take over accounts in an average of less than 30 seconds, which is an extremely difficult scenario. Additionally, Clerk's fast-expiring token provides an extra layer of protection against other attacks that `HttpOnly` cookies alone wouldn't mitigate.
 >
-> Summary: Clerk's session token is not `HttpOnly` because it needs to be accessible to the client-side SDKs. However, Clerk mitigates the risk of XSS attacks by setting the session token's expiration to a very short duration of 60 seconds.
+> Summary: Clerk's `__session` cookie is not `HttpOnly` because it needs to be accessible to the client-side SDKs. However, Clerk mitigates the risk of XSS attacks by setting the session token's expiration to a very short duration of 60 seconds.
 
 ## The Handshake
 
@@ -297,13 +301,13 @@ However, server-rendered applications present a unique challenge. Server-to-serv
 
 1. The server returns a **redirect response** to the browser
 1. The browser follows the redirect to FAPI
-1. FAPI receives the request with the client cookie
+1. FAPI receives the request with the `__client` cookie
 1. FAPI validates the authentication state and issues a new session token
 
 This server -> browser -> FAPI request includes the client token, so FAPI is able to verify the user's auth state and issue a new session token securely. This handshake ensures secure token renewal while maintaining the benefits of server-side rendering.
 
 > [!QUIZ]
-> Why does handshake do a redirect? Why can’t it make a fetch request to FAPI and get a new token back that way? Not needing to redirect would be a better user experience.
+> Why does handshake do a redirect? Why can't it make a fetch request to FAPI and get a new token back that way? Not needing to redirect would be a better user experience.
 >
 > ---
 >
@@ -326,14 +330,14 @@ This server -> browser -> FAPI request includes the client token, so FAPI is abl
 > 1. Clerk SDK determines the authentication state of the request (`signed-in`, `signed-out`, or `handshake`).
 > 1. If the authentication state is `handshake` (i.e. unknown), Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
 > 1. The handshake endpoint gets information about the current session and returns a handshake payload. The encoded handshake payload contains a list of `Set-Cookie` header directives to be passed along with the final response.
->    1. If the session is active, a fresh session JWT cookie is returned.
->    1. If the session is inactive, the session JWT cookie is wiped and the request will be treated as signed out.
+>    - If the session is active, a fresh `__session` cookie is returned.
+>    - If the session is inactive, the `__session` cookie is wiped and the request will be treated as signed out.
 > 1. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development) or as a cookie (production).
-> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response
-> 1. If an updated session JWT is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
-> 1. If an updated session JWT is not returned, the request is treated as signed out.
+> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response.
+> 1. If an updated `__session` cookie is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
+> 1. If an updated `__session` cookie is not returned, the request is treated as signed out.
 >
-> This makes it such that you can't provide proof of authentication via an API call - the proof comes from the **client cookie** on FAPI which can't be tampered with by attackers since it's not set on the application domain and is `HttpOnly`.
+> This makes it such that you can't provide proof of authentication via an API call - the proof comes from the **`__client` cookie** on FAPI which can't be tampered with by attackers since it's not set on the application domain and is `HttpOnly`.
 
 {/*
   Future sections to add

@@ -287,9 +287,9 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
         The `<VerificationComponent />` component handles the reverification process. It uses the `level` property to determine the verification level, which is set to `first_factor`. First, it finds the determined starting first factor from the supported first factors. Then, it prepares the first factor verification using the `strategy` (`email_code` in this case) and `emailAddressId` properties. Finally, it attempts to verify the session with email code provided by the user. If the verification is successful, the `onComplete()` handler is called to complete the reverification process.
 
         ```tsx {{ filename: 'src/components/VerificationComponent.tsx' }}
-        import { useEffect, useState } from 'react'
-        import { useSession, useUser } from '@clerk/clerk-react'
-        import { SessionVerificationLevel, SessionVerificationResource } from '@clerk/types'
+        import { useEffect, useRef, useState } from 'react'
+        import { useSession } from '@clerk/clerk-react'
+        import { EmailCodeFactor, SessionVerificationLevel, SessionVerificationResource } from '@clerk/types'
 
         export function VerificationComponent({
           level = 'first_factor',
@@ -300,15 +300,28 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
           onComplete: () => void
           onCancel: () => void
         }) {
-          const { user } = useUser()
           const { session } = useSession()
           const [code, setCode] = useState<string>('')
+          const reverificationRef = useRef<SessionVerificationResource | undefined>(undefined)
+          const [determinedStartingFirstFactor, setDeterminedStartingFirstFactor] = useState<EmailCodeFactor|undefined>()
+
+          useEffect(() => {
+            if (reverificationRef.current) {
+              return
+            }
+
+            session
+              ?.startVerification({ level })
+              .then(async (response) => {
+                reverificationRef.current = response
+                await prepareEmailVerification(response)
+              })
+          }, [])
 
           const prepareEmailVerification = async (verificationResource: SessionVerificationResource) => {
             // To simplify the example we will only handle the first factor verification
             if (
-              verificationResource.status === 'needs_first_factor' &&
-              verificationResource.level === 'first_factor'
+              verificationResource.status === 'needs_first_factor'
             ) {
               // Determine the starting first factor from the supported first factors
               const determinedStartingFirstFactor = verificationResource.supportedFirstFactors?.filter(
@@ -316,6 +329,7 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
               )[0]
 
               if (determinedStartingFirstFactor) {
+                setDeterminedStartingFirstFactor(determinedStartingFirstFactor)
                 // Prepare the first factor verification with the determined starting first factor
                 await session?.prepareFirstFactorVerification({
                   strategy: determinedStartingFirstFactor.strategy,
@@ -324,13 +338,6 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
               }
             }
           }
-
-          useEffect(() => {
-            // Start the verification process when the component mounts
-            session
-              ?.startVerification({ level })
-              .then(async (response) => prepareEmailVerification(response))
-          }, [])
 
           const handleVerificationAttempt = async () => {
             try {
@@ -346,15 +353,20 @@ The `useReverification()` hook displays a prebuilt UI when the user needs to rev
             }
           }
 
+          if (!determinedStartingFirstFactor) {
+            return null
+          }
+
           return (
             <div>
-              <p>Enter verification code sent to {user?.primaryEmailAddress?.emailAddress || ''}</p>
+              <p>Enter verification code sent to {determinedStartingFirstFactor.safeIdentifier || ''}</p>
               <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
               <button onClick={async () => handleVerificationAttempt()}>Complete</button>
               <button onClick={() => onCancel()}>Cancel</button>
             </div>
           )
         }
+
         ```
       </Tab>
     </Tabs>

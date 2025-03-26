@@ -645,9 +645,27 @@ const parseInMarkdownFile =
             // eg # test {{ id: 'my-heading' }}
             // This is for remapping the hash to the custom id
             const id = node?.children
-              ?.find((child) => child?.type === 'mdxTextExpression')
-              ?.data?.estree?.body?.find((child) => child?.type === 'ExpressionStatement')
-              ?.expression?.properties?.find((prop) => prop?.key?.name === 'id')?.value?.value as string | undefined
+              ?.find(
+                (child: unknown) =>
+                  typeof child === 'object' && child !== null && 'type' in child && child?.type === 'mdxTextExpression',
+              )
+              ?.data?.estree?.body?.find(
+                (child: unknown) =>
+                  typeof child === 'object' &&
+                  child !== null &&
+                  'type' in child &&
+                  child?.type === 'ExpressionStatement',
+              )
+              ?.expression?.properties?.find(
+                (prop: unknown) =>
+                  typeof prop === 'object' &&
+                  prop !== null &&
+                  'key' in prop &&
+                  typeof prop.key === 'object' &&
+                  prop.key !== null &&
+                  'name' in prop.key &&
+                  prop.key.name === 'id',
+              )?.value?.value as string | undefined
 
             if (id !== undefined) {
               headingsHashs.push(id)

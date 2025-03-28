@@ -852,28 +852,28 @@ The `<If />` component is used for conditional rendering. When the conditions ar
 
 Available values for the `sdk` prop:
 
-| SDK                    | Value              |
-| ---------------------- | ------------------ |
-| Next.js                | "nextjs"           |
-| React                  | "react"            |
-| Javascript             | "js-frontend"      |
-| Chrome Extension       | "chrome-extension" |
-| Expo                   | "expo"             |
-| iOS                    | "ios"              |
-| Express                | "expressjs"        |
-| Fastify                | "fastify"          |
-| React Router           | "react-router"     |
-| Remix                  | "remix"            |
-| Tanstack Start         | "tanstack-start"   |
-| Go                     | "go"               |
-| Astro                  | "astro"            |
-| Nuxt                   | "nuxt"             |
-| Vue                    | "vue"              |
-| Ruby / Rails / Sinatra | "ruby"             |
-| Python                 | "python"           |
-| JS Backend SDK         | "js-backend"       |
-| SDK Development        | "sdk-development"  |
-| Community SDKs         | "community-sdk"    |
+| SDK                    | Value                  |
+| ---------------------- | ---------------------- |
+| Next.js                | "nextjs"               |
+| React                  | "react"                |
+| Javascript             | "js-frontend"          |
+| Chrome Extension       | "chrome-extension"     |
+| Expo                   | "expo"                 |
+| iOS                    | "ios"                  |
+| Express                | "expressjs"            |
+| Fastify                | "fastify"              |
+| React Router           | "react-router"         |
+| Remix                  | "remix"                |
+| Tanstack React Start   | "tanstack-react-start" |
+| Go                     | "go"                   |
+| Astro                  | "astro"                |
+| Nuxt                   | "nuxt"                 |
+| Vue                    | "vue"                  |
+| Ruby / Rails / Sinatra | "ruby"                 |
+| Python                 | "python"               |
+| JS Backend SDK         | "js-backend"           |
+| SDK Development        | "sdk-development"      |
+| Community SDKs         | "community-sdk"        |
 
 #### Examples
 

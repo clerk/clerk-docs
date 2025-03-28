@@ -837,6 +837,19 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 <Include src="_partials/code-example" />
 ```
 
+### `<Typedoc />`
+
+The `<Typedoc />` component can be used to inject the contents of an MDX file of the [generated-typedoc](https://github.com/clerk/generated-typedoc) repository. The files inside that repository are not manually created and maintained, but rather automatically created from the [clerk/javascript](https://github.com/clerk/javascript) repository. This has a couple of implications:
+
+- If you want to edit the contents of a docs page that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment.
+- Once your PR inside `clerk/javascript` has been merged the `generated-typedoc` repository will be automatically updated. On the next deployment of the docs website your change will be live.
+
+```mdx
+{/* Render `generated-typedoc/clerk-react/use-auth.mdx` */}
+
+<Typedoc src="clerk-react/use-auth" />
+```
+
 ### `<If />`
 
 The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.

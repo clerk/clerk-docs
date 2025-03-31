@@ -1,0 +1,60 @@
+---
+title: Read session and user data in your Nuxt app with Clerk
+description: Learn how to use Clerk's composables to access the active session and user data in your Nuxt application.
+---
+
+Clerk provides [composables](/docs/references/nuxt/overview#client-side-helpers) to access the session and user data in your Nuxt application.
+
+## Client-side
+
+### `useAuth()`
+
+<Include src="_partials/vue-nuxt/use-auth" />
+
+## `useUser()`
+
+The `useUser()` composable provides access the [`User`](/docs/references/javascript/user) object, which contains the current user's data such as their full name.
+
+The following example uses the `useUser()` composable to display the user's first name if they are signed in. The `isLoaded` property checks if Clerk has finished initializing and the `isSignedIn` property checks if a user is currently signed in.
+
+```vue {{ filename: 'pages/protected-page.vue' }}
+<script setup>
+const { isLoaded, isSignedIn, user } = useUser()
+</script>
+
+<template>
+  <div v-if="!isLoaded">Loading...</div>
+  <div v-else-if="!isSignedIn">Sign in to access this page</div>
+  <div v-else>Hello, {{ user.firstName }}!</div>
+</template>
+```
+
+## Server-side
+
+The `Auth` object is available at `event.context.auth` in your [event handlers](https://h3.unjs.io/guide/event-handler). This JavaScript object contains important information like the current user's session ID, user ID, and organization ID. The `userId` can be used to protect your API routes.
+
+In some cases, you may need the full [`Backend User`](/docs/references/backend/types/backend-user) object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server. The `clerkClient()` helper returns an instance of the [JavaScript Backend SDK](/docs/references/backend/overview), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
+
+In the following example, the `userId` is passed to the Backend SDK's `getUser()` method to get the user's full `Backend User` object.
+
+```ts {{ filename: 'server/api/auth/index.ts' }}
+import { clerkClient } from '@clerk/nuxt/server'
+
+export default defineEventHandler(async (event) => {
+  // Use `auth` to get the user's ID
+  const { userId } = event.context.auth
+
+  // Protect the API route by checking if the user is signed in
+  if (!userId) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized: No user ID provided',
+    })
+  }
+
+  // Get the user's full `Backend User` object
+  const user = await clerkClient(event).users.getUser(userId)
+
+  return user
+})
+```

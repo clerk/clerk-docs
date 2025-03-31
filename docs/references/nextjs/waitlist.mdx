@@ -1,0 +1,158 @@
+---
+title: Set up a waitlist in your Next.js app
+description: Learn how to add a waitlist to your Next.js application.
+---
+
+In [**Waitlist** mode](/docs/authentication/configuration/restrictions#waitlist), users can register their interest in your app by joining a waitlist. This mode is ideal for apps in early development stages or those wanting to generate interest before launch. This guide shows you how to get Clerk integrated and how to add a waitlist to your Next.js application.
+
+<Steps>
+  ## Install `@clerk/nextjs`
+
+  The [Clerk Next.js SDK](/docs/references/nextjs/overview) gives you access to prebuilt components, React hooks, and helpers to make user authentication easier.
+
+  Run the following command to install the SDK:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bun add @clerk/nextjs
+    ```
+  </CodeBlockTabs>
+
+  ## Set your Clerk API keys
+
+  <If condition={experiment.enabled}>
+    <ExperimentCreateAccountFromDocsQuickstart params={experiment} />
+  </If>
+
+  <If condition={!experiment.enabled}>
+    <SignedIn>
+      Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+    </SignedIn>
+
+    <SignedOut>
+      1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys){{ track: 'exp_create_account_nextjs_quickstart' }} page.
+      1. In the **Quick Copy** section, copy your Clerk Publishable and Secret Keys.
+      1. Paste your keys into your `.env` file.
+
+      The final result should resemble the following:
+    </SignedOut>
+  </If>
+
+  ```env {{ filename: '.env' }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  CLERK_SECRET_KEY={{secret}}
+  ```
+
+  ## Enable Waitlist mode
+
+  To enable **Waitlist** mode, follow these steps:
+
+  1. In the Clerk Dashboard, navigate to the [**Restrictions**](https://dashboard.clerk.com/last-active?path=user-authentication/restrictions) page.
+  1. Under the **Sign-up modes** section, enable **Waitlist**.
+
+  To manage users on your waitlist:
+
+  1. In the Clerk Dashboard, navigate to the [**Waitlist**](https://dashboard.clerk.com/last-active?path=waitlist) page.
+  1. On the right-side of a user's row, select the menu icon (...).
+  1. Select **Invite** to invite the user to your application. Select **Deny** to deny the user access to your application.
+
+  ## Add the `<Waitlist />` component
+
+  The [`<Waitlist />`](/docs/components/waitlist) component renders a form that allows users to join for early access to your app.
+
+  The following example includes a basic implementation of the `<Waitlist />` component hosted on the `/` route (the home page). You can use this as a starting point for your own implementation.
+
+  ```jsx {{ filename: 'app/page.tsx' }}
+  import { Waitlist } from '@clerk/nextjs'
+
+  export default function Page() {
+    return <Waitlist />
+  }
+  ```
+
+  ## Add `<ClerkProvider>` to your app
+
+  <Include src="_partials/clerk-provider/explanation" />
+
+  To use the `<Waitlist />` component in your app, you must provide the `waitlistUrl` prop, which points to the URL of your waitlist page.
+
+  ```tsx {{ filename: 'app/layout.tsx', mark: [6] }}
+  import { ClerkProvider } from '@clerk/nextjs'
+  import './globals.css'
+
+  export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+      <ClerkProvider waitlistUrl="/">
+        <html lang="en">
+          <body>{children}</body>
+        </html>
+      </ClerkProvider>
+    )
+  }
+  ```
+
+  ## Add sign-in functionality
+
+  To allow users to sign in once they've been approved from the waitlist, you must:
+
+  - [Add `clerkMiddleware()` to your app.](#add-clerkmiddleware-to-your-app)
+  - [Add a sign-in page.](#add-a-sign-in-page)
+
+  ### Add `clerkMiddleware()` to your app
+
+  [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware#clerk-middleware) grants you access to user authentication state throughout your app, on any route or page. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your app, follow these steps:
+
+  1. Create a `middleware.ts` file.
+
+  - If you're using the `/src` directory, create `middleware.ts` in the `/src` directory.
+  - If you're not using the `/src` directory, create `middleware.ts` in the root directory alongside `.env`.
+
+  1. In your `middleware.ts` file, export the `clerkMiddleware()` helper:
+
+  ```tsx {{ filename: 'middleware.ts' }}
+  import { clerkMiddleware } from '@clerk/nextjs/server'
+
+  export default clerkMiddleware()
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+
+  1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
+
+  ### Add a sign-in page
+
+  The following example demonstrates how to render the `<SignIn />` component.
+
+  ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+  import { SignIn } from '@clerk/nextjs'
+
+  export default function Page() {
+    return <SignIn />
+  }
+  ```
+
+  Update your environment variables to point to your custom sign-in page. For more information on building a custom sign-in-or-up page, see the [dedicated guide](/docs/references/nextjs/custom-sign-in-or-up-page).
+
+  ```env {{ filename: '.env' }}
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
+  ```
+</Steps>

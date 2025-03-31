@@ -1,0 +1,711 @@
+---
+title: '`SignIn`'
+description: The SignIn object holds all the state of the current sign in and provides helper methods to navigate and complete the sign in process.
+---
+
+The `SignIn` object holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process. It is used to manage the sign-in lifecycle, including the first and second factor verification, and the creation of a new session.
+
+The following steps outline the sign-in process:
+
+1. Initiate the sign-in process by collecting the user's authentication information and passing the appropriate parameters to the [`create()`](#create) method.
+1. Prepare the first factor verification by calling [`SignIn.prepareFirstFactor()`](#prepare-first-factor). Users _must_ complete a first factor verification. This can be something like providing a password, an email link, a one-time code (OTP), a Web3 wallet address, or providing proof of their identity through an external social account (SSO/OAuth).
+1. Attempt to complete the first factor verification by calling [`SignIn.attemptFirstFactor()`](#attempt-first-factor).
+1. Optionally, if you have enabled [multi-factor](/docs/authentication/configuration/sign-up-sign-in-options) for your application, you will need to prepare the second factor verification by calling [`SignIn.prepareSecondFactor()`](#prepare-second-factor).
+1. Attempt to complete the second factor verification by calling [`SignIn.attemptSecondFactor()`](#attempt-second-factor).
+1. If verification is successful, set the newly created session as the active session by passing the `SignIn.createdSessionId` to the [`setActive()`](/docs/references/javascript/clerk#set-active) method on the `Clerk` object.
+
+## Properties
+
+<Properties>
+  - `status`
+  - `SignInStatus`
+
+  The current status of the sign-in. `SignInStatus` supports the following values:
+
+  - `'complete'`: The user is signed in and the custom flow can proceed to `setActive()` to create a session.
+  - `'needs_identifier'`: The user's identifier (e.g., email address, phone number, username) hasn't been provided.
+  - `'needs_first_factor'`: One of the following [first factor verification strategies](/docs/references/javascript/sign-in) is missing: `'email_link'`, `'email_code'`, `'phone_code'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'` or `'oauth_provider'`.
+  - `'needs_second_factor'`: One of the following [second factor verification strategies](/docs/references/javascript/sign-in) is missing: `'phone_code'` or `'totp'`.
+  - `'needs_new_password'`: The user needs to set a new password.
+
+  ---
+
+  - `supportedIdentifiers`
+  - `SignInIdentifier[]`
+
+  Array of all the authentication identifiers that are supported for this sign in. `SignInIdentifier` supports the following values:
+
+  - `'email_address'`
+  - `'phone_number'`
+  - `'web3_wallet'`
+  - `'username'`
+
+  ---
+
+  - `identifier`
+  - `string | null`
+
+  **Optional** if the `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. **Required** otherwise. The authentication identifier value for the current sign-in.
+
+  ---
+
+  - `supportedFirstFactors`
+  - <code>[SignInFirstFactor](/docs/references/javascript/types/sign-in-first-factor)\[]</code>
+
+  Array of the first factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used. See the [`SignInFirstFactor`](/docs/references/javascript/types/sign-in-first-factor) type reference for more information.
+
+  ---
+
+  - `supportedSecondFactors`
+  - <code>[SignInSecondFactor](/docs/references/javascript/types/sign-in-second-factor)\[]</code>
+
+  Array of the second factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used. This property is populated only when the first factor is verified. See the [`SignInSecondFactor`](/docs/references/javascript/types/sign-in-second-factor) type reference for more information.
+
+  ---
+
+  - `firstFactorVerification`
+  - [`Verification`](/docs/references/javascript/types/verification)
+
+  The state of the verification process for the selected first factor. Initially, this property contains an empty verification object, since there is no first factor selected. You need to call the [`prepareFirstFactor`](/docs/references/javascript/sign-in#prepare-first-factor) method in order to start the verification process.
+
+  ---
+
+  - `secondFactorVerification`
+  - [`Verification`](/docs/references/javascript/types/verification)
+
+  The state of the verification process for the selected second factor. Initially, this property contains an empty verification object, since there is no second factor selected. For the `phone_code` strategy, you need to call the [`prepareSecondFactor`](/docs/references/javascript/sign-in#prepare-second-factor) method in order to start the verification process. For the `totp` strategy, you can directly attempt.
+
+  ---
+
+  - `userData`
+  - `UserData`
+
+  An object containing information about the user of the current sign-in. This property is populated only once an identifier is given to the `SignIn` object.
+
+  ---
+
+  - `createdSessionId`
+  - `string | null`
+
+  The identifier of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `'complete'`.
+</Properties>
+
+## Methods
+
+### `attemptFirstFactor()`
+
+Attempts to complete the first factor verification process. This is a required step in order to complete a sign in, as users should be verified at least by one factor of authentication.
+
+Make sure that a `SignIn` object already exists before you call this method, either by first calling [`SignIn.create()`](#create) or [`SignIn.prepareFirstFactor()`](#prepare-first-factor). The only strategy that does not require a verification to have already been prepared before attempting to complete it is the `password` strategy.
+
+Depending on the strategy that was selected when the verification was prepared, the method parameters will be different.
+
+Returns a `SignIn` object. Check the `firstFactorVerification` attribute for the status of the first factor verification process.
+
+```typescript
+function attemptFirstFactor(params: AttemptFirstFactorParams): Promise<SignIn>
+```
+
+#### `AttemptFirstFactorParams`
+
+<Properties>
+  - `strategy`
+  - `'email_code' | 'phone_code' | 'password' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'passkey' | 'reset_password_phone_code' | 'reset_password_email_code'`
+
+  The `strategy` value depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
+
+  - `'email_code'`: User will receive a one-time authentication code via email. At least one email address should be on file for the user.
+  - `'phone_code'`: User will receive a one-time code via SMS. At least one phone number should be on file for the user.
+  - `'password'`: The verification will attempt to be completed with the user's password.
+  - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/).
+  - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet).
+  - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet).
+  - `'passkey'`: The verification will attempt to be completed using the user's passkey.
+  - `'reset_password_phone_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via SMS.
+  - `'reset_password_email_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via email.
+
+  ---
+
+  - `code?`
+  - `string`
+
+  **Required** if `strategy` is set to `'email_code'`, `'phone_code'`, `'reset_password_phone_code'`, or `'reset_password_email_code'`. The one-time code that was sent to the user.
+
+  ---
+
+  - `password?`
+  - `string`
+
+  **Required** if `strategy` is set to `'password'`. The user's password string to be verified.
+
+  ---
+
+  - `signature?`
+  - `string`
+
+  **Required** if `strategy` is set to `web3_metamask_signature`, `web3_coinbase_wallet_signature`, or `web3_okx_wallet_signature`. The Web3 wallet generated signature to be verified.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.attemptFirstFactor({
+  strategy: 'email_code',
+  code: '123456',
+})
+```
+
+For comprehensive examples, see the [custom flow guides](/docs/custom-flows/overview).
+
+### `attemptSecondFactor()`
+
+Attempts to complete the second factor (2FA) verification process, also known as 2FA, or [multi-factor authentication](/docs/authentication/configuration/sign-up-sign-in-options#multi-factor-authentication).
+
+> [!NOTE]
+> For the `phone_code` strategy, make sure that a verification has already been prepared before you call this method, by first calling [`SignIn.prepareSecondFactor`](#prepare-second-factor).
+
+Returns a `SignIn` object. Check the `secondFactorVerification` attribute for the status of the second factor verification process.
+
+```typescript
+function attemptSecondFactor(params: AttemptSecondFactorParams): Promise<SignIn>
+```
+
+#### `AttemptSecondFactorParams`
+
+<Properties>
+  - `strategy`
+  - `'phone_code' | 'totp'`
+
+  The strategy to be used for second factor verification. Possible `strategy` values are
+
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. At least one phone number should be on file for the user.
+  - `'totp'`: User must provide a 6-digit TOTP code generated by their authenticator app. The user must have previously created a TOTP secret and registered it in their authenticator app using a QR code, URI, or by manually entering the secret.
+
+  ---
+
+  - `code`
+  - `string`
+
+  {/* Comment to prevent lists from being merged into one */}
+
+  - For the `'phone_code'` strategy: The one-time code that was sent to the user as part of the `prepareSecondFactor()` step.
+  - For the `'totp'` strategy: The TOTP generated by the user's authenticator app.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.attemptSecondFactor({
+  strategy: 'phone_code',
+  code: '123456',
+})
+```
+
+For a comprehensive example, see the [custom flow for multi-factor authentication](/docs/custom-flows/email-password-mfa).
+
+### `authenticateWithCoinbaseWallet()`
+
+Initiates an authentication flow using the Coinbase Wallet browser extension, allowing users to authenticate via their Web3 wallet address. This method prompts the user to connect their Coinbase Wallet and sign a message to verify ownership of the wallet address.
+
+```typescript
+function authenticateWithCoinbaseWallet(): Promise<SignInResource>
+```
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.authenticateWithCoinbaseWallet()
+```
+
+### `authenticateWithMetamask()`
+
+Initiates an authentication flow using the MetaMask browser extension, allowing users to authenticate via their Ethereum wallet address. This method prompts the user to connect their MetaMask wallet and sign a message to verify ownership of the wallet address.
+
+```typescript
+function authenticateWithMetamask(): Promise<SignInResource>
+```
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.authenticateWithMetamask()
+```
+
+### `authenticateWithOKXWallet()`
+
+Initiates an authentication flow using the OKX Wallet browser extension, allowing users to authenticate via their Web3 wallet address. This method prompts the user to connect their OKX Wallet and sign a message to verify ownership of the wallet address.
+
+```typescript
+function authenticateWithOKXWallet(): Promise<SignInResource>
+```
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.authenticateWithOKXWallet()
+```
+
+### `authenticateWithPasskey()`
+
+Initiates a passkey-based authentication flow, enabling users to authenticate using a previously registered passkey. When called without parameters, this method requires a prior call to `SignIn.create({ strategy: 'passkey' })` to initialize the sign-in context. This pattern is particularly useful in scenarios where the authentication strategy needs to be determined dynamically at runtime.
+
+```ts
+function authenticateWithPasskey(params?: AuthenticateWithPasskeyParams): Promise<SignInResource>
+```
+
+##### `AuthenticateWithPasskeyParams`
+
+<Properties>
+  - `flow`
+  - `'autofill' | 'discoverable'`
+
+  The flow to use for the passkey sign-in.
+
+  - `'autofill'`: The client prompts your users to select a passkey before they interact with your app.
+  - `'discoverable'`: The client requires the user to interact with the client.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.authenticateWithPasskey({ flow: 'discoverable' })
+```
+
+### `authenticateWithRedirect()`
+
+Signs in a user via a Single Sign On (SSO) connection, such as OAuth or SAML, where an external account is used for verifying the user's identity.
+
+```typescript
+function authenticateWithRedirect(params: AuthenticateWithRedirectParams): Promise<void>
+```
+
+#### `AuthenticateWithRedirectParams`
+
+<Properties>
+  - `strategy`
+  - <code>[OAuthStrategy](/docs/references/javascript/types/sso#o-auth-strategy) | 'saml' | 'enterprise\_sso'</code>
+
+  The strategy to use for authentication. The following strategies are supported:
+
+  - `'oauth_<provider>'`: The user will be authenticated with their [social connection account](/docs/authentication/social-connections/oauth). See a list of [supported values for `<provider>`](/docs/references/javascript/types/sso).
+  - `'saml'` (deprecated): **Deprecated in favor of `'enterprise_sso'`.** The user will be authenticated with their [SAML account](/docs/authentication/enterprise-connections/overview#saml).
+  - `'enterprise_sso'`: The user will be authenticated either through SAML or OIDC depending on the configuration of their [enterprise SSO account](/docs/authentication/enterprise-connections/overview).
+
+  ---
+
+  - `redirectUrl`
+  - `string`
+
+  The full URL or path that the OAuth provider should redirect to, on successful authorization on their part. Typically, this will be a simple `/sso-callback` route that calls [`Clerk.handleRedirectCallback`](/docs/references/javascript/clerk#handle-redirect-callback) or mounts the [`<AuthenticateWithRedirectCallback />`](/docs/components/control/authenticate-with-callback) component. See the [custom flow](/docs/custom-flows/oauth-connections) for implementation details.
+
+  ---
+
+  - `redirectUrlComplete`
+  - `string`
+
+  The full URL or path that the user will be redirected to once the sign-in is complete.
+
+  ---
+
+  - `identifier`
+  - `string | undefined`
+
+    The ID used to target an enterprise connection during sign-in.
+
+  ---
+
+  - `emailAddress`
+  - `string | undefined`
+
+  The email address used to target an enterprise connection during sign-in.
+
+  ---
+
+  - `legalAccepted`
+  - `boolean | undefined`
+
+  A boolean indicating whether the user has agreed to the [legal compliance](/docs/authentication/configuration/legal-compliance) documents.
+</Properties>
+
+#### Example
+
+For OAuth connections, see the [custom flow for OAuth connections](/docs/custom-flows/oauth-connections).
+For enterprise connections, see the [custom flow for enterprise connections](/docs/custom-flows/enterprise-connections).
+
+### `authenticateWithWeb3()`
+
+Initiates a Web3 authentication flow by verifying the user's ownership of a blockchain wallet address through cryptographic signature verification. This method enables decentralized authentication without requiring traditional credentials.
+
+```typescript
+function authenticateWithWeb3(params: AuthenticateWithWeb3Params): Promise<SignInResource>
+```
+
+#### `AuthenticateWithWeb3Params`
+
+<Properties>
+  - `identifier`
+  - `string`
+
+  The user's Web3 ID.
+
+  ---
+
+  - `generateSignature`
+  - `(opts: GenerateSignatureParams) => Promise<string>`
+
+  The method of how to generate the signature for the Web3 sign-in. See [`GenerateSignatureParams`](#generate-signature-params) for more information.
+
+  ---
+
+  - `strategy?`
+  - `Web3Strategy`
+
+  The Web3 verification strategy.
+</Properties>
+
+##### `GenerateSignatureParams`
+
+<Properties>
+  - `identifier`
+  - `string`
+
+  The user's Web3 wallet address.
+
+  ---
+
+  - `nonce`
+  - `string`
+
+  The [cryptographic nonce](https://en.wikipedia.org/wiki/Cryptographic_nonce) used in the sign-in.
+
+  ---
+
+  - `provider?`
+  - `Web3Provider`
+
+    The Web3 provider to generate the signature with.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.authenticateWithWeb3({
+  identifier: '0x1234567890123456789012345678901234567890',
+})
+```
+
+### `create()`
+
+Creates and returns a new `SignIn` instance initialized with the provided parameters. The instance maintains the sign-in lifecycle state through its `status` property, which updates as the authentication flow progresses. This method serves as the entry point for initiating a sign-in flow.
+
+What you must pass to `params` depends on which [sign-in options](/docs/authentication/configuration/sign-up-sign-in-options) you have enabled in your app's settings in the Clerk Dashboard.
+
+You can complete the sign-in process in one step if you supply the required fields to `create()`. Otherwise, Clerk's sign-in process provides great flexibility and allows users to easily create multi-step sign-in flows.
+
+> [!WARNING]
+> Once the sign-in process is complete, pass the `createdSessionId` to the [`setActive()`](/docs/references/javascript/clerk#set-active) method on the `Clerk` object. This will set the newly created session as the active session.
+
+```typescript
+function create(params: SignInCreateParams): Promise<SignIn>
+```
+
+#### `SignInCreateParams`
+
+<Properties>
+  - `strategy?`
+  - `'password' | 'email_link' | 'email_code' | 'phone_code' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'passkey' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'ticket' | 'google_one_tap'`
+
+  The first factor verification strategy to use in the sign-in flow. Depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
+
+  - `'password'`: The verification will attempt to be completed using the user's password.
+  - `'email_link'`: User will receive an email magic link via email. The `identifier` parameter can also be specified to select one of the user's known email addresses. The `redirectUrl` parameter can also be specified.
+  - `'email_code'`: User will receive a one-time authentication code via email. The `identifier` parameter can also be specified to select one of the user's known email addresses.
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. The `identifier` parameter can also be specified to select one of the user's known phone numbers.
+  - `'oauth_<provider>'`: The user will be authenticated with their [social connection account](/docs/authentication/social-connections/oauth). See a list of [supported values for `<provider>`](/docs/references/javascript/types/sso).
+  - `'saml'` (deprecated): **Deprecated in favor of `'enterprise_sso'`.** The user will be authenticated with their [SAML account](/docs/authentication/enterprise-connections/overview#saml).
+  - `'enterprise_sso'`: The user will be authenticated either through SAML or OIDC depending on the configuration of their [enterprise SSO account](/docs/authentication/enterprise-connections/overview).
+  - `'passkey'`: The user will be authenticated with their [passkey](/docs/authentication/configuration/sign-up-sign-in-options#passkeys).
+  - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](/docs/authentication/web3/metamask). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](/docs/authentication/web3/coinbase-wallet). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](/docs/authentication/web3/okx-wallet). The `identifier` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'ticket'`: The user will be authenticated via the ticket _or token_ generated from the Backend API.
+  - `'google_one_tap'`: The user will be authenticated with the Google One Tap UI. It's recommended to use [`authenticateWithGoogleOneTap()`](/docs/components/authentication/google-one-tap#authenticate-with-google-one-tap) instead, as it will also set the user's current session as active for you.
+
+  ---
+
+  - `identifier`
+  - `string`
+
+  The authentication identifier for the sign-in. This can be the value of the user's email address, phone number, username, or Web3 wallet address.
+
+  ---
+
+  - `password?`
+  - `string`
+
+  The user's password. Only supported if `strategy` is set to `'password'` and [password](/docs/authentication/configuration/sign-up-sign-in-options#authentication-strategies) is enabled.
+
+  ---
+
+  - `ticket?`
+  - `string`
+
+  **Required** if `strategy` is set to `'ticket'`. The [ticket _or token_](/docs/custom-flows/embedded-email-links#generate-a-sign-in-token) generated from the Backend API.
+
+  ---
+
+  - `redirectUrl?`
+  - `string`
+
+  If `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`, this specifies the full URL or path that the OAuth provider should redirect to after successful authorization on their part. Typically, this will be a simple `/sso-callback` route that either calls [`Clerk.handleRedirectCallback`](/docs/references/javascript/clerk#handle-redirect-callback) or mounts the [`<AuthenticateWithRedirectCallback />`](/docs/components/control/authenticate-with-callback) component. See the [custom flow](/docs/custom-flows/oauth-connections) for implementation details.
+
+  If `strategy` is set to `'email_link'`, this specifies the URL that the user will be redirected to when they visit the email link. See the [custom flow](/docs/custom-flows/email-links) for implementation details.
+
+  ---
+
+  - `actionCompleteRedirectUrl?`
+  - `string`
+
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign-in.
+
+  ---
+
+  - `transfer?`
+  - `boolean`
+
+  When set to `true`, the `SignIn` will attempt to retrieve information from the active `SignUp` instance and use it to complete the sign-in process. This is useful when you want to seamlessly transition a user from a sign-up attempt to a sign-in attempt.
+
+  ---
+
+  - `oidcPrompt?`
+  - `string`
+
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The value to pass to the [OIDC `prompt` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=prompt,reauthentication%20and%20consent.) in the generated OAuth redirect URL.
+
+  ---
+
+  - `oidcLoginHint?`
+  - `string`
+
+  **Optional** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The value to pass to the [OIDC `login_hint` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=login_hint,in%20\(if%20necessary\).) in the generated OAuth redirect URL.
+</Properties>
+
+#### Example
+
+```js
+await clerk.signIn.create({
+  strategy: 'email_link',
+  identifier: 'test@example.com',
+})
+```
+
+For comprehensive examples, see the [custom flow guides](/docs/custom-flows/overview).
+
+### `createEmailLinkFlow()`
+
+Creates a flow for authenticating users via email links. This method returns functions for initiating and canceling the email link verification process; see the [returns](#returns) section for more information.
+
+```typescript
+function createEmailLinkFlow(): {
+  startEmailLinkFlow: (params: SignInStartEmailLinkFlowParams) => Promise<SignIn>
+  cancelEmailLinkFlow: () => void
+}
+```
+
+#### Returns
+
+`createEmailLinkFlow` returns an object with two functions:
+
+<Properties>
+  - `startEmailLinkFlow`
+  - <code>(params: [SignInStartEmailLinkFlowParams](#sign-in-start-email-link-flow-params)) => Promise\<SignIn></code>
+
+  Function to start the email link flow. It prepares an email link verification and polls for the verification result.
+
+  ---
+
+  - `cancelEmailLinkFlow`
+  - `() => void`
+
+  Function to cleanup the email link flow. Stops waiting for verification results.
+</Properties>
+
+#### `SignInStartEmailLinkFlowParams`
+
+<Properties>
+  - `emailAddressId`
+  - `string`
+
+  The ID of the user's email address that's going to be used as the first factor identification for verification.
+
+  ---
+
+  - `redirectUrl`
+  - `string`
+
+  The full URL that the user will be redirected to when they visit the email link.
+</Properties>
+
+#### Example
+
+```js
+const { startEmailLinkFlow, cancelEmailLinkFlow } = clerk.signIn.createEmailLinkFlow()
+```
+
+For a comprehensive example, see the [custom flow for email links](/docs/custom-flows/email-links).
+
+### `prepareFirstFactor()`
+
+Begins the first factor verification process. This is a required step in order to complete a sign in, as users should be verified at least by one factor of authentication.
+
+Common scenarios are one-time code (OTP) or social account (SSO) verification. This is determined by the accepted `strategy` parameter values. Each authentication identifier supports different strategies.
+
+Returns a `SignIn` object. Check the `firstFactorVerification` attribute for the status of the first factor verification process.
+
+```typescript
+function prepareFirstFactor(params: PrepareFirstFactorParams): Promise<SignIn>
+```
+
+#### `PrepareFirstFactorParams`
+
+<Properties>
+  - `strategy`
+  - `'email_link' | 'email_code' | 'phone_code' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'passkey' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'reset_password_phone_code' | 'reset_password_email_code'`
+
+  The `strategy` value depends on the `SignIn.identifier` value. Each authentication identifier supports different verification strategies. The following strategies are supported:
+
+  - `'email_link'`: User will receive an email magic link via email.
+  - `'email_code'`: User will receive a one-time authentication code via email. Requires `emailAddressId` parameter to be set.
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. Requires `phoneNumberId` parameter to be set.
+  - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). Requires `web3WalletId` parameter to be set.
+  - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). Requires `web3WalletId` parameter to be set.
+  - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). Requires `web3WalletId` parameter to be set.
+  - `'passkey'`: The verification will attempt to be completed using the user's passkey.
+  - `'oauth_<provider>'`: The user will be authenticated with their [social connection account](/docs/authentication/social-connections/oauth). See a list of [supported values for `<provider>`](/docs/references/javascript/types/sso).
+  - `'saml'` (deprecated): **Deprecated in favor of `'enterprise_sso'`.** The user will be authenticated with their [SAML account](/docs/authentication/enterprise-connections/overview#saml).
+  - `'enterprise_sso'`: The user will be authenticated either through SAML or OIDC depending on the configuration of their [enterprise SSO account](/docs/authentication/enterprise-connections/overview).
+  - `'reset_password_phone_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via SMS. Requires `phoneNumberId` parameter to be set.
+  - `'reset_password_email_code'`: Used when the user is trying to reset their password. The user will receive a one-time code via email. Requires `emailAddressId` parameter to be set.
+
+  ---
+
+  - `emailAddressId?`
+  - `string`
+
+  **Required** if `strategy` is set to `'email_code'` or `'reset_password_email_code'`. The ID for the user's email address that will receive an email with the one-time authentication code.
+
+  ---
+
+  - `phoneNumberId?`
+  - `string`
+
+  **Required** if `strategy` is set to `'phone_code'` or `'reset_password_phone_code'`. The ID for the user's phone number that will receive an SMS message with the one-time authentication code.
+
+  ---
+
+  - `web3WalletId?`
+  - `string`
+
+  **Required** if `strategy` is set to `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, or `'web3_okx_wallet_signature'`. The ID for the user's Web3 wallet address.
+
+  ---
+
+  - `redirectUrl?`
+  - `string`
+
+  **Required** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The full URL or path that the OAuth provider should redirect to after successful authorization on their part. Typically, this will be a simple `/sso-callback` route that either calls [`Clerk.handleRedirectCallback()`](/docs/references/javascript/clerk#handle-redirect-callback) or mounts the [`<AuthenticateWithRedirectCallback />`](/docs/components/control/authenticate-with-callback) component. See the [custom flow](/docs/custom-flows/oauth-connections) for implementation details.
+
+  **Required** if `strategy` is set to `'email_link'`. The full URL that the user will be redirected to when they visit the email link. See the [custom flow](/docs/custom-flows/email-links) for implementation details.
+
+  ---
+
+  - `actionCompleteRedirectUrl?`
+  - `string`
+
+  **Required** if `strategy` is set to `'oauth_<provider>'` or `'enterprise_sso'`. The URL that the user will be redirected to once the first factor verification is complete.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.prepareFirstFactor({
+  strategy: 'email_link',
+  identifier: 'test@example.com',
+})
+```
+
+For comprehensive examples, see the [custom flow guides](/docs/custom-flows/overview).
+
+### `prepareSecondFactor()`
+
+Begins the second factor (2FA) verification process. Clerk calls this [multi-factor authentication (MFA)](/docs/authentication/configuration/sign-up-sign-in-options#multi-factor-authentication).
+
+> [!NOTE]
+> If the `strategy` was set to `totp` (e.g. `SignIn.create({ strategy: 'totp' })`), it does not require preparation. You can directly attempt the second factor verification by calling [`SignIn.attemptSecondFactor`](#attempt-second-factor).
+
+Returns a `SignIn` object. Check the `secondFactorVerification` attribute for the status of the second factor verification process.
+
+```typescript
+function prepareSecondFactor(params: PrepareSecondFactorParams): Promise<SignIn>
+```
+
+#### `PrepareSecondFactorParams`
+
+<Properties>
+  - `strategy`
+  - `'phone_code'`
+
+  The strategy used for second factor verification. Supported strategies are:
+
+  - `'phone_code'`: User will receive a one-time authentication code via SMS. At least one phone number should be on file for the user.
+
+  ---
+
+  - `phoneNumberId`
+  - `string`
+
+  The ID for the user's phone number that will receive an SMS message with the one-time authentication code.
+</Properties>
+
+#### Example
+
+```js
+const signIn = await clerk.signIn.prepareSecondFactor({
+  strategy: 'phone_code',
+  phoneNumberId: '123',
+})
+```
+
+For a comprehensive example, see the [custom flow for multi-factor authentication](/docs/custom-flows/email-password-mfa).
+
+### `resetPassword()`
+
+Resets a user's password. It's recommended to use the [custom flow for resetting a user's password](/docs/custom-flows/forgot-password) instead.
+
+```typescript
+function resetPassword(params: ResetPasswordParams): Promise<SignIn>
+```
+
+#### `ResetPasswordParams`
+
+<Properties>
+  - `password`
+  - `string`
+
+  The user's current password.
+
+  ---
+
+  - `signOutOfOtherSessions?`
+  - `boolean | undefined`
+
+  If `true`, signs the user out of all other authenticated sessions.
+</Properties>
+
+#### Example
+
+```js
+await clerk.signIn.resetPassword({
+  password: 'new-password',
+})
+```

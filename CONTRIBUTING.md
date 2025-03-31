@@ -1,6 +1,6 @@
 # Contributing to Clerk's documentation
 
-Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute updates and fixes to the documentation content located in this repository.
+Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
 ## Written in MDX
 
@@ -12,12 +12,12 @@ MDX files ([including any code blocks](#prettier-integration)) are formatted usi
 
 ## Project setup
 
-1.  Fork and clone the repo
-2.  Run `npm install` to install dependencies
-3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`
+1.  Fork or clone the repo.
+2.  Run `npm install` to install dependencies.
+3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
-> Tip: Keep your `main` branch pointing at the original repository and make pull
-> requests from branches on your fork. To do this, run:
+> Tip: If you forked the repo, keep your `main` branch pointing at the original repository
+> and make pull requests from branches on your fork. To do this, run:
 >
 >     git remote add upstream https://github.com/clerk/clerk-docs.git
 >     git fetch upstream
@@ -40,7 +40,7 @@ The structure of the issue should be:
 - **Title**: Summarize the problem you want to solve in one sentence, using an active voice. E.g. "Fix broken "Home" link on sidenav"
 - **Description ("Leave a comment")**: Discuss what your finding is, why it needs a solution, and where you found it/how it can be reproduced. Links, screenshots, and videos can be helpful tools!
 
-## Creating a Pull Request
+## Creating a pull request
 
 When you're ready to submit your contribution, you're going to create a [pull request](https://github.com/clerk/clerk-docs/pulls), also referred to as a PR.
 
@@ -67,6 +67,8 @@ Clerk employees can run the application and preview their documentation changes 
 Before committing your changes, run our linting checks to validate the changes you are making are correct. Currently we:
 
 - **Check for broken links.** If your change contains URLs that are not authored inside this repository (e.g. marketing pages or other docs) the linter will fail. You'll need to add your URLs to the `EXCLUDE_LIST` inside [`check-links.mjs`](./scripts/check-links.mjs).
+- **Check that files are formatted with the prettier configuration settings.**
+- **Check for changes to quickstarts.**
 
 To run all linting steps:
 
@@ -90,9 +92,9 @@ The documentation content is located in the [`/docs` directory](./docs/). Each M
 
 For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at https://clerk.com/docs/quickstarts/setup-clerk.
 
-### Navigation manifest
+### Sidenav
 
-The navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered navigation.
+The side navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered sidenav.
 
 [Manifest JSON schema →](./docs/manifest.schema.json)
 
@@ -225,6 +227,59 @@ description: Some brief, but effective description of the page's content.
 
 These fields should be present on every documentation page.
 
+#### Search
+
+The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
+
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude`  | `boolean`       | `false` | Whether to exclude the page from search entirely                                                                                                                                                                                                                                           |
+| `rank`     | `number`        | `0`     | The value to use for `weight.pageRank` in the index. See [Custom Ranking](https://www.algolia.com/doc/guides/managing-results/must-do/custom-ranking/) and [Boost search results with `pageRank`](https://docsearch.algolia.com/docs/record-extractor/#boost-search-results-with-pagerank) |
+| `keywords` | `Array<string>` | `[]`    | Additional [searchable](https://www.algolia.com/doc/guides/managing-results/must-do/searchable-attributes/) keywords to include when indexing the page. These are not visible to users.                                                                                                    |
+
+You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
+
+##### Examples
+
+<details>
+<summary>Exclude a page from search</summary>
+
+```diff
+  ---
+  title: Example
++ search: false
+  ---
+```
+
+</details>
+
+<details>
+<summary>Boost a page in search results</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   rank: 1
+  ---
+```
+
+</details>
+
+<details>
+<summary>Show a page in results when searching for "supercalifragilisticexpialidocious"</summary>
+
+```diff
+  ---
+  title: Example
++ search:
++   keywords:
++     - supercalifragilisticexpialidocious
+  ---
+```
+
+</details>
+
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.
@@ -339,22 +394,39 @@ interface CodeBlockProps {
 
 </details>
 
+You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
+
+| Type     | Character |
+| -------- | --------- |
+| Deleted  | `-`       |
+| Inserted | `+`       |
+| Marked   | `=`       |
+
+````mdx
+```tsx
+  export function App() {
+-   return <Foo />
++   return <Bar />
+  }
+```
+````
+
 #### Code block shortcodes
 
 You can use the following shortcodes within a code block to inject information from the user's current Clerk instance:
 
-- `{{pub_key}}` – Publishable key
-- `{{secret}}` – Secret key
+- `{{pub_key}}` – Publishable Key
+- `{{secret}}` – Secret Key
 - `{{fapi_url}}` – Frontend API URL
 
 ````mdx
-```sh {{ filename: '.env.local' }}
+```sh {{ filename: '.env' }}
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
 CLERK_SECRET_KEY={{secret}}
 ```
 ````
 
-The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's secret key.
+The video below shows what this example looks like once rendered. Notice the eye icon on the code block that once clicked on, reveals the user's Secret Key.
 
 https://github.com/clerk/clerk-docs/assets/2615508/c1f3fc23-5581-481c-a89c-10c6a04b8536
 
@@ -386,18 +458,18 @@ console.log('ignored')
 
 ### `<Steps />`
 
-The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h3` headings.
+The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h2` and `h3` headings.
 
 ```mdx
 <Steps>
 
-### Step 1
+## Step 1
 
 Do these actions to complete Step 1.
 
-### Another step
+## Another step
 
-#### A heading inside a step
+### A heading inside a step
 
 Do these actions to complete Step 2.
 
@@ -415,7 +487,7 @@ A callout draws attention to something learners should slow down and read.
 > [!NOTE]
 > Callouts can be distracting when people are quickly skimming a page. So only use them if the information absolutely should not be missed!
 
-Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. Five types of callouts are available:
+Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts). To add a callout, use a special blockquote line specifying the callout type, followed by the callout information in a standard blockquote. The following types of callouts are available:
 
 ```mdx
 > [!NOTE]
@@ -432,11 +504,34 @@ Callout syntax is based on [GitHub's markdown "alerts"](https://docs.github.com/
 
 > [!CAUTION]
 > Advises about risks or negative outcomes of certain actions.
+
+> [!QUIZ]
+> An opportunity for users to check their understanding.
 ```
 
 The image below shows what this example looks like once rendered.
 
-![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION](/.github/media/callouts.png)
+![An example of each callout type: NOTE, TIP, IMPORTANT, WARNING, CAUTION, QUIZ](/.github/media/callouts.png)
+
+You can optionally specify an `id` attribute for a callout which allows for direct linking, e.g. `/docs/example#useful-info`:
+
+```mdx
+> [!NOTE useful-info]
+> Useful information that users should know, even when skimming content.
+```
+
+You can create a collapsible section within a callout by using a thematic break (`---`). Content following the break is hidden by default and can be toggled by the user:
+
+```mdx
+> [!QUIZ]
+> Why does handshake do a redirect? Why can’t it make a fetch request to FAPI and get a new token back that way? Not needing to redirect would be a better user experience.
+>
+> ---
+>
+> Occaecati esse ut iure in quam praesentium nesciunt nemo. Repellat aperiam eaque quia. Aperiam voluptatem consequuntur numquam tenetur. Quibusdam repellat modi qui dolor ducimus ut neque adipisci dolorem. Voluptates dolores nisi est fuga.
+```
+
+![An example of a collapsible section inside a quiz callout](/.github/media/callout-details.png)
 
 ### `<CodeBlockTabs />`
 
@@ -522,7 +617,7 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
 
 - Install `@clerk/nextjs`
 - Set up your environment keys to test your app locally
-- Add `<ClerkProvider />` to your application
+- Add `<ClerkProvider>` to your application
 - Use Clerk middleware to implement route-specific authentication
 - Create a header with Clerk components for users to sign in and out
 
@@ -580,7 +675,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
 ```
@@ -602,7 +697,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>
@@ -625,7 +720,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ---
 
 - [UI Components](/docs/components/overview)
-- Clerk's pre-built UI components give you a beautiful, fully-functional user management experience in minutes.
+- Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
 </Cards>
@@ -734,13 +829,83 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file:
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
 
 ```mdx
-{/* Render `docs/_partials/oauth-instructions.mdx` */}
+{/* Render `docs/_partials/code-example.mdx` */}
 
-<Include src="_partials/oauth-instructions" />
+<Include src="_partials/code-example" />
 ```
+
+### `<If />`
+
+The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
+
+> [!IMPORTANT]
+> This component cannot be used within code blocks.
+
+| Props                   | Type                 | Comment                                                                                                                                                                                                     |
+| ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                            |
+| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                   |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. |
+
+Available values for the `sdk` prop:
+
+| SDK                    | Value                  |
+| ---------------------- | ---------------------- |
+| Next.js                | "nextjs"               |
+| React                  | "react"                |
+| Javascript             | "js-frontend"          |
+| Chrome Extension       | "chrome-extension"     |
+| Expo                   | "expo"                 |
+| iOS                    | "ios"                  |
+| Express                | "expressjs"            |
+| Fastify                | "fastify"              |
+| React Router           | "react-router"         |
+| Remix                  | "remix"                |
+| Tanstack React Start   | "tanstack-react-start" |
+| Go                     | "go"                   |
+| Astro                  | "astro"                |
+| Nuxt                   | "nuxt"                 |
+| Vue                    | "vue"                  |
+| Ruby / Rails / Sinatra | "ruby"                 |
+| Python                 | "python"               |
+| JS Backend SDK         | "js-backend"           |
+| SDK Development        | "sdk-development"      |
+| Community SDKs         | "community-sdk"        |
+
+#### Examples
+
+<details>
+<summary>Filtered to a single SDK</summary>
+
+```mdx
+<If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
+```
+
+</details>
+
+<details>
+<summary>Filtered to either the Astro or React active SDK</summary>
+
+```mdx
+<If sdk={['astro', 'react']}>This content will only be rendered if the active SDK is Astro or React</If>
+```
+
+</details>
+
+<details>
+<summary>Filter within a filter</summary>
+
+```mdx
+<If sdk={['nextjs', 'remix']}>
+  This content will only be rendered if the active SDK is Next.js or Remix.
+  <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
+</If>
+```
+
+</details>
 
 ### Images and static assets
 

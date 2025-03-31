@@ -1,0 +1,48 @@
+The following example uses `getAuth()` to protect a route and load the user's data. If the user is authenticated, their `userId` is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to get the current user's [`User`](/docs/references/javascript/user){{ target: '_blank' }} object. If not authenticated, the request is rejected with a `401` status code.
+
+```ts
+// dotenv must be imported before @clerk/fastify
+import 'dotenv/config'
+import Fastify from 'fastify'
+import { clerkClient, clerkPlugin, getAuth } from '@clerk/fastify'
+
+const fastify = Fastify({ logger: true })
+
+fastify.register(clerkPlugin)
+
+// Use `getAuth()` to protect this route
+fastify.get('/protected', async (request, reply) => {
+  try {
+    // Use `getAuth()` to get the user's ID
+    const { userId } = getAuth(request)
+
+    // If user isn't authenticated, return a 401 error
+    if (!userId) {
+      return reply.code(401).send({ error: 'User not authenticated' })
+    }
+
+    // Use `clerkClient` to access Clerk's Backend SDK methods
+    // and get the user's User object
+    const user = userId ? await clerkClient.users.getUser(userId) : null
+
+    return reply.send({
+      message: 'User retrieved successfully',
+      user,
+    })
+  } catch (error) {
+    fastify.log.error(error)
+    return reply.code(500).send({ error: 'Failed to retrieve user' })
+  }
+})
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: 8080 })
+  } catch (error) {
+    fastify.log.error(error)
+    process.exit(1)
+  }
+}
+
+start()
+```

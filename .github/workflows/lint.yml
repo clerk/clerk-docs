@@ -5,9 +5,47 @@ on:
     branches: [main]
 
 jobs:
-  trigger_lint:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - run: npm i
-      - run: npm run lint
+      - run: npm run lint:formatting
+      - run: npm run lint:check-links
+      - run: npm run lint:check-frontmatter
+
+  check_quickstarts:
+    runs-on: ubuntu-latest
+    outputs:
+      output: ${{ steps.check.outputs.output }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout ${{ github.base_ref }}
+          git checkout ${{ github.sha }}
+      - run: npm i
+      - id: check
+        run: |
+          OUTPUT=$(npm run lint:check-quickstarts | tail -n +4)
+          # We need this specific syntax because the output has multiple lines
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  share_quickstart_changes:
+    needs: check_quickstarts
+    if: contains(needs.check_quickstarts.outputs.output, 'Please update the corresponding quickstarts in the Dashboard')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${{ needs.check_quickstarts.outputs.output }}`
+            })

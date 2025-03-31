@@ -1,16 +1,16 @@
-<!--- Add the "deploy-preview" label and add your page previews here -->
-
-> [!IMPORTANT]
-> 🔎 Previews:
->
-> -
-
-<!--- Describe your changes in detail. Why does this change need to happen? Include any links to Slack discussions, Linear comments, etc. -->
-
-### Explanation:
-
-<!--- How does this PR solve the problem? -->
-
-### This PR:
+### 🔎 Previews:
 
 -
+
+### What does this solve?
+
+- <!--- Describe your changes in detail. Why does this change need to happen? Include any links to Slack discussions, Linear comments, etc. -->
+
+### What changed?
+
+- <!--- How does this PR solve the problem? -->
+
+### Checklist
+
+- [ ] I have clicked on "Files changed" and performed a thorough self-review
+- [ ] All existing checks pass

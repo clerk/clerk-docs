@@ -1,0 +1,324 @@
+---
+title: Hide personal accounts and force organizations
+description: Learn how to hide personal accounts and force organizations in your Clerk application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Next.js + Clerk application",
+      link: "/docs/quickstarts/nextjs",
+      icon: "nextjs",
+    },
+    {
+      title: "Enable organizations for your instance",
+      link: "/docs/organizations/overview",
+      icon: "globe",
+    }
+  ]}
+>
+  - Hide personal accounts from UI components
+  - Detect an active organization
+  - Set an active organization
+  - Limit access to users with active organizations only
+</TutorialHero>
+
+This guide demonstrates how to hide a user's personal account in order to appear as if they only have access to organizations, and how to limit access to your application to only users with active organizations, further enforcing organization-centric access. This is useful for applications that are built for organizations only, such as B2B applications.
+
+This guide will be written for Next.js applications using App Router, but the same concepts can be applied to any application using Clerk.
+
+<Steps>
+  ## Hide personal accounts from UI components
+
+  To begin forcing organizations in your application, you need to remove a user's personal account from the UI. A user's personal account cannot be disabled; it can only be hidden.
+
+  If you have an application set up to use organizations, you might have the [`<OrganizationList />`](/docs/components/organization/organization-list) and [`<OrganizationSwitcher />`](/docs/components/organization/organization-switcher) components in your application. These components will show a user's personal account by default, but you can hide it by passing the `hidePersonal` prop.
+
+  <Tabs items={["<OrganizationList />", "<OrganizationSwitcher />"]}>
+    <Tab>
+      ```tsx {{ mark: [4] }}
+      export default function Page() {
+        return (
+          <OrganizationList
+            // prettier-ignore
+            hidePersonal={true}
+          />
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx {{ mark: [4] }}
+      export default function Page() {
+        return (
+          <OrganizationSwitcher
+            // prettier-ignore
+            hidePersonal={true}
+          />
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Detect and set an active organization
+
+  A user can have many organization memberships, but only one of them can be active at a time. This is called the "active organization".
+
+  ### Detect an active organization
+
+  The [`Auth` object](/docs/references/backend/types/auth-object#auth-object-example-with-active-organization) includes information about the user's session, including the `orgId`. The `orgId` can be used to detect if a user has an active organization. To see how to access the `Auth` object using your preferred SDK, see the [reference doc](/docs/references/backend/types/auth-object#how-to-access-the-auth-object). The following examples use the Next.js SDK.
+
+  <Tabs items={["Server-side", "Client-side"]}>
+    <Tab>
+      The [`auth()`](/docs/references/nextjs/auth) helper function can be used to get the `orgId` from the session _server-side_. If the `orgId` is `null`, then the user does not have an active organization.
+
+      ```tsx
+      import { auth } from '@clerk/nextjs/server'
+
+      export default async function Layout() {
+        const { orgId } = await auth()
+
+        const hasActiveOrg = !!orgId
+        // ...
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      The [`useAuth()`](/docs/hooks/use-auth) hook can be used to get the `orgId` from the session _client-side_. If the `orgId` is `null`, then the user does not have an active organization.
+
+      ```tsx
+      'use client'
+      import { useAuth } from '@clerk/nextjs'
+
+      export default function Layout() {
+        const { orgId } = useAuth()
+
+        const hasActiveOrg = orgId !== null
+        // ...
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ### Set an active organization
+
+  If you are using [prebuilt components](/docs/components/overview), an organization will _automatically_ be set as active each time the user creates an organization, accepts an invitation, or selects a membership. If prebuilt components don't meet your specific needs or if you require more control over the logic, you can rebuild the existing Clerk flows using the Clerk API. See the [organization switcher custom flow guide](/docs/custom-flows/organization-switcher).
+
+  ### Set an active organization based on the URL
+
+  > [!WARNING]
+  > This approach depends on the `setActive()` method, which only runs on the client. Due to this limitation, during SSR, it is possible that `orgId` from `auth()` returns an incorrect value that does not match the organization ID in the URL.
+
+  In some cases, you might want to set an active organization based on the URL. For example, if you have a URL like `/organizations/org_123`, you might want to set `org_123` as the active organization.
+
+  In the following example, a component called `SyncActiveOrganization` is created. The Next.js [`useParams()`](https://nextjs.org/docs/app/api-reference/functions/use-params) hook is used to get the organization ID from the URL, and then the `setActive()` method is used to set the organization as active.
+
+  ```tsx {{ filename: 'app/utils/sync-active-organization.tsx' }}
+  'use client'
+
+  import { useEffect } from 'react'
+  import { redirect, useParams } from 'next/navigation'
+  import { useAuth, useOrganizationList } from '@clerk/nextjs'
+
+  export function SyncActiveOrganization() {
+    // Use `useOrganizationList()` to access the `setActive()` method
+    const { setActive, isLoaded } = useOrganizationList()
+
+    // Get the organization ID from the session
+    const { orgId } = useAuth()
+
+    // Get the organization ID from the URL
+    const { orgId: urlOrgId } = useParams() as { orgId: string }
+
+    useEffect(() => {
+      if (!isLoaded) return
+
+      // If the org ID in the URL is not valid, redirect to the homepage
+      if (!urlOrgId?.startsWith('org_')) {
+        redirect('/')
+        return
+      }
+
+      // If the org ID in the URL is not the same as
+      // the org ID in the session (the active organization),
+      // set the active organization to be the org ID from the URL
+      if (urlOrgId && urlOrgId !== orgId) {
+        void setActive({ organization: urlOrgId })
+      }
+    }, [orgId, isLoaded, setActive, urlOrgId])
+
+    return null
+  }
+  ```
+
+  Now you can place the `SyncActiveOrganization` helper that you created above in a [layout](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts#layouts) and use the layout for all pages that require an active organization. In the following example, the `SyncActiveOrganization` component will run on every page in the `/app/[orgId]` directory.
+
+  ```tsx {{ filename: 'app/[orgId]/layout.tsx' }}
+  import { type PropsWithChildren } from 'react'
+  import { SyncActiveOrganization } from '../utils/sync-active-organization'
+
+  export default function OrganizationLayout(props: PropsWithChildren) {
+    return (
+      <>
+        <SyncActiveOrganization />
+        {props.children}
+      </>
+    )
+  }
+  ```
+
+  ## Limit access to only users with active organizations
+
+  Now that you have hidden personal accounts from the UI and can detect and set an active organization, you can limit access to your application to users with active organizations only. This will ensure that users without active organizations cannot access your application.
+
+  It's possible for a user to be signed in, but not have an active organization. This can happen in two cases:
+
+  - The user created an account and hasn't created an organization yet
+  - The user joined or created multiple organizations, and left or deleted the active organization
+
+  There are two ways to limit access to only users with active organizations:
+
+  - [Using the `clerkMiddleware()` helper](#limit-access-using-the-clerk-middleware-helper)
+  - [Using an App Router layout](#limit-access-using-an-app-router-layout)
+
+  Based on your use case, you can decide to limit users either in the entire app or a specific part of it. For example, a B2B application might need to limit access to only users with an active organization, whereas a B2B2C application might limit only the `/dashboard` path to users with an active organization.
+
+  ### Limit access using the `clerkMiddleware()` helper
+
+  The [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware) helper can be used to limit access to only users with active organizations.
+
+  <Tabs items={["Entire application", "Specific part of the application"]}>
+    <Tab>
+      In the following example, the `clerkMiddleware()` helper is used to redirect signed in users to the organization selection page if they are not active in an organization.
+
+      ```tsx {{ filename: 'middleware.ts' }}
+      import { clerkMiddleware } from '@clerk/nextjs/server'
+
+      export default clerkMiddleware(async (auth, req) => {
+        const { userId, orgId } = await auth()
+
+        // Redirect signed in users to organization selection page if they are not active in an organization
+        if (userId && !orgId && req.nextUrl.pathname !== '/org-selection') {
+          const searchParams = new URLSearchParams({ redirectUrl: req.url })
+
+          const orgSelection = new URL(`/org-selection?${searchParams.toString()}`, req.url)
+
+          return NextResponse.redirect(orgSelection)
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      To limit access to a specific part of the application, you can check if the path the user is visiting is the path you want to limit access to. In this example, the `/dashboard` path is limited to users with active organizations only. If the user is not active in an organization, they will be redirected to the `/dashboard/org-selection` page.
+
+      ```tsx {{ filename: 'middleware.ts' }}
+      import { clerkMiddleware } from '@clerk/nextjs/server'
+
+      export default clerkMiddleware(async (auth, req) => {
+        const { userId, orgId } = await auth()
+
+        // Redirect signed in users to organization selection page if they are not active in an organization
+        if (
+          userId &&
+          !orgId &&
+          req.nextUrl.pathname.startsWith('/dashboard') &&
+          req.nextUrl.pathname !== '/dashboard/org-selection'
+        ) {
+          const searchParams = new URLSearchParams({ redirectUrl: req.url })
+
+          const orgSelection = new URL(`/dashboard/org-selection?${searchParams.toString()}`, req.url)
+
+          return NextResponse.redirect(orgSelection)
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  Now that you have configured your middleware to redirect users to the `/org-selection` page if they are not active in an organization, you need to create the `/org-selection` page. This page will allow users to select an organization or create their own organization.
+
+  ```tsx {{ filename: 'app/org-selection/page.tsx' }}
+  'use client'
+
+  import { OrganizationList } from '@clerk/nextjs'
+  import { useSearchParams } from 'next/navigation'
+
+  export default function OrganizationSelection() {
+    const searchParams = useSearchParams()
+    const redirectUrl = searchParams.get('redirectUrl') ?? '/'
+
+    return (
+      <section>
+        <h1>Welcome to the Organization Selection page.</h1>
+        <p>
+          This part of the application requires the user to select an organization in order to
+          proceed. If you are not part of an organization, you can accept an invitation or create your
+          own organization.
+        </p>
+        <OrganizationList
+          hidePersonal={true}
+          afterCreateOrganizationUrl={redirectUrl}
+          afterSelectOrganizationUrl={redirectUrl}
+        />
+      </section>
+    )
+  }
+  ```
+
+  ### Limit access using an App Router layout
+
+  In Next.js App Router applications, instead of using `clerkMiddleware()`, you also have the option to use a layout to limit access to only users with active organizations.
+
+  In the following example, a component called `RequiredActiveOrgLayout` is created. This component will be used as a layout for all pages that require an active organization. If the user has an active organization, the route the user is visiting will be rendered. If the user does not have an active organization, the organization selection page will be rendered.
+
+  ```tsx {{ filename: 'app/(with-active-organization)/layout.tsx' }}
+  import { OrganizationList } from '@clerk/nextjs'
+  import { auth } from '@clerk/nextjs/server'
+  import { PropsWithChildren } from 'react'
+
+  export default async function RequiredActiveOrgLayout(props: PropsWithChildren) {
+    // Get the organization ID from the session
+    const { orgId } = await auth()
+
+    // If the user has an active organization, render the children
+    if (orgId) {
+      return props.children
+    }
+
+    // If the user does not have an active organization, render the organization selection page
+    return (
+      <section>
+        <h1>Welcome to the Organization Selection page.</h1>
+        <p>
+          This part of the application requires the user to select an organization in order to
+          proceed. If you are not part of an organization, you can accept an invitation or create your
+          own organization.
+        </p>
+        <OrganizationList hidePersonal={true} />
+      </section>
+    )
+  }
+  ```
+</Steps>

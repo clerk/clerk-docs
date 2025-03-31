@@ -1,10 +1,9 @@
 ---
 title: Build a custom flow for managing TOTP-based multi-factor authentication
-description: Learn how to use Clerk's API to build a custom flow for managing TOTP-based multi-factor authentication.
+description: Learn how to use the Clerk API to build a custom flow for managing TOTP-based multi-factor authentication.
 ---
 
-> [!WARNING]
-> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/customization/account-portal/overview) or [prebuilt components](/docs/components/overview).
+<Include src="_partials/custom-flows-callout" />
 
 [Multi-factor verification (MFA)](/docs/authentication/configuration/sign-up-sign-in-options) is an added layer of security that requires users to provide a second verification factor to access an account.
 
@@ -14,19 +13,19 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 > To learn how to build a custom flow for managing SMS MFA, see the [dedicated guide](/docs/custom-flows/manage-sms-based-mfa).
 
 <Steps>
-  ### Enable multi-factor authentication
+  ## Enable multi-factor authentication
 
   For your users to be able to enable MFA for their account, you need to enable MFA as an MFA authentication strategy in your Clerk application.
 
-  1. Navigate to the [Clerk Dashboard.](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor)
-  1. In the navigation sidebar, select **User & Authentication > Multi-factor**.
-  1. Enable **Authenticator application** and **Backup codes** and select **Save**.
+  1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/last-active?path=user-authentication/multi-factor) page.
+  1. Enable **Authenticator application** and **Backup codes**.
+  1. Select **Save**.
 
-  ### Create the multi-factor management flow
+  ## Create the multi-factor management flow
 
   <Tabs items={["Next.js", "Expo"]}>
     <Tab>
-      This example is written for Next.js App Router but it can be adapted for any React meta framework, such as Remix.
+      This example is written for Next.js App Router but it can be adapted for any React-based framework.
 
       This example consists of two pages:
 
@@ -37,21 +36,18 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
       <Tabs items={["Manage MFA page", "Add TOTP page"]}>
         <Tab>
-          ```tsx {{ filename: '/app/account/manage-mfa/page.tsx' }}
+          ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
           'use client'
 
           import * as React from 'react'
-          import { useUser } from '@clerk/nextjs'
+          import { useUser, useReverification } from '@clerk/nextjs'
           import Link from 'next/link'
           import { BackupCodeResource } from '@clerk/types'
 
           // If TOTP is enabled, provide the option to disable it
           const TotpEnabled = () => {
             const { user } = useUser()
-
-            const disableTOTP = async () => {
-              await user?.disableTOTP()
-            }
+            const disableTOTP = useReverification(() => user?.disableTOTP())
 
             return (
               <div>
@@ -80,6 +76,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           export function GenerateBackupCodes() {
             const { user } = useUser()
             const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
+            const createBackupCode = useReverification(() => user?.createBackupCode())
 
             const [loading, setLoading] = React.useState(false)
 
@@ -89,9 +86,8 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
               }
 
               setLoading(true)
-              void user
-                ?.createBackupCode()
-                .then((backupCode: BackupCodeResource) => {
+              void createBackupCode()
+                .then((backupCode: BackupCodeResource | undefined) => {
                   setBackupCodes(backupCode)
                   setLoading(false)
                 })
@@ -159,10 +155,10 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
         </Tab>
 
         <Tab>
-          ```tsx {{ filename: '/app/account/manage-mfa/add/page.tsx' }}
+          ```tsx {{ filename: 'app/account/manage-mfa/add/page.tsx', collapsible: true }}
           'use client'
 
-          import { useUser } from '@clerk/nextjs'
+          import { useUser, useReverification } from '@clerk/nextjs'
           import { TOTPResource } from '@clerk/types'
           import Link from 'next/link'
           import * as React from 'react'
@@ -181,10 +177,10 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
             const { user } = useUser()
             const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined)
             const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr')
+            const createTOTP = useReverification(() => user?.createTOTP())
 
             React.useEffect(() => {
-              void user
-                ?.createTOTP()
+              void createTOTP()
                 .then((totp: TOTPResource) => {
                   setTOTP(totp)
                 })
@@ -261,7 +257,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           }) {
             return (
               <>
-                <h1>Backup codes</h1>
+                <h1>Verification was a success!</h1>
                 <div>
                   <p>
                     Save this list of backup codes somewhere safe in case you need to access your account in
@@ -311,27 +307,31 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
     <Tab>
       ### Before you start
 
-      Install `expo-checkbox` for the UI and `@clerk/types` for type definitions.
+      Install `expo-checkbox` for the UI and `react-native-qr-svg` for the QR code.
 
-      <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+      <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
         ```bash {{ filename: 'terminal' }}
-        npm install expo-checkbox @clerk/types
+        npm install expo-checkbox react-native-qr-svg
         ```
 
         ```bash {{ filename: 'terminal' }}
-        yarn add expo-checkbox @clerk/types
+        yarn add expo-checkbox react-native-qr-svg
         ```
 
         ```bash {{ filename: 'terminal' }}
-        pnpm add expo-checkbox @clerk/types
+        pnpm add expo-checkbox react-native-qr-svg
+        ```
+
+        ```bash {{ filename: 'terminal' }}
+        bun add expo-checkbox react-native-qr-svg
         ```
       </CodeBlockTabs>
 
       ### Build the flow
 
-      To allow users to configure MFA, you will create a basic dashboard.
+      To allow users to configure their MFA settings, you'll create a basic dashboard.
 
-      This example consists of three pages:
+      The following example consists of three pages:
 
       - The layout page that checks if the user is signed in
       - The page where users can manage their account, including their MFA settings
@@ -341,7 +341,8 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
       <Tabs items={["Layout", "Account page", "Add TOTP page"]}>
         <Tab>
-          Start by creating the `(dashboard)` route group and adding the following code to the layout:
+          1. Create the `(dashboard)` route group. This groups your account page and the "Add TOTP MFA" page.
+          1. Create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/hooks/use-auth) hook is used to check if the user is signed in. If the user isn't signed in, they'll be redirected to the sign-in page.
 
           ```tsx {{ filename: 'app/(dashboard)/_layout.tsx' }}
           import { Redirect, Stack } from 'expo-router'
@@ -360,16 +361,17 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
         </Tab>
 
         <Tab>
-          Add a basic account page to the `(dashboard)` route group that shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
+          In the `(dashboard)` group, create an `account.tsx` file with the following code. This page shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
 
-          ```tsx {{ filename: 'app/(dashboard)/account.tsx' }}
+          ```tsx {{ filename: 'app/(dashboard)/account.tsx', collapsible: true }}
           import React from 'react'
           import { useUser } from '@clerk/clerk-expo'
-          import { Link } from 'expo-router'
-          import { View, Text, Button, TouchableOpacity, FlatList } from 'react-native'
+          import { useRouter } from 'expo-router'
+          import { View, Text, Button, FlatList } from 'react-native'
           import { BackupCodeResource } from '@clerk/types'
 
           export default function ManageTOTPMfa() {
+            const router = useRouter()
             const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
             const [loading, setLoading] = React.useState(false)
 
@@ -397,7 +399,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
             const MFAEnabled = () => {
               return (
-                <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text>TOTP via authentication app enabled - </Text>
                   <Button onPress={() => disableTOTP()} title="Remove" />
                 </View>
@@ -406,13 +408,9 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
             const MFADisabled = () => {
               return (
-                <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text>Add TOTP via authentication app - </Text>
-                  <TouchableOpacity>
-                    <Link href="/add-mfa">
-                      <Text>Add</Text>
-                    </Link>
-                  </TouchableOpacity>
+                  <Button onPress={() => router.push('/add-mfa')} title="Add" />
                 </View>
               )
             }
@@ -446,9 +444,9 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
         </Tab>
 
         <Tab>
-          Create a page that adds the functionality for generating the QR code and backup codes.
+          In the `(dashboard)` group, create an `add-mfa.tsx` file with the following code. This page adds the functionality for generating the QR code and backup codes.
 
-          ```tsx {{ filename: 'app/(dashboard)/add-mfa.tsx' }}
+          ```tsx {{ filename: 'app/(dashboard)/add-mfa.tsx', collapsible: true }}
           import React from 'react'
           import { useUser } from '@clerk/clerk-expo'
           import { Link } from 'expo-router'
@@ -469,7 +467,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
               void user
                 ?.createTOTP()
                 .then((totp: TOTPResource) => setTotp(totp))
-                .catch((error) => console.log('error', error))
+                .catch((err) => console.error(JSON.stringify(err, null, 2)))
             }, [])
 
             return (
@@ -509,13 +507,18 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
               await user
                 ?.verifyTOTP({ code })
                 .then(() => setStep('backupcodes'))
-                .catch((error) => console.log('Error', error))
+                .catch((err) => console.error(JSON.stringify(err, null, 2)))
             }
 
             return (
               <>
                 <Text>Verify MFA</Text>
-                <TextInput value={code} onChangeText={(c) => setCode(c)} />
+                <TextInput
+                  value={code}
+                  placeholder="Enter code"
+                  placeholderTextColor="#666666"
+                  onChangeText={(c) => setCode(c)}
+                />
                 <Button onPress={verifyTotp} title="Verify Code" />
                 <Button onPress={() => setStep('add')} title="Reset" />
               </>
@@ -534,12 +537,12 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
               void user
                 ?.createBackupCode()
                 .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
-                .catch((error) => console.log('Error', error))
+                .catch((err) => console.error(JSON.stringify(err, null, 2)))
             }, [])
 
             return (
               <>
-                <Text>Save Backup Codes</Text>
+                <Text>Verification was a success!</Text>
                 {backupCode && (
                   <View>
                     <Text>
@@ -565,7 +568,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
             return (
               <>
                 <Text>Success</Text>
-                <Text>You successfully added TOTP Mfa via an authentication application</Text>
+                <Text>You successfully added TOTP MFA via an authentication application</Text>
               </>
             )
           }

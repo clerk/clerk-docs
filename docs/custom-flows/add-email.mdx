@@ -1,32 +1,47 @@
 ---
 title: Build a custom flow for adding an email to a user's account
-description: Learn how to use Clerk's API to build a custom flow for adding an email to a user's account.
+description: Learn how to use the Clerk API to build a custom flow for adding an email to a user's account.
 ---
 
-> [!CAUTION]
-> This guide is for users who want to build a _custom_ user interface using the Clerk API. To use a _prebuilt_ UI, you should use Clerk's [Account Portal pages](/docs/customization/account-portal/overview) or [prebuilt components](/docs/components/overview).
+<Include src="_partials/custom-flows-callout" />
 
-Users are able to add multiple email addresses to their account.
+Users are able to add multiple email addresses to their account. Adding an email address requires the user to verify the email address before it can be added to the user's account.
 
-Every user has a [`User`](/docs/references/javascript/user/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user.
+This guide demonstrates how to build a custom user interface that allows users to add and verify an email address for their account.
 
-The following example demonstrates how to build a custom user interface that allows users to add an email address to their account. The example:
+## Configure email verification
 
-1. Uses the [`useUser()`](/docs/references/react/use-user) hook to get the `User` object.
-1. Uses the [`User.createEmailAddress()`](/docs/references/javascript/user/create-metadata#create-email-address) method to add the email address to the user's account.
+There are two verification methods available for email addresses:
 
-- A new [`EmailAddress`](/docs/references/javascript/email-address) object is created and stored in `User.emailAddresses`.
+- Email code verification: Users receive an email with a **verification code** to verify their email address.
+- Email link verification: Users receive an email with a **verification link** to verify their email address.
 
-1. Uses the `prepareVerification()` method on the newly created `EmailAddress` object to send a verification code to the user.
-1. Uses the `attemptVerification()` method on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
+By default, the verification method that is enabled is email code verification. To use email code verification, skip to the [Email code verification](#email-code-verification) section.
 
-<Tabs items={["Next.js", "iOS (Beta)"]}>
+To use email links, you must configure the following settings in the Clerk Dashboard:
+
+1. On the [**Email, phone, username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) page of the Clerk Dashboard, next to **Email address**, select the settings icon. A modal will open.
+1. Under **Verification methods**, enable the **Email verification link** option. By default, **Require the same device and browser** is enabled, which means that email links are required to be verified from the same device and browser on which the sign-up or sign-in was initiated. For this guide, leave this setting enabled.
+1. Uncheck the box for **Email verification code**.
+1. Select **Continue** to save your changes.
+
+Then skip to the [Email link verification](#email-link-verification) section.
+
+## Email code verification
+
+1. Every user has a [`User`](/docs/references/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/hooks/use-user) hook is used to get the `User` object.
+1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
+1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
+1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
+1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
+
+<Tabs items={["Next.js", "iOS (beta)"]}>
   <Tab>
-    ```tsx {{ filename: 'app/account/add-email/page.tsx' }}
+    ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
     'use client'
 
     import * as React from 'react'
-    import { useUser } from '@clerk/nextjs'
+    import { useUser, useReverification } from '@clerk/nextjs'
     import { EmailAddressResource } from '@clerk/types'
 
     export default function Page() {
@@ -36,6 +51,9 @@ The following example demonstrates how to build a custom user interface that all
       const [isVerifying, setIsVerifying] = React.useState(false)
       const [successful, setSuccessful] = React.useState(false)
       const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+      const createEmailAddress = useReverification((email: string) =>
+        user?.createEmailAddress({ email }),
+      )
 
       if (!isLoaded) return null
 
@@ -49,12 +67,12 @@ The following example demonstrates how to build a custom user interface that all
 
         try {
           // Add an unverified email address to user
-          const res = await user.createEmailAddress({ email })
+          const res = await createEmailAddress(email)
           // Reload user to get updated User object
           await user.reload()
 
           // Find the email address that was just added
-          const emailAddress = user.emailAddresses.find((a) => a.id === res.id)
+          const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
           // Create a reference to the email address that was just added
           setEmailObj(emailAddress)
 
@@ -153,9 +171,9 @@ The following example demonstrates how to build a custom user interface that all
   </Tab>
 
   <Tab>
-    ```swift {{ filename: 'AddEmailView.swift' }}
+    ```swift {{ filename: 'AddEmailView.swift', collapsible: true }}
     import SwiftUI
-    import ClerkSDK
+    import Clerk
 
     struct AddEmailView: View {
       @State private var email = ""
@@ -189,13 +207,11 @@ The following example demonstrates how to build a custom user interface that all
         do {
           guard let user = Clerk.shared.user else { return }
 
-          // Add an unverified email address to user
-          self.newEmailAddress = try await user.createEmailAddress(email)
-
-          guard let newEmailAddress = self.newEmailAddress else { return }
-
-          // Send the user an email with the verification code
-          try await newEmailAddress.prepareVerification(strategy: .emailCode)
+          // Add an unverified email address to user,
+          // then send the user an email with the verification code
+          self.newEmailAddress = try await user
+            .createEmailAddress(email)
+            .prepareVerification(strategy: .emailCode)
 
           // Set to true to display second form
           // and capture the OTP code
@@ -227,3 +243,7 @@ The following example demonstrates how to build a custom user interface that all
     ```
   </Tab>
 </Tabs>
+
+## Email link verification
+
+<Include src="_partials/custom-flows/email-link-verification" />

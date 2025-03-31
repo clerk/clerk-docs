@@ -1,6 +1,6 @@
 ---
 title: Configure Clerk Content-Security-Policy headers
-description: Learn how to configure your Content Security Policy to work with Clerk's APIs.
+description: Learn how to configure your Content Security Policy to work with the Clerk APIs.
 ---
 
 [Content-Security-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) (CSP) headers secure your document by preventing resources from being loaded from unexpected sources. This protects your apps from [XSS](/docs/security/xss-leak-protection#xss-leak-protection) attacks and data injections.
@@ -8,13 +8,13 @@ description: Learn how to configure your Content Security Policy to work with Cl
 For Clerk to work correctly in your application, you'll need to configure the following CSP directives:
 
 1. `script-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`, as well as cloudflare's bot protection host, `https://challenges.cloudflare.com`.
-1. `connect-src` - This value should also include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
+1. `connect-src` - This value should include the host application's FAPI hostname, such as `https://clerk.your-domain.com`.
 1. `img-src` - This value should be `https://img.clerk.com`.
 1. `worker-src` - Use the `'self'` value to indicate that workers can be loaded from first-party scripts. The `blob:` schema value also needs to be included.
-1. `style-src` - Due to Clerk's usage of runtime CSS-in-JS for styling, `'unsafe-inline'` needs to be included.
-1. `frame-src` - This value should also include cloudflare's bot protection host, `https://challenges.cloudflare.com`.
+1. `style-src` - This value should include `'unsafe-inline'` due to Clerk's usage of runtime CSS-in-JS for styling.
+1. `frame-src` - This value should include cloudflare's bot protection host, `https://challenges.cloudflare.com`.
 
-The following example demonstrates a Next.js config file that sets the necessary directives for your application's assets and Clerk to load and function correctly. The values used apply to your currently selected instance, make sure to handle both your development instance and production instance hosts.
+The following example demonstrates a Next.js config file that sets the necessary directives for your application's assets and Clerk to load and function correctly. The values used in the example are generated from your currently selected instance. Make sure to handle both your development instance and production instance hosts.
 
 > [!WARNING]
 > You will need to make sure any third-party domains where scripts or assets are loaded from are also specified.
@@ -53,9 +53,9 @@ module.exports = nextConfig
 
 ## Usage of `unsafe-eval` and `unsafe-inline` directives in Next.js
 
-- Within `script-src`, `unsafe-eval` is a [requirement for Next.js](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy#without-nonces) to run in development mode. _For production environment CSPs, it should be removed_.
+- Within `script-src`, `unsafe-eval` is a [requirement for Next.js](https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy#without-nonces) to run **in development mode**. **For production environment** CSPs, it should be removed.
 - Within `script-src`, `unsafe-inline` is a requirement for Next.js in both dev and prod environments if you're using the App Router and not using `strict-dynamic`. If you are using the Pages Router, it can be removed.
-- Within `style-src`, `unsafe-inline` is a requirement for Clerk's components to inject their styles. Removing this requirement is on our roadmap - please [reach out to support](/support){{ target: '_blank' }} if you'd like to see this implemented sooner.
+- Within `style-src`, `unsafe-inline` is a requirement for Clerk's components to inject their styles. Removing this requirement is on our roadmap. If you'd like to see this implemented sooner, [contact support](/contact/support){{ target: '_blank' }}.
 
 ## Implementing a `strict-dynamic` CSP
 
@@ -65,11 +65,11 @@ If you'd like to implement a [strict-dynamic CSP](https://content-security-polic
 import { NextResponse } from 'next/server'
 import { clerkMiddleware } from '@clerk/nextjs/server'
 
-export default clerkMiddleware((auth, request) => {
-  return applyCsp(request)
+export default clerkMiddleware((auth, req) => {
+  return applyCsp(req)
 })
 
-function applyCsp(request) {
+function applyCsp(req) {
   // create a randomly generated nonce value
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
 
@@ -82,7 +82,7 @@ function applyCsp(request) {
     connect-src 'self' https://{{fapi_url}};
     img-src 'self' https://img.clerk.com;
     worker-src 'self' blob:;
-    style-src 'self' 'unsafe-inline';
+    style-src 'self';
     frame-src 'self' https://challenges.cloudflare.com;
     form-action 'self';
   `
@@ -90,7 +90,7 @@ function applyCsp(request) {
   const contentSecurityPolicyHeaderValue = cspHeader.replace(/\s{2,}/g, ' ').trim()
 
   // set the nonce and csp values in the request headers
-  const requestHeaders = new Headers(request.headers)
+  const requestHeaders = new Headers(req.headers)
   requestHeaders.set('x-nonce', nonce)
   requestHeaders.set('Content-Security-Policy', contentSecurityPolicyHeaderValue)
 
@@ -117,6 +117,9 @@ export const config = {
 
 With this `strict-dynamic` configuration in place, **all script tags must be passed with a `nonce` value** or they will be blocked. This can be done by passing the nonce value as a `nonce` parameter to the script tag. For example, `<script src="https://example.com/script.js" nonce="<nonce_value>"></script>`. If you are using Next.js, any scripts loaded through next will automatically have the nonce value injected.
 
+> [!NOTE]
+> You must pass the [`dynamic` prop](/docs/components/clerk-provider#properties) to `<ClerkProvider>` for `strict-dynamic` CSPs to work correctly. This is because the nonce value is generated on the server and passed to the client, which requires dynamic rendering.
+
 With the above middleware, the nonce value is made accessible via the `x-nonce` request header. An example is provided below on how to access this value within a Next.js page.
 
 ```tsx {{ filename: 'pages/index.tsx' }}
@@ -129,7 +132,7 @@ export default function Page() {
 }
 ```
 
-If you're using one of Clerk's React-based SDKs, in order for Clerk to load correctly, the nonce value must also be passed to Clerk's `<ClerkProvider>` component. This can be done by passing the nonce value as a `nonce` prop to the `<ClerkProvider>` component. For example:
+If you're using one of Clerk's React-based SDKs, in order for Clerk to load correctly, the nonce value must also be passed to the `<ClerkProvider>` component. This can be done by passing the nonce value as a `nonce` prop to the `<ClerkProvider>` component. For example:
 
 ```tsx {{ filename: 'app/layout.tsx' }}
 import { ClerkProvider } from '@clerk/nextjs'
@@ -138,7 +141,7 @@ import { headers } from 'next/headers'
 export default function Layout({ children }) {
   return (
     // Note: since this is server-rendered, you don't _need_ to pass the nonce, see note below
-    <ClerkProvider nonce={headers().get('x-nonce')}>
+    <ClerkProvider nonce={headers().get('x-nonce')} dynamic>
       <html lang="en">
         <body>{children}</body>
       </html>

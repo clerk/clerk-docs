@@ -5,7 +5,7 @@ description: Use Clerk's Backend SDK to verify a token passed from the frontend.
 
 {/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/tokens/request.ts#L62 */}
 
-Authenticates a token passed from the frontend. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from [Clerk's Backend API](/docs/reference/backend-api/tag/JWKS#operation/GetJWKS).
+Authenticates a token passed from the frontend. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from the [Backend API](/docs/reference/backend-api/tag/JWKS#operation/GetJWKS){{ target: '_blank' }}.
 
 ```ts
 function authenticateRequest(
@@ -37,27 +37,27 @@ It is recommended to set these options as [environment variables](/docs/deployme
 > [!WARNING]
 > You must provide either `jwtKey` or `secretKey`.
 >
-> We strongly recommend explicitly setting the `authorizedParties` option when authorizing requests. The value should be a list of domains that are allowed to make requests to your application. Not setting this value can open your application to [CSRF attacks](https://owasp.org/www-community/attacks/csrf).
+> For better security, it's highly recommended to explicitly set the `authorizedParties` option when authorizing requests. The value should be a list of domains that are allowed to make requests to your application. Not setting this value can open your application to [CSRF attacks](https://owasp.org/www-community/attacks/csrf).
 
 <Properties>
   - `secretKey?`
   - `string`
 
-  The Clerk secret key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  The Clerk Secret Key from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
 
   ---
 
   - `publishableKey?`
   - `string`
 
-  The Clerk publishable key from the [API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  The Clerk Publishable Key from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
 
   ---
 
   - `jwtKey?`
   - `string`
 
-  Used to verify the session token in a networkless manner. Supply the PEM public key from the **[API Keys](https://dashboard.clerk.com/last-active?path=api-keys) page -> Show JWT public key -> PEM Public Key** section of the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/handling/manual-jwt).
+  Used to verify the session token in a networkless manner. Supply the **JWKS Public Key** from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. For more information, refer to [Manual JWT verification](/docs/backend-requests/manual-jwt).
 
   ---
 
@@ -120,7 +120,7 @@ It is recommended to set these options as [environment variables](/docs/deployme
   - `authorizedParties?`
   - `string[]`
 
-  An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack.<br />For example: `['http://localhost:3000', 'https://example.com']`
+  An allowlist of origins to verify against, to protect your application from the subdomain cookie leaking attack. For example: `['http://localhost:3000', 'https://example.com']`
 
   ---
 
@@ -146,55 +146,59 @@ It is recommended to set these options as [environment variables](/docs/deployme
 
 ## Examples
 
-### With a higher-level SDK
+<Tabs items={["Backend SDK on its own", "With other Clerk SDKs"]}>
+  <Tab>
+    If you are using the [JavaScript Backend SDK](/docs/references/backend/overview) on its own, you need to provide the `secretKey` and `publishableKey` to `createClerkClient()` so that it is passed to `authenticateRequest()`. You can set these values as [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass them to the function.
 
-`authenticateRequest()` requires `publishableKey` to be set. If you are importing `clerkClient` from a higher-level SDK, such as Next.js, then `clerkClient` infers the `publishableKey` from your [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys).
+    ```tsx
+    import { createClerkClient } from '@clerk/backend'
 
-```tsx
-import { clerkClient } from '@clerk/nextjs/server'
+    export async function GET(req: Request) {
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY,
+        publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      })
 
-export async function GET(req: Request) {
-  const { isSignedIn } = await clerkClient.authenticateRequest(req, {
-    authorizedParties: ['https://example.com'],
-  })
+      const { isSignedIn } = await clerkClient.authenticateRequest(req, {
+        authorizedParties: ['https://example.com'],
+      })
 
-  if (!isSignedIn) {
-    return Response.json({ status: 401 })
-  }
+      if (!isSignedIn) {
+        return Response.json({ status: 401 })
+      }
 
-  // Perform protected actions
-  // Add logic to perform protected actions
+      // Add logic to perform protected actions
 
-  return Response.json({ message: 'This is a reply' })
-}
-```
+      return Response.json({ message: 'This is a reply' })
+    }
+    ```
+  </Tab>
 
-### With the Backend SDK on its own
+  <Tab>
+    `authenticateRequest()` requires `publishableKey` to be set. If you are importing `clerkClient` from a higher-level SDK, such as Next.js, then `clerkClient` infers the `publishableKey` from your [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys). The following example uses Next.js, but the same logic applies for other frameworks.
 
-If you are using the [JavaScript Backend SDK](/docs/references/backend/overview) on its own, you need to provide the `secretKey` and `publishableKey` to `createClerkClient()` so that it is passed to `authenticateRequest()`. You can set these values as [environment variables](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass them to the function.
+    ```tsx
+    import { clerkClient } from '@clerk/nextjs/server'
 
-```tsx
-import { createClerkClient } from '@clerk/backend'
+    const client = await clerkClient()
 
-export async function GET(req: Request) {
-  const clerkClient = createClerkClient({
-    secretKey: process.env.CLERK_SECRET_KEY,
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-  })
+    export async function GET(req: Request) {
+      const { isSignedIn } = await client.authenticateRequest(req, {
+        authorizedParties: ['https://example.com'],
+      })
 
-  const { isSignedIn } = await clerkClient.authenticateRequest(req, {
-    authorizedParties: ['https://example.com'],
-  })
+      if (!isSignedIn) {
+        return Response.json({ status: 401 })
+      }
 
-  if (!isSignedIn) {
-    return Response.json({ status: 401 })
-  }
+      // Perform protected actions
+      // Add logic to perform protected actions
 
-  // Add logic to perform protected actions
-
-  return Response.json({ message: 'This is a reply' })
-}
-```
+      return Response.json({ message: 'This is a reply' })
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ### Networkless token verification
 
@@ -202,26 +206,4 @@ export async function GET(req: Request) {
 
 The following example uses the `authenticateRequest()` method with the [JavaScript Backend SDK](/docs/references/backend/overview) to verify the token passed by the frontend, and performs a networkless authentication by passing `jwtKey`. This will verify if the user is signed into the application or not.
 
-```tsx
-import { createClerkClient } from '@clerk/backend'
-
-export async function GET(req: Request) {
-  const clerkClient = createClerkClient({
-    secretKey: process.env.CLERK_SECRET_KEY,
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-  })
-
-  const { isSignedIn } = await clerkClient.authenticateRequest(req, {
-    jwtKey: process.env.CLERK_JWT_KEY,
-    authorizedParties: ['https://example.com'],
-  })
-
-  if (!isSignedIn) {
-    return Response.json({ status: 401 })
-  }
-
-  // Add logic to perform protected actions
-
-  return Response.json({ message: 'This is a reply' })
-}
-```
+<Include src="_partials/authenticate-req" />

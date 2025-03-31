@@ -1,0 +1,440 @@
+---
+title: Auth object
+description: The Auth object contains information about the current user's session.
+---
+
+The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
+
+## How to access the `Auth` object
+
+<Include src="_partials/auth-object-table" />
+
+## Properties
+
+<Properties>
+  - `sessionId`
+  - `string`
+
+  The ID of the current session.
+
+  ---
+
+  - `userId`
+  - `string`
+
+  The ID of the current user.
+
+  ---
+
+  - `orgId`
+  - `string | undefined`
+
+  The ID of the user's active organization.
+
+  ---
+
+  - `orgRole`
+  - <code>[OrganizationCustomRoleKey](/docs/references/javascript/types/organization-custom-role-key) | undefined</code>
+
+  The current user's role in their active organization.
+
+  ---
+
+  - `orgSlug`
+  - `string | undefined`
+
+  The URL-friendly identifier of the user's active organization.
+
+  ---
+
+  - `orgPermissions`
+  - <code>[OrganizationCustomPermissionKey](/docs/references/javascript/types/organization-custom-permission-key)\[] | undefined</code>
+
+  The current user's active organization permissions.
+
+  ---
+
+  - `sessionClaims`
+  - `JwtPayload`
+
+  The current user's [session claims](/docs/backend-requests/resources/session-tokens#default-session-claims).
+
+  ---
+
+  - `actor`
+  - `ActClaim | undefined`
+
+  Holds identifier for the user that is impersonating the current user. Read more about [impersonation](/docs/users/user-impersonation).
+
+  ---
+
+  - [`has()`](#has)
+  - <code>(isAuthorizedParams: [CheckAuthorizationParamsWithCustomPermissions](#check-authorization-params-with-custom-permissions)) => boolean</code>
+
+  A function that checks if the user has an organization role or custom permission.
+
+  ---
+
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
+
+  ---
+
+  - [`getToken()`](#get-token)
+  - [`ServerGetToken`](#server-get-token)
+
+  A function that gets the current user's [session token](/docs/backend-requests/resources/session-tokens) or a [custom JWT template](/docs/backend-requests/jwt-templates).
+
+  ---
+
+  - `debug`
+  - `AuthObjectDebug`
+
+  Used to help debug issues when using Clerk in development.
+</Properties>
+
+### `has()`
+
+`has()` determines if the user _has_ a role or permission and returns a boolean value.
+
+```ts
+function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
+```
+
+#### `CheckAuthorizationParamsWithCustomPermissions`
+
+`CheckAuthorizationParamsWithCustomPermissions` has the following properties:
+
+<Properties>
+  - `role`
+  - `string`
+
+  The role to check for.
+
+  ---
+
+  - `permission`
+  - `string`
+
+  The permission to check for.
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](#reverification-config)</code>
+
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
+</Properties>
+
+##### `ReverificationConfig`
+
+```ts
+type ReverificationConfig =
+  | SessionVerificationTypes
+  | {
+      level: SessionVerificationLevel
+      afterMinutes: SessionVerificationAfterMinutes
+    }
+
+type SessionVerificationTypes = 'strict_mfa' | 'strict' | 'moderate' | 'lax'
+```
+
+The `ReverificationConfig` type has the following properties:
+
+<Properties>
+  - `strict_mfa`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for both the first and second factors.
+
+  ---
+
+  - `strict`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for the second factor.
+
+  ---
+
+  - `moderate`
+
+  Requires the user to verify their credentials within the past hour. If not verified, prompt for the second factor.
+
+  ---
+
+  - `lax`
+
+  Requires the user to verify their credentials within the past day. If not verified, prompt for the second factor.
+
+  ---
+
+  - `level`
+  - `"first_factor" | "second_factor" | "multi_factor"`
+
+  The reverification level of credentials to check for.
+
+  ---
+
+  - `afterMinutes`
+  - `number`
+
+  The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
+</Properties>
+
+#### `has()` authorization example
+
+You can use `has()` to check if a user is authorized to access a component.
+
+<Include src="_partials/has-warning" />
+
+In the following example, `has()` is used to check if the user has the `org:team_settings:manage` permission. If the user doesn't have the permission, `null` is returned and the page isn't rendered. This example is written for Next.js App Router, but can be adapted to other frameworks by using the appropriate method for accessing the `Auth` object.
+
+```tsx {{ filename: 'app/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default async function Page() {
+  const { has } = await auth()
+
+  const canManage = has({ permission: 'org:team_settings:manage' })
+
+  if (!canManage) return null
+
+  return <h1>Team Settings</h1>
+}
+```
+
+#### `has()` reverification example
+
+> [!IMPORTANT]
+> This example demonstrates how to handle reverification **server-side**. For information on how to handle reverification on the **client-side**, see the [guide on reverification](/docs/guides/reverification).
+
+You can use `has()` to check if a user has verified their credentials within a certain time frame.
+
+<Include src="_partials/nextjs/reverification-route-handler" />
+
+### `getToken()`
+
+`getToken()` retrieves the current user's [session token](/docs/backend-requests/resources/session-tokens) or a [custom JWT template](/docs/backend-requests/jwt-templates).
+
+```typescript
+const getToken: ServerGetToken
+
+type ServerGetToken = (options?: ServerGetTokenOptions) => Promise<string | null>
+
+type ServerGetTokenOptions = {
+  template?: string // The name of the custom JWT template to retrieve.
+}
+```
+
+#### Use `getToken()` in the frontend
+
+The `Auth` object is not available in the frontend. To use the `getToken()` method in the frontend:
+
+- For React-based applications, you can use the `useAuth()` hook. See the [reference documentation](/docs/hooks/use-auth#how-to-use-the-use-auth-hook) for example usage.
+- For JavaScript applications, see the [reference documentation](/docs/references/javascript/session#get-token) for example usage.
+
+#### Use `getToken()` in the backend
+
+<Tabs items={["Next.js", "Tanstack React Start", "Express", "Remix"]}>
+  <Tab>
+    To use the `getToken()` method in the backend:
+
+    - In App Router applications, use the [`auth()`](/docs/references/nextjs/auth) helper.
+    - In Pages Router applications, use the [`getAuth()`](/docs/references/nextjs/get-auth) helper.
+
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```js {{ filename: 'app/api/get-token-example/route.ts' }}
+      import { auth } from '@clerk/nextjs/server'
+
+      export async function GET() {
+        const { getToken } = await auth()
+
+        const template = 'supabase'
+
+        const token = await getToken({ template })
+
+        return Response.json({ token })
+      }
+      ```
+
+      ```ts {{ filename: 'pages/api/getToken.ts' }}
+      import { getAuth } from '@clerk/nextjs/server'
+      import type { NextApiRequest, NextApiResponse } from 'next'
+
+      export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+        const { getToken } = getAuth(req)
+
+        const template = 'test'
+
+        const token = await getToken({ template })
+
+        return res.json({ token })
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'app/routes/api/example.ts' }}
+    import { getAuth } from '@clerk/tanstack-react-start/server'
+    import { json } from '@tanstack/react-start'
+    import { createAPIFileRoute } from '@tanstack/react-start/api'
+
+    export const Route = createAPIFileRoute('/api/example')({
+      GET: async ({ req, params }) => {
+        const { userId, getToken } = await getAuth(req)
+
+        if (!userId) {
+          return json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const token = await getToken({ template: 'supabase' })
+
+        // Add logic that retrieves the data
+        // from your database using the token
+
+        return json({
+          // ...
+        })
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    To use the `getToken()` method in the backend, you can access it using the `Auth` object returned by the `request` object.
+
+    ```js {{ filename: 'getToken.ts' }}
+    app.get('/api/get-token', async (req, res) => {
+      const getToken = req.auth.getToken
+
+      const template = 'test'
+
+      const token = await getToken({ template })
+
+      res.json({ token })
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    To use the `getToken()` method in the backend, you can access it using the [`getAuth()`](/docs/references/nextjs/get-auth) function.
+
+    ```ts {{ filename: 'app/routes/get-token.ts' }}
+    import { getAuth } from '@clerk/remix/ssr.server'
+    import { ActionFunction, json } from '@remix-run/node'
+
+    export const action: ActionFunction = async (req) => {
+      const { getToken } = await getAuth(req)
+
+      const template = 'test'
+
+      const token = await getToken({ template })
+
+      return json({ token })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `Auth` object example without active organization
+
+The following is an example of the `Auth` object without an active organization:
+
+```js {{ prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```
+
+## `Auth` object example with active organization
+
+The following is an example of the `Auth` object with an active organization:
+
+```js {{ prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: 'org_123',
+  orgRole: 'org:admin',
+  orgSlug: undefined,
+  orgPermissions: ['org:team_settings:manage'], // Custom permissions
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```
+
+## `Auth` object example with valid factor age
+
+```js {{ mark: [8], prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorVerificationAge: [0,0],
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```
+
+## `Auth` object example of a user without an MFA method registered
+
+```js {{ mark: [8], prettier: false }}
+{
+  sessionId: 'sess_123',
+  userId: 'user_123',
+  orgId: null,
+  orgRole: null,
+  orgSlug: null,
+  orgPermissions: null,
+  factorVerificationAge: [0, -1],
+  has: [Function (anonymous)],
+  getToken: [AsyncFunction (anonymous)],
+  claims: {
+    azp: 'http://localhost:3000',
+    exp: 1666622607,
+    iat: 1666622547,
+    iss: 'https://clerk.quiet.muskox-85.lcl.dev',
+    nbf: 1666622537,
+    sid: 'sess_123',
+    sub: 'user_123',
+  },
+}
+```

@@ -1,0 +1,341 @@
+---
+title: '`useOrganizationList()`'
+description: Access and manage the current user's organization list in your React application with Clerk's useOrganizationList() hook.
+---
+
+The `useOrganizationList()` hook provides access to the current user's organization memberships, invitations, and suggestions. It also includes methods for creating new organizations and managing the active organization.
+
+## Parameters
+
+`useOrganizationList()` accepts a single object with the following properties:
+
+<Properties>
+  - `userMemberships`
+  - `true | { SharedProperties }`
+
+  If set to `true`, all default properties will be used.
+
+  Otherwise, accepts an object with the following optional properties:
+
+  - Any of the properties described in [Shared properties](#shared-properties).
+
+  ---
+
+  - `userInvitations`
+  - `true | { status?: 'pending' | 'accepted' | 'revoked' } & { SharedProperties }`
+
+  If set to `true`, all default properties will be used.
+
+  Otherwise, accepts an object with the following optional properties:
+
+  - `status`: A string that filters the invitations by the provided status.
+  - Any of the properties described in [Shared properties](#shared-properties).
+
+  ---
+
+  - `userSuggestions`
+  - `true | { status?: 'pending' | 'accepted' } & { SharedProperties }`
+
+  If set to `true`, all default properties will be used.
+
+  Otherwise, accepts an object with the following optional properties:
+
+  - `status`: A string that filters the suggestions by the provided status.
+  - Any of the properties described in [Shared properties](#shared-properties).
+</Properties>
+
+> [!WARNING]
+> By default, the `userMemberships`, `userInvitations`, and `userSuggestions` attributes are not populated. To fetch and paginate the data, you must pass `true` or an object with the desired properties.
+
+### Shared properties
+
+Optional properties that are shared across the `userMemberships`, `userInvitations`, and `userSuggestions` properties.
+
+<Include src="_partials/hooks/shared-properties" />
+
+## Returns
+
+<Properties>
+  - `isLoaded`
+  - `boolean`
+
+  A boolean that indicates whether Clerk has completed initialization. Initially `false`, becomes `true` once Clerk loads.
+
+  ---
+
+  - `createOrganization()`
+  - <code>(params: [CreateOrganizationParams](#create-organization-params)) => Promise\<[OrganizationResource](/docs/references/javascript/organization)></code>
+
+  A function that returns a `Promise` which resolves to the newly created `Organization`.
+
+  ---
+
+  - `setActive()`
+  - <code>(params: [SetActiveParams](/docs/references/javascript/types/set-active-params)) => Promise\<void></code>
+
+  A function that sets the active session and/or organization.
+
+  ---
+
+  - `userMemberships`
+  - <code>[PaginatedResources](#paginated-resources)[\<OrganizationMembership>](/docs/references/javascript/types/organization-membership)</code>
+
+  Returns `PaginatedResources` which includes a list of the user's organization memberships.
+
+  ---
+
+  - `userInvitations`
+  - <code>[PaginatedResources](#paginated-resources)[\<OrganizationInvitation>](/docs/references/javascript/types/organization-invitation)</code>
+
+  Returns `PaginatedResources` which includes a list of the user's organization invitations.
+
+  ---
+
+  - `userSuggestions`
+  - <code>[PaginatedResources](#paginated-resources)[\<OrganizationSuggestion>](/docs/references/javascript/types/organization-suggestion)</code>
+
+  Returns `PaginatedResources` which includes a list of suggestions for organizations that the user can join.
+</Properties>
+
+### `CreateOrganizationParams`
+
+<Properties>
+  - `name`
+  - `string`
+
+  The name of the organization.
+
+  ---
+
+  - `slug?`
+  - `string`
+
+  The slug of the organization.
+</Properties>
+
+### `PaginatedResources`
+
+<Include src="_partials/hooks/paginated-resources" />
+
+## How to use the `useOrganizationList()` hook
+
+### Expanding and paginating attributes
+
+To keep network usage to a minimum, developers are required to opt-in by specifying which resource they need to fetch and paginate through. So by default, the `userMemberships`, `userInvitations`, and `userSuggestions` attributes are not populated. You must pass `true` or an object with the desired [properties](#shared-properties) to fetch and paginate the data.
+
+```jsx
+// userMemberships.data will never be populated
+const { userMemberships } = useOrganizationList()
+
+// Use default values to fetch userMemberships, such as initialPage = 1 and pageSize = 10
+const { userMemberships } = useOrganizationList({
+  userMemberships: true,
+})
+
+// Pass your own values to fetch userMemberships
+const { userMemberships } = useOrganizationList({
+  userMemberships: {
+    pageSize: 20,
+    initialPage: 2, // skips the first page
+  },
+})
+
+// Aggregate pages in order to render an infinite list
+const { userMemberships } = useOrganizationList({
+  userMemberships: {
+    infinite: true,
+  },
+})
+```
+
+### Infinite pagination
+
+The following example demonstrates how to use the `infinite` property to fetch and append new data to the existing list. The `userMemberships` attribute will be populated with the first page of the user's organization memberships. When the "Load more" button is clicked, the `fetchNext` helper function will be called to append the next page of memberships to the list.
+
+<Tabs items={['React', 'Next.js']}>
+  <Tab>
+    ```tsx {{ filename: 'src/components/JoinedOrganizations.tsx' }}
+    import { useOrganizationList } from '@clerk/clerk-react'
+    import React from 'react'
+
+    const JoinedOrganizations = () => {
+      const { isLoaded, setActive, userMemberships } = useOrganizationList({
+        userMemberships: {
+          infinite: true,
+        },
+      })
+
+      if (!isLoaded) {
+        return <>Loading</>
+      }
+
+      return (
+        <>
+          <ul>
+            {userMemberships.data?.map((mem) => (
+              <li key={mem.id}>
+                <span>{mem.organization.name}</span>
+                <button onClick={() => setActive({ organization: mem.organization.id })}>Select</button>
+              </li>
+            ))}
+          </ul>
+
+          <button disabled={!userMemberships.hasNextPage} onClick={() => userMemberships.fetchNext()}>
+            Load more
+          </button>
+        </>
+      )
+    }
+
+    export default JoinedOrganizations
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'components/JoinedOrganizations.tsx' }}
+    'use client'
+
+    import { useOrganizationList } from '@clerk/nextjs'
+
+    export const JoinedOrganizations = () => {
+      const { isLoaded, setActive, userMemberships } = useOrganizationList({
+        userMemberships: {
+          infinite: true,
+        },
+      })
+
+      if (!isLoaded) {
+        return <>Loading</>
+      }
+
+      return (
+        <>
+          <ul>
+            {userMemberships.data?.map((mem) => (
+              <li key={mem.id}>
+                <span>{mem.organization.name}</span>
+                <button onClick={() => setActive({ organization: mem.organization.id })}>Select</button>
+              </li>
+            ))}
+          </ul>
+
+          <button disabled={!userMemberships.hasNextPage} onClick={() => userMemberships.fetchNext()}>
+            Load more
+          </button>
+        </>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Simple pagination
+
+The following example demonstrates how to use the `fetchPrevious` and `fetchNext` helper functions to paginate through the data. The `userInvitations` attribute will be populated with the first page of invitations. When the "Previous page" or "Next page" button is clicked, the `fetchPrevious` or `fetchNext` helper function will be called to fetch the previous or next page of invitations.
+
+Notice the difference between this example's pagination and the infinite pagination example above.
+
+<Tabs items={['React', 'Next.js']}>
+  <Tab>
+    ```tsx {{ filename: 'src/components/UserInvitationsTable.tsx' }}
+    import { useOrganizationList } from '@clerk/clerk-react'
+    import React from 'react'
+
+    const UserInvitationsTable = () => {
+      const { isLoaded, userInvitations } = useOrganizationList({
+        userInvitations: {
+          infinite: true,
+          keepPreviousData: true,
+        },
+      })
+
+      if (!isLoaded || userInvitations.isLoading) {
+        return <>Loading</>
+      }
+
+      return (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Org name</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {userInvitations.data?.map((inv) => (
+                <tr key={inv.id}>
+                  <th>{inv.emailAddress}</th>
+                  <th>{inv.publicOrganizationData.name}</th>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button disabled={!userInvitations.hasPreviousPage} onClick={userInvitations.fetchPrevious}>
+            Prev
+          </button>
+          <button disabled={!userInvitations.hasNextPage} onClick={userInvitations.fetchNext}>
+            Next
+          </button>
+        </>
+      )
+    }
+
+    export default UserInvitationsTable
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'components/UserInvitationsTable.tsx' }}
+    'use client'
+
+    import { useOrganizationList } from '@clerk/nextjs'
+
+    export const UserInvitationsTable = () => {
+      const { isLoaded, userInvitations } = useOrganizationList({
+        userInvitations: {
+          infinite: true,
+          keepPreviousData: true,
+        },
+      })
+
+      if (!isLoaded || userInvitations.isLoading) {
+        return <>Loading</>
+      }
+
+      return (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Org name</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {userInvitations.data?.map((inv) => (
+                <tr key={inv.id}>
+                  <th>{inv.emailAddress}</th>
+                  <th>{inv.publicOrganizationData.name}</th>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <button disabled={!userInvitations.hasPreviousPage} onClick={userInvitations.fetchPrevious}>
+            Prev
+          </button>
+          <button disabled={!userInvitations.hasNextPage} onClick={userInvitations.fetchNext}>
+            Next
+          </button>
+        </>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+To see the different organization features integrated into one application, take a look at our [organizations demo repository](https://github.com/clerk/organizations-demo).

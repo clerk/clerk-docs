@@ -69,7 +69,7 @@ This guide will have you create a new table in your [Supabase project](https://s
      -- Enable RLS on the table
      alter table "tasks" enable row level security;
      ```
-  1. Create two policies that restrict access to the `tasks` table based on the requesting user's Clerk ID.
+  1. Create two policies that restrict access to the `tasks` table based on the requesting user's Clerk ID. These policies allow users to create tasks for themselves and view their own tasks.
      ```sql
      create policy "User can view their own tasks"
      on "public"."tasks"
@@ -113,24 +113,24 @@ This guide will have you create a new table in your [Supabase project](https://s
 
   ## Set up your environment variables
 
-  1. In the sidenav of the [Supabase dashboard](https://supabase.com/dashboard/project/_/settings/api)
+  1. In the Supabase dashboard, navigate to [**Project Settings > Data API**](https://supabase.com/dashboard/project/_/settings/api).
   1. Add the **Project URL** to your `.env` file as `SUPABASE_URL`.
   1. In the **Project API keys** section, add the value beside `anon` `public` to your `.env` file as `SUPABASE_KEY`.
 
-  > [!IMPORTANT]
-  > If you are using Next.js, the `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code.
+  <If sdk="nextjs">
+    > [!IMPORTANT]
+    > The `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code, so add this prefix to these variables.
+  </If>
 
   ## Fetch Supabase data in your code
 
-  The following example shows the list of tasks for the user and allows the user to add new tasks.
-
-  The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client with access to Clerk's session token.
+  In your app's `page.tsx`, paste the following code. This example shows the list of tasks for the user and allows the user to add new tasks. The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client with access to Clerk's session token.
 
   <Tabs items={["Client-side rendering", "Server-side rendering"]}>
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to access the [`useUser()`](/docs/hooks/use-user) and [`useSession()`](/docs/hooks/use-session) hooks, but you can adapt this code to work with any React-based Clerk SDK.
 
-      ```tsx {{ filename: 'app/page.tsx' }}
+      ```tsx {{ filename: 'app/page.tsx', collapsible: true }}
       'use client'
       import { useEffect, useState } from 'react'
       import { useSession, useUser } from '@clerk/nextjs'
@@ -140,12 +140,13 @@ This guide will have you create a new table in your [Supabase project](https://s
         const [tasks, setTasks] = useState<any[]>([])
         const [loading, setLoading] = useState(true)
         const [name, setName] = useState('')
-        // The `useUser()` hook will be used to ensure that Clerk has loaded data about the logged in user
+        // The `useUser()` hook is used to ensure that Clerk has loaded data about the signed in user
         const { user } = useUser()
-        // The `useSession()` hook will be used to get the Clerk session object
+        // The `useSession()` hook is used to get the Clerk session object
+        // The session object is used to get the Clerk session token
         const { session } = useSession()
 
-        // Create a custom supabase client that injects the Clerk Supabase token into the request headers
+        // Create a custom Supabase client that injects the Clerk session token into the request headers
         function createClerkSupabaseClient() {
           return createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -162,7 +163,7 @@ This guide will have you create a new table in your [Supabase project](https://s
         const client = createClerkSupabaseClient()
 
         // This `useEffect` will wait for the User object to be loaded before requesting
-        // the tasks for the logged in user
+        // the tasks for the signed in user
         useEffect(() => {
           if (!user) return
 
@@ -191,7 +192,7 @@ This guide will have you create a new table in your [Supabase project](https://s
 
             {loading && <p>Loading...</p>}
 
-            {!loading && tasks.length > 0 && tasks.map((task: any) => <p>{task.name}</p>)}
+            {!loading && tasks.length > 0 && tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
 
             {!loading && tasks.length === 0 && <p>No tasks found</p>}
 
@@ -217,7 +218,7 @@ This guide will have you create a new table in your [Supabase project](https://s
 
       The `createServerSupabaseClient()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to pass the Clerk session token to the Supabase client.
 
-      ```ts {{ filename: 'src/app/ssr/client.ts' }}
+      ```ts {{ filename: 'app/ssr/client.ts' }}
       import { auth } from '@clerk/nextjs/server'
       import { createClient } from '@supabase/supabase-js'
 
@@ -237,13 +238,13 @@ This guide will have you create a new table in your [Supabase project](https://s
       The following files render the `/ssr` page and handle the "Add task" form submission. Use the following tabs to view the code for each page.
 
       <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx']}>
-        ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
-        import { createServerSupabaseClient } from './client'
+        ```tsx {{ filename: 'app/ssr/page.tsx' }}
         import AddTaskForm from './AddTaskForm'
+        import { createServerSupabaseClient } from './client'
 
         export default async function Home() {
           // Use the custom Supabase client you created
-          const client = createServerSupabaseClient()
+          const client = await createServerSupabaseClient()
 
           // Query the 'tasks' table to render the list of tasks
           const { data, error } = await client.from('tasks').select()
@@ -264,14 +265,14 @@ This guide will have you create a new table in your [Supabase project](https://s
         }
         ```
 
-        ```ts {{ filename: 'src/app/ssr/actions.ts' }}
+        ```ts {{ filename: 'app/ssr/actions.ts' }}
         'use server'
 
         import { createServerSupabaseClient } from './client'
 
-        const client = createServerSupabaseClient()
-
         export async function addTask(name: string) {
+          const client = await createServerSupabaseClient()
+
           try {
             const response = await client.from('tasks').insert({
               name,
@@ -285,7 +286,7 @@ This guide will have you create a new table in your [Supabase project](https://s
         }
         ```
 
-        ```ts {{ filename: 'src/app/ssr/AddTaskForm.tsx' }}
+        ```ts {{ filename: 'app/ssr/AddTaskForm.tsx' }}
         'use client'
         import React, { useState } from 'react'
         import { addTask } from './actions'

@@ -16,13 +16,17 @@ description: Learn how to integrate Clerk into your Supabase application.
       icon: "code-bracket",
     },
   ]}
+  exampleRepo={[
+    {
+      title: "Supabase, Next.js, and Clerk Demo",
+      link: "https://github.com/clerk/clerk-supabase-nextjs",
+      icon: "github",
+    },
+  ]}
 >
   - Use Clerk to authenticate access to your Supabase data
   - Access Clerk user IDs in your Supabase RLS policies
 </TutorialHero>
-
-> [!IMPORTANT]
-> See the [demo repo](https://github.com/clerk/clerk-supabase-nextjs) for a full example of how to integrate Supabase with Clerk in a Next.js app.
 
 Integrating Supabase with Clerk gives you the benefits of using a Supabase database while leveraging Clerk's authentication, prebuilt components, and webhooks. To get the most out of Supabase with Clerk, you must implement custom [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) (RLS) policies.
 
@@ -37,58 +41,55 @@ This guide will have you create a new table in your [Supabase project](https://s
 > [!TIP]
 > This integration restricts what data authenticated users can access in the database, but does not synchronize user records between Clerk and Supabase. To send additional data from Clerk to your Supabase database, use [webhooks](/docs/webhooks/overview).
 
-## Integrate Clerk with Supabase
-
 <Steps>
-  ### Setup Clerk as a Supabase third-party auth provider
+  ## Set up Clerk as a Supabase third-party auth provider
 
-  First, we need to setup Clerk as a third-party auth provider in Supabase.
+  For your Clerk session token to work with Supabase, you need to set up Clerk as a third-party auth provider in Supabase.
 
-  - Navigate to the [Supabase integration setup](https://dashboard.clerk.com/setup/supabase) to enable the Supabase integration for your Clerk instance. Copy the **Clerk domain** for the next step.
-  - Navigate to the [Third-party Auth settings in the Supabase dashboard](https://supabase.com/dashboard/project/_/auth/third-party), click **Add provider**, and select **Clerk** from the list of providers. Paste the domain you copied in the previous step into the field.
+  1. In the Clerk Dashboard, navigate to the [Supabase integration setup](https://dashboard.clerk.com/setup/supabase).
+  1. Select your configuration options, and then select **Active Supabase integration**. This will reveal the **Clerk domain** for your Clerk instance.
+  1. Save the **Clerk domain**.
+  1. In the Supabase Dashboard, select your project.
+  1. In the left sidenav, select **Authentication**. Then select **Sign In / Up**.
+  1. Select **Add provider** and select **Clerk** from the list of providers. Paste the **Clerk domain** you copied from the Clerk Dashboard.
 
-  Your Clerk session token is now configured to work with Supabase. For more information on
+  ## Set up RLS policies using Clerk session token data
 
-  ### Setup RLS policies using Clerk session token data
+  You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. Clerk uses this function to create custom RLS policies to restrict database access based on the requesting user.
 
-  You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. We can use this function to create custom RLS policies to restrict database access based on the requesting user.
+  1. Create a table to enable RLS on. Open [Supabase's SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run the following queries.
+     ```sql
+     -- Create a "tasks" table with a user_id column that maps to a Clerk user ID
+     create table tasks(
+       id serial primary key,
+       name text not null,
+       user_id text not null default auth.jwt()->>'sub'
+     );
 
-  First, let's create a table to enable RLS on. Open [Supabase's SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run the following queries.
+     -- Enable RLS on the table
+     alter table "tasks" enable row level security;
+     ```
+  1. Create two policies that restrict access to the `tasks` table based on the requesting user's Clerk ID.
+     ```sql
+     create policy "User can view their own tasks"
+     on "public"."tasks"
+     for select
+     to authenticated
+     using (
+     ((select auth.jwt()->>'sub') = (user_id)::text)
+     );
 
-  ```sql
-    -- Create a "tasks" table with a user_id column that maps to a Clerk user ID
-  create table tasks(
-    id serial primary key,
-    name text not null,
-    user_id text not null default auth.jwt()->>'sub'
-  );
+     create policy "Users must insert their own tasks"
+     on "public"."tasks"
+     as permissive
+     for insert
+     to authenticated
+     with check (
+     ((select auth.jwt()->>'sub') = (user_id)::text)
+     );
+     ```
 
-  -- Enable RLS on the table
-  alter table "tasks" enable row level security;
-  ```
-
-  Next, create two policies that restrict access to the `tasks` table based on the requesting user's Clerk ID.
-
-  ```sql
-  create policy "User can view their own tasks"
-  on "public"."tasks"
-  for select
-  to authenticated
-  using (
-      ((select auth.jwt()->>"sub") = (user_id)::text)
-  )
-
-  create policy "Users must insert their own tasks"
-  on "public"."tasks"
-  as permissive
-  for insert
-  to authenticated
-  with check (
-    ((select auth.jwt()->>"sub") = (user_id)::text)
-  )
-  ```
-
-  ### Install the Supabase client library
+  ## Install the Supabase client library
 
   Add the Supabase client library to your project.
 
@@ -110,7 +111,7 @@ This guide will have you create a new table in your [Supabase project](https://s
     ```
   </CodeBlockTabs>
 
-  ### Set up your environment variables
+  ## Set up your environment variables
 
   1. In the sidenav of the [Supabase dashboard](https://supabase.com/dashboard/projects), select **Settings** > **API**.
   1. Add the **Project URL** to your `.env` file as `SUPABASE_URL`.
@@ -119,7 +120,7 @@ This guide will have you create a new table in your [Supabase project](https://s
   > [!IMPORTANT]
   > If you are using Next.js, the `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code.
 
-  ### Fetch Supabase data in your code
+  ## Fetch Supabase data in your code
 
   The following example shows the list of tasks for the user and allows the user to add new tasks.
 
@@ -320,7 +321,7 @@ This guide will have you create a new table in your [Supabase project](https://s
     </Tab>
   </Tabs>
 
-  ### Test your integration
+  ## Test your integration
 
   Run your project and sign in. Test creating and viewing tasks. Sign out and sign in as a different user, and repeat.
 

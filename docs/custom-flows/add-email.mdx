@@ -30,7 +30,8 @@ Then skip to the [Email link verification](#email-link-verification) section.
 ## Email code verification
 
 1. Every user has a [`User`](/docs/references/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/hooks/use-user) hook is used to get the `User` object.
-1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is used to add the email address to the user's account. A new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
+1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
+1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
 1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
 1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
 
@@ -40,7 +41,7 @@ Then skip to the [Email link verification](#email-link-verification) section.
     'use client'
 
     import * as React from 'react'
-    import { useUser } from '@clerk/nextjs'
+    import { useUser, useReverification } from '@clerk/nextjs'
     import { EmailAddressResource } from '@clerk/types'
 
     export default function Page() {
@@ -50,6 +51,9 @@ Then skip to the [Email link verification](#email-link-verification) section.
       const [isVerifying, setIsVerifying] = React.useState(false)
       const [successful, setSuccessful] = React.useState(false)
       const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+      const createEmailAddress = useReverification((email: string) =>
+        user?.createEmailAddress({ email }),
+      )
 
       if (!isLoaded) return null
 
@@ -63,12 +67,12 @@ Then skip to the [Email link verification](#email-link-verification) section.
 
         try {
           // Add an unverified email address to user
-          const res = await user.createEmailAddress({ email })
+          const res = await createEmailAddress(email)
           // Reload user to get updated User object
           await user.reload()
 
           // Find the email address that was just added
-          const emailAddress = user.emailAddresses.find((a) => a.id === res.id)
+          const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
           // Create a reference to the email address that was just added
           setEmailObj(emailAddress)
 

@@ -143,7 +143,7 @@ const VALID_SDKS = [
   'fastify',
   'react-router',
   'remix',
-  'tanstack-start',
+  'tanstack-react-start',
   'go',
   'astro',
   'nuxt',

@@ -96,7 +96,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   ## Create the endpoint
 
-  Set up a Route Handler that uses `svix` to verify the incoming Clerk webhook and process the payload.
+  Set up a Route Handler that uses the new `verifyWebhook` function to verify the incoming Clerk webhook and process the payload.
 
   For this guide, the payload will be logged to the console. In a real app, you'd use the payload to trigger an action. For example, if listening for the `user.created` event, you might perform a database `create` or `upsert` to add the user's Clerk data to your database's user table.
 
@@ -105,122 +105,16 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   > [!NOTE]
   > The following Route Handler can be used for any webhook event you choose to listen to. It is not specific to `user.created`.
 
-  <Tabs items={["Next.js", "Express"]}>
+  <Tabs items={["Next.js", "React Router", "Astro", "Nuxt", "TanStack React Start", "Express", "Fastify"]}>
     <Tab>
       ```ts {{ filename: 'app/api/webhooks/route.ts' }}
-      import { Webhook } from 'svix'
+      import { verifyWebhook } from '@clerk/nextjs/webhooks'
       import { headers } from 'next/headers'
       import { WebhookEvent } from '@clerk/nextjs/server'
 
       export async function POST(req: Request) {
-        const SIGNING_SECRET = process.env.SIGNING_SECRET
-
-        if (!SIGNING_SECRET) {
-          throw new Error('Error: Please add SIGNING_SECRET from Clerk Dashboard to .env or .env')
-        }
-
-        // Create new Svix instance with secret
-        const wh = new Webhook(SIGNING_SECRET)
-
-        // Get headers
-        const headerPayload = await headers()
-        const svix_id = headerPayload.get('svix-id')
-        const svix_timestamp = headerPayload.get('svix-timestamp')
-        const svix_signature = headerPayload.get('svix-signature')
-
-        // If there are no headers, error out
-        if (!svix_id || !svix_timestamp || !svix_signature) {
-          return new Response('Error: Missing Svix headers', {
-            status: 400,
-          })
-        }
-
-        // Get body
-        const payload = await req.json()
-        const body = JSON.stringify(payload)
-
-        let evt: WebhookEvent
-
-        // Verify payload with headers
         try {
-          evt = wh.verify(body, {
-            'svix-id': svix_id,
-            'svix-timestamp': svix_timestamp,
-            'svix-signature': svix_signature,
-          }) as WebhookEvent
-        } catch (err) {
-          console.error('Error: Could not verify webhook:', err)
-          return new Response('Error: Verification error', {
-            status: 400,
-          })
-        }
-
-        // Do something with payload
-        // For this guide, log payload to console
-        const { id } = evt.data
-        const eventType = evt.type
-        console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-        console.log('Webhook payload:', body)
-
-        return new Response('Webhook received', { status: 200 })
-      }
-      ```
-    </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'index.ts' }}
-      app.post(
-        '/api/webhooks',
-        // This is a generic method to parse the contents of the payload.
-        // Depending on the framework, packages, and configuration, this may be
-        // different or not required.
-        bodyParser.raw({ type: 'application/json' }),
-
-        async (req, res) => {
-          const SIGNING_SECRET = process.env.SIGNING_SECRET
-
-          if (!SIGNING_SECRET) {
-            throw new Error('Error: Please add SIGNING_SECRET from Clerk Dashboard to .env')
-          }
-
-          // Create new Svix instance with secret
-          const wh = new Webhook(SIGNING_SECRET)
-
-          // Get headers and body
-          const headers = req.headers
-          const payload = req.body
-
-          // Get Svix headers for verification
-          const svix_id = headers['svix-id']
-          const svix_timestamp = headers['svix-timestamp']
-          const svix_signature = headers['svix-signature']
-
-          // If there are no headers, error out
-          if (!svix_id || !svix_timestamp || !svix_signature) {
-            return void res.status(400).json({
-              success: false,
-              message: 'Error: Missing svix headers',
-            })
-          }
-
-          let evt
-
-          // Attempt to verify the incoming webhook
-          // If successful, the payload will be available from 'evt'
-          // If verification fails, error out and return error code
-          try {
-            evt = wh.verify(JSON.stringify(payload), {
-              'svix-id': svix_id as string,
-              'svix-timestamp': svix_timestamp as string,
-              'svix-signature': svix_signature as string,
-            })
-          } catch (err) {
-            console.log('Error: Could not verify webhook:', err.message)
-            return void res.status(400).json({
-              success: false,
-              message: err.message,
-            })
-          }
+          const evt = await verifyWebhook(req)
 
           // Do something with payload
           // For this guide, log payload to console
@@ -229,12 +123,172 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
           console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
           console.log('Webhook payload:', evt.data)
 
-          return void res.status(200).json({
-            success: true,
-            message: 'Webhook received',
-          })
-        },
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'app/routes/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/react-router/webhooks'
+      import type { Route } from './+types/webhooks'
+
+      export const action = async ({ request }: Route.ActionArgs) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'src/pages/api/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/astro/webhooks'
+      import type { APIRoute } from 'astro'
+
+      export const POST: APIRoute = async ({ request }) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'server/api/webhooks.post.ts' }}
+      import { verifyWebhook } from '@clerk/nuxt/webhooks'
+
+      export default defineEventHandler(async (event) => {
+        try {
+          const evt = await verifyWebhook(event)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return 'Webhook received'
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          setResponseStatus(event, 400)
+          return 'Error verifying webhook'
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'pages/api/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/tanstack-react-start/webhooks'
+      import { createAPIFileRoute } from '@tanstack/react-router'
+
+      export const APIRoute = createAPIFileRoute('/api/webhooks')({
+        POST: async ({ request }) => {
+          try {
+            const evt = await verifyWebhook(request)
+
+            // Do something with payload
+            // For this guide, log payload to console
+            const { id } = evt.data
+            const eventType = evt.type
+            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+            console.log('Webhook payload:', evt.data)
+
+            return new Response('Webhook received', { status: 200 })
+          } catch (err) {
+            console.error('Error verifying webhook:', err)
+            return new Response('Error verifying webhook', { status: 400 })
+          }
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'index.ts' }}
+      import { verifyWebhook } from '@clerk/express/webhooks'
+      import express from 'express'
+
+      const app = express()
+
+      app.post(
+        '/api/webhooks',
+        express.raw({ type: 'application/json' }),
+        async (req, res) => {
+          try {
+            const evt = await verifyWebhook(req)
+
+            // Do something with payload
+            // For this guide, log payload to console
+            const { id } = evt.data
+            const eventType = evt.type
+            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+            console.log('Webhook payload:', evt.data)
+
+            return res.send('Webhook received')
+          } catch (err) {
+            console.error('Error verifying webhook:', err)
+            return res.status(400).send('Error verifying webhook')
+          }
+        }
       )
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'index.ts' }}
+      import { verifyWebhook } from '@clerk/fastify/webhooks'
+      import Fastify from 'fastify'
+
+      const fastify = Fastify()
+
+      fastify.post('/api/webhooks', async (request, reply) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return 'Webhook received'
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return reply.code(400).send('Error verifying webhook')
+        }
+      })
       ```
     </Tab>
   </Tabs>
@@ -254,7 +308,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   }
   ```
 
-  To handle types manually, import the following types from your backend SDK (e.g., `@clerk/nextjs/server`):
+  To handle types manually, import the following types from your backend SDK (e.g., `@clerk/nextjs/webhooks`):
 
   - `DeletedObjectJSON`
   - `EmailJSON`

@@ -94,7 +94,13 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 ### Sidenav
 
-The side navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered sidenav.
+The side navigation element rendered on https://clerk.com/docs is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](./docs/manifest.json).
+
+The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js.
+
+- The logic for the SDK selector lives in `clerk/clerk`, which is a private repository that is only available to Clerk employees. Therefore, to update the SDK selector, such as adding new items, you must be a Clerk employee. For instructions on how to do so, see [this section](#update-the-sdk-selector). If you aren't a Clerk employee but have suggestions or concerns, please [submit an issue](https://github.com/clerk/clerk-docs/issues).
+
+The `manifest.json` is responsible for the structure of the sidenav, including setting the title and link for each sidenav item. Below is some helpful information on the typing and structure of the file.
 
 [Manifest JSON schema →](./docs/manifest.schema.json)
 
@@ -206,6 +212,85 @@ type SubNavItem = {
 ![](/public/images/styleguide/manifest.png)
 
 </details>
+
+### Update the SDK selector
+
+> For Clerk employees only. [_(Why?)_](#sidenav)
+
+To update the SDK selector, the files you need are in `clerk/clerk`:
+
+- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
+  - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
+- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
+  - The source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders as its formatted; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
+
+#### Add a new SDK
+
+If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
+
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on `https://clerk.com/docs`, `https://clerk.com/docs/references/overview`, and if there is a quickstart for it, `https://clerk.com/docs/quickstarts/overview`.
+
+In this repo (`clerk/clerk-docs`):
+
+1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. Add the color SVG to the partials icon folder `_partials/icons/`.
+1. Add the SDK to `https://clerk.com/docs`, `https://clerk.com/docs/references/overview`, and if there is a quickstart for it, `https://clerk.com/docs/quickstarts/overview`.
+1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
+
+Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
+
+In the `clerk/clerk` repo:
+
+4. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+5. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `route`, `category`.
+
+#### Add an external SDK
+
+If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
+
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on `https://clerk.com/docs` and `https://clerk.com/docs/references/overview`.
+
+In this repo (`clerk/clerk-docs`):
+
+1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. Add the color SVG to the partials icon folder `_partials/icons/`.
+1. Add the SDK to `https://clerk.com/docs` and `https://clerk.com/docs/references/overview`.
+
+Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
+
+In the `clerk/clerk` repo:
+
+4. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+5. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
+
+#### Update the 'key' of an SDK
+
+If you need to update the key of an SDK, because the logic is shared in `clerk-docs` and `clerk/clerk` repo's, both the old and the new keys must be kept as available. This is similar to deprecating an old key, and releasing a new key - you must still support the old key.
+
+In the `clerk/clerk` repo:
+
+1. In `clerk/src/app/(website)/docs/SDK.tsx`, change the necessary key in the `sdks` object.
+1. In that same file, update the `sdkKeyMigrations` object by adding the old key as the key and the new key as the value. For example, if you were changing the `sdk` key to be `js` instead of `javascript`, you would do the following updates:
+
+   ```diff
+   const sdks = {
+   -  'javascript': {
+   +  'js': {
+       ...
+     }
+   }
+
+
+   const sdkKeyMigrations = {
+   +  'javascript': 'js',
+   }
+   ```
+
+Then, in this repo (`clerk-docs`):
+
+4. In the `manifest.schema.json`, update the `sdk` enum to use the new key.
+5. In the `manifest.json`, update the `sdk` arrays to use the new key.
+6. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Editing content
 
@@ -875,6 +960,8 @@ Available values for the `sdk` prop:
 | SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
 
+To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
+
 #### Examples
 
 <details>
@@ -924,64 +1011,6 @@ You may also optionally provide the following [`next/image`](https://nextjs.org/
 ```
 
 When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
-
-### Modifying the available SDKs (for Clerk employees)
-
-The sdks clerk provides is dynamic, keeping the docs up to date with the current offering of SDKs is vital to a good developer experience.
-
-#### Adding a new SDK in beta
-
-You will need the name (eg Next.js), key (eg nextjs), two svg icons: one in color, one grayscale (both need to be in svg format not html).
-
-##### in this repo
-
-1. Update the `clerk-docs/docs/manifest.schema.json`, add the key to the `sdk` enum, and a reference name in the `icon` enum.
-2. (Optional) Add the color svg to the partials icon folder `clerk-docs/docs/_partials/icons/` if you want to add this reference to the grid on the `clerk-docs/docs/index.mdx` page.
-3. (Optional) If you are adding a section of documentation, eg an overview, quickstart or any other guides, update the `manifest.json` to have `"sdk": ["your-sdk-key"]` in the group.
-
-##### in the clerk repo
-
-4. Add the svgs to the `clerk/src/app/(website)/docs/icons.tsx` file, the grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object, use the same key for both.
-5. Edit the `clerk/src/app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new sdk, make sure to include the `tag: 'beta'` property to signify it's new and in development.
-
-#### Migrating an SDK to general availability
-
-Once an SDK is no longer in beta, the docs should reflect this.
-
-1. Edit `clerk/src/app/(website)/docs/SDK.tsx`, update the `sdks` object to remove the `tag: 'beta'` property for the sdk in question.
-
-#### Migrating the 'key' of an SDK
-
-If you need to update the key of an SDK, it can't just be changed as we are split across two repos, so it must be migrated.
-
-##### in the clerk repo
-
-1. Edit `clerk/src/app/(website)/docs/SDK.tsx`, update the `sdks` object, change the key for the sdk in question.
-2. Below update the `sdkKeyMigrations` object, add the old key as the `key` property, and add the new key as the value.
-
-```diff
-const sdks = {
--  'javascript': {
-+  'js': {
-    ...
-  }
-}
-
-
-const sdkKeyMigrations = {
-+  'javascript': 'js',
-}
-```
-
-3. Commit the changes and open a PR and merge it.
-
-This will make both the old and the new keys available to the docs.
-
-##### in this repo
-
-4. Update the `clerk-docs/docs/manifest.schema.json`, update the `sdk` enum to use the new key.
-5. Update the `clerk-docs/docs/manifest.json`, update the `sdk` arrays to use the new key.
-6. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Help wanted!
 

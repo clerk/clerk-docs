@@ -925,6 +925,64 @@ You may also optionally provide the following [`next/image`](https://nextjs.org/
 
 When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
 
+### Modifying the available SDKs (for Clerk employees)
+
+The sdks clerk provides is dynamic, keeping the docs up to date with the current offering of SDKs is vital to a good developer experience.
+
+#### Adding a new SDK in beta
+
+You will need the name (eg Next.js), key (eg nextjs), two svg icons: one in color, one grayscale (both need to be in svg format not html).
+
+##### in this repo
+
+1. Update the `clerk-docs/docs/manifest.schema.json`, add the key to the `sdk` enum, and a reference name in the `icon` enum.
+2. (Optional) Add the color svg to the partials icon folder `clerk-docs/docs/_partials/icons/` if you want to add this reference to the grid on the `clerk-docs/docs/index.mdx` page.
+3. (Optional) If you are adding a section of documentation, eg an overview, quickstart or any other guides, update the `manifest.json` to have `"sdk": ["your-sdk-key"]` in the group.
+
+##### in the clerk repo
+
+4. Add the svgs to the `clerk/src/app/(website)/docs/icons.tsx` file, the grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object, use the same key for both.
+5. Edit the `clerk/src/app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new sdk, make sure to include the `tag: 'beta'` property to signify it's new and in development.
+
+#### Migrating an SDK to general availability
+
+Once an SDK is no longer in beta, the docs should reflect this.
+
+1. Edit `clerk/src/app/(website)/docs/SDK.tsx`, update the `sdks` object to remove the `tag: 'beta'` property for the sdk in question.
+
+#### Migrating the 'key' of an SDK
+
+If you need to update the key of an SDK, it can't just be changed as we are split across two repos, so it must be migrated.
+
+##### in the clerk repo
+
+1. Edit `clerk/src/app/(website)/docs/SDK.tsx`, update the `sdks` object, change the key for the sdk in question.
+2. Below update the `sdkKeyMigrations` object, add the old key as the `key` property, and add the new key as the value.
+
+```diff
+const sdks = {
+-  'javascript': {
++  'js': {
+    ...
+  }
+}
+
+
+const sdkKeyMigrations = {
++  'javascript': 'js',
+}
+```
+
+3. Commit the changes and open a PR and merge it.
+
+This will make both the old and the new keys available to the docs.
+
+##### in this repo
+
+1. Update the `clerk-docs/docs/manifest.schema.json`, update the `sdk` enum to use the new key.
+2. Update the `clerk-docs/docs/manifest.json`, update the `sdk` arrays to use the new key.
+3. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
+
 ## Help wanted!
 
 Looking to contribute? Please check out [the open issues](https://github.com/clerk/clerk-docs/issues) for opportunities to help out. Thanks for taking the time to help make Clerk's docs better!

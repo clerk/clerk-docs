@@ -979,9 +979,9 @@ This will make both the old and the new keys available to the docs.
 
 ##### in this repo
 
-1. Update the `clerk-docs/docs/manifest.schema.json`, update the `sdk` enum to use the new key.
-2. Update the `clerk-docs/docs/manifest.json`, update the `sdk` arrays to use the new key.
-3. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
+4. Update the `clerk-docs/docs/manifest.schema.json`, update the `sdk` enum to use the new key.
+5. Update the `clerk-docs/docs/manifest.json`, update the `sdk` arrays to use the new key.
+6. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Help wanted!
 

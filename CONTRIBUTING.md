@@ -587,11 +587,11 @@ https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property                      | Type                                                                                                                           | Description                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                     |
-| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                         |
-| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'`. |
+| Property                      | Type                                                                                                                           | Description                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                                                                               |
+| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                                                                                   |
+| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'` or `'Example repositories'`, but can be passed any string. |
 
 ```mdx
 <TutorialHero
@@ -605,23 +605,15 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
       title: 'Create a Next.js application',
       link: 'https://nextjs.org/docs/getting-started/installation',
       icon: 'nextjs',
-    }
+    },
   ]}
   exampleRepo={[
     {
-      title: 'App router',
+      title: 'Clerk + Next.js App Router Quickstart',
       link: 'https://github.com/clerk/clerk-nextjs-app-quickstart',
-    }
+    },
   ]}
->
-
-- Install `@clerk/nextjs`
-- Set up your environment keys to test your app locally
-- Add `<ClerkProvider>` to your application
-- Use Clerk middleware to implement route-specific authentication
-- Create a header with Clerk components for users to sign in and out
-
-</TutorialHero>
+/>
 ```
 
 ### `<Cards>`

@@ -260,8 +260,8 @@ Now, the sidenav is set up to render the items for the new SDK you've added, and
 
 In the `clerk/clerk` repo:
 
-4. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
-5. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
+1. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
 
 #### Update the 'key' of an SDK
 
@@ -288,9 +288,9 @@ In the `clerk/clerk` repo:
 
 Then, in this repo (`clerk-docs`):
 
-4. In the `manifest.schema.json`, update the `sdk` enum to use the new key.
-5. In the `manifest.json`, update the `sdk` arrays to use the new key.
-6. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
+1. In the `manifest.schema.json`, update the `sdk` enum to use the new key.
+1. In the `manifest.json`, update the `sdk` arrays to use the new key.
+1. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Editing content
 

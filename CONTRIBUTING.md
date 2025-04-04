@@ -222,19 +222,19 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
   - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
 - https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
-  - The source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders as its formatted; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
+  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
 
 #### Add a new SDK
 
 If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on `https://clerk.com/docs`, `https://clerk.com/docs/references/overview`, and if there is a quickstart for it, `https://clerk.com/docs/quickstarts/overview`.
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `https://clerk.com/docs`, `https://clerk.com/docs/references/overview`, and if there is a quickstart for it, `https://clerk.com/docs/quickstarts/overview`.
+1. Add the SDK to `index.mdx`, `references/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
@@ -248,13 +248,13 @@ In the `clerk/clerk` repo:
 
 If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on `https://clerk.com/docs` and `https://clerk.com/docs/references/overview`.
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be in SVG format, not HTML. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `https://clerk.com/docs` and `https://clerk.com/docs/references/overview`.
+1. Add the SDK to `index.mdx` and `references/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 

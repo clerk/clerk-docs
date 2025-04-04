@@ -94,7 +94,7 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 ### Sidenav
 
-The side navigation element rendered on https://clerk.com/docs is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](./docs/manifest.json).
+The side navigation is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](./docs/manifest.json).
 
 The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js.
 

@@ -26,7 +26,7 @@ description: Learn how to sync Clerk data to your app with webhooks.
 
 The recommended way to sync Clerk data to your app is through webhooks.
 
-In this guide, you'll set up a webhook in your app to listen for the `user.created` event, create an endpoint in the Clerk Dashboard, build a handler, and test it locally using ngrok and the Clerk Dashboard.
+In this guide, you'll set up a webhook in your app to listen for the `user.created` event, create an endpoint in the Clerk Dashboard, build a handler for verifying the webhook, and test it locally using ngrok and the Clerk Dashboard.
 
 Clerk offers many events, but three key events include:
 
@@ -49,7 +49,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   1. In the Clerk Dashboard, navigate to the [**Webhooks**](https://dashboard.clerk.com/last-active?path=webhooks) page.
   1. Select **Add Endpoint**.
-  1. In the **Endpoint URL** field, paste the ngrok **Forwarding** URL you saved earlier, followed by `/api/webhooks`. This is the endpoint that Svix uses to send the webhook payload. The full URL should resemble `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
+  1. In the **Endpoint URL** field, paste the ngrok **Forwarding** URL you saved earlier, followed by `/api/webhooks`. This is the endpoint that Clerk uses to send the webhook payload. The full URL should resemble `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
   1. In the **Subscribe to events** section, scroll down and select `user.created`.
   1. Select **Create**. You'll be redirected to your endpoint's settings page. Keep this page open.
 
@@ -66,13 +66,13 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   CLERK_WEBHOOK_SIGNING_SECRET=whsec_123
   ```
 
-  ## Set the webhook route as public in your Middleware
+  ## Make sure the webhook route is public
 
   Incoming webhook events don't contain auth information. They come from an external source and aren't signed in or out, so the route must be public to allow access. If you're using `clerkMiddleware()`, ensure that the `/api/webhooks(.*)` route is set as public. For information on configuring routes, see the [`clerkMiddleware()` guide](/docs/references/nextjs/clerk-middleware).
 
   ## Install `svix`
 
-  Clerk uses [`svix`](https://www.npmjs.com/package/svix) to deliver webhooks, so you'll use it to verify the webhook signature. Run the following command in your terminal to install the package:
+  Clerk uses [`svix`](https://www.npmjs.com/package/svix) to deliver and verify webhooks. Run the following command in your terminal to install the package:
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
     ```bash {{ filename: 'terminal' }}
@@ -92,9 +92,9 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
     ```
   </CodeBlockTabs>
 
-  ## Create the endpoint
+  ## Create a route handler to verify the webhook
 
-  Set up a Route Handler that uses the `verifyWebhook` function to verify the incoming Clerk webhook and process the payload.
+  Set up a Route Handler that uses Clerk's [`verifyWebhook()`](/docs/references/backend/verify-webhook) function to verify the incoming Clerk webhook and process the payload.
 
   For this guide, the payload will be logged to the console. In a real app, you'd use the payload to trigger an action. For example, if listening for the `user.created` event, you might perform a database `create` or `upsert` to add the user's Clerk data to your database's user table.
 
@@ -103,7 +103,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   > [!NOTE]
   > The following Route Handler can be used for any webhook event you choose to listen to. It is not specific to `user.created`.
 
-  <Tabs items={["Next.js", "React Router", "Astro", "Nuxt", "TanStack React Start", "Express", "Fastify"]}>
+  <Tabs items={["Next.js", "Astro", "Express", "Fastify", "Nuxt", "React Router", "TanStack React Start"]}>
     <Tab>
       ```ts {{ filename: 'app/api/webhooks/route.ts' }}
       import { verifyWebhook } from '@clerk/nextjs/webhooks'
@@ -111,31 +111,6 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
       export async function POST(req: Request) {
         try {
           const evt = await verifyWebhook(req)
-
-          // Do something with payload
-          // For this guide, log payload to console
-          const { id } = evt.data
-          const eventType = evt.type
-          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-          console.log('Webhook payload:', evt.data)
-
-          return new Response('Webhook received', { status: 200 })
-        } catch (err) {
-          console.error('Error verifying webhook:', err)
-          return new Response('Error verifying webhook', { status: 400 })
-        }
-      }
-      ```
-    </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'app/routes/webhooks.ts' }}
-      import { verifyWebhook } from '@clerk/react-router/webhooks'
-      import type { Route } from './+types/webhooks'
-
-      export const action = async ({ request }: Route.ActionArgs) => {
-        try {
-          const evt = await verifyWebhook(request)
 
           // Do something with payload
           // For this guide, log payload to console
@@ -175,58 +150,6 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
           return new Response('Error verifying webhook', { status: 400 })
         }
       }
-      ```
-    </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'server/api/webhooks.post.ts' }}
-      import { verifyWebhook } from '@clerk/nuxt/webhooks'
-
-      export default defineEventHandler(async (event) => {
-        try {
-          const evt = await verifyWebhook(event)
-
-          // Do something with payload
-          // For this guide, log payload to console
-          const { id } = evt.data
-          const eventType = evt.type
-          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-          console.log('Webhook payload:', evt.data)
-
-          return 'Webhook received'
-        } catch (err) {
-          console.error('Error verifying webhook:', err)
-          setResponseStatus(event, 400)
-          return 'Error verifying webhook'
-        }
-      })
-      ```
-    </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'pages/api/webhooks.ts' }}
-      import { verifyWebhook } from '@clerk/tanstack-react-start/webhooks'
-      import { createAPIFileRoute } from '@tanstack/react-router'
-
-      export const APIRoute = createAPIFileRoute('/api/webhooks')({
-        POST: async ({ request }) => {
-          try {
-            const evt = await verifyWebhook(request)
-
-            // Do something with payload
-            // For this guide, log payload to console
-            const { id } = evt.data
-            const eventType = evt.type
-            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-            console.log('Webhook payload:', evt.data)
-
-            return new Response('Webhook received', { status: 200 })
-          } catch (err) {
-            console.error('Error verifying webhook:', err)
-            return new Response('Error verifying webhook', { status: 400 })
-          }
-        },
-      })
       ```
     </Tab>
 
@@ -283,6 +206,83 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
       })
       ```
     </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'server/api/webhooks.post.ts' }}
+      import { verifyWebhook } from '@clerk/nuxt/webhooks'
+
+      export default defineEventHandler(async (event) => {
+        try {
+          const evt = await verifyWebhook(event)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return 'Webhook received'
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          setResponseStatus(event, 400)
+          return 'Error verifying webhook'
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'app/routes/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/react-router/webhooks'
+      import type { Route } from './+types/webhooks'
+
+      export const action = async ({ request }: Route.ActionArgs) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'pages/api/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/tanstack-react-start/webhooks'
+      import { createAPIFileRoute } from '@tanstack/react-router'
+
+      export const APIRoute = createAPIFileRoute('/api/webhooks')({
+        POST: async ({ request }) => {
+          try {
+            const evt = await verifyWebhook(request)
+
+            // Do something with payload
+            // For this guide, log payload to console
+            const { id } = evt.data
+            const eventType = evt.type
+            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+            console.log('Webhook payload:', evt.data)
+
+            return new Response('Webhook received', { status: 200 })
+          } catch (err) {
+            console.error('Error verifying webhook:', err)
+            return new Response('Error verifying webhook', { status: 400 })
+          }
+        },
+      })
+      ```
+    </Tab>
   </Tabs>
 
   ## Narrow to a webhook event for type inference
@@ -317,20 +317,20 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   1. In your endpoint's settings page in the Clerk Dashboard, select the **Testing** tab.
   1. In the **Select event** dropdown, select `user.created`.
   1. Select **Send Example**.
-  1. In the **Message Attempts** section, confirm that the event's **Status** is labeled with **Succeeded**.
+  1. In the **Message Attempts** section, confirm that the event's **Status** is labeled with **Succeeded**. In your server's terminal where your app is running, you should see the webhook's payload.
 
   ### Handling failed messages
 
   1. In the **Message Attempts** section, select the event whose **Status** is labeled with **Failed**.
   1. Scroll down to the **Webhook Attempts** section.
   1. Toggle the arrow next to the **Status** column.
-  1. Review the error. Solutions vary by error type. For more information, refer to the [Debug your webhooks](/docs/webhooks/debug-your-webhooks) guide.
+  1. Review the error. Solutions vary by error type. For more information, refer to the [guide on debugging your webhooks](/docs/webhooks/debug-your-webhooks).
 
   ## Trigger the webhook
 
   To trigger the `user.created` event, create a new user in your app.
 
-  You should be able to see the webhook's payload logged to your terminal where your app is running. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-the-webhook).
+  In the terminal where your app is running, you should see the webhook's payload logged. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-the-webhook).
 </Steps>
 
 ## Configure your production instance

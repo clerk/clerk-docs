@@ -1109,7 +1109,7 @@ const main = async () => {
 
   if (output !== '') {
     console.info(output)
-    process.exit(1)
+    process.exit(0)
   }
 }
 

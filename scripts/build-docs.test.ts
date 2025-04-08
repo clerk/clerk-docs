@@ -121,6 +121,7 @@ const baseConfig = {
   partialsPath: '../docs/_partials',
   distPath: '../dist',
   ignorePaths: ['/docs/_partials'],
+  ignoreWarnings: {},
   manifestOptions: {
     wrapDefault: true,
     collapseDefault: false,
@@ -177,6 +178,39 @@ Testing with a simple page.`)
       navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
     }),
   )
+})
+
+test('Warning on missing description in frontmatter', async () => {
+  // Create temp environment with minimal files array
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+      }),
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+---
+
+# Simple Test Page
+
+Testing with a simple page.`,
+    },
+  ])
+
+  const output = await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['nextjs', 'react'],
+    }),
+  )
+
+  expect(output).toContain('warning Frontmatter should have a "description" property')
 })
 
 test('Two Docs, each grouped by a different SDK', async () => {
@@ -2189,5 +2223,420 @@ This document is available for React and Next.js.`,
     expect(landingPage).toBe(
       `<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
+  })
+})
+
+describe('configuration', () => {
+  describe('ignoreWarnings', () => {
+    test('Should ignore certain warnings for a file when set', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[]],
+          }),
+        },
+        {
+          path: './docs/index.mdx',
+          content: `---
+title: Index
+description: This page has a description
+---
+
+# Page exists but not in manifest`,
+        },
+      ])
+
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/index.mdx': ['doc-not-in-manifest'],
+          },
+        }),
+      )
+
+      expect(output).not.toContain(
+        'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
+      )
+      expect(output).toBe('')
+    })
+
+    test('Should ignore multiple warnings for a single file', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[]],
+          }),
+        },
+        {
+          path: './docs/problem-file.mdx',
+          content: `---
+title: Problem File
+description: This page has a description
+---
+
+# Test Page
+
+[Missing Link](/docs/non-existent)
+
+<If sdk="invalid-sdk">
+  This uses an invalid SDK
+</If>
+`,
+        },
+      ])
+
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/problem-file.mdx': ['doc-not-in-manifest', 'link-doc-not-found', 'invalid-sdk-in-if'],
+          },
+        }),
+      )
+
+      expect(output).not.toContain('This doc is not in the manifest.json')
+      expect(output).not.toContain('Doc /docs/non-existent not found')
+      expect(output).not.toContain('sdk "invalid-sdk" in <If /> is not a valid SDK')
+      expect(output).toBe('')
+    })
+
+    test('Should ignore the same warning for multiple files', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[]],
+          }),
+        },
+        {
+          path: './docs/file1.mdx',
+          content: `---
+title: File 1
+description: This page has a description
+---
+
+[Missing Link](/docs/non-existent)`,
+        },
+        {
+          path: './docs/file2.mdx',
+          content: `---
+title: File 2
+description: This page has a description
+---
+
+[Another Missing Link](/docs/another-non-existent)`,
+        },
+      ])
+
+      // Should complete without the ignored warnings
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/file1.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
+            '/docs/file2.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
+          },
+        }),
+      )
+
+      // Check that warnings are suppressed for both files
+      expect(output).not.toContain('Doc /docs/non-existent not found')
+      expect(output).not.toContain('Doc /docs/another-non-existent not found')
+      expect(output).toBe('')
+    })
+
+    test('Should only ignore specified warnings, leaving others intact', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [
+              [
+                {
+                  title: 'Partial Ignore',
+                  href: '/docs/partial-ignore',
+                },
+              ],
+            ],
+          }),
+        },
+        {
+          path: './docs/partial-ignore.mdx',
+          content: `---
+title: Partial Ignore
+description: This page has a description
+---
+
+[Missing Link](/docs/non-existent)
+
+<If sdk="invalid-sdk">
+  This uses an invalid SDK
+</If>
+`,
+        },
+      ])
+
+      // Only ignore the link warning, but leave SDK warning
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/partial-ignore.mdx': ['link-doc-not-found'],
+          },
+        }),
+      )
+
+      expect(output).not.toContain(
+        'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
+      )
+
+      // Link warning should be suppressed
+      expect(output).not.toContain('Doc /docs/non-existent not found')
+
+      // But SDK warning should still appear
+      expect(output).toContain('sdk "invalid-sdk" in <If /> is not a valid SDK')
+    })
+
+    test('Should handle ignoring warnings for component attribute validation', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[]],
+          }),
+        },
+        {
+          path: './docs/component-issues.mdx',
+          content: `---
+title: Component Issues
+description: This page has a description
+---
+
+<Include />
+<Include src="wrong-path" />
+`,
+        },
+      ])
+
+      // Ignore component attribute warnings
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/component-issues.mdx': [
+              'doc-not-in-manifest',
+              'component-missing-attribute',
+              'include-src-not-partials',
+            ],
+          },
+        }),
+      )
+
+      // Component warnings should be suppressed
+      expect(output).not.toContain('<Include /> component has no "src" attribute')
+      expect(output).not.toContain('<Include /> prop "src" must start with "_partials/"')
+      expect(output).toBe('')
+    })
+
+    test('Should ignore frontmatter description warning', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Missing Description', href: '/docs/missing-description' }]],
+          }),
+        },
+        {
+          path: './docs/missing-description.mdx',
+          content: `---
+title: Missing Description
+---
+
+# This page is missing a description
+`,
+        },
+      ])
+
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/missing-description.mdx': ['frontmatter-missing-description'],
+          },
+        }),
+      )
+
+      expect(output).not.toContain('Frontmatter should have a "description" property')
+      expect(output).toBe('')
+    })
+
+    test('Should ignore link hash warnings', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [
+              [
+                { title: 'Source Page', href: '/docs/source-page' },
+                { title: 'Target Page', href: '/docs/target-page' },
+              ],
+            ],
+          }),
+        },
+        {
+          path: './docs/source-page.mdx',
+          content: `---
+title: Source Page
+description: A page with links to another page
+---
+
+[Link with invalid hash](/docs/target-page#non-existent-section)
+`,
+        },
+        {
+          path: './docs/target-page.mdx',
+          content: `---
+title: Target Page
+description: The page being linked to
+---
+
+# Target Page
+`,
+        },
+      ])
+
+      // Ignore hash warnings
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/source-page.mdx': ['link-hash-not-found'],
+          },
+        }),
+      )
+
+      // Hash warning should be suppressed
+      expect(output).not.toContain('Hash "non-existent-section" not found in /docs/target-page')
+      expect(output).toBe('')
+    })
+
+    test('Should allow non-fatal errors to be ignored for specific paths', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [
+              [
+                {
+                  title: 'SDK Group',
+                  sdk: ['react'],
+                  items: [
+                    [
+                      {
+                        title: 'SDK Doc',
+                        href: '/docs/sdk-doc',
+                        sdk: ['react', 'nodejs'], // nodejs not in parent
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          }),
+        },
+        {
+          path: './docs/sdk-doc.mdx',
+          content: `---
+title: SDK Doc
+sdk: react, nodejs
+description: This page has a description
+---
+
+# SDK Document
+`,
+        },
+      ])
+
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react', 'nodejs'],
+          ignoreWarnings: {
+            '/docs/sdk-doc.mdx': ['doc-sdk-filtered-by-parent'],
+          },
+        }),
+      )
+
+      expect(output).toBe('')
+    })
+
+    test('Should respect ignoreWarnings in partials validation', async () => {
+      const { tempDir } = await createTempFiles([
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+          }),
+        },
+        {
+          path: './docs/_partials/test-partial.mdx',
+          content: `[Missing Link](/docs/non-existent)`,
+        },
+        {
+          path: './docs/test-page.mdx',
+          content: `---
+title: Test Page
+description: Test page with partial
+---
+
+<Include src="_partials/test-partial" />
+
+# Test Page`,
+        },
+      ])
+
+      // Ignore link warnings in partials
+      const output = await build(
+        createBlankStore(),
+        createConfig({
+          ...baseConfig,
+          basePath: tempDir,
+          validSdks: ['react'],
+          ignoreWarnings: {
+            '/docs/_partials/test-partial.mdx': ['link-doc-not-found'],
+          },
+        }),
+      )
+
+      // Link warning in partial should be suppressed
+      expect(output).not.toContain('Doc /docs/non-existent not found')
+      expect(output).toBe('')
+    })
   })
 })

@@ -34,14 +34,120 @@ import { toString } from 'mdast-util-to-string'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
 import { z } from 'zod'
-import { fromError } from 'zod-validation-error'
-import { Node } from 'unist'
+import { fromError, type ValidationError } from 'zod-validation-error'
+import { Node, Position } from 'unist'
 import watcher from '@parcel/watcher'
+
+const errorMessages = {
+  // Manifest errors
+  'manifest-parse-error': (error: ValidationError): string => `Failed to parse manifest: ${error}`,
+
+  // Component errors
+  'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,
+  'component-attributes-not-array': (componentName: string): string =>
+    `<${componentName} /> node attributes is not an array (this is a bug with the build script, please report)`,
+  'component-missing-attribute': (componentName: string, propName: string): string =>
+    `<${componentName} /> component has no "${propName}" attribute`,
+  'component-attribute-no-value': (componentName: string, propName: string): string =>
+    `<${componentName} /> attribute "${propName}" has no value (this is a bug with the build script, please report)`,
+  'component-attribute-unsupported-type': (componentName: string, propName: string): string =>
+    `<${componentName} /> attribute "${propName}" has an unsupported value type`,
+
+  // SDK errors
+  'invalid-sdks-in-if': (invalidSDKs: string[]): string =>
+    `sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`,
+  'invalid-sdk-in-if': (sdk: string): string => `sdk "${sdk}" in <If /> is not a valid SDK`,
+  'invalid-sdk-in-frontmatter': (invalidSDKs: string[], validSdks: SDK[]): string =>
+    `Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(validSdks)}`,
+  'if-component-sdk-not-in-frontmatter': (sdk: SDK, docSdk: SDK[]): string =>
+    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
+  'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
+    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+  'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
+    `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
+  'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>
+    `Group "${title}" is attempting to use ${JSON.stringify(groupSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
+
+  // Document structure errors
+  'doc-not-in-manifest': (): string =>
+    'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
+  'invalid-href-encoding': (href: string): string =>
+    `Href "${href}" contains characters that will be encoded by the browser, please remove them`,
+  'frontmatter-missing-title': (): string => 'Frontmatter must have a "title" property',
+  'frontmatter-missing-description': (): string => 'Frontmatter should have a "description" property',
+  'frontmatter-parse-failed': (href: string): string => `Frontmatter parsing failed for ${href}`,
+  'doc-not-found': (title: string, href: string): string =>
+    `Doc "${title}" in manifest.json not found in the docs folder at ${href}.mdx`,
+  'sdk-path-conflict': (href: string, path: string): string =>
+    `Doc "${href}" is attempting to write out a doc to ${path} but the first part of the path is a valid SDK, this causes a file path conflict.`,
+
+  // Include component errors
+  'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
+  'partial-not-found': (src: string): string => `Partial /docs/${src}.mdx not found`,
+  'partials-inside-partials': (): string =>
+    'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
+
+  // Link validation errors
+  'link-doc-not-found': (url: string): string => `Doc ${url} not found`,
+  'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
+
+  // File reading errors
+  'file-read-error': (filePath: string): string => `file ${filePath} doesn't exist`,
+  'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
+  'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
+  'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+} as const
+
+type WarningCode = keyof typeof errorMessages
+
+// Helper function to check if a warning should be ignored
+const shouldIgnoreWarning = (config: BuildConfig, filePath: string, warningCode: WarningCode): boolean => {
+  if (!config.ignoreWarnings) {
+    return false
+  }
+
+  const ignoreList = config.ignoreWarnings[filePath]
+  if (!ignoreList) {
+    return false
+  }
+
+  return ignoreList.includes(warningCode)
+}
+
+const safeMessage = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
+  config: BuildConfig,
+  vfile: VFile,
+  filePath: string,
+  warningCode: TCode,
+  args: TArgs,
+  position?: Position,
+) => {
+  if (!shouldIgnoreWarning(config, filePath, warningCode)) {
+    // @ts-expect-error - TypeScript has trouble with spreading args into the function
+    const message = errorMessages[warningCode](...args)
+    vfile.message(message, position)
+  }
+}
+
+const safeFail = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
+  config: BuildConfig,
+  vfile: VFile,
+  filePath: string,
+  warningCode: TCode,
+  args: TArgs,
+  position?: Position,
+) => {
+  if (!shouldIgnoreWarning(config, filePath, warningCode)) {
+    // @ts-expect-error - TypeScript has trouble with spreading args into the function
+    const message = errorMessages[warningCode](...args)
+    vfile.fail(message, position)
+  }
+}
 
 const VALID_SDKS = [
   'nextjs',
   'react',
-  'javascript-frontend',
+  'js-frontend',
   'chrome-extension',
   'expo',
   'ios',
@@ -50,14 +156,14 @@ const VALID_SDKS = [
   'fastify',
   'react-router',
   'remix',
-  'tanstack-start',
+  'tanstack-react-start',
   'go',
   'astro',
   'nuxt',
   'vue',
   'ruby',
   'python',
-  'javascript-backend',
+  'js-backend',
   'sdk-development',
   'community-sdk',
 ] as const
@@ -187,8 +293,6 @@ const createManifestSchema = (config: BuildConfig) => {
   }
 }
 
-const pleaseReport = '(this is a bug with the build script, please report)'
-
 const isValidSdk =
   (config: BuildConfig) =>
   (sdk: string): sdk is SDK => {
@@ -211,7 +315,7 @@ const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
     return manifest.data
   }
 
-  throw new Error(`Failed to parse manifest: ${fromError(manifest.error)}`)
+  throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
 }
 
 const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
@@ -221,7 +325,7 @@ const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
     const fileContent = await fs.readFile(filePath, { encoding: 'utf-8' })
     return [null, fileContent] as const
   } catch (error) {
-    return [new Error(`file ${filePath} doesn't exist`, { cause: error }), null] as const
+    return [new Error(errorMessages['file-read-error'](filePath), { cause: error }), null] as const
   }
 }
 
@@ -249,7 +353,7 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
   const [error, content] = await readFile(fullPath)
 
   if (error) {
-    throw new Error(`Failed to read in ${fullPath} from partials file`, { cause: error })
+    throw new Error(errorMessages['partial-read-error'](fullPath), { cause: error })
   }
 
   let partialNode: Node | null = null
@@ -266,7 +370,7 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
           'name' in node &&
           node.name === 'Include',
         (node) => {
-          vfile.fail(`Partials inside of partials is not yet supported, ${pleaseReport}`, node.position)
+          safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
         },
       )
     })
@@ -283,7 +387,7 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
   }
 
   if (partialNode === null) {
-    throw new Error(`Failed to parse the content of ${filePath}`)
+    throw new Error(errorMessages['partial-parse-error'](filePath))
   }
 
   return {
@@ -456,11 +560,13 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
 }
 
 const extractComponentPropValueFromNode = (
+  config: BuildConfig,
   node: Node,
   vfile: VFile | undefined,
   componentName: string,
   propName: string,
   required = true,
+  filePath: string,
 ): string | undefined => {
   // Check if it's an MDX component
   if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') {
@@ -473,12 +579,16 @@ const extractComponentPropValueFromNode = (
 
   // Check for attributes
   if (!('attributes' in node)) {
-    vfile?.message(`<${componentName} /> component has no props`, node.position)
+    if (vfile) {
+      safeMessage(config, vfile, filePath, 'component-no-props', [componentName], node.position)
+    }
     return undefined
   }
 
   if (!Array.isArray(node.attributes)) {
-    vfile?.message(`<${componentName} /> node attributes is not an array ${pleaseReport}`, node.position)
+    if (vfile) {
+      safeMessage(config, vfile, filePath, 'component-attributes-not-array', [componentName], node.position)
+    }
     return undefined
   }
 
@@ -486,8 +596,8 @@ const extractComponentPropValueFromNode = (
   const propAttribute = node.attributes.find((attribute) => attribute.name === propName)
 
   if (propAttribute === undefined) {
-    if (required === true) {
-      vfile?.message(`<${componentName} /> component has no "${propName}" attribute`, node.position)
+    if (required === true && vfile) {
+      safeMessage(config, vfile, filePath, 'component-missing-attribute', [componentName, propName], node.position)
     }
     return undefined
   }
@@ -495,8 +605,8 @@ const extractComponentPropValueFromNode = (
   const value = propAttribute.value
 
   if (value === undefined) {
-    if (required === true) {
-      vfile?.message(`<${componentName} /> attribute "${propName}" has no value ${pleaseReport}`, node.position)
+    if (required === true && vfile) {
+      safeMessage(config, vfile, filePath, 'component-attribute-no-value', [componentName, propName], node.position)
     }
     return undefined
   }
@@ -508,30 +618,44 @@ const extractComponentPropValueFromNode = (
     return value.value
   }
 
-  vfile?.message(`<${componentName} /> attribute "${propName}" has an unsupported value type`, node.position)
+  if (vfile) {
+    safeMessage(
+      config,
+      vfile,
+      filePath,
+      'component-attribute-unsupported-type',
+      [componentName, propName],
+      node.position,
+    )
+  }
   return undefined
 }
 
-const extractSDKsFromIfProp = (config: BuildConfig) => (node: Node, vfile: VFile | undefined, sdkProp: string) => {
-  const isValidItem = isValidSdk(config)
-  const isValidItems = isValidSdks(config)
+const extractSDKsFromIfProp =
+  (config: BuildConfig) => (node: Node, vfile: VFile | undefined, sdkProp: string, filePath: string) => {
+    const isValidItem = isValidSdk(config)
+    const isValidItems = isValidSdks(config)
 
-  if (sdkProp.includes('", "') || sdkProp.includes("', '") || sdkProp.includes('["') || sdkProp.includes('"]')) {
-    const sdks = JSON.parse(sdkProp.replaceAll("'", '"')) as string[]
-    if (isValidItems(sdks)) {
-      return sdks
+    if (sdkProp.includes('", "') || sdkProp.includes("', '") || sdkProp.includes('["') || sdkProp.includes('"]')) {
+      const sdks = JSON.parse(sdkProp.replaceAll("'", '"')) as string[]
+      if (isValidItems(sdks)) {
+        return sdks
+      } else {
+        const invalidSDKs = sdks.filter((sdk) => !isValidItem(sdk))
+        if (vfile) {
+          safeMessage(config, vfile, filePath, 'invalid-sdks-in-if', [invalidSDKs], node.position)
+        }
+      }
     } else {
-      const invalidSDKs = sdks.filter((sdk) => !isValidItem(sdk))
-      vfile?.message(`sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`, node.position)
-    }
-  } else {
-    if (isValidItem(sdkProp)) {
-      return [sdkProp]
-    } else {
-      vfile?.message(`sdk "${sdkProp}" in <If /> is not a valid SDK`, node.position)
+      if (isValidItem(sdkProp)) {
+        return [sdkProp]
+      } else {
+        if (vfile) {
+          safeMessage(config, vfile, filePath, 'invalid-sdk-in-if', [sdkProp], node.position)
+        }
+      }
     }
   }
-}
 
 const parseInMarkdownFile =
   (config: BuildConfig) =>
@@ -540,7 +664,7 @@ const parseInMarkdownFile =
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
     if (error !== null) {
-      throw new Error(`Attempting to read in ${href}.mdx failed, with error message: ${error.message}`, {
+      throw new Error(errorMessages['markdown-read-error'](href), {
         cause: error,
       })
     }
@@ -555,18 +679,17 @@ const parseInMarkdownFile =
 
     const slugify = slugifyWithCounter()
     const headingsHashs: Array<string> = []
+    const filePath = `${href}.mdx`
 
     const vfile = await markdownProcessor()
       // Some validation
       .use(() => (tree, vfile) => {
         if (inManifest === false) {
-          vfile.message(
-            'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
-          )
+          safeMessage(config, vfile, filePath, 'doc-not-in-manifest', [])
         }
 
         if (href !== encodeURI(href)) {
-          vfile.fail(`Href "${href}" contains characters that will be encoded by the browser, please remove them`)
+          safeFail(config, vfile, filePath, 'invalid-href-encoding', [href])
         }
       })
       // Pull out the frontmatter
@@ -584,20 +707,24 @@ const parseInMarkdownFile =
 
             if (frontmatterSDKs !== undefined && isValidSdks(config)(frontmatterSDKs) === false) {
               const invalidSDKs = frontmatterSDKs.filter((sdk) => isValidSdk(config)(sdk) === false)
-              vfile.fail(
-                `Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(config.validSdks)}`,
+              safeFail(
+                config,
+                vfile,
+                filePath,
+                'invalid-sdk-in-frontmatter',
+                [invalidSDKs, config.validSdks as SDK[]],
                 node.position,
               )
               return
             }
 
             if (frontmatterYaml.title === undefined) {
-              vfile.fail(`Frontmatter must have a "title" property`, node.position)
+              safeFail(config, vfile, filePath, 'frontmatter-missing-title', [], node.position)
               return
             }
 
             if (frontmatterYaml.description === undefined) {
-              vfile.message(`Frontmatter should have a "description" property`, node.position)
+              safeMessage(config, vfile, filePath, 'frontmatter-missing-description', [], node.position)
             }
 
             frontmatter = {
@@ -609,19 +736,19 @@ const parseInMarkdownFile =
         )
 
         if (frontmatter === undefined) {
-          vfile.fail(`Frontmatter parsing failed for ${href}`)
+          safeFail(config, vfile, filePath, 'frontmatter-parse-failed', [href])
           return
         }
       })
       // Validate the <Include />
       .use(() => (tree, vfile) => {
         return mdastVisit(tree, (node) => {
-          const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
+          const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
 
           if (partialSrc === undefined) return
 
           if (partialSrc.startsWith('_partials/') === false) {
-            vfile.message(`<Include /> prop "src" must start with "_partials/"`, node.position)
+            safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
             return
           }
 
@@ -630,7 +757,7 @@ const parseInMarkdownFile =
           )
 
           if (partial === undefined) {
-            vfile.message(`Partial /docs/${removeMdxSuffix(partialSrc)}.mdx not found`, node.position)
+            safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
             return
           }
         })
@@ -682,7 +809,7 @@ const parseInMarkdownFile =
       })
 
     if (frontmatter === undefined) {
-      throw new Error(`Frontmatter parsing failed for ${href}`)
+      throw new Error(errorMessages['frontmatter-parse-failed'](href))
     }
 
     return {
@@ -777,10 +904,14 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       const doc = docsMap.get(item.href)
 
       if (doc === undefined) {
-        throw new Error(`Doc "${item.title}" in manifest.json not found in the docs folder at ${item.href}.mdx`)
+        const filePath = `${item.href}.mdx`
+        if (!shouldIgnoreWarning(config, filePath, 'doc-not-found')) {
+          throw new Error(errorMessages['doc-not-found'](item.title, item.href))
+        }
+        return item
       }
 
-      // This is the sdk of the doc as defined in the docs frontmatter
+      // This is the sdk of the doc
       const docSDK = doc.sdk
 
       // This is the sdk of the parent group
@@ -791,9 +922,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
       if (docSDK !== undefined && parentSDK !== undefined) {
         if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          throw new Error(
-            `Doc "${item.title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
-          )
+          const filePath = `${item.href}.mdx`
+          if (!shouldIgnoreWarning(config, filePath, 'doc-sdk-filtered-by-parent')) {
+            throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
+          }
         }
       }
 
@@ -812,7 +944,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         return Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
       })()
 
-      // This is the sdk of the group as defined in the manifest.json
+      // This is the sdk of the group
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
@@ -820,9 +952,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
       if (groupSDK !== undefined && parentSDK !== undefined) {
         if (groupSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          throw new Error(
-            `Group "${details.title}" is attempting to use ${JSON.stringify(groupSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
-          )
+          const filePath = `/docs/groups/${details.title}.mdx`
+          if (!shouldIgnoreWarning(config, filePath, 'group-sdk-filtered-by-parent')) {
+            throw new Error(errorMessages['group-sdk-filtered-by-parent'](details.title, groupSDK, parentSDK))
+          }
         }
       }
 
@@ -890,6 +1023,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const partialsVFiles = await Promise.all(
     partials.map(async (partial) => {
+      const partialPath = `docs/_partials/${partial.path}`
       return await markdownProcessor()
         // validate links in partials to docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree, vfile) => {
@@ -911,7 +1045,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
-              vfile.message(`Doc ${url} not found`, node.position)
+              safeMessage(config, vfile, partialPath, 'link-doc-not-found', [url], node.position)
               return node
             }
 
@@ -919,7 +1053,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               const hasHash = doc.headingsHashs.includes(hash)
 
               if (hasHash === false) {
-                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+                safeMessage(config, vfile, partialPath, 'link-hash-not-found', [hash, url], node.position)
               }
             }
 
@@ -953,11 +1087,12 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
+      const filePath = `${doc.href}.mdx`
       const vfile = await markdownProcessor()
         // embed the partials into the doc
         .use(() => (tree, vfile) => {
           return mdastMap(tree, (node) => {
-            const partialSrc = extractComponentPropValueFromNode(node, vfile, 'Include', 'src')
+            const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
 
             if (partialSrc === undefined) return node
 
@@ -990,7 +1125,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
-              vfile.message(`Doc ${url} not found`, node.position)
+              safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
               return node
             }
 
@@ -998,7 +1133,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               const hasHash = doc.headingsHashs.includes(hash)
 
               if (hasHash === false) {
-                vfile.message(`Hash "${hash}" not found in ${url}`, node.position)
+                safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
               }
             }
 
@@ -1028,11 +1163,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         // Validate the <If /> components
         .use(() => (tree, vfile) => {
           mdastVisit(tree, (node) => {
-            const sdk = extractComponentPropValueFromNode(node, vfile, 'If', 'sdk', false)
+            const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, filePath)
 
             if (sdk === undefined) return
 
-            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk)
+            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, filePath)
 
             if (sdksFilter === undefined) return
 
@@ -1050,8 +1185,12 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 const available = doc.sdk.includes(sdk)
 
                 if (available === false) {
-                  vfile.fail(
-                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${doc.sdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
+                  safeFail(
+                    config,
+                    vfile,
+                    filePath,
+                    'if-component-sdk-not-in-frontmatter',
+                    [sdk, doc.sdk],
                     node.position,
                   )
                 }
@@ -1063,10 +1202,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 const available = availableSDKs.includes(sdk)
 
                 if (available === false) {
-                  vfile.fail(
-                    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${doc.href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
-                    node.position,
-                  )
+                  safeFail(config, vfile, filePath, 'if-component-sdk-not-in-manifest', [sdk, doc.href], node.position)
                 }
               })()
             })
@@ -1077,9 +1213,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       const distFilePath = `${doc.href.replace('/docs/', '')}.mdx`
 
       if (isValidSdk(config)(distFilePath.split('/')[0])) {
-        throw new Error(
-          `Doc "${doc.href}" is attempting to write out a doc to ${distFilePath} but the first part of the path is a valid SDK, this causes a file path conflict.`,
-        )
+        if (!shouldIgnoreWarning(config, filePath, 'sdk-path-conflict')) {
+          throw new Error(errorMessages['sdk-path-conflict'](doc.href, distFilePath))
+        }
       }
 
       if (doc.sdk !== undefined) {
@@ -1109,6 +1245,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 
+          const filePath = `${doc.href}.mdx`
           const vfile = await markdownProcessor()
             // filter out content that is only available to other sdk's
             .use(() => (tree, vfile) => {
@@ -1116,12 +1253,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 // We aren't passing the vfile here as the as the warning
                 // should have already been reported above when we initially
                 // parsed the file
-
-                const sdk = extractComponentPropValueFromNode(node, undefined, 'If', 'sdk')
+                const sdk = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, filePath)
 
                 if (sdk === undefined) return true
 
-                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk)
+                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, filePath)
 
                 if (sdksFilter === undefined) return true
 
@@ -1137,11 +1273,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               return mdastMap(tree, (node) => {
                 if (node.type !== 'link') return node
                 if (!('url' in node)) {
-                  vfile.fail(`Link node does not have a url property ${pleaseReport}`, node.position)
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url property missing'], node.position)
                   return node
                 }
                 if (typeof node.url !== 'string') {
-                  vfile.fail(`Link node url must be a string ${pleaseReport}`, node.position)
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url not a string'], node.position)
                   return node
                 }
                 if (!node.url.startsWith('/docs/')) {
@@ -1156,7 +1292,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 const doc = docsMap.get(url)
 
                 if (doc === undefined) {
-                  vfile.fail(`(SDK Specific Docs) Doc ${url} not found`, node.position)
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
                   return node
                 }
 
@@ -1247,6 +1383,7 @@ type BuildConfigOptions = {
   partialsPath: string
   distPath: string
   ignorePaths: string[]
+  ignoreWarnings?: Record<string, string[]>
   manifestOptions: {
     wrapDefault: boolean
     collapseDefault: boolean
@@ -1279,6 +1416,7 @@ export function createConfig(config: BuildConfigOptions) {
     distPath: resolve(config.distPath),
 
     ignorePaths: config.ignorePaths,
+    ignoreWarnings: config.ignoreWarnings || {},
     manifestOptions: config.manifestOptions ?? {
       wrapDefault: true,
       collapseDefault: false,
@@ -1308,6 +1446,9 @@ const main = async () => {
       '/changelog/2024-04-19',
       '/docs/_partials',
     ],
+    ignoreWarnings: {
+      '/docs/index.mdx': ['doc-not-in-manifest'],
+    },
     validSdks: VALID_SDKS,
     manifestOptions: {
       wrapDefault: true,

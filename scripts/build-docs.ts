@@ -1096,6 +1096,12 @@ const main = async () => {
     ],
     ignoreWarnings: {
       '/docs/index.mdx': ['doc-not-in-manifest'],
+      '/docs/guides/overview.mdx': ['doc-not-in-manifest'],
+      '/docs/quickstarts/overview.mdx': ['doc-not-in-manifest'],
+      '/docs/references/overview.mdx': ['doc-not-in-manifest'],
+      '/docs/maintenance-mode.mdx': ['doc-not-in-manifest'],
+      '/docs/deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
+      '/docs/references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
     },
     validSdks: VALID_SDKS,
     manifestOptions: {
@@ -1109,7 +1115,7 @@ const main = async () => {
 
   if (output !== '') {
     console.info(output)
-    process.exit(0)
+    process.exit(1)
   }
 }
 

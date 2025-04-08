@@ -682,7 +682,6 @@ const parseInMarkdownFile =
     const filePath = `${href}.mdx`
 
     const vfile = await markdownProcessor()
-      // Some validation
       .use(() => (tree, vfile) => {
         if (inManifest === false) {
           safeMessage(config, vfile, filePath, 'doc-not-in-manifest', [])
@@ -692,7 +691,6 @@ const parseInMarkdownFile =
           safeFail(config, vfile, filePath, 'invalid-href-encoding', [href])
         }
       })
-      // Pull out the frontmatter
       .use(() => (tree, vfile) => {
         mdastVisit(
           tree,
@@ -1074,6 +1072,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                     }),
                   }),
                 ],
+                children: node.children,
               })
             }
 
@@ -1154,6 +1153,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                     }),
                   }),
                 ],
+                children: node.children,
               })
             }
 

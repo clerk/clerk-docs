@@ -991,7 +991,7 @@ Content for React users.`,
       createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'javascript-frontend'],
+        validSdks: ['react', 'nextjs', 'js-frontend'],
       }),
     )
 
@@ -1056,9 +1056,9 @@ Content for React users.`,
     expect(await readFile(pathJoin('./dist/react/deeply-nested-react.mdx'))).toContain('Content for React users.')
     expect(await readFile(pathJoin('./dist/react/deeply-nested-react.mdx'))).not.toContain('Content for Next.js users.')
 
-    // Page should NOT be available in javascript-frontend (filtered out by manifest)
-    expect(await fileExists(pathJoin('./dist/javascript-frontend/deeply-nested-nextjs.mdx'))).toBe(false)
-    expect(await fileExists(pathJoin('./dist/javascript-frontend/deeply-nested-react.mdx'))).toBe(false)
+    // Page should NOT be available in js-frontend (filtered out by manifest)
+    expect(await fileExists(pathJoin('./dist/js-frontend/deeply-nested-nextjs.mdx'))).toBe(false)
+    expect(await fileExists(pathJoin('./dist/js-frontend/deeply-nested-react.mdx'))).toBe(false)
   })
 
   test('should correctly process multiple <If /> blocks with different SDKs in a single document', async () => {
@@ -1080,7 +1080,7 @@ Content for React users.`,
         path: './docs/multiple-sdk-blocks.mdx',
         content: `---
 title: Multiple SDK Blocks
-sdk: react, nextjs, javascript-frontend
+sdk: react, nextjs, js-frontend
 ---
 
 # Multiple SDK Blocks
@@ -1093,7 +1093,7 @@ sdk: react, nextjs, javascript-frontend
   This content is for Next.js users only.
 </If>
 
-<If sdk="javascript-frontend">
+<If sdk="js-frontend">
   This content is for JavaScript Frontend users only.
 </If>
 
@@ -1106,7 +1106,7 @@ Common content for all SDKs.`,
       createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'javascript-frontend'],
+        validSdks: ['react', 'nextjs', 'js-frontend'],
       }),
     )
 
@@ -1127,8 +1127,8 @@ Common content for all SDKs.`,
     expect(nextjsContent).toContain('Common content for all SDKs.')
 
     // Check JavaScript Frontend version
-    expect(await fileExists(pathJoin('./dist/javascript-frontend/multiple-sdk-blocks.mdx'))).toBe(true)
-    const jsContent = await readFile(pathJoin('./dist/javascript-frontend/multiple-sdk-blocks.mdx'))
+    expect(await fileExists(pathJoin('./dist/js-frontend/multiple-sdk-blocks.mdx'))).toBe(true)
+    const jsContent = await readFile(pathJoin('./dist/js-frontend/multiple-sdk-blocks.mdx'))
     expect(jsContent).not.toContain('This content is for React users only.')
     expect(jsContent).not.toContain('This content is for Next.js users only.')
     expect(jsContent).toContain('This content is for JavaScript Frontend users only.')
@@ -1211,7 +1211,7 @@ Common content for all SDKs.`,
         path: './docs/multiple-sdk-test.mdx',
         content: `---
 title: Multiple SDK Test
-sdk: react, nextjs, javascript-frontend
+sdk: react, nextjs, js-frontend
 ---
 
 # Multiple SDK Test
@@ -1220,7 +1220,7 @@ sdk: react, nextjs, javascript-frontend
   This content is for React and Next.js users.
 </If>
 
-<If sdk={["javascript-frontend"]}>
+<If sdk={["js-frontend"]}>
   This content is for JavaScript Frontend users.
 </If>
 
@@ -1233,7 +1233,7 @@ Common content for all SDKs.`,
       createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'nextjs', 'javascript-frontend'],
+        validSdks: ['react', 'nextjs', 'js-frontend'],
       }),
     )
 
@@ -1248,7 +1248,7 @@ Common content for all SDKs.`,
     expect(nextjsOutput).not.toContain('This content is for JavaScript Frontend users.')
 
     // Check JavaScript Frontend output has JavaScript Frontend content but not React/Next.js content
-    const jsOutput = await readFile(pathJoin('./dist/javascript-frontend/multiple-sdk-test.mdx'))
+    const jsOutput = await readFile(pathJoin('./dist/js-frontend/multiple-sdk-test.mdx'))
     expect(jsOutput).toContain('This content is for JavaScript Frontend users.')
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
   })

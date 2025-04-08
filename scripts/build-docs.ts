@@ -374,6 +374,21 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
         },
       )
     })
+    // Process links in partials and remove the .mdx suffix
+    .use(() => (tree, vfile) => {
+      return mdastMap(tree, (node) => {
+        if (node.type !== 'link') return node
+        if (!('url' in node)) return node
+        if (typeof node.url !== 'string') return node
+        if (!node.url.startsWith('/docs/')) return node
+        if (!('children' in node)) return node
+
+        // We are overwriting the url with the mdx suffix removed
+        node.url = removeMdxSuffix(node.url)
+
+        return node
+      })
+    })
     .process({
       path: `docs/_partials/${filePath}`,
       value: content,
@@ -1021,7 +1036,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const partialsVFiles = await Promise.all(
     partials.map(async (partial) => {
-      const partialPath = `docs/_partials/${partial.path}`
+      const partialPath = `/docs/_partials/${partial.path}`
       return await markdownProcessor()
         // validate links in partials to docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree, vfile) => {
@@ -1088,22 +1103,6 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
     docsArray.map(async (doc) => {
       const filePath = `${doc.href}.mdx`
       const vfile = await markdownProcessor()
-        // embed the partials into the doc
-        .use(() => (tree, vfile) => {
-          return mdastMap(tree, (node) => {
-            const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
-
-            if (partialSrc === undefined) return node
-
-            const partial = partials.find(
-              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
-            )
-
-            if (partial === undefined) return node // a warning will have already been reported
-
-            return Object.assign(node, partial.node)
-          })
-        })
         // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree: Node, vfile: VFile) => {
           return mdastMap(tree, (node) => {
@@ -1206,6 +1205,22 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 }
               })()
             })
+          })
+        })
+        // embed the partials into the doc
+        .use(() => (tree, vfile) => {
+          return mdastMap(tree, (node) => {
+            const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+
+            if (partialSrc === undefined) return node
+
+            const partial = partials.find(
+              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
+            )
+
+            if (partial === undefined) return node // a warning will have already been reported
+
+            return Object.assign(node, partial.node)
           })
         })
         .process(doc.vfile)

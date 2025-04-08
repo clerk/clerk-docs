@@ -311,11 +311,11 @@ This server -> browser -> FAPI request includes the client token, so FAPI is abl
 >
 > ---
 >
-> Imagine this scenario: you make a request to your frontend and you have an expired session token. You need a new valid session token.
+> Imagine this scenario: you open your server-rendered application after having closed the tab for a few minutes, and now you have an expired session token. For the server to render your app correctly, you need a new valid session token.
 >
-> Normally, to refresh your session token, you need to send your _valid_ session token to clerk, which it will verify, then send you a new valid one. This is _secure by default_, because anyone who has a valid session token is authenticated as you, as we have learned in the rest of this guide.
+> Normally, to refresh your session token, you make a request to FAPI with the client cookie, which it will validate and then send you a new session token. This is _secure by default_, because anyone who has a valid client token is authenticated as you and signed in, as we have learned in the rest of this guide.
 >
-> But in this scenario, you have only an invalid (expired) session token, so the question becomes this: how do you get a new token without making it such that anyone with an invalid token can produce a new valid token, which would be a security problem?
+> But in this scenario, you have only an invalid (expired) session token, and since your app is rendering on the server, you cannot send a request with the client token since it's stored in a cookie in the browser. So the question becomes this: how do we get a new session token?
 >
 > - You could send the expired session token, but then any attacker with an expired session token would be able to mint a new one and hijack your session.
 > - You could verify that the request only comes from your application's domain, but then any attacker could just send an `http` request with a spoofed domain value and get a token on your behalf.
@@ -324,16 +324,16 @@ This server -> browser -> FAPI request includes the client token, so FAPI is abl
 >
 > However, if your app is rendered on the server, your hands are tied. If your app's server makes an API request to FAPI, it will not be able to check the **client token**, because the **client token** is stored in a cookie and **cookies live in the browser**.
 >
-> This is where handshake comes in.
+> This is where handshake comes in - here's how it works:
 >
-> 1. Request is made to an application that uses Clerk.
-> 1. Clerk SDK determines the authentication state of the request (`signed-in`, `signed-out`, or `handshake`).
-> 1. If the authentication state is `handshake` (i.e. unknown), Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
+> 1. A request is made to an application that uses Clerk on the server.
+> 1. Clerk SDK determines the authentication state of the request: `signed-in` (valid session token), `signed-out` (no session token), or `handshake` (expired session token).
+> 1. If the authentication state is `handshake`, meaning we know the session token is expired but can't be sure if the user is signed in or out, Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
 > 1. The handshake endpoint gets information about the current session and returns a handshake payload. The encoded handshake payload contains a list of `Set-Cookie` header directives to be passed along with the final response.
->    - If the session is active, a fresh `__session` cookie is returned.
+>    - If the session is active, a new, valid `__session` cookie is returned.
 >    - If the session is inactive, the `__session` cookie is wiped and the request will be treated as signed out.
 > 1. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development) or as a cookie (production).
-> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response.
+> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response by the Clerk SDK.
 > 1. If an updated `__session` cookie is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
 > 1. If an updated `__session` cookie is not returned, the request is treated as signed out.
 >

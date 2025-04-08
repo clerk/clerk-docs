@@ -1115,7 +1115,7 @@ const main = async () => {
 
   if (output !== '') {
     console.info(output)
-    process.exit(0)
+    process.exit(1)
   }
 }
 

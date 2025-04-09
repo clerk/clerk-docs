@@ -95,6 +95,7 @@ const baseConfig = {
   docsPath: '../docs',
   manifestPath: '../docs/manifest.json',
   partialsPath: '../docs/_partials',
+  typedocPath: '../typedoc',
   ignorePaths: ['/docs/_partials'],
   ignoreWarnings: {},
   manifestOptions: {

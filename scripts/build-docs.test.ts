@@ -1361,3 +1361,290 @@ description: Test page with partial
     })
   })
 })
+
+describe('Typedoc Validation', () => {
+  test('should validate typedoc component with valid src', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API
+
+\`\`\`typescript
+interface Client {
+  signIn(): Promise<void>;
+  signOut(): Promise<void>;
+}
+\`\`\`
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should succeed without warnings
+    expect(output).toBe('')
+  })
+
+  test('should warn when typedoc src does not exist', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/non-existent" />
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API
+
+\`\`\`typescript
+interface Client {
+  signIn(): Promise<void>;
+  signOut(): Promise<void>;
+}
+\`\`\`
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should warn about non-existent typedoc
+    expect(output).toContain('warning Typedoc api/non-existent.mdx not found')
+  })
+
+  test('should fail when typedoc folder does not exist', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+      // Intentionally NOT creating the typedoc folder
+    ])
+
+    // Create a config with a non-existent typedoc path
+    const configWithMissingFolder = createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      typedocPath: '../non-existent-typedoc-folder',
+      validSdks: ['react'],
+    })
+
+    // Should fail due to missing typedoc folder
+    const promise = build(configWithMissingFolder)
+    await expect(promise).rejects.toThrow('Typedoc folder')
+  })
+
+  test('should ignore typedoc warnings when configured to do so', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/non-existent" />
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API
+
+\`\`\`typescript
+interface Client {
+  signIn(): Promise<void>;
+  signOut(): Promise<void>;
+}
+\`\`\`
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        ignoreWarnings: {
+          '/docs/api-doc.mdx': ['typedoc-not-found'],
+        },
+      }),
+    )
+
+    // Warning should be suppressed
+    expect(output).not.toContain('warning Typedoc api/non-existent.mdx not found')
+    expect(output).toBe('')
+  })
+
+  test('should validate heading hashes within typedoc content', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Reference', href: '/docs/reference' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client-with-sections" />
+`,
+      },
+      {
+        path: './docs/reference.mdx',
+        content: `---
+title: API Reference
+description: Reference to API docs
+---
+
+# API Reference
+
+[Client API Methods](/docs/api-doc#client-methods)
+[Invalid Section](/docs/api-doc#non-existent-section)
+`,
+      },
+      {
+        path: './typedoc/api/client-with-sections.mdx',
+        content: `# Client API
+
+## Client Methods
+
+\`\`\`typescript
+interface Client {
+  signIn(): Promise<void>;
+  signOut(): Promise<void>;
+}
+\`\`\`
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Valid heading hash should not produce warning
+    expect(output).not.toContain('warning Hash "client-methods" not found in /docs/api-doc')
+
+    // Invalid heading hash should produce warning
+    expect(output).toContain('warning Hash "non-existent-section" not found in /docs/api-doc')
+  })
+
+  test('should handle missing src attribute in Typedoc component', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc />
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should warn about missing src attribute
+    expect(output).toContain('warning <Typedoc /> component has no "src" attribute')
+  })
+})

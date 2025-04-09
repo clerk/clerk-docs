@@ -757,7 +757,14 @@ const parseInMarkdownFile =
           const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
 
           if (typedoc === undefined) {
-            safeMessage(config, vfile, filePath, 'typedoc-not-found', [typedocSrc], node.position)
+            safeMessage(
+              config,
+              vfile,
+              filePath,
+              'typedoc-not-found',
+              [`${removeMdxSuffix(typedocSrc)}.mdx`],
+              node.position,
+            )
             return
           }
 
@@ -806,7 +813,14 @@ const parseInMarkdownFile =
           const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
 
           if (typedoc === undefined) {
-            safeMessage(config, vfile, filePath, 'typedoc-not-found', [typedocSrc], node.position)
+            safeMessage(
+              config,
+              vfile,
+              filePath,
+              'typedoc-not-found',
+              [`${removeMdxSuffix(typedocSrc)}.mdx`],
+              node.position,
+            )
             return node
           }
 

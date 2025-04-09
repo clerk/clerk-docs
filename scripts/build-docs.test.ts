@@ -335,7 +335,7 @@ canonical: /docs/:sdk:/simple-test
 Testing with a simple page.`)
 
   expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(
-    `<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
+    `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
   )
 
   const distFiles = await treeDir(pathJoin('./dist'))
@@ -2221,7 +2221,7 @@ This document is available for React and Next.js.`,
     // Verify landing page content
     const landingPage = await readFile(pathJoin('./dist/sdk-document.mdx'))
     expect(landingPage).toBe(
-      `<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
+      `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
   })
 })

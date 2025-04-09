@@ -15,7 +15,7 @@ import path from 'node:path'
 import remarkMdx from 'remark-mdx'
 import { remark } from 'remark'
 import { visit as mdastVisit } from 'unist-util-visit'
-import { map as mdastMap } from 'unist-util-map'
+import { map, map as mdastMap } from 'unist-util-map'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from 'yaml'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -25,6 +25,7 @@ import readdirp from 'readdirp'
 import { z } from 'zod'
 import { fromError, type ValidationError } from 'zod-validation-error'
 import { Node, Position } from 'unist'
+import { existsSync } from 'node:fs'
 
 const errorMessages = {
   // Manifest errors
@@ -84,6 +85,13 @@ const errorMessages = {
   'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
   'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
   'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+
+  // Typedoc errors
+  'typedoc-folder-not-found': (path: string): string =>
+    `Typedoc folder ${path} not found, run "npm run typedoc:download"`,
+  'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
+  'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
+  'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,
 } as const
 
 type WarningCode = keyof typeof errorMessages
@@ -389,6 +397,51 @@ const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) =>
   )
 }
 
+const readTypedocsFolder = (config: BuildConfig) => async () => {
+  return readdirp.promise(config.typedocPath, {
+    type: 'files',
+    fileFilter: '*.mdx',
+  })
+}
+
+const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+  const readFile = readMarkdownFile(config)
+
+  return Promise.all(
+    paths.map(async (filePath) => {
+      const typedocPath = path.join(config.typedocRelativePath, filePath)
+
+      const [error, content] = await readFile(typedocPath)
+
+      if (error) {
+        throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
+      }
+
+      let node: Node | null = null
+
+      const vfile = await remark()
+        .use(() => (tree) => {
+          node = tree
+        })
+        .process({
+          path: typedocPath,
+          value: content,
+        })
+
+      if (node === null) {
+        throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
+      }
+
+      return {
+        path: `${removeMdxSuffix(filePath)}.mdx`,
+        content,
+        vfile,
+        node: node as Node,
+      }
+    }),
+  )
+}
+
 const markdownProcessor = remark().use(remarkFrontmatter).use(remarkMdx).freeze()
 
 type VFile = Awaited<ReturnType<typeof markdownProcessor.process>>
@@ -580,7 +633,12 @@ const extractSDKsFromIfProp =
 
 const parseInMarkdownFile =
   (config: BuildConfig) =>
-  async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
+  async (
+    href: string,
+    partials: { path: string; content: string; node: Node }[],
+    typedocs: { path: string; content: string; node: Node }[],
+    inManifest: boolean,
+  ) => {
     const readFile = readMarkdownFile(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
@@ -683,6 +741,29 @@ const parseInMarkdownFile =
           return
         })
       })
+      // Validate the <Typedoc />
+      .use(() => (tree, vfile) => {
+        return mdastVisit(tree, (node) => {
+          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+
+          if (typedocSrc === undefined) return
+
+          const typedocFolderExists = existsSync(config.typedocPath)
+
+          if (typedocFolderExists === false) {
+            throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
+          }
+
+          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+
+          if (typedoc === undefined) {
+            safeMessage(config, vfile, filePath, 'typedoc-not-found', [typedocSrc], node.position)
+            return
+          }
+
+          return
+        })
+      })
       .process({
         path: `${href.substring(1)}.mdx`,
         value: fileContent,
@@ -713,6 +794,23 @@ const parseInMarkdownFile =
           }
 
           return Object.assign(node, partial.node)
+        })
+      })
+      // Embed the typedoc
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+
+          if (typedocSrc === undefined) return node
+
+          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+
+          if (typedoc === undefined) {
+            safeMessage(config, vfile, filePath, 'typedoc-not-found', [typedocSrc], node.position)
+            return node
+          }
+
+          return Object.assign(node, typedoc.node)
         })
       })
       // extract out the headings to check hashes in links
@@ -780,6 +878,8 @@ export const build = async (config: BuildConfig) => {
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config)
+  const getTypedocsFolder = readTypedocsFolder(config)
+  const getTypedocsMarkdown = readTypedocsMarkdown(config)
   const parseMarkdownFile = parseInMarkdownFile(config)
 
   const userManifest = await getManifest()
@@ -790,6 +890,9 @@ export const build = async (config: BuildConfig) => {
 
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✔️ Read ${partials.length} Partials`)
+
+  const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
+  console.info(`✔️ Read ${typedocs.length} Typedocs`)
 
   const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const docsInManifest = new Set<string>()
@@ -815,7 +918,7 @@ export const build = async (config: BuildConfig) => {
 
       const inManifest = docsInManifest.has(href)
 
-      const markdownFile = await parseMarkdownFile(href, partials, inManifest)
+      const markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest)
 
       docsMap.set(href, markdownFile)
 
@@ -1067,6 +1170,7 @@ type BuildConfigOptions = {
   docsPath: string
   manifestPath: string
   partialsPath: string
+  typedocPath: string
   ignorePaths: string[]
   ignoreWarnings?: Record<string, string[]>
   manifestOptions: {
@@ -1097,6 +1201,9 @@ export function createConfig(config: BuildConfigOptions) {
     partialsRelativePath: config.partialsPath,
     partialsPath: resolve(config.partialsPath),
 
+    typedocRelativePath: config.typedocPath,
+    typedocPath: resolve(config.typedocPath),
+
     ignorePaths: config.ignorePaths,
     ignoreWarnings: config.ignoreWarnings || {},
     manifestOptions: config.manifestOptions ?? {
@@ -1113,6 +1220,7 @@ const main = async () => {
     docsPath: '../docs',
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',
+    typedocPath: '../clerk-typedoc',
     ignorePaths: [
       '/docs/core-1',
       '/pricing',

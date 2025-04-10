@@ -5,11 +5,9 @@ description: Learn how to sync Clerk data to your app with webhooks.
 
 <TutorialHero
   beforeYouStart={[
-
-      {
-      title: "A Clerk + Next.js app is required.",
-      link: "/docs/quickstarts/nextjs",
-      icon: "nextjs",
+    {
+      title: "A Clerk app is required.",
+      link: "/docs/quickstarts/overview",
     },
     {
       title: "A ngrok account is required.",
@@ -28,7 +26,7 @@ description: Learn how to sync Clerk data to your app with webhooks.
 
 The recommended way to sync Clerk data to your app is through webhooks.
 
-In this guide, you'll set up a webhook in your Next.js app to listen for the `user.created` event, create an endpoint in the Clerk Dashboard, build a handler, and test it locally using ngrok and the Clerk Dashboard.
+In this guide, you'll set up a webhook in your app to listen for the `user.created` event, create an endpoint in the Clerk Dashboard, build a handler for verifying the webhook, and test it locally using ngrok and the Clerk Dashboard.
 
 Clerk offers many events, but three key events include:
 
@@ -51,7 +49,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 
   1. In the Clerk Dashboard, navigate to the [**Webhooks**](https://dashboard.clerk.com/last-active?path=webhooks) page.
   1. Select **Add Endpoint**.
-  1. In the **Endpoint URL** field, paste the ngrok **Forwarding** URL you saved earlier, followed by `/api/webhooks`. This is the endpoint that Svix uses to send the webhook payload. The full URL should resemble `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
+  1. In the **Endpoint URL** field, paste the ngrok **Forwarding** URL you saved earlier, followed by `/api/webhooks`. This is the endpoint that Clerk uses to send the webhook payload. The full URL should resemble `https://fawn-two-nominally.ngrok-free.app/api/webhooks`.
   1. In the **Subscribe to events** section, scroll down and select `user.created`.
   1. Select **Create**. You'll be redirected to your endpoint's settings page. Keep this page open.
 
@@ -60,21 +58,26 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   To verify the webhook payload, you'll need your endpoint's **Signing Secret**. Since you don't want this secret exposed in your codebase, store it as an environment variable in your `.env` file during local development.
 
   1. On the endpoint's settings page in the Clerk Dashboard, copy the **Signing Secret**. You may need to select the eye icon to reveal the secret.
-  1. In your project's root directory, open or create an `.env` file, which should already include your Clerk API keys. Assign your **Signing Secret** to `SIGNING_SECRET`. The file should resemble:
+  1. In your project's root directory, open or create an `.env` file, which should already include your Clerk API keys. Assign your **Signing Secret** to `CLERK_WEBHOOK_SIGNING_SECRET`. The file should resemble:
+
+  <If sdk="nuxt">
+    > [!IMPORTANT]
+    > Prefix `CLERK_WEBHOOK_SIGNING_SECRET` with `NUXT_`.
+  </If>
 
   ```env {{ filename: '.env' }}
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
   CLERK_SECRET_KEY={{secret}}
-  SIGNING_SECRET=whsec_123
+  CLERK_WEBHOOK_SIGNING_SECRET=whsec_123
   ```
 
-  ## Set the webhook route as public in your Middleware
+  ## Make sure the webhook route is public
 
   Incoming webhook events don't contain auth information. They come from an external source and aren't signed in or out, so the route must be public to allow access. If you're using `clerkMiddleware()`, ensure that the `/api/webhooks(.*)` route is set as public. For information on configuring routes, see the [`clerkMiddleware()` guide](/docs/references/nextjs/clerk-middleware).
 
   ## Install `svix`
 
-  Clerk uses [`svix`](https://www.npmjs.com/package/svix) to deliver webhooks, so you'll use it to verify the webhook signature. Run the following command in your terminal to install the package:
+  Clerk uses [`svix`](https://www.npmjs.com/package/svix) to deliver and verify webhooks. Run the following command in your terminal to install the package:
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
     ```bash {{ filename: 'terminal' }}
@@ -94,9 +97,9 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
     ```
   </CodeBlockTabs>
 
-  ## Create the endpoint
+  ## Create a route handler to verify the webhook
 
-  Set up a Route Handler that uses `svix` to verify the incoming Clerk webhook and process the payload.
+  Set up a Route Handler that uses Clerk's [`verifyWebhook()`](/docs/references/backend/verify-webhook) function to verify the incoming Clerk webhook and process the payload.
 
   For this guide, the payload will be logged to the console. In a real app, you'd use the payload to trigger an action. For example, if listening for the `user.created` event, you might perform a database `create` or `upsert` to add the user's Clerk data to your database's user table.
 
@@ -105,122 +108,14 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   > [!NOTE]
   > The following Route Handler can be used for any webhook event you choose to listen to. It is not specific to `user.created`.
 
-  <Tabs items={["Next.js", "Express"]}>
+  <Tabs items={["Next.js", "Astro", "Express", "Fastify", "Nuxt", "React Router", "TanStack React Start"]}>
     <Tab>
       ```ts {{ filename: 'app/api/webhooks/route.ts' }}
-      import { Webhook } from 'svix'
-      import { headers } from 'next/headers'
-      import { WebhookEvent } from '@clerk/nextjs/server'
+      import { verifyWebhook } from '@clerk/nextjs/webhooks'
 
       export async function POST(req: Request) {
-        const SIGNING_SECRET = process.env.SIGNING_SECRET
-
-        if (!SIGNING_SECRET) {
-          throw new Error('Error: Please add SIGNING_SECRET from Clerk Dashboard to .env or .env')
-        }
-
-        // Create new Svix instance with secret
-        const wh = new Webhook(SIGNING_SECRET)
-
-        // Get headers
-        const headerPayload = await headers()
-        const svix_id = headerPayload.get('svix-id')
-        const svix_timestamp = headerPayload.get('svix-timestamp')
-        const svix_signature = headerPayload.get('svix-signature')
-
-        // If there are no headers, error out
-        if (!svix_id || !svix_timestamp || !svix_signature) {
-          return new Response('Error: Missing Svix headers', {
-            status: 400,
-          })
-        }
-
-        // Get body
-        const payload = await req.json()
-        const body = JSON.stringify(payload)
-
-        let evt: WebhookEvent
-
-        // Verify payload with headers
         try {
-          evt = wh.verify(body, {
-            'svix-id': svix_id,
-            'svix-timestamp': svix_timestamp,
-            'svix-signature': svix_signature,
-          }) as WebhookEvent
-        } catch (err) {
-          console.error('Error: Could not verify webhook:', err)
-          return new Response('Error: Verification error', {
-            status: 400,
-          })
-        }
-
-        // Do something with payload
-        // For this guide, log payload to console
-        const { id } = evt.data
-        const eventType = evt.type
-        console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
-        console.log('Webhook payload:', body)
-
-        return new Response('Webhook received', { status: 200 })
-      }
-      ```
-    </Tab>
-
-    <Tab>
-      ```ts {{ filename: 'index.ts' }}
-      app.post(
-        '/api/webhooks',
-        // This is a generic method to parse the contents of the payload.
-        // Depending on the framework, packages, and configuration, this may be
-        // different or not required.
-        bodyParser.raw({ type: 'application/json' }),
-
-        async (req, res) => {
-          const SIGNING_SECRET = process.env.SIGNING_SECRET
-
-          if (!SIGNING_SECRET) {
-            throw new Error('Error: Please add SIGNING_SECRET from Clerk Dashboard to .env')
-          }
-
-          // Create new Svix instance with secret
-          const wh = new Webhook(SIGNING_SECRET)
-
-          // Get headers and body
-          const headers = req.headers
-          const payload = req.body
-
-          // Get Svix headers for verification
-          const svix_id = headers['svix-id']
-          const svix_timestamp = headers['svix-timestamp']
-          const svix_signature = headers['svix-signature']
-
-          // If there are no headers, error out
-          if (!svix_id || !svix_timestamp || !svix_signature) {
-            return void res.status(400).json({
-              success: false,
-              message: 'Error: Missing svix headers',
-            })
-          }
-
-          let evt
-
-          // Attempt to verify the incoming webhook
-          // If successful, the payload will be available from 'evt'
-          // If verification fails, error out and return error code
-          try {
-            evt = wh.verify(JSON.stringify(payload), {
-              'svix-id': svix_id as string,
-              'svix-timestamp': svix_timestamp as string,
-              'svix-signature': svix_signature as string,
-            })
-          } catch (err) {
-            console.log('Error: Could not verify webhook:', err.message)
-            return void res.status(400).json({
-              success: false,
-              message: err.message,
-            })
-          }
+          const evt = await verifyWebhook(req)
 
           // Do something with payload
           // For this guide, log payload to console
@@ -229,12 +124,242 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
           console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
           console.log('Webhook payload:', evt.data)
 
-          return void res.status(200).json({
-            success: true,
-            message: 'Webhook received',
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'src/pages/api/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/astro/webhooks'
+      import type { APIRoute } from 'astro'
+
+      export const POST: APIRoute = async ({ request }) => {
+        try {
+          const evt = await verifyWebhook(request, {
+            signingSecret: import.meta.env.CLERK_WEBHOOK_SIGNING_SECRET,
           })
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'index.ts' }}
+      import { verifyWebhook } from '@clerk/express/webhooks'
+      import express from 'express'
+
+      const app = express()
+
+      app.post('/api/webhooks', express.raw({ type: 'application/json' }), async (req, res) => {
+        try {
+          const evt = await verifyWebhook(req)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return res.send('Webhook received')
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return res.status(400).send('Error verifying webhook')
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'index.ts' }}
+      import { verifyWebhook } from '@clerk/fastify/webhooks'
+      import Fastify from 'fastify'
+
+      const fastify = Fastify()
+
+      fastify.post('/api/webhooks', async (request, reply) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return 'Webhook received'
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return reply.code(400).send('Error verifying webhook')
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      First, configure Vite to allow the ngrok host in your `nuxt.config.ts`. You only need to do this in development when tunneling your local server (e.g. `localhost:3000/api/webhooks`) to a public URL (e.g. `https://fawn-two-nominally.ngrok-free.app/api/webhooks`). In production, you won't need this configuration because your webhook endpoint will be hosted on your app's production domain (e.g. `https://your-app.com/api/webhooks`).
+
+      ```ts {{ filename: 'nuxt.config.ts' }}
+      export default defineNuxtConfig({
+        // ... other config
+        vite: {
+          server: {
+            // Replace with your ngrok host
+            allowedHosts: ['fawn-two-nominally.ngrok-free.app'],
+          },
         },
-      )
+      })
+      ```
+
+      Then create your webhook handler:
+
+      ```ts {{ filename: 'server/api/webhooks.post.ts' }}
+      import { verifyWebhook } from '@clerk/nuxt/webhooks'
+
+      export default defineEventHandler(async (event) => {
+        try {
+          const evt = await verifyWebhook(event)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return 'Webhook received'
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          setResponseStatus(event, 400)
+          return 'Error verifying webhook'
+        }
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      First, configure Vite to allow the ngrok host in your `vite.config.ts`. You only need to do this in development when tunneling your local server (e.g. `localhost:3000/api/webhooks`) to a public URL (e.g. `https://fawn-two-nominally.ngrok-free.app/api/webhooks`). In production, you won't need this configuration because your webhook endpoint will be hosted on your app's production domain (e.g. `https://your-app.com/api/webhooks`).
+
+      ```ts {{ filename: 'vite.config.ts' }}
+      export default defineConfig({
+        // ... other config
+        server: {
+          // Replace with your ngrok host
+          allowedHosts: ['fawn-two-nominally.ngrok-free.app'],
+        },
+      })
+      ```
+
+      Then create your webhook handler:
+
+      ```ts {{ filename: 'app/routes/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/react-router/webhooks'
+      import type { Route } from './+types/webhooks'
+
+      export const action = async ({ request }: Route.ActionArgs) => {
+        try {
+          const evt = await verifyWebhook(request)
+
+          // Do something with payload
+          // For this guide, log payload to console
+          const { id } = evt.data
+          const eventType = evt.type
+          console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+          console.log('Webhook payload:', evt.data)
+
+          return new Response('Webhook received', { status: 200 })
+        } catch (err) {
+          console.error('Error verifying webhook:', err)
+          return new Response('Error verifying webhook', { status: 400 })
+        }
+      }
+      ```
+
+      Don't forget to add the route to your `router.ts` file:
+
+      ```ts {{ filename: 'router.ts', mark: [5] }}
+      import { type RouteConfig, route, index } from '@react-router/dev/routes'
+
+      export default [
+        index('routes/home.tsx'),
+        route('api/webhooks', 'routes/webhooks.ts'),
+      ] satisfies RouteConfig
+      ```
+    </Tab>
+
+    <Tab>
+      First, configure Vite to allow the ngrok host in your `app.config.ts`. You only need to do this in development when tunneling your local server (e.g. `localhost:3000/api/webhooks`) to a public URL (e.g. `https://fawn-two-nominally.ngrok-free.app/api/webhooks`). In production, you won't need this configuration because your webhook endpoint will be hosted on your app's production domain (e.g. `https://your-app.com/api/webhooks`).
+
+      {/* TODO: `vite` has to be typed as `InlineConfig` in order to support the type for `server` as vinxi currently doesn't expose it. Tanstack Start is in the process of movingaway from vinxi, and this type issue will be resolved. */}
+
+      ```ts {{ filename: 'app.config.ts' }}
+      import { defineConfig } from '@tanstack/react-start/config'
+      import tsConfigPaths from 'vite-tsconfig-paths'
+      import type { InlineConfig } from 'vite'
+
+      // `vite` must be typed as `InlineConfig` in order
+      // to support the type for `server`
+      // as vinxi currently doesn't expose it
+      const vite: InlineConfig = {
+        server: {
+          // Replace with your ngrok host
+          allowedHosts: ['fawn-two-nominally.ngrok-free.app'],
+        },
+        plugins: [
+          tsConfigPaths({
+            projects: ['./tsconfig.json'],
+          }),
+        ],
+      }
+
+      export default defineConfig({
+        vite,
+      })
+      ```
+
+      Then create your webhook handler:
+
+      ```ts {{ filename: 'app/routes/api/webhooks.ts' }}
+      import { verifyWebhook } from '@clerk/tanstack-react-start/webhooks'
+      import { createAPIFileRoute } from '@tanstack/react-start/api'
+
+      export const APIRoute = createAPIFileRoute('/api/webhooks')({
+        POST: async ({ request }) => {
+          try {
+            const evt = await verifyWebhook(request)
+
+            // Do something with payload
+            // For this guide, log payload to console
+            const { id } = evt.data
+            const eventType = evt.type
+            console.log(`Received webhook with ID ${id} and event type of ${eventType}`)
+            console.log('Webhook payload:', evt.data)
+
+            return new Response('Webhook received', { status: 200 })
+          } catch (err) {
+            console.error('Error verifying webhook:', err)
+            return new Response('Error verifying webhook', { status: 400 })
+          }
+        },
+      })
       ```
     </Tab>
   </Tabs>
@@ -254,7 +379,7 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   }
   ```
 
-  To handle types manually, import the following types from your backend SDK (e.g., `@clerk/nextjs/server`):
+  To handle types manually, import the following types from your backend SDK (e.g., `@clerk/nextjs/webhooks`):
 
   - `DeletedObjectJSON`
   - `EmailJSON`
@@ -271,20 +396,20 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
   1. In your endpoint's settings page in the Clerk Dashboard, select the **Testing** tab.
   1. In the **Select event** dropdown, select `user.created`.
   1. Select **Send Example**.
-  1. In the **Message Attempts** section, confirm that the event's **Status** is labeled with **Succeeded**.
+  1. In the **Message Attempts** section, confirm that the event's **Status** is labeled with **Succeeded**. In your server's terminal where your app is running, you should see the webhook's payload.
 
   ### Handling failed messages
 
   1. In the **Message Attempts** section, select the event whose **Status** is labeled with **Failed**.
   1. Scroll down to the **Webhook Attempts** section.
   1. Toggle the arrow next to the **Status** column.
-  1. Review the error. Solutions vary by error type. For more information, refer to the [Debug your webhooks](/docs/webhooks/debug-your-webhooks) guide.
+  1. Review the error. Solutions vary by error type. For more information, refer to the [guide on debugging your webhooks](/docs/webhooks/debug-your-webhooks).
 
   ## Trigger the webhook
 
   To trigger the `user.created` event, create a new user in your app.
 
-  You should be able to see the webhook's payload logged to your terminal where your app is running. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-the-webhook).
+  In the terminal where your app is running, you should see the webhook's payload logged. You can also check the Clerk Dashboard to see the webhook attempt, the same way you did when [testing the webhook](#test-the-webhook).
 </Steps>
 
 ## Configure your production instance
@@ -292,5 +417,5 @@ These steps apply to any Clerk event. To make the setup process easier, it's rec
 1. When you're ready to deploy your app to production, follow [the guide on deploying your Clerk app to production](/docs/deployments/overview).
 1. Create your production webhook by following the steps in the previous [Set up a webhook endpoint](#set-up-a-webhook-endpoint) section. In the **Endpoint URL** field, instead of pasting the ngrok URL, paste your production app URL.
 1. After you've set up your webhook endpoint, you'll be redirected to your endpoint's settings page. Copy the **Signing Secret**.
-1. On your hosting platform, update your environment variables on your hosting platform by adding **Signing Secret** with the key of `SIGNING_SECRET`.
+1. On your hosting platform, update your environment variables on your hosting platform by adding **Signing Secret** with the key of `CLERK_WEBHOOK_SIGNING_SECRET`.
 1. Redeploy your app.

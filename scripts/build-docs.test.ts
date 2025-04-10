@@ -4,7 +4,7 @@ import os from 'node:os'
 import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
-import { build, createConfig, createBlankStore } from './build-docs'
+import { build, createConfig, createBlankStore, invalidateFile } from './build-docs'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -2639,4 +2639,291 @@ description: Test page with partial
       expect(output).toBe('')
     })
   })
+})
+
+// MANIFEST VALIDATION TESTS
+
+test('should fail build with completely malformed manifest JSON', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: '{invalid json structure',
+    },
+    {
+      path: './docs/simple-test.mdx',
+      content: `---
+title: Simple Test
+---
+
+# Simple Test`,
+    },
+  ])
+
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow('Failed to parse manifest:')
+})
+
+// COMPLEX HEADING SCENARIOS
+
+test('should error on duplicate headings', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Duplicate Headings', href: '/docs/duplicate-headings' }]],
+      }),
+    },
+    {
+      path: './docs/duplicate-headings.mdx',
+      content: `---
+title: Duplicate Headings
+---
+
+# Heading {{ id: 'custom-id' }}
+
+## Another Heading {{ id: 'custom-id' }}
+
+[Link to first heading](#custom-id)`,
+    },
+  ])
+
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow(
+    'Doc "/docs/duplicate-headings" contains a duplicate heading id "custom-id", please ensure all heading ids are unique',
+  )
+})
+
+test('should not error on duplicate headings if they are in different <If /> components', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+      }),
+    },
+    {
+      path: './docs/quickstart.mdx',
+      content: `---
+title: Quickstart
+description: Quickstart page
+sdk: react, nextjs
+---
+
+<If sdk="react">
+  # Title {{ id: 'title' }}
+</If>
+
+<If sdk="nextjs">
+  # Title {{ id: 'title' }}
+</If>`,
+    },
+  ])
+
+  const output = await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs'],
+    }),
+  )
+
+  expect(output).toBe('')
+})
+
+test('should error on duplicate headings if they are in different <If /> components but with the same sdk', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+      }),
+    },
+    {
+      path: './docs/quickstart.mdx',
+      content: `---
+title: Quickstart
+description: Quickstart page
+sdk: react, nextjs
+---
+
+<If sdk="react">
+  # Title {{ id: 'title' }}
+</If>
+
+<If sdk="react">
+  # Title {{ id: 'title' }}
+</If>`,
+    },
+  ])
+
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow(
+    'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
+  )
+})
+
+test('should error on duplicate headings if they are in different <If /> components but with the same sdk without sdk in frontmatter', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+      }),
+    },
+    {
+      path: './docs/quickstart.mdx',
+      content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+<If sdk="react">
+  # Title {{ id: 'title' }}
+</If>
+
+<If sdk="react">
+  # Title {{ id: 'title' }}
+</If>`,
+    },
+  ])
+
+  const promise = build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  await expect(promise).rejects.toThrow(
+    'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
+  )
+})
+
+// HANDLING NON-MDX FILES
+
+test('should ignore non-MDX files in the docs folder', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'MDX Doc', href: '/docs/mdx-doc' }]],
+      }),
+    },
+    {
+      path: './docs/mdx-doc.mdx',
+      content: `---
+title: MDX Doc
+---
+
+# MDX Document`,
+    },
+    {
+      path: './docs/non-mdx-file.txt',
+      content: `This is a text file, not an MDX file.`,
+    },
+    {
+      path: './docs/image.png',
+      content: `fake image content`,
+    },
+  ])
+
+  await build(
+    createBlankStore(),
+    createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  // Verify only MDX files were processed
+  expect(await fileExists(pathJoin('./dist/mdx-doc.mdx'))).toBe(true)
+  expect(await fileExists(pathJoin('./dist/non-mdx-file.txt'))).toBe(false)
+  expect(await fileExists(pathJoin('./dist/image.png'))).toBe(false)
+})
+
+// CACHE INVALIDATION TESTS
+
+test('should update cached files when their content changes', async () => {
+  const { tempDir, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+      }),
+    },
+    {
+      path: './docs/cached-doc.mdx',
+      content: `---
+title: Original Title
+---
+
+# Original Content`,
+    },
+  ])
+
+  // Create store to maintain cache across builds
+  const store = createBlankStore()
+  const config = createConfig({
+    ...baseConfig,
+    basePath: tempDir,
+    validSdks: ['react'],
+  })
+  const invalidate = invalidateFile(store, config)
+
+  // First build
+  await build(store, config)
+
+  // Check initial content
+  const initialContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
+  expect(initialContent).toContain('Original Title')
+  expect(initialContent).toContain('Original Content')
+
+  // Update file content
+  await fs.writeFile(
+    pathJoin('./docs/cached-doc.mdx'),
+    `---
+title: Updated Title
+---
+
+# Updated Content`,
+    'utf-8',
+  )
+
+  invalidate(pathJoin('./docs/cached-doc.mdx'))
+
+  // Second build with same store (should detect changes)
+  await build(store, config)
+
+  // Check updated content
+  const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
+  expect(updatedContent).toContain('Updated Title')
+  expect(updatedContent).toContain('Updated Content')
 })

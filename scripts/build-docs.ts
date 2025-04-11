@@ -1079,6 +1079,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   )
   console.info('✔️ Applied manifest sdk scoping')
 
+  if (config.cleanDist) {
+    await fs.rm(config.distPath, { recursive: true })
+    console.info('✔️ Removed dist folder')
+  }
+
   await writeFile(
     'manifest.json',
     JSON.stringify({
@@ -1592,6 +1597,7 @@ type BuildConfigOptions = {
     collapseDefault: boolean
     hideTitleDefault: boolean
   }
+  cleanDist: boolean
 }
 
 type BuildConfig = ReturnType<typeof createConfig>
@@ -1625,6 +1631,7 @@ export function createConfig(config: BuildConfigOptions) {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    cleanDist: config.cleanDist,
   }
 }
 
@@ -1664,6 +1671,7 @@ const main = async () => {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    cleanDist: false,
   })
 
   const store = createBlankStore()
@@ -1680,7 +1688,7 @@ const main = async () => {
   if (watchFlag) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, config)
+    watchAndRebuild(store, { ...config, cleanDist: true })
   } else if (output !== '') {
     process.exit(1)
   }

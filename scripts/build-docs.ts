@@ -933,13 +933,14 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   await ensureDir(config.distPath)
 
   const userManifest = await getManifest()
-  console.info('✔️ Read Manifest')
+  console.info('✓ Read Manifest')
 
   const docsFiles = await getDocsFolder()
-  console.info('✔️ Read Docs Folder')
+  console.info('✓ Read Docs Folder')
 
+  const cachedPartialsSize = store.partialsFiles.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
-  console.info(`✔️ Read ${partials.length} Partials`)
+  console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
   const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const docsInManifest = new Set<string>()
@@ -956,8 +957,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
     return item
   })
-  console.info('✔️ Parsed in Manifest')
+  console.info('✓ Parsed in Manifest')
 
+  const cachedDocsSize = store.markdownFiles.size
   // Read in all the docs
   const docsArray = await Promise.all(
     docsFiles.map(async (file) => {
@@ -982,7 +984,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       return markdownFile
     }),
   )
-  console.info(`✔️ Loaded in ${docsArray.length} docs`)
+  console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifest = await traverseTree(
@@ -1077,11 +1079,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       throw error
     },
   )
-  console.info('✔️ Applied manifest sdk scoping')
+  console.info('✓ Applied manifest sdk scoping')
 
   if (config.cleanDist) {
     await fs.rm(config.distPath, { recursive: true })
-    console.info('✔️ Removed dist folder')
+    console.info('✓ Removed dist folder')
   }
 
   await writeFile(
@@ -1182,7 +1184,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         .process(partial.vfile)
     }),
   )
-  console.info(`✔️ Validated all partials`)
+  console.info(`✓ Validated all partials`)
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
@@ -1340,7 +1342,7 @@ template: wide
     }),
   )
 
-  console.info(`✔️ Validated and wrote out all docs`)
+  console.info(`✓ Validated and wrote out all docs`)
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {
@@ -1461,7 +1463,7 @@ template: wide
         }),
       )
 
-      console.info(`✔️ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific docs`)
+      console.info(`✓ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific docs`)
 
       return { targetSdk, vFiles }
     }),
@@ -1568,6 +1570,10 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: Bui
 
       const output = await build(store, config)
 
+      if (config.flags.controlled) {
+        console.info('---rebuild-complete---')
+      }
+
       const after = performance.now()
 
       console.info(`Rebuilt docs in ${after - now} milliseconds`)
@@ -1598,6 +1604,10 @@ type BuildConfigOptions = {
     hideTitleDefault: boolean
   }
   cleanDist: boolean
+  flags?: {
+    watch?: boolean
+    controlled?: boolean
+  }
 }
 
 type BuildConfig = ReturnType<typeof createConfig>
@@ -1632,10 +1642,16 @@ export function createConfig(config: BuildConfigOptions) {
       hideTitleDefault: false,
     },
     cleanDist: config.cleanDist,
+    flags: {
+      watch: config.flags?.watch ?? false,
+      controlled: config.flags?.controlled ?? false,
+    },
   }
 }
 
 const main = async () => {
+  const args = process.argv.slice(2)
+
   const config = createConfig({
     basePath: __dirname,
     docsPath: '../docs',
@@ -1672,20 +1688,25 @@ const main = async () => {
       hideTitleDefault: false,
     },
     cleanDist: false,
+    flags: {
+      watch: args.includes('--watch'),
+      controlled: args.includes('--controlled'),
+    },
   })
 
   const store = createBlankStore()
 
   const output = await build(store, config)
 
+  if (config.flags.controlled) {
+    console.info('---initial-build-complete---')
+  }
+
   if (output !== '') {
     console.info(output)
   }
 
-  const args = process.argv.slice(2)
-  const watchFlag = args.includes('--watch')
-
-  if (watchFlag) {
+  if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
     watchAndRebuild(store, { ...config, cleanDist: true })

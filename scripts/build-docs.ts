@@ -2,19 +2,37 @@
 
 // Validates
 // - The manifest
-// - The markdown files contents (including frontmatter)
-// - Links (including hashes) between docs are valid
+// - The markdown files contents (including required frontmatter fields)
+// - Links (including hashes) between docs are valid and point to existing headings
 // - The sdk filtering in the manifest
 // - The sdk filtering in the frontmatter
 // - The sdk filtering in the <If /> component
 //   - Checks that the sdk is available in the manifest
 //   - Checks that the sdk is available in the frontmatter
+//   - Validates sdk values against the list of valid SDKs
+// - URL encoding (prevents browser encoding issues)
+// - File existence for both docs and partials
+// - Path conflicts (prevents SDK name conflicts in paths)
+
+// Transforms
+// - Embeds the partials in the markdown files
+// - Updates the links in the content if they point to the sdk specific docs
+//   - Converts links to SDK-specific docs to use <SDKLink /> components
+// - Copies over "core" docs to the dist folder
+// - Generates "landing" pages for the sdk specific docs at the original url
+// - Generates out the sdk specific docs to their respective folders
+//   - Stripping filtered out content based on SDK
+// - Removes .mdx from the end of docs markdown links
+// - Adds canonical links in frontmatter for SDK-specific docs
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import remarkMdx from 'remark-mdx'
 import { remark } from 'remark'
 import { visit as mdastVisit } from 'unist-util-visit'
+import { filter as mdastFilter } from 'unist-util-filter'
+import { map as mdastMap } from 'unist-util-map'
+import { u as mdastBuilder } from 'unist-builder'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from 'yaml'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -24,10 +42,11 @@ import readdirp from 'readdirp'
 import { z } from 'zod'
 import { fromError, type ValidationError } from 'zod-validation-error'
 import { Node, Position } from 'unist'
+import watcher from '@parcel/watcher'
 
 const errorMessages = {
   // Manifest errors
-  'manifest-parse-error': (error: ValidationError): string => `Failed to parse manifest: ${error}`,
+  'manifest-parse-error': (error: ValidationError | Error): string => `Failed to parse manifest: ${error}`,
 
   // Component errors
   'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,
@@ -65,8 +84,11 @@ const errorMessages = {
   'frontmatter-parse-failed': (href: string): string => `Frontmatter parsing failed for ${href}`,
   'doc-not-found': (title: string, href: string): string =>
     `Doc "${title}" in manifest.json not found in the docs folder at ${href}.mdx`,
+  'doc-parse-failed': (href: string): string => `Doc "${href}" failed to parse`,
   'sdk-path-conflict': (href: string, path: string): string =>
     `Doc "${href}" is attempting to write out a doc to ${path} but the first part of the path is a valid SDK, this causes a file path conflict.`,
+  'duplicate-heading-id': (href: string, id: string): string =>
+    `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
 
   // Include component errors
   'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
@@ -292,14 +314,30 @@ const isValidSdks =
     return sdks.every(isValidSdk(config))
   }
 
+const parseJSON = (json: string) => {
+  try {
+    const output = JSON.parse(json)
+
+    return [null, output as unknown] as const
+  } catch (error) {
+    return [new Error(`Failed to parse JSON`, { cause: error }), null] as const
+  }
+}
+
 const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
   const { manifestSchema } = createManifestSchema(config)
   const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
 
-  const manifest = await manifestSchema.safeParseAsync(JSON.parse(unsafe_manifest).navigation)
+  const [error, json] = parseJSON(unsafe_manifest)
+
+  if (error) {
+    throw new Error(errorMessages['manifest-parse-error'](error))
+  }
+
+  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
 
   if (manifest.success === true) {
-    return manifest.data
+    return manifest.data.navigation
   }
 
   throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
@@ -332,70 +370,136 @@ const readPartialsFolder = (config: BuildConfig) => async () => {
   })
 }
 
-const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+const readPartial = (config: BuildConfig) => async (filePath: string) => {
   const readFile = readMarkdownFile(config)
 
-  return Promise.all(
-    paths.map(async (markdownPath) => {
-      const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, markdownPath)
+  const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, filePath)
 
-      const [error, content] = await readFile(fullPath)
+  const [error, content] = await readFile(fullPath)
 
-      if (error) {
-        throw new Error(errorMessages['partial-read-error'](fullPath), { cause: error })
-      }
+  if (error) {
+    throw new Error(errorMessages['partial-read-error'](fullPath), { cause: error })
+  }
 
-      let partialNode: Node | null = null
+  let partialNode: Node | null = null
 
-      const partialContentVFile = await markdownProcessor()
-        .use(() => (tree, vfile) => {
-          mdastVisit(
-            tree,
-            (node) =>
-              (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
-              'name' in node &&
-              node.name === 'Include',
-            (node) => {
-              safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
-            },
-          )
+  const partialContentVFile = await markdownProcessor()
+    .use(() => (tree) => {
+      partialNode = tree
+    })
+    .use(() => (tree, vfile) => {
+      mdastVisit(
+        tree,
+        (node) =>
+          (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
+          'name' in node &&
+          node.name === 'Include',
+        (node) => {
+          safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
+        },
+      )
+    })
+    // Process links in partials and remove the .mdx suffix
+    .use(() => (tree, vfile) => {
+      return mdastMap(tree, (node) => {
+        if (node.type !== 'link') return node
+        if (!('url' in node)) return node
+        if (typeof node.url !== 'string') return node
+        if (!node.url.startsWith('/docs/')) return node
+        if (!('children' in node)) return node
 
-          partialNode = tree
-        })
-        .process({
-          path: `docs/_partials/${markdownPath}`,
-          value: content,
-        })
+        // We are overwriting the url with the mdx suffix removed
+        node.url = removeMdxSuffix(node.url)
 
-      const partialContentReport = reporter([partialContentVFile], { quiet: true })
+        return node
+      })
+    })
+    .process({
+      path: `docs/_partials/${filePath}`,
+      value: content,
+    })
 
-      if (partialContentReport !== '') {
-        console.error(partialContentReport)
-        process.exit(1)
-      }
+  const partialContentReport = reporter([partialContentVFile], { quiet: true })
 
-      if (partialNode === null) {
-        throw new Error(errorMessages['partial-parse-error'](markdownPath))
-      }
+  if (partialContentReport !== '') {
+    console.error(partialContentReport)
+    process.exit(1)
+  }
 
-      return {
-        path: markdownPath,
-        content,
-        vfile: partialContentVFile,
-        node: partialNode as Node,
-      }
-    }),
-  )
+  if (partialNode === null) {
+    throw new Error(errorMessages['partial-parse-error'](filePath))
+  }
+
+  return {
+    path: filePath,
+    content,
+    vfile: partialContentVFile,
+    node: partialNode as Node,
+  }
 }
+
+const readPartialsMarkdown =
+  (config: BuildConfig, store: ReturnType<typeof createBlankStore>) => async (paths: string[]) => {
+    const read = readPartial(config)
+
+    return Promise.all(
+      paths.map(async (markdownPath) => {
+        const cachedValue = store.partialsFiles.get(markdownPath)
+
+        if (cachedValue !== undefined) {
+          return cachedValue
+        }
+
+        const partial = await read(markdownPath)
+
+        store.partialsFiles.set(markdownPath, partial)
+
+        return partial
+      }),
+    )
+  }
 
 const markdownProcessor = remark().use(remarkFrontmatter).use(remarkMdx).freeze()
 
 type VFile = Awaited<ReturnType<typeof markdownProcessor.process>>
 
+const ensureDirectory =
+  (config: BuildConfig) =>
+  async (dirPath: string): Promise<void> => {
+    try {
+      await fs.access(dirPath)
+    } catch {
+      await fs.mkdir(dirPath, { recursive: true })
+    }
+  }
+
+const writeDistFile = (config: BuildConfig) => async (filePath: string, contents: string) => {
+  const ensureDir = ensureDirectory(config)
+  const fullPath = path.join(config.distPath, filePath)
+  await ensureDir(path.dirname(fullPath))
+  await fs.writeFile(fullPath, contents, { encoding: 'utf-8' })
+}
+
+const writeSDKFile = (config: BuildConfig) => async (sdk: SDK, filePath: string, contents: string) => {
+  const writeFile = writeDistFile(config)
+  await writeFile(path.join(sdk, filePath), contents)
+}
+
 const removeMdxSuffix = (filePath: string) => {
+  if (filePath.includes('#')) {
+    const [url, hash] = filePath.split('#')
+
+    if (url.endsWith('.mdx')) {
+      return url.slice(0, -4) + `#${hash}`
+    }
+
+    return url + `#${hash}`
+  }
+
   if (filePath.endsWith('.mdx')) {
     return filePath.slice(0, -4)
   }
+
   return filePath
 }
 
@@ -479,15 +583,23 @@ function flattenTree<
   return result
 }
 
-const extractComponentPropValueFromNode = (
-  config: BuildConfig,
-  node: Node,
-  vfile: VFile | undefined,
-  componentName: string,
-  propName: string,
-  required = true,
-  filePath: string,
-): string | undefined => {
+const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
+  // This is external so can't change it
+  if (href.startsWith('/docs') === false) return href
+
+  const hrefSegments = href.split('/')
+
+  // This is a little hacky so we might change it
+  // if the url already contains the sdk, we don't need to change it
+  if (hrefSegments.includes(targetSDK)) {
+    return href
+  }
+
+  // Add the sdk to the url
+  return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
+}
+
+const findComponent = (node: Node, componentName: string) => {
   // Check if it's an MDX component
   if (node.type !== 'mdxJsxFlowElement' && node.type !== 'mdxJsxTextElement') {
     return undefined
@@ -497,27 +609,43 @@ const extractComponentPropValueFromNode = (
   if (!('name' in node)) return undefined
   if (node.name !== componentName) return undefined
 
+  return node
+}
+
+const extractComponentPropValueFromNode = (
+  config: BuildConfig,
+  node: Node,
+  vfile: VFile | undefined,
+  componentName: string,
+  propName: string,
+  required = true,
+  filePath: string,
+): string | undefined => {
+  const component = findComponent(node, componentName)
+
+  if (component === undefined) return undefined
+
   // Check for attributes
-  if (!('attributes' in node)) {
+  if (!('attributes' in component)) {
     if (vfile) {
-      safeMessage(config, vfile, filePath, 'component-no-props', [componentName], node.position)
+      safeMessage(config, vfile, filePath, 'component-no-props', [componentName], component.position)
     }
     return undefined
   }
 
-  if (!Array.isArray(node.attributes)) {
+  if (!Array.isArray(component.attributes)) {
     if (vfile) {
-      safeMessage(config, vfile, filePath, 'component-attributes-not-array', [componentName], node.position)
+      safeMessage(config, vfile, filePath, 'component-attributes-not-array', [componentName], component.position)
     }
     return undefined
   }
 
   // Find the requested prop
-  const propAttribute = node.attributes.find((attribute) => attribute.name === propName)
+  const propAttribute = component.attributes.find((attribute) => attribute.name === propName)
 
   if (propAttribute === undefined) {
     if (required === true && vfile) {
-      safeMessage(config, vfile, filePath, 'component-missing-attribute', [componentName, propName], node.position)
+      safeMessage(config, vfile, filePath, 'component-missing-attribute', [componentName, propName], component.position)
     }
     return undefined
   }
@@ -526,7 +654,14 @@ const extractComponentPropValueFromNode = (
 
   if (value === undefined) {
     if (required === true && vfile) {
-      safeMessage(config, vfile, filePath, 'component-attribute-no-value', [componentName, propName], node.position)
+      safeMessage(
+        config,
+        vfile,
+        filePath,
+        'component-attribute-no-value',
+        [componentName, propName],
+        component.position,
+      )
     }
     return undefined
   }
@@ -545,7 +680,7 @@ const extractComponentPropValueFromNode = (
       filePath,
       'component-attribute-unsupported-type',
       [componentName, propName],
-      node.position,
+      component.position,
     )
   }
   return undefined
@@ -577,10 +712,55 @@ const extractSDKsFromIfProp =
     }
   }
 
+const extractHeadingFromHeadingNode = (node: Node) => {
+  // eg # test {{ id: 'my-heading' }}
+  // This is for remapping the hash to the custom id
+  const id =
+    ('children' in node &&
+      Array.isArray(node.children) &&
+      (node?.children
+        ?.find(
+          (child: unknown) =>
+            typeof child === 'object' && child !== null && 'type' in child && child?.type === 'mdxTextExpression',
+        )
+        ?.data?.estree?.body?.find(
+          (child: unknown) =>
+            typeof child === 'object' && child !== null && 'type' in child && child?.type === 'ExpressionStatement',
+        )
+        ?.expression?.properties?.find(
+          (prop: unknown) =>
+            typeof prop === 'object' &&
+            prop !== null &&
+            'key' in prop &&
+            typeof prop.key === 'object' &&
+            prop.key !== null &&
+            'name' in prop.key &&
+            prop.key.name === 'id',
+        )?.value?.value as string | undefined)) ||
+    undefined
+
+  return id
+}
+
+const documentHasIfComponents = (tree: Node) => {
+  let found = false
+
+  mdastVisit(tree, (node) => {
+    const ifSrc = findComponent(node, 'If')
+
+    if (ifSrc !== undefined) {
+      found = true
+    }
+  })
+
+  return found
+}
+
 const parseInMarkdownFile =
   (config: BuildConfig) =>
   async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
     const readFile = readMarkdownFile(config)
+    const validateSDKs = isValidSdks(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
 
     if (error !== null) {
@@ -598,11 +778,14 @@ const parseInMarkdownFile =
     let frontmatter: Frontmatter | undefined = undefined
 
     const slugify = slugifyWithCounter()
-    const headingsHashs: Array<string> = []
+    const headingsHashes = new Set<string>()
     const filePath = `${href}.mdx`
+    let node: Node | undefined = undefined
 
     const vfile = await markdownProcessor()
       .use(() => (tree, vfile) => {
+        node = tree
+
         if (inManifest === false) {
           safeMessage(config, vfile, filePath, 'doc-not-in-manifest', [])
         }
@@ -623,7 +806,7 @@ const parseInMarkdownFile =
 
             const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
 
-            if (frontmatterSDKs !== undefined && isValidSdks(config)(frontmatterSDKs) === false) {
+            if (frontmatterSDKs !== undefined && validateSDKs(frontmatterSDKs) === false) {
               const invalidSDKs = frontmatterSDKs.filter((sdk) => isValidSdk(config)(sdk) === false)
               safeFail(
                 config,
@@ -678,47 +861,32 @@ const parseInMarkdownFile =
             safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
             return
           }
-
-          return
         })
       })
       // extract out the headings to check hashes in links
-      .use(() => (tree) => {
+      .use(() => (tree, vfile) => {
+        const documentContainsIfComponent = documentHasIfComponents(tree)
+
         mdastVisit(
           tree,
           (node) => node.type === 'heading',
           (node) => {
-            // @ts-expect-error - If the heading has a id in it, this will pick it up
-            // eg # test {{ id: 'my-heading' }}
-            // This is for remapping the hash to the custom id
-            const id = node?.children
-              ?.find(
-                (child: unknown) =>
-                  typeof child === 'object' && child !== null && 'type' in child && child?.type === 'mdxTextExpression',
-              )
-              ?.data?.estree?.body?.find(
-                (child: unknown) =>
-                  typeof child === 'object' &&
-                  child !== null &&
-                  'type' in child &&
-                  child?.type === 'ExpressionStatement',
-              )
-              ?.expression?.properties?.find(
-                (prop: unknown) =>
-                  typeof prop === 'object' &&
-                  prop !== null &&
-                  'key' in prop &&
-                  typeof prop.key === 'object' &&
-                  prop.key !== null &&
-                  'name' in prop.key &&
-                  prop.key.name === 'id',
-              )?.value?.value as string | undefined
+            const id = extractHeadingFromHeadingNode(node)
 
             if (id !== undefined) {
-              headingsHashs.push(id)
+              if (documentContainsIfComponent === false && headingsHashes.has(id)) {
+                safeFail(config, vfile, filePath, 'duplicate-heading-id', [href, id])
+              }
+
+              headingsHashes.add(id)
             } else {
               const slug = slugify(toString(node).trim())
-              headingsHashs.push(slug)
+
+              if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
+                safeFail(config, vfile, filePath, 'duplicate-heading-id', [href, slug])
+              }
+
+              headingsHashes.add(slug)
             }
           },
         )
@@ -728,6 +896,10 @@ const parseInMarkdownFile =
         value: fileContent,
       })
 
+    if (node === undefined) {
+      throw new Error(errorMessages['doc-parse-failed'](href))
+    }
+
     if (frontmatter === undefined) {
       throw new Error(errorMessages['frontmatter-parse-failed'](href))
     }
@@ -736,27 +908,39 @@ const parseInMarkdownFile =
       href,
       sdk: (frontmatter as Frontmatter).sdk,
       vfile,
-      headingsHashs,
+      headingsHashes,
       frontmatter: frontmatter as Frontmatter,
+      node: node as Node,
     }
   }
 
-export const build = async (config: BuildConfig) => {
+export const createBlankStore = () => ({
+  markdownFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>(),
+  partialsFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof readPartial>>>>(),
+})
+
+export const build = async (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
   // Apply currying to create functions pre-configured with config
+  const ensureDir = ensureDirectory(config)
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
-  const getPartialsMarkdown = readPartialsMarkdown(config)
+  const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config)
+  const writeFile = writeDistFile(config)
+  const writeSdkFile = writeSDKFile(config)
+
+  await ensureDir(config.distPath)
 
   const userManifest = await getManifest()
-  console.info('✔️ Read Manifest')
+  console.info('✓ Read Manifest')
 
   const docsFiles = await getDocsFolder()
-  console.info('✔️ Read Docs Folder')
+  console.info('✓ Read Docs Folder')
 
+  const cachedPartialsSize = store.partialsFiles.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
-  console.info(`✔️ Read ${partials.length} Partials`)
+  console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
   const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const docsInManifest = new Set<string>()
@@ -773,8 +957,9 @@ export const build = async (config: BuildConfig) => {
 
     return item
   })
-  console.info('✔️ Parsed in Manifest')
+  console.info('✓ Parsed in Manifest')
 
+  const cachedDocsSize = store.markdownFiles.size
   // Read in all the docs
   const docsArray = await Promise.all(
     docsFiles.map(async (file) => {
@@ -782,14 +967,24 @@ export const build = async (config: BuildConfig) => {
 
       const inManifest = docsInManifest.has(href)
 
-      const markdownFile = await parseMarkdownFile(href, partials, inManifest)
+      let markdownFile: Awaited<ReturnType<typeof parseMarkdownFile>>
+
+      const cachedMarkdownFile = store.markdownFiles.get(href)
+
+      if (cachedMarkdownFile) {
+        markdownFile = structuredClone(cachedMarkdownFile)
+      } else {
+        markdownFile = await parseMarkdownFile(href, partials, inManifest)
+
+        store.markdownFiles.set(href, structuredClone(markdownFile))
+      }
 
       docsMap.set(href, markdownFile)
 
       return markdownFile
     }),
   )
-  console.info(`✔️ Loaded in ${docsArray.length} docs`)
+  console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifest = await traverseTree(
@@ -884,81 +1079,172 @@ export const build = async (config: BuildConfig) => {
       throw error
     },
   )
-  console.info('✔️ Applied manifest sdk scoping')
+  console.info('✓ Applied manifest sdk scoping')
+
+  if (config.cleanDist) {
+    await fs.rm(config.distPath, { recursive: true })
+    console.info('✓ Removed dist folder')
+  }
+
+  await writeFile(
+    'manifest.json',
+    JSON.stringify({
+      navigation: await traverseTree(
+        { items: sdkScopedManifest },
+        async (item) => {
+          return {
+            title: item.title,
+            href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(item.href, ':sdk:') : item.href,
+            tag: item.tag,
+            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+            icon: item.icon,
+            target: item.target,
+            sdk: item.sdk,
+          }
+        },
+        // @ts-expect-error - This traverseTree function might just be the death of me
+        async (group) => {
+          return {
+            title: group.title,
+            collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+            tag: group.tag,
+            wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+            icon: group.icon,
+            hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+            sdk: group.sdk,
+            items: group.items,
+          }
+        },
+      ),
+    }),
+  )
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
   const partialsVFiles = await Promise.all(
     partials.map(async (partial) => {
-      const partialPath = `docs/_partials/${partial.path}`
+      const partialPath = `/docs/_partials/${partial.path}`
       return await markdownProcessor()
-        // validate links in partials to docs are valid
+        // validate links in partials to docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree, vfile) => {
-          return mdastVisit(tree, (node) => {
-            if (node.type !== 'link') return
-            if (!('url' in node)) return
-            if (typeof node.url !== 'string') return
-            if (!node.url.startsWith('/docs/')) return
-            if (!('children' in node)) return
+          return mdastMap(tree, (node) => {
+            if (node.type !== 'link') return node
+            if (!('url' in node)) return node
+            if (typeof node.url !== 'string') return node
+            if (!node.url.startsWith('/docs/')) return node
+            if (!('children' in node)) return node
 
-            const [url, hash] = removeMdxSuffix(node.url).split('#')
+            // we are overwriting the url with the mdx suffix removed
+            node.url = removeMdxSuffix(node.url)
+
+            const [url, hash] = (node.url as string).split('#')
 
             const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
-            if (ignore === true) return
+            if (ignore === true) return node
 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
               safeMessage(config, vfile, partialPath, 'link-doc-not-found', [url], node.position)
-              return
+              return node
             }
 
             if (hash !== undefined) {
-              const hasHash = doc.headingsHashs.includes(hash)
+              const hasHash = doc.headingsHashes.has(hash)
 
               if (hasHash === false) {
                 safeMessage(config, vfile, partialPath, 'link-hash-not-found', [hash, url], node.position)
               }
             }
+
+            if (doc.sdk !== undefined) {
+              // we are going to swap it for the sdk link component to give the users a great experience
+
+              return mdastBuilder('mdxJsxTextElement', {
+                name: 'SDKLink',
+                attributes: [
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'href',
+                    value: scopeHrefToSDK(url, ':sdk:'),
+                  }),
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'sdks',
+                    value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                      value: JSON.stringify(doc.sdk),
+                    }),
+                  }),
+                ],
+                children: node.children,
+              })
+            }
+
+            return node
           })
         })
         .process(partial.vfile)
     }),
   )
-  console.info(`✔️ Validated all partials`)
+  console.info(`✓ Validated all partials`)
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
       const filePath = `${doc.href}.mdx`
-      const vfile = await markdownProcessor()
-        // Validate links between docs are valid
-        .use(() => (tree: Node, vfile: VFile) => {
-          return mdastVisit(tree, (node) => {
-            if (node.type !== 'link') return
-            if (!('url' in node)) return
-            if (typeof node.url !== 'string') return
-            if (!node.url.startsWith('/docs/')) return
-            if (!('children' in node)) return
 
-            const [url, hash] = removeMdxSuffix(node.url).split('#')
+      const vfile = await markdownProcessor()
+        // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
+        .use(() => (tree: Node, vfile: VFile) => {
+          return mdastMap(tree, (node) => {
+            if (node.type !== 'link') return node
+            if (!('url' in node)) return node
+            if (typeof node.url !== 'string') return node
+            if (!node.url.startsWith('/docs/')) return node
+            if (!('children' in node)) return node
+
+            // we are overwriting the url with the mdx suffix removed
+            node.url = removeMdxSuffix(node.url)
+
+            const [url, hash] = (node.url as string).split('#')
 
             const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
-            if (ignore === true) return
+            if (ignore === true) return node
 
             const doc = docsMap.get(url)
 
             if (doc === undefined) {
               safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
-              return
+              return node
             }
 
             if (hash !== undefined) {
-              const hasHash = doc.headingsHashs.includes(hash)
+              const hasHash = doc.headingsHashes.has(hash)
 
               if (hasHash === false) {
                 safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
               }
             }
+
+            if (doc.sdk !== undefined) {
+              // we are going to swap it for the sdk link component to give the users a great experience
+
+              return mdastBuilder('mdxJsxTextElement', {
+                name: 'SDKLink',
+                attributes: [
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'href',
+                    value: scopeHrefToSDK(url, ':sdk:'),
+                  }),
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'sdks',
+                    value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                      value: JSON.stringify(doc.sdk),
+                    }),
+                  }),
+                ],
+                children: node.children,
+              })
+            }
+
+            return node
           })
         })
         // Validate the <If /> components
@@ -1009,6 +1295,22 @@ export const build = async (config: BuildConfig) => {
             })
           })
         })
+        // embed the partials into the doc
+        .use(() => (tree, vfile) => {
+          return mdastMap(tree, (node) => {
+            const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+
+            if (partialSrc === undefined) return node
+
+            const partial = partials.find(
+              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
+            )
+
+            if (partial === undefined) return node // a warning will have already been reported
+
+            return Object.assign(node, partial.node)
+          })
+        })
         .process(doc.vfile)
 
       const distFilePath = `${doc.href.replace('/docs/', '')}.mdx`
@@ -1019,13 +1321,272 @@ export const build = async (config: BuildConfig) => {
         }
       }
 
+      if (doc.sdk !== undefined) {
+        // This is a sdk specific doc, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+
+        await writeFile(
+          distFilePath,
+          // It's possible we will want to / need to put some frontmatter here
+          `---
+template: wide
+---
+<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+        )
+
+        return vfile
+      }
+
+      await writeFile(distFilePath, String(vfile))
+
       return vfile
     }),
   )
 
-  console.info(`✔️ Validated all docs`)
+  console.info(`✓ Validated and wrote out all docs`)
 
-  return reporter([...coreVFiles, ...partialsVFiles], { quiet: true })
+  const sdkSpecificVFiles = await Promise.all(
+    config.validSdks.map(async (targetSdk) => {
+      const vFiles = await Promise.all(
+        docsArray.map(async (doc) => {
+          if (doc.sdk === undefined) return null // skip core docs
+          if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
+
+          const filePath = `${doc.href}.mdx`
+          const vfile = await markdownProcessor()
+            // filter out content that is only available to other sdk's
+            .use(() => (tree, vfile) => {
+              return mdastFilter(tree, (node) => {
+                // We aren't passing the vfile here as the as the warning
+                // should have already been reported above when we initially
+                // parsed the file
+                const sdk = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, filePath)
+
+                if (sdk === undefined) return true
+
+                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, filePath)
+
+                if (sdksFilter === undefined) return true
+
+                if (sdksFilter.includes(targetSdk)) {
+                  return true
+                }
+
+                return false
+              })
+            })
+            // Validate unique heading ids
+            .use(() => (tree, vfile) => {
+              const headingsHashes = new Set<string>()
+              const slugify = slugifyWithCounter()
+
+              mdastVisit(
+                tree,
+                (node) => node.type === 'heading',
+                (node) => {
+                  const id = extractHeadingFromHeadingNode(node)
+
+                  if (id !== undefined) {
+                    if (headingsHashes.has(id)) {
+                      safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
+                    }
+
+                    headingsHashes.add(id)
+                  } else {
+                    const slug = slugify(toString(node).trim())
+
+                    if (headingsHashes.has(slug)) {
+                      safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
+                    }
+
+                    headingsHashes.add(slug)
+                  }
+                },
+              )
+            })
+            // scope urls so they point to the current sdk
+            .use(() => (tree, vfile) => {
+              return mdastMap(tree, (node) => {
+                if (node.type !== 'link') return node
+                if (!('url' in node)) {
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url property missing'], node.position)
+                  return node
+                }
+                if (typeof node.url !== 'string') {
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url not a string'], node.position)
+                  return node
+                }
+                if (!node.url.startsWith('/docs/')) {
+                  return node
+                }
+
+                // we are overwriting the url with the mdx suffix removed
+                node.url = removeMdxSuffix(node.url)
+
+                const [url, hash] = (node.url as string).split('#')
+
+                const doc = docsMap.get(url)
+
+                if (doc === undefined) {
+                  safeFail(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+                  return node
+                }
+
+                // we might need to do something here with doc
+
+                return node
+              })
+            })
+            // Insert the canonical link into the doc frontmatter
+            .use(() => (tree, vfile) => {
+              return mdastMap(tree, (node) => {
+                if (node.type !== 'yaml') return node
+                if (!('value' in node)) return node
+                if (typeof node.value !== 'string') return node
+
+                const frontmatter = yaml.parse(node.value)
+
+                frontmatter.canonical = doc.sdk ? scopeHrefToSDK(doc.href, ':sdk:') : doc.href
+
+                node.value = yaml.stringify(frontmatter).split('\n').slice(0, -1).join('\n')
+
+                return node
+              })
+            })
+            .process({
+              ...doc.vfile,
+              messages: [], // reset the messages, otherwise they will be duplicated
+            })
+
+          await writeSdkFile(targetSdk, `${doc.href.replace('/docs/', '')}.mdx`, String(vfile))
+
+          return vfile
+        }),
+      )
+
+      console.info(`✓ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific docs`)
+
+      return { targetSdk, vFiles }
+    }),
+  )
+
+  const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
+  const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
+
+  for (const doc of docsWithOnlyIfComponents) {
+    const filePath = `${doc.href}.mdx`
+
+    // Extract all SDK values from <If /> all components
+    const availableSDKs = new Set<SDK>()
+
+    mdastVisit(doc.node, (node) => {
+      const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, filePath)
+
+      if (sdkProp === undefined) return
+
+      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, filePath)
+
+      if (sdks === undefined) return
+
+      sdks.forEach((sdk) => availableSDKs.add(sdk))
+    })
+
+    // For each SDK, check heading uniqueness after filtering
+    for (const sdk of availableSDKs) {
+      const vfile = await markdownProcessor()
+        .use(() => (inputTree) => {
+          return mdastFilter(inputTree, (node) => {
+            const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', false, filePath)
+            if (!sdkProp) return true
+
+            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, filePath)
+            if (!ifSdks) return true
+
+            return ifSdks.includes(sdk)
+          })
+        })
+        .use(() => (inputTree, vfile) => {
+          const headingsHashes = new Set<string>()
+          const slugify = slugifyWithCounter()
+
+          mdastVisit(
+            inputTree,
+            (node) => node.type === 'heading',
+            (node) => {
+              const id = extractHeadingFromHeadingNode(node)
+
+              if (id !== undefined) {
+                if (headingsHashes.has(id)) {
+                  safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
+                }
+
+                headingsHashes.add(id)
+              } else {
+                const slug = slugify(toString(node).trim())
+
+                if (headingsHashes.has(slug)) {
+                  safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
+                }
+
+                headingsHashes.add(slug)
+              }
+            },
+          )
+        })
+        .process({
+          path: filePath,
+          value: String(doc.vfile),
+        })
+    }
+  }
+
+  const flatSdkSpecificVFiles = sdkSpecificVFiles
+    .flatMap(({ vFiles }) => vFiles)
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+
+  return reporter([...coreVFiles, ...partialsVFiles, ...flatSdkSpecificVFiles], { quiet: true })
+}
+
+export const invalidateFile =
+  (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => (filePath: string) => {
+    store.markdownFiles.delete(removeMdxSuffix(`/docs/${path.relative(config.docsPath, filePath)}`))
+    store.partialsFiles.delete(path.relative(config.partialsPath, filePath))
+  }
+
+const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
+  const invalidate = invalidateFile(store, config)
+
+  watcher.subscribe(config.docsPath, async (error, events) => {
+    if (error !== null) {
+      console.error(error)
+      return
+    }
+
+    events.forEach((event) => {
+      invalidate(event.path)
+    })
+
+    try {
+      const now = performance.now()
+
+      const output = await build(store, config)
+
+      if (config.flags.controlled) {
+        console.info('---rebuild-complete---')
+      }
+
+      const after = performance.now()
+
+      console.info(`Rebuilt docs in ${after - now} milliseconds`)
+
+      if (output !== '') {
+        console.info(output)
+      }
+    } catch (error) {
+      console.error(error)
+
+      return
+    }
+  })
 }
 
 type BuildConfigOptions = {
@@ -1034,12 +1595,18 @@ type BuildConfigOptions = {
   docsPath: string
   manifestPath: string
   partialsPath: string
+  distPath: string
   ignorePaths: string[]
   ignoreWarnings?: Record<string, string[]>
   manifestOptions: {
     wrapDefault: boolean
     collapseDefault: boolean
     hideTitleDefault: boolean
+  }
+  cleanDist: boolean
+  flags?: {
+    watch?: boolean
+    controlled?: boolean
   }
 }
 
@@ -1055,14 +1622,17 @@ export function createConfig(config: BuildConfigOptions) {
     basePath: config.basePath,
     validSdks: config.validSdks,
 
-    docsRelativePath: config.docsPath,
-    docsPath: resolve(config.docsPath),
-
     manifestRelativePath: config.manifestPath,
     manifestFilePath: resolve(config.manifestPath),
 
     partialsRelativePath: config.partialsPath,
     partialsPath: resolve(config.partialsPath),
+
+    docsRelativePath: config.docsPath,
+    docsPath: resolve(config.docsPath),
+
+    distRelativePath: config.distPath,
+    distPath: resolve(config.distPath),
 
     ignorePaths: config.ignorePaths,
     ignoreWarnings: config.ignoreWarnings || {},
@@ -1071,15 +1641,23 @@ export function createConfig(config: BuildConfigOptions) {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    cleanDist: config.cleanDist,
+    flags: {
+      watch: config.flags?.watch ?? false,
+      controlled: config.flags?.controlled ?? false,
+    },
   }
 }
 
 const main = async () => {
+  const args = process.argv.slice(2)
+
   const config = createConfig({
     basePath: __dirname,
     docsPath: '../docs',
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',
+    distPath: '../dist',
     ignorePaths: [
       '/docs/core-1',
       '/pricing',
@@ -1109,12 +1687,30 @@ const main = async () => {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    cleanDist: false,
+    flags: {
+      watch: args.includes('--watch'),
+      controlled: args.includes('--controlled'),
+    },
   })
 
-  const output = await build(config)
+  const store = createBlankStore()
+
+  const output = await build(store, config)
+
+  if (config.flags.controlled) {
+    console.info('---initial-build-complete---')
+  }
 
   if (output !== '') {
     console.info(output)
+  }
+
+  if (config.flags.watch) {
+    console.info(`Watching for changes...`)
+
+    watchAndRebuild(store, { ...config, cleanDist: true })
+  } else if (output !== '') {
     process.exit(1)
   }
 }

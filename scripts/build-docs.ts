@@ -1160,14 +1160,37 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               }
             }
 
-            console.log({
-              doc,
-            })
-
             if (doc.sdk !== undefined) {
               // we are going to swap it for the sdk link component to give the users a great experience
 
-              console.log('swapping for sdk link component')
+              const firstChild = node.children?.[0]
+              const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+              if (childIsCodeBlock) {
+                firstChild.type = 'text'
+
+                return mdastBuilder('mdxJsxTextElement', {
+                  name: 'SDKLink',
+                  attributes: [
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'href',
+                      value: scopeHrefToSDK(url, ':sdk:'),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'sdks',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: JSON.stringify(doc.sdk),
+                      }),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'code',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: childIsCodeBlock,
+                      }),
+                    }),
+                  ],
+                })
+              }
 
               return mdastBuilder('mdxJsxTextElement', {
                 name: 'SDKLink',
@@ -1247,6 +1270,35 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
             if (doc.sdk !== undefined) {
               // we are going to swap it for the sdk link component to give the users a great experience
+
+              const firstChild = node.children?.[0]
+              const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+              if (childIsCodeBlock) {
+                firstChild.type = 'text'
+
+                return mdastBuilder('mdxJsxTextElement', {
+                  name: 'SDKLink',
+                  attributes: [
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'href',
+                      value: scopeHrefToSDK(url, ':sdk:'),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'sdks',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: JSON.stringify(doc.sdk),
+                      }),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'code',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: childIsCodeBlock,
+                      }),
+                    }),
+                  ],
+                })
+              }
 
               return mdastBuilder('mdxJsxTextElement', {
                 name: 'SDKLink',

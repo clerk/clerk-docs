@@ -127,7 +127,7 @@ const baseConfig = {
     collapseDefault: false,
     hideTitleDefault: false,
   },
-cleanDist: false,
+  cleanDist: false,
 }
 
 describe('Basic Functionality', () => {
@@ -2044,6 +2044,116 @@ Content for section 2.`,
 
     // Invalid link should produce a warning
     expect(output).toContain('warning Hash "invalid-section" not found in /docs/target-document')
+  })
+
+  test('if the contents of a link starts with a ` and ends with a ` it should inject the code prop', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Link with code', href: '/docs/link-with-code' },
+              { title: 'Sign In', href: '/docs/components/sign-in' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/components/sign-in.mdx',
+        content: `---
+title: Sign In
+description: Sign In component
+sdk: react, nextjs
+---
+
+\`\`\`js
+const x = 'y'
+\`\`\`
+`,
+      },
+      {
+        path: './docs/link-with-code.mdx',
+        content: `---
+title: Link with code
+description: Link with code
+---
+- [\`<SignIn />\`](/docs/components/sign-in)
+`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile(pathJoin('./dist/link-with-code.mdx'))).toContain(
+      `<SDKLink href="/docs/:sdk:/components/sign-in" sdks={["react","nextjs"]} code={true}>\\<SignIn /></SDKLink>`,
+    )
+  })
+
+  test('if the contents of a link starts with a ` and ends with a ` it should inject the code prop (when in a partial)', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Link with code', href: '/docs/link-with-code' },
+              { title: 'Sign In', href: '/docs/components/sign-in' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/components/sign-in.mdx',
+        content: `---
+title: Sign In
+description: Sign In component
+sdk: react, nextjs
+---
+
+\`\`\`js
+const x = 'y'
+\`\`\`
+`,
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `[\`<SignIn />\`](/docs/components/sign-in)`,
+      },
+      {
+        path: './docs/link-with-code.mdx',
+        content: `---
+title: Link with code
+description: Link with code
+---
+- <Include src="_partials/links" />
+`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile(pathJoin('./dist/link-with-code.mdx'))).toContain(
+      `<SDKLink href="/docs/:sdk:/components/sign-in" sdks={["react","nextjs"]} code={true}>\\<SignIn /></SDKLink>`,
+    )
   })
 })
 

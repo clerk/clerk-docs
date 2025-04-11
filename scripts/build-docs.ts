@@ -1121,10 +1121,13 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
-  const partialsVFiles = await Promise.all(
+  const validatedPartials = await Promise.all(
     partials.map(async (partial) => {
       const partialPath = `/docs/_partials/${partial.path}`
-      return await markdownProcessor()
+
+      let node: Node | null = null
+
+      const vfile = await markdownProcessor()
         // validate links in partials to docs are valid and replace the links to sdk scoped pages with the sdk link component
         .use(() => (tree, vfile) => {
           return mdastMap(tree, (node) => {
@@ -1157,8 +1160,14 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               }
             }
 
+            console.log({
+              doc,
+            })
+
             if (doc.sdk !== undefined) {
               // we are going to swap it for the sdk link component to give the users a great experience
+
+              console.log('swapping for sdk link component')
 
               return mdastBuilder('mdxJsxTextElement', {
                 name: 'SDKLink',
@@ -1181,7 +1190,20 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             return node
           })
         })
+        .use(() => (tree, vfile) => {
+          node = tree
+        })
         .process(partial.vfile)
+
+      if (node === null) {
+        throw new Error(errorMessages['partial-parse-error'](partial.path))
+      }
+
+      return {
+        ...partial,
+        node: node as Node,
+        vfile,
+      }
     }),
   )
   console.info(`✓ Validated all partials`)
@@ -1302,7 +1324,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
             if (partialSrc === undefined) return node
 
-            const partial = partials.find(
+            const partial = validatedPartials.find(
               (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
             )
 
@@ -1542,6 +1564,8 @@ template: wide
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
+
+  const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
 
   return reporter([...coreVFiles, ...partialsVFiles, ...flatSdkSpecificVFiles], { quiet: true })
 }

@@ -127,6 +127,7 @@ const baseConfig = {
     collapseDefault: false,
     hideTitleDefault: false,
   },
+cleanDist: false,
 }
 
 describe('Basic Functionality', () => {
@@ -1860,6 +1861,113 @@ title: Core Page
 # Core page
 
 [SDK Filtered Page](/docs/sdk-filtered-page)
+`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Should swap out links for <SDKLink /> in partials', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+sdk: react, nextjs
+---
+
+SDK filtered page`,
+      },
+      {
+        path: './docs/_partials/links.mdx',
+        content: `[SDK Filtered Page](/docs/sdk-filtered-page)`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+---
+
+# Core page
+
+<Include src="_partials/links" />
+`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Should swap out links for <SDKLink /> inside a component', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+sdk: react, nextjs
+---
+
+SDK filtered page`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+---
+
+# Core page
+
+<Properties>
+  - afterMultiSessionSingleSignOutUrl
+  - string
+
+  go use [SDK Filtered Page](/docs/sdk-filtered-page)
+</Properties>
 `,
       },
     ])

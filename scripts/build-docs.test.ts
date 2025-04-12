@@ -388,6 +388,53 @@ title: Simple Test
 
     expect(output).toContain(`warning <Include /> prop "src" must start with "_partials/"`)
   })
+
+  test('Should validate heading within a partial', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Simple Test', href: '/docs/test-page-1' }],
+            [{ title: 'Test Page 2', href: '/docs/test-page-2' }],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/test-partial.mdx',
+        content: `# Heading`,
+      },
+      {
+        path: './docs/test-page-1.mdx',
+        content: `---
+title: Test Page 1
+description: This is a test page
+---
+
+<Include src="_partials/test-partial" />`,
+      },
+      {
+        path: './docs/test-page-2.mdx',
+        content: `---
+title: Test Page 2
+description: This is a test page
+---
+
+[Test Page](/docs/test-page-1#heading)`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).not.toContain(`warning Hash "heading" not found in /docs/test-page-1`)
+    expect(output).toBe('')
+  })
 })
 
 describe('Link Validation and Processing', () => {

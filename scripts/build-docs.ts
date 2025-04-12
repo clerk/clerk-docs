@@ -15,6 +15,7 @@ import path from 'node:path'
 import remarkMdx from 'remark-mdx'
 import { remark } from 'remark'
 import { visit as mdastVisit } from 'unist-util-visit'
+import { map as mdastMap } from 'unist-util-map'
 import remarkFrontmatter from 'remark-frontmatter'
 import yaml from 'yaml'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
@@ -680,6 +681,38 @@ const parseInMarkdownFile =
           }
 
           return
+        })
+      })
+      .process({
+        path: `${href.substring(1)}.mdx`,
+        value: fileContent,
+      })
+
+    // This needs to be done separately as some further validation expects the partials to not be embedded
+    // but we need to embed it to get all the headings to check
+    await markdownProcessor()
+      // Embed the partial
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+
+          if (partialSrc === undefined) return node
+
+          if (partialSrc.startsWith('_partials/') === false) {
+            safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
+            return node
+          }
+
+          const partial = partials.find(
+            (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
+          )
+
+          if (partial === undefined) {
+            safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
+            return node
+          }
+
+          return Object.assign(node, partial.node)
         })
       })
       // extract out the headings to check hashes in links

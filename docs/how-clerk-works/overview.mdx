@@ -241,7 +241,7 @@ Clerk's authentication model relies on two distinct tokens - a "client token" an
 
 ### Client token
 
-The client token is a long-lived token that is set on your FAPI domain and is stored in the `__client` cookie.
+The client token is a long-lived token that is stored in the `__client` cookie, which is set on your FAPI domain.
 
 - **Cookie name:** `__client`
 - **Contents:** A Clerk-signed JWT containing:
@@ -265,7 +265,7 @@ For more information on the differences between development and production envir
 
 ### Session token
 
-The session token is a short-lived token that is set on your app's domain and is stored in the `__session` cookie.
+The session token is a short-lived token that is stored in the `__session` cookie, which is set on your app's domain.
 
 - **Cookie name:** `__session`
 - **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/backend-requests/resources/session-tokens#default-claims). Can be customized in the Clerk Dashboard to include additional claims.
@@ -295,7 +295,7 @@ When your app makes a request from the frontend to your backend, if the backend 
 
 The short-lived nature of session tokens introduces a case that requires special handling. Consider this scenario: A user signs in to your application and then closes their browser tab. When they return after five minutes by opening a new tab, their session token will have expired since the refresh mechanism could not run while the tab was closed. At this point, Clerk needs to determine the user's authentication status and potentially issue a new session token.
 
-For client-rendered applications, this process is straightforward. Clerk's frontend SDK makes a direct request to FAPI, which validates the client token. If the token is valid, FAPI issues and returns a new session token. If invalid, the user is redirected to the sign-in flow.
+For client-rendered applications, this process is straightforward. Clerk's frontend SDK makes a direct request to FAPI with the `__client` cookie. If the client token is valid, FAPI issues and returns a new session token. This is _secure by default_, because only users who are properly authenticated and signed in will have a valid client token in their browser. If the client token is invalid, the user is redirected to the sign-in flow.
 
 However, server-rendered applications present a unique challenge. Server-to-server requests cannot include browser cookies, as cookies are stored by the browser. This means that, if your app's backend made a request directly to FAPI, the client token would not be available with that request, as the request would not flow through the browser. To solve this problem, Clerk implements a "handshake" flow:
 
@@ -311,29 +311,25 @@ This server -> browser -> FAPI request includes the client token, so FAPI is abl
 >
 > ---
 >
-> Imagine this scenario: you make a request to your frontend and you have an expired session token. You need a new valid session token.
+> First remember that with Clerk, the **session token** is the short-lived one that refreshes every 60 seconds, and the **client token** is the long-lived one whose expiration is your session's lifetime.
 >
-> Normally, to refresh your session token, you need to send your _valid_ session token to clerk, which it will verify, then send you a new valid one. This is _secure by default_, because anyone who has a valid session token is authenticated as you, as we have learned in the rest of this guide.
+> Now let's get back to the previous scenario: you open your server-rendered application after having closed the tab for a few minutes, and now you have an expired session token. Normally, to refresh your session token, you make a request to FAPI with the `__client` cookie that contains the long-lived client token. FAPI will validate the client token and check if there's an active session. If there is, it will mint a new session token and send it back.
 >
-> But in this scenario, you have only an invalid (expired) session token, so the question becomes this: how do you get a new token without making it such that anyone with an invalid token can produce a new valid token, which would be a security problem?
+> But in this scenario, you have only an invalid (expired) session token, and since your app is rendering on the server, you cannot send a request with the client token since it's stored in a cookie in the browser and server-to-server requests don't flow through the browser. So the question becomes this: how do you get a new session token?
 >
 > - You could send the expired session token, but then any attacker with an expired session token would be able to mint a new one and hijack your session.
 > - You could verify that the request only comes from your application's domain, but then any attacker could just send an `http` request with a spoofed domain value and get a token on your behalf.
 >
-> Remember, with Clerk, the **session token** is the short-lived one that is currently expired, and the **client token** is the long-lived one whose expiration is your session's lifetime. So, the best solution is to check if there's a valid **client token** set on FAPI with a session that's still active. If there is, it would be safe to mint a new **session token** and send that back.
+> Neither of these options are secure. Clerk's unique authentication model requires a new mechanism to get a new session token. This is where handshake comes in - here's how it works:
 >
-> However, if your app is rendered on the server, your hands are tied. If your app's server makes an API request to FAPI, it will not be able to check the **client token**, because the **client token** is stored in a cookie and **cookies live in the browser**.
->
-> This is where handshake comes in.
->
-> 1. Request is made to an application that uses Clerk.
-> 1. Clerk SDK determines the authentication state of the request (`signed-in`, `signed-out`, or `handshake`).
-> 1. If the authentication state is `handshake` (i.e. unknown), Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
+> 1. A request is made to an application that uses Clerk on the server.
+> 1. The Clerk SDK used by your app determines the authentication state of the request: `signed-in` (valid session token), `signed-out` (no session token), or `handshake` (expired session token).
+> 1. If the authentication state is `handshake`, meaning Clerk knows the session token is expired but can't be sure if the user is signed in or out, the Clerk SDK responds with a 307 redirect to the handshake endpoint: `fapi/v1/client/handshake`.
 > 1. The handshake endpoint gets information about the current session and returns a handshake payload. The encoded handshake payload contains a list of `Set-Cookie` header directives to be passed along with the final response.
->    - If the session is active, a fresh `__session` cookie is returned.
+>    - If the session is active, a new, valid `__session` cookie is returned.
 >    - If the session is inactive, the `__session` cookie is wiped and the request will be treated as signed out.
 > 1. The handshake endpoint redirects back to the host application along with the handshake payload, encoded either in the URL (development) or as a cookie (production).
-> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response.
+> 1. The handshake payload is parsed and `Set-Cookie` headers are set on the response by the Clerk SDK.
 > 1. If an updated `__session` cookie is returned, the JWT is verified. If verification is successful, the request is treated as signed in.
 > 1. If an updated `__session` cookie is not returned, the request is treated as signed out.
 >

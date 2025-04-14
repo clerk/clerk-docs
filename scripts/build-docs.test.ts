@@ -632,6 +632,68 @@ test`,
     expect(output).toContain(`warning Hash "my-heading" not found in /docs/page-2`)
     expect(output).toContain(`warning Doc /docs/page-3 not found`)
   })
+
+  test('Links with only a hash to the same page are valid', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Page 1', href: '/docs/page-1' }]],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+description: This is a test page
+---
+
+# Heading
+
+[Valid Link to self](#heading)`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('Invalid Links with only a hash to the same page should be reported', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Page 1', href: '/docs/page-1' }]],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+description: This is a test page
+---
+
+[Invalid Link to self](#invalid-heading)`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(`warning Hash "invalid-heading" not found in /docs/page-1`)
+  })
 })
 
 describe('Path and File Handling', () => {

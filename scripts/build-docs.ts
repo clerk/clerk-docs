@@ -970,23 +970,28 @@ export const build = async (config: BuildConfig) => {
             if (node.type !== 'link') return
             if (!('url' in node)) return
             if (typeof node.url !== 'string') return
-            if (!node.url.startsWith('/docs/')) return
+            if (!node.url.startsWith('/docs/') && !node.url.startsWith('#')) return
             if (!('children' in node)) return
 
-            const [url, hash] = removeMdxSuffix(node.url).split('#')
+            let [url, hash] = removeMdxSuffix(node.url).split('#')
+
+            if (url === '') {
+              // If the link is just a hash, then we need to link to the same doc
+              url = doc.href
+            }
 
             const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
             if (ignore === true) return
 
-            const doc = docsMap.get(url)
+            const linkedDoc = docsMap.get(url)
 
-            if (doc === undefined) {
+            if (linkedDoc === undefined) {
               safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
               return
             }
 
             if (hash !== undefined) {
-              const hasHash = doc.headingsHashs.includes(hash)
+              const hasHash = linkedDoc.headingsHashs.includes(hash)
 
               if (hasHash === false) {
                 safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)

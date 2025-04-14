@@ -741,12 +741,6 @@ const parseInMarkdownFile =
           return
         })
       })
-      .process({
-        path: `${href.substring(1)}.mdx`,
-        value: fileContent,
-      })
-
-    await markdownProcessor()
       // Validate the <Typedoc />
       .use(() => (tree, vfile) => {
         return mdastVisit(tree, (node) => {

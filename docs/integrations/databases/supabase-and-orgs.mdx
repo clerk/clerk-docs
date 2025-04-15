@@ -6,13 +6,8 @@ description: Learn how to integrate Clerk and support Clerk organizations in you
 <TutorialHero
   beforeYouStart={[
     {
-      title: "Set up a Clerk application",
-      link: "/docs/quickstarts/setup-clerk",
-      icon: "clerk",
-    },
-    {
-      title: "Integrate the appropriate Clerk SDK in your local project",
-      link: "/docs/quickstarts/overview",
+      title: "Integrate Supabase with Clerk",
+      link: "/docs/integrations/databases/supabase",
       icon: "code-bracket",
     },
   ]}
@@ -27,4 +22,145 @@ description: Learn how to integrate Clerk and support Clerk organizations in you
 
 Clerk [organizations](/docs/organizations/overview) allow you to group users together and assign them specific roles and permissions, giving you a flexible and scalable way to manage users and their access to resources within your application.
 
-This guide will show you how to integrate Clerk with Supabase and support Clerk organizations in your application.
+This guide will show you how to support Clerk organizations in your Clerk + Supabase application. If you haven't integrated Clerk with Supabase yet, follow the steps in the [guide on integrating Supabase with Clerk](/docs/integrations/databases/supabase). This guide is a direct extension of that guide.
+
+## Understand the Clerk JWT
+
+Supabase identifies the party making a request by parsing the claims of the incoming JWT. Clerk's JWT, also referred to as the [session token](/docs/backend-requests/resources/session-tokens), contains the `o.id` claim, which stands for the organization ID. This is the value that Supabase uses to identify the organization the user belongs to.
+
+The following is an example of a Clerk session token for a user in an organization, and that organization is [active](/docs/organizations/overview#active-organization). Notice the `o` claim which contains properties that identify the organization, such as the `id` and `slg` (slug) properties.
+
+```js {{ prettier: false }}
+{
+  azp: 'http://localhost:3001',
+  email: 'adaguilar@stetson.edu',
+  exp: 1744734948,
+  fea: 'o:custom-feature',
+  fva: [ 0, -1 ],
+  iat: 1744734888,
+  iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+  jti: '004f0096e5cd44911924',
+  nbf: 1744734878,
+  o: {
+    fpm: '1',
+    id: 'org_123',
+    per: 'custom-perm',
+    rol: 'admin',
+    slg: 'example-org'
+  },
+  role: 'authenticated',
+  sid: 'sess_123',
+  sub: 'user_123',
+  v: 2
+}
+```
+
+To learn about each of the claims and what they mean, see the [guide on session tokens](/docs/backend-requests/resources/session-tokens).
+
+## Enable organizations in the Clerk Dashboard
+
+Organizations are disabled by default. To enable organizations:
+
+1. In the Clerk Dashboard, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/last-active?path=organizations-settings) page.
+1. Select **Enable Organizations**.
+
+## Add `<OrganizationSwitcher />` to your app
+
+The [`<OrganizationSwitcher />`](/docs/components/organization/organization-switcher) component allows a user to switch between their account types - their personal account and their joined organizations. It handles all organization-related flows, including full organization management for users with the correct permissions.
+
+Add the `<OrganizationSwitcher />` component to your app. In the following example, it's added to the header of the app, besides the `<UserButton />` component.
+
+```tsx {{ filename: 'app/layout.tsx', mark: [3, 21] }}
+import {
+  ClerkProvider,
+  OrganizationSwitcher,
+  SignInButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from '@clerk/nextjs'
+import './globals.css'
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <header>
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            <SignedIn>
+              <OrganizationSwitcher />
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main>{children}</main>
+        </body>
+      </html>
+    </ClerkProvider>
+  )
+}
+```
+
+## Update your `task` table to include the organization ID
+
+The `task` table needs to include the organization ID in order to support organizations.
+
+{/* TODO: I don't know how to do migrations :( */}
+
+## Update your RLS policies to include the organization ID
+
+You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. In the [guide on integrating Supabase with Clerk](/docs/integrations/databases/supabase), you learned how to use this function to extract the `sub` value (the user ID) from the JWT claims of the user making the request. This same function can be used to access the `o.id` value as well.
+
+Consider the two policies from the Supabase + Clerk integration guide that restrict access to the `tasks` table based on the requesting user's Clerk ID:
+
+```sql
+    create policy "User can view their own tasks"
+on "public"."tasks"
+for select
+to authenticated
+using (
+((select auth.jwt()->>'sub') = (user_id)::text)
+);
+
+create policy "Users must insert their own tasks"
+on "public"."tasks"
+as permissive
+for insert
+to authenticated
+with check (
+((select auth.jwt()->>'sub') = (user_id)::text)
+);
+```
+
+To update these to include the organization ID, you can use the `coalesce` function to check for the `o.id` value first, and fall back to the `sub` value if it's not available.
+
+{/* TODO: I don't think these are correct, I think `o.id` has to get checked to be equal to the `org_id` column in the `tasks` table? */}
+
+```sql
+create policy "Users can view their own tasks"
+on public.tasks
+for select
+using(coalesce(auth.jwt()->>'o.id', auth.jwt()->>'sub') = user_id);
+
+create policy "Users must insert their own tasks"
+on public.tasks
+as permissive
+for insert
+to authenticated
+with check (
+coalesce(auth.jwt()->>'o.id', auth.jwt()->>'sub') = user_id
+);
+```
+
+{/* TODO: I think there needs to be a migration? But I'm not familiar with that */}
+
+## Test your changes
+
+1. Run your project and sign in. Create a task; this one will be visible if you don't have an active organization.
+1. The `<OrganizationSwitcher />` component will say "Personal account" which indicates that there is no [active organization](/docs/organizations/overview#active-organization). Select the component and create an organization.
+1. Your list of tasks should now be empty (TODO: this may not be true, I think the non-org tasks may still be visible, but I need to test once the migration TODO is done), because the "Users can view their own tasks" policy....
+1. Create a new task.
+1. To verify that the new task is only visible to users in the organization, use the `<OrganizationSwitcher />` component to invite a new user to the organization.
+1. Sign out and sign in as the new user. Use the `<OrganizationSwitcher />` component to verify that the user is part of the organization, and that the organization is set as active. The new task should be visible.

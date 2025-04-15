@@ -105,56 +105,74 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ## Update your `task` table to include the organization ID
 
-The `task` table needs to include the organization ID in order to support organizations.
+The `task` table needs to include the organization ID in order to support organizations. In the [Supabase SQL editor](https://supabase.com/dashboard/project/_/sql/new), run the following command to add the `org_id` column to the `tasks` table:
 
-{/* TODO: I don't know how to do migrations :( */}
+```sql
+-- Add org_id column to tasks table
+ALTER TABLE tasks
+ADD COLUMN org_id text DEFAULT auth.jwt()->>'o.id';
+```
+
+## Install the Supabase CLI
+
+If you haven't already installed the Supabase CLI, install it by running the following command in your terminal:
+
+```bash
+npm install supabase --save-dev
+```
+
+Initialize the Supabase CLI by running the following command in your terminal:
+
+```bash
+npx supabase init
+```
 
 ## Update your RLS policies to include the organization ID
 
 You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. In the [guide on integrating Supabase with Clerk](/docs/integrations/databases/supabase), you learned how to use this function to extract the `sub` value (the user ID) from the JWT claims of the user making the request. This same function can be used to access the `o.id` value as well.
 
-Consider the two policies from the Supabase + Clerk integration guide that restrict access to the `tasks` table based on the requesting user's Clerk ID:
+Let's update the RLS policies to include the organization ID where users can view and create tasks when either:
 
-```sql
-    create policy "User can view their own tasks"
-on "public"."tasks"
-for select
-to authenticated
-using (
-((select auth.jwt()->>'sub') = (user_id)::text)
-);
+- They are the owner of the task (`user_id` matches) and there's no active organization
+- The task belongs to their active organization (`org_id` matches)
 
-create policy "Users must insert their own tasks"
-on "public"."tasks"
-as permissive
-for insert
-to authenticated
-with check (
-((select auth.jwt()->>'sub') = (user_id)::text)
-);
-```
+You'll need to run a migration to update the RLS policies.
 
-To update these to include the organization ID, you can use the `coalesce` function to check for the `o.id` value first, and fall back to the `sub` value if it's not available.
+1. Run the following command to create the migration file:
+   ```bash
+   npx supabase migration new support_clerk_orgs
+   ```
+1. Add the following SQL commands to the migration file:
+   ```sql
+   -- Update RLS policies to include organization ID
+   drop policy if exists "User can view their own tasks" on tasks;
+   drop policy if exists "Users must insert their own tasks" on tasks;
 
-{/* TODO: I don't think these are correct, I think `o.id` has to get checked to be equal to the `org_id` column in the `tasks` table? */}
+   -- Create new policies that check both user_id and org_id
+   create policy "Users can view their own tasks"
+   on tasks
+   for select
+   using (
+     (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
+     (auth.jwt()->>'o.id' = org_id)
+   );
 
-```sql
-create policy "Users can view their own tasks"
-on public.tasks
-for select
-using(coalesce(auth.jwt()->>'o.id', auth.jwt()->>'sub') = user_id);
+   create policy "Users must insert their own tasks"
+   on tasks
+   for insert
+   with check (
+     (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
+     (auth.jwt()->>'o.id' = org_id)
+   );
+   ```
+1. Apply the migration to the database by executing the following command in your terminal:
 
-create policy "Users must insert their own tasks"
-on public.tasks
-as permissive
-for insert
-to authenticated
-with check (
-coalesce(auth.jwt()->>'o.id', auth.jwt()->>'sub') = user_id
-);
-```
+   > [!IMPORTANT]
+   > You may need to link your Supabase project to the CLI. You can do so by running `npx supabase link`. It may need you to sign in to your Supabase account. You can do so by running `npx supabase login`, which will open a browser window to Supabase and give you a code to paste into the CLI in order to sign in. Then you will need to run `npx supabase link` again to link the project to the CLI.
 
-{/* TODO: I think there needs to be a migration? But I'm not familiar with that */}
+   ```bash
+   npx supabase db push
+   ```
 
 ## Test your changes
 

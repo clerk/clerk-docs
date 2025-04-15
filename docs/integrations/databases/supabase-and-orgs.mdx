@@ -57,111 +57,115 @@ The following is an example of a Clerk session token for a user in an organizati
 
 To learn about each of the claims and what they mean, see the [guide on session tokens](/docs/backend-requests/resources/session-tokens).
 
-## Enable organizations in the Clerk Dashboard
+Now that you're familiar with the Clerk JWT, let's support Clerk organizations in your Supabase application.
 
-Organizations are disabled by default. To enable organizations:
+<Steps>
+  ## Enable organizations in the Clerk Dashboard
 
-1. In the Clerk Dashboard, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/last-active?path=organizations-settings) page.
-1. Select **Enable Organizations**.
+  Organizations are disabled by default. To enable organizations:
 
-## Add `<OrganizationSwitcher />` to your app
+  1. In the Clerk Dashboard, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/last-active?path=organizations-settings) page.
+  1. Select **Enable Organizations**.
 
-The [`<OrganizationSwitcher />`](/docs/components/organization/organization-switcher) component allows a user to switch between their account types - their personal account and their joined organizations. It handles all organization-related flows, including full organization management for users with the correct permissions.
+  ## Add `<OrganizationSwitcher />` to your app
 
-Add the `<OrganizationSwitcher />` component to your app. In the following example, it's added to the header of the app, besides the `<UserButton />` component.
+  The [`<OrganizationSwitcher />`](/docs/components/organization/organization-switcher) component allows a user to switch between their account types - their personal account and their joined organizations. It handles all organization-related flows, including full organization management for users with the correct permissions.
 
-```tsx {{ filename: 'app/layout.tsx', mark: [3, 21] }}
-import {
-  ClerkProvider,
-  OrganizationSwitcher,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from '@clerk/nextjs'
-import './globals.css'
+  Add the `<OrganizationSwitcher />` component to your app. In the following example, it's added to the header of the app, besides the `<UserButton />` component.
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>
-          <header>
-            <SignedOut>
-              <SignInButton />
-            </SignedOut>
-            <SignedIn>
-              <OrganizationSwitcher />
-              <UserButton />
-            </SignedIn>
-          </header>
-          <main>{children}</main>
-        </body>
-      </html>
-    </ClerkProvider>
-  )
-}
-```
+  ```tsx {{ filename: 'app/layout.tsx', mark: [3, 21] }}
+  import {
+    ClerkProvider,
+    OrganizationSwitcher,
+    SignInButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from '@clerk/nextjs'
+  import './globals.css'
 
-## Update your `task` table to include the organization ID
+  export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+      <ClerkProvider>
+        <html lang="en">
+          <body>
+            <header>
+              <SignedOut>
+                <SignInButton />
+              </SignedOut>
+              <SignedIn>
+                <OrganizationSwitcher />
+                <UserButton />
+              </SignedIn>
+            </header>
+            <main>{children}</main>
+          </body>
+        </html>
+      </ClerkProvider>
+    )
+  }
+  ```
 
-The `task` table needs to include the organization ID in order to support organizations. In the [Supabase SQL editor](https://supabase.com/dashboard/project/_/sql/new), run the following command to add the `org_id` column to the `tasks` table:
+  ## Update your `task` table to include the organization ID
 
-```sql
--- Add org_id column to tasks table
-ALTER TABLE tasks
-ADD COLUMN org_id text DEFAULT auth.jwt()->>'o.id';
-```
+  The `task` table needs to include the organization ID in order to support organizations. In the [Supabase SQL editor](https://supabase.com/dashboard/project/_/sql/new), run the following command to add the `org_id` column to the `tasks` table:
 
-## Update your RLS policies to include the organization ID
+  ```sql
+  -- Add org_id column to tasks table
+  ALTER TABLE tasks
+  ADD COLUMN org_id text DEFAULT auth.jwt()->>'o.id';
+  ```
 
-You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. In the [guide on integrating Supabase with Clerk](/docs/integrations/databases/supabase), you learned how to use this function to extract the `sub` value (the user ID) from the JWT claims of the user making the request. This same function can be used to access the `o.id` value as well.
+  ## Update your RLS policies to include the organization ID
 
-Let's update the RLS policies to include the organization ID where users can view and create tasks when either:
+  You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. In the [guide on integrating Supabase with Clerk](/docs/integrations/databases/supabase), you learned how to use this function to extract the `sub` value (the user ID) from the JWT claims of the user making the request. This same function can be used to access the `o.id` value as well.
 
-- They are the owner of the task (`user_id` matches) and there's no active organization
-- The task belongs to their active organization (`org_id` matches)
+  Let's update the RLS policies to include the organization ID where users can view and create tasks when either:
 
-You'll need to run a migration to update the RLS policies.
+  - They are the owner of the task (`user_id` matches) and there's no active organization
+  - The task belongs to their active organization (`org_id` matches)
 
-1. To run migrations, you'll need to install the Supabase CLI and start the local development stack. See the [Supabase docs](https://supabase.com/docs/guides/local-development#quickstart) for instructions.
-1. Add the following SQL commands to the migration file:
-   ```sql
-   -- Update RLS policies to include organization ID
-   drop policy if exists "User can view their own tasks" on tasks;
-   drop policy if exists "Users must insert their own tasks" on tasks;
+  You'll need to run a migration to update the RLS policies.
 
-   -- Create new policies that check both user_id and org_id
-   create policy "Users can view their own tasks"
-   on tasks
-   for select
-   using (
-     (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
-     (auth.jwt()->>'o.id' = org_id)
-   );
+  1. To run migrations, you'll need to install the Supabase CLI and start the local development stack. See the [Supabase docs](https://supabase.com/docs/guides/local-development#quickstart) for instructions.
+  1. Add the following SQL commands to the migration file:
+     ```sql
+     -- Update RLS policies to include organization ID
+     drop policy if exists "User can view their own tasks" on tasks;
+     drop policy if exists "Users must insert their own tasks" on tasks;
 
-   create policy "Users must insert their own tasks"
-   on tasks
-   for insert
-   with check (
-     (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
-     (auth.jwt()->>'o.id' = org_id)
-   );
-   ```
-1. Apply the migration to the database by executing the following command in your terminal:
+     -- Create new policies that check both user_id and org_id
+     create policy "Users can view their own tasks"
+     on tasks
+     for select
+     using (
+       (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
+       (auth.jwt()->>'o.id' = org_id)
+     );
 
-   > [!IMPORTANT]
-   > You may need to link your Supabase project to the CLI. You can do so by running `npx supabase link`. It may need you to sign in to your Supabase account. You can do so by running `npx supabase login`, which will open a browser window to Supabase and give you a code to paste into the CLI in order to sign in. Then you will need to run `npx supabase link` again to link the project to the CLI.
+     create policy "Users must insert their own tasks"
+     on tasks
+     for insert
+     with check (
+       (auth.jwt()->>'sub' = user_id and auth.jwt()->>'o.id' is null) or
+       (auth.jwt()->>'o.id' = org_id)
+     );
+     ```
+  1. Apply the migration to the database by executing the following command in your terminal:
 
-   ```bash
-   npx supabase db push
-   ```
+     > [!IMPORTANT]
+     > You may need to link your Supabase project to the CLI. You can do so by running `npx supabase link`. It may need you to sign in to your Supabase account. You can do so by running `npx supabase login`, which will open a browser window to Supabase and give you a code to paste into the CLI in order to sign in. Then you will need to run `npx supabase link` again to link the project to the CLI.
 
-## Test your changes
+     ```bash
+     npx supabase db push
+     ```
 
-1. Run your project and sign in. Create a task; this one will be visible if you don't have an active organization.
-1. The `<OrganizationSwitcher />` component will say "Personal account" which indicates that there is no [active organization](/docs/organizations/overview#active-organization). Select the component and create an organization.
-1. Your list of tasks should now be empty (TODO: this may not be true, I think the non-org tasks may still be visible, but I need to test once the migration TODO is done), because the "Users can view their own tasks" policy....
-1. Create a new task.
-1. To verify that the new task is only visible to users in the organization, use the `<OrganizationSwitcher />` component to invite a new user to the organization.
-1. Sign out and sign in as the new user. Use the `<OrganizationSwitcher />` component to verify that the user is part of the organization, and that the organization is set as active. The new task should be visible.
+  ## Test your changes
+
+  1. Run your project and sign in. Create a task; this one will be visible if you don't have an active organization.
+  1. The `<OrganizationSwitcher />` component will say "Personal account" which indicates that there is no [active organization](/docs/organizations/overview#active-organization). Select the component and create an organization.
+  1. Your list of tasks should now be empty (TODO: this may not be true, I think the non-org tasks may still be visible, but I need to test once the migration TODO is done), because the "Users can view their own tasks" policy....
+  1. Create a new task.
+  1. To verify that the new task is only visible to users in the organization, use the `<OrganizationSwitcher />` component to invite a new user to the organization.
+  1. Sign out and sign in as the new user. Use the `<OrganizationSwitcher />` component to verify that the user is part of the organization, and that the organization is set as active. The new task should be visible.
+</Steps>

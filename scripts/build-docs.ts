@@ -1297,6 +1297,10 @@ const main = async () => {
       '/docs/maintenance-mode.mdx': ['doc-not-in-manifest'],
       '/docs/deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
       '/docs/references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+
+      // Typedoc warnings
+      '../clerk-typedoc/types/active-session-resource.mdx': ['link-hash-not-found'],
+      '../clerk-typedoc/types/pending-session-resource.mdx': ['link-hash-not-found'],
     },
     validSdks: VALID_SDKS,
     manifestOptions: {

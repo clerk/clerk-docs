@@ -1498,6 +1498,9 @@ template: wide
 
                 const [url, hash] = (node.url as string).split('#')
 
+                const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+                if (ignore === true) return node
+
                 const doc = docsMap.get(url)
 
                 if (doc === undefined) {

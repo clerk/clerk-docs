@@ -523,11 +523,7 @@ title: Page 1
       },
       {
         path: './docs/_partials/links.mdx',
-        content: `---
-title: Links
----
-
-[Page 2](/docs/page-2#my-heading)
+        content: `[Page 2](/docs/page-2#my-heading)
 [Page 2](/docs/page-3)`,
       },
       {
@@ -1556,7 +1552,7 @@ title: Simple Test
         path: './docs/simple-test.mdx',
         content: `---
 title: Simple Test
-sdk: react
+sdk: react, nextjs
 ---
 
 <Include src="_partials/test-partial" />
@@ -1570,11 +1566,18 @@ sdk: react
       createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react'],
+        validSdks: ['react', 'nextjs'],
       }),
     )
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toContain('Test Partial Content')
+    expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).not.toContain(
+      '<Include src="_partials/test-partial" />',
+    )
+    expect(await readFile(pathJoin('./dist/nextjs/simple-test.mdx'))).toContain('Test Partial Content')
+    expect(await readFile(pathJoin('./dist/nextjs/simple-test.mdx'))).not.toContain(
+      '<Include src="_partials/test-partial" />',
+    )
   })
 
   test('Invalid partial src fails the build', async () => {
@@ -2159,68 +2162,55 @@ description: Link with code
 
 describe('Path and File Handling', () => {
   test('should ignore paths specified in ignorePaths during processing', async () => {
-    const { tempDir, pathJoin, listFiles } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigation: [
             [
-              { title: 'Regular Guide', href: '/docs/regular-guide' },
-              { title: 'Ignored Guide', href: '/docs/ignored/ignored-guide' },
+              { title: 'Core Guide', href: '/docs/core-guide' },
+              { title: 'Scoped Guide', href: '/docs/scoped-guide' },
             ],
           ],
         }),
       },
       {
-        path: './docs/regular-guide.mdx',
-        content: `---
-title: Regular Guide
----
-
-# Regular Guide Content`,
+        path: './docs/_partials/ignored-partial.mdx',
+        content: `[Ignored Guide](/docs/ignored/ignored-guide)`,
       },
       {
-        path: './docs/ignored/ignored-guide.mdx',
+        path: './docs/core-guide.mdx',
         content: `---
-title: Ignored Guide
+title: Core Guide
+description: Not sdk specific guide
 ---
 
-# Ignored Guide Content`,
+<Include src="_partials/ignored-partial" />
+[Ignored Guide](/docs/ignored/ignored-guide)`,
+      },
+      {
+        path: './docs/scoped-guide.mdx',
+        content: `---
+title: Scoped Guide
+description: guide specific to react
+sdk: react
+---
+
+[Ignored Guide](/docs/ignored/ignored-guide)`,
       },
     ])
 
-    await build(
+    const output = await build(
       createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
-        ignorePaths: ['/docs/ignored'],
+        ignorePaths: ['/docs/_partials', '/docs/ignored'],
       }),
     )
 
-    // Check that only the regular guide was processed
-    const distFiles = (await listFiles()).filter((file) => file.startsWith('dist/'))
-
-    expect(distFiles).toContain('dist/regular-guide.mdx')
-    expect(distFiles).toContain('dist/manifest.json')
-    expect(distFiles).not.toContain('dist/ignored/ignored-guide.mdx')
-
-    // Verify that the manifest was filtered correctly
-    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
-      navigation: [
-        [
-          {
-            title: 'Regular Guide',
-            href: '/docs/regular-guide',
-          },
-          {
-            title: 'Ignored Guide',
-            href: '/docs/ignored/ignored-guide',
-          },
-        ],
-      ],
-    })
+    expect(output).toBe('')
   })
 
   test('should detect file path conflicts when a core doc path matches an SDK path', async () => {
@@ -2333,11 +2323,7 @@ title: Target Page
       },
       {
         path: './docs/_partials/links.mdx',
-        content: `---
-title: Links
----
-
-[Link to Target with .mdx](/docs/target-page.mdx)
+        content: `[Link to Target with .mdx](/docs/target-page.mdx)
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,
@@ -2393,11 +2379,7 @@ title: Target Page
       },
       {
         path: './docs/_partials/links.mdx',
-        content: `---
-title: Links
----
-
-[Link to Target with .mdx](/docs/target-page.mdx)
+        content: `[Link to Target with .mdx](/docs/target-page.mdx)
 [Link to Target without .mdx](/docs/target-page)
 [Link to Target with hash](/docs/target-page#target-page-content)
 [Link to Target with hash and .mdx](/docs/target-page.mdx#target-page-content)`,

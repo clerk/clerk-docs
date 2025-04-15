@@ -175,11 +175,9 @@ description: This is a simple test page
 Testing with a simple page.`)
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
-    expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
-      JSON.stringify({
-        navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
-      }),
-    )
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+    })
   })
 
   test('Warning on missing description in frontmatter', async () => {
@@ -365,7 +363,7 @@ title: Simple Test
     expect(groups[3].hideTitle).toBe(true)
   })
 
-  test('should properly inherit SDK filtering from parent groups to child items', async () => {
+  test('should properly pass down SDK filtering from parent groups to child items', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -491,6 +489,139 @@ title: Simple Test
                   title: 'Sub Group',
                   sdk: ['vue'],
                   items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }]],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
+  })
+
+  test('should properly inherit SDK filtering from child items up to parent groups', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'SDK Group',
+                items: [
+                  [
+                    {
+                      title: 'Sub Group',
+                      items: [
+                        [
+                          { title: 'SDK Item', href: '/docs/sdk-item' },
+                          { title: 'Nested Group', items: [[{ title: 'Nested Item', href: '/docs/nested-item' }]] },
+                        ],
+                      ],
+                    },
+                  ],
+                ],
+              },
+              {
+                title: 'Generic Group',
+                items: [
+                  [
+                    {
+                      title: 'Sub Group',
+                      items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
+                    },
+                  ],
+                ],
+              },
+              {
+                title: 'Vue Group',
+                items: [
+                  [
+                    {
+                      title: 'Sub Group',
+                      items: [[{ title: 'Vue Item', href: '/docs/vue-item' }]],
+                    },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-item.mdx',
+        content: `---\ntitle: SDK Item\nsdk: react\n---\nSDK specific content`,
+      },
+      {
+        path: './docs/nested-item.mdx',
+        content: `---\ntitle: Nested Item\nsdk: nextjs\n---\nNested SDK specific content`,
+      },
+      {
+        path: './docs/generic-item.mdx',
+        content: `---\ntitle: Generic Item\n---\nGeneric content`,
+      },
+      {
+        path: './docs/vue-item.mdx',
+        content: `---\ntitle: Vue Item\nsdk: vue\n---\nVue specific content`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'vue'],
+      }),
+    )
+
+    // Check manifest
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+
+    expect(manifest).toEqual({
+      navigation: [
+        [
+          {
+            title: 'SDK Group',
+            sdk: ['react', 'nextjs'],
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  sdk: ['react', 'nextjs'],
+                  items: [
+                    [
+                      { title: 'SDK Item', sdk: ['react'], href: '/docs/:sdk:/sdk-item' },
+                      {
+                        title: 'Nested Group',
+                        sdk: ['nextjs'],
+                        items: [[{ title: 'Nested Item', sdk: ['nextjs'], href: '/docs/:sdk:/nested-item' }]],
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          },
+          {
+            title: 'Generic Group',
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
+                },
+              ],
+            ],
+          },
+          {
+            title: 'Vue Group',
+            sdk: ['vue'],
+            items: [
+              [
+                {
+                  title: 'Sub Group',
+                  sdk: ['vue'],
+                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/:sdk:/vue-item' }]],
                 },
               ],
             ],
@@ -647,24 +778,22 @@ title: Quickstart
     )
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
-    expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
-      JSON.stringify({
-        navigation: [
-          [
-            {
-              title: 'React',
-              sdk: ['react'],
-              items: [[{ title: 'Quickstart', href: '/docs/quickstart/react', sdk: ['react'] }]],
-            },
-            {
-              title: 'Vue',
-              sdk: ['vue'],
-              items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue', sdk: ['vue'] }]],
-            },
-          ],
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      navigation: [
+        [
+          {
+            title: 'React',
+            sdk: ['react'],
+            items: [[{ title: 'Quickstart', href: '/docs/quickstart/react', sdk: ['react'] }]],
+          },
+          {
+            title: 'Vue',
+            sdk: ['vue'],
+            items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue', sdk: ['vue'] }]],
+          },
         ],
-      }),
-    )
+      ],
+    })
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
@@ -704,9 +833,9 @@ Testing with a simple page.`,
       }),
     )
 
-    expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
-      JSON.stringify({ navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]] }),
-    )
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]],
+    })
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
@@ -760,11 +889,9 @@ Testing with a simple page.`,
       }),
     )
 
-    expect(await readFile(pathJoin('./dist/manifest.json'))).toBe(
-      JSON.stringify({
-        navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
-      }),
-    )
+    expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
+    })
 
     const distFiles = await treeDir(pathJoin('./dist'))
 

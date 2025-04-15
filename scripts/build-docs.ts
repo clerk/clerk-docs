@@ -561,6 +561,56 @@ const traverseTree = async <
   ) as unknown as OutTree
 }
 
+const traverseTreeItemsFirst = async <
+  Tree extends { items: BlankTree<any, any> },
+  InItem extends Extract<Tree['items'][number][number], { href: string }>,
+  InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
+  OutItem extends { href: string },
+  OutGroup extends { items: BlankTree<OutItem, OutGroup> },
+  OutTree extends BlankTree<OutItem, OutGroup>,
+>(
+  tree: Tree,
+  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | null> = async (item) => item,
+  groupCallback: (group: InGroup, tree: Tree) => Promise<OutGroup | null> = async (group) => group,
+  errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
+): Promise<OutTree> => {
+  const result = await Promise.all(
+    tree.items.map(async (group) => {
+      return await Promise.all(
+        group.map(async (item) => {
+          try {
+            if ('href' in item) {
+              return await itemCallback(item, tree)
+            }
+
+            if ('items' in item && Array.isArray(item.items)) {
+              const newItems = (await traverseTreeItemsFirst(item, itemCallback, groupCallback, errorCallback)).map(
+                (group) => group.filter((item): item is NonNullable<typeof item> => item !== null),
+              )
+
+              const newGroup = await groupCallback({ ...item, items: newItems }, tree)
+
+              return newGroup
+            }
+
+            return item as OutItem
+          } catch (error) {
+            if (error instanceof Error && errorCallback !== undefined) {
+              errorCallback(item, error)
+            } else {
+              throw error
+            }
+          }
+        }),
+      )
+    }),
+  )
+
+  return result.map((group) =>
+    group.filter((item): item is NonNullable<typeof item> => item !== null),
+  ) as unknown as OutTree
+}
+
 function flattenTree<
   Tree extends BlankTree<any, any>,
   InItem extends Extract<Tree[number][number], { href: string }>,
@@ -987,7 +1037,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest
-  const sdkScopedManifest = await traverseTree(
+  const sdkScopedManifestFirstPass = await traverseTree(
     { items: userManifest, sdk: undefined as undefined | SDK[] },
     async (item, tree) => {
       if (!item.href?.startsWith('/docs/')) return item
@@ -1076,6 +1126,55 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
     },
     (item, error) => {
       console.error('↳', item.title)
+      throw error
+    },
+  )
+
+  const sdkScopedManifest = await traverseTreeItemsFirst(
+    { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
+    async (item, tree) => item,
+    async ({ items, ...details }, tree) => {
+      // This takes all the children items, grabs the sdks out of them, and combines that in to a list
+      const groupsItemsCombinedSDKs = (() => {
+        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
+
+        if (sdks === undefined) return []
+
+        const uniqueSDKs = Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
+        return uniqueSDKs
+      })()
+
+      // This is the sdk of the group
+      const groupSDK = details.sdk
+
+      // This is the sdk of the parent group
+      const parentSDK = tree.sdk
+
+      // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
+      if (groupsItemsCombinedSDKs.length === 0) {
+        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+      }
+
+      if (groupSDK !== undefined && groupSDK.length > 0) {
+        return {
+          ...details,
+          sdk: groupSDK,
+          items,
+        } as ManifestGroup
+      }
+
+      const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []
+
+      return {
+        ...details,
+        // If there are children items, then we combine the sdks of the group and the children items sdks
+        sdk: combinedSDKs,
+        items,
+      } as ManifestGroup
+    },
+    (item, error) => {
+      console.error('[DEBUG] Error processing item:', item.title)
+      console.error(error)
       throw error
     },
   )

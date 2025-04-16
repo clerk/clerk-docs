@@ -1709,4 +1709,94 @@ description: Generated API docs
     // Should warn about missing src attribute
     expect(output).toContain('warning <Typedoc /> component has no "src" attribute')
   })
+
+  test('Should fail it typedoc file links to a non-existent file', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `[Non-existent File](/docs/non-existent-file)`,
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('Doc /docs/non-existent-file not found')
+  })
+
+  test('Should fail if typedoc file links to non-existent hash', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Overview', href: '/docs/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+description: Overview of the API
+---
+
+# Overview
+
+`,
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `[Non-existent Hash](/docs/overview#non-existent-hash)`,
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+    ])
+
+    const output = await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('Hash "non-existent-hash" not found in /docs/overview')
+  })
 })

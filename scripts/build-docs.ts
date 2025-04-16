@@ -741,12 +741,6 @@ const parseInMarkdownFile =
           return
         })
       })
-      .process({
-        path: `${href.substring(1)}.mdx`,
-        value: fileContent,
-      })
-
-    await markdownProcessor()
       // Validate the <Typedoc />
       .use(() => (tree, vfile) => {
         return mdastVisit(tree, (node) => {
@@ -1083,6 +1077,46 @@ export const build = async (config: BuildConfig) => {
   )
   console.info(`✔️ Validated all partials`)
 
+  const typedocVFiles = await Promise.all(
+    typedocs.map(async (typedoc) => {
+      const filePath = path.join(config.typedocRelativePath, typedoc.path)
+
+      return await remark()
+        // validate links in partials to docs are valid
+        .use(() => (tree, vfile) => {
+          return mdastVisit(tree, (node) => {
+            if (node.type !== 'link') return
+            if (!('url' in node)) return
+            if (typeof node.url !== 'string') return
+            if (!node.url.startsWith('/docs/')) return
+            if (!('children' in node)) return
+
+            const [url, hash] = removeMdxSuffix(node.url).split('#')
+
+            const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+            if (ignore === true) return
+
+            const doc = docsMap.get(url)
+
+            if (doc === undefined) {
+              safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+              return
+            }
+
+            if (hash !== undefined) {
+              const hasHash = doc.headingsHashs.includes(hash)
+
+              if (hasHash === false) {
+                safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+              }
+            }
+          })
+        })
+        .process(typedoc.vfile)
+    }),
+  )
+  console.info(`✔️ Validated all typedocs`)
+
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
       const filePath = `${doc.href}.mdx`
@@ -1186,7 +1220,7 @@ export const build = async (config: BuildConfig) => {
 
   console.info(`✔️ Validated all docs`)
 
-  return reporter([...coreVFiles, ...partialsVFiles], { quiet: true })
+  return reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles], { quiet: true })
 }
 
 type BuildConfigOptions = {
@@ -1268,6 +1302,10 @@ const main = async () => {
       '/docs/maintenance-mode.mdx': ['doc-not-in-manifest'],
       '/docs/deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
       '/docs/references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+
+      // Typedoc warnings
+      '../clerk-typedoc/types/active-session-resource.mdx': ['link-hash-not-found'],
+      '../clerk-typedoc/types/pending-session-resource.mdx': ['link-hash-not-found'],
     },
     validSdks: VALID_SDKS,
     manifestOptions: {

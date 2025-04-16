@@ -171,12 +171,12 @@ If you are using Next.js and your layout file is rendered on the server (as is t
 
 Clerk provides built-in support for automatically injecting CSP headers by adding the `contentSecurityPolicy` option to your `clerkMiddleware()`. There are two modes available depending on how strict you want your CSP to be:
 
-- [`standard` mode](#standard-mode)
-- [`strict-dynamic` mode](#strict-dynamic-mode)
+- [`default` configuration](#default-configuration)
+- [`strict` configuration](#strict-configuration)
 
-### `standard` mode
+### `default` configuration
 
-The `standard` mode will apply the following CSP directives:
+The `default` configuration will apply the following CSP directives:
 
 - `connect-src` - `'self' https://clerk-telemetry.com https://*.clerk-telemetry.com https://api.stripe.com https://maps.googleapis.com https://{{fapi_url}}`
 - `default-src` - `'self'`
@@ -189,7 +189,33 @@ The `standard` mode will apply the following CSP directives:
 
 ```ts {{ filename: 'middleware.ts' }}
 import { clerkMiddleware } from '@clerk/nextjs/server'
-import { isPublicRoute } from './utils' // Your public routes logic
+import { isPublicRoute } from './utils'
+
+export default clerkMiddleware(
+  async (auth, request) => {
+    if (!isPublicRoute(request)) {
+      await auth.protect()
+    }
+  },
+  {
+    contentSecurityPolicy: {},
+  },
+)
+```
+
+### `strict` configuration
+
+When using the `strict` configuration, Clerk will:
+
+1. Automatically generate a unique nonce for each request.
+1. Configure the CSP header with appropriate directives.
+1. Make the nonce available to your application through the `x-nonce` header.
+
+The middleware will handle passing the nonce to the `<ClerkProvider>` automatically, so you don't need to manually set the `nonce` prop when using server components.
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+import { isPublicRoute } from './utils'
 
 export default clerkMiddleware(
   async (auth, request) => {
@@ -199,32 +225,21 @@ export default clerkMiddleware(
   },
   {
     contentSecurityPolicy: {
-      // Use 'standard' mode for the default CSP configuration
-      mode: 'standard',
+      strict: true,
     },
   },
 )
 ```
 
-### `strict-dynamic` mode
-
-When using the `strict-dynamic` mode, Clerk will:
-
-1. Automatically generate a unique nonce for each request.
-1. Configure the CSP header with appropriate directives.
-1. Make the nonce available to your application through the `x-nonce` header.
-
-The middleware will handle passing the nonce to the `<ClerkProvider>` automatically, so you don't need to manually set the `nonce` prop when using server components.
-
 > [!IMPORTANT]
-> You must pass the [`dynamic` prop](/docs/components/clerk-provider#properties) to `<ClerkProvider>` for `strict-dynamic` CSPs to work correctly. This is because the nonce value is generated on the server and passed to the client, which requires dynamic rendering.
+> You must pass the [`dynamic` prop](/docs/components/clerk-provider#properties) to `<ClerkProvider>` for `strict` CSP configuration to work correctly. This is because the nonce value is generated on the server and passed to the client, which requires dynamic rendering.
 
 ```tsx {{ filename: 'app/layout.tsx' }}
 import { ClerkProvider } from '@clerk/nextjs'
 
 export default function Layout({ children }) {
   return (
-    // When using clerkMiddleware with `strict-dynamic`,
+    // When using clerkMiddleware with `strict` configuration,
     // the nonce is automatically provided.
     // No need to manually set the `nonce` prop on `<ClerkProvider>`
     <ClerkProvider dynamic>
@@ -254,7 +269,7 @@ export default function Page() {
 
 ### Add additional CSP directives
 
-For more control, both `standard` and `strict-dynamic` modes allow you to add additional CSP directives by providing a `directives` object.
+You can customize Content Security Policy (CSP) by adding your own directives to either the `default` or `strict` configurations. Simply provide a `directives` object, and your custom rules will be merged with Clerk's default security settings.
 
 In the following example, the `connect-src` directive is configured to include `api.example.com` and `analytics.example.com`, and the `img-src` directive is configured to include `images.example.com`.
 
@@ -269,8 +284,7 @@ export default clerkMiddleware(
   },
   {
     contentSecurityPolicy: {
-      // Both 'standard' and 'strict-dynamic' modes allow you to augment specific CSP directives
-      mode: 'standard',
+      strict: true,
       directives: {
         'connect-src': ['api.example.com', 'analytics.example.com'],
         'img-src': ['images.example.com'],

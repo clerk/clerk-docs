@@ -384,3 +384,128 @@ const localization = {
   },
 }
 ```
+
+## Advanced Usage
+
+### Customization
+
+If you want to customize values of an imported localization, you can use the following:
+
+```ts
+import { enUS } from '@clerk/localizations'
+
+enUS.signIn!.start!.title = 'Howdy! Sign In To {{applicationName}}'
+```
+
+If you want to update multiple values of an imported localization, you can use a function that resembles this:
+
+```ts
+import { enUS } from '@clerk/localizations'
+
+const updateLocalization = (obj: any, path: string, val: string) => {
+  path
+    .split('.')
+    .reduce((a, k, i, { length }) => (i + 1 === length ? (a[k] = val) : (a[k] ??= {})), obj)
+  return obj
+}
+
+const customLocalizations = [
+  ['signIn.start.actionLink__use_passkey', 'Use a passkey from your device instead'],
+  ['signIn.start.subtitle', 'Welcome back!!!'],
+  ['signIn.start.title', 'Howdy Partner! Sign In To {{applicationName}}'],
+]
+
+customLocalizations.forEach(([key, value]) => set(enUS, key, value))
+```
+
+Let's add some type safety and put it all together:
+
+```tsx {{ filename: 'localization.ts', prettier: false }}
+import { enUS } from '@clerk/localizations'
+import { LocalizationResource } from '@clerk/types'
+
+type Join<K, P> = K extends string | number
+  ? P extends string | number
+    ? `${K}${'' extends P ? '' : '.'}${P}`
+    : never
+  : never
+
+type Paths<T, D extends number = 10> = [D] extends [never]
+  ? never
+  : T extends object
+    ? {
+        [K in keyof T]-?: K extends string | number ? `${K}` | Join<K, Paths<T[K], Prev[D]>> : never
+      }[keyof T]
+    : ''
+
+type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+export const updateLocalization = <T extends object>(obj: T, path: Paths<T>, val: string): T => {
+  (path as string)
+    .split('.')
+    .reduce((a, k, i, { length }) => (i + 1 === length ? (a[k] = val) : (a[k] ??= {})), obj as any)
+  return obj
+}
+
+const customLocalizations = new Map<Paths<LocalizationResource>, string>([
+  ['signIn.start.actionLink__use_passkey', 'Use a passkey from your device instead'],
+  ['signIn.start.subtitle', 'Welcome back!!!'],
+  ['signIn.start.title', 'Howdy Partner! Sign In To {{applicationName}}'],
+])
+
+export const localization = (() => {
+  const modified = { ...enUS }
+  customLocalizations.forEach((value, key) => updateLocalization(modified, key, value))
+  return modified
+})()
+
+export default localization
+```
+
+### Dynamically update localization
+
+> [!WARNING]
+> This relies on an unstable and experimental function.
+> It is subject to change or removal at any time.
+
+> [!NOTE]
+> This will only work in client side Javascript and will not persist through a refresh.
+
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```tsx {{ filename: 'page.tsx' }}
+    'use client'
+    // IThis is for example purposes only, import only the languages you need.
+    import * as localization from '@clerk/localizations'
+    import { useClerk, UserButton } from '@clerk/nextjs'
+
+    export default function Page() {
+      const clerk = useClerk()
+
+      const changeLanguage = (lang: keyof typeof localization) => {
+        //@ts-ignore - This isn't included in types.
+        clerk.__unstable__updateProps({
+          options: {
+            localization: localization[lang],
+          },
+        })
+      }
+
+      return (
+        <div>
+          <UserButton />
+          <select
+            onChange={(e) => {
+              changeLanguage(e.target.value as keyof typeof localization)
+            }}
+          >
+            {Object.keys(localization).map((lang, index) => (
+              <option key={index}>{lang}</option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

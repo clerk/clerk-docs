@@ -43,6 +43,7 @@ import { z } from 'zod'
 import { fromError, type ValidationError } from 'zod-validation-error'
 import { Node, Position } from 'unist'
 import watcher from '@parcel/watcher'
+import { existsSync } from 'node:fs'
 
 const errorMessages = {
   // Manifest errors
@@ -105,6 +106,13 @@ const errorMessages = {
   'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
   'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
   'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+
+  // Typedoc errors
+  'typedoc-folder-not-found': (path: string): string =>
+    `Typedoc folder ${path} not found, run "npm run typedoc:download"`,
+  'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
+  'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
+  'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,
 } as const
 
 type WarningCode = keyof typeof errorMessages
@@ -458,6 +466,51 @@ const readPartialsMarkdown =
       }),
     )
   }
+  
+const readTypedocsFolder = (config: BuildConfig) => async () => {
+  return readdirp.promise(config.typedocPath, {
+    type: 'files',
+    fileFilter: '*.mdx',
+  })
+}
+
+const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+  const readFile = readMarkdownFile(config)
+
+  return Promise.all(
+    paths.map(async (filePath) => {
+      const typedocPath = path.join(config.typedocRelativePath, filePath)
+
+      const [error, content] = await readFile(typedocPath)
+
+      if (error) {
+        throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
+      }
+
+      let node: Node | null = null
+
+      const vfile = await remark()
+        .use(() => (tree) => {
+          node = tree
+        })
+        .process({
+          path: typedocPath,
+          value: content,
+        })
+
+      if (node === null) {
+        throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
+      }
+
+      return {
+        path: `${removeMdxSuffix(filePath)}.mdx`,
+        content,
+        vfile,
+        node: node as Node,
+      }
+    }),
+  )
+}
 
 const markdownProcessor = remark().use(remarkFrontmatter).use(remarkMdx).freeze()
 
@@ -808,7 +861,12 @@ const documentHasIfComponents = (tree: Node) => {
 
 const parseInMarkdownFile =
   (config: BuildConfig) =>
-  async (href: string, partials: { path: string; content: string; node: Node }[], inManifest: boolean) => {
+  async (
+    href: string,
+    partials: { path: string; content: string; node: Node }[],
+    typedocs: { path: string; content: string; node: Node }[],
+    inManifest: boolean,
+  ) => {
     const readFile = readMarkdownFile(config)
     const validateSDKs = isValidSdks(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
@@ -913,6 +971,92 @@ const parseInMarkdownFile =
           }
         })
       })
+      // Validate the <Typedoc />
+      .use(() => (tree, vfile) => {
+        return mdastVisit(tree, (node) => {
+          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+
+          if (typedocSrc === undefined) return
+
+          const typedocFolderExists = existsSync(config.typedocPath)
+
+          if (typedocFolderExists === false) {
+            throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
+          }
+
+          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+
+          if (typedoc === undefined) {
+            safeMessage(
+              config,
+              vfile,
+              filePath,
+              'typedoc-not-found',
+              [`${removeMdxSuffix(typedocSrc)}.mdx`],
+              node.position,
+            )
+            return
+          }
+
+          return
+        })
+      })
+      .process({
+        path: `${href.substring(1)}.mdx`,
+        value: fileContent,
+      })
+
+    // This needs to be done separately as some further validation expects the partials to not be embedded
+    // but we need to embed it to get all the headings to check
+    await markdownProcessor()
+      // Embed the partial
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+
+          if (partialSrc === undefined) return node
+
+          if (partialSrc.startsWith('_partials/') === false) {
+            safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
+            return node
+          }
+
+          const partial = partials.find(
+            (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
+          )
+
+          if (partial === undefined) {
+            safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
+            return node
+          }
+
+          return Object.assign(node, partial.node)
+        })
+      })
+      // Embed the typedoc
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+
+          if (typedocSrc === undefined) return node
+
+          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+
+          if (typedoc === undefined) {
+            safeMessage(
+              config,
+              vfile,
+              filePath,
+              'typedoc-not-found',
+              [`${removeMdxSuffix(typedocSrc)}.mdx`],
+              node.position,
+            )
+            return node
+          }
+
+          return Object.assign(node, typedoc.node)
+        })
+      })
       // extract out the headings to check hashes in links
       .use(() => (tree, vfile) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
@@ -976,6 +1120,8 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
+  const getTypedocsFolder = readTypedocsFolder(config)
+  const getTypedocsMarkdown = readTypedocsMarkdown(config)
   const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
@@ -991,6 +1137,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const cachedPartialsSize = store.partialsFiles.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
+
+  const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
+  console.info(`✔️ Read ${typedocs.length} Typedocs`)
 
   const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const docsInManifest = new Set<string>()
@@ -1024,7 +1173,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       if (cachedMarkdownFile) {
         markdownFile = structuredClone(cachedMarkdownFile)
       } else {
-        markdownFile = await parseMarkdownFile(href, partials, inManifest)
+        markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest)
 
         store.markdownFiles.set(href, structuredClone(markdownFile))
       }
@@ -1330,9 +1479,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   )
   console.info(`✓ Validated all partials`)
 
-  const coreVFiles = await Promise.all(
-    docsArray.map(async (doc) => {
-      const filePath = `${doc.href}.mdx`
+  const validatedTypedocs = await Promise.all(
+    typedocs.map(async (typedoc) => {
+      const filePath = path.join(config.typedocRelativePath, typedoc.path)
+
+      let node: Node | null = null
 
       const vfile = await markdownProcessor()
         // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
@@ -1410,6 +1561,119 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                     name: 'sdks',
                     value: mdastBuilder('mdxJsxAttributeValueExpression', {
                       value: JSON.stringify(doc.sdk),
+                    }),
+                  }),
+                ],
+                children: node.children,
+              })
+            }
+
+            return node
+          })
+        })
+        .use(() => (tree, vfile) => {
+          node = tree
+        })
+        .process(typedoc.vfile)
+
+      if (node === null) {
+        throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+      }
+
+      return {
+        ...typedoc,
+        vfile,
+        node: node as Node,
+      }
+    })
+  )
+  console.info(`✔️ Validated all typedocs`)
+
+  const coreVFiles = await Promise.all(
+    docsArray.map(async (doc) => {
+      const filePath = `${doc.href}.mdx`
+
+      const vfile = await markdownProcessor()
+        // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
+        .use(() => (tree: Node, vfile: VFile) => {
+          return mdastMap(tree, (node) => {
+            if (node.type !== 'link') return node
+            if (!('url' in node)) return node
+            if (typeof node.url !== 'string') return node
+            if (!node.url.startsWith('/docs/') && !node.url.startsWith('#')) return node
+            if (!('children' in node)) return node
+
+            // we are overwriting the url with the mdx suffix removed
+            node.url = removeMdxSuffix(node.url)
+
+            let [url, hash] = (node.url as string).split('#')
+
+            if (url === '') {
+              // If the link is just a hash, then we need to link to the same doc
+              url = doc.href
+            }
+
+            const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+            if (ignore === true) return node
+
+            const linkedDoc = docsMap.get(url)
+
+            if (linkedDoc === undefined) {
+              safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+              return node
+            }
+
+            if (hash !== undefined) {
+              const hasHash = linkedDoc.headingsHashes.has(hash)
+
+              if (hasHash === false) {
+                safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+              }
+            }
+
+            if (linkedDoc.sdk !== undefined) {
+              // we are going to swap it for the sdk link component to give the users a great experience
+
+              const firstChild = node.children?.[0]
+              const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+              if (childIsCodeBlock) {
+                firstChild.type = 'text'
+
+                return mdastBuilder('mdxJsxTextElement', {
+                  name: 'SDKLink',
+                  attributes: [
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'href',
+                      value: scopeHrefToSDK(url, ':sdk:'),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'sdks',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: JSON.stringify(linkedDoc.sdk),
+                      }),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'code',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: childIsCodeBlock,
+                      }),
+                    }),
+                  ],
+                })
+              }
+
+              return mdastBuilder('mdxJsxTextElement', {
+                name: 'SDKLink',
+                attributes: [
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'href',
+                    value: scopeHrefToSDK(url, ':sdk:'),
+                  }),
+                  mdastBuilder('mdxJsxAttribute', {
+                    name: 'sdks',
+                    value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                      value: JSON.stringify(linkedDoc.sdk),
                     }),
                   }),
                 ],
@@ -1720,8 +1984,9 @@ template: wide
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
+  const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  return reporter([...coreVFiles, ...partialsVFiles, ...flatSdkSpecificVFiles], { quiet: true })
+  return reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], { quiet: true })
 }
 
 export const invalidateFile =
@@ -1774,6 +2039,7 @@ type BuildConfigOptions = {
   manifestPath: string
   partialsPath: string
   distPath: string
+  typedocPath: string
   ignorePaths: string[]
   ignoreWarnings?: Record<string, string[]>
   manifestOptions: {
@@ -1812,6 +2078,9 @@ export function createConfig(config: BuildConfigOptions) {
     distRelativePath: config.distPath,
     distPath: resolve(config.distPath),
 
+    typedocRelativePath: config.typedocPath,
+    typedocPath: resolve(config.typedocPath),
+
     ignorePaths: config.ignorePaths,
     ignoreWarnings: config.ignoreWarnings || {},
     manifestOptions: config.manifestOptions ?? {
@@ -1836,6 +2105,7 @@ const main = async () => {
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',
     distPath: '../dist',
+    typedocPath: '../clerk-typedoc',
     ignorePaths: [
       '/docs/core-1',
       '/pricing',
@@ -1858,6 +2128,10 @@ const main = async () => {
       '/docs/maintenance-mode.mdx': ['doc-not-in-manifest'],
       '/docs/deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
       '/docs/references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+
+      // Typedoc warnings
+      '../clerk-typedoc/types/active-session-resource.mdx': ['link-hash-not-found'],
+      '../clerk-typedoc/types/pending-session-resource.mdx': ['link-hash-not-found'],
     },
     validSdks: VALID_SDKS,
     manifestOptions: {

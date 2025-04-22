@@ -705,11 +705,11 @@ https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property                      | Type                                                                                                                           | Description                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                     |
-| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                         |
-| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'`. |
+| Property                      | Type                                                                                                                           | Description                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                                                                               |
+| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                                                                                   |
+| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'` or `'Example repositories'`, but can be passed any string. |
 
 ```mdx
 <TutorialHero
@@ -723,23 +723,15 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
       title: 'Create a Next.js application',
       link: 'https://nextjs.org/docs/getting-started/installation',
       icon: 'nextjs',
-    }
+    },
   ]}
   exampleRepo={[
     {
-      title: 'App router',
+      title: 'Clerk + Next.js App Router Quickstart',
       link: 'https://github.com/clerk/clerk-nextjs-app-quickstart',
-    }
+    },
   ]}
->
-
-- Install `@clerk/nextjs`
-- Set up your environment keys to test your app locally
-- Add `<ClerkProvider>` to your application
-- Use Clerk middleware to implement route-specific authentication
-- Create a header with Clerk components for users to sign in and out
-
-</TutorialHero>
+/>
 ```
 
 ### `<Cards>`
@@ -953,6 +945,19 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 {/* Render `docs/_partials/code-example.mdx` */}
 
 <Include src="_partials/code-example" />
+```
+
+### `<Typedoc />`
+
+The `<Typedoc />` component can be used to inject the contents of an MDX file of the [`generated-typedoc`](https://github.com/clerk/generated-typedoc) repository. The files inside that repository are not manually created and maintained, but rather automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
+
+- If you want to edit the contents of a docs page that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment.
+- Once your PR inside `clerk/javascript` has been merged, the `generated-typedoc` repository will be automatically updated. On the next deployment of the docs website, your change will be live.
+
+```mdx
+{/* Render `generated-typedoc/clerk-react/use-auth.mdx` */}
+
+<Typedoc src="clerk-react/use-auth" />
 ```
 
 ### `<If />`

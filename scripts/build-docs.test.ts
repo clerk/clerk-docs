@@ -3403,7 +3403,6 @@ interface Client {
 
     const output = await build(
       createBlankStore(),
-
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -3451,7 +3450,6 @@ interface Client {
 
     const output = await build(
       createBlankStore(),
-
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -3495,7 +3493,7 @@ description: Generated API docs
     })
 
     // Should fail due to missing typedoc folder
-      const promise = build(createBlankStore(), configWithMissingFolder)
+    const promise = build(createBlankStore(), configWithMissingFolder)
     await expect(promise).rejects.toThrow('Typedoc folder')
   })
 
@@ -3749,5 +3747,44 @@ description: Generated API docs
     )
 
     expect(output).toContain('Hash "non-existent-hash" not found in /docs/overview')
+  })
+
+  test('should embed typedoc into the doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API`,
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile('./dist/api-doc.mdx')).toContain('Client API')
+    expect(output).toBe('')
   })
 })

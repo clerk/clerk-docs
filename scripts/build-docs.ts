@@ -496,9 +496,24 @@ const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
     let node: Node | null = null
 
     const vfile = await remark()
-      // .use(remarkMdx)
+      .use(remarkMdx)
       .use(() => (tree) => {
         node = tree
+      })
+      // Process links in typedocs and remove the .mdx suffix
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          if (node.type !== 'link') return node
+          if (!('url' in node)) return node
+          if (typeof node.url !== 'string') return node
+          if (!node.url.startsWith('/docs/')) return node
+          if (!('children' in node)) return node
+
+          // We are overwriting the url with the mdx suffix removed
+          node.url = removeMdxSuffix(node.url)
+
+          return node
+        })
       })
       .process({
         path: typedocPath,
@@ -516,8 +531,42 @@ const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
       node: node as Node,
     }
   } catch (error) {
-    console.error(`✗ Error parsing typedoc: ${typedocPath}`)
-    throw error
+    let node: Node | null = null
+
+    const vfile = await remark()
+      .use(() => (tree) => {
+        node = tree
+      })
+      // Process links in typedocs and remove the .mdx suffix
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          if (node.type !== 'link') return node
+          if (!('url' in node)) return node
+          if (typeof node.url !== 'string') return node
+          if (!node.url.startsWith('/docs/')) return node
+          if (!('children' in node)) return node
+
+          // We are overwriting the url with the mdx suffix removed
+          node.url = removeMdxSuffix(node.url)
+
+          return node
+        })
+      })
+      .process({
+        path: typedocPath,
+        value: content,
+      })
+
+    if (node === null) {
+      throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
+    }
+
+    return {
+      path: `${removeMdxSuffix(filePath)}.mdx`,
+      content,
+      vfile,
+      node: node as Node,
+    }
   }
 }
 
@@ -1528,7 +1577,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         let node: Node | null = null
 
         const vfile = await remark()
-          // .use(remarkMdx)
+          .use(remarkMdx)
           // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
           .use(() => (tree: Node, vfile: VFile) => {
             return mdastMap(tree, (node) => {
@@ -1629,8 +1678,108 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
           node: node as Node,
         }
       } catch (error) {
-        console.error(`✗ Error validating typedoc: ${typedoc.path}`)
-        throw error
+        let node: Node | null = null
+
+        const vfile = await remark()
+          // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
+          .use(() => (tree: Node, vfile: VFile) => {
+            return mdastMap(tree, (node) => {
+              if (node.type !== 'link') return node
+              if (!('url' in node)) return node
+              if (typeof node.url !== 'string') return node
+              if (!node.url.startsWith('/docs/')) return node
+              if (!('children' in node)) return node
+
+              // we are overwriting the url with the mdx suffix removed
+              node.url = removeMdxSuffix(node.url)
+
+              const [url, hash] = (node.url as string).split('#')
+
+              const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+              if (ignore === true) return node
+
+              const doc = docsMap.get(url)
+
+              if (doc === undefined) {
+                safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+                return node
+              }
+
+              if (hash !== undefined) {
+                const hasHash = doc.headingsHashes.has(hash)
+
+                if (hasHash === false) {
+                  safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+                }
+              }
+
+              if (doc.sdk !== undefined) {
+                // we are going to swap it for the sdk link component to give the users a great experience
+
+                const firstChild = node.children?.[0]
+                const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+                if (childIsCodeBlock) {
+                  firstChild.type = 'text'
+
+                  return mdastBuilder('mdxJsxTextElement', {
+                    name: 'SDKLink',
+                    attributes: [
+                      mdastBuilder('mdxJsxAttribute', {
+                        name: 'href',
+                        value: scopeHrefToSDK(url, ':sdk:'),
+                      }),
+                      mdastBuilder('mdxJsxAttribute', {
+                        name: 'sdks',
+                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                          value: JSON.stringify(doc.sdk),
+                        }),
+                      }),
+                      mdastBuilder('mdxJsxAttribute', {
+                        name: 'code',
+                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                          value: childIsCodeBlock,
+                        }),
+                      }),
+                    ],
+                  })
+                }
+
+                return mdastBuilder('mdxJsxTextElement', {
+                  name: 'SDKLink',
+                  attributes: [
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'href',
+                      value: scopeHrefToSDK(url, ':sdk:'),
+                    }),
+                    mdastBuilder('mdxJsxAttribute', {
+                      name: 'sdks',
+                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
+                        value: JSON.stringify(doc.sdk),
+                      }),
+                    }),
+                  ],
+                  children: node.children,
+                })
+              }
+
+              return node
+            })
+          })
+          .use(() => (tree, vfile) => {
+            node = tree
+          })
+          .process(typedoc.vfile)
+
+        if (node === null) {
+          throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+        }
+
+        return {
+          ...typedoc,
+          vfile,
+          node: node as Node,
+        }
       }
     }),
   )

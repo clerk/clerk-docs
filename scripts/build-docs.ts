@@ -391,60 +391,65 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
 
   let partialNode: Node | null = null
 
-  const partialContentVFile = await remark()
-    .use(remarkFrontmatter)
-    .use(remarkMdx)
-    .use(() => (tree) => {
-      partialNode = tree
-    })
-    .use(() => (tree, vfile) => {
-      mdastVisit(
-        tree,
-        (node) =>
-          (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
-          'name' in node &&
-          node.name === 'Include',
-        (node) => {
-          safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
-        },
-      )
-    })
-    // Process links in partials and remove the .mdx suffix
-    .use(() => (tree, vfile) => {
-      return mdastMap(tree, (node) => {
-        if (node.type !== 'link') return node
-        if (!('url' in node)) return node
-        if (typeof node.url !== 'string') return node
-        if (!node.url.startsWith('/docs/')) return node
-        if (!('children' in node)) return node
-
-        // We are overwriting the url with the mdx suffix removed
-        node.url = removeMdxSuffix(node.url)
-
-        return node
+  try {
+    const partialContentVFile = await remark()
+      .use(remarkFrontmatter)
+      .use(remarkMdx)
+      .use(() => (tree) => {
+        partialNode = tree
       })
-    })
-    .process({
-      path: `docs/_partials/${filePath}`,
-      value: content,
-    })
+      .use(() => (tree, vfile) => {
+        mdastVisit(
+          tree,
+          (node) =>
+            (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
+            'name' in node &&
+            node.name === 'Include',
+          (node) => {
+            safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
+          },
+        )
+      })
+      // Process links in partials and remove the .mdx suffix
+      .use(() => (tree, vfile) => {
+        return mdastMap(tree, (node) => {
+          if (node.type !== 'link') return node
+          if (!('url' in node)) return node
+          if (typeof node.url !== 'string') return node
+          if (!node.url.startsWith('/docs/')) return node
+          if (!('children' in node)) return node
 
-  const partialContentReport = reporter([partialContentVFile], { quiet: true })
+          // We are overwriting the url with the mdx suffix removed
+          node.url = removeMdxSuffix(node.url)
 
-  if (partialContentReport !== '') {
-    console.error(partialContentReport)
-    process.exit(1)
-  }
+          return node
+        })
+      })
+      .process({
+        path: `docs/_partials/${filePath}`,
+        value: content,
+      })
 
-  if (partialNode === null) {
-    throw new Error(errorMessages['partial-parse-error'](filePath))
-  }
+    const partialContentReport = reporter([partialContentVFile], { quiet: true })
 
-  return {
-    path: filePath,
-    content,
-    vfile: partialContentVFile,
-    node: partialNode as Node,
+    if (partialContentReport !== '') {
+      console.error(partialContentReport)
+      process.exit(1)
+    }
+
+    if (partialNode === null) {
+      throw new Error(errorMessages['partial-parse-error'](filePath))
+    }
+
+    return {
+      path: filePath,
+      content,
+      vfile: partialContentVFile,
+      node: partialNode as Node,
+    }
+  } catch (error) {
+    console.error(`✗ Error parsing partial: ${filePath}`)
+    throw error
   }
 }
 
@@ -476,49 +481,66 @@ const readTypedocsFolder = (config: BuildConfig) => async () => {
   })
 }
 
-const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
   const readFile = readMarkdownFile(config)
 
-  return Promise.all(
-    paths.map(async (filePath) => {
-      const typedocPath = path.join(config.typedocRelativePath, filePath)
+  const typedocPath = path.join(config.typedocRelativePath, filePath)
 
-      const [error, content] = await readFile(typedocPath)
+  const [error, content] = await readFile(typedocPath)
 
-      if (error) {
-        throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
-      }
+  if (error) {
+    throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
+  }
 
-      try {
-        let node: Node | null = null
+  try {
+    let node: Node | null = null
 
-        const vfile = await remark()
-          // .use(remarkMdx)
-          .use(() => (tree) => {
-            node = tree
-          })
-          .process({
-            path: typedocPath,
-            value: content,
-          })
+    const vfile = await remark()
+      // .use(remarkMdx)
+      .use(() => (tree) => {
+        node = tree
+      })
+      .process({
+        path: typedocPath,
+        value: content,
+      })
 
-        if (node === null) {
-          throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
-        }
+    if (node === null) {
+      throw new Error(errorMessages['typedoc-parse-error'](typedocPath))
+    }
 
-        return {
-          path: `${removeMdxSuffix(filePath)}.mdx`,
-          content,
-          vfile,
-          node: node as Node,
-        }
-      } catch (error) {
-        console.error(`✗ Error parsing typedoc: ${typedocPath}`)
-        throw error
-      }
-    }),
-  )
+    return {
+      path: `${removeMdxSuffix(filePath)}.mdx`,
+      content,
+      vfile,
+      node: node as Node,
+    }
+  } catch (error) {
+    console.error(`✗ Error parsing typedoc: ${typedocPath}`)
+    throw error
+  }
 }
+
+const readTypedocsMarkdown =
+  (config: BuildConfig, store: ReturnType<typeof createBlankStore>) => async (paths: string[]) => {
+    const read = readTypedoc(config)
+
+    return Promise.all(
+      paths.map(async (filePath) => {
+        const cachedValue = store.typedocsFiles.get(filePath)
+
+        if (cachedValue !== undefined) {
+          return cachedValue
+        }
+
+        const typedoc = await read(filePath)
+
+        store.typedocsFiles.set(filePath, typedoc)
+
+        return typedoc
+      }),
+    )
+  }
 
 type VFile = Awaited<ReturnType<typeof remark.process>>
 
@@ -1121,6 +1143,7 @@ const parseInMarkdownFile =
 export const createBlankStore = () => ({
   markdownFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>(),
   partialsFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof readPartial>>>>(),
+  typedocsFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof readTypedoc>>>>(),
 })
 
 export const build = async (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
@@ -1131,7 +1154,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
-  const getTypedocsMarkdown = readTypedocsMarkdown(config)
+  const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
@@ -1148,8 +1171,9 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
+  const cachedTypedocsSize = store.typedocsFiles.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
-  console.info(`✓ Read ${typedocs.length} Typedocs`)
+  console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
   const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
   const docsInManifest = new Set<string>()
@@ -2036,12 +2060,13 @@ export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => (filePath: string) => {
     store.markdownFiles.delete(removeMdxSuffix(`/docs/${path.relative(config.docsPath, filePath)}`))
     store.partialsFiles.delete(path.relative(config.partialsPath, filePath))
+    store.typedocsFiles.delete(path.relative(config.typedocPath, filePath))
   }
 
 const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
   const invalidate = invalidateFile(store, config)
 
-  watcher.subscribe(config.docsPath, async (error, events) => {
+  const handleFileChange: watcher.SubscribeCallback = async (error, events) => {
     if (error !== null) {
       console.error(error)
       return
@@ -2072,7 +2097,10 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: Bui
 
       return
     }
-  })
+  }
+
+  watcher.subscribe(config.docsPath, handleFileChange)
+  watcher.subscribe(config.typedocPath, handleFileChange)
 }
 
 type BuildConfigOptions = {

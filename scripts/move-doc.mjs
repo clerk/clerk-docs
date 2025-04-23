@@ -19,6 +19,7 @@
 
 import fs from 'fs/promises'
 import path from 'path'
+import prettier from 'prettier'
 
 const DOCS_FILE = './redirects/static/docs.json'
 const MANIFEST_FILE = './docs/manifest.json'
@@ -41,7 +42,7 @@ const readJsonFile = async (filePath) => {
 
 const writeJsonFile = async (filePath, data) => {
   try {
-    await fs.writeFile(filePath, JSON.stringify(data, null, 2))
+    await fs.writeFile(filePath, await prettier.format(JSON.stringify(data, null, 2), { parser: 'json' }))
   } catch (error) {
     console.error(`Error writing ${filePath}:`, error)
     throw error

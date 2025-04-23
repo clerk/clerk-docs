@@ -981,6 +981,7 @@ const parseInMarkdownFile =
           safeFail(config, vfile, filePath, 'invalid-href-encoding', [href])
         }
       })
+      // validate and extract out the frontmatter
       .use(() => (tree, vfile) => {
         mdastVisit(
           tree,
@@ -1028,58 +1029,8 @@ const parseInMarkdownFile =
           return
         }
       })
-      // Validate the <Include />
-      .use(() => (tree, vfile) => {
-        return mdastVisit(tree, (node) => {
-          const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
-
-          if (partialSrc === undefined) return
-
-          if (partialSrc.startsWith('_partials/') === false) {
-            safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
-            return
-          }
-
-          const partial = partials.find(
-            (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
-          )
-
-          if (partial === undefined) {
-            safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
-            return
-          }
-        })
-      })
-      // Validate the <Typedoc />
-      .use(() => (tree, vfile) => {
-        return mdastVisit(tree, (node) => {
-          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
-
-          if (typedocSrc === undefined) return
-
-          const typedocFolderExists = existsSync(config.typedocPath)
-
-          if (typedocFolderExists === false) {
-            throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
-          }
-
-          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
-
-          if (typedoc === undefined) {
-            safeMessage(
-              config,
-              vfile,
-              filePath,
-              'typedoc-not-found',
-              [`${removeMdxSuffix(typedocSrc)}.mdx`],
-              node.position,
-            )
-            return
-          }
-
-          return
-        })
-      })
+      .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: false }))
+      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: false }))
       .process({
         path: `${href.substring(1)}.mdx`,
         value: fileContent,
@@ -1090,54 +1041,8 @@ const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
-      // Embed the partial
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
-
-          if (partialSrc === undefined) return node
-
-          if (partialSrc.startsWith('_partials/') === false) {
-            safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
-            return node
-          }
-
-          const partial = partials.find(
-            (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
-          )
-
-          if (partial === undefined) {
-            safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
-            return node
-          }
-
-          return Object.assign(node, partial.node)
-        })
-      })
-      // Embed the typedoc
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
-
-          if (typedocSrc === undefined) return node
-
-          const typedoc = typedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
-
-          if (typedoc === undefined) {
-            safeMessage(
-              config,
-              vfile,
-              filePath,
-              'typedoc-not-found',
-              [`${removeMdxSuffix(typedocSrc)}.mdx`],
-              node.position,
-            )
-            return node
-          }
-
-          return Object.assign(node, typedoc.node)
-        })
-      })
+      .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: true }))
+      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
       // extract out the headings to check hashes in links
       .use(() => (tree, vfile) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
@@ -1195,6 +1100,8 @@ export const createBlankStore = () => ({
   typedocsFiles: new Map<string, Awaited<ReturnType<ReturnType<typeof readTypedoc>>>>(),
 })
 
+type DocsMap = Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>
+
 export const build = async (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => {
   // Apply currying to create functions pre-configured with config
   const ensureDir = ensureDirectory(config)
@@ -1224,7 +1131,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
   console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
-  const docsMap = new Map<string, Awaited<ReturnType<typeof parseMarkdownFile>>>()
+  const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
 
   // Grab all the docs links in the manifest
@@ -1462,91 +1369,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          // validate links in partials to docs are valid and replace the links to sdk scoped pages with the sdk link component
-          .use(() => (tree, vfile) => {
-            return mdastMap(tree, (node) => {
-              if (node.type !== 'link') return node
-              if (!('url' in node)) return node
-              if (typeof node.url !== 'string') return node
-              if (!node.url.startsWith('/docs/')) return node
-              if (!('children' in node)) return node
-
-              // we are overwriting the url with the mdx suffix removed
-              node.url = removeMdxSuffix(node.url)
-
-              const [url, hash] = (node.url as string).split('#')
-
-              const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
-              if (ignore === true) return node
-
-              const doc = docsMap.get(url)
-
-              if (doc === undefined) {
-                safeMessage(config, vfile, partialPath, 'link-doc-not-found', [url], node.position)
-                return node
-              }
-
-              if (hash !== undefined) {
-                const hasHash = doc.headingsHashes.has(hash)
-
-                if (hasHash === false) {
-                  safeMessage(config, vfile, partialPath, 'link-hash-not-found', [hash, url], node.position)
-                }
-              }
-
-              if (doc.sdk !== undefined) {
-                // we are going to swap it for the sdk link component to give the users a great experience
-
-                const firstChild = node.children?.[0]
-                const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-                if (childIsCodeBlock) {
-                  firstChild.type = 'text'
-
-                  return mdastBuilder('mdxJsxTextElement', {
-                    name: 'SDKLink',
-                    attributes: [
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'href',
-                        value: scopeHrefToSDK(url, ':sdk:'),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'sdks',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: JSON.stringify(doc.sdk),
-                        }),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'code',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: childIsCodeBlock,
-                        }),
-                      }),
-                    ],
-                  })
-                }
-
-                return mdastBuilder('mdxJsxTextElement', {
-                  name: 'SDKLink',
-                  attributes: [
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'href',
-                      value: scopeHrefToSDK(url, ':sdk:'),
-                    }),
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'sdks',
-                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                        value: JSON.stringify(doc.sdk),
-                      }),
-                    }),
-                  ],
-                  children: node.children,
-                })
-              }
-
-              return node
-            })
-          })
+          .use(validateAndEmbedLinks(config, docsMap, partialPath))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -1578,91 +1401,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
         const vfile = await remark()
           .use(remarkMdx)
-          // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
-          .use(() => (tree: Node, vfile: VFile) => {
-            return mdastMap(tree, (node) => {
-              if (node.type !== 'link') return node
-              if (!('url' in node)) return node
-              if (typeof node.url !== 'string') return node
-              if (!node.url.startsWith('/docs/')) return node
-              if (!('children' in node)) return node
-
-              // we are overwriting the url with the mdx suffix removed
-              node.url = removeMdxSuffix(node.url)
-
-              const [url, hash] = (node.url as string).split('#')
-
-              const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
-              if (ignore === true) return node
-
-              const doc = docsMap.get(url)
-
-              if (doc === undefined) {
-                safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
-                return node
-              }
-
-              if (hash !== undefined) {
-                const hasHash = doc.headingsHashes.has(hash)
-
-                if (hasHash === false) {
-                  safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
-                }
-              }
-
-              if (doc.sdk !== undefined) {
-                // we are going to swap it for the sdk link component to give the users a great experience
-
-                const firstChild = node.children?.[0]
-                const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-                if (childIsCodeBlock) {
-                  firstChild.type = 'text'
-
-                  return mdastBuilder('mdxJsxTextElement', {
-                    name: 'SDKLink',
-                    attributes: [
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'href',
-                        value: scopeHrefToSDK(url, ':sdk:'),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'sdks',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: JSON.stringify(doc.sdk),
-                        }),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'code',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: childIsCodeBlock,
-                        }),
-                      }),
-                    ],
-                  })
-                }
-
-                return mdastBuilder('mdxJsxTextElement', {
-                  name: 'SDKLink',
-                  attributes: [
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'href',
-                      value: scopeHrefToSDK(url, ':sdk:'),
-                    }),
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'sdks',
-                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                        value: JSON.stringify(doc.sdk),
-                      }),
-                    }),
-                  ],
-                  children: node.children,
-                })
-              }
-
-              return node
-            })
-          })
+          .use(validateAndEmbedLinks(config, docsMap, filePath))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -1681,91 +1420,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         let node: Node | null = null
 
         const vfile = await remark()
-          // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
-          .use(() => (tree: Node, vfile: VFile) => {
-            return mdastMap(tree, (node) => {
-              if (node.type !== 'link') return node
-              if (!('url' in node)) return node
-              if (typeof node.url !== 'string') return node
-              if (!node.url.startsWith('/docs/')) return node
-              if (!('children' in node)) return node
-
-              // we are overwriting the url with the mdx suffix removed
-              node.url = removeMdxSuffix(node.url)
-
-              const [url, hash] = (node.url as string).split('#')
-
-              const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
-              if (ignore === true) return node
-
-              const doc = docsMap.get(url)
-
-              if (doc === undefined) {
-                safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
-                return node
-              }
-
-              if (hash !== undefined) {
-                const hasHash = doc.headingsHashes.has(hash)
-
-                if (hasHash === false) {
-                  safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
-                }
-              }
-
-              if (doc.sdk !== undefined) {
-                // we are going to swap it for the sdk link component to give the users a great experience
-
-                const firstChild = node.children?.[0]
-                const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-                if (childIsCodeBlock) {
-                  firstChild.type = 'text'
-
-                  return mdastBuilder('mdxJsxTextElement', {
-                    name: 'SDKLink',
-                    attributes: [
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'href',
-                        value: scopeHrefToSDK(url, ':sdk:'),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'sdks',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: JSON.stringify(doc.sdk),
-                        }),
-                      }),
-                      mdastBuilder('mdxJsxAttribute', {
-                        name: 'code',
-                        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                          value: childIsCodeBlock,
-                        }),
-                      }),
-                    ],
-                  })
-                }
-
-                return mdastBuilder('mdxJsxTextElement', {
-                  name: 'SDKLink',
-                  attributes: [
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'href',
-                      value: scopeHrefToSDK(url, ':sdk:'),
-                    }),
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'sdks',
-                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                        value: JSON.stringify(doc.sdk),
-                      }),
-                    }),
-                  ],
-                  children: node.children,
-                })
-              }
-
-              return node
-            })
-          })
+          .use(validateAndEmbedLinks(config, docsMap, filePath))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -1838,43 +1493,17 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               if (childIsCodeBlock) {
                 firstChild.type = 'text'
 
-                return mdastBuilder('mdxJsxTextElement', {
-                  name: 'SDKLink',
-                  attributes: [
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'href',
-                      value: scopeHrefToSDK(url, ':sdk:'),
-                    }),
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'sdks',
-                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                        value: JSON.stringify(linkedDoc.sdk),
-                      }),
-                    }),
-                    mdastBuilder('mdxJsxAttribute', {
-                      name: 'code',
-                      value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                        value: childIsCodeBlock,
-                      }),
-                    }),
-                  ],
+                return SDKLink({
+                  href: scopeHrefToSDK(url, ':sdk:'),
+                  sdks: linkedDoc.sdk,
+                  code: true,
                 })
               }
 
-              return mdastBuilder('mdxJsxTextElement', {
-                name: 'SDKLink',
-                attributes: [
-                  mdastBuilder('mdxJsxAttribute', {
-                    name: 'href',
-                    value: scopeHrefToSDK(url, ':sdk:'),
-                  }),
-                  mdastBuilder('mdxJsxAttribute', {
-                    name: 'sdks',
-                    value: mdastBuilder('mdxJsxAttributeValueExpression', {
-                      value: JSON.stringify(linkedDoc.sdk),
-                    }),
-                  }),
-                ],
+              return SDKLink({
+                href: scopeHrefToSDK(url, ':sdk:'),
+                sdks: linkedDoc.sdk,
+                code: false,
                 children: node.children,
               })
             }
@@ -1930,36 +1559,8 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             })
           })
         })
-        // embed the partials into the doc
-        .use(() => (tree, vfile) => {
-          return mdastMap(tree, (node) => {
-            const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
-
-            if (partialSrc === undefined) return node
-
-            const partial = validatedPartials.find(
-              (partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`,
-            )
-
-            if (partial === undefined) return node // a warning will have already been reported
-
-            return Object.assign(node, partial.node)
-          })
-        })
-        // embed the typedoc into the doc
-        .use(() => (tree, vfile) => {
-          return mdastMap(tree, (node) => {
-            const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
-
-            if (typedocSrc === undefined) return node
-
-            const typedoc = validatedTypedocs.find((typedoc) => typedoc.path === `${removeMdxSuffix(typedocSrc)}.mdx`)
-
-            if (typedoc === undefined) return node // a warning will have already been reported
-
-            return Object.assign(node, typedoc.node)
-          })
-        })
+        .use(checkPartials(config, validatedPartials, filePath, { reportWarnings: false, embed: true }))
+        .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .process(doc.vfile)
 
       const distFilePath = `${doc.href.replace('/docs/', '')}.mdx`
@@ -2025,35 +1626,7 @@ template: wide
                 return false
               })
             })
-            // Validate unique heading ids
-            .use(() => (tree, vfile) => {
-              const headingsHashes = new Set<string>()
-              const slugify = slugifyWithCounter()
-
-              mdastVisit(
-                tree,
-                (node) => node.type === 'heading',
-                (node) => {
-                  const id = extractHeadingFromHeadingNode(node)
-
-                  if (id !== undefined) {
-                    if (headingsHashes.has(id)) {
-                      safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
-                    }
-
-                    headingsHashes.add(id)
-                  } else {
-                    const slug = slugify(toString(node).trim())
-
-                    if (headingsHashes.has(slug)) {
-                      safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
-                    }
-
-                    headingsHashes.add(slug)
-                  }
-                },
-              )
-            })
+            .use(validateUniqueHeadings(config, filePath))
             // scope urls so they point to the current sdk
             .use(() => (tree, vfile) => {
               return mdastMap(tree, (node) => {
@@ -2160,34 +1733,7 @@ template: wide
             return ifSdks.includes(sdk)
           })
         })
-        .use(() => (inputTree, vfile) => {
-          const headingsHashes = new Set<string>()
-          const slugify = slugifyWithCounter()
-
-          mdastVisit(
-            inputTree,
-            (node) => node.type === 'heading',
-            (node) => {
-              const id = extractHeadingFromHeadingNode(node)
-
-              if (id !== undefined) {
-                if (headingsHashes.has(id)) {
-                  safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
-                }
-
-                headingsHashes.add(id)
-              } else {
-                const slug = slugify(toString(node).trim())
-
-                if (headingsHashes.has(slug)) {
-                  safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
-                }
-
-                headingsHashes.add(slug)
-              }
-            },
-          )
-        })
+        .use(validateUniqueHeadings(config, filePath))
         .process({
           path: filePath,
           value: String(doc.vfile),
@@ -2390,4 +1936,227 @@ const main = async () => {
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
   main()
+}
+
+const SDKLink = (
+  props: { href: string; sdks: SDK[]; code: true } | { href: string; sdks: SDK[]; code: false; children: unknown },
+) => {
+  if (props.code) {
+    return mdastBuilder('mdxJsxTextElement', {
+      name: 'SDKLink',
+      attributes: [
+        mdastBuilder('mdxJsxAttribute', {
+          name: 'href',
+          value: props.href,
+        }),
+        mdastBuilder('mdxJsxAttribute', {
+          name: 'sdks',
+          value: mdastBuilder('mdxJsxAttributeValueExpression', {
+            value: JSON.stringify(props.sdks),
+          }),
+        }),
+        mdastBuilder('mdxJsxAttribute', {
+          name: 'code',
+          value: mdastBuilder('mdxJsxAttributeValueExpression', {
+            value: props.code,
+          }),
+        }),
+      ],
+    })
+  }
+
+  return mdastBuilder('mdxJsxTextElement', {
+    name: 'SDKLink',
+    attributes: [
+      mdastBuilder('mdxJsxAttribute', {
+        name: 'href',
+        value: props.href,
+      }),
+      mdastBuilder('mdxJsxAttribute', {
+        name: 'sdks',
+        value: mdastBuilder('mdxJsxAttributeValueExpression', {
+          value: JSON.stringify(props.sdks),
+        }),
+      }),
+    ],
+    children: props.children,
+  })
+}
+
+// Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
+const validateAndEmbedLinks =
+  (config: BuildConfig, docsMap: DocsMap, filePath: string) => () => (tree: Node, vfile: VFile) => {
+    return mdastMap(tree, (node) => {
+      if (node.type !== 'link') return node
+      if (!('url' in node)) return node
+      if (typeof node.url !== 'string') return node
+      if (!node.url.startsWith('/docs/')) return node
+      if (!('children' in node)) return node
+
+      // we are overwriting the url with the mdx suffix removed
+      node.url = removeMdxSuffix(node.url)
+
+      const [url, hash] = (node.url as string).split('#')
+
+      const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+      if (ignore === true) return node
+
+      const doc = docsMap.get(url)
+
+      if (doc === undefined) {
+        safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+        return node
+      }
+
+      if (hash !== undefined) {
+        const hasHash = doc.headingsHashes.has(hash)
+
+        if (hasHash === false) {
+          safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+        }
+      }
+
+      if (doc.sdk !== undefined) {
+        // we are going to swap it for the sdk link component to give the users a great experience
+
+        const firstChild = node.children?.[0]
+        const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+        if (childIsCodeBlock) {
+          firstChild.type = 'text'
+
+          return SDKLink({
+            href: scopeHrefToSDK(url, ':sdk:'),
+            sdks: doc.sdk,
+            code: true,
+          })
+        }
+
+        return SDKLink({
+          href: scopeHrefToSDK(url, ':sdk:'),
+          sdks: doc.sdk,
+          code: false,
+          children: node.children,
+        })
+      }
+
+      return node
+    })
+  }
+
+const checkPartials =
+  (
+    config: BuildConfig,
+    partials: {
+      node: Node
+      path: string
+    }[],
+    filePath: string,
+    options: {
+      reportWarnings: boolean
+      embed: boolean
+    },
+  ) =>
+  () =>
+  (tree: Node, vfile: VFile) => {
+    mdastMap(tree, (node) => {
+      const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+
+      if (partialSrc === undefined) return node
+
+      if (partialSrc.startsWith('_partials/') === false) {
+        if (options.reportWarnings === true) {
+          safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
+        }
+        return node
+      }
+
+      const partial = partials.find((partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`)
+
+      if (partial === undefined) {
+        if (options.reportWarnings === true) {
+          safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
+        }
+        return node
+      }
+
+      if (options.embed === true) {
+        return Object.assign(node, partial.node)
+      }
+
+      return node
+    })
+  }
+
+const checkTypedoc =
+  (
+    config: BuildConfig,
+    typedocs: { path: string; node: Node }[],
+    filePath: string,
+    options: { reportWarnings: boolean; embed: boolean },
+  ) =>
+  () =>
+  (tree: Node, vfile: VFile) => {
+    mdastMap(tree, (node) => {
+      const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+
+      if (typedocSrc === undefined) return node
+
+      const typedocFolderExists = existsSync(config.typedocPath)
+
+      if (typedocFolderExists === false && options.reportWarnings === true) {
+        throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
+      }
+
+      const typedoc = typedocs.find(({ path }) => path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+
+      if (typedoc === undefined) {
+        if (options.reportWarnings === true) {
+          safeMessage(
+            config,
+            vfile,
+            filePath,
+            'typedoc-not-found',
+            [`${removeMdxSuffix(typedocSrc)}.mdx`],
+            node.position,
+          )
+        }
+        return node
+      }
+
+      if (options.embed === true) {
+        return Object.assign(node, typedoc.node)
+      }
+
+      return node
+    })
+  }
+
+const validateUniqueHeadings = (config: BuildConfig, filePath: string) => () => (tree: Node, vfile: VFile) => {
+  const headingsHashes = new Set<string>()
+  const slugify = slugifyWithCounter()
+
+  mdastVisit(
+    tree,
+    (node) => node.type === 'heading',
+    (node) => {
+      const id = extractHeadingFromHeadingNode(node)
+
+      if (id !== undefined) {
+        if (headingsHashes.has(id)) {
+          safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
+        }
+
+        headingsHashes.add(id)
+      } else {
+        const slug = slugify(toString(node).trim())
+
+        if (headingsHashes.has(slug)) {
+          safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
+        }
+
+        headingsHashes.add(slug)
+      }
+    },
+  )
 }

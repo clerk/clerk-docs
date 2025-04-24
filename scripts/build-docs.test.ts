@@ -4,7 +4,8 @@ import os from 'node:os'
 import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
-import { build, createConfig, createBlankStore, invalidateFile } from './build-docs'
+import { build, createBlankStore, invalidateFile } from './build-docs'
+import { createConfig } from './lib/config'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -117,12 +118,17 @@ function treeDir(baseDir: string) {
 
 const baseConfig = {
   docsPath: '../docs',
+  baseDocsLink: '/docs/',
   manifestPath: '../docs/manifest.json',
   partialsPath: '../docs/_partials',
-  distPath: '../dist',
   typedocPath: '../typedoc',
-  ignorePaths: ['/docs/_partials'],
-  ignoreWarnings: {},
+  distPath: '../dist',
+  ignoreLinks: [],
+  ignoreWarnings: {
+    docs: {},
+    partials: {},
+    typedoc: {},
+  },
   manifestOptions: {
     wrapDefault: true,
     collapseDefault: false,
@@ -2448,7 +2454,7 @@ sdk: react
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
-        ignorePaths: ['/docs/_partials', '/docs/ignored'],
+        ignoreLinks: ['/docs/ignored'],
       }),
     )
 
@@ -2979,7 +2985,11 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/index.mdx': ['doc-not-in-manifest'],
+            docs: {
+              'index.mdx': ['doc-not-in-manifest'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3023,7 +3033,11 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/problem-file.mdx': ['doc-not-in-manifest', 'link-doc-not-found', 'invalid-sdk-in-if'],
+            docs: {
+              'problem-file.mdx': ['doc-not-in-manifest', 'link-doc-not-found', 'invalid-sdk-in-if'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3070,8 +3084,12 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/file1.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
-            '/docs/file2.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
+            docs: {
+              'file1.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
+              'file2.mdx': ['doc-not-in-manifest', 'link-doc-not-found'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3121,7 +3139,11 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/partial-ignore.mdx': ['link-doc-not-found'],
+            docs: {
+              'partial-ignore.mdx': ['link-doc-not-found'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3166,11 +3188,15 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/component-issues.mdx': [
-              'doc-not-in-manifest',
-              'component-missing-attribute',
-              'include-src-not-partials',
-            ],
+            docs: {
+              'component-issues.mdx': [
+                'doc-not-in-manifest',
+                'component-missing-attribute',
+                'include-src-not-partials',
+              ],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3207,7 +3233,11 @@ title: Missing Description
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/missing-description.mdx': ['frontmatter-missing-description'],
+            docs: {
+              'missing-description.mdx': ['frontmatter-missing-description'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3259,7 +3289,11 @@ description: The page being linked to
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/source-page.mdx': ['link-hash-not-found'],
+            docs: {
+              'source-page.mdx': ['link-hash-not-found'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3313,7 +3347,11 @@ description: This page has a description
           basePath: tempDir,
           validSdks: ['react', 'nodejs'],
           ignoreWarnings: {
-            '/docs/sdk-doc.mdx': ['doc-sdk-filtered-by-parent'],
+            docs: {
+              'sdk-doc.mdx': ['doc-sdk-filtered-by-parent'],
+            },
+            partials: {},
+            typedoc: {},
           },
         }),
       )
@@ -3354,7 +3392,11 @@ description: Test page with partial
           basePath: tempDir,
           validSdks: ['react'],
           ignoreWarnings: {
-            '/docs/_partials/test-partial.mdx': ['link-doc-not-found'],
+            partials: {
+              'test-partial.mdx': ['link-doc-not-found'],
+            },
+            docs: {},
+            typedoc: {},
           },
         }),
       )
@@ -3538,7 +3580,11 @@ interface Client {
         basePath: tempDir,
         validSdks: ['react'],
         ignoreWarnings: {
-          '/docs/api-doc.mdx': ['typedoc-not-found'],
+          docs: {
+            'api-doc.mdx': ['typedoc-not-found'],
+          },
+          partials: {},
+          typedoc: {},
         },
       }),
     )

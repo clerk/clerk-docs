@@ -25,331 +25,28 @@
 // - Removes .mdx from the end of docs markdown links
 // - Adds canonical links in frontmatter for SDK-specific docs
 
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import remarkMdx from 'remark-mdx'
-import { remark } from 'remark'
-import { visit as mdastVisit } from 'unist-util-visit'
-import { filter as mdastFilter } from 'unist-util-filter'
-import { map as mdastMap } from 'unist-util-map'
-import { u as mdastBuilder } from 'unist-builder'
-import remarkFrontmatter from 'remark-frontmatter'
-import yaml from 'yaml'
+import watcher from '@parcel/watcher'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
-import reporter from 'vfile-reporter'
-import readdirp from 'readdirp'
-import { z } from 'zod'
-import { fromError, type ValidationError } from 'zod-validation-error'
-import { Node, Position } from 'unist'
-import watcher from '@parcel/watcher'
 import { existsSync } from 'node:fs'
-
-const errorMessages = {
-  // Manifest errors
-  'manifest-parse-error': (error: ValidationError | Error): string => `Failed to parse manifest: ${error}`,
-
-  // Component errors
-  'component-no-props': (componentName: string): string => `<${componentName} /> component has no props`,
-  'component-attributes-not-array': (componentName: string): string =>
-    `<${componentName} /> node attributes is not an array (this is a bug with the build script, please report)`,
-  'component-missing-attribute': (componentName: string, propName: string): string =>
-    `<${componentName} /> component has no "${propName}" attribute`,
-  'component-attribute-no-value': (componentName: string, propName: string): string =>
-    `<${componentName} /> attribute "${propName}" has no value (this is a bug with the build script, please report)`,
-  'component-attribute-unsupported-type': (componentName: string, propName: string): string =>
-    `<${componentName} /> attribute "${propName}" has an unsupported value type`,
-
-  // SDK errors
-  'invalid-sdks-in-if': (invalidSDKs: string[]): string =>
-    `sdks "${invalidSDKs.join('", "')}" in <If /> are not valid SDKs`,
-  'invalid-sdk-in-if': (sdk: string): string => `sdk "${sdk}" in <If /> is not a valid SDK`,
-  'invalid-sdk-in-frontmatter': (invalidSDKs: string[], validSdks: SDK[]): string =>
-    `Invalid SDK ${JSON.stringify(invalidSDKs)}, the valid SDKs are ${JSON.stringify(validSdks)}`,
-  'if-component-sdk-not-in-frontmatter': (sdk: SDK, docSdk: SDK[]): string =>
-    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
-  'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
-    `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
-  'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
-    `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
-  'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>
-    `Group "${title}" is attempting to use ${JSON.stringify(groupSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
-
-  // Document structure errors
-  'doc-not-in-manifest': (): string =>
-    'This doc is not in the manifest.json, but will still be publicly accessible and other docs can link to it',
-  'invalid-href-encoding': (href: string): string =>
-    `Href "${href}" contains characters that will be encoded by the browser, please remove them`,
-  'frontmatter-missing-title': (): string => 'Frontmatter must have a "title" property',
-  'frontmatter-missing-description': (): string => 'Frontmatter should have a "description" property',
-  'frontmatter-parse-failed': (href: string): string => `Frontmatter parsing failed for ${href}`,
-  'doc-not-found': (title: string, href: string): string =>
-    `Doc "${title}" in manifest.json not found in the docs folder at ${href}.mdx`,
-  'doc-parse-failed': (href: string): string => `Doc "${href}" failed to parse`,
-  'sdk-path-conflict': (href: string, path: string): string =>
-    `Doc "${href}" is attempting to write out a doc to ${path} but the first part of the path is a valid SDK, this causes a file path conflict.`,
-  'duplicate-heading-id': (href: string, id: string): string =>
-    `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
-
-  // Include component errors
-  'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
-  'partial-not-found': (src: string): string => `Partial /docs/${src}.mdx not found`,
-  'partials-inside-partials': (): string =>
-    'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
-
-  // Link validation errors
-  'link-doc-not-found': (url: string): string => `Doc ${url} not found`,
-  'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
-
-  // File reading errors
-  'file-read-error': (filePath: string): string => `file ${filePath} doesn't exist`,
-  'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
-  'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
-  'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
-
-  // Typedoc errors
-  'typedoc-folder-not-found': (path: string): string =>
-    `Typedoc folder ${path} not found, run "npm run typedoc:download"`,
-  'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
-  'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
-  'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,
-} as const
-
-type WarningCode = keyof typeof errorMessages
-
-// Helper function to check if a warning should be ignored
-const shouldIgnoreWarning = (config: BuildConfig, filePath: string, warningCode: WarningCode): boolean => {
-  if (!config.ignoreWarnings) {
-    return false
-  }
-
-  const ignoreList = config.ignoreWarnings[filePath]
-  if (!ignoreList) {
-    return false
-  }
-
-  return ignoreList.includes(warningCode)
-}
-
-const safeMessage = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
-  config: BuildConfig,
-  vfile: VFile,
-  filePath: string,
-  warningCode: TCode,
-  args: TArgs,
-  position?: Position,
-) => {
-  if (!shouldIgnoreWarning(config, filePath, warningCode)) {
-    // @ts-expect-error - TypeScript has trouble with spreading args into the function
-    const message = errorMessages[warningCode](...args)
-    vfile.message(message, position)
-  }
-}
-
-const safeFail = <TCode extends WarningCode, TArgs extends Parameters<(typeof errorMessages)[TCode]>>(
-  config: BuildConfig,
-  vfile: VFile,
-  filePath: string,
-  warningCode: TCode,
-  args: TArgs,
-  position?: Position,
-) => {
-  if (!shouldIgnoreWarning(config, filePath, warningCode)) {
-    // @ts-expect-error - TypeScript has trouble with spreading args into the function
-    const message = errorMessages[warningCode](...args)
-    vfile.fail(message, position)
-  }
-}
-
-const VALID_SDKS = [
-  'nextjs',
-  'react',
-  'js-frontend',
-  'chrome-extension',
-  'expo',
-  'ios',
-  'nodejs',
-  'expressjs',
-  'fastify',
-  'react-router',
-  'remix',
-  'tanstack-react-start',
-  'go',
-  'astro',
-  'nuxt',
-  'vue',
-  'ruby',
-  'python',
-  'js-backend',
-  'sdk-development',
-  'community-sdk',
-] as const
-
-type SDK = (typeof VALID_SDKS)[number]
-
-const sdk = z.enum(VALID_SDKS)
-
-const icon = z.enum([
-  'apple',
-  'application-2',
-  'arrow-up-circle',
-  'astro',
-  'angular',
-  'block',
-  'bolt',
-  'book',
-  'box',
-  'c-sharp',
-  'chart',
-  'checkmark-circle',
-  'chrome',
-  'clerk',
-  'code-bracket',
-  'cog-6-teeth',
-  'door',
-  'elysia',
-  'expressjs',
-  'globe',
-  'go',
-  'home',
-  'hono',
-  'javascript',
-  'koa',
-  'link',
-  'linkedin',
-  'lock',
-  'nextjs',
-  'nodejs',
-  'plug',
-  'plus-circle',
-  'python',
-  'react',
-  'redwood',
-  'remix',
-  'react-router',
-  'rocket',
-  'route',
-  'ruby',
-  'rust',
-  'speedometer',
-  'stacked-rectangle',
-  'solid',
-  'svelte',
-  'tanstack',
-  'user-circle',
-  'user-dotted-circle',
-  'vue',
-  'x',
-  'expo',
-  'nuxt',
-  'fastify',
-])
-
-type Icon = z.infer<typeof icon>
-
-const tag = z.enum(['(Beta)', '(Community)'])
-
-type Tag = z.infer<typeof tag>
-
-type ManifestItem = {
-  title: string
-  href: string
-  tag?: Tag
-  wrap?: boolean
-  icon?: Icon
-  target?: '_blank'
-  sdk?: SDK[]
-}
-
-type ManifestGroup = {
-  title: string
-  items: Manifest
-  collapse?: boolean
-  tag?: Tag
-  wrap?: boolean
-  icon?: Icon
-  hideTitle?: boolean
-  sdk?: SDK[]
-}
-
-type Manifest = (ManifestItem | ManifestGroup)[][]
-
-// Create manifest schema based on config
-const createManifestSchema = (config: BuildConfig) => {
-  const manifestItem: z.ZodType<ManifestItem> = z
-    .object({
-      title: z.string(),
-      href: z.string(),
-      tag: tag.optional(),
-      wrap: z.boolean().default(config.manifestOptions.wrapDefault),
-      icon: icon.optional(),
-      target: z.enum(['_blank']).optional(),
-      sdk: z.array(sdk).optional(),
-    })
-    .strict()
-
-  const manifestGroup: z.ZodType<ManifestGroup> = z
-    .object({
-      title: z.string(),
-      items: z.lazy(() => manifestSchema),
-      collapse: z.boolean().default(config.manifestOptions.collapseDefault),
-      tag: tag.optional(),
-      wrap: z.boolean().default(config.manifestOptions.wrapDefault),
-      icon: icon.optional(),
-      hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
-      sdk: z.array(sdk).optional(),
-    })
-    .strict()
-
-  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup])))
-
-  return {
-    manifestItem,
-    manifestGroup,
-    manifestSchema,
-  }
-}
-
-const isValidSdk =
-  (config: BuildConfig) =>
-  (sdk: string): sdk is SDK => {
-    return config.validSdks.includes(sdk as SDK)
-  }
-
-const isValidSdks =
-  (config: BuildConfig) =>
-  (sdks: string[]): sdks is SDK[] => {
-    return sdks.every(isValidSdk(config))
-  }
-
-const parseJSON = (json: string) => {
-  try {
-    const output = JSON.parse(json)
-
-    return [null, output as unknown] as const
-  } catch (error) {
-    return [new Error(`Failed to parse JSON`, { cause: error }), null] as const
-  }
-}
-
-const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
-  const { manifestSchema } = createManifestSchema(config)
-  const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
-
-  const [error, json] = parseJSON(unsafe_manifest)
-
-  if (error) {
-    throw new Error(errorMessages['manifest-parse-error'](error))
-  }
-
-  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
-
-  if (manifest.success === true) {
-    return manifest.data.navigation
-  }
-
-  throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
-}
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import readdirp from 'readdirp'
+import { remark } from 'remark'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkMdx from 'remark-mdx'
+import { Node } from 'unist'
+import { filter as mdastFilter } from 'unist-util-filter'
+import { map as mdastMap } from 'unist-util-map'
+import { visit as mdastVisit } from 'unist-util-visit'
+import type { VFile } from 'vfile'
+import reporter from 'vfile-reporter'
+import yaml from 'yaml'
+import { SDKLink } from './lib/components/SDKLink'
+import { createConfig, type BuildConfig } from './lib/config'
+import { errorMessages, safeFail, safeMessage, shouldIgnoreWarning, type WarningsSection } from './lib/error-messages'
+import { ManifestGroup, readManifest } from './lib/manifest'
+import { isValidSdk, isValidSdks, VALID_SDKS, type SDK } from './lib/validators'
 
 const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
   const filePath = path.join(config.docsPath, docPath)
@@ -366,7 +63,8 @@ const readDocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.docsPath, {
     type: 'files',
     fileFilter: (entry) =>
-      config.ignorePaths.some((ignoreItem) => `/docs/${entry.path}`.startsWith(ignoreItem)) === false &&
+      // Partials are inside the docs folder, so we need to exclude them
+      `${config.docsRelativePath}/${entry.path}`.startsWith(config.partialsRelativePath) === false &&
       entry.path.endsWith('.mdx'),
   })
 }
@@ -406,7 +104,7 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
             'name' in node &&
             node.name === 'Include',
           (node) => {
-            safeFail(config, vfile, fullPath, 'partials-inside-partials', [], node.position)
+            safeFail(config, vfile, fullPath, 'partials', 'partials-inside-partials', [], node.position)
           },
         )
       })
@@ -416,7 +114,7 @@ const readPartial = (config: BuildConfig) => async (filePath: string) => {
           if (node.type !== 'link') return node
           if (!('url' in node)) return node
           if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith('/docs/')) return node
+          if (!node.url.startsWith(config.baseDocsLink)) return node
           if (!('children' in node)) return node
 
           // We are overwriting the url with the mdx suffix removed
@@ -500,13 +198,12 @@ const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
       .use(() => (tree) => {
         node = tree
       })
-      // Process links in typedocs and remove the .mdx suffix
       .use(() => (tree, vfile) => {
         return mdastMap(tree, (node) => {
           if (node.type !== 'link') return node
           if (!('url' in node)) return node
           if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith('/docs/')) return node
+          if (!node.url.startsWith(config.baseDocsLink)) return node
           if (!('children' in node)) return node
 
           // We are overwriting the url with the mdx suffix removed
@@ -537,13 +234,12 @@ const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
       .use(() => (tree) => {
         node = tree
       })
-      // Process links in typedocs and remove the .mdx suffix
       .use(() => (tree, vfile) => {
         return mdastMap(tree, (node) => {
           if (node.type !== 'link') return node
           if (!('url' in node)) return node
           if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith('/docs/')) return node
+          if (!node.url.startsWith(config.baseDocsLink)) return node
           if (!('children' in node)) return node
 
           // We are overwriting the url with the mdx suffix removed
@@ -590,8 +286,6 @@ const readTypedocsMarkdown =
       }),
     )
   }
-
-type VFile = Awaited<ReturnType<typeof remark.process>>
 
 const ensureDirectory =
   (config: BuildConfig) =>
@@ -763,7 +457,7 @@ function flattenTree<
   return result
 }
 
-const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
+const scopeHrefToSDK = (config: BuildConfig) => (href: string, targetSDK: SDK | ':sdk:') => {
   // This is external so can't change it
   if (href.startsWith('/docs') === false) return href
 
@@ -776,7 +470,7 @@ const scopeHrefToSDK = (href: string, targetSDK: SDK | ':sdk:') => {
   }
 
   // Add the sdk to the url
-  return `/docs/${targetSDK}/${hrefSegments.slice(2).join('/')}`
+  return `${config.baseDocsLink}${targetSDK}/${hrefSegments.slice(2).join('/')}`
 }
 
 const findComponent = (node: Node, componentName: string) => {
@@ -799,6 +493,7 @@ const extractComponentPropValueFromNode = (
   componentName: string,
   propName: string,
   required = true,
+  section: WarningsSection,
   filePath: string,
 ): string | undefined => {
   const component = findComponent(node, componentName)
@@ -808,14 +503,22 @@ const extractComponentPropValueFromNode = (
   // Check for attributes
   if (!('attributes' in component)) {
     if (vfile) {
-      safeMessage(config, vfile, filePath, 'component-no-props', [componentName], component.position)
+      safeMessage(config, vfile, filePath, section, 'component-no-props', [componentName], component.position)
     }
     return undefined
   }
 
   if (!Array.isArray(component.attributes)) {
     if (vfile) {
-      safeMessage(config, vfile, filePath, 'component-attributes-not-array', [componentName], component.position)
+      safeMessage(
+        config,
+        vfile,
+        filePath,
+        section,
+        'component-attributes-not-array',
+        [componentName],
+        component.position,
+      )
     }
     return undefined
   }
@@ -825,7 +528,15 @@ const extractComponentPropValueFromNode = (
 
   if (propAttribute === undefined) {
     if (required === true && vfile) {
-      safeMessage(config, vfile, filePath, 'component-missing-attribute', [componentName, propName], component.position)
+      safeMessage(
+        config,
+        vfile,
+        filePath,
+        section,
+        'component-missing-attribute',
+        [componentName, propName],
+        component.position,
+      )
     }
     return undefined
   }
@@ -838,6 +549,7 @@ const extractComponentPropValueFromNode = (
         config,
         vfile,
         filePath,
+        section,
         'component-attribute-no-value',
         [componentName, propName],
         component.position,
@@ -858,6 +570,7 @@ const extractComponentPropValueFromNode = (
       config,
       vfile,
       filePath,
+      section,
       'component-attribute-unsupported-type',
       [componentName, propName],
       component.position,
@@ -867,7 +580,8 @@ const extractComponentPropValueFromNode = (
 }
 
 const extractSDKsFromIfProp =
-  (config: BuildConfig) => (node: Node, vfile: VFile | undefined, sdkProp: string, filePath: string) => {
+  (config: BuildConfig) =>
+  (node: Node, vfile: VFile | undefined, sdkProp: string, section: WarningsSection, filePath: string) => {
     const isValidItem = isValidSdk(config)
     const isValidItems = isValidSdks(config)
 
@@ -878,7 +592,7 @@ const extractSDKsFromIfProp =
       } else {
         const invalidSDKs = sdks.filter((sdk) => !isValidItem(sdk))
         if (vfile) {
-          safeMessage(config, vfile, filePath, 'invalid-sdks-in-if', [invalidSDKs], node.position)
+          safeMessage(config, vfile, filePath, section, 'invalid-sdks-in-if', [invalidSDKs], node.position)
         }
       }
     } else {
@@ -886,7 +600,7 @@ const extractSDKsFromIfProp =
         return [sdkProp]
       } else {
         if (vfile) {
-          safeMessage(config, vfile, filePath, 'invalid-sdk-in-if', [sdkProp], node.position)
+          safeMessage(config, vfile, filePath, section, 'invalid-sdk-in-if', [sdkProp], node.position)
         }
       }
     }
@@ -943,10 +657,11 @@ const parseInMarkdownFile =
     partials: { path: string; content: string; node: Node }[],
     typedocs: { path: string; content: string; node: Node }[],
     inManifest: boolean,
+    section: WarningsSection,
   ) => {
     const readFile = readMarkdownFile(config)
     const validateSDKs = isValidSdks(config)
-    const [error, fileContent] = await readFile(`${href}.mdx`.replace('/docs/', ''))
+    const [error, fileContent] = await readFile(`${href}.mdx`.replace(config.baseDocsLink, ''))
 
     if (error !== null) {
       throw new Error(errorMessages['markdown-read-error'](href), {
@@ -974,11 +689,11 @@ const parseInMarkdownFile =
         node = tree
 
         if (inManifest === false) {
-          safeMessage(config, vfile, filePath, 'doc-not-in-manifest', [])
+          safeMessage(config, vfile, filePath, section, 'doc-not-in-manifest', [])
         }
 
         if (href !== encodeURI(href)) {
-          safeFail(config, vfile, filePath, 'invalid-href-encoding', [href])
+          safeFail(config, vfile, filePath, section, 'invalid-href-encoding', [href])
         }
       })
       // validate and extract out the frontmatter
@@ -1000,6 +715,7 @@ const parseInMarkdownFile =
                 config,
                 vfile,
                 filePath,
+                section,
                 'invalid-sdk-in-frontmatter',
                 [invalidSDKs, config.validSdks as SDK[]],
                 node.position,
@@ -1008,12 +724,12 @@ const parseInMarkdownFile =
             }
 
             if (frontmatterYaml.title === undefined) {
-              safeFail(config, vfile, filePath, 'frontmatter-missing-title', [], node.position)
+              safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
               return
             }
 
             if (frontmatterYaml.description === undefined) {
-              safeMessage(config, vfile, filePath, 'frontmatter-missing-description', [], node.position)
+              safeMessage(config, vfile, filePath, section, 'frontmatter-missing-description', [], node.position)
             }
 
             frontmatter = {
@@ -1025,7 +741,7 @@ const parseInMarkdownFile =
         )
 
         if (frontmatter === undefined) {
-          safeFail(config, vfile, filePath, 'frontmatter-parse-failed', [href])
+          safeFail(config, vfile, filePath, section, 'frontmatter-parse-failed', [href])
           return
         }
       })
@@ -1055,7 +771,7 @@ const parseInMarkdownFile =
 
             if (id !== undefined) {
               if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeFail(config, vfile, filePath, 'duplicate-heading-id', [href, id])
+                safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [href, id])
               }
 
               headingsHashes.add(id)
@@ -1063,7 +779,7 @@ const parseInMarkdownFile =
               const slug = slugify(toString(node).trim())
 
               if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
-                safeFail(config, vfile, filePath, 'duplicate-heading-id', [href, slug])
+                safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [href, slug])
               }
 
               headingsHashes.add(slug)
@@ -1136,10 +852,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   // Grab all the docs links in the manifest
   await traverseTree({ items: userManifest }, async (item) => {
-    if (!item.href?.startsWith('/docs/')) return item
+    if (!item.href?.startsWith(config.baseDocsLink)) return item
     if (item.target !== undefined) return item
 
-    const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
+    const ignore = config.ignoredLink(item.href)
     if (ignore === true) return item
 
     docsInManifest.add(item.href)
@@ -1152,7 +868,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   // Read in all the docs
   const docsArray = await Promise.all(
     docsFiles.map(async (file) => {
-      const href = removeMdxSuffix(`/docs/${file.path}`)
+      const href = removeMdxSuffix(`${config.baseDocsLink}${file.path}`)
 
       const inManifest = docsInManifest.has(href)
 
@@ -1163,7 +879,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       if (cachedMarkdownFile) {
         markdownFile = structuredClone(cachedMarkdownFile)
       } else {
-        markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest)
+        markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest, 'docs')
 
         store.markdownFiles.set(href, structuredClone(markdownFile))
       }
@@ -1179,17 +895,17 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
   const sdkScopedManifestFirstPass = await traverseTree(
     { items: userManifest, sdk: undefined as undefined | SDK[] },
     async (item, tree) => {
-      if (!item.href?.startsWith('/docs/')) return item
+      if (!item.href?.startsWith(config.baseDocsLink)) return item
       if (item.target !== undefined) return item
 
-      const ignore = config.ignorePaths.some((ignoreItem) => item.href.startsWith(ignoreItem))
+      const ignore = config.ignoredLink(item.href)
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
       const doc = docsMap.get(item.href)
 
       if (doc === undefined) {
         const filePath = `${item.href}.mdx`
-        if (!shouldIgnoreWarning(config, filePath, 'doc-not-found')) {
+        if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-not-found')) {
           throw new Error(errorMessages['doc-not-found'](item.title, item.href))
         }
         return item
@@ -1207,7 +923,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
       if (docSDK !== undefined && parentSDK !== undefined) {
         if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
           const filePath = `${item.href}.mdx`
-          if (!shouldIgnoreWarning(config, filePath, 'doc-sdk-filtered-by-parent')) {
+          if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-sdk-filtered-by-parent')) {
             throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
           }
         }
@@ -1233,15 +949,6 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
       // This is the sdk of the parent group
       const parentSDK = tree.sdk
-
-      if (groupSDK !== undefined && parentSDK !== undefined) {
-        if (groupSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          const filePath = `/docs/groups/${details.title}.mdx`
-          if (!shouldIgnoreWarning(config, filePath, 'group-sdk-filtered-by-parent')) {
-            throw new Error(errorMessages['group-sdk-filtered-by-parent'](details.title, groupSDK, parentSDK))
-          }
-        }
-      }
 
       // If there are no children items, then the we either use the group we are looking at sdks if its defined, or its parent group
       if (groupsItemsCombinedSDKs.length === 0) {
@@ -1332,7 +1039,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         async (item) => {
           return {
             title: item.title,
-            href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(item.href, ':sdk:') : item.href,
+            href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
             tag: item.tag,
             wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
             icon: item.icon,
@@ -1361,7 +1068,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
   const validatedPartials = await Promise.all(
     partials.map(async (partial) => {
-      const partialPath = `/docs/_partials/${partial.path}`
+      const partialPath = `${config.partialsRelativePath}/${partial.path}`
 
       try {
         let node: Node | null = null
@@ -1369,7 +1076,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, partialPath))
+          .use(validateAndEmbedLinks(config, docsMap, partialPath, 'partials'))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -1401,7 +1108,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
 
         const vfile = await remark()
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, filePath))
+          .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -1417,23 +1124,28 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
           node: node as Node,
         }
       } catch (error) {
-        let node: Node | null = null
+        try {
+          let node: Node | null = null
 
-        const vfile = await remark()
-          .use(validateAndEmbedLinks(config, docsMap, filePath))
-          .use(() => (tree, vfile) => {
-            node = tree
-          })
-          .process(typedoc.vfile)
+          const vfile = await remark()
+            .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
+            .use(() => (tree, vfile) => {
+              node = tree
+            })
+            .process(typedoc.vfile)
 
-        if (node === null) {
+          if (node === null) {
+            throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
+          }
+
+          return {
+            ...typedoc,
+            vfile,
+            node: node as Node,
+          }
+        } catch (error) {
+          console.error(error)
           throw new Error(errorMessages['typedoc-parse-error'](typedoc.path))
-        }
-
-        return {
-          ...typedoc,
-          vfile,
-          node: node as Node,
         }
       }
     }),
@@ -1453,7 +1165,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
             if (node.type !== 'link') return node
             if (!('url' in node)) return node
             if (typeof node.url !== 'string') return node
-            if (!node.url.startsWith('/docs/') && !node.url.startsWith('#')) return node
+            if (!node.url.startsWith(config.baseDocsLink) && !node.url.startsWith('#')) return node
             if (!('children' in node)) return node
 
             // we are overwriting the url with the mdx suffix removed
@@ -1466,13 +1178,13 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               url = doc.href
             }
 
-            const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+            const ignore = config.ignoredLink(url)
             if (ignore === true) return node
 
             const linkedDoc = docsMap.get(url)
 
             if (linkedDoc === undefined) {
-              safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+              safeMessage(config, vfile, filePath, 'docs', 'link-doc-not-found', [url], node.position)
               return node
             }
 
@@ -1480,7 +1192,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
               const hasHash = linkedDoc.headingsHashes.has(hash)
 
               if (hasHash === false) {
-                safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+                safeMessage(config, vfile, filePath, 'docs', 'link-hash-not-found', [hash, url], node.position)
               }
             }
 
@@ -1494,14 +1206,14 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 firstChild.type = 'text'
 
                 return SDKLink({
-                  href: scopeHrefToSDK(url, ':sdk:'),
+                  href: scopeHrefToSDK(config)(url, ':sdk:'),
                   sdks: linkedDoc.sdk,
                   code: true,
                 })
               }
 
               return SDKLink({
-                href: scopeHrefToSDK(url, ':sdk:'),
+                href: scopeHrefToSDK(config)(url, ':sdk:'),
                 sdks: linkedDoc.sdk,
                 code: false,
                 children: node.children,
@@ -1514,11 +1226,11 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         // Validate the <If /> components
         .use(() => (tree, vfile) => {
           mdastVisit(tree, (node) => {
-            const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, filePath)
+            const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath)
 
             if (sdk === undefined) return
 
-            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, filePath)
+            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
 
             if (sdksFilter === undefined) return
 
@@ -1540,6 +1252,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                     config,
                     vfile,
                     filePath,
+                    'docs',
                     'if-component-sdk-not-in-frontmatter',
                     [sdk, doc.sdk],
                     node.position,
@@ -1553,7 +1266,15 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
                 const available = availableSDKs.includes(sdk)
 
                 if (available === false) {
-                  safeFail(config, vfile, filePath, 'if-component-sdk-not-in-manifest', [sdk, doc.href], node.position)
+                  safeFail(
+                    config,
+                    vfile,
+                    filePath,
+                    'docs',
+                    'if-component-sdk-not-in-manifest',
+                    [sdk, doc.href],
+                    node.position,
+                  )
                 }
               })()
             })
@@ -1563,10 +1284,10 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .process(doc.vfile)
 
-      const distFilePath = `${doc.href.replace('/docs/', '')}.mdx`
+      const distFilePath = `${doc.href.replace(config.baseDocsLink, '')}.mdx`
 
       if (isValidSdk(config)(distFilePath.split('/')[0])) {
-        if (!shouldIgnoreWarning(config, filePath, 'sdk-path-conflict')) {
+        if (!shouldIgnoreWarning(config, filePath, 'docs', 'sdk-path-conflict')) {
           throw new Error(errorMessages['sdk-path-conflict'](doc.href, distFilePath))
         }
       }
@@ -1580,7 +1301,7 @@ export const build = async (store: ReturnType<typeof createBlankStore>, config: 
           `---
 template: wide
 ---
-<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
 
         return vfile
@@ -1611,11 +1332,20 @@ template: wide
                 // We aren't passing the vfile here as the as the warning
                 // should have already been reported above when we initially
                 // parsed the file
-                const sdk = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, filePath)
+                const sdk = extractComponentPropValueFromNode(
+                  config,
+                  node,
+                  undefined,
+                  'If',
+                  'sdk',
+                  true,
+                  'docs',
+                  filePath,
+                )
 
                 if (sdk === undefined) return true
 
-                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, filePath)
+                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
 
                 if (sdksFilter === undefined) return true
 
@@ -1626,20 +1356,28 @@ template: wide
                 return false
               })
             })
-            .use(validateUniqueHeadings(config, filePath))
+            .use(validateUniqueHeadings(config, filePath, 'docs'))
             // scope urls so they point to the current sdk
             .use(() => (tree, vfile) => {
               return mdastMap(tree, (node) => {
                 if (node.type !== 'link') return node
                 if (!('url' in node)) {
-                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url property missing'], node.position)
+                  safeFail(
+                    config,
+                    vfile,
+                    filePath,
+                    'docs',
+                    'link-doc-not-found',
+                    ['url property missing'],
+                    node.position,
+                  )
                   return node
                 }
                 if (typeof node.url !== 'string') {
-                  safeFail(config, vfile, filePath, 'link-doc-not-found', ['url not a string'], node.position)
+                  safeFail(config, vfile, filePath, 'docs', 'link-doc-not-found', ['url not a string'], node.position)
                   return node
                 }
-                if (!node.url.startsWith('/docs/')) {
+                if (!node.url.startsWith(config.baseDocsLink)) {
                   return node
                 }
 
@@ -1648,13 +1386,13 @@ template: wide
 
                 const [url, hash] = (node.url as string).split('#')
 
-                const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+                const ignore = config.ignoredLink(url)
                 if (ignore === true) return node
 
                 const doc = docsMap.get(url)
 
                 if (doc === undefined) {
-                  safeFail(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+                  safeFail(config, vfile, filePath, 'docs', 'link-doc-not-found', [url], node.position)
                   return node
                 }
 
@@ -1672,7 +1410,7 @@ template: wide
 
                 const frontmatter = yaml.parse(node.value)
 
-                frontmatter.canonical = doc.sdk ? scopeHrefToSDK(doc.href, ':sdk:') : doc.href
+                frontmatter.canonical = doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href
 
                 node.value = yaml.stringify(frontmatter).split('\n').slice(0, -1).join('\n')
 
@@ -1684,7 +1422,7 @@ template: wide
               messages: [], // reset the messages, otherwise they will be duplicated
             })
 
-          await writeSdkFile(targetSdk, `${doc.href.replace('/docs/', '')}.mdx`, String(vfile))
+          await writeSdkFile(targetSdk, `${doc.href.replace(config.baseDocsLink, '')}.mdx`, String(vfile))
 
           return vfile
         }),
@@ -1706,11 +1444,11 @@ template: wide
     const availableSDKs = new Set<SDK>()
 
     mdastVisit(doc.node, (node) => {
-      const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, filePath)
+      const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, 'docs', filePath)
 
       if (sdkProp === undefined) return
 
-      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, filePath)
+      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', filePath)
 
       if (sdks === undefined) return
 
@@ -1724,16 +1462,25 @@ template: wide
         .use(remarkMdx)
         .use(() => (inputTree) => {
           return mdastFilter(inputTree, (node) => {
-            const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', false, filePath)
+            const sdkProp = extractComponentPropValueFromNode(
+              config,
+              node,
+              undefined,
+              'If',
+              'sdk',
+              false,
+              'docs',
+              filePath,
+            )
             if (!sdkProp) return true
 
-            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, filePath)
+            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', filePath)
             if (!ifSdks) return true
 
             return ifSdks.includes(sdk)
           })
         })
-        .use(validateUniqueHeadings(config, filePath))
+        .use(validateUniqueHeadings(config, filePath, 'docs'))
         .process({
           path: filePath,
           value: String(doc.vfile),
@@ -1753,7 +1500,7 @@ template: wide
 
 export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => (filePath: string) => {
-    store.markdownFiles.delete(removeMdxSuffix(`/docs/${path.relative(config.docsPath, filePath)}`))
+    store.markdownFiles.delete(removeMdxSuffix(`${config.baseDocsLink}${path.relative(config.docsPath, filePath)}`))
     store.partialsFiles.delete(path.relative(config.partialsPath, filePath))
     store.typedocsFiles.delete(path.relative(config.typedocPath, filePath))
   }
@@ -1798,85 +1545,22 @@ const watchAndRebuild = (store: ReturnType<typeof createBlankStore>, config: Bui
   watcher.subscribe(config.typedocPath, handleFileChange)
 }
 
-type BuildConfigOptions = {
-  basePath: string
-  validSdks: readonly SDK[]
-  docsPath: string
-  manifestPath: string
-  partialsPath: string
-  distPath: string
-  typedocPath: string
-  ignorePaths: string[]
-  ignoreWarnings?: Record<string, string[]>
-  manifestOptions: {
-    wrapDefault: boolean
-    collapseDefault: boolean
-    hideTitleDefault: boolean
-  }
-  cleanDist: boolean
-  flags?: {
-    watch?: boolean
-    controlled?: boolean
-  }
-}
-
-type BuildConfig = ReturnType<typeof createConfig>
-
-// Takes the basePath and resolves the relative paths to be absolute paths
-export function createConfig(config: BuildConfigOptions) {
-  const resolve = (relativePath: string) => {
-    return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
-  }
-
-  return {
-    basePath: config.basePath,
-    validSdks: config.validSdks,
-
-    manifestRelativePath: config.manifestPath,
-    manifestFilePath: resolve(config.manifestPath),
-
-    partialsRelativePath: config.partialsPath,
-    partialsPath: resolve(config.partialsPath),
-
-    docsRelativePath: config.docsPath,
-    docsPath: resolve(config.docsPath),
-
-    distRelativePath: config.distPath,
-    distPath: resolve(config.distPath),
-
-    typedocRelativePath: config.typedocPath,
-    typedocPath: resolve(config.typedocPath),
-
-    ignorePaths: config.ignorePaths,
-    ignoreWarnings: config.ignoreWarnings || {},
-    manifestOptions: config.manifestOptions ?? {
-      wrapDefault: true,
-      collapseDefault: false,
-      hideTitleDefault: false,
-    },
-    cleanDist: config.cleanDist,
-    flags: {
-      watch: config.flags?.watch ?? false,
-      controlled: config.flags?.controlled ?? false,
-    },
-  }
-}
-
 const main = async () => {
   const args = process.argv.slice(2)
 
   const config = createConfig({
     basePath: __dirname,
     docsPath: '../docs',
+    baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
-    ignorePaths: [
+    ignoreLinks: [
       '/docs/core-1',
-      '/pricing',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
+      '/pricing',
       '/support',
       '/discord',
       '/contact',
@@ -1884,20 +1568,22 @@ const main = async () => {
       '/contact/support',
       '/blog',
       '/changelog/2024-04-19',
-      '/docs/_partials',
     ],
     ignoreWarnings: {
-      '/docs/index.mdx': ['doc-not-in-manifest'],
-      '/docs/guides/overview.mdx': ['doc-not-in-manifest'],
-      '/docs/quickstarts/overview.mdx': ['doc-not-in-manifest'],
-      '/docs/references/overview.mdx': ['doc-not-in-manifest'],
-      '/docs/maintenance-mode.mdx': ['doc-not-in-manifest'],
-      '/docs/deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
-      '/docs/references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
-
-      // Typedoc warnings
-      '../clerk-typedoc/types/active-session-resource.mdx': ['link-hash-not-found'],
-      '../clerk-typedoc/types/pending-session-resource.mdx': ['link-hash-not-found'],
+      docs: {
+        'index.mdx': ['doc-not-in-manifest'],
+        'guides/overview.mdx': ['doc-not-in-manifest'],
+        'quickstarts/overview.mdx': ['doc-not-in-manifest'],
+        'references/overview.mdx': ['doc-not-in-manifest'],
+        'maintenance-mode.mdx': ['doc-not-in-manifest'],
+        'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
+        'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+      },
+      typedoc: {
+        'types/active-session-resource.mdx': ['link-hash-not-found'],
+        'types/pending-session-resource.mdx': ['link-hash-not-found'],
+      },
+      partials: {},
     },
     validSdks: VALID_SDKS,
     manifestOptions: {
@@ -1938,59 +1624,16 @@ if (require.main === module) {
   main()
 }
 
-const SDKLink = (
-  props: { href: string; sdks: SDK[]; code: true } | { href: string; sdks: SDK[]; code: false; children: unknown },
-) => {
-  if (props.code) {
-    return mdastBuilder('mdxJsxTextElement', {
-      name: 'SDKLink',
-      attributes: [
-        mdastBuilder('mdxJsxAttribute', {
-          name: 'href',
-          value: props.href,
-        }),
-        mdastBuilder('mdxJsxAttribute', {
-          name: 'sdks',
-          value: mdastBuilder('mdxJsxAttributeValueExpression', {
-            value: JSON.stringify(props.sdks),
-          }),
-        }),
-        mdastBuilder('mdxJsxAttribute', {
-          name: 'code',
-          value: mdastBuilder('mdxJsxAttributeValueExpression', {
-            value: props.code,
-          }),
-        }),
-      ],
-    })
-  }
-
-  return mdastBuilder('mdxJsxTextElement', {
-    name: 'SDKLink',
-    attributes: [
-      mdastBuilder('mdxJsxAttribute', {
-        name: 'href',
-        value: props.href,
-      }),
-      mdastBuilder('mdxJsxAttribute', {
-        name: 'sdks',
-        value: mdastBuilder('mdxJsxAttributeValueExpression', {
-          value: JSON.stringify(props.sdks),
-        }),
-      }),
-    ],
-    children: props.children,
-  })
-}
-
 // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
 const validateAndEmbedLinks =
-  (config: BuildConfig, docsMap: DocsMap, filePath: string) => () => (tree: Node, vfile: VFile) => {
+  (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection) =>
+  () =>
+  (tree: Node, vfile: VFile) => {
     return mdastMap(tree, (node) => {
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith('/docs/')) return node
+      if (!node.url.startsWith(config.baseDocsLink)) return node
       if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed
@@ -1998,13 +1641,13 @@ const validateAndEmbedLinks =
 
       const [url, hash] = (node.url as string).split('#')
 
-      const ignore = config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem))
+      const ignore = config.ignoredLink(url)
       if (ignore === true) return node
 
       const doc = docsMap.get(url)
 
       if (doc === undefined) {
-        safeMessage(config, vfile, filePath, 'link-doc-not-found', [url], node.position)
+        safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [url], node.position)
         return node
       }
 
@@ -2012,7 +1655,7 @@ const validateAndEmbedLinks =
         const hasHash = doc.headingsHashes.has(hash)
 
         if (hasHash === false) {
-          safeMessage(config, vfile, filePath, 'link-hash-not-found', [hash, url], node.position)
+          safeMessage(config, vfile, filePath, section, 'link-hash-not-found', [hash, url], node.position)
         }
       }
 
@@ -2026,14 +1669,14 @@ const validateAndEmbedLinks =
           firstChild.type = 'text'
 
           return SDKLink({
-            href: scopeHrefToSDK(url, ':sdk:'),
+            href: scopeHrefToSDK(config)(url, ':sdk:'),
             sdks: doc.sdk,
             code: true,
           })
         }
 
         return SDKLink({
-          href: scopeHrefToSDK(url, ':sdk:'),
+          href: scopeHrefToSDK(config)(url, ':sdk:'),
           sdks: doc.sdk,
           code: false,
           children: node.children,
@@ -2060,13 +1703,22 @@ const checkPartials =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastMap(tree, (node) => {
-      const partialSrc = extractComponentPropValueFromNode(config, node, vfile, 'Include', 'src', true, filePath)
+      const partialSrc = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'Include',
+        'src',
+        true,
+        'docs',
+        filePath,
+      )
 
       if (partialSrc === undefined) return node
 
       if (partialSrc.startsWith('_partials/') === false) {
         if (options.reportWarnings === true) {
-          safeMessage(config, vfile, filePath, 'include-src-not-partials', [], node.position)
+          safeMessage(config, vfile, filePath, 'docs', 'include-src-not-partials', [], node.position)
         }
         return node
       }
@@ -2075,7 +1727,15 @@ const checkPartials =
 
       if (partial === undefined) {
         if (options.reportWarnings === true) {
-          safeMessage(config, vfile, filePath, 'partial-not-found', [removeMdxSuffix(partialSrc)], node.position)
+          safeMessage(
+            config,
+            vfile,
+            filePath,
+            'docs',
+            'partial-not-found',
+            [removeMdxSuffix(partialSrc)],
+            node.position,
+          )
         }
         return node
       }
@@ -2098,7 +1758,16 @@ const checkTypedoc =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastMap(tree, (node) => {
-      const typedocSrc = extractComponentPropValueFromNode(config, node, vfile, 'Typedoc', 'src', true, filePath)
+      const typedocSrc = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'Typedoc',
+        'src',
+        true,
+        'docs',
+        filePath,
+      )
 
       if (typedocSrc === undefined) return node
 
@@ -2116,6 +1785,7 @@ const checkTypedoc =
             config,
             vfile,
             filePath,
+            'docs',
             'typedoc-not-found',
             [`${removeMdxSuffix(typedocSrc)}.mdx`],
             node.position,
@@ -2132,31 +1802,32 @@ const checkTypedoc =
     })
   }
 
-const validateUniqueHeadings = (config: BuildConfig, filePath: string) => () => (tree: Node, vfile: VFile) => {
-  const headingsHashes = new Set<string>()
-  const slugify = slugifyWithCounter()
+const validateUniqueHeadings =
+  (config: BuildConfig, filePath: string, section: WarningsSection) => () => (tree: Node, vfile: VFile) => {
+    const headingsHashes = new Set<string>()
+    const slugify = slugifyWithCounter()
 
-  mdastVisit(
-    tree,
-    (node) => node.type === 'heading',
-    (node) => {
-      const id = extractHeadingFromHeadingNode(node)
+    mdastVisit(
+      tree,
+      (node) => node.type === 'heading',
+      (node) => {
+        const id = extractHeadingFromHeadingNode(node)
 
-      if (id !== undefined) {
-        if (headingsHashes.has(id)) {
-          safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, id])
+        if (id !== undefined) {
+          if (headingsHashes.has(id)) {
+            safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, id])
+          }
+
+          headingsHashes.add(id)
+        } else {
+          const slug = slugify(toString(node).trim())
+
+          if (headingsHashes.has(slug)) {
+            safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, slug])
+          }
+
+          headingsHashes.add(slug)
         }
-
-        headingsHashes.add(id)
-      } else {
-        const slug = slugify(toString(node).trim())
-
-        if (headingsHashes.has(slug)) {
-          safeFail(config, vfile, filePath, 'duplicate-heading-id', [filePath, slug])
-        }
-
-        headingsHashes.add(slug)
-      }
-    },
-  )
-}
+      },
+    )
+  }

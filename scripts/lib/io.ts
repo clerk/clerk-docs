@@ -5,6 +5,7 @@ import type { BuildConfig } from './config'
 import readdirp from 'readdirp'
 import type { SDK } from './schemas'
 
+// Read in a markdown file from the docs folder
 export const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
   const filePath = path.join(config.docsPath, docPath)
 
@@ -16,6 +17,7 @@ export const readMarkdownFile = (config: BuildConfig) => async (docPath: string)
   }
 }
 
+// list all the docs in the docs folder
 export const readDocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.docsPath, {
     type: 'files',
@@ -26,6 +28,7 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
   })
 }
 
+// checks if a folder exists, if not it will be created
 export const ensureDirectory =
   (config: BuildConfig) =>
   async (dirPath: string): Promise<void> => {
@@ -36,6 +39,7 @@ export const ensureDirectory =
     }
   }
 
+// write a file to the dist (output) folder
 export const writeDistFile = (config: BuildConfig) => async (filePath: string, contents: string) => {
   const ensureDir = ensureDirectory(config)
   const fullPath = path.join(config.distPath, filePath)
@@ -43,7 +47,19 @@ export const writeDistFile = (config: BuildConfig) => async (filePath: string, c
   await fs.writeFile(fullPath, contents, { encoding: 'utf-8' })
 }
 
+// write a file to the dist (output) folder, inside the specified sdk folder
 export const writeSDKFile = (config: BuildConfig) => async (sdk: SDK, filePath: string, contents: string) => {
   const writeFile = writeDistFile(config)
   await writeFile(path.join(sdk, filePath), contents)
+}
+
+// not exactly io, but used to parse the json using a result patten
+export const parseJSON = (json: string) => {
+  try {
+    const output = JSON.parse(json)
+
+    return [null, output as unknown] as const
+  } catch (error) {
+    return [new Error(`Failed to parse JSON`, { cause: error }), null] as const
+  }
 }

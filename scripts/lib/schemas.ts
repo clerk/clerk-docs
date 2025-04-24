@@ -1,3 +1,5 @@
+// zod schemas for some of the basic types
+
 import { z } from 'zod'
 import type { BuildConfig } from './config'
 

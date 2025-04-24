@@ -1,3 +1,6 @@
+// for development mode, this function watches the markdown,
+// invalidates the cache and kicks off a rebuild of the docs
+
 import watcher from '@parcel/watcher'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'

@@ -1,3 +1,14 @@
+// responsible for reading in the markdown files and parsing them
+// This is only for parsing in the main docs files, not the partials or typedocs
+// - throws a warning if the doc is not in the manifest.json
+// - throws a warning if the filename contains characters that will be encoded by the browser
+// - extracts the frontmatter and validates it
+//    - title is required, will fail
+//    - description is required, will warn if missing
+//    - sdk is optional, but if present must be a valid sdk
+// - validates (but does not embed) the partials and typedocs
+// - extracts the headings and validates that they are unique
+
 import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'

@@ -1,3 +1,8 @@
+// responsible for reading in and parsing the partials markdown
+// for validation see validators/checkPartials.ts
+// for partials we currently do not allow them to embed other partials
+// this also removes the .mdx suffix from the urls in the markdown
+
 import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'

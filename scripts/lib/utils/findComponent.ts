@@ -1,3 +1,5 @@
+// hunts a markdown tree for a specific component
+
 import type { Node } from 'unist'
 
 export const findComponent = (node: Node, componentName: string) => {

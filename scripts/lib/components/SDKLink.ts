@@ -1,3 +1,6 @@
+// a fake component that takes the possible props and creates a mdx node
+// SDKLink is used for the links that get replaced as they point to a sdk scoped page
+
 import type { SDK } from '../schemas'
 import { u as mdastBuilder } from 'unist-builder'
 

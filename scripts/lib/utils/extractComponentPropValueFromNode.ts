@@ -1,3 +1,7 @@
+// Given a component name (eg <If />) and a prop name (eg sdk)
+// this function will extract and return the value of the prop
+// note that this won't further parse the value
+
 import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
 import type { Node } from 'unist'

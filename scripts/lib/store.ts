@@ -1,3 +1,8 @@
+// only really needed when in dev mode
+// if `build()` is run twice, this can store the important markdown files
+//   so that we don't have to read them from the file system again which is slow
+// use the `invalidateFile()` function to remove a file from the store
+
 import path from 'node:path'
 import type { BuildConfig } from './config'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'

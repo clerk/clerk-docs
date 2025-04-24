@@ -1,3 +1,5 @@
+// removes the .mdx suffix from a file path if it exists
+
 export const removeMdxSuffix = (filePath: string) => {
   if (filePath.includes('#')) {
     const [url, hash] = filePath.split('#')

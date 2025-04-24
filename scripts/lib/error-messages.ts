@@ -1,3 +1,6 @@
+// defining most of the error messages that may be thrown by the build script
+// with some helper functions that check if the warning should be ignored
+
 import type { VFile } from 'vfile'
 import type { ValidationError } from 'zod-validation-error'
 import type { BuildConfig } from './config'

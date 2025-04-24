@@ -1,3 +1,7 @@
+// This function takes the value pulled out from
+// `extractComponentPropValueFromNode()` and parses it in to
+// an array of sdk keys
+
 import { VFile } from 'vfile'
 import { BuildConfig } from '../config'
 import type { Node } from 'unist'

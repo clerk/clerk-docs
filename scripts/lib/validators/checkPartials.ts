@@ -1,3 +1,9 @@
+// This validator manages the partials in the docs
+// based on the options passed through it can
+//   - only report warnings if something ain't right
+//   - only embed the partials contents in to the markdown
+//   - both report warnings and embed the partials contents
+
 import type { BuildConfig } from '../config'
 import type { Node } from 'unist'
 import type { VFile } from 'vfile'

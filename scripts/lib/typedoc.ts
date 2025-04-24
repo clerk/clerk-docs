@@ -1,3 +1,9 @@
+// responsible for reading in and parsing the typedoc markdown
+// for validation see validators/checkTypedoc.ts
+// this also removes the .mdx suffix from the urls in the markdown
+// some of the typedoc files with not parse when using `remarkMdx`
+//   so we catch those errors and parse them the same but without `remarkMdx`
+
 import path from 'node:path'
 import readdirp from 'readdirp'
 import { remark } from 'remark'

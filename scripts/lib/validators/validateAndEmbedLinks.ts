@@ -1,3 +1,9 @@
+// Validates
+// - remove the mdx suffix from the url
+// - check if the link is a valid link
+// - check if the link is a link to a sdk scoped page
+// - replace the link with the sdk link component if it is a link to a sdk scoped page
+
 import { Node } from 'unist'
 import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
@@ -8,7 +14,6 @@ import { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
 
-// Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
 export const validateAndEmbedLinks =
   (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection) =>
   () =>

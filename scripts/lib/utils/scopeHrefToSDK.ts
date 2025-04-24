@@ -1,3 +1,5 @@
+// if a link contains the :sdk: token, it will be replaced with the targetSDK
+
 import type { BuildConfig } from '../config'
 import type { SDK } from '../schemas'
 

@@ -1,11 +1,38 @@
+// parsing and traversing the manifest.json file
+// main thing here is that the tree uses double arrays
+
 import fs from 'node:fs/promises'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
+import { parseJSON } from './io'
 import { icon, sdk, tag, type Icon, type SDK, type Tag } from './schemas'
 
-type ManifestItem = {
+// read in the manifest
+
+export const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
+  const { manifestSchema } = createManifestSchema(config)
+  const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
+
+  const [error, json] = parseJSON(unsafe_manifest)
+
+  if (error) {
+    throw new Error(errorMessages['manifest-parse-error'](error))
+  }
+
+  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
+
+  if (manifest.success === true) {
+    return manifest.data.navigation
+  }
+
+  throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
+}
+
+// verify the manifest is valid
+
+export type ManifestItem = {
   title: string
   href: string
   tag?: Tag
@@ -64,34 +91,7 @@ const createManifestSchema = (config: BuildConfig) => {
   }
 }
 
-const parseJSON = (json: string) => {
-  try {
-    const output = JSON.parse(json)
-
-    return [null, output as unknown] as const
-  } catch (error) {
-    return [new Error(`Failed to parse JSON`, { cause: error }), null] as const
-  }
-}
-
-export const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
-  const { manifestSchema } = createManifestSchema(config)
-  const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
-
-  const [error, json] = parseJSON(unsafe_manifest)
-
-  if (error) {
-    throw new Error(errorMessages['manifest-parse-error'](error))
-  }
-
-  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
-
-  if (manifest.success === true) {
-    return manifest.data.navigation
-  }
-
-  throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
-}
+// helper functions for traversing the manifest tree
 
 export type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Array<Item | Group>>
 

@@ -1,3 +1,6 @@
+// For the test suite to work effectively we need to be able to
+// configure the builds, this file defines the config object
+
 import path from 'node:path'
 import type { SDK } from './schemas'
 

@@ -1,3 +1,10 @@
+// This validator manages the typedoc in the docs
+// based on the options passed through it can
+//   - only report warnings if something ain't right
+//   - only embed the typedoc contents in to the markdown
+//   - both report warnings and embed the typedoc contents
+// This validator will also ensure that the typedoc folder exists
+
 import type { BuildConfig } from '../config'
 import type { Node } from 'unist'
 import type { VFile } from 'vfile'

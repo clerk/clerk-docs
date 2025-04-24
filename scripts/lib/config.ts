@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { SDK } from './validators'
+import type { SDK } from './schemas'
 
 type BuildConfigOptions = {
   basePath: string

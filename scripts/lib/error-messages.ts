@@ -2,7 +2,7 @@ import type { VFile } from 'vfile'
 import type { ValidationError } from 'zod-validation-error'
 import type { BuildConfig } from './config'
 import type { Position } from 'unist'
-import type { SDK } from './validators'
+import type { SDK } from './schemas'
 
 export const errorMessages = {
   // Manifest errors

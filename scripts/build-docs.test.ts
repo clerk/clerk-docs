@@ -4,7 +4,8 @@ import os from 'node:os'
 import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
-import { build, createBlankStore, invalidateFile } from './build-docs'
+import { build } from './build-docs'
+import { createBlankStore, invalidateFile } from './lib/store'
 import { createConfig } from './lib/config'
 
 const tempConfig = {

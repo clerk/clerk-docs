@@ -1,0 +1,25 @@
+import path from 'node:path'
+import type { BuildConfig } from './config'
+import { removeMdxSuffix } from './utils/removeMdxSuffix'
+import type { readPartial } from './partials'
+import type { readTypedoc } from './typedoc'
+import type { parseInMarkdownFile } from './markdown'
+
+export type DocsMap = Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>
+export type PartialsMap = Map<string, Awaited<ReturnType<ReturnType<typeof readPartial>>>>
+export type TypedocsMap = Map<string, Awaited<ReturnType<ReturnType<typeof readTypedoc>>>>
+
+export const createBlankStore = () => ({
+  markdownFiles: new Map() as DocsMap,
+  partialsFiles: new Map() as PartialsMap,
+  typedocsFiles: new Map() as TypedocsMap,
+})
+
+export type Store = ReturnType<typeof createBlankStore>
+
+export const invalidateFile =
+  (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => (filePath: string) => {
+    store.markdownFiles.delete(removeMdxSuffix(`${config.baseDocsLink}${path.relative(config.docsPath, filePath)}`))
+    store.partialsFiles.delete(path.relative(config.partialsPath, filePath))
+    store.typedocsFiles.delete(path.relative(config.typedocPath, filePath))
+  }

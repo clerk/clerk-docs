@@ -1,4 +1,4 @@
-import type { SDK } from '../validators'
+import type { SDK } from '../schemas'
 import { u as mdastBuilder } from 'unist-builder'
 
 export const SDKLink = (

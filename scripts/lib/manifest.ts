@@ -1,9 +1,9 @@
-import { z } from 'zod'
-import type { BuildConfig } from './config'
-import { icon, sdk, tag, type Icon, type SDK, type Tag } from './validators'
-import { errorMessages } from './error-messages'
 import fs from 'node:fs/promises'
+import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
+import type { BuildConfig } from './config'
+import { errorMessages } from './error-messages'
+import { icon, sdk, tag, type Icon, type SDK, type Tag } from './schemas'
 
 type ManifestItem = {
   title: string
@@ -91,4 +91,134 @@ export const readManifest = (config: BuildConfig) => async (): Promise<Manifest>
   }
 
   throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
+}
+
+export type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Array<Item | Group>>
+
+export const traverseTree = async <
+  Tree extends { items: BlankTree<any, any> },
+  InItem extends Extract<Tree['items'][number][number], { href: string }>,
+  InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
+  OutItem extends { href: string },
+  OutGroup extends { items: BlankTree<OutItem, OutGroup> },
+  OutTree extends BlankTree<OutItem, OutGroup>,
+>(
+  tree: Tree,
+  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | null> = async (item) => item,
+  groupCallback: (group: InGroup, tree: Tree) => Promise<OutGroup | null> = async (group) => group,
+  errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
+): Promise<OutTree> => {
+  const result = await Promise.all(
+    tree.items.map(async (group) => {
+      return await Promise.all(
+        group.map(async (item) => {
+          try {
+            if ('href' in item) {
+              return await itemCallback(item, tree)
+            }
+
+            if ('items' in item && Array.isArray(item.items)) {
+              const newGroup = await groupCallback(item, tree)
+
+              if (newGroup === null) return null
+
+              // @ts-expect-error - OutGroup should always contain "items" property, so this is safe
+              const newItems = (await traverseTree(newGroup, itemCallback, groupCallback, errorCallback)).map((group) =>
+                group.filter((item): item is NonNullable<typeof item> => item !== null),
+              )
+
+              return {
+                ...newGroup,
+                items: newItems,
+              }
+            }
+
+            return item as OutItem
+          } catch (error) {
+            if (error instanceof Error && errorCallback !== undefined) {
+              errorCallback(item, error)
+            } else {
+              throw error
+            }
+          }
+        }),
+      )
+    }),
+  )
+
+  return result.map((group) =>
+    group.filter((item): item is NonNullable<typeof item> => item !== null),
+  ) as unknown as OutTree
+}
+
+export const traverseTreeItemsFirst = async <
+  Tree extends { items: BlankTree<any, any> },
+  InItem extends Extract<Tree['items'][number][number], { href: string }>,
+  InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
+  OutItem extends { href: string },
+  OutGroup extends { items: BlankTree<OutItem, OutGroup> },
+  OutTree extends BlankTree<OutItem, OutGroup>,
+>(
+  tree: Tree,
+  itemCallback: (item: InItem, tree: Tree) => Promise<OutItem | null> = async (item) => item,
+  groupCallback: (group: InGroup, tree: Tree) => Promise<OutGroup | null> = async (group) => group,
+  errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
+): Promise<OutTree> => {
+  const result = await Promise.all(
+    tree.items.map(async (group) => {
+      return await Promise.all(
+        group.map(async (item) => {
+          try {
+            if ('href' in item) {
+              return await itemCallback(item, tree)
+            }
+
+            if ('items' in item && Array.isArray(item.items)) {
+              const newItems = (await traverseTreeItemsFirst(item, itemCallback, groupCallback, errorCallback)).map(
+                (group) => group.filter((item): item is NonNullable<typeof item> => item !== null),
+              )
+
+              const newGroup = await groupCallback({ ...item, items: newItems }, tree)
+
+              return newGroup
+            }
+
+            return item as OutItem
+          } catch (error) {
+            if (error instanceof Error && errorCallback !== undefined) {
+              errorCallback(item, error)
+            } else {
+              throw error
+            }
+          }
+        }),
+      )
+    }),
+  )
+
+  return result.map((group) =>
+    group.filter((item): item is NonNullable<typeof item> => item !== null),
+  ) as unknown as OutTree
+}
+
+export function flattenTree<
+  Tree extends BlankTree<any, any>,
+  InItem extends Extract<Tree[number][number], { href: string }>,
+  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>,
+>(tree: Tree): InItem[] {
+  const result: InItem[] = []
+
+  for (const group of tree) {
+    for (const itemOrGroup of group) {
+      if ('href' in itemOrGroup) {
+        // It's an item
+        result.push(itemOrGroup)
+      } else if ('items' in itemOrGroup && Array.isArray(itemOrGroup.items)) {
+        // It's a group with its own sub-tree, flatten it
+        result.push(...flattenTree(itemOrGroup.items))
+      }
+    }
+  }
+
+  return result
 }

@@ -618,7 +618,7 @@ template: wide
     }),
   )
 
-  console.info(`✓ Validated and wrote out all docs`)
+  console.info(`✓ Validated and wrote out all core docs`)
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {
@@ -733,7 +733,11 @@ template: wide
         }),
       )
 
-      console.info(`✓ Wrote out ${vFiles.filter(Boolean).length} ${targetSdk} specific docs`)
+      const numberOfSdkSpecificDocs = vFiles.filter(Boolean).length
+
+      if (numberOfSdkSpecificDocs > 0) {
+        console.info(`✓ Wrote out ${numberOfSdkSpecificDocs} ${targetSdk} specific docs`)
+      }
 
       return { targetSdk, vFiles }
     }),

@@ -32,15 +32,11 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
 import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
-import { map as mdastMap } from 'unist-util-map'
 import { visit as mdastVisit } from 'unist-util-visit'
-import type { VFile } from 'vfile'
 import reporter from 'vfile-reporter'
-import yaml from 'yaml'
-import { SDKLink } from './lib/components/SDKLink'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
-import { errorMessages, safeFail, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
+import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
 import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
@@ -55,7 +51,10 @@ import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
 import { checkPartials } from './lib/validators/checkPartials'
 import { checkTypedoc } from './lib/validators/checkTypedoc'
+import { filterOtherSDKsContentOut } from './lib/validators/filterOtherSDKsContentOut'
+import { insertFrontmatter } from './lib/validators/insertFrontmatter'
 import { validateAndEmbedLinks } from './lib/validators/validateAndEmbedLinks'
+import { validateIfComponents } from './lib/validators/validateIfComponents'
 import { validateUniqueHeadings } from './lib/validators/validateUniqueHeadings'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -465,127 +464,8 @@ export async function build(store: Store, config: BuildConfig) {
       const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
-        // Validate links between docs are valid and replace the links to sdk scoped pages with the sdk link component
-        .use(() => (tree: Node, vfile: VFile) => {
-          return mdastMap(tree, (node) => {
-            if (node.type !== 'link') return node
-            if (!('url' in node)) return node
-            if (typeof node.url !== 'string') return node
-            if (!node.url.startsWith(config.baseDocsLink) && !node.url.startsWith('#')) return node
-            if (!('children' in node)) return node
-
-            // we are overwriting the url with the mdx suffix removed
-            node.url = removeMdxSuffix(node.url)
-
-            let [url, hash] = (node.url as string).split('#')
-
-            if (url === '') {
-              // If the link is just a hash, then we need to link to the same doc
-              url = doc.href
-            }
-
-            const ignore = config.ignoredLink(url)
-            if (ignore === true) return node
-
-            const linkedDoc = docsMap.get(url)
-
-            if (linkedDoc === undefined) {
-              safeMessage(config, vfile, filePath, 'docs', 'link-doc-not-found', [url], node.position)
-              return node
-            }
-
-            if (hash !== undefined) {
-              const hasHash = linkedDoc.headingsHashes.has(hash)
-
-              if (hasHash === false) {
-                safeMessage(config, vfile, filePath, 'docs', 'link-hash-not-found', [hash, url], node.position)
-              }
-            }
-
-            if (linkedDoc.sdk !== undefined) {
-              // we are going to swap it for the sdk link component to give the users a great experience
-
-              const firstChild = node.children?.[0]
-              const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-              if (childIsCodeBlock) {
-                firstChild.type = 'text'
-
-                return SDKLink({
-                  href: scopeHrefToSDK(config)(url, ':sdk:'),
-                  sdks: linkedDoc.sdk,
-                  code: true,
-                })
-              }
-
-              return SDKLink({
-                href: scopeHrefToSDK(config)(url, ':sdk:'),
-                sdks: linkedDoc.sdk,
-                code: false,
-                children: node.children,
-              })
-            }
-
-            return node
-          })
-        })
-        // Validate the <If /> components
-        .use(() => (tree, vfile) => {
-          mdastVisit(tree, (node) => {
-            const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath)
-
-            if (sdk === undefined) return
-
-            const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
-
-            if (sdksFilter === undefined) return
-
-            const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.href)
-
-            const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
-
-            // The doc doesn't exist in the manifest so we are skipping it
-            if (manifestItems.length === 0) return
-
-            sdksFilter.forEach((sdk) => {
-              ;(() => {
-                if (doc.sdk === undefined) return
-
-                const available = doc.sdk.includes(sdk)
-
-                if (available === false) {
-                  safeFail(
-                    config,
-                    vfile,
-                    filePath,
-                    'docs',
-                    'if-component-sdk-not-in-frontmatter',
-                    [sdk, doc.sdk],
-                    node.position,
-                  )
-                }
-              })()
-              ;(() => {
-                // The doc is generic so we are skipping it
-                if (availableSDKs.length === 0) return
-
-                const available = availableSDKs.includes(sdk)
-
-                if (available === false) {
-                  safeFail(
-                    config,
-                    vfile,
-                    filePath,
-                    'docs',
-                    'if-component-sdk-not-in-manifest',
-                    [sdk, doc.href],
-                    node.position,
-                  )
-                }
-              })()
-            })
-          })
-        })
+        .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
+        .use(validateIfComponents(config, filePath, doc, flatSDKScopedManifest))
         .use(checkPartials(config, validatedPartials, filePath, { reportWarnings: false, embed: true }))
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .process(doc.vfile)
@@ -631,97 +511,9 @@ template: wide
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
-            // filter out content that is only available to other sdk's
-            .use(() => (tree, vfile) => {
-              return mdastFilter(tree, (node) => {
-                // We aren't passing the vfile here as the as the warning
-                // should have already been reported above when we initially
-                // parsed the file
-                const sdk = extractComponentPropValueFromNode(
-                  config,
-                  node,
-                  undefined,
-                  'If',
-                  'sdk',
-                  true,
-                  'docs',
-                  filePath,
-                )
-
-                if (sdk === undefined) return true
-
-                const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
-
-                if (sdksFilter === undefined) return true
-
-                if (sdksFilter.includes(targetSdk)) {
-                  return true
-                }
-
-                return false
-              })
-            })
+            .use(filterOtherSDKsContentOut(config, filePath, targetSdk))
             .use(validateUniqueHeadings(config, filePath, 'docs'))
-            // scope urls so they point to the current sdk
-            .use(() => (tree, vfile) => {
-              return mdastMap(tree, (node) => {
-                if (node.type !== 'link') return node
-                if (!('url' in node)) {
-                  safeFail(
-                    config,
-                    vfile,
-                    filePath,
-                    'docs',
-                    'link-doc-not-found',
-                    ['url property missing'],
-                    node.position,
-                  )
-                  return node
-                }
-                if (typeof node.url !== 'string') {
-                  safeFail(config, vfile, filePath, 'docs', 'link-doc-not-found', ['url not a string'], node.position)
-                  return node
-                }
-                if (!node.url.startsWith(config.baseDocsLink)) {
-                  return node
-                }
-
-                // we are overwriting the url with the mdx suffix removed
-                node.url = removeMdxSuffix(node.url)
-
-                const [url, hash] = (node.url as string).split('#')
-
-                const ignore = config.ignoredLink(url)
-                if (ignore === true) return node
-
-                const doc = docsMap.get(url)
-
-                if (doc === undefined) {
-                  safeFail(config, vfile, filePath, 'docs', 'link-doc-not-found', [url], node.position)
-                  return node
-                }
-
-                // we might need to do something here with doc
-
-                return node
-              })
-            })
-            // Insert the canonical link into the doc frontmatter
-            .use(() => (tree, vfile) => {
-              return mdastMap(tree, (node) => {
-                if (node.type !== 'yaml') return node
-                if (!('value' in node)) return node
-                if (typeof node.value !== 'string') return node
-
-                const frontmatter = yaml.parse(node.value)
-
-                frontmatter.canonical = doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href
-
-                node.value = yaml.stringify(frontmatter).split('\n').slice(0, -1).join('\n')
-
-                return node
-              })
-            })
+            .use(insertFrontmatter({ canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href }))
             .process({
               ...doc.vfile,
               messages: [], // reset the messages, otherwise they will be duplicated
@@ -764,7 +556,6 @@ template: wide
       sdks.forEach((sdk) => availableSDKs.add(sdk))
     })
 
-    // For each SDK, check heading uniqueness after filtering
     for (const sdk of availableSDKs) {
       await remark()
         .use(remarkFrontmatter)
@@ -784,6 +575,7 @@ template: wide
             if (!sdkProp) return true
 
             const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', filePath)
+
             if (!ifSdks) return true
 
             return ifSdks.includes(sdk)

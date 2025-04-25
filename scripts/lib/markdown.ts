@@ -23,8 +23,8 @@ import { readMarkdownFile } from './io'
 import { isValidSdk, isValidSdks, type SDK } from './schemas'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
-import { checkPartials } from './validators/checkPartials'
-import { checkTypedoc } from './validators/checkTypedoc'
+import { checkPartials } from './plugins/checkPartials'
+import { checkTypedoc } from './plugins/checkTypedoc'
 
 export const parseInMarkdownFile =
   (config: BuildConfig) =>

@@ -16,15 +16,14 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
-import yaml from 'yaml'
 import { type BuildConfig } from './config'
 import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
 import { readMarkdownFile } from './io'
-import { isValidSdk, isValidSdks, type SDK } from './schemas'
-import { documentHasIfComponents } from './utils/documentHasIfComponents'
-import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import { checkPartials } from './plugins/checkPartials'
 import { checkTypedoc } from './plugins/checkTypedoc'
+import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
+import { documentHasIfComponents } from './utils/documentHasIfComponents'
+import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 
 export const parseInMarkdownFile =
   (config: BuildConfig) =>
@@ -36,19 +35,12 @@ export const parseInMarkdownFile =
     section: WarningsSection,
   ) => {
     const readFile = readMarkdownFile(config)
-    const validateSDKs = isValidSdks(config)
     const [error, fileContent] = await readFile(`${href}.mdx`.replace(config.baseDocsLink, ''))
 
     if (error !== null) {
       throw new Error(errorMessages['markdown-read-error'](href), {
         cause: error,
       })
-    }
-
-    type Frontmatter = {
-      title: string
-      description?: string
-      sdk?: SDK[]
     }
 
     let frontmatter: Frontmatter | undefined = undefined
@@ -72,55 +64,11 @@ export const parseInMarkdownFile =
           safeFail(config, vfile, filePath, section, 'invalid-href-encoding', [href])
         }
       })
-      // validate and extract out the frontmatter
-      .use(() => (tree, vfile) => {
-        mdastVisit(
-          tree,
-          (node) => node.type === 'yaml' && 'value' in node,
-          (node) => {
-            if (!('value' in node)) return
-            if (typeof node.value !== 'string') return
-
-            const frontmatterYaml: Record<'title' | 'description' | 'sdk', string | undefined> = yaml.parse(node.value)
-
-            const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
-
-            if (frontmatterSDKs !== undefined && validateSDKs(frontmatterSDKs) === false) {
-              const invalidSDKs = frontmatterSDKs.filter((sdk) => isValidSdk(config)(sdk) === false)
-              safeFail(
-                config,
-                vfile,
-                filePath,
-                section,
-                'invalid-sdk-in-frontmatter',
-                [invalidSDKs, config.validSdks as SDK[]],
-                node.position,
-              )
-              return
-            }
-
-            if (frontmatterYaml.title === undefined) {
-              safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
-              return
-            }
-
-            if (frontmatterYaml.description === undefined) {
-              safeMessage(config, vfile, filePath, section, 'frontmatter-missing-description', [], node.position)
-            }
-
-            frontmatter = {
-              title: frontmatterYaml.title,
-              description: frontmatterYaml.description,
-              sdk: frontmatterSDKs,
-            }
-          },
-        )
-
-        if (frontmatter === undefined) {
-          safeFail(config, vfile, filePath, section, 'frontmatter-parse-failed', [href])
-          return
-        }
-      })
+      .use(
+        extractFrontmatter(config, href, filePath, section, (fm) => {
+          frontmatter = fm
+        }),
+      )
       .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: false }))
       .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: false }))
       .process({

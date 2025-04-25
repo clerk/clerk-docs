@@ -9,12 +9,10 @@ import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
-import { map as mdastMap } from 'unist-util-map'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
-import { getTypedocsCache, type Store } from './store'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.typedocPath, {
@@ -42,20 +40,6 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
       .process({
         path: typedocPath,
         value: content,
@@ -78,20 +62,6 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
       .process({
         path: typedocPath,
         value: content,
@@ -110,9 +80,8 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
   }
 }
 
-export const readTypedocsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
+export const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
   const read = readTypedoc(config)
-  const typedocsCache = getTypedocsCache(store)
 
-  return Promise.all(paths.map(async (filePath) => typedocsCache(filePath, () => read(filePath))))
+  return Promise.all(paths.map(async (filePath) => read(filePath)))
 }

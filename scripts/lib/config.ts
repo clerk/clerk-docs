@@ -11,7 +11,6 @@ type BuildConfigOptions = {
   baseDocsLink: string
   manifestPath: string
   partialsPath: string
-  distPath: string
   typedocPath: string
   ignoreLinks: string[]
   ignoreWarnings?: {
@@ -23,11 +22,6 @@ type BuildConfigOptions = {
     wrapDefault: boolean
     collapseDefault: boolean
     hideTitleDefault: boolean
-  }
-  cleanDist: boolean
-  flags?: {
-    watch?: boolean
-    controlled?: boolean
   }
 }
 
@@ -53,9 +47,6 @@ export function createConfig(config: BuildConfigOptions) {
     docsRelativePath: config.docsPath,
     docsPath: resolve(config.docsPath),
 
-    distRelativePath: config.distPath,
-    distPath: resolve(config.distPath),
-
     typedocRelativePath: config.typedocPath,
     typedocPath: resolve(config.typedocPath),
 
@@ -70,13 +61,6 @@ export function createConfig(config: BuildConfigOptions) {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
-    },
-
-    cleanDist: config.cleanDist,
-
-    flags: {
-      watch: config.flags?.watch ?? false,
-      controlled: config.flags?.controlled ?? false,
     },
   }
 }

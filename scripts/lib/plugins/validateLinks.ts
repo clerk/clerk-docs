@@ -5,25 +5,23 @@
 // - replace the link with the sdk link component if it is a link to a sdk scoped page
 
 import { Node } from 'unist'
-import { map as mdastMap } from 'unist-util-map'
+import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
-import { SDKLink } from '../components/SDKLink'
 import { type BuildConfig } from '../config'
 import { safeMessage, type WarningsSection } from '../error-messages'
 import { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
-import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
 
-export const validateAndEmbedLinks =
+export const validateLinks =
   (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
   () =>
   (tree: Node, vfile: VFile) => {
-    return mdastMap(tree, (node) => {
-      if (node.type !== 'link') return node
-      if (!('url' in node)) return node
-      if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return node
-      if (!('children' in node)) return node
+    return mdastVisit(tree, (node) => {
+      if (node.type !== 'link') return
+      if (!('url' in node)) return
+      if (typeof node.url !== 'string') return
+      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return
+      if (!('children' in node)) return
 
       // we are overwriting the url with the mdx suffix removed
       node.url = removeMdxSuffix(node.url)
@@ -36,13 +34,13 @@ export const validateAndEmbedLinks =
       }
 
       const ignore = config.ignoredLink(url)
-      if (ignore === true) return node
+      if (ignore === true) return
 
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
         safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [url], node.position)
-        return node
+        return
       }
 
       if (hash !== undefined) {
@@ -53,30 +51,6 @@ export const validateAndEmbedLinks =
         }
       }
 
-      if (linkedDoc.sdk !== undefined) {
-        // we are going to swap it for the sdk link component to give the users a great experience
-
-        const firstChild = node.children?.[0]
-        const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-        if (childIsCodeBlock) {
-          firstChild.type = 'text'
-
-          return SDKLink({
-            href: scopeHrefToSDK(config)(url, ':sdk:'),
-            sdks: linkedDoc.sdk,
-            code: true,
-          })
-        }
-
-        return SDKLink({
-          href: scopeHrefToSDK(config)(url, ':sdk:'),
-          sdks: linkedDoc.sdk,
-          code: false,
-          children: node.children,
-        })
-      }
-
-      return node
+      return
     })
   }

@@ -9,14 +9,11 @@ import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
-import { map as mdastMap } from 'unist-util-map'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import type { BuildConfig } from './config'
 import { errorMessages, safeFail } from './error-messages'
 import { readMarkdownFile } from './io'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
-import { getPartialsCache, type Store } from './store'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.partialsPath, {
@@ -57,21 +54,6 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
           },
         )
       })
-      // Process links in partials and remove the .mdx suffix
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
       .process({
         path: `docs/_partials/${filePath}`,
         value: content,
@@ -100,9 +82,8 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
   }
 }
 
-export const readPartialsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
+export const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
   const read = readPartial(config)
-  const partialsCache = getPartialsCache(store)
 
-  return Promise.all(paths.map(async (markdownPath) => partialsCache(markdownPath, () => read(markdownPath))))
+  return Promise.all(paths.map(async (markdownPath) => read(markdownPath)))
 }

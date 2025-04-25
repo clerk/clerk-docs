@@ -16,7 +16,7 @@ import type { BuildConfig } from './config'
 import { errorMessages, safeFail } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
-import type { Store } from './store'
+import { getPartialsCache, type Store } from './store'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.partialsPath, {
@@ -102,20 +102,7 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
 
 export const readPartialsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
   const read = readPartial(config)
+  const partialsCache = getPartialsCache(store)
 
-  return Promise.all(
-    paths.map(async (markdownPath) => {
-      const cachedValue = store.partialsFiles.get(markdownPath)
-
-      if (cachedValue !== undefined) {
-        return cachedValue
-      }
-
-      const partial = await read(markdownPath)
-
-      store.partialsFiles.set(markdownPath, partial)
-
-      return partial
-    }),
-  )
+  return Promise.all(paths.map(async (markdownPath) => partialsCache(markdownPath, () => read(markdownPath))))
 }

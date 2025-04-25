@@ -10,21 +10,58 @@ import type { readPartial } from './partials'
 import type { readTypedoc } from './typedoc'
 import type { parseInMarkdownFile } from './markdown'
 
-export type DocsMap = Map<string, Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>>
-export type PartialsMap = Map<string, Awaited<ReturnType<ReturnType<typeof readPartial>>>>
-export type TypedocsMap = Map<string, Awaited<ReturnType<ReturnType<typeof readTypedoc>>>>
+type MarkdownFile = Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>
+type PartialsFile = Awaited<ReturnType<ReturnType<typeof readPartial>>>
+type TypedocsFile = Awaited<ReturnType<ReturnType<typeof readTypedoc>>>
+
+export type DocsMap = Map<string, MarkdownFile>
+export type PartialsMap = Map<string, PartialsFile>
+export type TypedocsMap = Map<string, TypedocsFile>
 
 export const createBlankStore = () => ({
-  markdownFiles: new Map() as DocsMap,
-  partialsFiles: new Map() as PartialsMap,
-  typedocsFiles: new Map() as TypedocsMap,
+  markdown: new Map() as DocsMap,
+  partials: new Map() as PartialsMap,
+  typedocs: new Map() as TypedocsMap,
 })
 
 export type Store = ReturnType<typeof createBlankStore>
 
 export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) => (filePath: string) => {
-    store.markdownFiles.delete(removeMdxSuffix(`${config.baseDocsLink}${path.relative(config.docsPath, filePath)}`))
-    store.partialsFiles.delete(path.relative(config.partialsPath, filePath))
-    store.typedocsFiles.delete(path.relative(config.typedocPath, filePath))
+    store.markdown.delete(removeMdxSuffix(`${config.baseDocsLink}${path.relative(config.docsPath, filePath)}`))
+    store.partials.delete(path.relative(config.partialsPath, filePath))
+    store.typedocs.delete(path.relative(config.typedocPath, filePath))
   }
+
+export const getMarkdownCache = (store: Store) => {
+  return async (key: string, cacheMiss: (key: string) => Promise<MarkdownFile>) => {
+    const cached = store.markdown.get(key)
+    if (cached) return structuredClone(cached)
+
+    const result = await cacheMiss(key)
+    store.markdown.set(key, structuredClone(result))
+    return result
+  }
+}
+
+export const getPartialsCache = (store: Store) => {
+  return async (key: string, cacheMiss: (key: string) => Promise<PartialsFile>) => {
+    const cached = store.partials.get(key)
+    if (cached) return structuredClone(cached)
+
+    const result = await cacheMiss(key)
+    store.partials.set(key, structuredClone(result))
+    return result
+  }
+}
+
+export const getTypedocsCache = (store: Store) => {
+  return async (key: string, cacheMiss: (key: string) => Promise<TypedocsFile>) => {
+    const cached = store.typedocs.get(key)
+    if (cached) return structuredClone(cached)
+
+    const result = await cacheMiss(key)
+    store.typedocs.set(key, structuredClone(result))
+    return result
+  }
+}

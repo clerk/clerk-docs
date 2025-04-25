@@ -46,7 +46,7 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, Store } from './lib/store'
+import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown } from './lib/typedoc'
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
 import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
@@ -149,6 +149,7 @@ export async function build(store: Store, config: BuildConfig) {
   const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
+  const markdownCache = getMarkdownCache(store)
 
   await ensureDir(config.distPath)
 
@@ -158,11 +159,11 @@ export async function build(store: Store, config: BuildConfig) {
   const docsFiles = await getDocsFolder()
   console.info('✓ Read Docs Folder')
 
-  const cachedPartialsSize = store.partialsFiles.size
+  const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
-  const cachedTypedocsSize = store.typedocsFiles.size
+  const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
   console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
@@ -183,28 +184,18 @@ export async function build(store: Store, config: BuildConfig) {
   })
   console.info('✓ Parsed in Manifest')
 
-  const cachedDocsSize = store.markdownFiles.size
+  const cachedDocsSize = store.markdown.size
   // Read in all the docs
   const docsArray = await Promise.all(
     docsFiles.map(async (file) => {
       const href = removeMdxSuffix(`${config.baseDocsLink}${file.path}`)
-
       const inManifest = docsInManifest.has(href)
 
-      let markdownFile: Awaited<ReturnType<typeof parseMarkdownFile>>
-
-      const cachedMarkdownFile = store.markdownFiles.get(href)
-
-      if (cachedMarkdownFile) {
-        markdownFile = structuredClone(cachedMarkdownFile)
-      } else {
-        markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest, 'docs')
-
-        store.markdownFiles.set(href, structuredClone(markdownFile))
-      }
+      const markdownFile = await markdownCache(href, () =>
+        parseMarkdownFile(href, partials, typedocs, inManifest, 'docs'),
+      )
 
       docsMap.set(href, markdownFile)
-
       return markdownFile
     }),
   )
@@ -355,30 +346,26 @@ export async function build(store: Store, config: BuildConfig) {
     JSON.stringify({
       navigation: await traverseTree(
         { items: sdkScopedManifest },
-        async (item) => {
-          return {
-            title: item.title,
-            href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-            tag: item.tag,
-            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-            icon: item.icon,
-            target: item.target,
-            sdk: item.sdk,
-          }
-        },
+        async (item) => ({
+          title: item.title,
+          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
+          tag: item.tag,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          sdk: item.sdk,
+        }),
         // @ts-expect-error - This traverseTree function might just be the death of me
-        async (group) => {
-          return {
-            title: group.title,
-            collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
-            tag: group.tag,
-            wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
-            icon: group.icon,
-            hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-            sdk: group.sdk,
-            items: group.items,
-          }
-        },
+        async (group) => ({
+          title: group.title,
+          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+          tag: group.tag,
+          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+          icon: group.icon,
+          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+          sdk: group.sdk,
+          items: group.items,
+        }),
       ),
     }),
   )
@@ -616,7 +603,6 @@ export async function build(store: Store, config: BuildConfig) {
 
         await writeFile(
           distFilePath,
-          // It's possible we will want to / need to put some frontmatter here
           `---
 template: wide
 ---

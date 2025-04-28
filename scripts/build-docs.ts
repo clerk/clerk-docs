@@ -25,39 +25,40 @@
 // - Removes .mdx from the end of docs markdown links
 // - Adds canonical links in frontmatter for SDK-specific docs
 
-import path from 'node:path'
-import { remark } from 'remark'
-import remarkFrontmatter from 'remark-frontmatter'
-import remarkMdx from 'remark-mdx'
-import { Node } from 'unist'
-import { filter as mdastFilter } from 'unist-util-filter'
-import { visit as mdastVisit } from 'unist-util-visit'
-import reporter from 'vfile-reporter'
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { remark } from 'remark';
+import remarkFrontmatter from 'remark-frontmatter';
+import remarkMdx from 'remark-mdx';
+import { Node } from 'unist';
+import { filter as mdastFilter } from 'unist-util-filter';
+import { visit as mdastVisit } from 'unist-util-visit';
+import reporter from 'vfile-reporter';
 
-import { createConfig, type BuildConfig } from './lib/config'
-import { watchAndRebuild } from './lib/dev'
-import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
-import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
-import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
-import { parseInMarkdownFile } from './lib/markdown'
-import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
-import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
-import { readTypedocsFolder, readTypedocsMarkdown } from './lib/typedoc'
+import { createConfig, type BuildConfig } from './lib/config';
+import { watchAndRebuild } from './lib/dev';
+import { errorMessages, shouldIgnoreWarning } from './lib/error-messages';
+import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io';
+import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest';
+import { parseInMarkdownFile } from './lib/markdown';
+import { readPartialsFolder, readPartialsMarkdown } from './lib/partials';
+import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas';
+import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store';
+import { readTypedocsFolder, readTypedocsMarkdown } from './lib/typedoc';
 
-import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
-import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
-import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp'
-import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
-import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
+import { documentHasIfComponents } from './lib/utils/documentHasIfComponents';
+import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode';
+import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp';
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix';
+import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK';
 
-import { checkPartials } from './lib/plugins/checkPartials'
-import { checkTypedoc } from './lib/plugins/checkTypedoc'
-import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
-import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
-import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
-import { validateIfComponents } from './lib/plugins/validateIfComponents'
-import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
+import { checkPartials } from './lib/plugins/checkPartials';
+import { checkTypedoc } from './lib/plugins/checkTypedoc';
+import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut';
+import { insertFrontmatter } from './lib/plugins/insertFrontmatter';
+import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks';
+import { validateIfComponents } from './lib/plugins/validateIfComponents';
+import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings';
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {

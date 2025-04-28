@@ -1,98 +1,128 @@
 ---
-title: Billing Guide
-description: This guide will walk you through setting up your application to use Clerk Billing.
+title: Clerk Billing
+description: Clerk Billing is a feature that allows you to create and manage Plans and Features for your application.
 ---
 
-This guide will walk you through setting up your application to use Clerk Billing.
+Clerk Billing is a feature that allows you to create and manage Plans and Features for your application. This guide will walk you through how to enable Billing, create Plans and Features, and use them to gate access to your application.
 
-## Enabling Billing
+## Enable Billing
 
-To start using Clerk Billing, you’ll first need to enable it on your application. You can do this from Clerk’s dashboard.
+To enable Billing for your application, navigate to the [**Billing Settings**](https://dashboard.clerk.com/last-active?path=billing/settings) page in the Clerk Dashboard. This page will guide you through enabling Billing for your application. If your application was created after the Billing launch, you will only need to create a plan. If your application predates the Billing launch, you will need to complete the steps outlined.
 
-The first step is to log into your Clerk account, and select the application you want to enable Billing on. From there you can click on the **Configure** tab in the top page navigation. Then click on the **Settings** tab found in the side navigation under the **Billing** section.
+## Create a plan
 
-This page will guide you through enabling Billing on your application. If you’ve created a new application, after the Billing launch, there will only be one step you need to complete: Create a Plan.
+Plans are what your users subscribe to. There is no limit to the number of Plans you can create.
 
-If you want to enable Billing on an app that predates the Billing launch, there may be a couple more steps to get up and going. You can follow the helpful onboarding cards to make any updates to your application needed. Once you’ve completed all those cards, you’ll be able to Enable Billing on your application.
+There are two types of Plans:
 
-## Creating a Plan
+- Organization Plans: plans that only [organizations](/docs/organizations/overview) can subscribe to.
+- User Plans: plans that only users can subscribe to.
 
-Creating a Plan is easy. You can create any number of Plans you’d like. If you’re using Organizations, you can create dedicated Organization Plans that will only be available to Organizations. Only organizations can subscribe to these Plans.
+To create a Plan, navigate to the [**Plans**](https://dashboard.clerk.com/last-active?path=billing/products) page in the Clerk Dashboard. Here, you can create, edit, and delete Plans. When creating a Plan, you can also create Features for the Plan; see the next section for more information.
 
-Similarly, User Plans are only available to users. Only users can subscribe to these Plans.
+> [!QUIZ]
+> What is the **Visible on Components** option?
+>
+> ---
+>
+> Plans appear in some on Clerk components depending on what kind of plan it is. All Plans can appear in the `<PricingTable />` component. If it's a User Plan, it can appear in the `<UserProfile />` component. If it's an Organization Plan, it can appear in the `<OrganizationProfile />` component. When creating or editing a Plan, if you'd like to hide it from appearing in Clerk components, you can toggle the **Visible on Components** option off.
 
-You can hide Plans from appearing on the Clerk UI Components (like `<PricingTable />`, `<UserProfile />`, and `<OrganizationProfile />`) by toggling off the “Visible on Components” option when creating and editing a Plan.
+## Add features to a plan
 
-## Adding Features to a Plan
+Features make it easy to give entitlements to your Plans. You can add any number of Features to a Plan.
 
-Features make it easy to give entitlements to your Plans. You can add any number of Features to a Plan. Then, you can check to see if a user (or organization) has access to those Features from your app’s codebase. Features make it easy to gate access to your app’s content and functionality.
+You can add a Feature to a Plan when you are creating a Plan. To add it after a Plan is created:
 
-When you add a Feature to a Plan, it will also automatically appear in the corresponding Plan Tier in the  `<PricingTable />` component.
+1. Navigate to the [**Plans**](https://dashboard.clerk.com/last-active?path=billing/products) page in the Clerk Dashboard.
+1. Select the Plan you'd like to add a Feature to.
+1. In the **Features & Entitlements** section, select **Add Feature**.
 
-You can hide Features from appearing on the `<PricingTable />` component by toggling off the “Visible on Components” option when creating and editing a Feature.
+> [!QUIZ]
+> What is the **Visible on Components** option?
+>
+> ---
+>
+> Plans appear in some on Clerk components depending on what kind of plan it is. All Plans can appear in the `<PricingTable />` component. If it's a User Plan, it can appear in the `<UserProfile />` component. If it's an Organization Plan, it can appear in the `<OrganizationProfile />` component. When adding a Feature to a Plan, it will also automatically appear in the corresponding Plan. When creating or editing a Feature, if you'd like to hide it from appearing in Clerk components, you can toggle the **Visible on Components** option off.
 
-### Using Features and Plans in your app
+## Use features and plans in your app
 
-You can gate access to the content in your app using Clerk’s Features and Plans. Clerk provides a couple of ways to do this. The simplest way is via our [`has()`](https://clerk.com/docs/references/backend/types/auth-object#has) method and our [`<Protect />`](https://clerk.com/docs/components/protect) component.
+You can use Clerk's Features and Plans to gate access to the content in your app. There are a few ways to do this, but the recommended and simplest way is either using our [`has()`](/docs/references/backend/types/auth-object#has) method or our [`<Protect />`](/docs/components/protect) component.
 
-Examples using [`has()`](https://clerk.com/docs/references/backend/types/auth-object#has):
+When deciding which to use, both offer the same functionality, but `has()` is available for any JS-framework, while `<Protect />` is only available for React-based frameworks.
 
-import { auth } from '@clerk/nextjs/server'
+### Example: Using `has()`
 
-```js
-export default async function Page() {
-  const { has } = await auth()
+The [`has()`](/docs/references/backend/types/auth-object#has) method checks if the user has been granted a specific type of access control (Role, Permission, Feature, or Plan) and returns a boolean value. It is available on the [`auth` object](/docs/references/backend/types/auth-object) server-side, which is accessed differently depending the framework you are using.
 
-  const hasPremiumAccess = has({ feature: 'premium_access' })
+For example, in Next.js, you can access the `auth` object and the `has()` method using the [Next.js-specific `auth()` helper](/docs/references/nextjs/auth):
 
-  if (!hasPremiumAccess) return null
+<Tabs items={["Feature", "Plan"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
 
-  return <h1>Our Exclusive Content</h1>
-}
-```
+    export default async function Page() {
+      const { has } = await auth()
 
-```js
-import { auth } from '@clerk/nextjs/server'
+      const hasPremiumAccess = has({ feature: 'premium_access' })
 
-export default async function Page() {
-  const { has } = await auth()
+      if (!hasPremiumAccess)
+        return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
 
-  const hasBronzePlan = has({ plan: 'bronze' })
+      return <h1>Our Exclusive Content</h1>
+    }
+    ```
+  </Tab>
 
-  if (!hasBronzePlan) return null
+  <Tab>
+    ```tsx {{ filename: 'app/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
 
-  return <h1>For Bronze subscribers only</h1>
-}
-```
+    export default async function Page() {
+      const { has } = await auth()
 
-Examples using [`<Protect />`](https://clerk.com/docs/components/protect):
+      const hasBronzePlan = has({ plan: 'bronze' })
 
-```js
-import { Protect } from '@clerk/nextjs'
+      if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
 
-export default function ProtectPage() {
-  return (
-    <Protect
-      feature="premium_access"
-      fallback={<p>Only subscribers with the Premium Access feature can access this content.</p>}
-    >
-      {children}
-    </Protect>
-  )
-}
-```
+      return <h1>For Bronze subscribers only</h1>
+    }
+    ```
+  </Tab>
+</Tabs>
 
-```js
-import { Protect } from '@clerk/nextjs'
+### Example: Using `<Protect />`
 
-export default function ProtectPage() {
-  return (
-    <Protect
-      plan="bronze"
-      fallback={<p>Only subscribers to the Bronze plan can access this content.</p>}
-    >
-      {children}
-    </Protect>
-  )
-}
-```
+The [`<Protect />`](/docs/components/protect) component protects a page or part of a page by checking if the user has been granted a specific type of access control (Role, Permission, Feature, or Plan). You can pass it a `fallback` prop that will be rendered if the user does not have the access control.
+
+<Tabs items={["Feature", "Plan"]}>
+  <Tab>
+    ```tsx
+    export default function ProtectPage() {
+      return (
+        <Protect
+          feature="premium_access"
+          fallback={<p>Only subscribers with the Premium Access feature can access this content.</p>}
+        >
+          {children}
+        </Protect>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx
+    export default function ProtectPage() {
+      return (
+        <Protect
+          plan="bronze"
+          fallback={<p>Only subscribers to the Bronze plan can access this content.</p>}
+        >
+          {children}
+        </Protect>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

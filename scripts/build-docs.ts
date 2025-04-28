@@ -25,7 +25,6 @@
 // - Removes .mdx from the end of docs markdown links
 // - Adds canonical links in frontmatter for SDK-specific docs
 
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'

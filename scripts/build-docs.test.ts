@@ -2473,7 +2473,7 @@ description: A page that contains cards
 
     const indexContent = await readFile('./dist/index.mdx')
 
-    expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page)')
+    expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page?instant-redirect=true)')
   })
 })
 

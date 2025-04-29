@@ -296,9 +296,9 @@ export async function build(store: Store, config: BuildConfig) {
       const groupsItemsCombinedSDKs = (() => {
         const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
 
-        if (sdks === undefined) return []
+        // If the child sdks is undefined then its core so it supports all sdks
+        const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => sdk !== undefined ? sdk : config.validSdks)))
 
-        const uniqueSDKs = Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
         return uniqueSDKs
       })()
 
@@ -311,6 +311,11 @@ export async function build(store: Store, config: BuildConfig) {
       // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
       if (groupsItemsCombinedSDKs.length === 0) {
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+      }
+
+      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
+        return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
       if (groupSDK !== undefined && groupSDK.length > 0) {

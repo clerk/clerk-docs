@@ -506,6 +506,74 @@ title: Simple Test
     })
   })
 
+  test('Setting the sdk on an item should bubble up if siblings are core docs', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Group',
+                items: [
+                  [
+                    { title: 'Item 1', href: '/docs/item-1' },
+                    { title: 'Item 2', href: '/docs/item-2' },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/item-1.mdx',
+        content: `---
+title: Item 1
+sdk: expressjs, fastify
+---
+
+# Item 1`,
+      },
+      {
+        path: './docs/item-2.mdx',
+        content: `---
+title: Item 2
+---
+
+# Item 2`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['expressjs', 'fastify', 'nextjs', 'react'],
+      }),
+    )
+
+    // Check manifest
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+
+    expect(manifest).toEqual({
+      navigation: [
+        [
+          {
+            title: 'Group',
+            items: [
+              [
+                { title: 'Item 1', sdk: ['expressjs', 'fastify'], href: '/docs/:sdk:/item-1' },
+                { title: 'Item 2', href: '/docs/item-2' },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
+  })
+
   test('should properly inherit SDK filtering from child items up to parent groups', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

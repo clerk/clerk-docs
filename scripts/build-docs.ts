@@ -524,12 +524,15 @@ template: wide
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
+            .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
+            .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: true }))
+            .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
             .use(filterOtherSDKsContentOut(config, filePath, targetSdk))
             .use(validateUniqueHeadings(config, filePath, 'docs'))
             .use(insertFrontmatter({ canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href }))
             .process({
-              ...doc.vfile,
-              messages: [], // reset the messages, otherwise they will be duplicated
+              path: filePath,
+              value: doc.fileContent
             })
 
           await writeSdkFile(targetSdk, `${doc.href.replace(config.baseDocsLink, '')}.mdx`, String(vfile))

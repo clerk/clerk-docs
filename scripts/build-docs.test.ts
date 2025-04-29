@@ -3191,6 +3191,116 @@ title: Updated Title
     expect(updatedContent).toContain('Updated Title')
     expect(updatedContent).toContain('Updated Content')
   })
+
+  test('should update doc content when the partial changes in a sdk scoped doc', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/partial.mdx',
+        content: `# Original Content`,
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+sdk: react
+---
+
+<Include src="_partials/partial" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(store, config)
+
+    // Check initial content
+    const initialContent = await readFile(pathJoin('./dist/react/cached-doc.mdx'))
+    expect(initialContent).toContain('Original Content')
+
+    // Update file content
+    await fs.writeFile(
+      pathJoin('./docs/_partials/partial.mdx'),
+      `# Updated Content`,
+    )
+
+    invalidate(pathJoin('./docs/_partials/partial.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(store, config)
+
+    // Check updated content
+    const updatedContent = await readFile(pathJoin('./dist/react/cached-doc.mdx'))
+    expect(updatedContent).toContain('Updated Content')
+  })
+
+  test('should update doc content when the typedoc changes in a sdk scoped doc', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+        }),
+      },
+      {
+        path: './typedoc/component.mdx',
+        content: `# Original Content`,
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+sdk: react
+---
+
+<Typedoc src="component" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(store, config)
+
+    // Check initial content
+    const initialContent = await readFile(pathJoin('./dist/react/cached-doc.mdx'))
+    expect(initialContent).toContain('Original Content')
+
+    // Update file content
+    await fs.writeFile(
+      pathJoin('./typedoc/component.mdx'),
+      `# Updated Content`,
+    )
+
+    invalidate(pathJoin('./typedoc/component.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(store, config)
+
+    // Check updated content
+    const updatedContent = await readFile(pathJoin('./dist/react/cached-doc.mdx'))
+    expect(updatedContent).toContain('Updated Content')
+  })
 })
 
 describe('Configuration Options', () => {

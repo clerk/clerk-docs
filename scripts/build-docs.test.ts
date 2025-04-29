@@ -2407,6 +2407,74 @@ description: This is a test page
 
     expect(output).toContain(`warning Hash "invalid-heading" not found in /docs/page-1`)
   })
+
+  test('Should skip swapping out <SDKLink /> when the link is in a <Cards /> component', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: "./docs/manifest.json",
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page', href: '/docs/index' },
+              { title: 'Standard Card', href: '/docs/standard-card' },
+              { title: 'SDK Scoped Page', href: '/docs/sdk-scoped-page' },
+            ]
+          ]
+        })
+      },
+      {
+        path: "./docs/standard-card.mdx",
+        content: `---
+title: Standard Card
+description: Just a standard card
+---
+
+# Standard Card`,
+      },
+      {
+        path: "./docs/sdk-scoped-page.mdx",
+        content: `---
+title: SDK Scoped Page
+description: A card that is scoped to a specific SDK
+sdk: react
+---
+
+# SDK Scoped Page`,
+      },
+      {
+        path: "./docs/index.mdx",
+        content: `---
+title: Page
+description: A page that contains cards
+---
+
+<Cards>
+  - [Standard card](/docs/standard-card.mdx)
+  - Just a standard car
+
+  ---
+
+  - [SDK Scoped Card](/docs/sdk-scoped-page.mdx)
+  - A card that is scoped to a specific SDK
+</Cards>`
+      }
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const indexContent = await readFile('./dist/index.mdx')
+
+    expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page)')
+  })
 })
 
 describe('Path and File Handling', () => {

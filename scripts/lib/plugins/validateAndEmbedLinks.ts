@@ -13,12 +13,28 @@ import { safeMessage, type WarningsSection } from '../error-messages'
 import { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
+import { findComponent } from '../utils/findComponent'
 
 export const validateAndEmbedLinks =
   (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
   () =>
   (tree: Node, vfile: VFile) => {
+
+    let inCardsComponent = false
+    let inCardsComponentOffset = 0
+
     return mdastMap(tree, (node) => {
+
+      if (findComponent(node, 'Cards')) {
+        inCardsComponent = true
+        inCardsComponentOffset = node.position?.end?.offset ?? 0
+      }
+
+      if (inCardsComponent && node.position?.start?.offset && node.position.start.offset > inCardsComponentOffset) {
+        inCardsComponent = false
+        inCardsComponentOffset = 0
+      }
+
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
@@ -53,7 +69,8 @@ export const validateAndEmbedLinks =
         }
       }
 
-      if (linkedDoc.sdk !== undefined) {
+      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+      if (linkedDoc.sdk !== undefined && inCardsComponent === false) {
         // we are going to swap it for the sdk link component to give the users a great experience
 
         const firstChild = node.children?.[0]

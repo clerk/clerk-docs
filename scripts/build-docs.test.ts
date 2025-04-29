@@ -3899,7 +3899,50 @@ description: Generated API docs
       }),
     )
 
-    expect(await readFile('./dist/api-doc.mdx')).toContain('Client API')
     expect(output).toBe('')
+
+    expect(await readFile('./dist/api-doc.mdx')).toContain('Client API')
+  })
+
+  test('should embed typedoc into a sdk scoped doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './typedoc/api/client.mdx',
+        content: `# Client API`,
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+sdk: react, nextjs
+---
+
+# API Documentation
+
+<Typedoc src="api/client" />
+`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/react/api-doc.mdx')).toContain('Client API')
+    expect(await readFile('./dist/nextjs/api-doc.mdx')).toContain('Client API')
   })
 })

@@ -506,7 +506,7 @@ title: Simple Test
     })
   })
 
-  test('Setting the sdk on an item should bubble up if siblings are core docs', async () => {
+  test('Setting the sdk on an item should not bubble up if siblings are core docs', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -566,6 +566,67 @@ title: Item 2
               [
                 { title: 'Item 1', sdk: ['expressjs', 'fastify'], href: '/docs/:sdk:/item-1' },
                 { title: 'Item 2', href: '/docs/item-2' },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
+  })
+
+  test('External links should still get sdk scoping if applied to the group', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Group',
+                sdk: ['expressjs'],
+                items: [
+                  [
+                    { title: 'Item 1', href: '/docs/item-1' },
+                    { title: 'Item 2', href: 'https://example.com' },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/item-1.mdx',
+        content: `---
+title: Item 1
+---
+
+# Item 1`,
+      },
+    ])
+
+    await build(
+      createBlankStore(),
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['expressjs', 'react'],
+      }),
+    )
+
+    // Check manifest
+    const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
+
+    expect(manifest).toEqual({
+      navigation: [
+        [
+          {
+            title: 'Group',
+            sdk: ['expressjs'],
+            items: [
+              [
+                { title: 'Item 1', sdk: ['expressjs'], href: '/docs/item-1' },
+                { title: 'Item 2', sdk: ['expressjs'], href: 'https://example.com' },
               ],
             ],
           },

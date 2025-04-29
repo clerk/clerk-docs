@@ -207,8 +207,13 @@ export async function build(store: Store, config: BuildConfig) {
   const sdkScopedManifestFirstPass = await traverseTree(
     { items: userManifest, sdk: undefined as undefined | SDK[] },
     async (item, tree) => {
-      if (!item.href?.startsWith(config.baseDocsLink)) return item
-      if (item.target !== undefined) return item
+      if (!item.href?.startsWith(config.baseDocsLink)) {
+        return {
+          ...item,
+          // Either use the sdk of the item, or the parent group if the item doesn't have a sdk
+          sdk: item.sdk ?? tree.sdk
+        }
+      }
 
       const ignore = config.ignoredLink(item.href)
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them

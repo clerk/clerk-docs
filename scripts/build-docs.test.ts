@@ -2604,6 +2604,44 @@ description: A page that contains cards
 
     expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page?instant-redirect=true)')
   })
+
+  test('Url hash links should be included when swapping out sdk scoped links to <SDKLink />', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Page 1', href: '/docs/page-1' }]],
+        }),
+      },
+      {
+        path: './docs/page-1.mdx',
+        content: `---
+title: Page 1
+description: This is a test page
+sdk: react
+---
+
+# Content
+
+[Hash Link](#content)`,
+      },
+    ])
+
+    const output = await build(
+      createBlankStore(),
+
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const page1Content = await readFile('./dist/react/page-1.mdx')
+    expect(page1Content).toContain('<SDKLink href="/docs/:sdk:/page-1#content" sdks={["react"]}>Hash Link</SDKLink>')
+  })
 })
 
 describe('Path and File Handling', () => {

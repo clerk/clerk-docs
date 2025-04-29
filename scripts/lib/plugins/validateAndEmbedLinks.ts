@@ -71,14 +71,14 @@ export const validateAndEmbedLinks =
             firstChild.type = 'text'
 
             return SDKLink({
-              href: scopeHrefToSDK(config)(url, ':sdk:'),
+              href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
               sdks: linkedDoc.sdk,
               code: true,
             })
           }
 
           return SDKLink({
-            href: scopeHrefToSDK(config)(url, ':sdk:'),
+            href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
             sdks: linkedDoc.sdk,
             code: false,
             children: node.children,

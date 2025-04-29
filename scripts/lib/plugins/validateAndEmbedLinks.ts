@@ -20,20 +20,10 @@ export const validateAndEmbedLinks =
   () =>
   (tree: Node, vfile: VFile) => {
 
-    let inCardsComponent = false
-    let inCardsComponentOffset = 0
+    const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
-
-      if (findComponent(node, 'Cards')) {
-        inCardsComponent = true
-        inCardsComponentOffset = node.position?.end?.offset ?? 0
-      }
-
-      if (inCardsComponent && node.position?.start?.offset && node.position.start.offset > inCardsComponentOffset) {
-        inCardsComponent = false
-        inCardsComponentOffset = 0
-      }
+      const inCardsComponent = checkCardsComponentScope(node)
 
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
@@ -101,3 +91,24 @@ export const validateAndEmbedLinks =
       return node
     })
   }
+
+
+function watchComponentScope(componentName: string) {
+
+  let inComponent = false
+  let offset: number | null = null
+
+  return (node: Node) => {
+    if (findComponent(node, componentName)) {
+      inComponent = true
+      offset = node.position?.end?.offset ?? 0
+    }
+
+    if (inComponent && offset !== null && node.position?.start?.offset && node.position.start.offset > offset) {
+      inComponent = false
+      offset = null
+    }
+
+    return inComponent
+  }
+}

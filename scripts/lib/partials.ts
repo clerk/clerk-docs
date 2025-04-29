@@ -17,6 +17,7 @@ import { errorMessages, safeFail } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { getPartialsCache, type Store } from './store'
+import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.partialsPath, {
@@ -57,21 +58,7 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
           },
         )
       })
-      // Process links in partials and remove the .mdx suffix
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: `docs/_partials/${filePath}`,
         value: content,

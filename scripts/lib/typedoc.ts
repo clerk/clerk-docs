@@ -15,6 +15,7 @@ import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { getTypedocsCache, type Store } from './store'
+import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.typedocPath, {
@@ -42,20 +43,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
         value: content,
@@ -78,20 +66,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(() => (tree, vfile) => {
-        return mdastMap(tree, (node) => {
-          if (node.type !== 'link') return node
-          if (!('url' in node)) return node
-          if (typeof node.url !== 'string') return node
-          if (!node.url.startsWith(config.baseDocsLink)) return node
-          if (!('children' in node)) return node
-
-          // We are overwriting the url with the mdx suffix removed
-          node.url = removeMdxSuffix(node.url)
-
-          return node
-        })
-      })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
         value: content,

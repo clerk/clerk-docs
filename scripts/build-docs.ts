@@ -1,29 +1,40 @@
 // Things this script does
 
 // Validates
-// - The manifest
-// - The markdown files contents (including required frontmatter fields)
-// - Links (including hashes) between docs are valid and point to existing headings
-// - The sdk filtering in the manifest
-// - The sdk filtering in the frontmatter
-// - The sdk filtering in the <If /> component
-//   - Checks that the sdk is available in the manifest
-//   - Checks that the sdk is available in the frontmatter
-//   - Validates sdk values against the list of valid SDKs
-// - URL encoding (prevents browser encoding issues)
-// - File existence for both docs and partials
-// - Path conflicts (prevents SDK name conflicts in paths)
+// - The manifest structure and its contents
+// - Markdown files and their required frontmatter fields:
+//   - Ensures title is present (required)
+//   - Warns if description is missing (optional)
+//   - Validates SDK declarations in frontmatter
+// - Validates internal doc links exist
+// - Validates hash links point to headings
+// - SDK filtering in three contexts:
+//   1. Manifest: Ensures SDK scoping is properly defined and inherited
+//   2. Frontmatter: Validates SDK declarations in document metadata
+//   3. <If /> components: Ensures:
+//      - Referenced SDKs exist in the manifest
+//      - SDKs are available in the frontmatter
+//      - SDK values match the list of valid SDKs
+//      - Parent group SDK compatibility
+// - Unique headings within documents
+// - Typedoc content structure and references
+// - Validates all embedded content (partials, typedocs) exists and is properly formatted
 
 // Transforms
-// - Embeds the partials in the markdown files
-// - Updates the links in the content if they point to the sdk specific docs
-//   - Converts links to SDK-specific docs to use <SDKLink /> components
-// - Copies over "core" docs to the dist folder
-// - Generates "landing" pages for the sdk specific docs at the original url
-// - Generates out the sdk specific docs to their respective folders
-//   - Stripping filtered out content based on SDK
-// - Removes .mdx from the end of docs markdown links
-// - Adds canonical links in frontmatter for SDK-specific docs
+// - Content Integration:
+//   - Embeds partial content into markdown files
+//   - Embeds typedoc content where referenced
+//   - Handles special character encoding in typedoc tables
+// - Link Processing:
+//   - Updates links to SDK-specific docs to use <SDKLink /> components
+//   - Removes .mdx extensions from doc links
+// - SDK-Specific Processing:
+//   - Generates SDK-specific versions of docs in their respective folders
+//   - Creates "landing" pages for SDK-specific docs at original URLs
+//   - Strips out content filtered by SDKs
+// - Manifest Processing:
+//   - Generates processed manifest.json with SDK scoping
+//   - Applies inheritance rules for SDK scoping in the navigation tree
 
 import fs from 'node:fs/promises'
 import path from 'node:path'

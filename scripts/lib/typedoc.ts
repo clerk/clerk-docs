@@ -9,7 +9,6 @@ import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
-import { map as mdastMap } from 'unist-util-map'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
@@ -35,6 +34,9 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
     throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
   }
 
+  // Replace special characters with markers before processing
+  const contentWithMarkers = typedocTableSpecialCharacters.encode(content)
+
   try {
     let node: Node | null = null
 
@@ -46,7 +48,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
-        value: content,
+        value: contentWithMarkers,
       })
 
     if (node === null) {
@@ -55,7 +57,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
 
     return {
       path: `${removeMdxSuffix(filePath)}.mdx`,
-      content,
+      content: contentWithMarkers,
       vfile,
       node: node as Node,
     }
@@ -69,7 +71,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
-        value: content,
+        value: contentWithMarkers,
       })
 
     if (node === null) {
@@ -78,11 +80,29 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
 
     return {
       path: `${removeMdxSuffix(filePath)}.mdx`,
-      content,
+      content: contentWithMarkers,
       vfile,
       node: node as Node,
     }
   }
+}
+
+// We need to replace these characters otherwise the markdown parser will act weird
+export const typedocTableSpecialCharacters = {
+  encode: (content: string) =>
+    content
+      .replaceAll('\\|', '/ESCAPEPIPE/')
+      .replaceAll('\\{', '/ESCAPEOPENBRACKET/')
+      .replaceAll('\\}', '/ESCAPECLOSEBRACKET/')
+      .replaceAll('\\>', '/ESCAPEGREATERTHAN/')
+      .replaceAll('\\<', '/ESCAPELESSTHAN/'),
+  decode: (content: string) =>
+    content
+      .replaceAll('/ESCAPEPIPE/', '\\|')
+      .replaceAll('/ESCAPEOPENBRACKET/', '\\{')
+      .replaceAll('/ESCAPECLOSEBRACKET/', '\\}')
+      .replaceAll('/ESCAPEGREATERTHAN/', '\\>')
+      .replaceAll('/ESCAPELESSTHAN/', '\\<'),
 }
 
 export const readTypedocsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {

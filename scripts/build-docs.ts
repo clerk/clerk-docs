@@ -25,40 +25,40 @@
 // - Removes .mdx from the end of docs markdown links
 // - Adds canonical links in frontmatter for SDK-specific docs
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { remark } from 'remark';
-import remarkFrontmatter from 'remark-frontmatter';
-import remarkMdx from 'remark-mdx';
-import { Node } from 'unist';
-import { filter as mdastFilter } from 'unist-util-filter';
-import { visit as mdastVisit } from 'unist-util-visit';
-import reporter from 'vfile-reporter';
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { remark } from 'remark'
+import remarkFrontmatter from 'remark-frontmatter'
+import remarkMdx from 'remark-mdx'
+import { Node } from 'unist'
+import { filter as mdastFilter } from 'unist-util-filter'
+import { visit as mdastVisit } from 'unist-util-visit'
+import reporter from 'vfile-reporter'
 
-import { createConfig, type BuildConfig } from './lib/config';
-import { watchAndRebuild } from './lib/dev';
-import { errorMessages, shouldIgnoreWarning } from './lib/error-messages';
-import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io';
-import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest';
-import { parseInMarkdownFile } from './lib/markdown';
-import { readPartialsFolder, readPartialsMarkdown } from './lib/partials';
-import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas';
-import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store';
-import { readTypedocsFolder, readTypedocsMarkdown } from './lib/typedoc';
+import { createConfig, type BuildConfig } from './lib/config'
+import { watchAndRebuild } from './lib/dev'
+import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
+import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
+import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
+import { parseInMarkdownFile } from './lib/markdown'
+import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
+import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
+import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
+import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
-import { documentHasIfComponents } from './lib/utils/documentHasIfComponents';
-import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode';
-import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp';
-import { removeMdxSuffix } from './lib/utils/removeMdxSuffix';
-import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK';
+import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
+import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
+import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp'
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
 
-import { checkPartials } from './lib/plugins/checkPartials';
-import { checkTypedoc } from './lib/plugins/checkTypedoc';
-import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut';
-import { insertFrontmatter } from './lib/plugins/insertFrontmatter';
-import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks';
-import { validateIfComponents } from './lib/plugins/validateIfComponents';
-import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings';
+import { checkPartials } from './lib/plugins/checkPartials'
+import { checkTypedoc } from './lib/plugins/checkTypedoc'
+import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
+import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
+import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
+import { validateIfComponents } from './lib/plugins/validateIfComponents'
+import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -211,7 +211,7 @@ export async function build(store: Store, config: BuildConfig) {
         return {
           ...item,
           // Either use the sdk of the item, or the parent group if the item doesn't have a sdk
-          sdk: item.sdk ?? tree.sdk
+          sdk: item.sdk ?? tree.sdk,
         }
       }
 
@@ -302,7 +302,7 @@ export async function build(store: Store, config: BuildConfig) {
         const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
 
         // If the child sdks is undefined then its core so it supports all sdks
-        const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => sdk !== undefined ? sdk : config.validSdks)))
+        const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
 
         return uniqueSDKs
       })()
@@ -505,7 +505,7 @@ template: wide
         return vfile
       }
 
-      await writeFile(distFilePath, String(vfile))
+      await writeFile(distFilePath, typedocTableSpecialCharacters.decode(String(vfile)))
 
       return vfile
     }),
@@ -532,10 +532,14 @@ template: wide
             .use(insertFrontmatter({ canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href }))
             .process({
               path: filePath,
-              value: doc.fileContent
+              value: doc.fileContent,
             })
 
-          await writeSdkFile(targetSdk, `${doc.href.replace(config.baseDocsLink, '')}.mdx`, String(vfile))
+          await writeSdkFile(
+            targetSdk,
+            `${doc.href.replace(config.baseDocsLink, '')}.mdx`,
+            typedocTableSpecialCharacters.decode(String(vfile)),
+          )
 
           return vfile
         }),

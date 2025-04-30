@@ -19,7 +19,6 @@ export const validateAndEmbedLinks =
   (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
   () =>
   (tree: Node, vfile: VFile) => {
-
     const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
@@ -92,9 +91,7 @@ export const validateAndEmbedLinks =
     })
   }
 
-
 function watchComponentScope(componentName: string) {
-
   let inComponent = false
   let offset: number | null = null
 

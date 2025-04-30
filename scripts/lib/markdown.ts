@@ -131,6 +131,6 @@ export const parseInMarkdownFile =
       headingsHashes,
       frontmatter: frontmatter as Frontmatter,
       node: node as Node,
-      fileContent
+      fileContent,
     }
   }

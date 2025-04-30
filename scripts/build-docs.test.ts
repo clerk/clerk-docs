@@ -2540,19 +2540,19 @@ description: This is a test page
   test('Should skip swapping out <SDKLink /> when the link is in a <Cards /> component', async () => {
     const { tempDir, readFile } = await createTempFiles([
       {
-        path: "./docs/manifest.json",
+        path: './docs/manifest.json',
         content: JSON.stringify({
           navigation: [
             [
               { title: 'Page', href: '/docs/index' },
               { title: 'Standard Card', href: '/docs/standard-card' },
               { title: 'SDK Scoped Page', href: '/docs/sdk-scoped-page' },
-            ]
-          ]
-        })
+            ],
+          ],
+        }),
       },
       {
-        path: "./docs/standard-card.mdx",
+        path: './docs/standard-card.mdx',
         content: `---
 title: Standard Card
 description: Just a standard card
@@ -2561,7 +2561,7 @@ description: Just a standard card
 # Standard Card`,
       },
       {
-        path: "./docs/sdk-scoped-page.mdx",
+        path: './docs/sdk-scoped-page.mdx',
         content: `---
 title: SDK Scoped Page
 description: A card that is scoped to a specific SDK
@@ -2571,7 +2571,7 @@ sdk: react
 # SDK Scoped Page`,
       },
       {
-        path: "./docs/index.mdx",
+        path: './docs/index.mdx',
         content: `---
 title: Page
 description: A page that contains cards
@@ -2585,8 +2585,8 @@ description: A page that contains cards
 
   - [SDK Scoped Card](/docs/sdk-scoped-page.mdx)
   - A card that is scoped to a specific SDK
-</Cards>`
-      }
+</Cards>`,
+      },
     ])
 
     const output = await build(
@@ -3232,10 +3232,7 @@ sdk: react
     expect(initialContent).toContain('Original Content')
 
     // Update file content
-    await fs.writeFile(
-      pathJoin('./docs/_partials/partial.mdx'),
-      `# Updated Content`,
-    )
+    await fs.writeFile(pathJoin('./docs/_partials/partial.mdx'), `# Updated Content`)
 
     invalidate(pathJoin('./docs/_partials/partial.mdx'))
 
@@ -3287,10 +3284,7 @@ sdk: react
     expect(initialContent).toContain('Original Content')
 
     // Update file content
-    await fs.writeFile(
-      pathJoin('./typedoc/component.mdx'),
-      `# Updated Content`,
-    )
+    await fs.writeFile(pathJoin('./typedoc/component.mdx'), `# Updated Content`)
 
     invalidate(pathJoin('./typedoc/component.mdx'))
 

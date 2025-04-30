@@ -3,14 +3,11 @@ title: Verify if a user is authorized
 description: Protect actions, content, or entire routes based on the user's type of access control.
 ---
 
-> [!IMPORTANT]
-> The following authorization checks are predicated on a user having an [active organization](/docs/organizations/overview#active-organization). Without this, they will likely always evaluate to false by default. If you would like to perform authorization checks **without** using Clerk's organizations feature, see [the Role Based Access Control (RBAC) guide](/docs/references/nextjs/basic-rbac).
-
 It's best practice to always verify whether or not a user is **authorized** to access sensitive information, important content, or exclusive features. **Authorization** is the process of determining the access rights and privileges of a user, ensuring they have the necessary permissions to perform specific actions.
 
 With the [Organizations](/docs/organizations/overview) feature, users can be assigned [roles and permissions](/docs/organizations/roles-permissions#permissions), which can be used in authorization checks.
 
-**It's recommended to use permission-based authorization over role-based authorization**, as it's more flexible, easier to manage, and more secure. This guide will show you how to implement authorization checks in order to protect actions, content, or entire routes based on the user's permissions, but the same concepts can be applied to roles.
+With the [Billing](/docs/billing/overview) feature, users can subscribe to [plans](/docs/billing/overview#create-a-plan) and [features](/docs/billing/overview#add-features-to-a-plan), which can be used in authorization checks.
 
 There are a few ways to perform authorization checks:
 
@@ -27,14 +24,128 @@ There are a few ways to perform authorization checks:
     - Limitations: doesn't offer control over the response, and can only be used on the server-side.
 </If>
 
+This guide will show you how to implement authorization checks in order to protect actions, content, or entire routes based on the user's **permissions**, but the same concepts can be applied to roles, features, and plans. When calling the `has()` helper, you would simply replace the `permission` parameter with the appropriate access control type, such as `role`, `feature`, or `plan`.
+
+## Important considerations
+
+- If you are doing role or permission-based authorization checks, **it's recommended to use permission-based authorization over role-based authorization**, as it's more flexible, easier to manage, and more secure.
+  - Using `has()` **on the server-side** to check permissions works only with **custom permissions**, as [system permissions](/docs/organizations/roles-permissions#system-permissions) aren't included in the session token claims. To check system permissions, verify the user's role instead.
+- Checking for a role or permission depends on the user having an [active organization](/docs/organizations/overview#active-organization). Without an active organization, the authorization checks will likely always evaluate to false by default.
+- If you would like to perform role-based authorization checks **without** using Clerk's organizations feature, see [the Role Based Access Control (RBAC) guide](/docs/references/nextjs/basic-rbac).
+
 <If sdk="nextjs">
-  > [!WARNING]
-  > Be cautious when doing authorization checks in layouts, as these don't re-render on navigation, meaning the user session won't be checked on every route change. [Read more in the Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
+  * Be cautious when doing authorization checks in layouts, as these don't re-render on navigation, meaning the user session won't be checked on every route change. [Read more in the Next.js docs](https://nextjs.org/docs/app/building-your-application/authentication#layouts-and-auth-checks).
 </If>
 
 ### Use `has()` for authorization checks
 
-<Include src="_partials/has-example" />
+The [`has()`](/docs/references/backend/types/auth-object#has) helper returns `false` if the user does not have the correct access control. If they aren't authorized, you can choose how your app responds. It can be used to perform authorization checks in pages, route handlers, and Server Actions (Next.js only) to protect them from unauthorized access.
+
+<Include src="_partials/has-warning" />
+
+<Tabs items={["Protect a page", "Protect a route handler", "Protect a Server Action"]}>
+  <Tab>
+    The following example demonstrates how to perform authorization checks in a page in order to protect the content from unauthorized access. It uses `has()` to check if the user has the `org:team_settings:manage` permission. If they aren't authorized, `null` is returned and the page isn't rendered.
+
+    This example is written for Next.js App Router, but can be adapted to other frameworks by using [the appropriate method for accessing the `Auth` object](/docs/references/nextjs/auth#how-to-access-the-auth-object).
+
+    ```tsx {{ filename: 'app/page.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export default async function Page() {
+      // Use `auth()` to access the `has()` helper
+      // For other frameworks, use the appropriate method for accessing the `Auth` object
+      const { has } = await auth()
+
+      // Check if the user is authorized
+      const canManage = has({ permission: 'org:team_settings:manage' })
+
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns null.
+      if (!canManage) return null
+
+      return <h1>Team Settings</h1>
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The following example demonstrates how to perform authorization checks in a route handler in order to protect it from unauthorized access. It
+
+    - uses the `userId` returned from the [`Auth` object](/docs/references/backend/types/auth-object) to check if the user is signed in. If the user is not **authenticated**, the Route Handler will return a `401` error.
+    - uses `has()` to check if the user has the correct permission. If the user is not **authorized**, `has()` will return false, causing the Route Handler to return a `403` error.
+
+    This example is written for Next.js App Router, but can be adapted to other frameworks by using the appropriate method for accessing the [`Auth` object](/docs/references/backend/types/auth-object).
+
+    ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export const GET = async () => {
+      // Use `auth()` to access the `has()` helper and the `userId`
+      // For other frameworks, use the appropriate method for accessing the `Auth` object
+      const { userId, has } = await auth()
+
+      // Check if the user is authenticated
+      if (!userId) {
+        return Response.json({ error: 'User is not signed in' }, { status: 401 })
+      }
+
+      // Check if the user is authorized
+      const canRead = has({ permission: 'org:team_settings:read' })
+
+      // If has() returns false, the user does not have the correct permissions
+      // You can choose how your app responds. This example returns a 403 error.
+      if (!canRead)
+        return Response.json({ error: 'User does not have the correct permissions' }, { status: 403 })
+
+      // If the user is both authenticated and authorized, move forward with your logic
+      return users.getTeams(userId)
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The following example demonstrates how to perform authorization checks in a Server Action in order to protect the action from unauthorized access. It
+
+    - uses the `userId` returned from the [`Auth` object](/docs/references/backend/types/auth-object) to check if the user is signed in. If the user is not **authenticated**, the Server Action will return a `401` error.
+    - uses `has()` to check if the user has the correct permission. If the user is not **authorized**, `has()` will return false, causing the Server Action to return a `403` error.
+
+    ```tsx {{ filename: 'app/components/ExampleServerComponent.tsx' }}
+    import { auth } from '@clerk/nextjs/server'
+
+    export default async function ExampleServerComponent() {
+      async function myServerAction(formData: FormData) {
+        'use server'
+        // Use `auth()` to access the `has()` helper and the `userId`
+        const { has, userId } = await auth()
+
+        // Check if the user is authenticated
+        if (!userId) {
+          return Response.json({ error: 'User is not signed in' }, { status: 401 })
+        }
+
+        // Check if the user is authorized
+        const canManage = has({ permission: 'org:team_settings:manage' })
+
+        // If has() returns false, the user does not have the correct permissions
+        // You can choose how your app responds. This example returns a 403 error.
+        if (!canManage)
+          return Response.json({ error: 'User does not have the correct permissions' }, { status: 403 })
+
+        // If the user is both authenticated and authorized, move forward with your logic
+        return users.getTeams(userId)
+      }
+
+      return (
+        <form action={myServerAction}>
+          {/* Add UI for managing team settings */}
+          <button type="submit">Submit</button>
+        </form>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ### Use `<Protect>` for authorization checks
 

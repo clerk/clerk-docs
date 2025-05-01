@@ -154,7 +154,9 @@ describe('Basic Functionality', () => {
 title: Simple Test
 description: This is a simple test page
 ---
+
 # Simple Test Page
+
 Testing with a simple page.`,
       },
     ])

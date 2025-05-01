@@ -426,7 +426,7 @@ export async function build(store: Store, config: BuildConfig) {
     }),
   )
 
-  console.info(`✓ Validated out all core docs`)
+  console.info(`✓ Validated all core docs`)
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {

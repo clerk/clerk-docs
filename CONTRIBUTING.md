@@ -396,7 +396,7 @@ This does a couple things:
   - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
 - The page will only show up in the sidebar navigation if the reader has one of the specified sdks active.
 - Links to this page will be 'smart' and point the user towards the correct variant of the page.
-- A variant selector will be shown in the top right of the page, allowing the user to switch between the different variants of the page.
+- A selector will be shown on the right side of the page, allowing the user to switch between the different versions of the page.
 
 ### Headings
 

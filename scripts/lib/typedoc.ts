@@ -14,7 +14,6 @@ import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { getTypedocsCache, type Store } from './store'
-import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.typedocPath, {
@@ -42,7 +41,6 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
         value: content,
@@ -65,7 +63,6 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
-      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
         value: content,

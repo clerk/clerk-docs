@@ -5,6 +5,7 @@ import { glob } from 'glob'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { build } from './build-docs'
+import { createBlankStore, invalidateFile } from './lib/store'
 import { createConfig } from './lib/config'
 
 const tempConfig = {

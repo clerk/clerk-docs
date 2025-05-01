@@ -23,6 +23,10 @@ type BuildConfigOptions = {
     collapseDefault: boolean
     hideTitleDefault: boolean
   }
+  flags?: {
+    watch?: boolean
+    controlled?: boolean
+  }
 }
 
 export type BuildConfig = ReturnType<typeof createConfig>
@@ -61,6 +65,11 @@ export function createConfig(config: BuildConfigOptions) {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
+    },
+
+    flags: {
+      watch: config.flags?.watch ?? false,
+      controlled: config.flags?.controlled ?? false,
     },
   }
 }

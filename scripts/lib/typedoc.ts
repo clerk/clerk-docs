@@ -13,6 +13,7 @@ import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
+import { getTypedocsCache, type Store } from './store'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.typedocPath, {
@@ -80,8 +81,9 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
   }
 }
 
-export const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+export const readTypedocsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
   const read = readTypedoc(config)
+  const typedocsCache = getTypedocsCache(store)
 
-  return Promise.all(paths.map(async (filePath) => read(filePath)))
+  return Promise.all(paths.map(async (filePath) => typedocsCache(filePath, () => read(filePath))))
 }

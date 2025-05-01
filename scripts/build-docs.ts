@@ -24,13 +24,14 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 
 import { createConfig, type BuildConfig } from './lib/config'
+import { watchAndRebuild } from './lib/dev'
 import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
 import { readDocsFolder } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { DocsMap } from './lib/store'
+import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -49,6 +50,8 @@ if (require.main === module) {
 }
 
 async function main() {
+  const args = process.argv.slice(2)
+
   const config = createConfig({
     basePath: __dirname,
     docsPath: '../docs',
@@ -91,25 +94,43 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    flags: {
+      watch: args.includes('--watch'),
+      controlled: args.includes('--controlled'),
+    },
   })
 
-  const output = await build(config)
+  const store = createBlankStore()
+
+  const output = await build(config, store)
+
+  if (config.flags.controlled) {
+    console.info('---initial-build-complete---')
+  }
 
   if (output !== '') {
     console.info(output)
+  }
+
+  if (config.flags.watch) {
+    console.info(`Watching for changes...`)
+
+    watchAndRebuild(store, { ...config }, build)
+  } else if (output !== '') {
     process.exit(1)
   }
 }
 
-export async function build(config: BuildConfig) {
+export async function build(config: BuildConfig, store: Store = createBlankStore()) {
   // Apply currying to create functions pre-configured with config
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
-  const getPartialsMarkdown = readPartialsMarkdown(config)
+  const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
-  const getTypedocsMarkdown = readTypedocsMarkdown(config)
+  const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config)
+  const markdownCache = getMarkdownCache(store)
 
   const userManifest = await getManifest()
   console.info('✓ Read Manifest')
@@ -117,11 +138,13 @@ export async function build(config: BuildConfig) {
   const docsFiles = await getDocsFolder()
   console.info('✓ Read Docs Folder')
 
+  const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
-  console.info(`✓ Loaded in ${partials.length} partials`)
+  console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
+  const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
-  console.info(`✓ Read ${typedocs.length} Typedocs`)
+  console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
@@ -140,19 +163,22 @@ export async function build(config: BuildConfig) {
   })
   console.info('✓ Parsed in Manifest')
 
+  const cachedDocsSize = store.markdown.size
   // Read in all the docs
   const docsArray = await Promise.all(
     docsFiles.map(async (file) => {
       const href = removeMdxSuffix(`${config.baseDocsLink}${file.path}`)
       const inManifest = docsInManifest.has(href)
 
-      const markdownFile = await parseMarkdownFile(href, partials, typedocs, inManifest, 'docs')
+      const markdownFile = await markdownCache(href, () =>
+        parseMarkdownFile(href, partials, typedocs, inManifest, 'docs'),
+      )
 
       docsMap.set(href, markdownFile)
       return markdownFile
     }),
   )
-  console.info(`✓ Loaded in ${docsArray.length} docs`)
+  console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifestFirstPass = await traverseTree(

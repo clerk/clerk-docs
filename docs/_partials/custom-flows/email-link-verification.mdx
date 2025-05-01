@@ -1,12 +1,13 @@
 {/* Adds an email address to a user's account, and verifies it using an email link. */}
 
 1. Every user has a [`User`](/docs/references/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/hooks/use-user) hook is used to get the `User` object.
-1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is used to add the email address to the user's account. A new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
+1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
+1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
 1. The newly created `EmailAddress` object is used to access the [`createEmailLinkFlow()`](/docs/references/javascript/types/email-address#create-email-link-flow) method.
 1. The `createEmailLinkFlow()` method is used to access the `startEmailLinkFlow()` method.
 1. The `startEmailLinkFlow()` method is called with the `redirectUrl` parameter set to `/account/add-email/verify`. It sends an email with a verification link to the user. When the user visits the link, they are redirected to the URL that was provided.
 1. On the `/account/add-email/verify` page, the [`useClerk()`](/docs/hooks/use-clerk) hook is used to get the `handleEmailLinkVerification()` method.
-1. The [`handleEmailLinkVerification()`](/docs/references/javascript/clerk/handle-navigation#handle-email-link-verification) method is called to verify the email address. Error handling is included to handle any errors that occur during the verification process.
+1. The [`handleEmailLinkVerification()`](/docs/references/javascript/clerk#handle-email-link-verification) method is called to verify the email address. Error handling is included to handle any errors that occur during the verification process.
 
 <Tabs items={["Next.js"]}>
   <Tab>
@@ -15,13 +16,16 @@
       'use client'
 
       import * as React from 'react'
-      import { useUser } from '@clerk/nextjs'
+      import { useUser, useReverification } from '@clerk/nextjs'
 
       export default function Page() {
         const { isLoaded, user } = useUser()
         const [email, setEmail] = React.useState('')
         const [verifying, setVerifying] = React.useState(false)
         const [error, setError] = React.useState('')
+        const createEmailAddress = useReverification((email: string) =>
+          user?.createEmailAddress({ email }),
+        )
 
         if (!isLoaded) return null
 
@@ -37,7 +41,7 @@
             setVerifying(true)
 
             // Add an unverified email address to user
-            const res = await user.createEmailAddress({ email })
+            const res = await createEmailAddress(email)
             // Reload user to get updated User object
             await user.reload()
 
@@ -116,7 +120,7 @@
 
       import * as React from 'react'
       import { useClerk } from '@clerk/nextjs'
-      import { EmailLinkErrorCode, isEmailLinkError } from '@clerk/nextjs/errors'
+      import { EmailLinkErrorCodeStatus, isEmailLinkError } from '@clerk/nextjs/errors'
       import Link from 'next/link'
 
       export type VerificationStatus =
@@ -141,9 +145,9 @@
 
             if (isEmailLinkError(err)) {
               // If link expired, set status to expired
-              if (err.code === EmailLinkErrorCode.Expired) {
+              if (err.code === EmailLinkErrorCodeStatus.Expired) {
                 status = 'expired'
-              } else if (err.code === EmailLinkErrorCode.ClientMismatch) {
+              } else if (err.code === EmailLinkErrorCodeStatus.ClientMismatch) {
                 // OPTIONAL: This check is only required if you have
                 // the 'Require the same device and browser' setting
                 // enabled in the Clerk Dashboard

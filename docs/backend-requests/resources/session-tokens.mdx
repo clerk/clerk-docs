@@ -5,39 +5,88 @@ description: Learn about session tokens and how to validate them in your backend
 
 When a user is authenticated in your application, Clerk generates a short-lived session token that you can use to authenticate requests to your backend. This token is a JSON Web Token (JWT) that contains information about the user and their session.
 
-Learn more about how Clerk combines session token authentication and JWT authentication in the [blog post](https://clerk.com/blog/combining-the-benefits-of-session-tokens-and-jwts).
+Read more about Clerk session tokens and how they work in [the guide on how Clerk works](/docs/how-clerk-works/overview).
 
-## Default session claims
+## Default claims
 
-Every generated token has default claims that cannot be overridden by templates. Clerk's default claims include:
+<Tabs items={["Version 2", "Version 1"]}>
+  <Tab>
+    > [!IMPORTANT]
+    > You are reading about version 2 of Clerk's session token claims. To read about version 1, select the respective tab above.
 
-| Claim | Abbreviation expanded | Description | Example |
-| - | - | - | - |
-| `azp` | authorized party | The `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application. This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null. | `https://example.com` |
-| `exp` | expiration time | The time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4) for more information. | `1713158400` |
-| `fva` | factor verification age | Each item represents the minutes that have passed since the last time a first or second factor, respectively, was verified. | `[7, -1]` which means it has been 7 minutes since the first factor was verified, and there either is not a second factor or the second factor has never been verified. |
-| `iat` | issued at | The time at which the token was issued as a Unix timestamp. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6) for more information. | `1713158400` |
-| `iss` | issuer | The Frontend API URL of your instance. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1) for more information. | `https://clerk.your-site.com` for a production instance, `https://your-site.clerk.accounts.dev` for a development instance |
-| `nbf` | not before | The time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5) for more information. | `1713158400` |
-| `sid` | session ID | The ID of the current session. | `sess_123` |
-| `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
+    Every generated token has default claims that cannot be overridden by templates. Clerk's default claims include:
 
-The **`act` (actor) claim** is only included if the user is [impersonating](/docs/users/user-impersonation) another user. It's value is an object that contains the following properties:
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `azp` | authorized party | The `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application. This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null. | `https://example.com` |
+    | `exp` | expiration time | The time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4) for more information. | `1713158400` |
+    | `fva` | factor verification age | Each item represents the minutes that have passed since the last time a first or second factor, respectively, was verified. | `[7, -1]` which means it has been 7 minutes since the first factor was verified, and there either is not a second factor or the second factor has never been verified. |
+    | `iat` | issued at | The time at which the token was issued as a Unix timestamp. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6) for more information. | `1713158400` |
+    | `iss` | issuer | The Frontend API URL of your instance. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1) for more information. | `https://clerk.your-site.com` for a production instance, `https://your-site.clerk.accounts.dev` for a development instance |
+    | `nbf` | not before | The time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5) for more information. | `1713158400` |
+    | `sid` | session ID | The ID of the current session. | `sess_123` |
+    | `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
+    | `v` | version | The version number of the session token. | `2` |
+    | `fea` | features | A list of enabled features and their scope. The scope can either be `o` for org-level features, `u` for user-level features, or `uo` for both. | `o:dashboard,o:impersonation` |
 
-| Claim | Abbreviation expanded | Description | Example |
-| - | - | - | - |
-| `iss` | issuer | The referrer of the token. | `https://dashboard.clerk.com` |
-| `sid` | session ID | The session ID of the impersonated session. | `sess_456` |
-| `sub` | subject | The ID of the impersonator. | `user_456` |
+    The **`o` claim**, or organization claim, is only included if the user is part of an [organization](/docs/organizations/overview) and that organization is [active](/docs/organizations/overview#active-organization). Its value is an object that contains the following properties:
 
-The following claims are only included if the user is part of an [organization](/docs/organizations/overview):
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `id` | ID | The ID of the organization. | `org_123` |
+    | `slg` | slug | The slug of the organization. | `org-slug` |
+    | `rol` | role | The role of the user in the organization, without the `org:` prefix. | `admin` |
+    | `per` | permissions | The names of the permissions the user has in the organization. | `read,manage` |
+    | `fpm` | feature-permission map | The mapping of features with permissions, where the value of the integer, when converted to binary, represents a bitmask where each bit's position corresponds to a permission in the `o.per` list, and where `0` = `not-allowed` and `1` = `allowed`. | `3,2` |
 
-| Claim | Abbreviation expanded | Description | Example |
-| - | - | - | - |
-| `org_id` | organization ID | The ID of the active organization that the user belongs to. | `org_123` |
-| `org_permissions` | organization permissions | The permissions of the user in the currently active organization. | `["org:sys_profile:manage", "org:sys_profile:delete"]` |
-| `org_slug` | organization slug | The slug of the currently active organization that the user belongs to. | `org-slug` |
-| `org_role` | organization role | The role of the user in the currently active organization. | `org:admin` |
+    > [!WARNING]
+    > The organization claims above are intentionally designed to be as compact as possible to keep JWT tokens small.
+    > As a result, they can be difficult to decode manually. We strongly recommend using one of our SDKs that support API version [2025-04-10](/docs/versioning/available-versions#2025-04-10) to handle decoding reliably.
+
+    The **`act` (actor) claim** is only included if the user is [impersonating](/docs/users/user-impersonation) another user. It's value is an object that contains the following properties:
+
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `iss` | issuer | The referrer of the token. | `https://dashboard.clerk.com` |
+    | `sid` | session ID | The session ID of the impersonated session. | `sess_456` |
+    | `sub` | subject | The ID of the impersonator. | `user_456` |
+  </Tab>
+
+  <Tab>
+    > [!IMPORTANT]
+    > Version 1 was deprecated on April 14, 2025. To upgrade to version 2, go to the [**Updates**](https://dashboard.clerk.com/last-active?path=updates) page in the Clerk Dashboard.
+
+    Every generated token has default claims that cannot be overridden by templates. Clerk's default claims include:
+
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `azp` | authorized party | The `Origin` header that was included in the original Frontend API request made from the user. Most commonly, it will be the URL of the application. This claim could be omitted if, for privacy-related reasons, `Origin` is empty or null. | `https://example.com` |
+    | `exp` | expiration time | The time after which the token will expire, as a Unix timestamp. Determined using the **Token lifetime** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4) for more information. | `1713158400` |
+    | `fva` | factor verification age | Each item represents the minutes that have passed since the last time a first or second factor, respectively, was verified. | `[7, -1]` which means it has been 7 minutes since the first factor was verified, and there either is not a second factor or the second factor has never been verified. |
+    | `iat` | issued at | The time at which the token was issued as a Unix timestamp. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.6) for more information. | `1713158400` |
+    | `iss` | issuer | The Frontend API URL of your instance. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.1) for more information. | `https://clerk.your-site.com` for a production instance, `https://your-site.clerk.accounts.dev` for a development instance |
+    | `nbf` | not before | The time before which the token is considered invalid, as a Unix timestamp. Determined using the **Allowed Clock Skew** JWT template setting in the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates). See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5) for more information. | `1713158400` |
+    | `sid` | session ID | The ID of the current session. | `sess_123` |
+    | `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
+
+    The following claims are only included if the user is part of an organization and that organization is [active](/docs/organizations/overview#active-organization):
+
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `org_id` | organization ID | The ID of the active organization that the user belongs to. | `org_123` |
+    | `org_permissions` | organization permissions | The permissions of the user in the currently active organization. System permissions are not included in the session token. | `["org:admin:example_permission", "org:member:example_permission"]` |
+    | `org_slug` | organization slug | The slug of the currently active organization that the user belongs to. | `org-slug` |
+    | `org_role` | organization role | The role of the user in the currently active organization. | `org:admin` |
+
+    The **`act` (actor) claim** is only included if the user is [impersonating](/docs/users/user-impersonation) another user. It's value is an object that contains the following properties:
+
+    | Claim | Abbreviation expanded | Description | Example |
+    | - | - | - | - |
+    | `iss` | issuer | The referrer of the token. | `https://dashboard.clerk.com` |
+    | `sid` | session ID | The session ID of the impersonated session. | `sess_456` |
+    | `sub` | subject | The ID of the impersonator. | `user_456` |
+  </Tab>
+</Tabs>
 
 If you would like to add custom claims to your session token, you can [customize it](/docs/backend-requests/custom-session-token).
 
@@ -47,7 +96,7 @@ You can also create custom tokens using a [JWT template](/docs/backend-requests/
 
 The Clerk session token is stored in a cookie. All modern browsers [limit the maximum size of a cookie to 4kb](https://datatracker.ietf.org/doc/html/rfc2109#section-6.3). Exceeding this limit can have adverse effects, including a possible infinite redirect loop for users who exceed this size in Next.js applications.
 
-A session token with the [default session claims](#default-session-claims) won't run into this issue, as this configuration produces a cookie significantly smaller than 4kb. However, this limitation becomes relevant when implementing a [custom session token](/docs/backend-requests/custom-session-token). In this case, it's recommended to move particularly large claims out of the token and fetch these using a separate API call from your backend.
+A session token with the [default session claims](#default-claims) won't run into this issue, as this configuration produces a cookie significantly smaller than 4kb. However, this limitation becomes relevant when implementing a [custom session token](/docs/backend-requests/custom-session-token). In this case, it's recommended to move particularly large claims out of the token and fetch these using a separate API call from your backend.
 
 Claims to monitor for size limits:
 
@@ -64,6 +113,6 @@ If you include any of these claims in your token, use caution to ensure the stor
 
 ## Validate session tokens
 
-If you're using the middleware provided by our Clerk SDKs, this is all handled automatically in every request. If you're not using the middleware, you can still use the respective helpers provided by the SDKs to validate the tokens.
+If you're using the middleware provided by our Clerk SDKs, validating session tokens is handled automatically in every request. If you're not using the middleware, you can still use the respective helpers provided by the SDKs to validate the tokens.
 
 To learn how to manually verify a session token, refer to the [dedicated guide](/docs/backend-requests/manual-jwt).

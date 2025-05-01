@@ -5,11 +5,14 @@ sdk: chrome-extension, nextjs, react, react-router, remix, tanstack-start
 ---
 
 > [!WARNING]
-> This feature is currently in public beta. **It is not recommended for production use**.
 >
-> Depending on the SDK you're using, this feature requires `@clerk/nextjs@6.5.0` or later, `@clerk/clerk-react@5.17.0` or later, and `@clerk/clerk-js@5.35.0` or later.
+> Depending on the SDK you're using, this feature requires `@clerk/nextjs@6.12.7` or later, `@clerk/clerk-react@5.25.1` or later, and `@clerk/clerk-js@5.57.1` or later.
 
-The `useReverification()` hook is used to handle a session's reverification flow. If a request requires reverification, a modal will display, prompting the user to verify their credentials. Upon successful verification, the original request will automatically retry.
+Reverification allows you to prompt a user to verify their credentials before performing sensitive actions, even if they're already authenticated. For example, in a banking application, transferring money is considered a "sensitive action." Reverification can be used to confirm the user's identity.
+
+The `useReverification()` hook is used to handle a session's reverification flow. If a request requires reverification, a modal will display, prompting the user to verify their credentials. Upon successful verification, the original request will automatically retry. If you'd like to build a custom UI, you can use the [`onNeedsReverification`](#use-reverification-options) option.
+
+When using reverification, a user's credentials are valid for 10 minutes. Once stale, a user will need to reverify their credentials. This time duration can be customized by using the `has()` helper on the server-side. See the [guide on reverification](/docs/guides/reverification) for more information.
 
 ## Parameters
 
@@ -17,7 +20,7 @@ The `useReverification()` hook is used to handle a session's reverification flow
   - `fetcher`
   - `Fetcher extends (...args: any[]) => Promise<any>`
 
-  The fetcher function.
+  A function that returns a promise.
 
   ---
 
@@ -30,127 +33,344 @@ The `useReverification()` hook is used to handle a session's reverification flow
 ### `UseReverificationOptions`
 
 <Properties>
-  - `onCancel?`
-  - `() ⇒ void`
+  - `onNeedsReverification?`
+  - <code>(\{ complete, cancel, level }: [NeedsReverificationParameters](#needs-reverification-parameters)) => void</code>
 
-  A callback function that is invoked when the user cancels the reverification process.
+  Handler for the reverification process. Opts out of using the default UI. Use this to build a custom UI.
+</Properties>
+
+### `NeedsReverificationParameters`
+
+<Properties>
+  - `complete`
+  - `() => void`
+
+  Marks the reverification process as complete and retries the original request.
 
   ---
 
-  - `throwOnCancel?`
-  - `boolean`
+  - `cancel`
+  - `() => void`
 
-  Determines if an error should throw when the user cancels the reverification process. Defaults to `false`.
+  Marks the reverification process as cancelled and rejects the original request.
+
+  ---
+
+  - `level`
+  - `"first_factor" | "second_factor" | "multi_factor" | undefined`
+
+  The verification level required for the reverification process.
 </Properties>
 
 ## Returns
 
-The `useReverification()` hook returns an array with the "enhanced" fetcher.
+<Properties>
+  - `(...args: any[]) => Promise<any>`
 
-## How to use the `useReverification()` hook
+  The action returns the response from the fetcher function.
+</Properties>
 
-### Handle cancellation of the reverification process
+## Examples
 
-The following example demonstrates how to handle scenarios where a user cancels the reverification flow, such as closing the modal, which might result in `myData` being `null`.
+> [!TIP]
+> For more dedicated examples, such as handling reverification on the server-side, see the [guide on reverification](/docs/guides/reverification).
 
-In the following example, `myFetcher` would be a function in your backend that fetches data from the route that requires reverification. See the [guide on how to require reverification](/docs/guides/reverification) for more information.
+The `useReverification()` hook displays a prebuilt UI when the user needs to reverify their credentials. You can also build a custom UI to handle the reverification process yourself. Use the following tabs to see examples of either option.
 
-<Tabs items={['React', 'Next.js']}>
+<Tabs items={["Prebuilt UI", "Custom UI"]}>
   <Tab>
-    ```tsx {{ filename: 'src/components/MyButton.tsx' }}
-    import { useReverification } from '@clerk/react'
+    ### Handle reverification for an action
 
-    export function MyButton() {
-      const [enhancedFetcher] = useReverification(myFetcher)
+    The following example demonstrates how to use the `useReverification()` hook to require a user to reverify their credentials before being able to update their primary email address. It also demonstrates how to handle the cancellation of the reverification process.
 
-      const handleClick = async () => {
-        const myData = await enhancedFetcher()
-        // If `myData` is null, the user canceled the reverification process
-        // You can choose how your app responds. This example returns null.
-        if (!myData) return
-      }
+    This example uses React, but can be adapted for other React-based frameworks, like Next.js.
 
-      return <button onClick={handleClick}>Update User</button>
-    }
-    ```
-  </Tab>
+    ```tsx {{ filename: 'src/components/UpdateUserEmail.tsx', collapsible: true }}
+    import { useReverification, useUser } from '@clerk/clerk-react'
+    import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/clerk-react/errors'
 
-  <Tab>
-    ```tsx {{ filename: 'components/MyButton.tsx' }}
-    'use client'
+    export function UpdateUserEmail() {
+      // Use `useUser()` to get the current user's `User` object
+      // `User` includes the `update()` method to update the user's primary email address
+      const { user } = useUser()
 
-    import { useReverification } from '@clerk/nextjs'
+      // Use `useReverification()` to enhance the `update()` method
+      // to handle the reverification process
+      const changePrimaryEmail = useReverification((emailAddressId: string) =>
+        user?.update({ primaryEmailAddressId: emailAddressId }),
+      )
 
-    export function MyButton() {
-      const [enhancedFetcher] = useReverification(myFetcher)
-
-      const handleClick = async () => {
-        const myData = await enhancedFetcher()
-        // If `myData` is null, the user canceled the reverification process
-        // You can choose how your app responds. This example returns null.
-        if (!myData) return
-      }
-
-      return <button onClick={handleClick}>Update User</button>
-    }
-    ```
-  </Tab>
-</Tabs>
-
-### Handle `throwOnCancel`
-
-When `throwOnCancel` is set to `true`, the fetcher will throw a `ClerkRuntimeError` with the code `"reverification_cancelled"` if the user cancels the reverification flow (for example, by closing the modal). This error can be caught and handled according to your app's needs. For example, by displaying a toast notification to the user or silently ignoring the cancellation.
-
-In this example, `myFetcher` would be a function in your backend that fetches data from the route that requires reverification. See the [guide on how to require reverification](/docs/guides/reverification) for more information.
-
-<Tabs items={['React', 'Next.js']}>
-  <Tab>
-    ```tsx {{ filename: 'src/components/MyButton.tsx' }}
-    import { useReverification } from '@clerk/clerk-react'
-    import { isClerkRuntimeError } from '@clerk/clerk-react/errors'
-
-    export function MyButton() {
-      const [enhancedFetcher] = useReverification(myFetcher, { throwOnCancel: true })
-
-      const handleClick = async () => {
+      const handleClick = async (emailAddressId: string) => {
         try {
-          const myData = await enhancedFetcher()
+          await changePrimaryEmail(emailAddressId)
         } catch (e) {
           // Handle if user cancels the reverification process
-          if (isClerkRuntimeError(e) && e.code === 'reverification_cancelled') {
+          if (isClerkRuntimeError(e) && isReverificationCancelledError(e)) {
             console.error('User cancelled reverification', e.code)
           }
+
+          // Handle other errors
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(e, null, 2))
         }
       }
 
-      return <button onClick={handleClick}>Update user</button>
+      return (
+        <div>
+          <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
+
+          <ul>
+            {user?.emailAddresses.map((email) => (
+              <li key={email.id}>
+                <span>{email.emailAddress}</span>
+                {email.emailAddress !== user?.primaryEmailAddress?.emailAddress && (
+                  <button onClick={() => handleClick(email.id)}>Make primary</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    ```
+
+    ### Handle reverification for a fetcher function
+
+    The following example demonstrates how to use the `useReverification()` hook to enhance a fetcher function that fetches data from a route that requires reverification. For examples on how to set up a route that requires reverification, see the [guide on reverification](/docs/guides/reverification).
+
+    This example uses React, but can be adapted for other React-based frameworks, like Next.js.
+
+    ```tsx {{ filename: 'src/components/AccountBalance.tsx' }}
+    import { useReverification, useUser } from '@clerk/clerk-react'
+    import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/clerk-react/errors'
+    import { useState } from 'react'
+
+    export function UpdateUserEmail() {
+      const [balance, setBalance] = useState<number | null>(null)
+      const accountBalance = useReverification(() => fetch('/api/balance'))
+
+      const handleClick = async () => {
+        try {
+          const accountBalanceResponse = await accountBalance()
+
+          setBalance(accountBalanceResponse.amount)
+        } catch (e) {
+          // Handle if user cancels the reverification process
+          if (isClerkRuntimeError(e) && isReverificationCancelledError(e)) {
+            console.error('User cancelled reverification', e.code)
+          }
+
+          // Handle other errors
+          // See https://clerk.com/docs/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(e, null, 2))
+        }
+      }
+
+      return (
+        <div>
+          <span>Your account balance is {balance ? `$${balance}` : '$******'}</span>
+          <button onClick={() => handleClick()}>See account balance</button>
+        </div>
+      )
     }
     ```
   </Tab>
 
   <Tab>
-    ```tsx {{ filename: 'components/MyButton.tsx' }}
-    'use client'
+    The following example demonstrates how to build a custom UI when using the `useReverification()` hook. In the example, the `useReverification()` hook is used to require a user to reverify their credentials before being able to update their primary email address. It requires two components: the `<UpdateUserEmail />` component displays the list of email addresses to choose from and it renders the second component, `<VerificationComponent />`, which handles the reverification process.
 
-    import { useReverification } from '@clerk/nextjs'
-    import { isClerkRuntimeError } from '@clerk/nextjs/errors'
+    The example handles first factor verification using an email code, so you will need to have the [email code verification method](/docs/authentication/configuration/sign-up-sign-in-options#verification-methods) enabled for your application. But you can adapt this example to handle any type of verification level or strategy.
 
-    export function MyButton() {
-      const [enhancedFetcher] = useReverification(myFetcher, { throwOnCancel: true })
+    This example uses React, but can be adapted for other React-based frameworks, like Next.js.
 
-      const handleClick = async () => {
-        try {
-          const myData = await enhancedFetcher()
-        } catch (e) {
-          // Handle if user cancels the reverification process
-          if (isClerkRuntimeError(e) && e.code === 'reverification_cancelled') {
-            console.error('User cancelled reverification', e.code)
+    <Tabs items={["UpdateUserEmail", "VerificationComponent"]}>
+      <Tab>
+        The `<UpdateUserEmail />` component uses `useReverification()` to enhance the `update()` method, requiring the user to reverify their credentials before being able to update their primary email address.
+
+        The `useReverification()` hook provides the `onNeedsReverification` option, which is a handler for building a custom UI. It provides four properties: `level`, `complete`, `cancel`, and `inProgress`. The example tracks these using the `verificationState` state variable.
+
+        - The `level` property determines the verification level required for the reverification process. This example only handles first factor verification, which is done in the `<VerificationComponent>` component.
+        - The `complete` and `cancel` properties are the steps of the reverification process, which is also done in the `<VerificationComponent>` component.
+        - The `inProgress` property is used to track the state of the reverification process. When the user selects the "Make primary" button, it triggers the reverification process and sets the `inProgress` property is `true`, which displays the `<VerificationComponent>` component.
+
+        ```tsx {{ filename: 'src/components/UpdateUserEmail.tsx', collapsible: true }}
+        import { useReverification, useUser } from '@clerk/clerk-react'
+        import { isClerkRuntimeError, isReverificationCancelledError } from '@clerk/clerk-react/errors'
+        import { useState } from 'react'
+        import { SessionVerificationLevel } from '@clerk/types'
+        import { VerificationComponent } from './VerificationComponent'
+
+        export function UpdateUserEmail() {
+          // Use `useUser()` to get the current user's `User` object
+          // `User` includes the `update()` method to update the user's primary email address
+          const { user } = useUser()
+
+          // TODO: Update to use exported type once available
+          const [verificationState, setVerificationState] = useState<
+            | {
+                complete: () => void
+                cancel: () => void
+                level: SessionVerificationLevel | undefined
+                inProgress: boolean
+              }
+            | undefined
+          >(undefined)
+
+          // Use `useReverification()` to enhance the `update()` method
+          // to handle the reverification process
+          const changePrimaryEmail = useReverification(
+            (emailAddressId: string) => user?.update({ primaryEmailAddressId: emailAddressId }),
+            {
+              onNeedsReverification: ({ complete, cancel, level }) => {
+                setVerificationState({
+                  complete,
+                  cancel,
+                  level,
+                  inProgress: true,
+                })
+              },
+            },
+          )
+
+          const handleClick = async (emailAddressId: string) => {
+            try {
+              await changePrimaryEmail(emailAddressId)
+            } catch (e) {
+              // Handle if user cancels the reverification process
+              if (isClerkRuntimeError(e) && isReverificationCancelledError(e)) {
+                console.error('User cancelled reverification', e.code)
+              }
+
+              // Handle other errors
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(e, null, 2))
+            }
           }
-        }
-      }
 
-      return <button onClick={handleClick}>Update user</button>
-    }
-    ```
+          return (
+            <div>
+              <span>Your primary email address is {user?.primaryEmailAddress?.emailAddress}</span>
+
+              <ul>
+                {user?.emailAddresses.map((email) => (
+                  <li key={email.id}>
+                    <span>{email.emailAddress}</span>
+                    {user?.primaryEmailAddressId !== email.id && (
+                      <button onClick={() => handleClick(email.id)}>Make primary</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {verificationState?.inProgress && (
+                <VerificationComponent
+                  level={verificationState?.level}
+                  onComplete={() => {
+                    verificationState.complete()
+                    setVerificationState(undefined)
+                  }}
+                  onCancel={() => {
+                    verificationState.cancel()
+                    setVerificationState(undefined)
+                  }}
+                />
+              )}
+            </div>
+          )
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        The `<VerificationComponent />` component handles the reverification process. It uses the `level` property to determine the verification level, which is set to `first_factor`. First, it finds the determined starting first factor from the supported first factors. Then, it prepares the first factor verification using the `strategy` (`email_code` in this case) and `emailAddressId` properties. Finally, it attempts to verify the session with email code provided by the user. If the verification is successful, the `onComplete()` handler is called to complete the reverification process.
+
+        ```tsx {{ filename: 'src/components/VerificationComponent.tsx', collapsible: true }}
+        import { useEffect, useRef, useState } from 'react'
+        import { useSession } from '@clerk/clerk-react'
+        import {
+          EmailCodeFactor,
+          SessionVerificationLevel,
+          SessionVerificationResource,
+        } from '@clerk/types'
+
+        export function VerificationComponent({
+          level = 'first_factor',
+          onComplete,
+          onCancel,
+        }: {
+          level: SessionVerificationLevel | undefined
+          onComplete: () => void
+          onCancel: () => void
+        }) {
+          const { session } = useSession()
+          const [code, setCode] = useState<string>('')
+          const reverificationRef = useRef<SessionVerificationResource | undefined>(undefined)
+          const [determinedStartingFirstFactor, setDeterminedStartingFirstFactor] = useState<
+            EmailCodeFactor | undefined
+          >()
+
+          useEffect(() => {
+            if (reverificationRef.current) {
+              return
+            }
+
+            session?.startVerification({ level }).then(async (response) => {
+              reverificationRef.current = response
+              await prepareEmailVerification(response)
+            })
+          }, [])
+
+          const prepareEmailVerification = async (verificationResource: SessionVerificationResource) => {
+            // To simplify the example we will only handle the first factor verification
+            if (verificationResource.status === 'needs_first_factor') {
+              // Determine the starting first factor from the supported first factors
+              const determinedStartingFirstFactor = verificationResource.supportedFirstFactors?.filter(
+                (factor) => factor.strategy === 'email_code',
+              )[0]
+
+              if (determinedStartingFirstFactor) {
+                setDeterminedStartingFirstFactor(determinedStartingFirstFactor)
+                // Prepare the first factor verification with the determined starting first factor
+                await session?.prepareFirstFactorVerification({
+                  strategy: determinedStartingFirstFactor.strategy,
+                  emailAddressId: determinedStartingFirstFactor?.emailAddressId,
+                })
+              }
+            }
+          }
+
+          const handleVerificationAttempt = async () => {
+            try {
+              // Attempt to verify the session with the provided code
+              await session?.attemptFirstFactorVerification({
+                strategy: 'email_code',
+                code,
+              })
+              onComplete()
+            } catch (e) {
+              // Any error from the attempt to verify the session can be handled here
+              console.error('Error verifying session', e)
+            }
+          }
+
+          if (!determinedStartingFirstFactor) {
+            return null
+          }
+
+          return (
+            <div>
+              <p>Enter verification code sent to {determinedStartingFirstFactor.safeIdentifier || ''}</p>
+              <input type="number" name="code" onChange={(e) => setCode(e.target.value)} />
+              <button onClick={async () => handleVerificationAttempt()}>Complete</button>
+              <button onClick={() => onCancel()}>Cancel</button>
+            </div>
+          )
+        }
+        ```
+      </Tab>
+    </Tabs>
   </Tab>
 </Tabs>

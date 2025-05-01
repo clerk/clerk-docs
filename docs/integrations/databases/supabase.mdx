@@ -16,20 +16,19 @@ description: Learn how to integrate Clerk into your Supabase application.
       icon: "code-bracket",
     },
   ]}
->
-  - Use Clerk to authenticate access to your Supabase data
-  - Access Clerk user IDs in your Supabase RLS policies
-  - Customize a Clerk JWT template to suit your use case with Supabase
-</TutorialHero>
-
-> [!IMPORTANT]
-> See the [demo repo](https://github.com/clerk/clerk-supabase-nextjs) for a full example of how to integrate Supabase with Clerk in a Next.js app.
+  exampleRepo={[
+    {
+      title: "Supabase, Next.js, and Clerk Demo",
+      link: "https://github.com/clerk/clerk-supabase-nextjs",
+      icon: "github",
+    },
+  ]}
+/>
 
 Integrating Supabase with Clerk gives you the benefits of using a Supabase database while leveraging Clerk's authentication, prebuilt components, and webhooks. To get the most out of Supabase with Clerk, you must implement custom [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security) (RLS) policies.
 
 RLS works by validating database queries according to the restrictions defined in the RLS policies applied to the table. This guide will show you how to create RLS policies that restrict access to data based on the user's Clerk ID. This way, users can only access data that belongs to them. To set this up, you will:
 
-- Create a function in Supabase to parse the Clerk user ID from the authentication token.
 - Create a `user_id` column that defaults to the Clerk user's ID when new records are created.
 - Create policies to restrict what data can be read and inserted.
 - Use the Clerk Supabase integration helper in your code to authenticate with Supabase and execute queries.
@@ -39,159 +38,57 @@ This guide will have you create a new table in your [Supabase project](https://s
 > [!TIP]
 > This integration restricts what data authenticated users can access in the database, but does not synchronize user records between Clerk and Supabase. To send additional data from Clerk to your Supabase database, use [webhooks](/docs/webhooks/overview).
 
-## Choose your own adventure
-
-For interacting with the Supabase dashboard, you can either use the **Supabase interface** or the **SQL Editor**. The **SQL Editor** is a more direct way to interact with your database, but the **Supabase interface** provides a more user-friendly experience.
-
 <Steps>
-  ### Create a SQL query that checks the user ID
+  ## Set up Clerk as a Supabase third-party auth provider
 
-  Create a function named `requesting_user_id()` that will parse the Clerk user ID from the authentication token. This function will be used to set the default value of `user_id` in a table and in the RLS policies to ensure the user can only access their data.
+  For your Clerk session token to work with Supabase, you need to set up Clerk as a third-party auth provider in Supabase.
 
-  <Tabs items={["Supabase interface", "SQL Editor"]}>
-    <Tab>
-      1. In the sidenav of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **Database** > **Functions**.
-      1. Select **Create a new function**.
-      1. In the **Add a new function** sheet, make the following changes:
-         - Set **Name of function** to `requesting_user_id`.
-         - Set **Return type** to `text`.
-         - Toggle **Show advanced settings** on.
-         - Set **Language** to `sql`.
-         - Populate the **Definition** with the following sql:
-           ```sql
-           SELECT NULLIF(
-               current_setting('request.jwt.claims', true)::json->>'sub',
-               ''
-           )::text;
-           ```
-         - Select **Confirm**.
-    </Tab>
+  1. In the Clerk Dashboard, navigate to the [Supabase integration setup](https://dashboard.clerk.com/setup/supabase).
+  1. Select your configuration options, and then select **Activate Supabase integration**. This will reveal the **Clerk domain** for your Clerk instance.
+  1. Save the **Clerk domain**.
+  1. In the Supabase Dashboard, navigate to [**Authentication > Sign In / Up**](https://supabase.com/dashboard/project/_/auth/third-party).
+  1. Select **Add provider** and select **Clerk** from the list of providers.
+  1. Paste the **Clerk domain** you copied from the Clerk Dashboard.
 
-    <Tab>
-      1. In the sidenav of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**, and paste the following into the editor:
-         ```sql
-         CREATE OR REPLACE FUNCTION requesting_user_id()
-         RETURNS TEXT AS $$
-             SELECT NULLIF(
-                 current_setting('request.jwt.claims', true)::json->>'sub',
-                 ''
-             )::text;
-         $$ LANGUAGE SQL STABLE;
-         ```
-      1. To execute the query and create the `requesting_user_id()` function, select **Run**.
-    </Tab>
-  </Tabs>
+  ## Set up RLS policies using Clerk session token data
 
-  ### Create a table and enable RLS on it
+  You can access Clerk session token data in Supabase using the built-in `auth.jwt()` function. This is necessary to create custom RLS policies to restrict database access based on the requesting user.
 
-  Next, you'll create a `tasks` table and enable RLS on that table. The `tasks` table will also contain a `user_id` column that will use the `requesting_user_id()` function you just created as it's default value. This column will be used in the RLS policies to only return or modify records scoped to the user's account.
+  1. Create a table to enable RLS on. Open [Supabase's SQL editor](https://supabase.com/dashboard/project/_/sql/new) and run the following queries. This example creates a `tasks` table with a `user_id` column that maps to a Clerk user ID.
+     ```sql
+     -- Create a "tasks" table with a user_id column that maps to a Clerk user ID
+     create table tasks(
+       id serial primary key,
+       name text not null,
+       user_id text not null default auth.jwt()->>'sub'
+     );
 
-  <Tabs items={["Supabase interface", "SQL Editor"]}>
-    <Tab>
-      In the left navigation, select **Table Editor** and select **Create a new table**. In the sheet that appears in the right, configure the following settings:
+     -- Enable RLS on the table
+     alter table "tasks" enable row level security;
+     ```
+  1. Create two policies that restrict access to the `tasks` table based on the requesting user's Clerk ID. These policies allow users to create tasks for themselves and view their own tasks.
+     ```sql
+     create policy "User can view their own tasks"
+     on "public"."tasks"
+     for select
+     to authenticated
+     using (
+     ((select auth.jwt()->>'sub') = (user_id)::text)
+     );
 
-      - Name: `tasks`.
-      - Toggle on **Enable Row Level Security (RLS).**
-      - Set up the **Columns** with the following configuration:
-        | Name | Type | Default value | Primary | Additional settings (Gear icon) |
-        | - | - | - | - | - |
-        | id | int8 | _NULL_ | Checked | Is identity |
-        | name | text | | | |
-        | user\_id | text | requesting\_user\_id() | | |
-      - Select **Save**.
-    </Tab>
+     create policy "Users must insert their own tasks"
+     on "public"."tasks"
+     as permissive
+     for insert
+     to authenticated
+     with check (
+     ((select auth.jwt()->>'sub') = (user_id)::text)
+     );
+     ```
 
-    <Tab>
-      1. In the sidenav of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**.
-      1. To create the `"tasks"` table and enable RLS on it, run the following two queries:
+  ## Install the Supabase client library
 
-      ```sql
-      -- Create a "tasks" table
-      create table tasks(
-        id serial primary key,
-        name text not null,
-        user_id text not null default requesting_user_id()
-      );
-
-      -- Enable RLS on the table
-      alter table "tasks" enable row level security;
-      ```
-    </Tab>
-  </Tabs>
-
-  ### Create ID-based RLS policies
-
-  Create RLS policies that permit users to read and insert content associated with their user IDs only.
-
-  <Tabs items={["Supabase interface", "SQL Editor"]}>
-    <Tab>
-      In the sidenav, navigate to **Authentication** > **Policies**. Create policies that allow your users to read and insert data into the `tasks` table:
-
-      1. Select **Create policy** to create the `SELECT` policy:
-         - Name: "Select tasks policy".
-         - For **Policy Command**, select **SELECT**.
-         - For **Target roles**, select **authenticated**.
-         - Replace the "-- Provide a SQL expression for the using statement" with the following:
-           ```sql {{ filename: 'Supabase policy editor' }}
-           requesting_user_id() = user_id
-           ```
-         - Select **Save policy**.
-      1. Select **Create policy** to create the `INSERT` policy:
-         - Name: "Insert task policy".
-         - For **Policy Command**, select **INSERT**.
-         - For **Target roles**, select **authenticated**.
-         - Replace the "-- Provide a SQL expression for the with check statement" with the following:
-           ```sql {{ filename: 'Supabase policy editor' }}
-           requesting_user_id() = user_id
-           ```
-         - Select **Save policy**.
-    </Tab>
-
-    <Tab>
-      1. In the sidenav of your [Supabase dashboard](https://supabase.com/dashboard/projects), navigate to **SQL Editor**
-      1. Run the following queries to add policies for all statements issued on `"tasks"`:
-
-      ```sql
-      -- This policy will enforce that only tasks where the `user_id` matches the Clerk user ID are returned.
-      CREATE POLICY "Select tasks policy" ON "public"."tasks" AS PERMISSIVE FOR
-      SELECT
-        TO authenticated USING (requesting_user_id () = user_id);
-
-      -- This policy will enforce the `user_id` field on INSERT statements matches the Clerk user ID.
-      CREATE POLICY "Insert tasks policy" ON "public"."tasks" AS PERMISSIVE FOR INSERT TO authenticated
-      WITH
-        CHECK (requesting_user_id () = user_id);
-      ```
-    </Tab>
-  </Tabs>
-
-  ### Get your Supabase JWT Secret Key
-
-  To give users access to your data, Supabase's API requires an authentication token. Your Clerk project can generate these authentication tokens, but it needs your Supabase project's JWT Secret Key first.
-
-  To find the JWT Secret Key:
-
-  1. In the sidenav, navigate to **Project Settings > API**.
-  1. Under the **JWT Settings** section, save the value in the **JWT Secret** field somewhere secure. This value will be used in the next step.
-
-  ### Create a Supabase JWT template
-
-  Clerk's JWT templates allow you to generate a new valid Supabase authentication token for each signed in user. These tokens allow authenticated users to access your data with Supabase's API.
-
-  To create a JWT template for Supabase:
-
-  1. In the Clerk Dashboard, navigate to the [**JWT templates**](https://dashboard.clerk.com/last-active?path=jwt-templates) page.
-  1. Select the **New template** button, then select **Supabase** from the list of options.
-  1. Configure your template:
-     - The value of the **Name** field will be required when using the template in your code. For this tutorial, name it `supabase`.
-     - **Signing algorithm** will be `HS256` by default. This algorithm is required to use JWTs with Supabase. [Learn more in their docs](https://supabase.com/docs/guides/resources/glossary#jwt-signing-secret).
-     - Under **Signing key**, add the value of your Supabase **JWT Secret Key** from [the previous step](#get-your-supabase-jwt-secret-key).
-     - You can leave all other fields at their default settings or customize them to your needs. See the [JWT template guide](/docs/backend-requests/jwt-templates#creating-a-template) to learn more about these settings.
-     - Select **Save** from the notification bubble to complete setup.
-
-  ### Install the Supabase client library
-
-  Add the Supabase client library to your project.
+  Run the following command to add the Supabase client library to your application.
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
     ```bash {{ filename: 'terminal' }}
@@ -211,26 +108,26 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     ```
   </CodeBlockTabs>
 
-  ### Set up your environment variables
+  ## Set up your environment variables
 
-  1. In the sidenav of the [Supabase dashboard](https://supabase.com/dashboard/projects), select **Settings** > **API**.
+  1. In the Supabase dashboard, navigate to [**Project Settings > Data API**](https://supabase.com/dashboard/project/_/settings/api).
   1. Add the **Project URL** to your `.env` file as `SUPABASE_URL`.
   1. In the **Project API keys** section, add the value beside `anon` `public` to your `.env` file as `SUPABASE_KEY`.
 
-  > [!IMPORTANT]
-  > If you are using Next.js, the `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code.
+  <If sdk="nextjs">
+    > [!IMPORTANT]
+    > The `NEXT_PUBLIC_` prefix is required for environment variables that are used in the client-side code, so add this prefix to these variables.
+  </If>
 
-  ### Fetch Supabase data in your code
+  ## Fetch Supabase data in your code
 
-  The following example shows the list of tasks for the user and allows the user to add new tasks.
-
-  The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client, but modifies it to inject the Clerk token you [created with the Supabase JWT template](#create-a-supabase-jwt-template) into the request headers sent to Supabase. The `requesting_user_id()` function that was created in the Supabase dashboard will parse this token to use it when querying data from the `tasks` table.
+  In your app's `page.tsx`, paste the following code. This example shows the list of tasks for the user and allows the user to add new tasks. The `createClerkSupabaseClient()` function uses [Supabase's `createClient()` method](https://supabase.com/docs/reference/javascript/initializing) to initialize a new Supabase client with access to Clerk's session token.
 
   <Tabs items={["Client-side rendering", "Server-side rendering"]}>
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to access the [`useUser()`](/docs/hooks/use-user) and [`useSession()`](/docs/hooks/use-session) hooks, but you can adapt this code to work with any React-based Clerk SDK.
 
-      ```tsx {{ filename: 'app/page.tsx' }}
+      ```tsx {{ filename: 'app/page.tsx', collapsible: true }}
       'use client'
       import { useEffect, useState } from 'react'
       import { useSession, useUser } from '@clerk/nextjs'
@@ -240,34 +137,20 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
         const [tasks, setTasks] = useState<any[]>([])
         const [loading, setLoading] = useState(true)
         const [name, setName] = useState('')
-        // The `useUser()` hook will be used to ensure that Clerk has loaded data about the logged in user
+        // The `useUser()` hook is used to ensure that Clerk has loaded data about the signed in user
         const { user } = useUser()
-        // The `useSession()` hook will be used to get the Clerk session object
+        // The `useSession()` hook is used to get the Clerk session object
+        // The session object is used to get the Clerk session token
         const { session } = useSession()
 
-        // Create a custom supabase client that injects the Clerk Supabase token into the request headers
+        // Create a custom Supabase client that injects the Clerk session token into the request headers
         function createClerkSupabaseClient() {
           return createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_KEY!,
             {
-              global: {
-                // Get the custom Supabase token from Clerk
-                fetch: async (url, options = {}) => {
-                  const clerkToken = await session?.getToken({
-                    template: 'supabase',
-                  })
-
-                  // Insert the Clerk Supabase token into the headers
-                  const headers = new Headers(options?.headers)
-                  headers.set('Authorization', `Bearer ${clerkToken}`)
-
-                  // Now call the default fetch
-                  return fetch(url, {
-                    ...options,
-                    headers,
-                  })
-                },
+              async accessToken() {
+                return session?.getToken() ?? null
               },
             },
           )
@@ -277,7 +160,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
         const client = createClerkSupabaseClient()
 
         // This `useEffect` will wait for the User object to be loaded before requesting
-        // the tasks for the logged in user
+        // the tasks for the signed in user
         useEffect(() => {
           if (!user) return
 
@@ -306,7 +189,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
 
             {loading && <p>Loading...</p>}
 
-            {!loading && tasks.length > 0 && tasks.map((task: any) => <p>{task.name}</p>)}
+            {!loading && tasks.length > 0 && tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
 
             {!loading && tasks.length === 0 && <p>No tasks found</p>}
 
@@ -330,37 +213,19 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     <Tab>
       The following example uses the [Next.js SDK](/docs/references/nextjs/overview) to demonstrate how to integrate Supabase with Clerk in a **server-side rendered** application.
 
-      The `createClerkSupabaseClientSsr()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#use-auth-for-data-fetching) method to get the Clerk token and inject it into the request headers sent to Supabase.
+      The `createServerSupabaseClient()` function is stored in a separate file so that it can be re-used in multiple places, such as within `page.tsx` or a Server Action file. This function uses the [`auth().getToken()`](/docs/references/nextjs/auth#data-fetching-with-get-token) method to pass the Clerk session token to the Supabase client.
 
-      ```ts {{ filename: 'src/app/ssr/client.ts' }}
+      ```ts {{ filename: 'app/ssr/client.ts' }}
       import { auth } from '@clerk/nextjs/server'
       import { createClient } from '@supabase/supabase-js'
 
-      export async function createClerkSupabaseClientSsr() {
-        // The `useAuth()` hook is used to access the `getToken()` method
-        const { getToken } = await auth()
-
+      export function createServerSupabaseClient() {
         return createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_KEY!,
           {
-            global: {
-              // Get the custom Supabase token from Clerk
-              fetch: async (url, options = {}) => {
-                const clerkToken = await getToken({
-                  template: 'supabase',
-                })
-
-                // Insert the Clerk Supabase token into the headers
-                const headers = new Headers(options?.headers)
-                headers.set('Authorization', `Bearer ${clerkToken}`)
-
-                // Now call the default fetch
-                return fetch(url, {
-                  ...options,
-                  headers,
-                })
-              },
+            async accessToken() {
+              return (await auth()).getToken()
             },
           },
         )
@@ -370,13 +235,13 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
       The following files render the `/ssr` page and handle the "Add task" form submission. Use the following tabs to view the code for each page.
 
       <CodeBlockTabs options={['page.tsx', 'actions.ts', 'AddTaskForm.tsx']}>
-        ```tsx {{ filename: 'src/app/ssr/page.tsx' }}
-        import { createClerkSupabaseClientSsr } from './client'
+        ```tsx {{ filename: 'app/ssr/page.tsx' }}
         import AddTaskForm from './AddTaskForm'
+        import { createServerSupabaseClient } from './client'
 
         export default async function Home() {
           // Use the custom Supabase client you created
-          const client = createClerkSupabaseClientSsr()
+          const client = createServerSupabaseClient()
 
           // Query the 'tasks' table to render the list of tasks
           const { data, error } = await client.from('tasks').select()
@@ -389,7 +254,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
             <div>
               <h1>Tasks</h1>
 
-              <div>{tasks?.map((task: any) => <p>{task.name}</p>)}</div>
+              <div>{tasks?.map((task: any) => <p key={task.id}>{task.name}</p>)}</div>
 
               <AddTaskForm />
             </div>
@@ -397,14 +262,14 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
         }
         ```
 
-        ```ts {{ filename: 'src/app/ssr/actions.ts' }}
+        ```ts {{ filename: 'app/ssr/actions.ts' }}
         'use server'
 
-        import { createClerkSupabaseClientSsr } from './client'
-
-        const client = createClerkSupabaseClientSsr()
+        import { createServerSupabaseClient } from './client'
 
         export async function addTask(name: string) {
+          const client = createServerSupabaseClient()
+
           try {
             const response = await client.from('tasks').insert({
               name,
@@ -418,7 +283,7 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
         }
         ```
 
-        ```ts {{ filename: 'src/app/ssr/AddTaskForm.tsx' }}
+        ```ts {{ filename: 'app/ssr/AddTaskForm.tsx' }}
         'use client'
         import React, { useState } from 'react'
         import { addTask } from './actions'
@@ -454,9 +319,22 @@ For interacting with the Supabase dashboard, you can either use the **Supabase i
     </Tab>
   </Tabs>
 
-  ### Test your integration
+  ## Test your integration
 
   Run your project and sign in. Test creating and viewing tasks. Sign out and sign in as a different user, and repeat.
 
   If you have the same tasks across multiple accounts, double check that RLS is enabled, or that the RLS policies were properly created. Check the table in the Supabase dashboard. You should see all the tasks between both users, but with differing values in the `user_id` column.
 </Steps>
+
+## What does the Clerk Supabase integration do?
+
+Requests to Supabase's APIs require that authenticated users have a `"role": "authenticated"` JWT claim. When enabled, the Clerk Supabase integration adds this claim to your instance's generated session tokens.
+
+## Supabase JWT template deprecation
+
+As of April 1st, 2025, the Clerk Supabase JWT template is considered deprecated. Going forward, the native Supabase integration is the recommended way to integrate Clerk with Supabase. The native integration has a number of benefits over the JWT template:
+
+- No need to fetch a new token for each Supabase request
+- No need to share your Supabase JWT secret key with Clerk
+
+For more information on the benefits of the native integration, see [Supabase's documentation on third-party auth providers](https://supabase.com/docs/guides/auth/third-party/overview).

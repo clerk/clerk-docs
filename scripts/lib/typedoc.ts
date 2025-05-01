@@ -12,9 +12,9 @@ import type { Node } from 'unist'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
-import { getTypedocsCache, type Store } from './store'
 import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
+import { getTypedocsCache, type Store } from './store'
+import { removeMdxSuffix } from './utils/removeMdxSuffix'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.typedocPath, {

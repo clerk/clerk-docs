@@ -22,7 +22,7 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     try {
       const now = performance.now()
 
-      const output = await buildFunc(store, config)
+      const output = await buildFunc(config, store)
 
       if (config.flags.controlled) {
         console.info('---rebuild-complete---')

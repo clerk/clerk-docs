@@ -162,7 +162,6 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -195,7 +194,6 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -225,7 +223,6 @@ title: Simple Test
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -273,7 +270,6 @@ test`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -309,7 +305,6 @@ Testing with a simple page.`,
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -346,7 +341,6 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -395,7 +389,6 @@ Authentication login documentation.`,
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -433,7 +426,6 @@ title: Duplicate Headings
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -473,7 +465,6 @@ sdk: react, nextjs
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -511,7 +502,6 @@ sdk: react, nextjs
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -550,7 +540,6 @@ description: Quickstart page
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -586,7 +575,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -626,7 +614,6 @@ title: Simple Test
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -658,7 +645,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -705,7 +691,6 @@ description: This is a test page
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -740,7 +725,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -780,7 +764,6 @@ title: Core Page
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -812,7 +795,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -855,7 +837,6 @@ title: Simple Test
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -910,7 +891,6 @@ Content for section 2.`,
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -948,8 +928,6 @@ description: This is a test page
     ])
 
     const output = await build(
-      createBlankStore(),
-
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -980,8 +958,6 @@ description: This is a test page
     ])
 
     const output = await build(
-      createBlankStore(),
-
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1034,7 +1010,6 @@ sdk: react
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1066,7 +1041,6 @@ title: React Doc
 
     // This should throw an error because the file path starts with an SDK name
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1102,7 +1076,6 @@ description: \`This frontmatter has an unbalanced quote
 
     // This should throw a parsing error
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1133,7 +1106,6 @@ description: This frontmatter is missing the required title field
 
     // This should throw an error about missing title
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1159,7 +1131,6 @@ description: This frontmatter is missing the required title field
     ])
 
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1197,7 +1168,6 @@ This page has an invalid SDK in frontmatter.`,
 
     // This should throw an error with specific message about invalid SDK
     const promise = build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1245,7 +1215,6 @@ This document doesn't have the referenced header.`,
 
     // Should complete with warnings
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1280,7 +1249,6 @@ description: This page has a description
       ])
 
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1328,7 +1296,6 @@ description: This page has a description
       ])
 
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1379,7 +1346,6 @@ description: This page has a description
 
       // Should complete without the ignored warnings
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1434,7 +1400,6 @@ description: This page has a description
 
       // Only ignore the link warning, but leave SDK warning
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1483,7 +1448,6 @@ description: This page has a description
 
       // Ignore component attribute warnings
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1528,7 +1492,6 @@ title: Missing Description
       ])
 
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1584,7 +1547,6 @@ description: The page being linked to
 
       // Ignore hash warnings
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1642,7 +1604,6 @@ description: This page has a description
       ])
 
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1687,7 +1648,6 @@ description: Test page with partial
 
       // Ignore link warnings in partials
       const output = await build(
-        createBlankStore(),
         createConfig({
           ...baseConfig,
           basePath: tempDir,
@@ -1745,7 +1705,6 @@ interface Client {
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1792,7 +1751,6 @@ interface Client {
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1836,7 +1794,7 @@ description: Generated API docs
     })
 
     // Should fail due to missing typedoc folder
-    const promise = build(createBlankStore(), configWithMissingFolder)
+    const promise = build(configWithMissingFolder)
     await expect(promise).rejects.toThrow('Typedoc folder')
   })
 
@@ -1875,7 +1833,6 @@ interface Client {
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1950,7 +1907,6 @@ interface Client {
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1992,7 +1948,6 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -2031,7 +1986,6 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -2085,7 +2039,6 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createBlankStore(),
       createConfig({
         ...baseConfig,
         basePath: tempDir,

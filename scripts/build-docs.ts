@@ -131,7 +131,7 @@ async function main() {
 
   const store = createBlankStore()
 
-  const output = await build(store, config)
+  const output = await build(config, store)
 
   if (config.flags.controlled) {
     console.info('---initial-build-complete---')
@@ -150,7 +150,7 @@ async function main() {
   }
 }
 
-export async function build(store: Store, config: BuildConfig) {
+export async function build(config: BuildConfig, store: Store = createBlankStore()) {
   // Apply currying to create functions pre-configured with config
   const ensureDir = ensureDirectory(config)
   const getManifest = readManifest(config)

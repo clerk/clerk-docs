@@ -56,6 +56,7 @@ import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
 import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
+import { isExternalLink, type ExternalLink } from './lib/external-links'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
 import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
@@ -182,6 +183,7 @@ export async function build(store: Store, config: BuildConfig) {
 
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
+  const externalLinks = new Set<ExternalLink>()
 
   // Grab all the docs links in the manifest
   await traverseTree({ items: userManifest }, async (item) => {
@@ -219,6 +221,10 @@ export async function build(store: Store, config: BuildConfig) {
     { items: userManifest, sdk: undefined as undefined | SDK[] },
     async (item, tree) => {
       if (!item.href?.startsWith(config.baseDocsLink)) {
+        if (isExternalLink(item.href)) {
+          externalLinks.add(item.href)
+        }
+
         return {
           ...item,
           // Either use the sdk of the item, or the parent group if the item doesn't have a sdk
@@ -405,7 +411,7 @@ export async function build(store: Store, config: BuildConfig) {
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, partialPath, 'partials'))
+          .use(validateAndEmbedLinks(config, docsMap, externalLinks, partialPath, 'partials'))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -437,7 +443,7 @@ export async function build(store: Store, config: BuildConfig) {
 
         const vfile = await remark()
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
+          .use(validateAndEmbedLinks(config, docsMap, externalLinks, filePath, 'typedoc'))
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -457,7 +463,7 @@ export async function build(store: Store, config: BuildConfig) {
           let node: Node | null = null
 
           const vfile = await remark()
-            .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
+            .use(validateAndEmbedLinks(config, docsMap, externalLinks, filePath, 'typedoc'))
             .use(() => (tree, vfile) => {
               node = tree
             })
@@ -488,7 +494,7 @@ export async function build(store: Store, config: BuildConfig) {
       const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
-        .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
+        .use(validateAndEmbedLinks(config, docsMap, externalLinks, filePath, 'docs', doc))
         .use(validateIfComponents(config, filePath, doc, flatSDKScopedManifest))
         .use(checkPartials(config, validatedPartials, filePath, { reportWarnings: false, embed: true }))
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
@@ -535,7 +541,7 @@ template: wide
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
+            .use(validateAndEmbedLinks(config, docsMap, externalLinks, filePath, 'docs', doc))
             .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: true }))
             .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
             .use(filterOtherSDKsContentOut(config, filePath, targetSdk))
@@ -619,6 +625,8 @@ template: wide
         })
     }
   }
+
+  console.log([...externalLinks].toSorted())
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)

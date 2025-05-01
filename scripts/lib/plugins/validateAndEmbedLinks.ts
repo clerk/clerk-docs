@@ -14,9 +14,17 @@ import { DocsMap } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
 import { findComponent } from '../utils/findComponent'
+import { type ExternalLinks, isExternalLink } from '../external-links'
 
 export const validateAndEmbedLinks =
-  (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
+  (
+    config: BuildConfig,
+    docsMap: DocsMap,
+    externalLinks: ExternalLinks,
+    filePath: string,
+    section: WarningsSection,
+    doc?: { href: string },
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     const checkCardsComponentScope = watchComponentScope('Cards')
@@ -27,7 +35,21 @@ export const validateAndEmbedLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return node
+      // if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return node
+      if (!node.url.startsWith(config.baseDocsLink)) {
+        if (isExternalLink(node.url)) {
+          externalLinks.add(node.url)
+          return node
+        }
+
+        if (doc === undefined) {
+          return node
+        }
+
+        if (!node.url.startsWith('#')) {
+          return node
+        }
+      }
       if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed

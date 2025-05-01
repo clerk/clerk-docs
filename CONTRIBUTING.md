@@ -379,25 +379,6 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 
 </details>
 
-#### SDK
-
-the `sdk` frontmatter is the best way to define what sdks a page supports. If you are writing documentation that only works under certain sdks, setting this value will indicate to the docs to only make the page available when the reader has one of the specified sdks available.
-
-```diff
-  ---
-  title: <ClerkProvider>
-+ sdk: nextjs, react
-  ---
-```
-
-This does a couple things:
-
-- The pages url gets generated out, say the above page is at `/docs/clerk-provider.mdx` then `/docs/nextjs/clerk-provider` and `/docs/expo/clerk-provider` will be generated.
-  - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
-- The page will only show up in the sidebar navigation if the reader has one of the specified sdks active.
-- Links to this page will be 'smart' and point the user towards the correct variant of the page.
-- A selector will be shown on the right side of the page, allowing the user to switch between the different versions of the page.
-
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.

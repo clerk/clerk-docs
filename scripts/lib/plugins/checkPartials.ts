@@ -27,7 +27,7 @@ export const checkPartials =
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
-    return mdastMap(tree, (node) => {
+    mdastMap(tree, (node) => {
       const partialSrc = extractComponentPropValueFromNode(
         config,
         node,

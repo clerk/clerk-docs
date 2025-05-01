@@ -9,15 +9,12 @@ import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
-import { map as mdastMap } from 'unist-util-map'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import type { BuildConfig } from './config'
 import { errorMessages, safeFail } from './error-messages'
 import { readMarkdownFile } from './io'
-import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { getPartialsCache, type Store } from './store'
-import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.partialsPath, {
@@ -58,7 +55,6 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
           },
         )
       })
-      .use(removeMdxSuffixPlugin(config))
       .process({
         path: `docs/_partials/${filePath}`,
         value: content,

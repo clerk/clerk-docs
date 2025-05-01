@@ -23,7 +23,7 @@ export const checkTypedoc =
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
-    return mdastMap(tree, (node) => {
+    mdastMap(tree, (node) => {
       const typedocSrc = extractComponentPropValueFromNode(
         config,
         node,

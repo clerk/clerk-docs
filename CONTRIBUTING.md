@@ -381,22 +381,25 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 
 #### SDK
 
-the `sdk` frontmatter is the best way to define what sdks a page supports. If you are writing documentation that only works under certain sdks, setting this value will indicate to the docs to only make the page available when the reader has one of the specified sdks available.
+The `sdk` frontmatter field defines what SDKs a page supports and makes the page visible in the sidenav only when one of those SDKs is selected by the [SDK selector](#sidenav).
+
+For example, if `nextjs` and `react` were passed to the `sdk` frontmatter field, like so:
 
 ```diff
   ---
-  title: <ClerkProvider>
+  title: `'<ClerkProvider>'`
+  description: Lorem ipsum...
 + sdk: nextjs, react
   ---
 ```
 
 This does a couple things:
 
-- The pages url gets generated out, say the above page is at `/docs/clerk-provider.mdx` then `/docs/nextjs/clerk-provider` and `/docs/expo/clerk-provider` will be generated.
+- URL's are generated for this page per specified SDK. In this case, for the `/docs/clerk-provider.mdx` file, `/docs/nextjs/clerk-provider` and `/docs/react/clerk-provider` will be generated. One for `nextjs` and one for `react`.
   - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
-- The page will only show up in the sidebar navigation if the reader has one of the specified sdks active.
-- Links to this page will be 'smart' and point the user towards the correct variant of the page.
-- A selector will be shown on the right side of the page, allowing the user to switch between the different versions of the page.
+- The page will only show up in the sidenav if the user has one of the specified SDKs "active", which means selected in the [SDK selector](#sidenav).
+- Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
+- On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
 ### Headings
 

@@ -162,6 +162,13 @@ type LinkItem = {
    * Set to "_blank" to open link in a new tab
    */
   target?: '_blank'
+
+  /**
+   * Limit this page to only show when the user has one of the specified sdks active
+   *
+   * @example ['nextjs', 'react']
+   */
+  sdk?: string[]
 }
 type SubNavItem = {
   /**
@@ -201,6 +208,13 @@ type SubNavItem = {
    * @default false
    */
   collapse?: boolean
+
+  /**
+   * Limit this group to only show when the user has one of the specified sdks active
+   *
+   * @example ['nextjs', 'react']
+   */
+  sdk?: string[]
 }
 ```
 

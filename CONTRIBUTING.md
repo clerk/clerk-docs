@@ -379,6 +379,28 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 
 </details>
 
+#### SDK
+
+The `sdk` frontmatter field defines what SDKs a page supports and makes the page visible in the sidenav only when one of those SDKs is selected by the [SDK selector](#sidenav).
+
+For example, if `nextjs` and `react` were passed to the `sdk` frontmatter field, like so:
+
+```diff
+  ---
+  title: `'<ClerkProvider>'`
+  description: Lorem ipsum...
++ sdk: nextjs, react
+  ---
+```
+
+This does a couple things:
+
+- URL's are generated for this page per specified SDK. In this case, for the `/docs/clerk-provider.mdx` file, `/docs/nextjs/clerk-provider` and `/docs/react/clerk-provider` will be generated. One for `nextjs` and one for `react`.
+  - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
+- The page will only show up in the sidenav if the user has one of the specified SDKs "active", which means selected in the [SDK selector](#sidenav).
+- Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
+- On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
+
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.

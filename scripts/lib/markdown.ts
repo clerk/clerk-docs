@@ -81,8 +81,8 @@ export const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
-      .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: true }))
-      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
+      .use(checkPartials(config, partials, filePath, { reportWarnings: false, embed: true }))
+      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
       .use(() => (tree, vfile) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
@@ -131,5 +131,6 @@ export const parseInMarkdownFile =
       headingsHashes,
       frontmatter: frontmatter as Frontmatter,
       node: node as Node,
+      fileContent,
     }
   }

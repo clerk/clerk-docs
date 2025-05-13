@@ -14,6 +14,8 @@ import reporter from 'vfile-reporter'
 import type { BuildConfig } from './config'
 import { errorMessages, safeFail } from './error-messages'
 import { readMarkdownFile } from './io'
+import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
+import { getPartialsCache, type Store } from './store'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   return readdirp.promise(config.partialsPath, {
@@ -54,6 +56,7 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
           },
         )
       })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: `docs/_partials/${filePath}`,
         value: content,
@@ -82,8 +85,9 @@ export const readPartial = (config: BuildConfig) => async (filePath: string) => 
   }
 }
 
-export const readPartialsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
+export const readPartialsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
   const read = readPartial(config)
+  const partialsCache = getPartialsCache(store)
 
-  return Promise.all(paths.map(async (markdownPath) => read(markdownPath)))
+  return Promise.all(paths.map(async (markdownPath) => partialsCache(markdownPath, () => read(markdownPath))))
 }

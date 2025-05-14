@@ -12,6 +12,8 @@ import type { Node } from 'unist'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
+import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
+import { getTypedocsCache, type Store } from './store'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 
 export const readTypedocsFolder = (config: BuildConfig) => async () => {
@@ -32,6 +34,9 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
     throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })
   }
 
+  // Replace special characters with markers before processing
+  const contentWithMarkers = typedocTableSpecialCharacters.encode(content)
+
   try {
     let node: Node | null = null
 
@@ -40,9 +45,10 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
-        value: content,
+        value: contentWithMarkers,
       })
 
     if (node === null) {
@@ -51,7 +57,7 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
 
     return {
       path: `${removeMdxSuffix(filePath)}.mdx`,
-      content,
+      content: contentWithMarkers,
       vfile,
       node: node as Node,
     }
@@ -62,9 +68,10 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
       .use(() => (tree) => {
         node = tree
       })
+      .use(removeMdxSuffixPlugin(config))
       .process({
         path: typedocPath,
-        value: content,
+        value: contentWithMarkers,
       })
 
     if (node === null) {
@@ -73,15 +80,34 @@ export const readTypedoc = (config: BuildConfig) => async (filePath: string) => 
 
     return {
       path: `${removeMdxSuffix(filePath)}.mdx`,
-      content,
+      content: contentWithMarkers,
       vfile,
       node: node as Node,
     }
   }
 }
 
-export const readTypedocsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
-  const read = readTypedoc(config)
+// We need to replace these characters otherwise the markdown parser will act weird
+export const typedocTableSpecialCharacters = {
+  encode: (content: string) =>
+    content
+      .replaceAll('\\|', '/ESCAPEPIPE/')
+      .replaceAll('\\{', '/ESCAPEOPENBRACKET/')
+      .replaceAll('\\}', '/ESCAPECLOSEBRACKET/')
+      .replaceAll('\\>', '/ESCAPEGREATERTHAN/')
+      .replaceAll('\\<', '/ESCAPELESSTHAN/'),
+  decode: (content: string) =>
+    content
+      .replaceAll('/ESCAPEPIPE/', '\\|')
+      .replaceAll('/ESCAPEOPENBRACKET/', '\\{')
+      .replaceAll('/ESCAPECLOSEBRACKET/', '\\}')
+      .replaceAll('/ESCAPEGREATERTHAN/', '\\>')
+      .replaceAll('/ESCAPELESSTHAN/', '\\<'),
+}
 
-  return Promise.all(paths.map(async (filePath) => read(filePath)))
+export const readTypedocsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
+  const read = readTypedoc(config)
+  const typedocsCache = getTypedocsCache(store)
+
+  return Promise.all(paths.map(async (filePath) => typedocsCache(filePath, () => read(filePath))))
 }

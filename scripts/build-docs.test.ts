@@ -920,10 +920,16 @@ title: Quickstart
       ],
     })
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'quickstart/react.mdx' },
+      { path: 'quickstart/vue.mdx' },
+    ])
+
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(3)
+    expect(distFiles.length).toBe(4)
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('quickstart/vue.mdx')
     expect(distFiles).toContain('quickstart/react.mdx')
   })
@@ -961,6 +967,11 @@ Testing with a simple page.`,
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]],
     })
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'simple-test.mdx' },
+      { path: 'react/simple-test.mdx' },
+    ])
+
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
@@ -977,9 +988,10 @@ Testing with a simple page.`)
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(3)
+    expect(distFiles.length).toBe(4)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
   })
 
@@ -1016,11 +1028,19 @@ Testing with a simple page.`,
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
     })
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'simple-test.mdx' },
+      { path: 'vue/simple-test.mdx' },
+      { path: 'react/simple-test.mdx' },
+      { path: 'astro/simple-test.mdx' },
+    ])
+
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(5)
+    expect(distFiles.length).toBe(6)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
     expect(distFiles).toContain('vue/simple-test.mdx')
     expect(distFiles).toContain('astro/simple-test.mdx')

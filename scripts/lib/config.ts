@@ -85,12 +85,12 @@ export function createConfig(config: BuildConfigOptions) {
     redirects: config.redirects
       ? {
           static: {
-            inputPath: resolve(config.redirects.static.inputPath),
-            outputPath: resolve(config.redirects.static.outputPath),
+            inputPath: resolve(path.join(config.distPath, config.redirects.static.inputPath)),
+            outputPath: resolve(path.join(config.distPath, config.redirects.static.outputPath)),
           },
           dynamic: {
-            inputPath: resolve(config.redirects.dynamic.inputPath),
-            outputPath: resolve(config.redirects.dynamic.outputPath),
+            inputPath: resolve(path.join(config.distPath, config.redirects.dynamic.inputPath)),
+            outputPath: resolve(path.join(config.distPath, config.redirects.dynamic.outputPath)),
           },
         }
       : null,

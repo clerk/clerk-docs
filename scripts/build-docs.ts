@@ -70,6 +70,12 @@ import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
 import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
+import {
+  analyzeAndFixRedirects as optimizeRedirects,
+  readRedirects,
+  transformRedirectsToObject,
+  writeRedirects,
+} from './lib/redirects'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -87,6 +93,16 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
+    redirects: {
+      static: {
+        inputPath: '../redirects/static/docs.json',
+        outputPath: '_redirects/static.json',
+      },
+      dynamic: {
+        inputPath: '../redirects/dynamic/docs.jsonc',
+        outputPath: '_redirects/dynamic.jsonc',
+      },
+    },
     ignoreLinks: [
       '/docs/core-1',
       '/docs/reference/backend-api',
@@ -165,6 +181,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const markdownCache = getMarkdownCache(store)
 
   await ensureDir(config.distPath)
+
+  if (config.redirects) {
+    const { staticRedirects, dynamicRedirects } = await readRedirects(config)
+
+    const optimizedStaticRedirects = optimizeRedirects(staticRedirects)
+    const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
+
+    await writeRedirects(config, transformedStaticRedirects, dynamicRedirects)
+    console.info('✓ Wrote redirects to disk')
+  }
 
   const userManifest = await getManifest()
   console.info('✓ Read Manifest')

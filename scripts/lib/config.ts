@@ -24,6 +24,16 @@ type BuildConfigOptions = {
     collapseDefault: boolean
     hideTitleDefault: boolean
   }
+  redirects?: {
+    static: {
+      inputPath: string
+      outputPath: string
+    }
+    dynamic: {
+      inputPath: string
+      outputPath: string
+    }
+  }
   cleanDist: boolean
   flags?: {
     watch?: boolean
@@ -71,6 +81,19 @@ export function createConfig(config: BuildConfigOptions) {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+
+    redirects: config.redirects
+      ? {
+          static: {
+            inputPath: resolve(path.join(config.distPath, config.redirects.static.inputPath)),
+            outputPath: resolve(path.join(config.distPath, config.redirects.static.outputPath)),
+          },
+          dynamic: {
+            inputPath: resolve(path.join(config.distPath, config.redirects.dynamic.inputPath)),
+            outputPath: resolve(path.join(config.distPath, config.redirects.dynamic.outputPath)),
+          },
+        }
+      : null,
 
     cleanDist: config.cleanDist,
 

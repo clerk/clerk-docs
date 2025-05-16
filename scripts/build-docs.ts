@@ -45,6 +45,7 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
+import readdirp from 'readdirp'
 
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
@@ -619,6 +620,21 @@ template: wide
         })
     }
   }
+
+  // Write directory.json with a flat list of all markdown files in dist, excluding partials
+  const mdxFiles = await readdirp.promise(config.distPath, {
+    type: 'files',
+    fileFilter: '*.mdx',
+    alwaysStat: false,
+  })
+  const mdxFilePaths = mdxFiles
+    .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
+    .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
+    .map((path) => ({ path }))
+
+  await writeFile('directory.json', JSON.stringify(mdxFilePaths))
+
+  console.info('✓ Wrote out directory.json')
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)

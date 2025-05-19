@@ -97,11 +97,11 @@ async function main() {
     redirects: {
       static: {
         inputPath: '../redirects/static/docs.json',
-        outputPath: '../dist/_redirects/static.json',
+        outputPath: '_redirects/static.json',
       },
       dynamic: {
         inputPath: '../redirects/dynamic/docs.jsonc',
-        outputPath: '../dist/_redirects/dynamic.jsonc',
+        outputPath: '_redirects/dynamic.jsonc',
       },
     },
     ignoreLinks: [

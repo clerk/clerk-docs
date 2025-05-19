@@ -258,6 +258,80 @@ title: MDX Doc
     expect(await fileExists(pathJoin('./dist/non-mdx-file.txt'))).toBe(false)
     expect(await fileExists(pathJoin('./dist/image.png'))).toBe(false)
   })
+
+  test('should copy over and process redirects', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [],
+        }),
+      },
+      {
+        path: './redirects/static.json',
+        content: JSON.stringify([
+          {
+            source: '/docs/page-1',
+            destination: '/docs/page-2',
+            permanent: true,
+          },
+          {
+            source: '/docs/page-2',
+            destination: '/docs/page-3',
+            permanent: true,
+          },
+        ]),
+      },
+      {
+        path: './redirects/dynamic.jsonc',
+        content: JSON.stringify([
+          {
+            source: '/docs/login/:path*',
+            destination: '/docs/signin/:path*',
+            permanent: true,
+          },
+        ]),
+      },
+    ])
+
+    await build(
+      createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        redirects: {
+          static: {
+            inputPath: '../redirects/static.json',
+            outputPath: '_redirects/static.json',
+          },
+          dynamic: {
+            inputPath: '../redirects/dynamic.jsonc',
+            outputPath: '_redirects/dynamic.jsonc',
+          },
+        },
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/_redirects/static.json'))).toEqual({
+      '/docs/page-1': {
+        source: '/docs/page-1',
+        destination: '/docs/page-3',
+        permanent: true,
+      },
+      '/docs/page-2': {
+        source: '/docs/page-2',
+        destination: '/docs/page-3',
+        permanent: true,
+      },
+    })
+    expect(JSON.parse(await readFile('./dist/_redirects/dynamic.jsonc'))).toEqual([
+      {
+        source: '/docs/login/:path*',
+        destination: '/docs/signin/:path*',
+        permanent: true,
+      },
+    ])
+  })
 })
 
 describe('Manifest Validation', () => {

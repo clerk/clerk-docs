@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
 
-interface Redirect {
+export interface Redirect {
   source: string
   destination: string
   permanent: boolean

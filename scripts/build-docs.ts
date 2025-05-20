@@ -74,6 +74,7 @@ import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import {
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
+type Redirect,
   transformRedirectsToObject,
   writeRedirects,
 } from './lib/redirects'
@@ -183,14 +184,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   await ensureDir(config.distPath)
 
-  if (config.redirects) {
-    const { staticRedirects, dynamicRedirects } = await readRedirects(config)
+  let staticRedirects: Record<string, Redirect> | null = null
+  let dynamicRedirects: Redirect[] | null = null
 
-    const optimizedStaticRedirects = optimizeRedirects(staticRedirects)
+  if (config.redirects) {
+    const redirects = await readRedirects(config)
+
+    const optimizedStaticRedirects = optimizeRedirects(redirects.staticRedirects)
     const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
 
-    await writeRedirects(config, transformedStaticRedirects, dynamicRedirects)
-    console.info('✓ Wrote redirects to disk')
+    staticRedirects = transformedStaticRedirects
+    dynamicRedirects = redirects.dynamicRedirects
+
+    console.info('✓ Read, optimized and transformed redirects')
   }
 
   const userManifest = await getManifest()
@@ -661,6 +667,11 @@ template: wide
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
   console.info('✓ Wrote out directory.json')
+
+  if (staticRedirects !== null && dynamicRedirects !== null) {
+    await writeRedirects(config, staticRedirects, dynamicRedirects)
+    console.info('✓ Wrote redirects to disk')
+  }
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)

@@ -680,7 +680,14 @@ template: wide
   })
 
   await fs.rm(config.distFinalPath, { recursive: true })
-  await fs.rename(config.distTempPath, config.distFinalPath)
+
+  if (process.env.VERCEL === '1') {
+    // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
+    await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
+    await fs.rm(config.distTempPath, { recursive: true })
+  } else {
+    await fs.rename(config.distTempPath, config.distFinalPath)
+  }
 
   return warnings
 }

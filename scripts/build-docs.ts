@@ -95,6 +95,7 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
+    publicPath: '../public',
     redirects: {
       static: {
         inputPath: '../redirects/static/docs.json',
@@ -666,6 +667,11 @@ template: wide
   if (staticRedirects !== null && dynamicRedirects !== null) {
     await writeRedirects(config, staticRedirects, dynamicRedirects)
     console.info('✓ Wrote redirects to disk')
+  }
+
+  if (config.publicPath) {
+    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
+    console.info('✓ Copied public assets to dist')
   }
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles

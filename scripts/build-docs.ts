@@ -87,7 +87,7 @@ if (require.main === module) {
 async function main() {
   const args = process.argv.slice(2)
 
-  const config = createConfig({
+  const config = await createConfig({
     basePath: __dirname,
     docsPath: '../docs',
     baseDocsLink: '/docs/',
@@ -182,7 +182,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeSdkFile = writeSDKFile(config)
   const markdownCache = getMarkdownCache(store)
 
-  await ensureDir(config.distPath)
+  await ensureDir(config.distFinalPath)
 
   let staticRedirects: Record<string, Redirect> | null = null
   let dynamicRedirects: Redirect[] | null = null
@@ -480,11 +480,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all typedocs`)
 
-  if (config.cleanDist) {
-    await fs.rm(config.distPath, { recursive: true })
-    console.info('✓ Removed dist folder')
-  }
-
   await writeFile(
     'manifest.json',
     JSON.stringify({
@@ -654,7 +649,7 @@ template: wide
   }
 
   // Write directory.json with a flat list of all markdown files in dist, excluding partials
-  const mdxFiles = await readdirp.promise(config.distPath, {
+  const mdxFiles = await readdirp.promise(config.distTempPath, {
     type: 'files',
     fileFilter: '*.mdx',
     alwaysStat: false,
@@ -680,5 +675,12 @@ template: wide
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  return reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], { quiet: true })
+  const warnings = reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], {
+    quiet: true,
+  })
+
+  await fs.rm(config.distFinalPath, { recursive: true })
+  await fs.rename(config.distTempPath, config.distFinalPath)
+
+  return warnings
 }

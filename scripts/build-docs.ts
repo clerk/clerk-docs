@@ -74,7 +74,7 @@ import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import {
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
-type Redirect,
+  type Redirect,
   transformRedirectsToObject,
   writeRedirects,
 } from './lib/redirects'
@@ -392,40 +392,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info('✓ Applied manifest sdk scoping')
 
-  if (config.cleanDist) {
-    await fs.rm(config.distPath, { recursive: true })
-    console.info('✓ Removed dist folder')
-  }
-
-  await writeFile(
-    'manifest.json',
-    JSON.stringify({
-      navigation: await traverseTree(
-        { items: sdkScopedManifest },
-        async (item) => ({
-          title: item.title,
-          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-          tag: item.tag,
-          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-          icon: item.icon,
-          target: item.target,
-          sdk: item.sdk,
-        }),
-        // @ts-expect-error - This traverseTree function might just be the death of me
-        async (group) => ({
-          title: group.title,
-          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
-          tag: group.tag,
-          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
-          icon: group.icon,
-          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-          sdk: group.sdk,
-          items: group.items,
-        }),
-      ),
-    }),
-  )
-
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
   const validatedPartials = await Promise.all(
@@ -513,6 +479,40 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
   console.info(`✓ Validated all typedocs`)
+
+  if (config.cleanDist) {
+    await fs.rm(config.distPath, { recursive: true })
+    console.info('✓ Removed dist folder')
+  }
+
+  await writeFile(
+    'manifest.json',
+    JSON.stringify({
+      navigation: await traverseTree(
+        { items: sdkScopedManifest },
+        async (item) => ({
+          title: item.title,
+          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
+          tag: item.tag,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          sdk: item.sdk,
+        }),
+        // @ts-expect-error - This traverseTree function might just be the death of me
+        async (group) => ({
+          title: group.title,
+          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+          tag: group.tag,
+          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+          icon: group.icon,
+          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+          sdk: group.sdk,
+          items: group.items,
+        }),
+      ),
+    }),
+  )
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {

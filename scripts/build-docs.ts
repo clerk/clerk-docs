@@ -45,6 +45,7 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
+import readdirp from 'readdirp'
 
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
@@ -70,6 +71,13 @@ import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
 import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
+import {
+  analyzeAndFixRedirects as optimizeRedirects,
+  readRedirects,
+  type Redirect,
+  transformRedirectsToObject,
+  writeRedirects,
+} from './lib/redirects'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -79,7 +87,7 @@ if (require.main === module) {
 async function main() {
   const args = process.argv.slice(2)
 
-  const config = createConfig({
+  const config = await createConfig({
     basePath: __dirname,
     docsPath: '../docs',
     baseDocsLink: '/docs/',
@@ -87,6 +95,17 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
+    publicPath: '../public',
+    redirects: {
+      static: {
+        inputPath: '../redirects/static/docs.json',
+        outputPath: '_redirects/static.json',
+      },
+      dynamic: {
+        inputPath: '../redirects/dynamic/docs.jsonc',
+        outputPath: '_redirects/dynamic.jsonc',
+      },
+    },
     ignoreLinks: [
       '/docs/core-1',
       '/docs/reference/backend-api',
@@ -164,7 +183,22 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeSdkFile = writeSDKFile(config)
   const markdownCache = getMarkdownCache(store)
 
-  await ensureDir(config.distPath)
+  await ensureDir(config.distFinalPath)
+
+  let staticRedirects: Record<string, Redirect> | null = null
+  let dynamicRedirects: Redirect[] | null = null
+
+  if (config.redirects) {
+    const redirects = await readRedirects(config)
+
+    const optimizedStaticRedirects = optimizeRedirects(redirects.staticRedirects)
+    const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
+
+    staticRedirects = transformedStaticRedirects
+    dynamicRedirects = redirects.dynamicRedirects
+
+    console.info('✓ Read, optimized and transformed redirects')
+  }
 
   const userManifest = await getManifest()
   console.info('✓ Read Manifest')
@@ -359,40 +393,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info('✓ Applied manifest sdk scoping')
 
-  if (config.cleanDist) {
-    await fs.rm(config.distPath, { recursive: true })
-    console.info('✓ Removed dist folder')
-  }
-
-  await writeFile(
-    'manifest.json',
-    JSON.stringify({
-      navigation: await traverseTree(
-        { items: sdkScopedManifest },
-        async (item) => ({
-          title: item.title,
-          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-          tag: item.tag,
-          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-          icon: item.icon,
-          target: item.target,
-          sdk: item.sdk,
-        }),
-        // @ts-expect-error - This traverseTree function might just be the death of me
-        async (group) => ({
-          title: group.title,
-          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
-          tag: group.tag,
-          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
-          icon: group.icon,
-          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-          sdk: group.sdk,
-          items: group.items,
-        }),
-      ),
-    }),
-  )
-
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
   const validatedPartials = await Promise.all(
@@ -480,6 +480,35 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
   console.info(`✓ Validated all typedocs`)
+
+  await writeFile(
+    'manifest.json',
+    JSON.stringify({
+      navigation: await traverseTree(
+        { items: sdkScopedManifest },
+        async (item) => ({
+          title: item.title,
+          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
+          tag: item.tag,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          sdk: item.sdk,
+        }),
+        // @ts-expect-error - This traverseTree function might just be the death of me
+        async (group) => ({
+          title: group.title,
+          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+          tag: group.tag,
+          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+          icon: group.icon,
+          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+          sdk: group.sdk,
+          items: group.items,
+        }),
+      ),
+    }),
+  )
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
@@ -620,6 +649,31 @@ template: wide
     }
   }
 
+  // Write directory.json with a flat list of all markdown files in dist, excluding partials
+  const mdxFiles = await readdirp.promise(config.distTempPath, {
+    type: 'files',
+    fileFilter: '*.mdx',
+    alwaysStat: false,
+  })
+  const mdxFilePaths = mdxFiles
+    .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
+    .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
+    .map((path) => ({ path }))
+
+  await writeFile('directory.json', JSON.stringify(mdxFilePaths))
+
+  console.info('✓ Wrote out directory.json')
+
+  if (staticRedirects !== null && dynamicRedirects !== null) {
+    await writeRedirects(config, staticRedirects, dynamicRedirects)
+    console.info('✓ Wrote redirects to disk')
+  }
+
+  if (config.publicPath) {
+    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
+    console.info('✓ Copied public assets to dist')
+  }
+
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
@@ -627,5 +681,19 @@ template: wide
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  return reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], { quiet: true })
+  const warnings = reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], {
+    quiet: true,
+  })
+
+  await fs.rm(config.distFinalPath, { recursive: true })
+
+  if (process.env.VERCEL === '1') {
+    // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
+    await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
+    await fs.rm(config.distTempPath, { recursive: true })
+  } else {
+    await fs.rename(config.distTempPath, config.distFinalPath)
+  }
+
+  return warnings
 }

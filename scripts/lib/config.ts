@@ -2,6 +2,8 @@
 // configure the builds, this file defines the config object
 
 import path from 'node:path'
+import fs from 'node:fs/promises'
+import os from 'node:os'
 import type { SDK } from './schemas'
 
 type BuildConfigOptions = {
@@ -13,6 +15,7 @@ type BuildConfigOptions = {
   partialsPath: string
   distPath: string
   typedocPath: string
+  publicPath?: string
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -24,6 +27,16 @@ type BuildConfigOptions = {
     collapseDefault: boolean
     hideTitleDefault: boolean
   }
+  redirects?: {
+    static: {
+      inputPath: string
+      outputPath: string
+    }
+    dynamic: {
+      inputPath: string
+      outputPath: string
+    }
+  }
   cleanDist: boolean
   flags?: {
     watch?: boolean
@@ -31,13 +44,15 @@ type BuildConfigOptions = {
   }
 }
 
-export type BuildConfig = ReturnType<typeof createConfig>
+export type BuildConfig = Awaited<ReturnType<typeof createConfig>>
 
 // Takes the basePath and resolves the relative paths to be absolute paths
-export function createConfig(config: BuildConfigOptions) {
+export async function createConfig(config: BuildConfigOptions) {
   const resolve = (relativePath: string) => {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
   }
+
+  const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
 
   return {
     basePath: config.basePath,
@@ -53,11 +68,17 @@ export function createConfig(config: BuildConfigOptions) {
     docsRelativePath: config.docsPath,
     docsPath: resolve(config.docsPath),
 
-    distRelativePath: config.distPath,
-    distPath: resolve(config.distPath),
+    distTempRelativePath: tempDist,
+    distTempPath: resolve(tempDist),
+
+    distFinalRelativePath: config.distPath,
+    distFinalPath: resolve(config.distPath),
 
     typedocRelativePath: config.typedocPath,
     typedocPath: resolve(config.typedocPath),
+
+    publicRelativePath: config.publicPath,
+    publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
     ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
     ignoreWarnings: config.ignoreWarnings ?? {
@@ -71,6 +92,19 @@ export function createConfig(config: BuildConfigOptions) {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+
+    redirects: config.redirects
+      ? {
+          static: {
+            inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
+            outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+          },
+          dynamic: {
+            inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
+            outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
+          },
+        }
+      : null,
 
     cleanDist: config.cleanDist,
 

@@ -162,7 +162,7 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react'],
@@ -209,7 +209,7 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react'],
@@ -246,7 +246,7 @@ title: MDX Doc
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -257,6 +257,80 @@ title: MDX Doc
     expect(await fileExists(pathJoin('./dist/mdx-doc.mdx'))).toBe(true)
     expect(await fileExists(pathJoin('./dist/non-mdx-file.txt'))).toBe(false)
     expect(await fileExists(pathJoin('./dist/image.png'))).toBe(false)
+  })
+
+  test('should copy over and process redirects', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [],
+        }),
+      },
+      {
+        path: './redirects/static.json',
+        content: JSON.stringify([
+          {
+            source: '/docs/page-1',
+            destination: '/docs/page-2',
+            permanent: true,
+          },
+          {
+            source: '/docs/page-2',
+            destination: '/docs/page-3',
+            permanent: true,
+          },
+        ]),
+      },
+      {
+        path: './redirects/dynamic.jsonc',
+        content: JSON.stringify([
+          {
+            source: '/docs/login/:path*',
+            destination: '/docs/signin/:path*',
+            permanent: true,
+          },
+        ]),
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        redirects: {
+          static: {
+            inputPath: '../redirects/static.json',
+            outputPath: '_redirects/static.json',
+          },
+          dynamic: {
+            inputPath: '../redirects/dynamic.jsonc',
+            outputPath: '_redirects/dynamic.jsonc',
+          },
+        },
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/_redirects/static.json'))).toEqual({
+      '/docs/page-1': {
+        source: '/docs/page-1',
+        destination: '/docs/page-3',
+        permanent: true,
+      },
+      '/docs/page-2': {
+        source: '/docs/page-2',
+        destination: '/docs/page-3',
+        permanent: true,
+      },
+    })
+    expect(JSON.parse(await readFile('./dist/_redirects/dynamic.jsonc'))).toEqual([
+      {
+        source: '/docs/login/:path*',
+        destination: '/docs/signin/:path*',
+        permanent: true,
+      },
+    ])
   })
 })
 
@@ -278,7 +352,7 @@ title: Simple Test
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -334,7 +408,7 @@ title: Simple Test
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs'],
@@ -436,7 +510,7 @@ title: Simple Test
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react', 'vue'],
@@ -540,7 +614,7 @@ title: Item 2
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['expressjs', 'fastify', 'nextjs', 'react'],
@@ -599,7 +673,7 @@ title: Item 1
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['expressjs', 'react'],
@@ -695,7 +769,7 @@ title: Item 1
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react', 'vue'],
@@ -796,7 +870,7 @@ test`,
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -833,7 +907,7 @@ This is a normal document.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -895,7 +969,7 @@ title: Quickstart
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'vue'],
@@ -920,10 +994,16 @@ title: Quickstart
       ],
     })
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'quickstart/react.mdx' },
+      { path: 'quickstart/vue.mdx' },
+    ])
+
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(3)
+    expect(distFiles.length).toBe(4)
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('quickstart/vue.mdx')
     expect(distFiles).toContain('quickstart/react.mdx')
   })
@@ -950,7 +1030,7 @@ Testing with a simple page.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -960,6 +1040,11 @@ Testing with a simple page.`,
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]],
     })
+
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'simple-test.mdx' },
+      { path: 'react/simple-test.mdx' },
+    ])
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
@@ -977,9 +1062,10 @@ Testing with a simple page.`)
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(3)
+    expect(distFiles.length).toBe(4)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
   })
 
@@ -1005,7 +1091,7 @@ Testing with a simple page.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'vue', 'astro'],
@@ -1016,11 +1102,19 @@ Testing with a simple page.`,
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
     })
 
+    expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
+      { path: 'simple-test.mdx' },
+      { path: 'vue/simple-test.mdx' },
+      { path: 'react/simple-test.mdx' },
+      { path: 'astro/simple-test.mdx' },
+    ])
+
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(5)
+    expect(distFiles.length).toBe(6)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
+    expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
     expect(distFiles).toContain('vue/simple-test.mdx')
     expect(distFiles).toContain('astro/simple-test.mdx')
@@ -1052,7 +1146,7 @@ Testing with a simple page.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'expo'],
@@ -1086,7 +1180,7 @@ Testing with a simple page.`,
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'expo'],
@@ -1122,7 +1216,7 @@ Testing with a simple page.`,
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'expo'],
@@ -1170,7 +1264,7 @@ Authentication login documentation.`,
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'python', 'nextjs'],
@@ -1205,7 +1299,7 @@ This document is available for React and Next.js.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -1283,7 +1377,7 @@ Content for React users.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs', 'js-frontend'],
@@ -1397,7 +1491,7 @@ Common content for all SDKs.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs', 'js-frontend'],
@@ -1467,7 +1561,7 @@ Common content for all SDKs.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -1522,7 +1616,7 @@ Common content for all SDKs.`,
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs', 'js-frontend'],
@@ -1572,7 +1666,7 @@ sdk: fastify, expressjs
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['fastify', 'expressjs'],
@@ -1608,7 +1702,7 @@ title: Duplicate Headings
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1647,7 +1741,7 @@ sdk: react, nextjs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -1684,7 +1778,7 @@ sdk: react, nextjs
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -1722,7 +1816,7 @@ description: Quickstart page
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1761,7 +1855,7 @@ title: Simple Test
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1797,7 +1891,7 @@ sdk: react, nextjs
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -1835,7 +1929,7 @@ title: Simple Test
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1874,7 +1968,7 @@ title: Simple Test
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1905,7 +1999,7 @@ title: Simple Test
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1951,7 +2045,7 @@ description: This is a test page
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -1985,7 +2079,7 @@ title: Simple Test
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2024,7 +2118,7 @@ title: Core Page
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2055,7 +2149,7 @@ title: Simple Test
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2097,7 +2191,7 @@ title: Simple Test
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2143,7 +2237,7 @@ title: Core Page
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -2195,7 +2289,7 @@ title: Core Page
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -2248,7 +2342,7 @@ title: Core Page
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -2304,7 +2398,7 @@ Content for section 2.`,
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2357,7 +2451,7 @@ description: Link with code
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -2413,7 +2507,7 @@ description: Link with code
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
@@ -2449,7 +2543,7 @@ description: This is a test page
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2479,7 +2573,7 @@ description: This is a test page
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2542,7 +2636,7 @@ description: A page that contains cards
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2579,7 +2673,7 @@ sdk: react
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2634,7 +2728,7 @@ sdk: react
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2665,7 +2759,7 @@ title: React Doc
 
     // This should throw an error because the file path starts with an SDK name
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2714,7 +2808,7 @@ title: Standard Page
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2769,7 +2863,7 @@ title: Partials Page
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2825,7 +2919,7 @@ sdk: expo
     ])
 
     await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['expo'],
@@ -2864,7 +2958,7 @@ description: \`This frontmatter has an unbalanced quote
 
     // This should throw a parsing error
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2894,7 +2988,7 @@ description: This frontmatter is missing the required title field
 
     // This should throw an error about missing title
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2919,7 +3013,7 @@ description: This frontmatter is missing the required title field
     ])
 
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -2956,7 +3050,7 @@ This page has an invalid SDK in frontmatter.`,
 
     // This should throw an error with specific message about invalid SDK
     const promise = build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3003,7 +3097,7 @@ This document doesn't have the referenced header.`,
 
     // Should complete with warnings
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3055,7 +3149,7 @@ title: Document with Warnings
 
     // Should complete with warnings
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3093,7 +3187,7 @@ title: Original Title
 
     // Create store to maintain cache across builds
     const store = createBlankStore()
-    const config = createConfig({
+    const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
       validSdks: ['react'],
@@ -3155,7 +3249,7 @@ sdk: react
 
     // Create store to maintain cache across builds
     const store = createBlankStore()
-    const config = createConfig({
+    const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
       validSdks: ['react'],
@@ -3207,7 +3301,7 @@ sdk: react
 
     // Create store to maintain cache across builds
     const store = createBlankStore()
-    const config = createConfig({
+    const config = await createConfig({
       ...baseConfig,
       basePath: tempDir,
       validSdks: ['react'],
@@ -3257,7 +3351,7 @@ description: This page has a description
       ])
 
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3304,7 +3398,7 @@ description: This page has a description
       ])
 
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3354,7 +3448,7 @@ description: This page has a description
 
       // Should complete without the ignored warnings
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3408,7 +3502,7 @@ description: This page has a description
 
       // Only ignore the link warning, but leave SDK warning
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3456,7 +3550,7 @@ description: This page has a description
 
       // Ignore component attribute warnings
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3500,7 +3594,7 @@ title: Missing Description
       ])
 
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3555,7 +3649,7 @@ description: The page being linked to
 
       // Ignore hash warnings
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3612,7 +3706,7 @@ description: This page has a description
       ])
 
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react', 'nodejs'],
@@ -3656,7 +3750,7 @@ description: Test page with partial
 
       // Ignore link warnings in partials
       const output = await build(
-        createConfig({
+        await createConfig({
           ...baseConfig,
           basePath: tempDir,
           validSdks: ['react'],
@@ -3713,7 +3807,7 @@ interface Client {
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3759,7 +3853,7 @@ interface Client {
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3794,7 +3888,7 @@ description: Generated API docs
     ])
 
     // Create a config with a non-existent typedoc path
-    const configWithMissingFolder = createConfig({
+    const configWithMissingFolder = await createConfig({
       ...baseConfig,
       basePath: tempDir,
       typedocPath: '../non-existent-typedoc-folder',
@@ -3841,7 +3935,7 @@ interface Client {
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3915,7 +4009,7 @@ interface Client {
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3956,7 +4050,7 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -3994,7 +4088,7 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -4047,7 +4141,7 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -4084,7 +4178,7 @@ description: Generated API docs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
@@ -4124,7 +4218,7 @@ sdk: react, nextjs
     ])
 
     const output = await build(
-      createConfig({
+      await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],

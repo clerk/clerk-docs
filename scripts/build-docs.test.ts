@@ -62,7 +62,12 @@ async function createTempFiles(
 
   // Initialize git repository
   const git = simpleGit(tempDir)
+
   await git.init()
+
+  // Locally set the git user config
+  await git.addConfig('user.name', 'Test User')
+  await git.addConfig('user.email', 'test@example.com')
 
   // Add all files to git
   await git.add('.')

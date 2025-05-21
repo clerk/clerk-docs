@@ -41,7 +41,9 @@ ${opts.description}
 
   const parseDescription = (name: string, description: string | undefined) => {
     if (!description) return ''
-    return `\n${description.replace(name, `\`${name}\``)}\n`
+
+    const parsedDescription = description.replace(name, `\`${name}\``).replace('_', '\\_')
+    return `\n${parsedDescription}\n`
   }
 
   const parseTitle = (file: string) => {

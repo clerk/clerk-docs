@@ -62,6 +62,13 @@ ${opts.description}
     return name.replace(/([A-Z])/g, '<wbr />$1')
   }
 
+  const parseCode = (code: {}, status: number) => {
+    return `\`\`\`json {{ filename: 'Status Code: ${status}' }}
+${JSON.stringify(code, null, 2)}
+\`\`\`
+`
+  }
+
   // Group errors by file
   const errorsByFile = errors.reduce(
     (acc, error) => {
@@ -93,11 +100,8 @@ ${opts.description}
 
           return `### <code>${parseName(error.name)}</code>
 
-**Status Code:** \`${error.status}\`
 ${parseDescription(error.name, error.description)}
-\`\`\`json
-${JSON.stringify(errorJson, null, 2)}
-\`\`\`
+${parseCode(errorJson, error.status)}
 `
         })
         .join('\n')
@@ -109,7 +113,7 @@ ${fileErrors}
     })
     .join('')
 
-  return frontmatter + errorDocs
+  return frontmatter + errorDocs.replace(/\n$/, '')
 }
 
 export async function generateApiErrorDocs() {

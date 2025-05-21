@@ -16,12 +16,12 @@ interface ApiError {
   file?: string
 }
 
-interface GenerateErrorDocsOpts {
+interface ParseApiErrorsOpts {
   title: string
   description: string
 }
 
-function generateErrorDocs(errors: ApiError[], opts: GenerateErrorDocsOpts): string {
+function parseApiErrors(errors: ApiError[], opts: ParseApiErrorsOpts): string {
   const frontmatter = `---
 title: ${opts.title}
 description: ${opts.description}
@@ -108,7 +108,7 @@ ${fileErrors}
   return frontmatter + errorDocs
 }
 
-async function main() {
+export async function generateApiErrorDocs() {
   try {
     // Read the API errors JSON file
     const apiErrorsPath = path.join(process.cwd(), 'data', 'api-errors.json')
@@ -116,14 +116,14 @@ async function main() {
     const errors: ApiError[] = JSON.parse(apiErrorsContent)
 
     // Generate the documentation
-    const docsBAPI = generateErrorDocs(
+    const docsBAPI = parseApiErrors(
       errors.filter((error) => error.usage.bapi),
       {
         title: 'Backend API errors',
         description: 'An index of Clerk Backend API errors.',
       },
     )
-    const docsFAPI = generateErrorDocs(
+    const docsFAPI = parseApiErrors(
       errors.filter((error) => error.usage.fapi),
       {
         title: 'Frontend API errors',
@@ -132,18 +132,13 @@ async function main() {
     )
 
     // Write the output file
-    const outputPathBAPI = path.join(process.cwd(), 'docs', 'errors', 'bapi.mdx')
-    const outputPathFAPI = path.join(process.cwd(), 'docs', 'errors', 'fapi.mdx')
+    const outputPathBAPI = path.join(process.cwd(), 'docs', 'errors', 'backend-api.mdx')
+    const outputPathFAPI = path.join(process.cwd(), 'docs', 'errors', 'frontend-api.mdx')
 
     await fs.promises.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
     await fs.promises.writeFile(outputPathFAPI, docsFAPI, 'utf-8')
-
-    console.log(`Successfully generated BAPI error documentation at ${outputPathBAPI}`)
-    console.log(`Successfully generated FAPI error documentation at ${outputPathFAPI}`)
   } catch (error) {
     console.error('Error generating documentation:', error)
     process.exit(1)
   }
 }
-
-main()

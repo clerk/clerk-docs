@@ -42,7 +42,11 @@ ${opts.description}
   const parseDescription = (name: string, description: string | undefined) => {
     if (!description) return ''
 
-    const parsedDescription = description.replace(name, `\`${name}\``).replace('_', '\\_')
+    const parsedDescription = description
+      .replaceAll(name, `\`${name}\``) // Format the error name in the description
+      .replaceAll('_', '\\_') // Escape underscores
+      .replaceAll(/(https?:\/\/[^\s]+)/g, (url) => `[${url}](${url})`) // Replace URLs with MDX links
+
     return `\n${parsedDescription}\n`
   }
 

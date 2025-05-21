@@ -42,7 +42,7 @@ export const ensureDirectory =
 // write a file to the dist (output) folder
 export const writeDistFile = (config: BuildConfig) => async (filePath: string, contents: string) => {
   const ensureDir = ensureDirectory(config)
-  const fullPath = path.join(config.distPath, filePath)
+  const fullPath = path.join(config.distTempPath, filePath)
   await ensureDir(path.dirname(fullPath))
   await fs.writeFile(fullPath, contents, { encoding: 'utf-8' })
 }

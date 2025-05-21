@@ -144,6 +144,7 @@ function treeDir(baseDir: string) {
 }
 
 const baseConfig = {
+  dataPath: '../data',
   docsPath: '../docs',
   baseDocsLink: '/docs/',
   manifestPath: '../docs/manifest.json',

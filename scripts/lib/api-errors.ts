@@ -101,7 +101,7 @@ ${JSON.stringify(errorJson, null, 2)}
 ${fileErrors}
 `
     })
-    .join('\n')
+    .join('')
 
   return frontmatter + errorDocs
 }

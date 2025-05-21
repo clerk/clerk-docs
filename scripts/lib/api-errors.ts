@@ -99,7 +99,6 @@ ${JSON.stringify(code, null, 2)}
           }
 
           return `### <code>${parseName(error.name)}</code>
-
 ${parseDescription(error.name, error.description)}
 ${parseCode(errorJson, error.status)}
 `

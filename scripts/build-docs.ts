@@ -91,6 +91,7 @@ async function main() {
 
   const config = await createConfig({
     basePath: __dirname,
+    dataPath: '../data',
     docsPath: '../docs',
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',

@@ -41,7 +41,7 @@ ${opts.description}
 
   const parseDescription = (name: string, description: string | undefined) => {
     if (!description) return ''
-    return description.replace(name, `\`${name}\``)
+    return `\n${description.replace(name, `\`${name}\``)}\n`
   }
 
   const parseTitle = (file: string) => {
@@ -53,7 +53,7 @@ ${opts.description}
 
   // Handles line break opportunities in the error name
   const parseName = (name: string) => {
-    return name.replace(/([A-Z])/g, '<wbr/>$1')
+    return name.replace(/([A-Z])/g, '<wbr />$1')
   }
 
   // Group errors by file
@@ -88,9 +88,7 @@ ${opts.description}
           return `### <code>${parseName(error.name)}</code>
 
 **Status Code:** \`${error.status}\`
-
 ${parseDescription(error.name, error.description)}
-
 \`\`\`json
 ${JSON.stringify(errorJson, null, 2)}
 \`\`\`

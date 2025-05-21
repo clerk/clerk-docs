@@ -65,8 +65,7 @@ ${opts.description}
   const parseCode = (code: {}, status: number) => {
     return `\`\`\`json {{ filename: 'Status Code: ${status}' }}
 ${JSON.stringify(code, null, 2)}
-\`\`\`
-`
+\`\`\``
   }
 
   // Group errors by file

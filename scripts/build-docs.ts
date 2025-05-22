@@ -204,7 +204,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
-  await generateApiErrorDocs()
+  await generateApiErrorDocs(config)
   console.info('✓ Generated API Error MDX files')
 
   const userManifest = await getManifest()

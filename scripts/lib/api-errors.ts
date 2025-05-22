@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import type { BuildConfig } from './config'
 
 interface ApiError {
   name: string
@@ -114,10 +115,10 @@ ${fileErrors}
   return frontmatter + errorDocs.replace(/\n$/, '')
 }
 
-export async function generateApiErrorDocs() {
+export async function generateApiErrorDocs(config: BuildConfig) {
   try {
     // Read the API errors JSON file
-    const apiErrorsPath = path.join(process.cwd(), 'data', 'api-errors.json')
+    const apiErrorsPath = path.join(config.dataPath, 'api-errors.json')
     const apiErrorsContent = await fs.promises.readFile(apiErrorsPath, 'utf-8')
     const errors: ApiError[] = JSON.parse(apiErrorsContent)
 
@@ -138,8 +139,8 @@ export async function generateApiErrorDocs() {
     )
 
     // Write the output file
-    const outputPathBAPI = path.join(process.cwd(), 'docs', 'errors', 'backend-api.mdx')
-    const outputPathFAPI = path.join(process.cwd(), 'docs', 'errors', 'frontend-api.mdx')
+    const outputPathBAPI = path.join(config.docsPath, 'errors', 'backend-api.mdx')
+    const outputPathFAPI = path.join(config.docsPath, 'errors', 'frontend-api.mdx')
 
     await fs.promises.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
     await fs.promises.writeFile(outputPathFAPI, docsFAPI, 'utf-8')

@@ -144,6 +144,7 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    skipApiErrors: false,
     cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
@@ -204,8 +205,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
-  await generateApiErrorDocs(config)
-  console.info('✓ Generated API Error MDX files')
+  if (!config.skipApiErrors) {
+    await generateApiErrorDocs(config)
+    console.info('✓ Generated API Error MDX files')
+  }
 
   const userManifest = await getManifest()
   console.info('✓ Read Manifest')

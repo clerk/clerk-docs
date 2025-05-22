@@ -57,6 +57,7 @@ import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
 import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
+import { getLastCommitDate } from './lib/getLastCommitDate'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
 import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
@@ -182,6 +183,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
   const markdownCache = getMarkdownCache(store)
+  const getCommitDate = getLastCommitDate(config)
 
   await ensureDir(config.distFinalPath)
 
@@ -521,6 +523,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .use(validateIfComponents(config, filePath, doc, flatSDKScopedManifest))
         .use(checkPartials(config, validatedPartials, filePath, { reportWarnings: false, embed: true }))
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
+        .use(
+          insertFrontmatter({
+            lastUpdated: (
+              (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
+            ).toISOString(),
+          }),
+        )
         .process(doc.vfile)
 
       const distFilePath = `${doc.href.replace(config.baseDocsLink, '')}.mdx`
@@ -569,7 +578,14 @@ template: wide
             .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
             .use(filterOtherSDKsContentOut(config, filePath, targetSdk))
             .use(validateUniqueHeadings(config, filePath, 'docs'))
-            .use(insertFrontmatter({ canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href }))
+            .use(
+              insertFrontmatter({
+                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href,
+                lastUpdated: (
+                  (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
+                ).toISOString(),
+              }),
+            )
             .process({
               path: filePath,
               value: doc.fileContent,

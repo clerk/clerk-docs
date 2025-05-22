@@ -38,6 +38,7 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
+  skipApiErrors?: boolean
   cleanDist: boolean
   flags?: {
     watch?: boolean
@@ -110,6 +111,7 @@ export async function createConfig(config: BuildConfigOptions) {
         }
       : null,
 
+    skipApiErrors: config.skipApiErrors ?? false,
     cleanDist: config.cleanDist,
 
     flags: {

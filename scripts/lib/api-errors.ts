@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs/promises'
 import path from 'path'
 import type { BuildConfig } from './config'
 
@@ -119,7 +119,7 @@ export async function generateApiErrorDocs(config: BuildConfig) {
   try {
     // Read the API errors JSON file
     const apiErrorsPath = path.join(config.dataPath, 'api-errors.json')
-    const apiErrorsContent = await fs.promises.readFile(apiErrorsPath, 'utf-8')
+    const apiErrorsContent = await fs.readFile(apiErrorsPath, 'utf-8')
     const errors: ApiError[] = JSON.parse(apiErrorsContent)
 
     // Generate the documentation
@@ -142,10 +142,11 @@ export async function generateApiErrorDocs(config: BuildConfig) {
     const outputPathBAPI = path.join(config.docsPath, 'errors', 'backend-api.mdx')
     const outputPathFAPI = path.join(config.docsPath, 'errors', 'frontend-api.mdx')
 
-    await fs.promises.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
-    await fs.promises.writeFile(outputPathFAPI, docsFAPI, 'utf-8')
+    await fs.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
+    await fs.writeFile(outputPathFAPI, docsFAPI, 'utf-8')
   } catch (error) {
     console.error('Error generating documentation:', error)
+    throw error
     process.exit(1)
   }
 }

@@ -144,6 +144,7 @@ function treeDir(baseDir: string) {
 }
 
 const baseConfig = {
+  dataPath: '../data',
   docsPath: '../docs',
   baseDocsLink: '/docs/',
   manifestPath: '../docs/manifest.json',
@@ -161,6 +162,7 @@ const baseConfig = {
     collapseDefault: false,
     hideTitleDefault: false,
   },
+  skipApiErrors: true,
   cleanDist: false,
 }
 
@@ -4257,5 +4259,73 @@ sdk: react, nextjs
 
     expect(await readFile('./dist/react/api-doc.mdx')).toContain('Client API')
     expect(await readFile('./dist/nextjs/api-doc.mdx')).toContain('Client API')
+  })
+})
+
+describe('API Errors Generation', () => {
+  test('should generate api errors', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Backend API', href: '/docs/errors/backend-api' }],
+            [{ title: 'Frontend API', href: '/docs/errors/frontend-api' }],
+          ],
+        }),
+      },
+      {
+        path: './data/api-errors.json',
+        content: await fs.readFile(path.join(__dirname, '..', 'data', 'api-errors.json'), 'utf-8'),
+      },
+      {
+        path: './docs/errors/backend-api.mdx',
+        content: '',
+      },
+      {
+        path: './docs/errors/frontend-api.mdx',
+        content: '',
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        skipApiErrors: false,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const bapi = await readFile('./dist/errors/backend-api.mdx')
+    const fapi = await readFile('./dist/errors/frontend-api.mdx')
+
+    expect(bapi).toContain('title: Backend API errors')
+    expect(fapi).toContain('title: Frontend API errors')
+
+    // Headings
+    expect(bapi).toContain('## Actor Tokens')
+    expect(fapi).toContain('## Actor Tokens')
+
+    // Error names
+    expect(bapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Cannot<wbr />Be<wbr />Revoked</code>')
+    expect(fapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Already<wbr />Used</code>')
+
+    // Error Schema
+    expect(bapi).toContain('"longMessage":')
+    expect(bapi).toContain('"shortMessage":')
+    expect(bapi).toContain('"code":')
+    expect(bapi).toContain('"meta":')
+
+    expect(fapi).toContain('"longMessage":')
+    expect(fapi).toContain('"shortMessage":')
+    expect(fapi).toContain('"code":')
+    expect(fapi).toContain('"meta":')
+
+    // Error status codes
+    expect(bapi).toContain('Status Code: 400')
+    expect(fapi).toContain('Status Code: 400')
   })
 })

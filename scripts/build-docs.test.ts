@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { glob } from 'glob'
+import simpleGit from 'simple-git'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { build } from './build-docs'
@@ -59,6 +60,25 @@ async function createTempFiles(
     await fs.writeFile(filePath, file.content)
   }
 
+  // Initialize git repository
+  const git = simpleGit(tempDir)
+
+  await git.init()
+
+  // Locally set the git user config
+  await git.addConfig('user.name', 'Test User')
+  await git.addConfig('user.email', 'test@example.com')
+
+  // Add all files to git
+  await git.add('.')
+
+  // Use a fixed date for the initial commit
+  const initialCommitDate = new Date()
+  initialCommitDate.setMilliseconds(0) // git will drop off the milliseconds so if we don't do that then the times will miss-match
+  await git.commit('Initial commit', undefined, {
+    '--date': initialCommitDate.toISOString(),
+  })
+
   // Register cleanup unless preserveTemp is true
   if (!preserve) {
     onTestFinished(async () => {
@@ -90,6 +110,12 @@ async function createTempFiles(
     readFile: async (filePath: string): Promise<string> => {
       return fs.readFile(path.join(tempDir, filePath), 'utf-8')
     },
+
+    // Pass through the git instance incase we need to use it for something
+    git,
+
+    // Return the initial commit date
+    initialCommitDate,
   }
 }
 
@@ -141,7 +167,7 @@ const baseConfig = {
 describe('Basic Functionality', () => {
   test('Basic build test with simple files', async () => {
     // Create temp environment with minimal files array
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir, pathJoin, initialCommitDate } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -175,6 +201,7 @@ Testing with a simple page.`,
     expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(`---
 title: Simple Test
 description: This is a simple test page
+lastUpdated: ${initialCommitDate.toISOString()}
 ---
 
 # Simple Test Page
@@ -1009,7 +1036,7 @@ title: Quickstart
   })
 
   test('sdk in frontmatter filters the docs', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
+    const { tempDir, pathJoin, initialCommitDate } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -1050,6 +1077,7 @@ Testing with a simple page.`,
 title: Simple Test
 sdk: react
 canonical: /docs/:sdk:/simple-test
+lastUpdated: ${initialCommitDate.toISOString()}
 ---
 
 # Simple Test Page

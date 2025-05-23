@@ -102,10 +102,10 @@ English gerunds ("-ing" words like "running") turn verbs into nouns ("run" becom
 When learners are performing an order of operations, it helps for them to start with _where_ they need to be to perform the action.
 
 > ❌
-> Open your `.env file` in your Next.js project's folder.
+> Open your `.env.local file` in your Next.js project's folder.
 
 > ✅
-> In your Next.js project's root folder, open your `.env file`.
+> In your Next.js project's root folder, open your `.env.local file`.
 
 ### Use an active voice vs. passive voice
 
@@ -179,16 +179,6 @@ Use "ensure" instead of "make sure."
 
 > ✅
 > Ensure you have the correct permissions.
-
-### Sidenav vs. sidebar
-
-Use "sidenav" instead of "sidebar."
-
-> ❌
-> In the left sidebar, select **Users**.
-
-> ✅
-> In the left sidenav, select **Users**.
 
 ### Syntax for code example explanations
 

@@ -1,0 +1,53 @@
+---
+title: Handling requests with Go
+description: Learn how to handle authenticated requests with Go middleware using Clerk.
+---
+
+## Go Middleware
+
+The Clerk Go SDK provides an easy-to-use middleware that adds the active session to the request's context.
+
+**Pro tip!** If you are signed into the Clerk Dashboard, your Secret Key should become visible by clicking on the eye icon. Otherwise, you can find your keys in the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+
+```go {{ filename: 'main.go' }}
+package main
+
+import (
+	"net/http"
+
+	"github.com/clerk/clerk-sdk-go/v2"
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+	"github.com/clerk/clerk-sdk-go/v2/user"
+)
+
+func main() {
+	clerk.SetKey(`{{secret}}`)
+
+	mux := http.NewServeMux()
+	mux.Handle("/hello", clerkhttp.WithHeaderAuthorization()(hello()))
+	http.ListenAndServe(":8080", mux)
+}
+
+func hello() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		claims, ok := clerk.SessionClaimsFromContext(ctx)
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		usr, err := user.Get(ctx, claims.Subject)
+		if err != nil {
+			panic(err)
+		}
+		if usr == nil {
+			w.Write([]byte("User does not exist"))
+			return
+		}
+
+		w.Write([]byte("Hello " + *usr.FirstName))
+	}
+}
+```

@@ -47,6 +47,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
 
+import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
@@ -90,6 +91,7 @@ async function main() {
 
   const config = await createConfig({
     basePath: __dirname,
+    dataPath: '../data',
     docsPath: '../docs',
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
@@ -142,6 +144,7 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    skipApiErrors: false,
     cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
@@ -200,6 +203,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     dynamicRedirects = redirects.dynamicRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
+  }
+
+  if (!config.skipApiErrors) {
+    await generateApiErrorDocs(config)
+    console.info('✓ Generated API Error MDX files')
   }
 
   const userManifest = await getManifest()

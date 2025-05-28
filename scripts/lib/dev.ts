@@ -42,6 +42,10 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     }
   }
 
-  watcher.subscribe(config.docsPath, handleFileChange)
+  watcher.subscribe(config.dataPath, handleFileChange)
+  watcher.subscribe(config.docsPath, handleFileChange, {
+    // Ignore generated files
+    ignore: [`${config.docsPath}/errors/backend-api.mdx`, `${config.docsPath}/errors/frontend-api.mdx`],
+  })
   watcher.subscribe(config.typedocPath, handleFileChange)
 }

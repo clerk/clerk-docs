@@ -54,7 +54,7 @@ It happens when `auth()` is called, but `clerkMiddleware` hasn’t run. This can
 As a result, `ClerkProvider` attempts to call `auth()` **without context**, leading to this error:
 
 ```text
-  ⨯ [Error: Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware(). Please ensure the following:
+⨯ [Error: Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware(). Please ensure the following:
  - Your Middleware exists at ./src/middleware.(ts|js)
  - clerkMiddleware() is used in your Next.js Middleware.
  - Your Middleware matcher is configured to match this route or page.
@@ -76,79 +76,81 @@ You’ll typically observe:
 
 # How to fix it
 
-## **Fix #1: Correct the static asset paths**
+<Tabs items={["Correct the static asset paths", "Scope the ClerkProvider to a sub-layout"]}>
+  <Tab>
+    The ideal solution is to fix any incorrect asset paths. Ensure that all images, icons, or files are requested using valid URLs. When these requests succeed, no 404 is triggered, and the Clerk provider context works as expected.
 
-The ideal solution is to fix any incorrect asset paths. Ensure that all images, icons, or files are requested using valid URLs. When these requests succeed, no 404 is triggered, and the Clerk provider context works as expected.
+    This is the **root cause** and the cleanest fix.
+  </Tab>
 
-This is the **root cause** and the cleanest fix.
+  <Tab>
+    > [!IMPORTANT]
+    > This fix will prevent the `auth()` error as it moves `<ClerkProvider />` from the root layout, however it does not resolve the underlying issue which is a reference to a missing static asset.
 
-## **Fix #2:** Scope the `ClerkProvider` to a sub-layout
+    If you want to protect your app against similar issues in the future—or want to ensure that system-level errors (like 404s) don't rely on Clerk—you can refactor your layout structure.
 
-> [!IMPORTANT]
-> This fix will prevent the `auth()` error as it moves `<ClerkProvider />` from the root layout, however it does not resolve the underlying issue which is a reference to a missing static asset.
+    By moving `ClerkProvider` into a subfolder layout, you allow 404 pages and other global error routes to render without needing Clerk’s context.
 
-If you want to protect your app against similar issues in the future—or want to ensure that system-level errors (like 404s) don't rely on Clerk—you can refactor your layout structure.
+    **Before**
 
-By moving `ClerkProvider` into a subfolder layout, you allow 404 pages and other global error routes to render without needing Clerk’s context.
+    ```bash
+    app/
+      layout.ts  // includes <ClerkProvider />
+    ```
 
-**Before**
+    **After**
 
-```bash
-app/
-  layout.ts  // includes <ClerkProvider />
-```
+    ```bash
+    app/
+      layout.ts       // base layout without Clerk
+      (in-app)        // virtual folder - doesn't impact routing
+        layout.ts     // includes <ClerkProvider />
+        page.tsx
+    ```
 
-**After**
+    ### Example of new Clerk layout
 
-```bash
-app/
-  layout.ts       // base layout without Clerk
-  (in-app)        // virtual folder - doesn't impact routing
-    layout.ts     // includes <ClerkProvider />
-    page.tsx
-```
+    ```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
+    import { ClerkProvider } from '@clerk/nextjs'
 
-### Example of new Clerk layout
+    export default function AppLayout({ children }: { children: React.ReactNode }) {
+      return <ClerkProvider>{children}</ClerkProvider>
+    }
+    ```
 
-```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
-import { ClerkProvider } from '@clerk/nextjs'
+    Or loading Clerk built-in components:
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <ClerkProvider>{children}</ClerkProvider>
-}
-```
+    ```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
+    import {
+      ClerkProvider,
+      SignedIn,
+      SignedOut,
+      SignInButton,
+      SignUpButton,
+      UserButton,
+    } from '@clerk/nextjs'
 
-Or loading Clerk built-in components:
+    export default function AppLayout({ children }: { children: React.ReactNode }) {
+      return (
+        <ClerkProvider>
+          <header className="flex justify-end items-center p-4 gap-4 h-16">
+            <SignedOut>
+              <SignInButton />
+              <SignUpButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          {children}
+        </ClerkProvider>
+      )
+    }
+    ```
 
-```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
-import {
-  ClerkProvider,
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from '@clerk/nextjs'
-
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider>
-      <header className="flex justify-end items-center p-4 gap-4 h-16">
-        <SignedOut>
-          <SignInButton />
-          <SignUpButton />
-        </SignedOut>
-        <SignedIn>
-          <UserButton />
-        </SignedIn>
-      </header>
-      {children}
-    </ClerkProvider>
-  )
-}
-```
-
-This ensures the root layout (which handles top-level errors like 404s) does not rely on Clerk, avoiding the middleware mismatch error entirely.
+    This ensures the root layout (which handles top-level errors like 404s) does not rely on Clerk, avoiding the middleware mismatch error entirely.
+  </Tab>
+</Tabs>
 
 ## Summary
 

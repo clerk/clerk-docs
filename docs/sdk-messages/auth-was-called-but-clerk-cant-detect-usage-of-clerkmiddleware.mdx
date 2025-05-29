@@ -1,0 +1,168 @@
+---
+title: "Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()"
+description: Learn how to handle auth() was called but Clerk can't detect usage of clerkMiddleware() when getting 404 errors in Next.js.
+---
+
+**Error when requests that are not covered by clerkMiddleware get 404 return in a Clerk + Next.js App Router setup**
+
+## Why this error occurs
+
+This error commonly appears when using Clerk with Next.js and the `clerkMiddleware()` helper is configured *not* to run on static asset routes. Which is part of the default setup.
+
+### First scenario
+
+The most common cause of this error is when `auth()` is called **without** a `ClerkProvider` wrapping the component tree where Clerk components are used. This is a common pattern with React context and also used by many libraries.
+
+To prevent this, ensure that `ClerkProvider` is set up at a higher level in your component hierarchy than any Clerk components like [`<UserButton />`](https://clerk.com/docs/components/user/user-button), [`<SignedIn />`](https://clerk.com/docs/components/control/signed-in), or others. [Clerk's Next.js Quickstart](https://clerk.com/docs/quickstarts/nextjs) shows how to do this correctly in your root layout.
+
+```tsx {{ filename: 'app/layout.tsx' }}
+import {
+  ClerkProvider
+} from '@clerk/nextjs'
+import './globals.css'
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
+  )
+}
+```
+
+## Second scenario
+
+Beyond the general case, this error can also appear in a more subtle situation when `ClerkProvider` **is correctly configured**.
+
+It happens when `auth()` is called, but `clerkMiddleware` hasn’t run. This can occur if a request is made to a **non-existent static asset.** Static asset requests are excluded the matcher Clerk provides and often from other `middleware.ts` matchers, so `clerkMiddleware` doesn’t run for them. A typo or incorrect path is usually the problem in these cases.
+
+**Example**
+
+1. A user accesses `/dashboard`—*a valid page and matched route.*
+2. That page includes an `<img>` tag with a `src` pointing to an invalid path.
+3. A 404 error is triggered because of the invalid static asset request.
+4. Next.js serves the 404 response.
+5. The 404 page is rendered **within the root layout** — that's where Next.js injects their 404 page / component.
+6. Since `ClerkProvider` is usually placed in the root layout, it runs—but because the request didn’t match the Middleware, `clerkMiddleware` never executed.
+
+As a result, `ClerkProvider` attempts to call `auth()` **without context**, leading to this error:
+
+```text
+  ⨯ [Error: Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware(). Please ensure the following:
+ - Your Middleware exists at ./src/middleware.(ts|js)
+ - clerkMiddleware() is used in your Next.js Middleware.
+ - Your Middleware matcher is configured to match this route or page.
+ - If you are using the src directory, make sure the Middleware file is inside of it.
+
+ For more details, see https://clerk.com/docs/quickstarts/nextjs
+ ] {
+   digest: '3346914516'
+ }
+```
+
+This happens because `auth()` inside `ClerkProvider` expects the Middleware to have already run. When it hasn’t, Clerk can’t initialize the session context properly.
+
+You’ll typically observe:
+
+- A `500` or `404` error in your browser’s network tab.
+- `GET /{non-existing-path}.{static-asset-extension} 500 | 404` in your terminal or logs.
+- The above Clerk error in the console.
+
+# How to fix it
+
+## **Fix #1: Correct the static asset paths**
+
+The ideal solution is to fix any incorrect asset paths. Ensure that all images, icons, or files are requested using valid URLs. When these requests succeed, no 404 is triggered, and the Clerk provider context works as expected.
+
+This is the **root cause** and the cleanest fix.
+
+
+
+## **Fix #2:** Scope the `ClerkProvider` to a sub-layout
+
+> [!IMPORTANT]
+> This fix will prevent the `auth()` error as it moves `<ClerkProvider />` from the root layout, however it does not resolve the underlying issue which is a reference to a missing static asset.
+
+If you want to protect your app against similar issues in the future—or want to ensure that system-level errors (like 404s) don't rely on Clerk—you can refactor your layout structure.
+
+By moving `ClerkProvider` into a subfolder layout, you allow 404 pages and other global error routes to render without needing Clerk’s context.
+
+**Before**
+
+```bash
+app/
+  layout.ts  // includes <ClerkProvider />
+```
+
+**After**
+
+```bash
+app/
+  layout.ts       // base layout without Clerk
+  (in-app)        // virtual folder - doesn't impact routing
+    layout.ts     // includes <ClerkProvider />
+    page.tsx
+```
+
+### Example of new Clerk layout
+
+```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
+import { ClerkProvider } from "@clerk/nextjs";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return <ClerkProvider>{children}</ClerkProvider>;
+}
+```
+
+Or loading Clerk built-in components:
+
+```tsx {{ filename: 'app/(in-app)/layout.tsx' }}
+import {
+  ClerkProvider,
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from "@clerk/nextjs";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ClerkProvider>
+      <header className="flex justify-end items-center p-4 gap-4 h-16">
+        <SignedOut>
+          <SignInButton />
+          <SignUpButton />
+        </SignedOut>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </header>
+      {children}
+    </ClerkProvider>
+  );
+}
+```
+
+This ensures the root layout (which handles top-level errors like 404s) does not rely on Clerk, avoiding the middleware mismatch error entirely.
+
+
+## Summary
+
+This issue is caused by Next.js 404s running with the root layout — and `ClerkProvider` — in a request that `clerkMiddleware()` hasn't run.
+
+- Fix the static asset paths
+- Refactor your layouts so the root layout doesn't rely on `ClerkProvider` and the 404s won't trigger different errors.
+
+**Handlful links:**
+
+- [More on Clerk Middleware setup](https://clerk.com/docs/references/nextjs/clerk-middleware)
+- [To get started with Clerk and Next.js](https://clerk.com/docs/quickstarts/nextjs)

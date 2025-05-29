@@ -143,6 +143,7 @@ async function main() {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
+      deprecatedDefault: false,
     },
     flags: {
       watch: args.includes('--watch'),
@@ -261,7 +262,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifestFirstPass = await traverseTree(
-    { items: userManifest, sdk: undefined as undefined | SDK[] },
+    { items: userManifest, sdk: undefined as undefined | SDK[], deprecated: undefined as undefined | true },
     async (item, tree) => {
       if (!item.href?.startsWith(config.baseDocsLink)) {
         return {
@@ -305,6 +306,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       return {
         ...item,
         sdk,
+        deprecated: doc.frontmatter.deprecated,
       }
     },
     async ({ items, ...details }, tree) => {
@@ -350,7 +352,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
-    { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
+    {
+      items: sdkScopedManifestFirstPass,
+      sdk: undefined as undefined | SDK[],
+      deprecated: undefined as undefined | true,
+    },
     async (item, tree) => item,
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
@@ -363,6 +369,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return uniqueSDKs
       })()
 
+      const deprecated = items?.every((item) => item.every((item) => item.deprecated))
+
       // This is the sdk of the group
       const groupSDK = details.sdk
 
@@ -371,12 +379,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
       if (groupsItemsCombinedSDKs.length === 0) {
-        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+        return { ...details, sdk: groupSDK ?? parentSDK, items, deprecated } as ManifestGroup
       }
 
       // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
       if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
-        return { ...details, sdk: undefined, items } as ManifestGroup
+        return { ...details, sdk: undefined, items, deprecated } as ManifestGroup
       }
 
       if (groupSDK !== undefined && groupSDK.length > 0) {
@@ -384,6 +392,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           ...details,
           sdk: groupSDK,
           items,
+          deprecated,
         } as ManifestGroup
       }
 
@@ -394,6 +403,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // If there are children items, then we combine the sdks of the group and the children items sdks
         sdk: combinedSDKs,
         items,
+        deprecated,
       } as ManifestGroup
     },
     (item, error) => {
@@ -505,6 +515,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           icon: item.icon,
           target: item.target,
           sdk: item.sdk,
+          deprecated: item.deprecated === config.manifestOptions.deprecatedDefault ? undefined : item.deprecated,
         }),
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
@@ -516,6 +527,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
           sdk: group.sdk,
           items: group.items,
+          deprecated: group.deprecated === config.manifestOptions.deprecatedDefault ? undefined : group.deprecated,
         }),
       ),
     }),

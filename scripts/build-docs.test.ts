@@ -164,6 +164,7 @@ const baseConfig = {
     wrapDefault: true,
     collapseDefault: false,
     hideTitleDefault: false,
+    deprecatedDefault: false,
   },
   flags: {
     skipGit: true,
@@ -459,6 +460,7 @@ title: Simple Test
           wrapDefault: false,
           collapseDefault: false,
           hideTitleDefault: false,
+          deprecatedDefault: false,
         },
       }),
     )
@@ -4344,5 +4346,161 @@ describe('API Errors Generation', () => {
     // Error status codes
     expect(bapi).toContain('Status Code: 400')
     expect(fapi).toContain('Status Code: 400')
+  })
+})
+
+describe('File deprecation', () => {
+  test('Should include the deprecation frontmatter in the dist file', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+deprecated: true
+---
+
+# API Documentation`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile('dist/api-doc.mdx')).toContain(`---
+title: API Documentation
+description: Generated API docs
+deprecated: true
+---
+
+# API Documentation`)
+  })
+
+  test('Should include the deprecation field in the manifest', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+deprecated: true
+---
+
+# API Documentation`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('dist/manifest.json'))).toEqual({
+      navigation: [
+        [
+          {
+            href: '/docs/api-doc',
+            title: 'API Doc',
+            deprecated: true,
+          },
+        ],
+      ],
+    })
+  })
+
+  test('Should include the deprecation field in the group above', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'API',
+                items: [
+                  [
+                    { title: 'API Doc', href: '/docs/api-doc' },
+                    { title: 'API Doc 2', href: '/docs/api-doc-2' },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+deprecated: true
+---
+
+# API Documentation`,
+      },
+      {
+        path: './docs/api-doc-2.mdx',
+        content: `---
+title: API Documentation 2
+description: Generated API docs 2
+deprecated: true
+---
+
+# API Documentation 2`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('dist/manifest.json'))).toEqual({
+      navigation: [
+        [
+          {
+            title: 'API',
+            deprecated: true,
+            items: [
+              [
+                {
+                  title: 'API Doc',
+                  href: '/docs/api-doc',
+                  deprecated: true,
+                },
+                {
+                  title: 'API Doc 2',
+                  href: '/docs/api-doc-2',
+                  deprecated: true,
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
   })
 })

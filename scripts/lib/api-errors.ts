@@ -118,7 +118,7 @@ ${fileErrors}
 export async function generateApiErrorDocs(config: BuildConfig) {
   try {
     // Read the API errors JSON file
-    const apiErrorsPath = path.join(config.dataPath, 'api-errors.json')
+    const apiErrorsPath = path.join(config.dataPath, 'api_errors.json')
     const apiErrorsContent = await fs.readFile(apiErrorsPath, 'utf-8')
     const errors: ApiError[] = JSON.parse(apiErrorsContent)
 

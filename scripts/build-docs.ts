@@ -143,12 +143,14 @@ async function main() {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
+      deprecatedDefault: false,
     },
-    skipApiErrors: false,
-    cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
+      skipApiErrors: args.includes('--skip-api-errors'),
+      clean: args.includes('--clean'),
+      skipGit: args.includes('--skip-git'),
     },
   })
 
@@ -167,7 +169,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, { ...config, cleanDist: true }, build)
+    watchAndRebuild(store, { ...config, flags: { ...config.flags, clean: true } }, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -205,7 +207,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
-  if (!config.skipApiErrors) {
+  if (!config.flags.skipApiErrors) {
     await generateApiErrorDocs(config)
     console.info('✓ Generated API Error MDX files')
   }
@@ -260,7 +262,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifestFirstPass = await traverseTree(
-    { items: userManifest, sdk: undefined as undefined | SDK[] },
+    { items: userManifest, sdk: undefined as undefined | SDK[], deprecated: undefined as undefined | true },
     async (item, tree) => {
       if (!item.href?.startsWith(config.baseDocsLink)) {
         return {
@@ -304,6 +306,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       return {
         ...item,
         sdk,
+        deprecated: doc.frontmatter.deprecated,
       }
     },
     async ({ items, ...details }, tree) => {
@@ -349,7 +352,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
-    { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
+    {
+      items: sdkScopedManifestFirstPass,
+      sdk: undefined as undefined | SDK[],
+      deprecated: undefined as undefined | true,
+    },
     async (item, tree) => item,
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
@@ -362,6 +369,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return uniqueSDKs
       })()
 
+      const deprecated = items?.every((item) => item.every((item) => item.deprecated))
+
       // This is the sdk of the group
       const groupSDK = details.sdk
 
@@ -370,12 +379,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       // If there are no children items, then we either use the group we are looking at sdks if its defined, or its parent group
       if (groupsItemsCombinedSDKs.length === 0) {
-        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
+        return { ...details, sdk: groupSDK ?? parentSDK, items, deprecated } as ManifestGroup
       }
 
       // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
       if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
-        return { ...details, sdk: undefined, items } as ManifestGroup
+        return { ...details, sdk: undefined, items, deprecated } as ManifestGroup
       }
 
       if (groupSDK !== undefined && groupSDK.length > 0) {
@@ -383,6 +392,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           ...details,
           sdk: groupSDK,
           items,
+          deprecated,
         } as ManifestGroup
       }
 
@@ -393,6 +403,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // If there are children items, then we combine the sdks of the group and the children items sdks
         sdk: combinedSDKs,
         items,
+        deprecated,
       } as ManifestGroup
     },
     (item, error) => {
@@ -504,6 +515,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           icon: item.icon,
           target: item.target,
           sdk: item.sdk,
+          deprecated: item.deprecated === config.manifestOptions.deprecatedDefault ? undefined : item.deprecated,
         }),
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
@@ -515,6 +527,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
           sdk: group.sdk,
           items: group.items,
+          deprecated: group.deprecated === config.manifestOptions.deprecatedDefault ? undefined : group.deprecated,
         }),
       ),
     }),
@@ -533,9 +546,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .use(
           insertFrontmatter({
-            lastUpdated: (
-              (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-            ).toISOString(),
+            lastUpdated: (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
           }),
         )
         .process(doc.vfile)
@@ -589,9 +600,8 @@ template: wide
             .use(
               insertFrontmatter({
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href,
-                lastUpdated: (
-                  (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-                ).toISOString(),
+                lastUpdated:
+                  (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
               }),
             )
             .process({

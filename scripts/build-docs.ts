@@ -144,11 +144,12 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
-    skipApiErrors: false,
-    cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
+      skipApiErrors: args.includes('--skip-api-errors'),
+      clean: args.includes('--clean'),
+      skipGit: args.includes('--skip-git'),
     },
   })
 
@@ -167,7 +168,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, { ...config, cleanDist: true }, build)
+    watchAndRebuild(store, { ...config, flags: { ...config.flags, clean: true } }, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -205,7 +206,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
-  if (!config.skipApiErrors) {
+  if (!config.flags.skipApiErrors) {
     await generateApiErrorDocs(config)
     console.info('✓ Generated API Error MDX files')
   }
@@ -533,9 +534,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .use(
           insertFrontmatter({
-            lastUpdated: (
-              (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-            ).toISOString(),
+            lastUpdated: (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
           }),
         )
         .process(doc.vfile)
@@ -589,9 +588,8 @@ template: wide
             .use(
               insertFrontmatter({
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href,
-                lastUpdated: (
-                  (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-                ).toISOString(),
+                lastUpdated:
+                  (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
               }),
             )
             .process({

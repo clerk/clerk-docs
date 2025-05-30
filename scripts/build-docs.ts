@@ -81,6 +81,7 @@ async function main() {
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+        'sdk-messages/auth-was-called-but-clerk-cant-detect-usage-of-clerkmiddleware.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],

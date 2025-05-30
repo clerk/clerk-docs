@@ -116,6 +116,8 @@ ${fileErrors}
 }
 
 export async function generateApiErrorDocs(config: BuildConfig) {
+  if (config.skipApiErrors) return []
+
   try {
     // Read the API errors JSON file
     const apiErrorsPath = path.join(config.dataPath, 'api_errors.json')
@@ -138,12 +140,23 @@ export async function generateApiErrorDocs(config: BuildConfig) {
       },
     )
 
-    // Write the output file
-    const outputPathBAPI = path.join(config.docsPath, 'errors', 'backend-api.mdx')
-    const outputPathFAPI = path.join(config.docsPath, 'errors', 'frontend-api.mdx')
+    const outputPath = path.join(config.distTempPath, 'errors')
+    await fs.mkdir(outputPath, { recursive: true })
 
-    await fs.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
-    await fs.writeFile(outputPathFAPI, docsFAPI, 'utf-8')
+    // Write the output file
+    await fs.writeFile(path.join(outputPath, 'backend-api.mdx'), docsBAPI, 'utf-8')
+    await fs.writeFile(path.join(outputPath, 'frontend-api.mdx'), docsFAPI, 'utf-8')
+
+    return [
+      {
+        href: 'errors/backend-api.mdx',
+        content: docsBAPI,
+      },
+      {
+        href: 'errors/frontend-api.mdx',
+        content: docsFAPI,
+      },
+    ]
   } catch (error) {
     console.error('Error generating documentation:', error)
     throw error

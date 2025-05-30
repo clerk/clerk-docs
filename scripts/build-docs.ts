@@ -205,8 +205,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
+  const apiErrorsFiles = await generateApiErrorDocs(config)
   if (!config.skipApiErrors) {
-    await generateApiErrorDocs(config)
     console.info('✓ Generated API Error MDX files')
   }
 
@@ -243,19 +243,28 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
-  const docsArray = await Promise.all(
-    docsFiles.map(async (file) => {
+  const docsArray = await Promise.all([
+    ...docsFiles.map(async (file) => {
       const href = removeMdxSuffix(`${config.baseDocsLink}${file.path}`)
       const inManifest = docsInManifest.has(href)
 
       const markdownFile = await markdownCache(href, () =>
-        parseMarkdownFile(href, partials, typedocs, inManifest, 'docs'),
+        parseMarkdownFile({ href }, partials, typedocs, inManifest, 'docs'),
       )
 
       docsMap.set(href, markdownFile)
       return markdownFile
     }),
-  )
+    ...apiErrorsFiles.map(async (file) => {
+      const href = removeMdxSuffix(`${config.baseDocsLink}${file.href}`)
+      const inManifest = docsInManifest.has(href)
+
+      const markdownFile = await parseMarkdownFile(file, partials, typedocs, inManifest, 'docs')
+
+      docsMap.set(href, markdownFile)
+      return markdownFile
+    }),
+  ])
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest

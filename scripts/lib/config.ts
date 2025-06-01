@@ -38,11 +38,12 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
-  skipApiErrors?: boolean
-  cleanDist: boolean
   flags?: {
     watch?: boolean
     controlled?: boolean
+    skipGit?: boolean
+    clean?: boolean
+    skipApiErrors?: boolean
   }
 }
 
@@ -111,12 +112,12 @@ export async function createConfig(config: BuildConfigOptions) {
         }
       : null,
 
-    skipApiErrors: config.skipApiErrors ?? false,
-    cleanDist: config.cleanDist,
-
     flags: {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
+      skipGit: config.flags?.skipGit ?? false,
+      clean: config.flags?.clean ?? false,
+      skipApiErrors: config.flags?.skipApiErrors ?? false,
     },
   }
 }

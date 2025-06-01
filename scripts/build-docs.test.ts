@@ -4290,8 +4290,8 @@ describe('API Errors Generation', () => {
         }),
       },
       {
-        path: './data/api-errors.json',
-        content: await fs.readFile(path.join(__dirname, '..', 'data', 'api-errors.json'), 'utf-8'),
+        path: './data/api_errors.json',
+        content: await fs.readFile(path.join(__dirname, '..', 'data', 'api_errors.json'), 'utf-8'),
       },
       {
         path: './docs/errors/backend-api.mdx',

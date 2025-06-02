@@ -166,7 +166,6 @@ const baseConfig = {
     hideTitleDefault: false,
   },
   flags: {
-    skipGit: true,
     clean: true,
     skipApiErrors: true,
   },
@@ -203,11 +202,7 @@ Testing with a simple page.`,
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react'],
-        flags: {
-          skipGit: false,
-          clean: true,
-          skipApiErrors: true,
-        },
+        gitPath: path.join(tempDir, '../'),
       }),
     )
 
@@ -4308,7 +4303,6 @@ describe('API Errors Generation', () => {
         validSdks: ['react'],
         flags: {
           skipApiErrors: false,
-          skipGit: true,
           clean: true,
         },
       }),

@@ -99,6 +99,7 @@ async function main() {
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
     publicPath: '../public',
+    gitPath: '../',
     redirects: {
       static: {
         inputPath: '../redirects/static/docs.json',
@@ -149,7 +150,6 @@ async function main() {
       controlled: args.includes('--controlled'),
       skipApiErrors: args.includes('--skip-api-errors'),
       clean: args.includes('--clean'),
-      skipGit: args.includes('--skip-git'),
     },
   })
 

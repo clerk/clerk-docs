@@ -1,15 +1,14 @@
-import simpleGit from 'simple-git'
+import { Repository } from '@napi-rs/simple-git'
 import type { BuildConfig } from './config'
 
 export const getLastCommitDate = (config: BuildConfig) => {
-  if (config.flags.skipGit) {
-    return async () => null
+  if (config.gitPath === undefined) {
+    return async (filePath: string) => null
   }
 
-  const git = simpleGit(config.docsPath)
+  const repo = new Repository(config.gitPath)
 
   return async (filePath: string) => {
-    const log = await git.log({ file: filePath, n: 1 })
-    return log.latest?.date ? new Date(log.latest.date) : null
+    return new Date(await repo.getFileLatestModifiedDateAsync(filePath))
   }
 }

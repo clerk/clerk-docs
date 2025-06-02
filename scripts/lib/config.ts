@@ -17,6 +17,7 @@ type BuildConfigOptions = {
   distPath: string
   typedocPath: string
   publicPath?: string
+  gitPath?: string
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -41,7 +42,6 @@ type BuildConfigOptions = {
   flags?: {
     watch?: boolean
     controlled?: boolean
-    skipGit?: boolean
     clean?: boolean
     skipApiErrors?: boolean
   }
@@ -86,6 +86,9 @@ export async function createConfig(config: BuildConfigOptions) {
     publicRelativePath: config.publicPath,
     publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
+    gitRelativePath: config.gitPath,
+    gitPath: config.gitPath ? resolve(config.gitPath) : undefined,
+
     ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
     ignoreWarnings: config.ignoreWarnings ?? {
       docs: {},
@@ -115,7 +118,6 @@ export async function createConfig(config: BuildConfigOptions) {
     flags: {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
-      skipGit: config.flags?.skipGit ?? false,
       clean: config.flags?.clean ?? false,
       skipApiErrors: config.flags?.skipApiErrors ?? false,
     },

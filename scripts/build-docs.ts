@@ -47,6 +47,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import readdirp from 'readdirp'
 
+import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
@@ -90,6 +91,7 @@ async function main() {
 
   const config = await createConfig({
     basePath: __dirname,
+    dataPath: '../data',
     docsPath: '../docs',
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
@@ -142,10 +144,12 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
-    cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
+      skipApiErrors: args.includes('--skip-api-errors'),
+      clean: args.includes('--clean'),
+      skipGit: args.includes('--skip-git'),
     },
   })
 
@@ -164,7 +168,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, { ...config, cleanDist: true }, build)
+    watchAndRebuild(store, { ...config, flags: { ...config.flags, clean: true } }, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -200,6 +204,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     dynamicRedirects = redirects.dynamicRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
+  }
+
+  if (!config.flags.skipApiErrors) {
+    await generateApiErrorDocs(config)
+    console.info('✓ Generated API Error MDX files')
   }
 
   const userManifest = await getManifest()
@@ -525,9 +534,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
         .use(
           insertFrontmatter({
-            lastUpdated: (
-              (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-            ).toISOString(),
+            lastUpdated: (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
           }),
         )
         .process(doc.vfile)
@@ -581,9 +588,8 @@ template: wide
             .use(
               insertFrontmatter({
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href,
-                lastUpdated: (
-                  (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-                ).toISOString(),
+                lastUpdated:
+                  (await getCommitDate(path.join(config.docsPath, '..', filePath)))?.toISOString() ?? undefined,
               }),
             )
             .process({

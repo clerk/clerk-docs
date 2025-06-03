@@ -44,6 +44,7 @@ type BuildConfigOptions = {
     skipGit?: boolean
     clean?: boolean
     skipApiErrors?: boolean
+    copyInDist?: boolean
   }
 }
 
@@ -118,6 +119,7 @@ export async function createConfig(config: BuildConfigOptions) {
       skipGit: config.flags?.skipGit ?? false,
       clean: config.flags?.clean ?? false,
       skipApiErrors: config.flags?.skipApiErrors ?? false,
+      copyInDist: config.flags?.copyInDist ?? false,
     },
   }
 }

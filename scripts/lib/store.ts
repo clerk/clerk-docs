@@ -36,11 +36,11 @@ export const invalidateFile =
 export const getMarkdownCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<MarkdownFile>) => {
     const cached = store.markdown.get(key)
-    if (cached) return structuredClone(cached)
+    if (cached) return { ...structuredClone(cached), cached: true }
 
     const result = await cacheMiss(key)
     store.markdown.set(key, structuredClone(result))
-    return result
+    return { ...result, cached: false }
   }
 }
 

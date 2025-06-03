@@ -169,7 +169,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, { ...config, flags: { ...config.flags, clean: true } }, build)
+    watchAndRebuild(store, { ...config, flags: { ...config.flags, clean: true, copyInDist: true } }, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -191,6 +191,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
 
   await ensureDir(config.distFinalPath)
+
+  if (config.flags?.copyInDist) {
+    await fs.cp(config.distFinalPath, config.distTempPath, { recursive: true })
+  }
 
   let staticRedirects: Record<string, Redirect> | null = null
   let dynamicRedirects: Redirect[] | null = null
@@ -524,6 +528,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const coreVFiles = await Promise.all(
     docsArray.map(async (doc) => {
+      if (doc.cached === true) return doc.vfile
+
       const filePath = `${doc.href}.mdx`
 
       const vfile = await remark()
@@ -574,6 +580,7 @@ template: wide
     config.validSdks.map(async (targetSdk) => {
       const vFiles = await Promise.all(
         docsArray.map(async (doc) => {
+          if (doc.cached === true) return doc.vfile
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 

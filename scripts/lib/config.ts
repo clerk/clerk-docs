@@ -42,9 +42,7 @@ type BuildConfigOptions = {
     watch?: boolean
     controlled?: boolean
     skipGit?: boolean
-    clean?: boolean
     skipApiErrors?: boolean
-    copyInDist?: boolean
   }
 }
 
@@ -117,9 +115,7 @@ export async function createConfig(config: BuildConfigOptions) {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
       skipGit: config.flags?.skipGit ?? false,
-      clean: config.flags?.clean ?? false,
       skipApiErrors: config.flags?.skipApiErrors ?? false,
-      copyInDist: config.flags?.copyInDist ?? false,
     },
   }
 }

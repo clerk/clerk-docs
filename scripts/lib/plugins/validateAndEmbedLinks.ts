@@ -10,15 +10,16 @@ import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
 import { type BuildConfig } from '../config'
 import { safeMessage, type WarningsSection } from '../error-messages'
-import { DocsMap } from '../store'
+import { markDocumentDirty, type DocsMap, type Store } from '../store'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
 import { findComponent } from '../utils/findComponent'
 
 export const validateAndEmbedLinks =
-  (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
+  (config: BuildConfig, store: Store, docsMap: DocsMap, filePath: string, section: WarningsSection, href?: string) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const markDirty = markDocumentDirty(store)
     const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
@@ -27,7 +28,7 @@ export const validateAndEmbedLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return node
+      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
       if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed
@@ -35,9 +36,9 @@ export const validateAndEmbedLinks =
 
       let [url, hash] = (node.url as string).split('#')
 
-      if (url === '' && doc !== undefined) {
+      if (url === '' && href !== undefined) {
         // If the link is just a hash, then we need to link to the same doc
-        url = doc.href
+        url = href
       }
 
       const ignore = config.ignoredLink(url)
@@ -49,6 +50,8 @@ export const validateAndEmbedLinks =
         safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [url], node.position)
         return node
       }
+
+      markDirty(filePath, linkedDoc.file.filePath)
 
       if (hash !== undefined) {
         const hasHash = linkedDoc.headingsHashes.has(hash)

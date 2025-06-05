@@ -4,22 +4,25 @@
 //   - only embed the partials contents in to the markdown
 //   - both report warnings and embed the partials contents
 
-import type { BuildConfig } from '../config'
 import type { Node } from 'unist'
-import type { VFile } from 'vfile'
 import { map as mdastMap } from 'unist-util-map'
-import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
+import type { VFile } from 'vfile'
+import type { BuildConfig } from '../config'
 import { safeMessage } from '../error-messages'
+import { markDocumentDirty, type Store } from '../store'
+import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
+import type { DocsFile } from '../io'
 
 export const checkPartials =
   (
     config: BuildConfig,
+    store: Store,
     partials: {
       node: Node
       path: string
     }[],
-    filePath: string,
+    file: DocsFile,
     options: {
       reportWarnings: boolean
       embed: boolean
@@ -27,6 +30,8 @@ export const checkPartials =
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const markDirty = markDocumentDirty(store, true)
+
     return mdastMap(tree, (node) => {
       const partialSrc = extractComponentPropValueFromNode(
         config,
@@ -36,14 +41,14 @@ export const checkPartials =
         'src',
         true,
         'docs',
-        filePath,
+        file.filePath,
       )
 
       if (partialSrc === undefined) return node
 
       if (partialSrc.startsWith('_partials/') === false) {
         if (options.reportWarnings === true) {
-          safeMessage(config, vfile, filePath, 'docs', 'include-src-not-partials', [], node.position)
+          safeMessage(config, vfile, file.filePath, 'docs', 'include-src-not-partials', [], node.position)
         }
         return node
       }
@@ -55,7 +60,7 @@ export const checkPartials =
           safeMessage(
             config,
             vfile,
-            filePath,
+            file.filePath,
             'docs',
             'partial-not-found',
             [removeMdxSuffix(partialSrc)],
@@ -66,6 +71,7 @@ export const checkPartials =
       }
 
       if (options.embed === true) {
+        markDirty(file.filePath, `${config.docsRelativePath}/${removeMdxSuffix(partialSrc)}.mdx`)
         return Object.assign(node, partial.node)
       }
 

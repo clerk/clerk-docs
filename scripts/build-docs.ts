@@ -131,6 +131,7 @@ async function main() {
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+        'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],

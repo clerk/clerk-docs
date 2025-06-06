@@ -9,7 +9,12 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 
 export const validateIfComponents =
-  (config: BuildConfig, filePath: string, doc: { href: string; sdk?: SDK[] }, flatSDKScopedManifest: ManifestItem[]) =>
+  (
+    config: BuildConfig,
+    filePath: string,
+    doc: { file: { href: string }; sdk?: SDK[] },
+    flatSDKScopedManifest: ManifestItem[],
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     mdastVisit(tree, (node) => {
@@ -21,7 +26,7 @@ export const validateIfComponents =
 
       if (sdksFilter === undefined) return
 
-      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.href)
+      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
 
       const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
 
@@ -59,7 +64,7 @@ export const validateIfComponents =
               filePath,
               'docs',
               'if-component-sdk-not-in-manifest',
-              [sdk, doc.href],
+              [sdk, doc.file.href],
               node.position,
             )
           }

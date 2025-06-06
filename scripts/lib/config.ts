@@ -42,7 +42,6 @@ type BuildConfigOptions = {
     watch?: boolean
     controlled?: boolean
     skipGit?: boolean
-    clean?: boolean
     skipApiErrors?: boolean
   }
 }
@@ -116,7 +115,6 @@ export async function createConfig(config: BuildConfigOptions) {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
       skipGit: config.flags?.skipGit ?? false,
-      clean: config.flags?.clean ?? false,
       skipApiErrors: config.flags?.skipApiErrors ?? false,
     },
   }

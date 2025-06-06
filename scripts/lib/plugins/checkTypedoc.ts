@@ -20,6 +20,7 @@ export const checkTypedoc =
     typedocs: { path: string; node: Node }[],
     filePath: string,
     options: { reportWarnings: boolean; embed: boolean },
+    foundTypedoc?: (typedoc: string) => void,
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
@@ -59,6 +60,8 @@ export const checkTypedoc =
         }
         return node
       }
+
+      foundTypedoc?.(`${removeMdxSuffix(typedocSrc)}.mdx`)
 
       if (options.embed === true) {
         return Object.assign(node, typedoc.node)

@@ -64,7 +64,7 @@ export const errorMessages = {
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
 
   // File reading errors
-  'file-read-error': (filePath: string): string => `file ${filePath} doesn't exist`,
+  'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,
   'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
   'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
   'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,

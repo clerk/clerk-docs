@@ -24,10 +24,9 @@ import { checkTypedoc } from './plugins/checkTypedoc'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
-import type { Store } from './store'
 
 export const parseInMarkdownFile =
-  (config: BuildConfig, store: Store) =>
+  (config: BuildConfig) =>
   async (
     file: DocsFile,
     partials: { path: string; content: string; node: Node }[],
@@ -68,7 +67,7 @@ export const parseInMarkdownFile =
           frontmatter = fm
         }),
       )
-      .use(checkPartials(config, store, partials, file, { reportWarnings: true, embed: false }))
+      .use(checkPartials(config, partials, file, { reportWarnings: true, embed: false }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }))
       .process({
         path: file.relativeFilePath,
@@ -80,7 +79,7 @@ export const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
-      .use(checkPartials(config, store, partials, file, { reportWarnings: false, embed: true }))
+      .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
       .use(() => (tree, vfile) => {

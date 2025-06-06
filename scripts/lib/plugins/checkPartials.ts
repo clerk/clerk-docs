@@ -9,15 +9,13 @@ import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
 import { safeMessage } from '../error-messages'
-import { type Store } from '../store'
+import type { DocsFile } from '../io'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
-import type { DocsFile } from '../io'
 
 export const checkPartials =
   (
     config: BuildConfig,
-    store: Store,
     partials: {
       node: Node
       path: string

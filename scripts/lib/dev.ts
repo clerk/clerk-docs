@@ -2,10 +2,10 @@
 // invalidates the cache and kicks off a rebuild of the docs
 
 import watcher from '@parcel/watcher'
+import path from 'path'
+import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
-import type { build } from '../build-docs'
-import path from 'path'
 
 export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)

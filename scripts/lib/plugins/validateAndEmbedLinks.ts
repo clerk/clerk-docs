@@ -10,15 +10,14 @@ import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
 import { type BuildConfig } from '../config'
 import { safeMessage, type WarningsSection } from '../error-messages'
-import { type DocsMap, type Store } from '../store'
+import { type DocsMap } from '../store'
+import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
-import { findComponent } from '../utils/findComponent'
 
 export const validateAndEmbedLinks =
   (
     config: BuildConfig,
-    store: Store,
     docsMap: DocsMap,
     filePath: string,
     section: WarningsSection,

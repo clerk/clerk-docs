@@ -182,7 +182,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
-  const parseMarkdownFile = parseInMarkdownFile(config, store)
+  const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
   const markdownCache = getMarkdownCache(store)
@@ -418,7 +418,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, store, docsMap, partialPath, 'partials', (linkInPartial) => {
+            validateAndEmbedLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
@@ -456,7 +456,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+            validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
               links.add(linkInTypedoc)
             }),
           )
@@ -482,7 +482,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
               }),
             )
@@ -553,7 +553,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             validateAndEmbedLinks(
               config,
-              store,
               docsMap,
               doc.file.filePath,
               'docs',
@@ -564,16 +563,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkPartials(
-              config,
-              store,
-              validatedPartials,
-              doc.file,
-              { reportWarnings: false, embed: true },
-              (partial) => {
-                foundPartials.add(partial)
-              },
-            ),
+            checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
+              foundPartials.add(partial)
+            }),
           )
           .use(
             checkTypedoc(
@@ -650,8 +642,8 @@ template: wide
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, store, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-            .use(checkPartials(config, store, partials, doc.file, { reportWarnings: true, embed: true }))
+            .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+            .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
             .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
             .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
             .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))

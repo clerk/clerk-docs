@@ -10,6 +10,7 @@ export type Frontmatter = {
   title: string
   description?: string
   sdk?: SDK[]
+  deprecated?: boolean
 }
 
 export const extractFrontmatter =
@@ -33,7 +34,7 @@ export const extractFrontmatter =
         if (!('value' in node)) return
         if (typeof node.value !== 'string') return
 
-        const frontmatterYaml: Record<'title' | 'description' | 'sdk', string | undefined> = yaml.parse(node.value)
+        const frontmatterYaml = yaml.parse(node.value)
 
         const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
 
@@ -64,6 +65,7 @@ export const extractFrontmatter =
           title: frontmatterYaml.title,
           description: frontmatterYaml.description,
           sdk: frontmatterSDKs,
+          deprecated: frontmatterYaml.deprecated === true,
         }
       },
     )

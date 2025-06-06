@@ -9,7 +9,7 @@ import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
 import { safeMessage } from '../error-messages'
-import { markDocumentDirty, type Store } from '../store'
+import { type Store } from '../store'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import type { DocsFile } from '../io'
@@ -27,11 +27,10 @@ export const checkPartials =
       reportWarnings: boolean
       embed: boolean
     },
+    foundPartial?: (partial: string) => void,
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
-    const markDirty = markDocumentDirty(store, true)
-
     return mdastMap(tree, (node) => {
       const partialSrc = extractComponentPropValueFromNode(
         config,
@@ -70,8 +69,9 @@ export const checkPartials =
         return node
       }
 
+      foundPartial?.(`${removeMdxSuffix(partialSrc)}.mdx`)
+
       if (options.embed === true) {
-        markDirty(file.filePath, `${config.docsRelativePath}/${removeMdxSuffix(partialSrc)}.mdx`)
         return Object.assign(node, partial.node)
       }
 

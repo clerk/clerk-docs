@@ -25,7 +25,7 @@ export const createBlankStore = () => ({
   coreDocs: new Map() as CoreDocsMap,
   partials: new Map() as PartialsMap,
   typedocs: new Map() as TypedocsMap,
-  dirtyDocMap: new Map() as Map<string, Set<[string, boolean]>>,
+  dirtyDocMap: new Map() as Map<string, Set<string>>,
 })
 
 export type Store = ReturnType<typeof createBlankStore>
@@ -33,7 +33,7 @@ export type Store = ReturnType<typeof createBlankStore>
 export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) =>
   (filePath: string, invalidateAdjacentDocs: boolean = true) => {
-    console.log(`invalidating ${filePath} ${invalidateAdjacentDocs ? 'and adjacent docs' : ''}`)
+    console.log(`invalidating ${filePath}`)
 
     const docsPath = path.join(config.baseDocsLink, path.relative(config.docsPath, filePath))
 
@@ -41,24 +41,12 @@ export const invalidateFile =
       store.markdown.delete(docsPath)
       store.coreDocs.delete(docsPath)
 
-      console.dir(
-        {
-          docLinkedMap: store.dirtyDocMap,
-          docsPath,
-        },
-        { depth: null },
-      )
-
       const adjacentDocs = store.dirtyDocMap.get(docsPath)
-
-      console.log({
-        adjacentDocs,
-      })
 
       if (adjacentDocs && invalidateAdjacentDocs) {
         const invalidate = invalidateFile(store, config)
-        adjacentDocs.forEach(([docPath, passThrough]) => {
-          invalidate(docPath, passThrough)
+        adjacentDocs.forEach((docPath) => {
+          invalidate(docPath, false)
         })
       }
     }
@@ -67,12 +55,9 @@ export const invalidateFile =
   }
 
 export const markDocumentDirty =
-  (store: ReturnType<typeof createBlankStore>, passThrough: boolean = false) =>
-  (filePath: string, adjustedByFilePath: string) => {
-    console.log(`${filePath} needs to be re-generated if ${adjustedByFilePath} changes`)
-
+  (store: ReturnType<typeof createBlankStore>) => (filePath: string, adjustedByFilePath: string) => {
     const dirtyDocs = store.dirtyDocMap.get(adjustedByFilePath) ?? new Set()
-    dirtyDocs.add([filePath, passThrough])
+    dirtyDocs.add(filePath)
     store.dirtyDocMap.set(adjustedByFilePath, dirtyDocs)
   }
 

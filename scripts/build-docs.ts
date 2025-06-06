@@ -57,7 +57,7 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, Store } from './lib/store'
+import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, markDocumentDirty, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -188,6 +188,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
+  const markDirty = markDocumentDirty(store)
 
   await ensureDir(config.distFinalPath)
 
@@ -411,12 +412,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       try {
         let node: Node | null = null
-        let links: string[] = []
+        const links: Set<string> = new Set()
 
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, store, docsMap, partialPath, 'partials'))
+          .use(
+            validateAndEmbedLinks(config, store, docsMap, partialPath, 'partials', (linkInPartial) => {
+              links.add(linkInPartial)
+            }),
+          )
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -446,11 +451,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       try {
         let node: Node | null = null
-        let links: string[] = []
+        const links: Set<string> = new Set()
 
         const vfile = await remark()
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc'))
+          .use(
+            validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              links.add(linkInTypedoc)
+            }),
+          )
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -469,10 +478,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       } catch (error) {
         try {
           let node: Node | null = null
-          let links: string[] = []
+          const links: Set<string> = new Set()
 
           const vfile = await remark()
-            .use(validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc'))
+            .use(
+              validateAndEmbedLinks(config, store, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              }),
+            )
             .use(() => (tree, vfile) => {
               node = tree
             })
@@ -529,13 +542,50 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedCoreDocsSize = store.coreDocs.size
   const coreDocs = await Promise.all(
     docsArray.map(async (doc) => {
+      const foundLinks: Set<string> = new Set()
+      const foundPartials: Set<string> = new Set()
+      const foundTypedocs: Set<string> = new Set()
+
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, store, docsMap, doc.file.filePath, 'docs', doc.file.href))
-          .use(checkPartials(config, store, validatedPartials, doc.file, { reportWarnings: false, embed: true }))
-          .use(checkTypedoc(config, validatedTypedocs, doc.file.filePath, { reportWarnings: false, embed: true }))
+          .use(
+            validateAndEmbedLinks(
+              config,
+              store,
+              docsMap,
+              doc.file.filePath,
+              'docs',
+              (link) => {
+                foundLinks.add(link)
+              },
+              doc.file.href,
+            ),
+          )
+          .use(
+            checkPartials(
+              config,
+              store,
+              validatedPartials,
+              doc.file,
+              { reportWarnings: false, embed: true },
+              (partial) => {
+                foundPartials.add(partial)
+              },
+            ),
+          )
+          .use(
+            checkTypedoc(
+              config,
+              validatedTypedocs,
+              doc.file.filePath,
+              { reportWarnings: false, embed: true },
+              (typedoc) => {
+                foundTypedocs.add(typedoc)
+              },
+            ),
+          )
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
           .use(
             insertFrontmatter({
@@ -545,12 +595,24 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .process(doc.vfile),
       )
 
+      const partialsLinks = validatedPartials
+        .filter((partial) => foundPartials.has(`_partials/${partial.path}`))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundPartials)
+
+      const typedocsLinks = validatedTypedocs
+        .filter((typedoc) => foundTypedocs.has(typedoc.path))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
+
+      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks])
+
+      allLinks.forEach((link) => {
+        markDirty(doc.file.filePath, link)
+      })
+
       return { ...doc, vfile }
     }),
   )
   console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
-
-  console.log(coreDocs)
 
   await Promise.all(
     coreDocs.map(async (doc) => {
@@ -588,7 +650,7 @@ template: wide
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, store, docsMap, doc.file.filePath, 'docs', doc.file.href))
+            .use(validateAndEmbedLinks(config, store, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
             .use(checkPartials(config, store, partials, doc.file, { reportWarnings: true, embed: true }))
             .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
             .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))

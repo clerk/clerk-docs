@@ -19,6 +19,7 @@ export const validateAndEmbedLinks =
   (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const scopeHref = scopeHrefToSDK(config)
     const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
@@ -58,33 +59,34 @@ export const validateAndEmbedLinks =
         }
       }
 
-      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-      if (inCardsComponent === false) {
-        if (linkedDoc.sdk !== undefined) {
-          // we are going to swap it for the sdk link component to give the users a great experience
+      if (linkedDoc.sdk !== undefined) {
+        // we are going to swap it for the sdk link component to give the users a great experience
 
-          const firstChild = node.children?.[0]
-          const childIsCodeBlock = firstChild?.type === 'inlineCode'
+        // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+        if (inCardsComponent === true) {
+          node.url = scopeHref(url, '~')
+          return node
+        }
 
-          if (childIsCodeBlock) {
-            firstChild.type = 'text'
+        const firstChild = node.children?.[0]
+        const childIsCodeBlock = firstChild?.type === 'inlineCode'
 
-            return SDKLink({
-              href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
-              sdks: linkedDoc.sdk,
-              code: true,
-            })
-          }
+        if (childIsCodeBlock) {
+          firstChild.type = 'text'
 
           return SDKLink({
-            href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+            href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
             sdks: linkedDoc.sdk,
-            code: false,
-            children: node.children,
+            code: true,
           })
         }
-      } else {
-        node.url = node.url + '?instant-redirect=true'
+
+        return SDKLink({
+          href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+          sdks: linkedDoc.sdk,
+          code: false,
+          children: node.children,
+        })
       }
 
       return node

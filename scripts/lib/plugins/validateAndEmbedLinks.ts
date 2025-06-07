@@ -59,37 +59,36 @@ export const validateAndEmbedLinks =
         }
       }
 
-      if (linkedDoc.sdk !== undefined) {
-        // we are going to swap it for the sdk link component to give the users a great experience
+      if (linkedDoc.sdk === undefined) {
+        return node
+      }
 
-        // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-        if (inCardsComponent === true) {
-          node.url = scopeHref(url, '~')
-          return node
-        }
+      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+      if (inCardsComponent === true) {
+        node.url = scopeHref(url, '~')
+        return node
+      }
 
-        const firstChild = node.children?.[0]
-        const childIsCodeBlock = firstChild?.type === 'inlineCode'
+      // we are going to swap it for the sdk link component to give the users a great experience
+      const firstChild = node.children?.[0]
+      const childIsCodeBlock = firstChild?.type === 'inlineCode'
 
-        if (childIsCodeBlock) {
-          firstChild.type = 'text'
-
-          return SDKLink({
-            href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
-            sdks: linkedDoc.sdk,
-            code: true,
-          })
-        }
+      if (childIsCodeBlock) {
+        firstChild.type = 'text'
 
         return SDKLink({
           href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
           sdks: linkedDoc.sdk,
-          code: false,
-          children: node.children,
+          code: true,
         })
       }
 
-      return node
+      return SDKLink({
+        href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+        sdks: linkedDoc.sdk,
+        code: false,
+        children: node.children,
+      })
     })
   }
 

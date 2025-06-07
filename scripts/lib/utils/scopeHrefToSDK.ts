@@ -3,7 +3,7 @@
 import type { BuildConfig } from '../config'
 import type { SDK } from '../schemas'
 
-export const scopeHrefToSDK = (config: BuildConfig) => (href: string, targetSDK: SDK | ':sdk:') => {
+export const scopeHrefToSDK = (config: BuildConfig) => (href: string, targetSDK: SDK | ':sdk:' | '~') => {
   // This is external so can't change it
   if (href.startsWith('/docs') === false) return href
 
@@ -11,7 +11,7 @@ export const scopeHrefToSDK = (config: BuildConfig) => (href: string, targetSDK:
 
   // This is a little hacky so we might change it
   // if the url already contains the sdk, we don't need to change it
-  if (hrefSegments.includes(targetSDK)) {
+  if (hrefSegments.includes(targetSDK) && targetSDK !== '~') {
     return href
   }
 

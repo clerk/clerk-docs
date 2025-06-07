@@ -109,7 +109,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
       import { NextResponse } from 'next/server'
       import { clerkMiddleware } from '@clerk/nextjs/server'
 
-      export default clerkMiddleware((auth, req) => {
+      function proxyMiddleware(req) {
         if (req.nextUrl.pathname.match('__clerk')) {
           const proxyHeaders = new Headers(req.headers)
           proxyHeaders.set('Clerk-Proxy-Url', process.env.NEXT_PUBLIC_CLERK_PROXY_URL || '')
@@ -132,7 +132,22 @@ When using a proxy, all requests to the Frontend API will be made through your d
             },
           })
         }
-      })
+
+        return null
+      }
+
+      const clerkHandler = clerkMiddleware()
+
+      export default function middleware(req) {
+        // First check if it's a proxy request
+        const proxyResponse = proxyMiddleware(req)
+        if (proxyResponse) {
+          return proxyResponse
+        }
+
+        // Otherwise, use Clerk's middleware
+        return clerkHandler(req)
+      }
 
       export const config = {
         matcher: [

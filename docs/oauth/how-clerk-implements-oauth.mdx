@@ -3,99 +3,137 @@ title: How Clerk implements OAuth
 description: Learn how Clerk supports OAuth & how to set up and configure OAuth with Clerk, including dynamic client registration, PKCE, and scopes.
 ---
 
-## Clerk's OAuth features and configuration
+Clerk supports secure, standards-compliant OAuth flows for your applications. You can create OAuth apps, enable dynamic client registration, manage consent screens, and use PKCE for public clients.
 
-### Creating OAuth apps in the Dashboard
+This guide covers all key OAuth features and configurations in Clerk and helps you set up the right OAuth flow for your needs.
 
-To create an OAuth application:
+## Creating OAuth applications
+
+To create an OAuth application in the Clerk Dashboard:
 
 1. In the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
-1. Select the **Add OAuth application** button. A modal will open.
-1. Complete the following fields:
-   - `Name` - helps you identify your application.
-   - `Scopes` - the scopes that you would like to leverage.
-1. Select **Create**. You'll be redirected to your app's settings page.
-1. In the **Redirect URI** field, add the redirect URI that the client provides. This is the URL that Clerk will redirect to after the user has authenticated.
+2. Select the **Add OAuth application** button. A modal will open.
+3. Complete the following fields:
+    - `Name` - helps you identify your application.
+    - `Scopes` - the scopes that you would like to leverage.
+4. Select **Add**. A modal will open with your **Client Secret**.
+    
+    > [!WARNING]
+    For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so ensure to download the secret and store it someplace secure.
+    > 
+5. You'll be redirected to your app's settings page. Under **Application credentials**, you will find your **Client ID**, which will be useful for implementing an OAuth flow. 
+6. In the **Redirect URIs** field, add the redirect URI provided by your client. This is the URL that Clerk will redirect to after the user has authenticated and consented to the access request. 
 
-### Dynamic client registration
+Additional settings are available when configuring your OAuth app. Let’s go through them:
 
-MORE INFO HERE: https://www.notion.so/clerkdev/How-OAuth-Works-2082b9ab44fe80878954d0950d2c0cef
+## Dynamic client registration
 
-Clerk now supports [dynamic client registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing OAuth clients to be created programmatically via API in addition to [manually through the dashboard](https://dashboard.clerk.com/last-active?path=oauth-applications).
+In addition to configuring OAuth apps manually through the [Dashboard](https://dashboard.clerk.com/last-active?path=oauth-applications), Clerk supports [dynamic client registration](https://datatracker.ietf.org/doc/html/rfc7591), allowing OAuth clients to be created programmatically via a public API endpoint.
 
-You can enable this feature through a toggle in your [OAuth applications settings](https://dashboard.clerk.com/last-active?path=oauth-applications):
+You can enable this feature through a toggle in your [OAuth applications settings](https://dashboard.clerk.com/last-active?path=oauth-applications). 
 
-IMAGE HERE
+![Dynamic Client Registration Toggle](/docs/images/oauth/dynamic-client-registration.png)
 
 > [!CAUTION]
-> Dynamic client registration creates a public, unauthenticated endpoint that anyone can use to register OAuth clients with your authorization service. While this enables powerful use cases like multi-tenant SaaS platforms, developer marketplaces, and some MCP integrations, it also introduces significant security risks:
->
-> - Attackers can create clients anonymously without audit trails
-> - Malicious clients can use legitimate-sounding names to trick users
-> - Administrative overhead increases substantially for monitoring and cleanup
+Dynamic client registration creates a public, unauthenticated endpoint that anyone can use to register OAuth clients with your authorization service. While this enables powerful use cases like multi-tenant SaaS platforms, developer marketplaces, and some MCP integrations, it also introduces significant security risks:
+> 
+> - Attackers can create clients anonymously without audit trails.
+> - Malicious clients can use legitimate-sounding names to trick users.
+> - Administrative overhead increases substantially for monitoring and cleanup.
 > 
 > Dynamic client registration is essential for scenarios like IoT device provisioning, developer platforms, and enterprise federation hubs where thousands of clients need to be created programmatically. However, it should only be enabled after carefully evaluating and accepting the associated security risks.
->
-> Additionally, as mentioned above, when dynamic client registration is enabled, the OAuth consent screen is automatically enforced and cannot be disabled - this prevents dangerous combinations that could lead to CSRF vulnerabilities.
+> 
+> Additionally, when dynamic client registration is enabled, the OAuth consent screen is automatically enforced and cannot be disabled - this prevents dangerous combinations that could lead to CSRF vulnerabilities.
+> 
 
-### Consent screen management
+## Consent screen management
 
-The new OAuth consent screen ensures users understand exactly what permissions they're granting before completing the OAuth flow.
+The OAuth consent screen ensures users understand *exactly* what permissions they're granting before completing the OAuth flow.
 
 **The consent screen displays:**
 
-- The requesting application's name and logo
-- Specific scopes being requested in user-friendly language
-- Clear accept/deny options
+- The requesting application's name and logo.
+- Specific scopes being requested in user-friendly language.
+- Clear accept/deny options.
 
-IMAGE 
+![OAuth Consent Screen](/docs/images/oauth/oauth-consent-screen.png){{ style: { maxWidth: '400px' } }}
 
-In order to avoid breaking changes and security issues, we have implemented the following settings with respect to the consent screen
 
-- **New OAuth applications**: Consent screen enabled by default
-- **Existing OAuth applications**: Disabled by default (to avoid breaking changes), but we strongly recommend enabling it
-- **OAuth applications with dynamic client registration enabled**: Consent screen automatically enforced and cannot be disabled
+In order to avoid breaking changes and security issues, Clerk has implemented the following settings with respect to the consent screen:
 
-You can toggle the consent screen in the settings for any individual OAuth application [on the Clerk dashboard](https://dashboard.clerk.com/last-active?path=oauth-applications).
+- **New OAuth apps**: Consent screen is enabled by default.
+- **Existing OAuth apps**: Consent screen is disabled by default to avoid breaking changes; enabling it is strongly recommended.
+- **OAuth apps with dynamic client registration enabled**: Consent screen is automatically enforced and **cannot be disabled**.
 
-IMAGE
+You can toggle the consent screen in the settings for each OAuth app [on the Clerk Dashboard](https://dashboard.clerk.com/last-active?path=oauth-applications).
+
+![OAuth Consent Screen Toggle](/docs/images/oauth/oauth-consent-screen-toggle.png){{ style: { maxWidth: '600px' } }}
 
 > [!IMPORTANT]
-> We strongly recommend enabling the consent screen for all OAuth applications. Without a consent screen, any logged-in user who visits an OAuth authorization URL automatically grants access to any requested scopes. The consent screen acts as a critical security checkpoint, preventing malicious applications from silently gaining access to user accounts.
+Enabling the consent screen for all OAuth apps is **strongly recommended**. Without a consent screen, any logged-in user who visits an OAuth authorization URL automatically grants access to any requested scopes. The consent screen acts as a critical security checkpoint, preventing malicious apps from silently gaining access to user accounts.
 
 ### Public clients and PKCE supports
 
-In a usual authorization code flow, a server makes a request to another server and has to include the client_secret to exchange the authorization code for an access token. But, if you want to build a mobile app or a single-page web application (SPA) that runs entirely on the browser, there's no secure server-side environment to store the client_secret. Any secret you embed in a mobile app can be extracted by someone with the right tools, and anything in a browser-based app is visible to anyone who opens the developer tools. These are called public clients because they cannot securely store secrets.
+In traditional OAuth flows, a server uses the `client_secret` to exchange an authorization code for an access token. However, in mobile or single-page apps (SPAs), there is no secure server-side environment to store the `client_secret`. This is dangerous as any secret you embed in a mobile app can be extracted by someone with the right tools, and anything in a browser-based app is visible to anyone who opens the developer tools. These are called **public clients** because they cannot securely store secrets.
 
-Clerk handles this through a PKCE (Proof Key for Code Exchange). PKCE replaces the client_secret with a dynamically generated proof that only the Cclient who started the OAuth flow can provide.
+Clerk handles this problem through a **PKCE (Proof Key for Code Exchange)**. PKCE replaces the `client_secret` with a dynamically generated proof that **only the client who started the OAuth flow can provide**.
 
-Here's how it works: instead of relying on a pre-shared secret, the Cclient generates a random value called a code verifier at the start of each OAuth flow, along with a code challenge (which is a hashed version of the code verifier). The Cclient sends the code challenge when starting the authorization flow, then proves it started the flow by providing the original code verifier during the token exchange.
+Here's how it works: instead of relying on a pre-shared secret, the client generates a random value called a **code verifier** at the start of each OAuth flow, along with a **code challenge** (which is a hashed version of the code verifier). The client sends the code challenge when starting the authorization flow, and later, during the token exchange, sends the original code verifier to prove it initiated the flow.
 
-CODE INVOLVED
+This ensures that even if an attacker intercepts the authorization code, they can’t complete the token exchange without the original code verifier. Only the client that started the flow has that value. 
 
-AS A NOTE CALLOUT:
+> [!QUIZ]
+> Couldn’t an attacker just steal the `code_verifier` from the browser (like from sessionStorage)?
+>
+> ---
+>
+> The key difference is *timing* and *access*. 
+>
+> The `code_verifier` only exists for the brief duration of the OAuth flow and is only accessible to the specific application that created it. A `client_secret`, on the other hand, would be permanently embedded in the app code where it could be extracted by anyone. 
+>
+> Additionally, each PKCE flow uses a unique `code_verifier`, so even if one was somehow compromised, it couldn't be reused for other users or future flows.
 
 PKCE is actually becoming mandatory for many OAuth providers, even for confidential clients, because it provides an additional layer of security. It's considered a best practice to use PKCE for all OAuth flows when possible, regardless of whether your client can store secrets or not. In fact, the most up to date OAuth spec, OAuth 2.1, requires that PKCE be used for all authorization code flows.
 
-### Scopes 
+### Scopes
 
-ADD AS A NOTE CALLOUT
+Scopes define the level of access and specific user data that will be shared with the client application during authentication. The following scopes are currently supported:
 
-We don’t yet have support for adding in custom OAuth scopes, we wanted to get this feature into our users’ hands as quickly as it was usable and stable, which we feel like it is now. Next on our list is implementing a way that custom scopes can be added, accepted, and checked through our SDKs. We’ll have another update coming your way soon when this feature is available!
+| Scope | Access |
+| - | - |
+| `profile` | Grant access to the user's personal information, such as first and last name, avatar, and username |
+| `email` | Grant access to the user's email address |
+| `public_metadata` | Grant access to the user's public and unsafe metadata |
+| `private_metadata` | Grant access to the user's private metadata |
+| `openid` | Enables the OpenID Connect flow |
 
-If you’re interested in getting involved with early access for custom OAuth scopes, please add a vote and/or feedback to [the item on our roadmap here](https://feedback.clerk.com/roadmap?id=d2d88be9-4d4f-45e6-997e-61d0b2a34bc9) and we’ll be in touch soon!
+> [!NOTE]
+> Support for adding custom OAuth scopes is **not yet available**, but development is underway. The goal is to allow custom scopes to be added, accepted, and checked through Clerk SDKs. An update will be provided when this feature is available.
+>
+> For early access to custom OAuth scopes, please vote or provide feedback on the [roadmap here](https://feedback.clerk.com/roadmap?id=d2d88be9-4d4f-45e6-997e-61d0b2a34bc9).
 
-### Token expiration and Management
+### Token expiration and management
 
-### Authorization server metadata
+- Clerk machine token expires in 24h
+- Refresh token expires in 30 days
+- Authorization codes + ID tokens expirations
 
-### Handling User Management with OAuth
+### Building an MCP service using Clerk’s OAuth server
 
-## OAuth flows supported by Clerk 
+OAuth features can be leveraged to support [MCP](https://modelcontextprotocol.io/introduction) integrations. Enhanced OAuth features make it possible to build MCP services that use Clerk as an authorization server.
 
-### OAuth scoped access
+MCP services often need to access user data from various sources on behalf of AI applications. This requires robust OAuth flows with proper consent management, token verification, and security controls - exactly what Clerk's enhanced OAuth features provide. The combination of dynamic client registration (for registering MCP servers programmatically), the consent screen (for secure user authorization), and comprehensive SDK support makes Clerk an ideal authorization server for MCP implementations.
 
-### OAuth single sign-on
+Imagine the following example of a real-world use case. Say you've built a project management tool using Clerk for authentication. With Clerk's OAuth server, you can easily expose an MCP endpoint that allows AI applications like Cursor, Claude Desktop, or Windsurf to securely access your users' project data. Your users can authorize these AI tools through Clerk's consent screen, and the AI applications can then help with tasks like generating project summaries, suggesting optimizations, or automating workflows - all while maintaining secure, user-controlled access to your application's data.
 
-### OpenID Connect (OIDC)
+We have a separate post that goes into detailed implementation of building MCP services using Clerk's OAuth server - check it out for a complete guide to MCP integration (TODO - link other post)!
 
+---
+
+Now that you know all the OAuth features and configurations Clerk has to offer, you might be ready to make this happen for one of your applications. If you’re using Clerk, we have a robust OAuth authorization server built in for you automatically. Refer to the OAuth flows supported by Clerk below for more information on integrating OAuth.
+
+## OAuth flows supported by Clerk
+
+- OAuth scoped access
+- OAuth single sign-on
+- OpenID Connect (OIDC)

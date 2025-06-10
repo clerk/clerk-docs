@@ -3,103 +3,127 @@ title: Use OAuth for scoped access
 description: Learn how to use OAuth with Clerk to grant granular permissions and manage access securely.
 ---
 
-Clerk's OAuth implementation supports scoped access, which lets third-party applications request limited access to a user's data through Clerk's API. This is an extension of the OAuth protocol that can be layered on top of Clerk's Identity Provider (IdP) functionality.
+Clerk's OAuth implementation supports **scoped access**, which lets third-party applications request limited access to specific parts of a user's data through Clerk's API. This enables applications to interact with user data in a secure and controlled manner, based on the user’s explicit consent. If you would look to know more about how this flow works, see the [OAuth scoped access diagram](/docs/oauth/oauth-overview#o-auth-flow-overview).
 
-Clerk as an IdP focuses on authenticating users into third-party apps through single sign-on (SSO). OAuth scoped access goes a step further by enabling those apps to fetch or update user information from Clerk with explicit user consent.
+## How the flow works
 
-This section covers how to configure and use OAuth scoped access in Clerk, including:
+Before diving into implementations details, it's important to understand the different actors involved in this flow:
 
-- Creating and managing OAuth scopes
-- Handling user consent screens
-- Retrieving tokens
-- Authenticating resource requests with Clerk SDKs
+- **Client** - The third party app that wants to access a user's data from your application (resource service). This app is configured to obtain OAuth tokens from Clerk.
+- **Authorization service** - The service that authorizes the user and grants the OAuth tokens. For Clerk’s implementation, this is FAPI, using `<fapi>/oauth/*` endpoints.
+- **Resource service** - The backend server that hosts the user's data that the client wants to access. In Clerk’s implementation, this is **your own application** that uses Clerk for authentication and route protection.
 
-### How the flow works
+If you would like to know more about the terminology around OAuth, check out our [OAuth terminology guide](/docs/oauth/oauth-overview#key-terminology).
 
-From a developer’s perspective, this flow looks like this:
+There are two key steps in implementing this feature:
 
-- **Configure Clerk as an OAuth provider** using the existing flow documented [here](https://clerk.com/docs/advanced-usage/clerk-idp#configure-clerk-as-an-id-p).
-- **Receive a machine token -** a token with embedded scopes in its claims - after completing the OAuth flow.
-- **Use this token** to make authenticated requests against Clerk-protected endpoints and have data returned as expected.
-- **Validate tokens** using Clerk SDKs in your resource server.
+1. **Configuring an OAuth client** to use Clerk as an authorization server.
+1. **Accepting and validating an OAuth token** from a resource server using Clerk SDKs for route protection.
 
-In the traditional Clerk IdP flow, the OAuth process issues a user session token - a token that represents an authenticated user session. In contrast, this OAuth scoped access flow issues a machine token, which is specifically designed for service-to-service interactions. A machine token includes scopes in its claims, enabling the application to access Clerk-protected endpoints with the appropriate permissions.
+This guide provides step-by-step instructions for both parts. Before continuing, ensure you have created an OAuth application in the Clerk Dashboard. Here’s how:
+
+### Create a Clerk OAuth application
+
+1. In the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
+1. Select the **Add OAuth application** button. A modal will open.
+1. Complete the following fields:
+   - `Name` - Helps you identify your application.
+   - `Scopes` - The scopes that you would like to leverage. To find out more about the scopes currently supported by Clerk, check out the [OAuth reference documentation](/docs/oauth/how-clerk-implements-oauth#scopes).
+1. Select **Add**. A modal will open with your **Client Secret**.
+
+   > [!WARNING]
+   > For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so ensure to download the secret and store it someplace secure.
+1. You'll be redirected to your app's settings page. Under **Application credentials**, you can find your **Client ID**, which will be useful for configuring the client to work with your Clerk instance.
+1. In the **Redirect URIs** field, add the redirect URI provided by your client. This is the URL that Clerk will redirect to after the user has authenticated.
+
+If you're interested to know more about additional configuration settings, refer to the [dedicated reference documentation](/docs/oauth/how-clerk-implements-oauth).
 
 ## Configuring an OAuth Client
 
-Here’s how to configure your app to let users authorize a client to obtain an OAuth token that grants access to a Clerk application on their behalf:
+To allow your app to authenticate users and access user data through Clerk, you'll need to configure it as an OAuth client. This process involves:
 
-1. **Initiate the OAuth flow**:
+- Initiating the OAuth flow.
+- Handling user authentication and consent.
+- Exchanging the authorization code for an access token.
+- Handling token refresh when the access token expires.
 
-   - Your app should present a link or button to users to begin the OAuth flow. The entrypoint is `<fapi>/oauth/authorize`
-   - This link requires the following query parameters:
-     - `client_id`: The ID of your OAuth app from the Clerk Dashboard.
-     - `response_type`: Typically `code` for the standard Authorization Code Flow. Use `code id_token` if you also need an OIDC ID token.
-     - `scopes`: A space-separated list of access scopes you want users to consent to. These scopes will be included as claims in the resulting access token and displayed on the consent screen presented to the user.
-     - `state`: A unique, randomly generated string to protect against CSRF attacks. Your OAuth client generates this value per request to verify the response and optionally pass additional data through the OAuth flow.
-     - `redirect_uri`: The URL to receive the authorization code after the user signs in and consents. Clerk will redirect to this URL with an authorization code that should be exchanged on the server side for an access token. This URL must be registered as an authorized redirect URL in the Clerk Dashboard.
+<Steps>
+  ### Initiate the OAuth flow
 
-   Here is an example of how that would look:
+  Your app should present a link or button that users can select to begin the OAuth flow. The entry point is `<fapi>/oauth/authorize`. This endpoint requires the following query parameters:
 
-   ```
-   <fapi>/oauth/authorize?client_id=x&response_type=code&scopes=email&state=y&redirect_uri=z
-   ```
+  - `client_id`: The ID of your OAuth app from the Clerk Dashboard.
+  - `response_type`: Typically `code` for the standard Authorization Code Flow. Use `code id_token` if you also need an OIDC ID token.
+  - `scopes`: A space-separated list of access scopes you want users to consent to. These scopes will be included as claims in the resulting access token and displayed on the consent screen presented to the user.
+  - `state`: A unique, randomly generated string to protect against CSRF attacks. Your OAuth client generates this value per request to verify the response and optionally pass additional data through the OAuth flow.
+  - `redirect_uri`: The URL to receive the authorization code after the user signs in and consents. Clerk will redirect to this URL with an authorization code that should be exchanged on the server side for an access token. This URL must be registered as an authorized redirect URI in the Clerk Dashboard.
 
-1. **User Authentication and Consent**:
-   - After sign-in, Clerk will redirect to an OAuth consent screen showing requested scopes and asking for user consent.
-   - Users review the requested access and grant or deny consent.
-   - The consent screen will appear by default for newly created OAuth apps but can be toggled in the Dashboard.
+  Here is an example of how that endpoint would look like:
 
-1. **Handling the Authorization Code**:
-   - After consent, Clerk redirects to your `redirect_uri` with an authorization code.
+  ```bash
+  <fapi>/oauth/authorize?client_id=x&response_type=code&scopes=email&state=y&redirect_uri=z
+  ```
 
-   - Your app can then exchange the code for an access token and refresh token by sending a `POST` request of the type `application/x-www-form-urlencoded` to `<fapi>/oauth/token` with the following parameters in the body (URL-encoded):
-     - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
-     - `code` - the authorization code received.
-     - `grant_type=authorization_code` - always use this value when exchanging the initial authorization code for an access token. or refresh token requests, the `grant_type` value will be different.
-     - `redirect_uri` - the same redirect URI used in the authorization request.
+  ### Handling user authentication and consent
 
-   - You will get back a JSON response containing a valid Clerk machine token, similar to this:
+  - After signing in, Clerk will redirect to an OAuth consent screen showing the requested scopes and asking for user consent.
+  - The user can approve or deny the requested access.
+  - The consent screen is shown by default for newly created OAuth apps, but can be toggled in the Dashboard.
 
-     ```json
-     {
-       "access_token": "xxx",
-       "expires_in": 7200,
-       "id_token": "xxx",
-       "refresh_token": "xxx",
-       "scope": "openid email profile",
-       "token_type": "bearer"
-     }
-     ```
+  For more details on how our Clerk OAuth consent screen works, see the [OAuth consent screen reference docs](/docs/oauth/how-clerk-implements-oauth#consent-screen-management).
 
-   - Access tokens expire (recommended: 24h) and can be refreshed using the refresh token (recommended: 30 days).
+  ### Exchanging the authorization code for an access token
 
-1. **Refresh Tokens**:
-   - When the client encounters an unauthorized request, it assumes the token has expired. The client then sends a `POST` request to `<fapi>/oauth/token` with the following URL-encoded parameters in the body:
-     - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
-     - `grant_type=refresh_token` - this value is used to refresh tokens.
-     - `refresh_token=xxx` - the refresh token received from the previous token response.
-   - You should expect to get back a response that looks like this:
+  After the user consents, Clerk redirects to your `redirect_uri` with an **authorization code**.
 
-     ```json
-     {
-       "access_token": "xxx",
-       "expires_in": 7200,
-       "refresh_token": "xxx",
-       "scope": "openid email profile",
-       "token_type": "bearer"
-     }
-     ```
+  Your app can then exchange the code for an **access token** and **refresh token** by making a `POST` request of the type `application/x-www-form-urlencoded` to `<fapi>/oauth/token` with the following parameters in the body (URL-encoded):
 
----
+  - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
+  - `code` - the authorization code you received.
+  - `grant_type=authorization_code` - always use this value when exchanging the initial authorization code for an access token. For refresh token requests, the `grant_type` value is different.
+  - `redirect_uri` - the same redirect URI used in the authorization request.
 
-## Accepting an OAuth Token with Clerk SDKs
+  You will get back a JSON response containing a valid Clerk machine token, similar to this:
 
-Once the client has an OAuth token, the next step is usually for the client to send requests to your resource server using that token. As a developer, you’ll need to configure your application to accept these requests and authenticate them properly.
+  ```json
+  {
+    "access_token": "xxx",
+    "expires_in": 7200,
+    "id_token": "xxx",
+    "refresh_token": "xxx",
+    "scope": "openid email profile",
+    "token_type": "bearer"
+  }
+  ```
 
-Clerk’s SDKs support this through a new `acceptsToken` option in route protection functions, such as **`auth()`, `auth.protect()`** and **`clerkClient.authenticateRequest()`.**
+  ### Handling token refresh when the access token expires
 
-This option can be set to a single token type as a string, or to multiple token types using an array. By default, `acceptsToken` is set to `session_token`, which means that OAuth tokens will **not** be accepted unless explicitly configured.
+  When the client encounters an unauthorized request, it assumes the token has expired. The client then sends a `POST` request to `<fapi>/oauth/token` with the following URL-encoded parameters in the body:
+
+  - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
+  - `grant_type=refresh_token` - this value is used to refresh tokens.
+  - `refresh_token=xxx` - the refresh token received from the previous token response.
+
+  You should expect to get back a response that looks like this:
+
+  ```json
+  {
+    "access_token": "xxx",
+    "expires_in": 7200,
+    "refresh_token": "xxx",
+    "scope": "openid email profile",
+    "token_type": "bearer"
+  }
+  ```
+</Steps>
+
+## Accepting and validating an OAuth Token with Clerk SDKs
+
+Once the client has an OAuth token, the next step is usually for the client to send requests to your resource server using that token. You’ll need to configure your application to accept these requests and authenticate them properly.
+
+Clerk’s SDKs support this through a new `acceptsToken` option that can be used in Clerk's route protection functions, such as [`auth()`](/docs/references/nextjs/auth), [`auth.protect()`](/docs/references/nextjs/auth#auth-protect) and [`authenticateRequest()`](/docs/references/backend/authenticate-request).
+
+By default, `acceptsToken` is set to `session_token`, which means **OAuth tokens will not be accepted unless explicitly configured** .
 
 Here are the supported token types:
 
@@ -107,7 +131,7 @@ Here are the supported token types:
 type AcceptedTokens = 'session_token' | 'oauth_token' | 'm2m_token' | 'api_key' | 'any'
 ```
 
-Here’s how to use the `acceptsToken` option:
+The `acceptsToken` option can accept a single token type or multiple token types through an array:
 
 ```tsx
 // Accept OAuth tokens
@@ -117,7 +141,13 @@ acceptsToken: 'oauth_token'
 acceptsToken: ['session_token', 'oauth_token']
 ```
 
-Below is an example of using this option on an API route with Clerk’s Next.js SDK:
+### Example: Next.js API Route
+
+Below is an example of accepting an OAuth token using Clerk’s Next.js SDK:
+
+- The returned `subject` is the unique ID of the Clerk user for whom the OAuth token was granted.
+  - If it’s `null`, the token is invalid, and you can respond with a 401.
+  - If it contains an ID, the token is valid and you can proceed with your logic (for e.g. fetching the needed data and return it).
 
 ```tsx
 // app/api/example/route.ts
@@ -136,69 +166,73 @@ export async function GET() {
 }
 ```
 
-- The returned `subject` is the unique ID of the Clerk user for whom the OAuth token was granted. If it’s `null`, the token is invalid, and you can respond with a 401. If it contains an ID, the token is valid and you can proceed with your logic (for e.g. fetching the needed data and return it).
+### Example: Clerk Middleware in Next.js
 
-- It’s also possible to execute access checks in middleware, if using Next.js. Here’s how that might look:
+You can also protect entire route groups with Clerk middleware:
 
-  ```tsx
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+```tsx
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-  const isOAuthAccessible = createRouteMatcher(['/oauth(.*)'])
-  const isUserAccessible = createRouteMatcher(['/user(.*)'])
-  const isAccessibleToAnyValidToken = createRouteMatcher(['/any(.*)'])
+const isOAuthAccessible = createRouteMatcher(['/oauth(.*)'])
+const isUserAccessible = createRouteMatcher(['/user(.*)'])
+const isAccessibleToAnyValidToken = createRouteMatcher(['/any(.*)'])
 
-  export default clerkMiddleware(async (auth, req) => {
-    if (isOAuthAccessible(req)) await auth.protect({ token: 'oauth_token' })
-    if (isUserAccessible(req)) await auth.protect({ token: 'session_token' })
-    if (isAccessibleToAnyValidToken(req)) await auth.protect()
-  })
-  ```
-
-- If you aren’t using Next.js, here’s an example of how a request could be verified using [the JS Backend SDK](https://clerk.com/docs/references/backend/overview), with [Hono](https://hono.dev/) just as an example:
-
-  ```tsx
-  import { Hono } from 'hono'
-  import { clerkClient } from '@clerk/backend'
-
-  const app = new Hono()
-
-  app.use('*', async (ctx, next) => {
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET })
-
-    // can also be "oauth_token" or "session_token"
-    const authReq = await clerk.authenticateRequest(req, { acceptsToken: 'any' })
-    const authObject = authReq.toAuth()
-
-    if (authObject.tokenType === 'session_token') {
-      console.log('this is session token from a user')
-    } else if (authObject.tokenType === 'oauth_token') {
-      console.log('this is an oauth token')
-    }
-
-    await next()
-  })
-
-  export default app
-  ```
-
-Once you have an OAuth access token generated, you can test it with your Clerk application. For endpoints that require OAuth tokens, include the token in the `Authorization` header like this:
-
-```makefile
-Authorization: Bearer <oauth_token>
+export default clerkMiddleware(async (auth, req) => {
+  if (isOAuthAccessible(req)) await auth.protect({ token: 'oauth_token' })
+  if (isUserAccessible(req)) await auth.protect({ token: 'session_token' })
+  if (isAccessibleToAnyValidToken(req)) await auth.protect()
+})
 ```
 
-A valid token will be authenticated. If the token is invalid or expired, you’ll receive an error response.
+### Example: Node.js with the JS Backend SDK (Hono)
 
-OAuth token verification is available across most Clerk SDKs. If you’re using an SDK that doesn’t yet support OAuth token verification, you can use Clerk’s REST API directly:
+If you aren’t using Next.js, here’s an example of how a request could be verified using [the JS Backend SDK](https://clerk.com/docs/references/backend/overview), with a Node.js framework like [Hono](https://hono.dev/):
 
+```tsx
+import { Hono } from 'hono'
+import { clerkClient } from '@clerk/backend'
+
+const app = new Hono()
+
+app.use('*', async (ctx, next) => {
+  const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET })
+
+  // can also be "oauth_token" or "session_token"
+  const authReq = await clerk.authenticateRequest(req, { acceptsToken: 'any' })
+  const authObject = authReq.toAuth()
+
+  if (authObject.tokenType === 'session_token') {
+    console.log('this is session token from a user')
+  } else if (authObject.tokenType === 'oauth_token') {
+    console.log('this is an oauth token')
+  }
+
+  await next()
+})
+
+export default app
 ```
-bash
-Copy code
 
+### Testing the OAuth token
+
+Once you have a valid OAuth access token, you can test it with your Clerk application. For endpoints that require OAuth tokens, include the token in the `Authorization` header, as such: `Authorization: Bearer <oauth_token>`. A valid token will be authenticated. If the token is invalid or expired, you’ll receive an error response.
+
+OAuth token verification is supported in these SDKs:
+
+- [Next.js](https://clerk.com/docs/quickstarts/nextjs)
+- [JavaScript Backend SDK](https://clerk.com/docs/references/backend/overview)
+- [Express SDK](https://clerk.com/docs/quickstarts/express)
+- [Python SDK](https://github.com/clerk/clerk-sdk-python/blob/main/README.md)
+- [C# SDK](https://github.com/clerk/clerk-sdk-csharp/blob/main/README.md)
+- [Remix](https://clerk.com/docs/quickstarts/remix)
+- [Fastify SDK](https://clerk.com/docs/quickstarts/fastify)
+- [TanStack Start](https://clerk.com/docs/quickstarts/tanstack-react-start)
+
+If you’re using an SDK that doesn’t yet support OAuth token verification, you can verify tokens via the [Clerk REST API](https://api.clerk.com/docs?access_token=m2m-design-partners#tag/oauth-access-tokens---backend-api/post/oauth_applications/access_tokens/verify):
+
+```bash {{ filename: 'terminal' }}
+curl https://api.clerk.com/oauth_applications/access_tokens/verify \
+  -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{ "access_token": "your-oauth-token-here" }'
 ```
-
-OAuth token verification through Clerk is currently available across most of our SDK ecosystem, making it easy to build resource servers that can authenticate requests from OAuth clients.
-
-Have a list of supported SDKs?
-
-If you’re using an SDK that doesn’t yet support OAuth token verification, you can use [Clerk's REST API directly](https://api.clerk.com/docs?access_token=m2m-design-partners#tag/oauth-access-tokens---backend-api/post/oauth_applications/access_tokens/verify):

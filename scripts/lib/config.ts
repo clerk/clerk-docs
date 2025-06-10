@@ -9,6 +9,7 @@ import type { SDK } from './schemas'
 type BuildConfigOptions = {
   basePath: string
   validSdks: readonly SDK[]
+  dataPath: string
   docsPath: string
   baseDocsLink: string
   manifestPath: string
@@ -37,10 +38,12 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
-  cleanDist: boolean
   flags?: {
     watch?: boolean
     controlled?: boolean
+    skipGit?: boolean
+    clean?: boolean
+    skipApiErrors?: boolean
   }
 }
 
@@ -64,6 +67,9 @@ export async function createConfig(config: BuildConfigOptions) {
 
     partialsRelativePath: config.partialsPath,
     partialsPath: resolve(config.partialsPath),
+
+    dataRelativePath: config.dataPath,
+    dataPath: resolve(config.dataPath),
 
     docsRelativePath: config.docsPath,
     docsPath: resolve(config.docsPath),
@@ -106,11 +112,12 @@ export async function createConfig(config: BuildConfigOptions) {
         }
       : null,
 
-    cleanDist: config.cleanDist,
-
     flags: {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
+      skipGit: config.flags?.skipGit ?? false,
+      clean: config.flags?.clean ?? false,
+      skipApiErrors: config.flags?.skipApiErrors ?? false,
     },
   }
 }

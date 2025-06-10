@@ -19,20 +19,20 @@ const tempConfig = {
   // Whether to preserve temp directories after tests
   // (helpful for debugging, but requires manual cleanup)
   preserveTemp: false,
+
+  // Whether to setup a git repository in each test
+  setupGit: false,
 }
 
 async function createTempFiles(
   files: { path: string; content: string }[],
-  options?: {
-    prefix?: string // Prefix for the temp directory name
-    preserveTemp?: boolean // Override global preserveTemp setting
-    useLocalTemp?: boolean // Override global useLocalTemp setting
-  },
+  {
+    tempDirectoryPrefix = 'clerk-docs-test-',
+    preserveTemp = tempConfig.preserveTemp,
+    useLocalTemp = tempConfig.useLocalTemp,
+    setupGit = tempConfig.setupGit,
+  } = {},
 ) {
-  const prefix = options?.prefix || 'clerk-docs-test-'
-  const preserve = options?.preserveTemp ?? tempConfig.preserveTemp
-  const useLocalTemp = options?.useLocalTemp ?? tempConfig.useLocalTemp
-
   // Determine base directory for temp files
   let baseDir: string
 
@@ -46,7 +46,7 @@ async function createTempFiles(
   }
 
   // Create temp folder with unique name
-  const tempDir = await fs.mkdtemp(path.join(baseDir, prefix))
+  const tempDir = await fs.mkdtemp(path.join(baseDir, tempDirectoryPrefix))
 
   // Create all files
   for (const file of files) {
@@ -60,27 +60,30 @@ async function createTempFiles(
     await fs.writeFile(filePath, file.content)
   }
 
-  // Initialize git repository
-  const git = simpleGit(tempDir)
-
-  await git.init()
-
-  // Locally set the git user config
-  await git.addConfig('user.name', 'Test User')
-  await git.addConfig('user.email', 'test@example.com')
-
-  // Add all files to git
-  await git.add('.')
-
-  // Use a fixed date for the initial commit
   const initialCommitDate = new Date()
-  initialCommitDate.setMilliseconds(0) // git will drop off the milliseconds so if we don't do that then the times will miss-match
-  await git.commit('Initial commit', undefined, {
-    '--date': initialCommitDate.toISOString(),
-  })
+
+  if (setupGit) {
+    // Initialize git repository
+    const git = simpleGit(tempDir)
+
+    await git.init()
+
+    // Locally set the git user config
+    await git.addConfig('user.name', 'Test User')
+    await git.addConfig('user.email', 'test@example.com')
+
+    // Add all files to git
+    await git.add('.')
+
+    // Use a fixed date for the initial commit
+    initialCommitDate.setMilliseconds(0) // git will drop off the milliseconds so if we don't do that then the times will miss-match
+    await git.commit('Initial commit', undefined, {
+      '--date': initialCommitDate.toISOString(),
+    })
+  }
 
   // Register cleanup unless preserveTemp is true
-  if (!preserve) {
+  if (!preserveTemp) {
     onTestFinished(async () => {
       try {
         await fs.rm(tempDir, { recursive: true, force: true })
@@ -112,7 +115,7 @@ async function createTempFiles(
     },
 
     // Pass through the git instance incase we need to use it for something
-    git,
+    git: setupGit ? simpleGit(tempDir) : undefined,
 
     // Return the initial commit date
     initialCommitDate,
@@ -144,6 +147,7 @@ function treeDir(baseDir: string) {
 }
 
 const baseConfig = {
+  dataPath: '../data',
   docsPath: '../docs',
   baseDocsLink: '/docs/',
   manifestPath: '../docs/manifest.json',
@@ -161,22 +165,27 @@ const baseConfig = {
     collapseDefault: false,
     hideTitleDefault: false,
   },
-  cleanDist: false,
-}
+  flags: {
+    skipGit: true,
+    clean: true,
+    skipApiErrors: true,
+  },
+} satisfies Partial<Parameters<typeof createConfig>[0]>
 
 describe('Basic Functionality', () => {
   test('Basic build test with simple files', async () => {
     // Create temp environment with minimal files array
-    const { tempDir, pathJoin, initialCommitDate } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
-        }),
-      },
-      {
-        path: './docs/simple-test.mdx',
-        content: `---
+    const { tempDir, pathJoin, initialCommitDate } = await createTempFiles(
+      [
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          }),
+        },
+        {
+          path: './docs/simple-test.mdx',
+          content: `---
 title: Simple Test
 description: This is a simple test page
 ---
@@ -184,14 +193,21 @@ description: This is a simple test page
 # Simple Test Page
 
 Testing with a simple page.`,
-      },
-    ])
+        },
+      ],
+      { setupGit: true },
+    )
 
     const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react'],
+        flags: {
+          skipGit: false,
+          clean: true,
+          skipApiErrors: true,
+        },
       }),
     )
 
@@ -1036,7 +1052,7 @@ title: Quickstart
   })
 
   test('sdk in frontmatter filters the docs', async () => {
-    const { tempDir, pathJoin, initialCommitDate } = await createTempFiles([
+    const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -1077,7 +1093,6 @@ Testing with a simple page.`,
 title: Simple Test
 sdk: react
 canonical: /docs/:sdk:/simple-test
-lastUpdated: ${initialCommitDate.toISOString()}
 ---
 
 # Simple Test Page
@@ -4257,5 +4272,77 @@ sdk: react, nextjs
 
     expect(await readFile('./dist/react/api-doc.mdx')).toContain('Client API')
     expect(await readFile('./dist/nextjs/api-doc.mdx')).toContain('Client API')
+  })
+})
+
+describe('API Errors Generation', () => {
+  test('should generate api errors', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Backend API', href: '/docs/errors/backend-api' }],
+            [{ title: 'Frontend API', href: '/docs/errors/frontend-api' }],
+          ],
+        }),
+      },
+      {
+        path: './data/api_errors.json',
+        content: await fs.readFile(path.join(__dirname, '..', 'data', 'api_errors.json'), 'utf-8'),
+      },
+      {
+        path: './docs/errors/backend-api.mdx',
+        content: '',
+      },
+      {
+        path: './docs/errors/frontend-api.mdx',
+        content: '',
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        flags: {
+          skipApiErrors: false,
+          skipGit: true,
+          clean: true,
+        },
+      }),
+    )
+
+    expect(output).toBe('')
+
+    const bapi = await readFile('./dist/errors/backend-api.mdx')
+    const fapi = await readFile('./dist/errors/frontend-api.mdx')
+
+    expect(bapi).toContain('title: Backend API errors')
+    expect(fapi).toContain('title: Frontend API errors')
+
+    // Headings
+    expect(bapi).toContain('## Actor Tokens')
+    expect(fapi).toContain('## Actor Tokens')
+
+    // Error names
+    expect(bapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Cannot<wbr />Be<wbr />Revoked</code>')
+    expect(fapi).toContain('### <code><wbr />Actor<wbr />Token<wbr />Already<wbr />Used</code>')
+
+    // Error Schema
+    expect(bapi).toContain('"longMessage":')
+    expect(bapi).toContain('"shortMessage":')
+    expect(bapi).toContain('"code":')
+    expect(bapi).toContain('"meta":')
+
+    expect(fapi).toContain('"longMessage":')
+    expect(fapi).toContain('"shortMessage":')
+    expect(fapi).toContain('"code":')
+    expect(fapi).toContain('"meta":')
+
+    // Error status codes
+    expect(bapi).toContain('Status Code: 400')
+    expect(fapi).toContain('Status Code: 400')
   })
 })

@@ -154,6 +154,7 @@ const baseConfig = {
   partialsPath: '../docs/_partials',
   typedocPath: '../typedoc',
   distPath: '../dist',
+  ignorePaths: [],
   ignoreLinks: [],
   ignoreWarnings: {
     docs: {},
@@ -2773,7 +2774,7 @@ sdk: react
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
-        ignoreLinks: ['/docs/ignored'],
+        ignorePaths: ['/docs/ignored'],
       }),
     )
 

@@ -108,11 +108,11 @@ async function main() {
         outputPath: '_redirects/dynamic.jsonc',
       },
     },
-    ignoreLinks: [
+    ignoreLinks: ['/docs/quickstart'],
+    ignorePaths: [
       '/docs/core-1',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
-      '/docs/quickstart',
       '/pricing',
       '/support',
       '/discord',
@@ -235,7 +235,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     if (!item.href?.startsWith(config.baseDocsLink)) return item
     if (item.target !== undefined) return item
 
-    const ignore = config.ignoredLink(item.href)
+    const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
     if (ignore === true) return item
 
     docsInManifest.add(item.href)
@@ -272,7 +272,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
       }
 
-      const ignore = config.ignoredLink(item.href)
+      const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
       const doc = docsMap.get(item.href)

@@ -47,7 +47,7 @@ export const validateAndEmbedLinks =
         url = href
       }
 
-      const ignore = config.ignoredLink(url)
+      const ignore = config.ignoredPaths(url) || config.ignoredLinks(url)
       if (ignore === true) return node
 
       const linkedDoc = docsMap.get(url)

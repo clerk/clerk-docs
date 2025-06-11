@@ -80,9 +80,10 @@ If you are building an OAuth **client** that you'd like to have the ability to a
 
   After the user consents, Clerk redirects them to the `redirect_uri` specified in the request parameters, including the `state`  and `code` (the **authorization code**) as query params. If the user does not consent, Clerk will still redirect to the `redirect_uri`, but with an `error` querystring that should be appropriately handled by the client.
 
-  Your app can then exchange the authorization code for an **access token** and **refresh token** by making a `POST` request of the type `application/x-www-form-urlencoded` to `<fapi>/oauth/token` with the following parameters in the body (URL-encoded):
+  Your app can then exchange the authorization code for an **access token** and **refresh token** by making a `POST` request of the type `application/x-www-form-urlencoded` to then **tokens endpoint** ( typically `<fapi>/oauth/token`) with the following parameters in the body (URL-encoded):
 
-  - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
+  - `client_id` - you can find this in your OAuth app settings in the Dashboard.
+  - `client_secret` and/or `code_verifier` - if it's a public client, it should be only `code_verifier`, if not, it should include both. The client secret can be found in your OAuth app settings in the dashboard, and the code verifier should be the original value that you hashed and provided as the `code_challenge` to the authorize endpoint above.
   - `code` - the authorization code you received.
   - `grant_type=authorization_code` - always use this value when exchanging the initial authorization code for an access token. For refresh token requests, the `grant_type` value is different.
   - `redirect_uri` - the same redirect URI used in the authorization request.
@@ -102,9 +103,9 @@ If you are building an OAuth **client** that you'd like to have the ability to a
 
   ### Handling token refresh when the access token expires
 
-  When the client encounters an unauthorized request, it assumes the token has expired. The client then sends a `POST` request to `<fapi>/oauth/token` with the following URL-encoded parameters in the body:
+  When the client makes a request to the resource server that is returned as unauthorized (401), it assumes the token has expired. The client should then send a `POST` request to the tokens endpoint (`<fapi>/oauth/token`) with the following headers and URL-encoded parameters in the body:
 
-  - `client_id` and `client_secret` - you can find these in your OAuth app settings in the Dashboard.
+  - An `Authorization` header with the value `Basic btoa(\`${this.clientId}:${this.clientSecret}\`)` (with `btoa` representing generally any function that base64 encodes the values). If it's a public client, the `client_secret` should instead be sent within the body parameters, with no authorization header.
   - `grant_type=refresh_token` - this value is used to refresh tokens.
   - `refresh_token=xxx` - the refresh token received from the previous token response.
 
@@ -125,7 +126,7 @@ If you are building an OAuth **client** that you'd like to have the ability to a
 
 Once the client has an OAuth token, the next step is usually for the client to send requests to your resource server using that token. You’ll need to configure your application to accept these requests and authenticate them properly.
 
-Clerk’s SDKs support this through a new `acceptsToken` option that can be used in Clerk's route protection functions, such as [`auth()`](/docs/references/nextjs/auth), [`auth.protect()`](/docs/references/nextjs/auth#auth-protect) and [`authenticateRequest()`](/docs/references/backend/authenticate-request).
+Clerk’s SDKs support this through the `acceptsToken` option that can be used in Clerk's route protection functions, such as [`auth()`](/docs/references/nextjs/auth), [`auth.protect()`](/docs/references/nextjs/auth#auth-protect) and [`authenticateRequest()`](/docs/references/backend/authenticate-request).
 
 By default, `acceptsToken` is set to `session_token`, which means **OAuth tokens will not be accepted unless explicitly configured** .
 
@@ -158,13 +159,14 @@ Below is an example of accepting an OAuth token using Clerk’s Next.js SDK:
 import { auth } from '@clerk/nextjs'
 
 export async function GET() {
-  const { subject } = await auth({ acceptsToken: 'oauth_token' })
+  const { userId } = await auth({ acceptsToken: 'oauth_token' })
 
-  if (!subject) {
+  if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const userData = await getUserDataFromDatabase({ clerkUserId: subject })
+  // pseudo-code
+  const userData = await getUserDataFromDatabase({ clerkUserId: userId })
 
   return Response.json(userData)
 }

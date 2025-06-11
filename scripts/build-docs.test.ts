@@ -4565,3 +4565,72 @@ describe('API Errors Generation', () => {
     expect(fapi).toContain('Status Code: 400')
   })
 })
+
+describe('Git', () => {
+  test('should generate changes.json file of files that have changed in the current branch', async () => {
+    const { tempDir, readFile, git, pathJoin } = await createTempFiles(
+      [
+        {
+          path: './docs/manifest.json',
+          content: JSON.stringify({
+            navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+          }),
+        },
+        {
+          path: './docs/quickstart.mdx',
+          content: `---
+title: Quickstart
+description: Quickstart
+---
+
+# Quickstart 1`,
+        },
+      ],
+      { setupGit: true },
+    )
+
+    const output1 = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output1).toBe('')
+
+    const changes1 = await readFile('./dist/changes.json')
+    expect(changes1).toContain([])
+
+    if (git === undefined) {
+      throw new Error('Git is not available')
+    }
+
+    await git.checkoutLocalBranch('test-branch')
+
+    await fs.writeFile(
+      pathJoin(tempDir, 'docs', 'quickstart.mdx'),
+      `---
+title: Quickstart
+description: Quickstart
+---
+
+# Quickstart 2`,
+    )
+
+    await git.commit('Add Quickstart 2')
+
+    const output2 = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output2).toBe('')
+
+    const changes2 = await readFile('./dist/changes.json')
+    expect(changes2).toContain(['docs/quickstart.mdx'])
+  })
+})

@@ -17,6 +17,7 @@ type BuildConfigOptions = {
   distPath: string
   typedocPath: string
   publicPath?: string
+  ignorePaths: string[]
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -85,7 +86,8 @@ export async function createConfig(config: BuildConfigOptions) {
     publicRelativePath: config.publicPath,
     publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
-    ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredPaths: (url: string) => config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredLinks: (url: string) => config.ignoreLinks.some((ignoreItem) => url === ignoreItem),
     ignoreWarnings: config.ignoreWarnings ?? {
       docs: {},
       partials: {},

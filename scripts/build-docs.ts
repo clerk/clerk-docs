@@ -112,6 +112,7 @@ async function main() {
       '/docs/core-1',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
+      '/docs/quickstart',
       '/pricing',
       '/support',
       '/discord',

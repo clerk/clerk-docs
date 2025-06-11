@@ -7,6 +7,7 @@ import { ManifestItem } from '../manifest'
 import { type SDK } from '../schemas'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
+import { z } from 'zod'
 
 export const validateIfComponents =
   (
@@ -18,7 +19,17 @@ export const validateIfComponents =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastVisit(tree, (node) => {
-      const sdk = extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath)
+      const sdk = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'If',
+        'sdk',
+        false,
+        'docs',
+        filePath,
+        z.string(),
+      )
 
       if (sdk === undefined) return
 

@@ -46,6 +46,7 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
+import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -709,6 +710,7 @@ template: wide
         true,
         'docs',
         doc.file.filePath,
+        z.string(),
       )
 
       if (sdkProp === undefined) return
@@ -735,6 +737,7 @@ template: wide
               false,
               'docs',
               doc.file.filePath,
+              z.string(),
             )
             if (!sdkProp) return true
 

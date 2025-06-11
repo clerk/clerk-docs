@@ -1,6 +1,7 @@
 import type { BuildConfig } from './config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { u as mdastBuilder } from 'unist-builder'
 
 export interface Prompt {
   filePath: string
@@ -44,6 +45,7 @@ import type { VFile } from 'vfile'
 import { safeMessage } from './error-messages'
 import type { DocsFile } from './io'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
+import { z } from 'zod'
 
 export const checkPrompts =
   (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
@@ -52,6 +54,7 @@ export const checkPrompts =
     if (config.prompts === null) return
 
     return mdastMap(tree, (node) => {
+      // console.dir(node, { depth: null })
       const promptSrc = extractComponentPropValueFromNode(
         config,
         node,
@@ -61,6 +64,7 @@ export const checkPrompts =
         true,
         'docs',
         file.filePath,
+        z.string(),
       )
 
       if (promptSrc === undefined) return node
@@ -81,10 +85,26 @@ export const checkPrompts =
         return node
       }
 
+      const embedPrompt = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'LLMPrompt',
+        'embed',
+        false,
+        'docs',
+        file.filePath,
+        z.boolean(),
+      )
+
+      if (embedPrompt === true) {
+        return Object.assign(node, mdastBuilder('code', { value: prompt.content }))
+      }
+
       if (options.update === true && config.prompts !== null) {
         ;(node as any).attributes.find(({ name }) => name === 'src').value = promptSrc.replace(
           'prompts/',
-          `${config.prompts.outputPath}/`,
+          `${config.prompts.outputPathRelative}/`,
         )
       }
 

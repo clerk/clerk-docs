@@ -118,7 +118,9 @@ export async function createConfig(config: BuildConfigOptions) {
     prompts: config.prompts
       ? {
           inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+          inputPathRelative: config.prompts.inputPath,
           outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+          outputPathRelative: config.prompts.outputPath,
         }
       : null,
 

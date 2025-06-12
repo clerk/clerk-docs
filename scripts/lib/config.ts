@@ -39,6 +39,10 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
+  prompts?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
@@ -110,6 +114,15 @@ export async function createConfig(config: BuildConfigOptions) {
             inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
             outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
           },
+        }
+      : null,
+
+    prompts: config.prompts
+      ? {
+          inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+          inputPathRelative: config.prompts.inputPath,
+          outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+          outputPathRelative: config.prompts.outputPath,
         }
       : null,
 

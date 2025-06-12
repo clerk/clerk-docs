@@ -46,6 +46,7 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
+import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -79,6 +80,7 @@ import {
   writeRedirects,
   type Redirect,
 } from './lib/redirects'
+import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -107,6 +109,10 @@ async function main() {
         inputPath: '../redirects/dynamic/docs.jsonc',
         outputPath: '_redirects/dynamic.jsonc',
       },
+    },
+    prompts: {
+      inputPath: '../prompts',
+      outputPath: '_prompts',
     },
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
@@ -208,6 +214,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
+  let prompts: Prompt[] = []
+
+  if (config.prompts) {
+    prompts = await readPrompts(config)
+    console.info(`✓ Read ${prompts.length} prompts`)
+  }
+
   if (!config.flags.skipApiErrors) {
     await generateApiErrorDocs(config)
     console.info('✓ Generated API Error MDX files')
@@ -251,7 +264,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const inManifest = docsInManifest.has(file.href)
 
       const markdownFile = await markdownCache(file.filePath, () =>
-        parseMarkdownFile(file, partials, typedocs, inManifest, 'docs'),
+        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
       )
 
       docsMap.set(file.href, markdownFile)
@@ -579,6 +592,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               },
             ),
           )
+          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
           .use(
             insertFrontmatter({
@@ -646,6 +660,7 @@ template: wide
             .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
             .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
             .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+            .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
             .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
             .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
             .use(
@@ -696,6 +711,7 @@ template: wide
         true,
         'docs',
         doc.file.filePath,
+        z.string(),
       )
 
       if (sdkProp === undefined) return
@@ -722,6 +738,7 @@ template: wide
               false,
               'docs',
               doc.file.filePath,
+              z.string(),
             )
             if (!sdkProp) return true
 
@@ -758,6 +775,11 @@ template: wide
   if (staticRedirects !== null && dynamicRedirects !== null) {
     await writeRedirects(config, staticRedirects, dynamicRedirects)
     console.info('✓ Wrote redirects to disk')
+  }
+
+  if (prompts.length > 0) {
+    await writePrompts(config, prompts)
+    console.info(`✓ Wrote ${prompts.length} prompts to disk`)
   }
 
   if (config.publicPath) {

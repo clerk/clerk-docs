@@ -24,6 +24,7 @@ import { checkTypedoc } from './plugins/checkTypedoc'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
+import { Prompt, checkPrompts } from './prompts'
 
 export const parseInMarkdownFile =
   (config: BuildConfig) =>
@@ -31,6 +32,7 @@ export const parseInMarkdownFile =
     file: DocsFile,
     partials: { path: string; content: string; node: Node }[],
     typedocs: { path: string; content: string; node: Node }[],
+    prompts: Prompt[],
     inManifest: boolean,
     section: WarningsSection,
   ) => {
@@ -69,6 +71,7 @@ export const parseInMarkdownFile =
       )
       .use(checkPartials(config, partials, file, { reportWarnings: true, embed: false }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }))
+      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
       .process({
         path: file.relativeFilePath,
         value: fileContent,

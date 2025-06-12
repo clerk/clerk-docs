@@ -13,6 +13,7 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { errorMessages, safeMessage } from '../error-messages'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { existsSync } from 'node:fs'
+import { z } from 'zod'
 
 export const checkTypedoc =
   (
@@ -34,6 +35,7 @@ export const checkTypedoc =
         true,
         'docs',
         filePath,
+        z.string(),
       )
 
       if (typedocSrc === undefined) return node

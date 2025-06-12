@@ -17,6 +17,7 @@ type BuildConfigOptions = {
   distPath: string
   typedocPath: string
   publicPath?: string
+  ignorePaths: string[]
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -38,11 +39,15 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
-  skipApiErrors?: boolean
-  cleanDist: boolean
+  prompts?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
+    skipGit?: boolean
+    skipApiErrors?: boolean
   }
 }
 
@@ -85,7 +90,8 @@ export async function createConfig(config: BuildConfigOptions) {
     publicRelativePath: config.publicPath,
     publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
-    ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredPaths: (url: string) => config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredLinks: (url: string) => config.ignoreLinks.some((ignoreItem) => url === ignoreItem),
     ignoreWarnings: config.ignoreWarnings ?? {
       docs: {},
       partials: {},
@@ -111,12 +117,20 @@ export async function createConfig(config: BuildConfigOptions) {
         }
       : null,
 
-    skipApiErrors: config.skipApiErrors ?? false,
-    cleanDist: config.cleanDist,
+    prompts: config.prompts
+      ? {
+          inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+          inputPathRelative: config.prompts.inputPath,
+          outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+          outputPathRelative: config.prompts.outputPath,
+        }
+      : null,
 
     flags: {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
+      skipGit: config.flags?.skipGit ?? false,
+      skipApiErrors: config.flags?.skipApiErrors ?? false,
     },
   }
 }

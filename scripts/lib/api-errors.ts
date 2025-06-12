@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'path'
 import type { BuildConfig } from './config'
+import { DocsFile } from './io'
 
 interface ApiError {
   name: string
@@ -116,7 +117,7 @@ ${fileErrors}
 }
 
 export async function generateApiErrorDocs(config: BuildConfig) {
-  if (config.skipApiErrors) return []
+  if (config.flags.skipApiErrors) return null
 
   try {
     // Read the API errors JSON file
@@ -149,14 +150,28 @@ export async function generateApiErrorDocs(config: BuildConfig) {
 
     return [
       {
-        href: 'errors/backend-api.mdx',
+        filePath: '/docs/errors/backend-api.mdx',
+        relativeFilePath: 'docs/errors/backend-api.mdx',
+        fullFilePath: path.join(config.basePath, '..', '/docs/errors/backend-api.mdx') as `${string}.mdx`,
+        filePathInDocsFolder: 'errors/backend-api.mdx',
+
+        href: '/docs/errors/backend-api',
+        relativeHref: 'docs/errors/backend-api',
+
         content: docsBAPI,
       },
       {
-        href: 'errors/frontend-api.mdx',
+        filePath: '/docs/errors/frontend-api.mdx',
+        relativeFilePath: 'docs/errors/frontend-api.mdx',
+        fullFilePath: path.join(config.basePath, '..', '/docs/errors/frontend-api.mdx') as `${string}.mdx`,
+        filePathInDocsFolder: 'errors/frontend-api.mdx',
+
+        href: '/docs/errors/frontend-api',
+        relativeHref: 'docs/errors/frontend-api',
+
         content: docsFAPI,
       },
-    ]
+    ] as const satisfies (DocsFile & { content: string })[]
   } catch (error) {
     console.error('Error generating documentation:', error)
     throw error

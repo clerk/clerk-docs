@@ -38,6 +38,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
@@ -45,25 +46,24 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
-import readdirp from 'readdirp'
+import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
+import { getLastCommitDate } from './lib/getLastCommitDate'
 import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getMarkdownCache, Store } from './lib/store'
+import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, markDocumentDirty, Store } from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
-import { getLastCommitDate } from './lib/getLastCommitDate'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
 import { extractComponentPropValueFromNode } from './lib/utils/extractComponentPropValueFromNode'
 import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp'
-import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
 
 import { checkPartials } from './lib/plugins/checkPartials'
@@ -76,10 +76,12 @@ import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import {
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
-  type Redirect,
   transformRedirectsToObject,
   writeRedirects,
+  type Redirect,
 } from './lib/redirects'
+import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -109,7 +111,12 @@ async function main() {
         outputPath: '_redirects/dynamic.jsonc',
       },
     },
-    ignoreLinks: [
+    prompts: {
+      inputPath: '../prompts',
+      outputPath: '_prompts',
+    },
+    ignoreLinks: ['/docs/quickstart'],
+    ignorePaths: [
       '/docs/core-1',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
@@ -131,6 +138,7 @@ async function main() {
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+        'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -144,11 +152,11 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
-    skipApiErrors: false,
-    cleanDist: false,
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
+      skipApiErrors: args.includes('--skip-api-errors'),
+      skipGit: args.includes('--skip-git'),
     },
   })
 
@@ -167,7 +175,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, { ...config, cleanDist: true }, build)
+    watchAndRebuild(store, config, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -186,7 +194,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeFile = writeDistFile(config)
   const writeSdkFile = writeSDKFile(config)
   const markdownCache = getMarkdownCache(store)
+  const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
+  const markDirty = markDocumentDirty(store)
 
   await ensureDir(config.distFinalPath)
 
@@ -205,8 +215,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
+  let prompts: Prompt[] = []
+
+  if (config.prompts) {
+    prompts = await readPrompts(config)
+    console.info(`✓ Read ${prompts.length} prompts`)
+  }
+
   const apiErrorsFiles = await generateApiErrorDocs(config)
-  if (!config.skipApiErrors) {
+  if (!config.flags.skipApiErrors) {
     console.info('✓ Generated API Error MDX files')
   }
 
@@ -232,7 +249,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     if (!item.href?.startsWith(config.baseDocsLink)) return item
     if (item.target !== undefined) return item
 
-    const ignore = config.ignoredLink(item.href)
+    const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
     if (ignore === true) return item
 
     docsInManifest.add(item.href)
@@ -244,24 +261,25 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
   const docsArray = await Promise.all([
-    ...docsFiles.map(async (file) => {
-      const href = removeMdxSuffix(`${config.baseDocsLink}${file.path}`)
-      const inManifest = docsInManifest.has(href)
+    ...(apiErrorsFiles
+      ? apiErrorsFiles.map(async (file) => {
+          const inManifest = docsInManifest.has(file.href)
 
-      const markdownFile = await markdownCache(href, () =>
-        parseMarkdownFile({ href }, partials, typedocs, inManifest, 'docs'),
+          const markdownFile = await parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs')
+
+          docsMap.set(file.href, markdownFile)
+
+          return markdownFile
+        })
+      : []),
+    ...docsFiles.map(async (file) => {
+      const inManifest = docsInManifest.has(file.href)
+
+      const markdownFile = await markdownCache(file.filePath, () =>
+        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
       )
 
-      docsMap.set(href, markdownFile)
-      return markdownFile
-    }),
-    ...apiErrorsFiles.map(async (file) => {
-      const href = removeMdxSuffix(`${config.baseDocsLink}${file.href}`)
-      const inManifest = docsInManifest.has(href)
-
-      const markdownFile = await parseMarkdownFile(file, partials, typedocs, inManifest, 'docs')
-
-      docsMap.set(href, markdownFile)
+      docsMap.set(file.href, markdownFile)
       return markdownFile
     }),
   ])
@@ -279,14 +297,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
       }
 
-      const ignore = config.ignoredLink(item.href)
+      const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
       if (ignore === true) return item // even thou we are not processing them, we still need to keep them
 
       const doc = docsMap.get(item.href)
 
       if (doc === undefined) {
-        const filePath = `${item.href}.mdx`
-        if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-not-found')) {
+        if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-not-found')) {
           throw new Error(errorMessages['doc-not-found'](item.title, item.href))
         }
         return item
@@ -303,8 +320,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       if (docSDK !== undefined && parentSDK !== undefined) {
         if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          const filePath = `${item.href}.mdx`
-          if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-sdk-filtered-by-parent')) {
+          if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-sdk-filtered-by-parent')) {
             throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
           }
         }
@@ -420,11 +436,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       try {
         let node: Node | null = null
+        const links: Set<string> = new Set()
 
         const vfile = await remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, partialPath, 'partials'))
+          .use(
+            validateAndEmbedLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
+              links.add(linkInPartial)
+            }),
+          )
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -438,6 +459,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           ...partial,
           node: node as Node,
           vfile,
+          links,
         }
       } catch (error) {
         console.error(`✗ Error validating partial: ${partial.path}`)
@@ -453,10 +475,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       try {
         let node: Node | null = null
+        const links: Set<string> = new Set()
 
         const vfile = await remark()
           .use(remarkMdx)
-          .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
+          .use(
+            validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              links.add(linkInTypedoc)
+            }),
+          )
           .use(() => (tree, vfile) => {
             node = tree
           })
@@ -470,13 +497,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           ...typedoc,
           vfile,
           node: node as Node,
+          links,
         }
       } catch (error) {
         try {
           let node: Node | null = null
+          const links: Set<string> = new Set()
 
           const vfile = await remark()
-            .use(validateAndEmbedLinks(config, docsMap, filePath, 'typedoc'))
+            .use(
+              validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              }),
+            )
             .use(() => (tree, vfile) => {
               node = tree
             })
@@ -490,6 +523,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ...typedoc,
             vfile,
             node: node as Node,
+            links,
           }
         } catch (error) {
           console.error(error)
@@ -529,31 +563,79 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
 
-  const coreVFiles = await Promise.all(
+  const cachedCoreDocsSize = store.coreDocs.size
+  const coreDocs = await Promise.all(
     docsArray.map(async (doc) => {
-      const filePath = `${doc.href}.mdx`
+      const foundLinks: Set<string> = new Set()
+      const foundPartials: Set<string> = new Set()
+      const foundTypedocs: Set<string> = new Set()
 
-      const vfile = await remark()
-        .use(remarkFrontmatter)
-        .use(remarkMdx)
-        .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
-        .use(validateIfComponents(config, filePath, doc, flatSDKScopedManifest))
-        .use(checkPartials(config, validatedPartials, filePath, { reportWarnings: false, embed: true }))
-        .use(checkTypedoc(config, validatedTypedocs, filePath, { reportWarnings: false, embed: true }))
-        .use(
-          insertFrontmatter({
-            lastUpdated: (
-              (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-            ).toISOString(),
-          }),
-        )
-        .process(doc.vfile)
+      const vfile = await coreDocCache(doc.file.filePath, async () =>
+        remark()
+          .use(remarkFrontmatter)
+          .use(remarkMdx)
+          .use(
+            validateAndEmbedLinks(
+              config,
+              docsMap,
+              doc.file.filePath,
+              'docs',
+              (link) => {
+                foundLinks.add(link)
+              },
+              doc.file.href,
+            ),
+          )
+          .use(
+            checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
+              foundPartials.add(partial)
+            }),
+          )
+          .use(
+            checkTypedoc(
+              config,
+              validatedTypedocs,
+              doc.file.filePath,
+              { reportWarnings: false, embed: true },
+              (typedoc) => {
+                foundTypedocs.add(typedoc)
+              },
+            ),
+          )
+          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
+          .use(
+            insertFrontmatter({
+              lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+            }),
+          )
+          .process(doc.vfile),
+      )
 
-      const distFilePath = `${doc.href.replace(config.baseDocsLink, '')}.mdx`
+      const partialsLinks = validatedPartials
+        .filter((partial) => foundPartials.has(`_partials/${partial.path}`))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundPartials)
 
-      if (isValidSdk(config)(distFilePath.split('/')[0])) {
-        if (!shouldIgnoreWarning(config, filePath, 'docs', 'sdk-path-conflict')) {
-          throw new Error(errorMessages['sdk-path-conflict'](doc.href, distFilePath))
+      const typedocsLinks = validatedTypedocs
+        .filter((typedoc) => foundTypedocs.has(typedoc.path))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
+
+      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks])
+
+      allLinks.forEach((link) => {
+        markDirty(doc.file.filePath, link)
+      })
+
+      return { ...doc, vfile }
+    }),
+  )
+  console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
+
+  await Promise.all(
+    coreDocs.map(async (doc) => {
+      if (isValidSdk(config)(doc.file.filePathInDocsFolder.split('/')[0])) {
+        if (!shouldIgnoreWarning(config, doc.file.filePath, 'docs', 'sdk-path-conflict')) {
+          throw new Error(errorMessages['sdk-path-conflict'](doc.file.href, doc.file.filePathInDocsFolder))
         }
       }
 
@@ -561,23 +643,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // This is a sdk specific doc, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
 
         await writeFile(
-          distFilePath,
+          doc.file.filePathInDocsFolder,
           `---
 template: wide
 ---
-<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
-
-        return vfile
+      } else {
+        await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
       }
-
-      await writeFile(distFilePath, typedocTableSpecialCharacters.decode(String(vfile)))
-
-      return vfile
     }),
   )
 
-  console.info(`✓ Validated and wrote out all core docs`)
+  console.info(`✓ Wrote out all core docs (${coreDocs.length} total)`)
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {
@@ -586,31 +664,29 @@ template: wide
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 
-          const filePath = `${doc.href}.mdx`
           const vfile = await remark()
             .use(remarkFrontmatter)
             .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, docsMap, filePath, 'docs', doc))
-            .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: true }))
-            .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: true }))
-            .use(filterOtherSDKsContentOut(config, filePath, targetSdk))
-            .use(validateUniqueHeadings(config, filePath, 'docs'))
+            .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+            .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+            .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+            .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+            .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
+            .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
             .use(
               insertFrontmatter({
-                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.href, ':sdk:') : doc.href,
-                lastUpdated: (
-                  (await getCommitDate(path.join(config.docsPath, '..', filePath))) ?? new Date()
-                ).toISOString(),
+                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
+                lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
               }),
             )
             .process({
-              path: filePath,
+              path: doc.file.filePath,
               value: doc.fileContent,
             })
 
           await writeSdkFile(
             targetSdk,
-            `${doc.href.replace(config.baseDocsLink, '')}.mdx`,
+            doc.file.filePathInDocsFolder,
             typedocTableSpecialCharacters.decode(String(vfile)),
           )
 
@@ -632,17 +708,25 @@ template: wide
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
 
   for (const doc of docsWithOnlyIfComponents) {
-    const filePath = `${doc.href}.mdx`
-
     // Extract all SDK values from <If /> all components
     const availableSDKs = new Set<SDK>()
 
     mdastVisit(doc.node, (node) => {
-      const sdkProp = extractComponentPropValueFromNode(config, node, undefined, 'If', 'sdk', true, 'docs', filePath)
+      const sdkProp = extractComponentPropValueFromNode(
+        config,
+        node,
+        undefined,
+        'If',
+        'sdk',
+        true,
+        'docs',
+        doc.file.filePath,
+        z.string(),
+      )
 
       if (sdkProp === undefined) return
 
-      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', filePath)
+      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
 
       if (sdks === undefined) return
 
@@ -663,20 +747,21 @@ template: wide
               'sdk',
               false,
               'docs',
-              filePath,
+              doc.file.filePath,
+              z.string(),
             )
             if (!sdkProp) return true
 
-            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', filePath)
+            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
 
             if (!ifSdks) return true
 
             return ifSdks.includes(sdk)
           })
         })
-        .use(validateUniqueHeadings(config, filePath, 'docs'))
+        .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
         .process({
-          path: filePath,
+          path: doc.file.filePath,
           value: String(doc.vfile),
         })
     }
@@ -702,6 +787,11 @@ template: wide
     console.info('✓ Wrote redirects to disk')
   }
 
+  if (prompts.length > 0) {
+    await writePrompts(config, prompts)
+    console.info(`✓ Wrote ${prompts.length} prompts to disk`)
+  }
+
   if (config.publicPath) {
     await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
     console.info('✓ Copied public assets to dist')
@@ -711,6 +801,7 @@ template: wide
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
+  const coreVFiles = coreDocs.map((doc) => doc.vfile)
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 

@@ -9,6 +9,7 @@ import type { SDK } from './schemas'
 type BuildConfigOptions = {
   basePath: string
   validSdks: readonly SDK[]
+  dataPath: string
   docsPath: string
   baseDocsLink: string
   manifestPath: string
@@ -16,6 +17,7 @@ type BuildConfigOptions = {
   distPath: string
   typedocPath: string
   publicPath?: string
+  ignorePaths: string[]
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -37,10 +39,15 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
-  cleanDist: boolean
+  prompts?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
+    skipGit?: boolean
+    skipApiErrors?: boolean
   }
 }
 
@@ -65,6 +72,9 @@ export async function createConfig(config: BuildConfigOptions) {
     partialsRelativePath: config.partialsPath,
     partialsPath: resolve(config.partialsPath),
 
+    dataRelativePath: config.dataPath,
+    dataPath: resolve(config.dataPath),
+
     docsRelativePath: config.docsPath,
     docsPath: resolve(config.docsPath),
 
@@ -80,7 +90,8 @@ export async function createConfig(config: BuildConfigOptions) {
     publicRelativePath: config.publicPath,
     publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
-    ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredPaths: (url: string) => config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem)),
+    ignoredLinks: (url: string) => config.ignoreLinks.some((ignoreItem) => url === ignoreItem),
     ignoreWarnings: config.ignoreWarnings ?? {
       docs: {},
       partials: {},
@@ -106,11 +117,20 @@ export async function createConfig(config: BuildConfigOptions) {
         }
       : null,
 
-    cleanDist: config.cleanDist,
+    prompts: config.prompts
+      ? {
+          inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+          inputPathRelative: config.prompts.inputPath,
+          outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+          outputPathRelative: config.prompts.outputPath,
+        }
+      : null,
 
     flags: {
       watch: config.flags?.watch ?? false,
       controlled: config.flags?.controlled ?? false,
+      skipGit: config.flags?.skipGit ?? false,
+      skipApiErrors: config.flags?.skipApiErrors ?? false,
     },
   }
 }

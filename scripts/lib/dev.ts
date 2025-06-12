@@ -2,9 +2,10 @@
 // invalidates the cache and kicks off a rebuild of the docs
 
 import watcher from '@parcel/watcher'
+import path from 'path'
+import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
-import type { build } from '../build-docs'
 
 export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)
@@ -42,6 +43,28 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     }
   }
 
-  watcher.subscribe(config.docsPath, handleFileChange)
+  watcher.subscribe(config.dataPath, handleFileChange)
+
+  if (config.redirects) {
+    const staticDir = path.dirname(config.redirects.static.inputPath)
+    const dynamicDir = path.dirname(config.redirects.dynamic.inputPath)
+
+    if (staticDir === dynamicDir) {
+      watcher.subscribe(staticDir, handleFileChange)
+    } else {
+      watcher.subscribe(staticDir, handleFileChange)
+      watcher.subscribe(dynamicDir, handleFileChange)
+    }
+  }
+
+  watcher.subscribe(config.docsPath, handleFileChange, {
+    // Ignore generated files
+    ignore: [`${config.docsPath}/errors/backend-api.mdx`, `${config.docsPath}/errors/frontend-api.mdx`],
+  })
+
   watcher.subscribe(config.typedocPath, handleFileChange)
+
+  if (config.publicPath) {
+    watcher.subscribe(config.publicPath, handleFileChange)
+  }
 }

@@ -154,6 +154,7 @@ const baseConfig = {
   partialsPath: '../docs/_partials',
   typedocPath: '../typedoc',
   distPath: '../dist',
+  ignorePaths: [],
   ignoreLinks: [],
   ignoreWarnings: {
     docs: {},
@@ -167,7 +168,6 @@ const baseConfig = {
   },
   flags: {
     skipGit: true,
-    clean: true,
     skipApiErrors: true,
   },
 } satisfies Partial<Parameters<typeof createConfig>[0]>
@@ -205,7 +205,6 @@ Testing with a simple page.`,
         validSdks: ['nextjs', 'react'],
         flags: {
           skipGit: false,
-          clean: true,
           skipApiErrors: true,
         },
       }),
@@ -2775,7 +2774,7 @@ sdk: react
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react'],
-        ignoreLinks: ['/docs/ignored'],
+        ignorePaths: ['/docs/ignored'],
       }),
     )
 
@@ -3263,8 +3262,230 @@ title: Updated Title
 
     // Check updated content
     const updatedContent = await readFile(pathJoin('./dist/cached-doc.mdx'))
+
     expect(updatedContent).toContain('Updated Title')
     expect(updatedContent).toContain('Updated Content')
+  })
+
+  test('should invalidate linked pages when the markdown changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Cached Doc', href: '/docs/cached-doc' },
+              { title: 'Linked Doc', href: '/docs/linked-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+---
+
+[Link to Linked Doc](/docs/linked-doc)`,
+      },
+      {
+        path: './docs/linked-doc.mdx',
+        content: `---
+title: Linked Doc
+sdk: react, nextjs
+---
+
+# Linked Doc`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'astro'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs"]}>Link to Linked Doc</SDKLink>',
+    )
+
+    // Update file content
+    await fs.writeFile(
+      pathJoin('./docs/linked-doc.mdx'),
+      `---
+title: Linked Doc
+sdk: react, nextjs, astro
+---
+
+# Linked Doc`,
+      'utf-8',
+    )
+
+    invalidate(pathJoin('./docs/linked-doc.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs","astro"]}>Link to Linked Doc</SDKLink>',
+    )
+  })
+
+  test('should invalidate linked pages when the partial changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Cached Doc', href: '/docs/cached-doc' },
+              { title: 'Linked Doc', href: '/docs/linked-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/partial.mdx',
+        content: `[Link to Linked Doc](/docs/linked-doc)`,
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+---
+
+<Include src="_partials/partial" />`,
+      },
+      {
+        path: './docs/linked-doc.mdx',
+        content: `---
+title: Linked Doc
+sdk: react, nextjs
+---
+
+# Linked Doc`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'astro'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs"]}>Link to Linked Doc</SDKLink>',
+    )
+
+    // Update file content
+    await fs.writeFile(
+      pathJoin('./docs/linked-doc.mdx'),
+      `---
+title: Linked Doc
+sdk: react, nextjs, astro
+---
+
+# Linked Doc`,
+      'utf-8',
+    )
+
+    invalidate(pathJoin('./docs/linked-doc.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs","astro"]}>Link to Linked Doc</SDKLink>',
+    )
+  })
+
+  test('should invalidate linked pages when the typedoc changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Cached Doc', href: '/docs/cached-doc' },
+              { title: 'Linked Doc', href: '/docs/linked-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './typedoc/component.mdx',
+        content: `[Link to Linked Doc](/docs/linked-doc)`,
+      },
+      {
+        path: './docs/cached-doc.mdx',
+        content: `---
+title: Original Title
+---
+
+<Typedoc src="component" />`,
+      },
+      {
+        path: './docs/linked-doc.mdx',
+        content: `---
+title: Linked Doc
+sdk: react, nextjs
+---
+
+# Linked Doc`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'astro'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs"]}>Link to Linked Doc</SDKLink>',
+    )
+
+    // Update file content
+    await fs.writeFile(
+      pathJoin('./docs/linked-doc.mdx'),
+      `---
+title: Linked Doc
+sdk: react, nextjs, astro
+---
+
+# Linked Doc`,
+      'utf-8',
+    )
+
+    invalidate(pathJoin('./docs/linked-doc.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    expect(await readFile(pathJoin('./dist/cached-doc.mdx'))).toContain(
+      '<SDKLink href="/docs/:sdk:/linked-doc" sdks={["react","nextjs","astro"]}>Link to Linked Doc</SDKLink>',
+    )
   })
 
   test('should update doc content when the partial changes in a sdk scoped doc', async () => {
@@ -4309,7 +4530,6 @@ describe('API Errors Generation', () => {
         flags: {
           skipApiErrors: false,
           skipGit: true,
-          clean: true,
         },
       }),
     )

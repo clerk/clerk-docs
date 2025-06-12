@@ -59,12 +59,16 @@ export const errorMessages = {
   'partials-inside-partials': (): string =>
     'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
 
+  // LLMPrompt component errors
+  'src-not-in-prompts': (src: string): string => `<LLMPrompt /> prop "src" must start with "prompts/"`,
+  'prompt-not-found': (src: string): string => `Prompt ${src} not found`,
+
   // Link validation errors
   'link-doc-not-found': (url: string): string => `Doc ${url} not found`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
 
   // File reading errors
-  'file-read-error': (filePath: string): string => `file ${filePath} doesn't exist`,
+  'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,
   'partial-read-error': (path: string): string => `Failed to read in ${path} from partials file`,
   'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
   'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,

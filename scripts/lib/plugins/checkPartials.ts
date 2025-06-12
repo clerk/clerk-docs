@@ -12,6 +12,7 @@ import { safeMessage } from '../error-messages'
 import type { DocsFile } from '../io'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
+import { z } from 'zod'
 
 export const checkPartials =
   (
@@ -39,6 +40,7 @@ export const checkPartials =
         true,
         'docs',
         file.filePath,
+        z.string(),
       )
 
       if (partialSrc === undefined) return node

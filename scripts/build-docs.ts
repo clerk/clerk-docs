@@ -261,6 +261,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
   const docsArray = await Promise.all([
+    ...docsFiles.map(async (file) => {
+      const inManifest = docsInManifest.has(file.href)
+
+      const markdownFile = await markdownCache(file.filePath, () =>
+        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+      )
+
+      docsMap.set(file.href, markdownFile)
+      return markdownFile
+    }),
     ...(apiErrorsFiles
       ? apiErrorsFiles.map(async (file) => {
           const inManifest = docsInManifest.has(file.href)
@@ -272,16 +282,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           return markdownFile
         })
       : []),
-    ...docsFiles.map(async (file) => {
-      const inManifest = docsInManifest.has(file.href)
-
-      const markdownFile = await markdownCache(file.filePath, () =>
-        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
-      )
-
-      docsMap.set(file.href, markdownFile)
-      return markdownFile
-    }),
   ])
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 

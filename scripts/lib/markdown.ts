@@ -36,7 +36,7 @@ export const parseInMarkdownFile =
     inManifest: boolean,
     section: WarningsSection,
   ) => {
-    const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.relativeFilePath)
+    const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.fullFilePath)
 
     if (error !== null) {
       throw new Error(errorMessages['markdown-read-error'](file.href), {

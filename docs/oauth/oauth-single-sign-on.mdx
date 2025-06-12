@@ -75,6 +75,62 @@ Other available settings that may be useful include:
 
 After a user has successfully completed an OAuth 2.0 flow, you can retrieve additional user information from Clerk's [`/oauth/userinfo`](/docs/reference/frontend-api/tag/OAuth2-Identify-Provider#operation/getOAuthUserInfo){{ target: '_blank' }} endpoint. When making the request to this endpoint, you must include the OAuth access token in the `Authorization` header.
 
+This example is written for Next.js App Router but can be adapted for any framework/language. It assumes the OAuth flow has already been completed and that you have obtained an access token from Clerk.
+
+```tsx {{ filename: 'app/api/userinfo/route.ts' }}
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  // Assume you already have the access token available here
+  const accessToken = 'YOUR_ACCESS_TOKEN_HERE'
+
+  try {
+    const response = await fetch(`${process.env.FAPI_URL}/oauth/userinfo`, {
+      headers: {
+        // Include the access token in the Authorization header
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      return NextResponse.json(errorData, { status: response.status })
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data)
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { error: 'Failed to fetch user info', details: (error as Error).message },
+      { status: 500 },
+    )
+  }
+}
+```
+
+**Example response**
+
+```json
+{
+  "object": "string",
+  "instance_id": "string",
+  "user_id": "string",
+  "sub": "string",
+  "email": "string",
+  "email_verified": true,
+  "family_name": "string",
+  "given_name": "string",
+  "name": "string",
+  "username": "string",
+  "preferred_username": "string",
+  "picture": "string",
+  "public_metadata": {},
+  "private_metadata": {},
+  "unsafe_metadata": {}
+}
+```
+
 The `/oauth/userinfo` endpoint provides the following user properties, depending on the granted scopes:
 
 | Property | Description |
@@ -100,6 +156,57 @@ The endpoint returns detailed token information such as if the token is still ac
 
 > [!WARNING]
 > This endpoint is protected. You must provide your Clerk Client ID and Client Secret credentials to authenticate.
+
+Here’s a Next.js API route example illustrating how to call this endpoint assuming you already have your tokens.
+
+```tsx {{ filename: 'app/api/tokeninfo/route.ts' }}
+import type { NextApiRequest, NextApiResponse } from 'next'
+import qs from 'qs'
+
+// Assume you already have the access token and refresh token available here
+const tokens = {
+  accessToken: 'YOUR_ACCESS_TOKEN_HERE',
+  refreshToken: 'YOUR_REFRESH_TOKEN_HERE',
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const response = await fetch(`${process.env.FAPI_URL}/oauth/token_info`, {
+      method: 'POST',
+      headers: {
+        // Include the access token in the Authorization header
+        Authorization: `Bearer ${tokens.accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: qs.stringify({
+        // Include the refresh token in the body
+        token: tokens.refreshToken,
+      }),
+    })
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch token info' })
+    }
+
+    const data = await response.json()
+    res.status(200).json(data)
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}
+```
+
+**Example response**
+
+```json
+{
+  "active": true,
+  "client_id": "string",
+  "iat": 0,
+  "scope": "string",
+  "sub": "string"
+}
+```
 
 ### Grant types
 

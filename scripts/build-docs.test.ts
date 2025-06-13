@@ -2291,6 +2291,57 @@ title: Core Page
     )
   })
 
+  test('Swap out links for <SDKLink /> when a link points to a sdk manifest filtered page', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'nextjs',
+                sdk: ['nextjs'],
+                items: [[{ title: 'SDK Filtered Page', href: '/docs/reference/nextjs/sdk-filtered-page' }]],
+              },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/reference/nextjs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+---
+
+SDK filtered page`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+---
+
+# Core page
+
+[SDK Filtered Page](/docs/reference/nextjs/sdk-filtered-page)
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
+      `<SDKLink href="/docs/reference/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
   test('Should swap out links for <SDKLink /> in partials', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

@@ -26,6 +26,7 @@ export const validateAndEmbedLinks =
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const scopeHref = scopeHrefToSDK(config)
     const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
@@ -75,18 +76,26 @@ export const validateAndEmbedLinks =
           const firstChild = node.children?.[0]
           const childIsCodeBlock = firstChild?.type === 'inlineCode'
 
+          const injectSDK =
+            linkedDoc.frontmatter.sdk !== undefined &&
+            linkedDoc.frontmatter.sdk.length >= 1 &&
+            !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
+            !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
+
+          const href = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
+
           if (childIsCodeBlock) {
             firstChild.type = 'text'
 
             return SDKLink({
-              href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+              href,
               sdks: linkedDoc.sdk,
               code: true,
             })
           }
 
           return SDKLink({
-            href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+            href,
             sdks: linkedDoc.sdk,
             code: false,
             children: node.children,

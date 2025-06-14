@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+export const config = {
+  runtime: 'edge',
+}
+
 export default function handler(request: VercelRequest, response: VercelResponse) {
   const branchUrl = process.env.VERCEL_BRANCH_URL
 

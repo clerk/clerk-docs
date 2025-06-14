@@ -41,6 +41,7 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
     }
   })
 }
+
 export type DocsFile = Awaited<ReturnType<ReturnType<typeof readDocsFolder>>>[number]
 
 // checks if a folder exists, if not it will be created

@@ -68,44 +68,44 @@ export const validateAndEmbedLinks =
         }
       }
 
-      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-      if (inCardsComponent === false) {
-        if (linkedDoc.sdk !== undefined) {
-          // we are going to swap it for the sdk link component to give the users a great experience
-
-          const firstChild = node.children?.[0]
-          const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-          const injectSDK =
-            linkedDoc.frontmatter.sdk !== undefined &&
-            linkedDoc.frontmatter.sdk.length >= 1 &&
-            !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
-            !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
-
-          const href = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
-
-          if (childIsCodeBlock) {
-            firstChild.type = 'text'
-
-            return SDKLink({
-              href,
-              sdks: linkedDoc.sdk,
-              code: true,
-            })
-          }
-
-          return SDKLink({
-            href,
-            sdks: linkedDoc.sdk,
-            code: false,
-            children: node.children,
-          })
-        }
-      } else {
-        node.url = node.url + '?instant-redirect=true'
+      if (linkedDoc.sdk === undefined) {
+        return node
       }
 
-      return node
+      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+      if (inCardsComponent === true) {
+        node.url = scopeHref(url, '~')
+        return node
+      }
+
+      // we are going to swap it for the sdk link component to give the users a great experience
+      const firstChild = node.children?.[0]
+      const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+      const injectSDK =
+        linkedDoc.frontmatter.sdk !== undefined &&
+        linkedDoc.frontmatter.sdk.length >= 1 &&
+        !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
+        !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
+
+      const href = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
+
+      if (childIsCodeBlock) {
+        firstChild.type = 'text'
+
+        return SDKLink({
+          href,
+          sdks: linkedDoc.sdk,
+          code: true,
+        })
+      }
+
+      return SDKLink({
+        href,
+        sdks: linkedDoc.sdk,
+        code: false,
+        children: node.children,
+      })
     })
   }
 

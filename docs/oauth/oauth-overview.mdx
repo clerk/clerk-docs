@@ -1,0 +1,80 @@
+---
+title: OAuth and OIDC overview
+description: Learn what OAuth and OpenID Connect (OIDC) are, why they're used, and how the different OAuth flows work.
+---
+
+**[OAuth (Open Authorization)](https://oauth.net/2/)** is a widely adopted standard designed by the **[IETF](https://www.ietf.org/)** to provide a secure way for users to grant third-party applications limited access to their data and resources without providing their login credentials directly.
+
+This guide explains the fundamentals of OAuth using practical examples and outlines its different use cases, helping developers navigate the complexities of implementing OAuth in modern apps.
+
+## What is OAuth?
+
+OAuth enables users to grant applications access to their resources without sharing their username and password directly. This ensures secure, limited, and auditable access.
+
+For example, consider a brand manager who wants to schedule marketing content to be published across various social platforms, such as LinkedIn, Twitter or Facebook. Many content management tools exist to help with this but they would need permission to post on the manager's behalf.
+
+Rather than asking for a username and password for each social media platform, which could compromise account security, OAuth allows the chosen content management tool to request limited permissions (such as posting content) while restricting sensitive actions like deleting the account or changing the password.
+
+> [!QUIZ]
+> Why not use credentials directly?
+>
+> ---
+>
+> Using credentials directly is both insecure and impractical for the following reasons:
+>
+> - **Limited access and security:** users typically do not want to grant full access to their accounts. Granting full access would violate the [principle of least privilege](https://en.wikipedia.org/wiki/Principle_of_least_privilege), aiming to minimize potential damage in case of a security incident. OAuth allows apps to request only the permissions they truly need, reducing security risks.
+>
+> - **Automated logins and security controls:** even if an app had your credentials, it would need to sign in as you through an automated script. However, many authentication systems detect and block scripted logins to protect against bots and abuse. OAuth provides a standardized way to grant access without bypassing these controls.
+>
+> - **Modern authentication:** many platforms now require additional security measures beyond just a username and password, such as multi-factor authentication (MFA), one-time passwords (OTPs), or passkeys. OAuth is designed to work with these modern authentication methods, ensuring secure access without compromising the user’s account.
+
+## Key terminology
+
+Before diving deeper, it’s essential to understand some common terminology around OAuth:
+
+- **Client:** The application requesting access to a user’s data/ resources. For example, in the earlier scenario, the content management tool acts as the **client**, since it needs permission to make posts from Twitter, Facebook, LinkedIn, etc.
+- **Authorization service:** The service responsible for authenticating the user and granting third-party apps access to a user’s account, based on user consent. For instance, Facebook's auth service manages this process for apps wanting to access Facebook resources. This is also known as an **authorization server** or **Identity Provider (IdP)**.
+- **Resource service:** The service that holds the data or resources the **client** wants to access. Following the same example, Facebook's API would be the resource service. This is sometimes referred to as a **resource server** or **Service Provider (SP)**.
+- **OAuth access token:** A randomly generated string or JSON Web Token (JWT) that is given to the **client** by the **authorization service** if the OAuth process is completed successfully. The client can then send this token to the **resource service** to be allowed to access the relevant resources and data.
+- **Scopes:** Permissions that define which specific actions or data a **client** can access on the **resource service** on behalf of the user. For example, a **scope** might allow readings emails but not sending them. Scopes are requested by the client during the OAuth flow and are displayed to the user, usually via a consent screen.
+
+## OAuth flow overview
+
+Here is what a typical OAuth flow, known as the [Authorization Code Flow](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.1), looks like:
+
+1. The user selects a "Connect" or "Sign in with" option in your app.
+1. They’re redirected to the OAuth provider’s authorization page.
+1. After they approve the request, the provider redirects them back to your app with a short-lived authorization code.
+1. Your server exchanges this code (along with the **client\_id** and **client\_secret**) for an access token.
+1. Your app can now use this access token to make authorized requests on behalf of the user.
+
+![OAuth flow diagram](/docs/images/oauth/oauth-flow-diagram.jpg)
+
+> [!QUIZ]
+> Why does this happen in two steps? Why return an "authorization code" and not just send back the OAuth token to save time and resources?
+>
+> ---
+>
+> The answer is security. If the token was returned directly in the browser, it could show up in browser history, be intercepted by browser extensions, or leak through network logs. Instead, this flow ensures that the sensitive access token is only shared in a server-to-server request, away from the browser.
+>
+> Additionally, any attacker with only the Client ID, which is **not** a sensitive or secret value that's already exposed to the browser, could obtain an OAuth token without any client verification, significantly compromising the security of your app.
+>
+> This is why OAuth flows rely on both a Client ID and a Client Secret. While the Client ID is safe to expose publicly, the Client Secret must remain confidential. It should never be sent through the browser and is only used in secure, server-to-server requests between your client backend and the authorization service.
+>
+> In environments without a secure server such as mobile apps or SPAs, a Client Secret can’t be safely stored. In this case, [PKCE (Proof Key for Code Exchange)](https://datatracker.ietf.org/doc/html/rfc7636) can be used to improve security by ensuring only the client that requested the authorization code can exchange it. To learn more, see the [dedicated section on PKCE](/docs/oauth/how-clerk-implements-oauth#public-clients-and-pkce).
+
+## OAuth use cases
+
+OAuth extends beyond the single use case described above. The diagram above illustrates only one scenario: granting third-party apps scoped access to a user’s data – but OAuth can also be used in many other scenarios, such as:
+
+1. **OAuth Scoped Access:** granting a third-party app limited access to a user’s data through Clerk's API, given the user's consent. This is the use case described in the diagram above. If you'd like to implement this flow, see the [Use OAuth for scoped access guide](/docs/oauth/oauth-scoped-access).
+1. **OAuth Single Sign-On (SSO):** allowing users to sign up/sign in to an app using a third-party provider (e.g. “Sign in with Google"). If you’d like to implement this flow, see the [Use OAuth for SSO guide](/docs/oauth/oauth-single-sign-on).
+1. **OAuth User Management:** using OAuth as a full user registration and sign-in/out mechanism (a full authorization service built with OAuth). **Please note this is not currently supported by Clerk**, as Clerk uses [a different architecture](/docs/how-clerk-works/overview) for user management. If you'd like to learn how to get started with user management using Clerk, [check out this quickstart guide](/docs/quickstarts/overview).
+
+## OpenID Connect (OIDC)
+
+[OpenID Connect (OIDC)](https://openid.net/developers/how-connect-works/) is an extension to OAuth written and maintained by a different standards committee, the [OpenID Foundation](https://openid.net/foundation/). Built on top of OAuth 2.0 and often used with it, OIDC provides a simple, reliable process for a **client** to verify the authenticating user's identity and retrieve basic user details as part of the OAuth flow.
+
+The key addition that OIDC makes to OAuth is that, when returning the access and refresh tokens, as long as an `openid` scope is included, the authorization server should also return an additional property called `id_token`. This ID token is a JSON Web Token (JWT) containing basic user information such as name, email, and profile photo, helping the client identify the user who just went through the flow. Without OIDC, the client would need to use the access token to make another request to a separate API endpoint to retrieve user details. With OIDC, this extra step can be skipped since the user information is already included in the initial OAuth response.
+
+For more details on how Clerk supports OAuth & OIDC, including features and configuration options, refer to the [OAuth reference documentation](/docs/oauth/how-clerk-implements-oauth).

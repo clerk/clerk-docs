@@ -81,6 +81,7 @@ import {
   type Redirect,
 } from './lib/redirects'
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -222,8 +223,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info(`✓ Read ${prompts.length} prompts`)
   }
 
+  const apiErrorsFiles = await generateApiErrorDocs(config)
   if (!config.flags.skipApiErrors) {
-    await generateApiErrorDocs(config)
     console.info('✓ Generated API Error MDX files')
   }
 
@@ -260,8 +261,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
-  const docsArray = await Promise.all(
-    docsFiles.map(async (file) => {
+  const docsArray = await Promise.all([
+    ...docsFiles.map(async (file) => {
       const inManifest = docsInManifest.has(file.href)
 
       const markdownFile = await markdownCache(file.filePath, () =>
@@ -271,7 +272,18 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       docsMap.set(file.href, markdownFile)
       return markdownFile
     }),
-  )
+    ...(apiErrorsFiles
+      ? apiErrorsFiles.map(async (file) => {
+          const inManifest = docsInManifest.has(file.href)
+
+          const markdownFile = await parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs')
+
+          docsMap.set(file.href, markdownFile)
+
+          return markdownFile
+        })
+      : []),
+  ])
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   // Goes through and grabs the sdk scoping out of the manifest
@@ -292,8 +304,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const doc = docsMap.get(item.href)
 
       if (doc === undefined) {
-        const filePath = `${item.href}.mdx`
-        if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-not-found')) {
+        if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-not-found')) {
           throw new Error(errorMessages['doc-not-found'](item.title, item.href))
         }
         return item
@@ -310,8 +321,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       if (docSDK !== undefined && parentSDK !== undefined) {
         if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          const filePath = `${item.href}.mdx`
-          if (!shouldIgnoreWarning(config, filePath, 'docs', 'doc-sdk-filtered-by-parent')) {
+          if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-sdk-filtered-by-parent')) {
             throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
           }
         }
@@ -657,6 +667,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 template: wide
 ---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+        )
+
+        await writeFile(
+          `~/${doc.file.filePathInDocsFolder}`,
+          `---
+template: wide
+---
+<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))

@@ -4524,14 +4524,6 @@ describe('API Errors Generation', () => {
         path: './data/api_errors.json',
         content: await fs.readFile(path.join(__dirname, '..', 'data', 'api_errors.json'), 'utf-8'),
       },
-      {
-        path: './docs/errors/backend-api.mdx',
-        content: '',
-      },
-      {
-        path: './docs/errors/frontend-api.mdx',
-        content: '',
-      },
     ])
 
     const output = await build(

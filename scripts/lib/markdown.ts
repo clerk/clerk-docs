@@ -29,14 +29,14 @@ import { Prompt, checkPrompts } from './prompts'
 export const parseInMarkdownFile =
   (config: BuildConfig) =>
   async (
-    file: DocsFile,
+    file: DocsFile & { content?: string },
     partials: { path: string; content: string; node: Node }[],
     typedocs: { path: string; content: string; node: Node }[],
     prompts: Prompt[],
     inManifest: boolean,
     section: WarningsSection,
   ) => {
-    const [error, fileContent] = await readMarkdownFile(file.fullFilePath)
+    const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.fullFilePath)
 
     if (error !== null) {
       throw new Error(errorMessages['markdown-read-error'](file.href), {

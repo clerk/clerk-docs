@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'path'
 import type { BuildConfig } from './config'
+import { DocsFile } from './io'
 
 interface ApiError {
   name: string
@@ -116,6 +117,8 @@ ${fileErrors}
 }
 
 export async function generateApiErrorDocs(config: BuildConfig) {
+  if (config.flags.skipApiErrors) return null
+
   try {
     // Read the API errors JSON file
     const apiErrorsPath = path.join(config.dataPath, 'api_errors.json')
@@ -138,12 +141,37 @@ export async function generateApiErrorDocs(config: BuildConfig) {
       },
     )
 
-    // Write the output file
-    const outputPathBAPI = path.join(config.docsPath, 'errors', 'backend-api.mdx')
-    const outputPathFAPI = path.join(config.docsPath, 'errors', 'frontend-api.mdx')
+    const outputPath = path.join(config.distTempPath, 'errors')
+    await fs.mkdir(outputPath, { recursive: true })
 
-    await fs.writeFile(outputPathBAPI, docsBAPI, 'utf-8')
-    await fs.writeFile(outputPathFAPI, docsFAPI, 'utf-8')
+    // Write the output file
+    await fs.writeFile(path.join(outputPath, 'backend-api.mdx'), docsBAPI, 'utf-8')
+    await fs.writeFile(path.join(outputPath, 'frontend-api.mdx'), docsFAPI, 'utf-8')
+
+    return [
+      {
+        filePath: '/docs/errors/backend-api.mdx',
+        relativeFilePath: 'docs/errors/backend-api.mdx',
+        fullFilePath: path.join(config.basePath, '..', '/docs/errors/backend-api.mdx') as `${string}.mdx`,
+        filePathInDocsFolder: 'errors/backend-api.mdx',
+
+        href: '/docs/errors/backend-api',
+        relativeHref: 'docs/errors/backend-api',
+
+        content: docsBAPI,
+      },
+      {
+        filePath: '/docs/errors/frontend-api.mdx',
+        relativeFilePath: 'docs/errors/frontend-api.mdx',
+        fullFilePath: path.join(config.basePath, '..', '/docs/errors/frontend-api.mdx') as `${string}.mdx`,
+        filePathInDocsFolder: 'errors/frontend-api.mdx',
+
+        href: '/docs/errors/frontend-api',
+        relativeHref: 'docs/errors/frontend-api',
+
+        content: docsFAPI,
+      },
+    ] as const satisfies (DocsFile & { content: string })[]
   } catch (error) {
     console.error('Error generating documentation:', error)
     throw error

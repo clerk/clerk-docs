@@ -61,7 +61,7 @@ export const checkPrompts =
         vfile,
         'LLMPrompt',
         'src',
-        true,
+        false,
         'docs',
         file.filePath,
         z.string(),

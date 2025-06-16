@@ -2,3 +2,123 @@
 title: Build an MCP service in your Express application with Clerk
 description: Learn how to build an MCP service using Clerk's OAuth server in your Express application.
 ---
+
+If you're building an app and want to allow large language model (LLM) apps to securely access user data within your app, you’ll need to set up a Model Context Protocol (MCP) service. MCP enables external tools like LLM-based apps to request user permission to access specific data from your service. Refer to the [dedicated MCP section](/docs/oauth/how-clerk-implements-oauth#building-a-model-context-protocol-mcp-service-using-clerk-s-o-auth-server) for more information.
+
+> [!NOTE]
+> Each part of the implementation is broken down into steps for clarity, but all logic lives in a single file.
+
+<Steps>
+  ## Install dependencies
+
+  Install the following packages - assuming you already have `express` and `@clerk/express` set up. If not, ensure they’re installed as part of your Express + Clerk integration.
+
+  - `@modelcontextprotocol/sdk` - used to define MCP tools
+  - `@clerk/mcp-tools` - used to connect Clerk to MCP via Express middleware
+  - `zod` - the MCP SDK uses `zod` under the hood for schema validation, so it must be installed as a peer dependency
+
+    <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+      ```bash {{ filename: 'terminal' }}
+      npm install @modelcontextprotocol/sdk @clerk/mcp-tools zod
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      yarn add @modelcontextprotocol/sdk @clerk/mcp-tools zod
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      pnpm add @modelcontextprotocol/sdk @clerk/mcp-tools zod
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      bun add @modelcontextprotocol/sdk @clerk/mcp-tools zod
+      ```
+    </CodeBlockTabs>
+
+  ## Set up core services
+
+  1. Import the required packages to the file of your choice in your Express app
+
+     ```js
+     import express from 'express'
+     import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+     import { streamableHttpHandler } from '@clerk/mcp-tools/express'
+     import { createClerkClient } from '@clerk/express'
+     import { z } from 'zod'
+     ```
+
+  1. Initialize the Clerk client using your Clerk Secret key. This can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+
+     ```js
+     const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET })
+     ```
+
+  ## Define your MCP server and tool
+
+  To let external LLM-powered tools securely interact with your app, you need to define an MCP server and expose at least one tool. The following example registers a single tool called `clerk_user_data` that retrieves information about the authenticated Clerk user.
+
+  1. The `McpServer` function is used to create a new MCP server with a name and version.
+  1. The `server.tool()` function is used to define a tool that external LLM-based apps can invoke. Each tool includes:
+
+     - A name (`clerk-user-data`)
+     - A description of what the tool does
+     - Input parameters (none in this case)
+     - A callback function that uses the auth info to identify the user and fetch its data using `clerk.users.getUser()`. The user data is wrapped in a `content` array, which is MCP's expected response format.
+
+     ```js
+     const server = new McpServer({
+       name: 'test-server',
+       version: '0.0.1',
+     })
+
+     server.tool(
+       'clerk_user_data',
+       'Gets data about the current Clerk user',
+       async (_, { authInfo }) => {
+         const userId = authInfo?.extra?.subject
+         const userData = await clerk.users.getUser(userId)
+         return {
+           content: [{ type: 'text', text: JSON.stringify(userData) }],
+         }
+       },
+     )
+     ```
+
+  ## Set up the MCP handler
+
+  Now that your MCP server and tools are defined, you need to expose it via an Express route and secure it using Clerk’s OAuth token verification.
+
+  1. `streamableHttpHandler()` connects the MCP server to an HTTP endpoint (in this case, `/mcp`). It takes two arguments:
+
+     - The `server` instance created above.
+     - A callback that verifies the incoming request, using Clerk's [`authenticateRequest()`](/docs/references/backend/authenticate-request) helper with `acceptsToken: 'oauth_token'` to check the token format and verify it with Clerk.
+       - If the token is valid and includes a user ID (`subject`), it returns the associated session/user context.
+       - If the token is invalid or missing, it returns `false`, and access is denied.
+
+  ```js
+  app.use(
+    '/mcp',
+    streamableHttpHandler(server, async (req) => {
+      const authReq = await clerk.authenticateRequest(req, {
+        acceptsToken: 'oauth_token',
+      })
+      const authData = authReq.toAuth()
+      return authData.subject ? authData : false
+    }),
+  )
+  ```
+
+  ## Finished 🎉
+
+  Ensure to have set up an Express server and start it
+
+  ```js
+  const app = express()
+
+  app.listen(3000, () => {
+    console.log('MCP server listening at http://localhost:3000/mcp')
+  })
+  ```
+
+  Once this is complete, the `clerk-user-data` tool can be invoked to securely fetch user data from your app, assuming the request is properly authorized with a Clerk OAuth token.
+</Steps>

@@ -1085,6 +1085,7 @@ Testing with a simple page.`,
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
       { path: 'simple-test.mdx' },
+      { path: '~/simple-test.mdx' },
       { path: 'react/simple-test.mdx' },
     ])
 
@@ -1102,13 +1103,18 @@ Testing with a simple page.`)
       `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
     )
 
+    expect(await readFile(pathJoin('./dist/~/simple-test.mdx'))).toBe(
+      `---\ntemplate: wide\n---\n<SDKDocRedirectPage instant title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
+    )
+
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(4)
+    expect(distFiles.length).toBe(5)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
+    expect(distFiles).toContain('~/simple-test.mdx')
   })
 
   test('3 sdks in frontmatter generates 3 variants', async () => {
@@ -1146,6 +1152,7 @@ Testing with a simple page.`,
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
       { path: 'simple-test.mdx' },
+      { path: '~/simple-test.mdx' },
       { path: 'vue/simple-test.mdx' },
       { path: 'react/simple-test.mdx' },
       { path: 'astro/simple-test.mdx' },
@@ -1153,10 +1160,11 @@ Testing with a simple page.`,
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(6)
-    expect(distFiles).toContain('simple-test.mdx')
+    expect(distFiles.length).toBe(7)
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
+    expect(distFiles).toContain('simple-test.mdx')
+    expect(distFiles).toContain('~/simple-test.mdx')
     expect(distFiles).toContain('react/simple-test.mdx')
     expect(distFiles).toContain('vue/simple-test.mdx')
     expect(distFiles).toContain('astro/simple-test.mdx')
@@ -1356,9 +1364,12 @@ This document is available for React and Next.js.`,
     expect(await fileExists(pathJoin('./dist/sdk-document.mdx'))).toBe(true)
 
     // Verify landing page content
-    const landingPage = await readFile(pathJoin('./dist/sdk-document.mdx'))
-    expect(landingPage).toBe(
+    expect(await readFile(pathJoin('./dist/sdk-document.mdx'))).toBe(
       `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
+    )
+
+    expect(await readFile(pathJoin('./dist/~/sdk-document.mdx'))).toBe(
+      `---\ntemplate: wide\n---\n<SDKDocRedirectPage instant title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
   })
 
@@ -2689,7 +2700,8 @@ description: A page that contains cards
 
     const indexContent = await readFile('./dist/index.mdx')
 
-    expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page?instant-redirect=true)')
+    expect(indexContent).toContain('* [Standard card](/docs/standard-card)')
+    expect(indexContent).toContain('* [SDK Scoped Card](/docs/~/sdk-scoped-page)')
   })
 
   test('Url hash links should be included when swapping out sdk scoped links to <SDKLink />', async () => {

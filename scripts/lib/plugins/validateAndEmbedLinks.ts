@@ -88,20 +88,20 @@ export const validateAndEmbedLinks =
         !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
         !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
 
-      const href = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
+      const scopedHref = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
 
       if (childIsCodeBlock) {
         firstChild.type = 'text'
 
         return SDKLink({
-          href,
+          href: scopedHref,
           sdks: linkedDoc.sdk,
           code: true,
         })
       }
 
       return SDKLink({
-        href,
+        href: scopedHref,
         sdks: linkedDoc.sdk,
         code: false,
         children: node.children,

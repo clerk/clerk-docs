@@ -210,7 +210,7 @@ export const config = {
 
 To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
 
-```jsx {{ filename: 'middleware.ts' }}
+```tsx {{ filename: 'middleware.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
@@ -219,6 +219,45 @@ export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) {
     await auth.protect()
   }
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+## Protect routes based on token types
+
+You can protect routes based on token types by checking if the request includes the required token (e.g. OAuth token, API key, machine token or session token). This ensures that only requests with the appropriate token type can access the route.
+
+The following example uses the [`protect()`](/docs/references/nextjs/auth#auth-protect) method from the `auth()` helper. Requests without the required token will return an appropriate error:
+
+- A `404` error for unauthenticated requests with a session token type.
+- A `401` error for unauthenticated requests with machine token types.
+
+```tsx {{ filename: 'middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+// Create route matchers to identify which token type each route should require
+const isOAuthAccessible = createRouteMatcher(['/oauth(.*)'])
+const isApiKeyAccessible = createRouteMatcher(['/api(.*)'])
+const isMachineTokenAccessible = createRouteMatcher(['/m2m(.*)'])
+const isUserAccessible = createRouteMatcher(['/user(.*)'])
+const isAccessibleToAnyValidToken = createRouteMatcher(['/any(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  // Check if the request matches each route and enforce the corresponding token type
+  if (isOAuthAccessible(req)) await auth.protect({ token: 'oauth_token' })
+  if (isApiKeyAccessible(req)) await auth.protect({ token: 'api_key' })
+  if (isMachineTokenAccessible(req)) await auth.protect({ token: 'machine_token' })
+  if (isUserAccessible(req)) await auth.protect({ token: 'session_token' })
+
+  if (isAccessibleToAnyValidToken(req)) await auth.protect({ token: 'any' })
 })
 
 export const config = {

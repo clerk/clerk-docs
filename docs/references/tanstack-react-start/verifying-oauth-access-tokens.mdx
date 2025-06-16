@@ -1,0 +1,58 @@
+---
+title: Verify OAuth access tokens in your TanStack React Start application with Clerk
+description: Learn how to use Clerk's helpers to verify OAuth access tokens in your TanStack React Start application.
+---
+
+When building a resource server that needs to accept and verify OAuth access tokens issued by Clerk, it's crucial to verify these tokens on your backend to ensure the request is coming from an authenticated client.
+
+Clerk provides a built-in [`getAuth()`](/docs/references/tanstack-react-start/get-auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept in your TanStack React Start application.
+
+By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To know more about the supported token types, see the [`getAuth()` parameters documentation](/docs/references/tanstack-react-start/get-auth#parameters).
+
+### Examples
+
+Here is an example using `getAuth()` to authenticate OAuth access tokens issued by Clerk in a TanStack React Start app:
+
+- It only accepts OAuth tokens `(acceptsToken: 'oauth_token')` from the incoming request.
+- If the token is invalid or missing, it throws an error indicating the OAuth token is invalid.
+- If valid, it returns the authenticated user’s subject and their associated scopes for further authorization.
+
+```tsx
+export async function clerkAuth({ request }: { request: Request }) {
+  const authObject = await getAuth(request, {
+    acceptsToken: 'oauth_token',
+  })
+
+  if (!authObject.subject) {
+    throw new Error('OAuth access token is invalid')
+  }
+
+  return { subject: authObject.subject, scopes: authObject.scopes }
+}
+```
+
+Here is an example using `getAuth()` to protect the route based on token type in a TanStack React Start app using Clerk’s SDK:
+
+- It accepts any token type `(acceptsToken: 'any')` from the request.
+- If the token is a `session_token`, it logs that the request is from a user session.
+- Otherwise, it logs that the request uses a machine token and specifies its type.
+
+```tsx
+import { createServerFn } from '@tanstack/react-start'
+import { getAuth } from '@clerk/tanstack-react-start/server'
+import { getWebRequest } from '@tanstack/react-start/server'
+
+const authStateFn = createServerFn({ method: 'GET' }).handler(async () => {
+  const request = getWebRequest()
+  const authObject = await getAuth(request, { acceptsToken: 'any' })
+
+  if (authObject.tokenType === 'session_token') {
+    console.log('this is session token from a user')
+  } else {
+    console.log('this is some other type of machine token')
+    console.log('more specifically, a ' + authObject.tokenType)
+  }
+
+  return {}
+})
+```

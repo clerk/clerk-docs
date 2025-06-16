@@ -82,10 +82,8 @@ export const validateAndEmbedLinks =
       if (inCardsComponent === true) {
         if (injectSDK) {
           node.url = scopeHref(url, '~')
-          return node
-        } else {
-          return node
         }
+        return node
       }
 
       // we are going to swap it for the sdk link component to give the users a great experience

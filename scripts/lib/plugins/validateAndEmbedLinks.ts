@@ -72,21 +72,25 @@ export const validateAndEmbedLinks =
         return node
       }
 
-      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-      if (inCardsComponent === true) {
-        node.url = scopeHref(url, '~')
-        return node
-      }
-
-      // we are going to swap it for the sdk link component to give the users a great experience
-      const firstChild = node.children?.[0]
-      const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
       const injectSDK =
         linkedDoc.frontmatter.sdk !== undefined &&
         linkedDoc.frontmatter.sdk.length >= 1 &&
         !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
         !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
+
+      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+      if (inCardsComponent === true) {
+        if (injectSDK) {
+          node.url = scopeHref(url, '~')
+          return node
+        } else {
+          return node
+        }
+      }
+
+      // we are going to swap it for the sdk link component to give the users a great experience
+      const firstChild = node.children?.[0]
+      const childIsCodeBlock = firstChild?.type === 'inlineCode'
 
       const scopedHref = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
 

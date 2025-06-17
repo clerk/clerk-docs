@@ -61,6 +61,20 @@ It is recommended to set these options as [environment variables](/docs/deployme
 
   ---
 
+  - `acceptsToken?`
+  - `TokenType`
+
+  Determines what type of authentication token(s) to verify. Valid values are:
+
+  - `'session_token'` - authenticates a user session.
+  - `'oauth_token'` - authenticates a machine request using OAuth.
+  - `'machine_token'` - authenticates a machine request.
+  - `'api_key'` - authenticates a machine request using API keys.
+
+  If set to `any`, the function will authenticate both user sessions and machine requests. Defaults to `session_token`.
+
+  ---
+
   - `domain?`
   - `string`
 
@@ -144,6 +158,15 @@ It is recommended to set these options as [environment variables](/docs/deployme
   A flag to skip ignore cache and always fetch JWKS before each jwt verification.
 </Properties>
 
+## Returns
+
+<Properties>
+  - `isAuthenticated`
+  - `boolean`
+
+  Indicates whether the incoming request is authenticated.
+</Properties>
+
 ## Examples
 
 <Tabs items={["Backend SDK on its own", "With other Clerk SDKs"]}>
@@ -159,11 +182,11 @@ It is recommended to set these options as [environment variables](/docs/deployme
         publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
       })
 
-      const { isSignedIn } = await clerkClient.authenticateRequest(req, {
+      const { isAuthenticated } = await clerkClient.authenticateRequest(req, {
         authorizedParties: ['https://example.com'],
       })
 
-      if (!isSignedIn) {
+      if (!isAuthenticated) {
         return Response.json({ status: 401 })
       }
 
@@ -183,11 +206,11 @@ It is recommended to set these options as [environment variables](/docs/deployme
     const client = await clerkClient()
 
     export async function GET(req: Request) {
-      const { isSignedIn } = await client.authenticateRequest(req, {
+      const { isAuthenticated } = await client.authenticateRequest(req, {
         authorizedParties: ['https://example.com'],
       })
 
-      if (!isSignedIn) {
+      if (!isAuthenticated) {
         return Response.json({ status: 401 })
       }
 
@@ -199,6 +222,32 @@ It is recommended to set these options as [environment variables](/docs/deployme
     ```
   </Tab>
 </Tabs>
+
+### Machine authentication
+
+By default, `authenticateRequest()` will authenticate a session request. To authenticate a machine request, you need to set the `acceptsToken` option to a machine token type, such as `'api_key'`, `'oauth_token'` or `'machine_token'`.
+
+```tsx
+import { createClerkClient } from '@clerk/backend'
+
+export async function GET(request: Request) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+  })
+
+  const { isAuthenticated } = await clerkClient.authenticateRequest(request, {
+    acceptsToken: 'oauth_token',
+  })
+
+  if (!isAuthenticated) {
+    return Response.json({ status: 401 })
+  }
+
+  // Add logic to perform protected actions
+  return Response.json({ message: 'This is a machine-to-machine reply' })
+}
+```
 
 ### Networkless token verification
 

@@ -1,0 +1,60 @@
+---
+title: Verify OAuth access tokens in your Next.js application with Clerk
+description: Learn how to use Clerk's helpers to verify OAuth access tokens in your Next.js application.
+---
+
+When building a resource server that needs to accept and verify OAuth access tokens issued by Clerk, it's crucial to verify these tokens on your backend to ensure the request is coming from an authenticated client.
+
+Clerk’s Next.js SDK provides a built-in [`auth()`](/docs/references/nextjs/auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept. You can also use the [`auth.protect()`](/docs/references/nextjs/auth#auth-protect) method to check if a request includes a valid machine token (e.g. API key or OAuth token) and enforce access rules accordingly.
+
+By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To know more about the supported token types, see the [`auth()` parameters documentation](/docs/references/nextjs/auth#parameters).
+
+Below are two examples of verifying OAuth access tokens in a Next.js API route using Clerk’s SDK:
+
+## Example 1: Accepting a single token type
+
+For this example, the `acceptsToken` parameter is set to only accept `oauth_token`s.
+
+- If the token is invalid or missing, `userId` will be `null`, and the request is rejected with a `401` response.
+- If valid, it returns the `userId` and token claims for use in the application logic.
+
+```tsx {{ filename: 'app/api/example/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export async function GET(req, res) {
+  const { claims, userId } = await auth({ acceptsToken: 'oauth_token' })
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  return NextResponse.json({ userId, claims })
+}
+```
+
+## Example 2: Accepting multiple token types
+
+For this example, the `acceptsToken` option allows both `session_token`s and `oauth_token`s.
+
+- If the token is an `oauth_token`, the code checks that it includes the required "profile" scope. If not, an error is thrown.
+- If the token is valid and the required scope is present, user data is fetched from the database using the Clerk `userId` and returned as a response.
+
+```tsx {{ filename: 'app/api/example/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+// In this example, we allow users and oauth tokens with the "profile" scope to access the data. Other types of tokens are rejected.
+export async function POST(req, res) {
+  const authObject = await auth({ acceptsToken: ['session_token', 'oauth_token'] })
+
+  if (authObject.tokenType === 'oauth_token' && !authObject.scopes?.includes('profile')) {
+    throw new Error('Unauthorized: OAuth token missing the "profile" scope')
+  }
+
+  // pseudo-code: get data from db using userId
+  const data = db.select().from(user).where(eq(user.id, authObject.userId))
+
+  return { data }
+}
+```
+
+You can also protect entire route groups using [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). See how to implement this in [the middleware docs](/docs/references/nextjs/clerk-middleware#protect-routes-based-on-token-types).

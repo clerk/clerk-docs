@@ -1,0 +1,304 @@
+---
+title: Use OAuth for Single Sign-On (SSO)
+description: Learn how to implement single sign-on with OAuth & OpenID Connect in your Clerk application or when signing into a third-party app.
+---
+
+Clerk supports two primary Single Sign-On (SSO) options using OAuth:
+
+- Authenticate users into your Clerk application using external social providers (e.g. Google)
+- Enable users to sign in to third-party apps using Clerk as an Identity Provider (IdP)
+
+These features help you streamline authentication for your users, whether they're signing into your Clerk-powered app or accessing external apps with their Clerk credentials. This guide covers both options in detail and provides links to additional resources where applicable.
+
+## Option 1: Let users authenticate into your Clerk application with social providers
+
+This feature allows users to sign up/sign in to your Clerk app using their existing credentials from popular social providers - also known as Identity Providers (IdP) - like Google, Facebook, or Github. For example, if you enable Github as a social provider, then a user can sign in to your Clerk app by selecting Github as an option and authenticating with their Github account credentials.
+
+Refer to the [Social connections guide](https://clerk.com/docs/authentication/social-connections/overview) for implementation details.
+
+## Option 2: Let users authenticate into third-party applications using Clerk as an Identity Provider (IdP)
+
+Clerk can be configured as an OAuth 2.0 and OpenID Connect (OIDC) IdP to enable Single Sign-On (SSO) with other clients that support these protocols. This feature allows users to authenticate to other applications using their Clerk credentials, enabling user information sharing between your Clerk app and OAuth clients.
+
+For example, if your user wants to sign in to a third-party app, they can select Clerk as the IdP and use their Clerk credentials to sign in. It's similar to the first option, but in reverse: instead of using an external app to authenticate into your Clerk app, users use their Clerk credentials to sign in to an external app.
+
+## Configure Clerk as an IdP
+
+Clerk is the OAuth 2.0 and OIDC IdP for your application. The "client" is the third party site or tool that you want your users to authenticate to.
+
+Here is the general flow to set up your Clerk instance as an OAuth provider:
+
+1. Create a connection or integration in the client.
+1. Create an OAuth application in Clerk and configure it.
+1. Obtain the Client ID and Client Secret from Clerk.
+1. Enter these credentials into the client to complete the integration.
+
+### Create a connection or integration in the client
+
+Ensure you have setup a new connection within the third-party client or tool where your users will authenticate. As part of this process, you'll be provided a **redirect URL** that you’ll need to use in the next step.
+
+### Create a Clerk OAuth application
+
+To create an OAuth app:
+
+1. In the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
+
+1. Select **Add OAuth application**. A modal will open.
+
+1. Complete the following fields:
+   - `Name` - Helps you identify your application.
+   - `Scopes` - The scopes that you would like to leverage. To find out more about the scopes currently supported by Clerk, check out the [OAuth implementation reference documentation](/docs/oauth/how-clerk-implements-oauth#scopes).
+
+     ![A screenshot of a new OAuth application being created in the Clerk dashboard](/docs/images/oauth/dashboard-create-oauth-application.png)
+
+1. Select **Add**. A modal will open with your **Client Secret**. Ensure that you copy this and store it somewhere secure.
+
+   > [!WARNING]
+   > For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so ensure that you copy it and store it somewhere secure, like an environment variable.
+
+1. You'll be redirected to your app's settings page. Under **Application credentials**, you can find your **Client ID**, which will be necessary for configuring the client to sign in using your Clerk users' credentials.
+
+1. In the **Redirect URIs** field, add the redirect URI provided by your client in the earlier step. This is the URL that Clerk will redirect to after the user has authenticated.
+
+If you'd like to know more about other OAuth application configuration settings, refer to the [dedicated reference documentation](/docs/oauth/how-clerk-implements-oauth).
+
+### Configure your client
+
+Once you have set up a Clerk OAuth app, you'll need to configure a few settings in your client to establish the connection. All the necessary information can be found in your Clerk OAuth app's settings, starting with two key parameters:
+
+- **Client ID**: Public identifier of your Clerk OAuth app.
+- **Client Secret**: Confidential secret used to authenticate your Clerk OAuth app.
+
+Both of these will need to be entered into your client's setup interface to complete the integration. Once completed, your users will be able to authenticate into your app using their Clerk credentials.
+
+Other available settings that may be useful include:
+
+- **Discovery URL**: Used by the client to retrieve the configuration data of the Clerk OAuth app.
+- **Authorize URL**: Used by the client to request authorization from your user.
+- **Token URL**: Used by the client to exchange an authorization code for an access token and a refresh token.
+- **User Info URL**: Used by the client to retrieve additional user data upon authentication.
+
+## Get additional user information with the OAuth 2.0 flow
+
+After a user has successfully completed an OAuth 2.0 flow, you can retrieve additional user information from Clerk's [`/oauth/userinfo`](https://clerk.com/docs/reference/frontend-api/tag/OAuth2-Identify-Provider#operation/getOAuthUserInfoPOST){{ target: '_blank' }} endpoint. When making the request to this endpoint, you must include the OAuth access token in the `Authorization` header.
+
+This example is written for Next.js App Router but can be adapted for any framework/language. It assumes the OAuth flow has already been completed and that you have obtained an access token from Clerk.
+
+```tsx {{ filename: 'app/api/userinfo/route.ts' }}
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  // Assume you already have the access token available here
+  const accessToken = 'YOUR_ACCESS_TOKEN_HERE'
+
+  try {
+    const response = await fetch(`${process.env.FAPI_URL}/oauth/userinfo`, {
+      headers: {
+        // Include the access token in the Authorization header
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      return NextResponse.json(errorData, { status: response.status })
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data)
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { error: 'Failed to fetch user info', details: (error as Error).message },
+      { status: 500 },
+    )
+  }
+}
+```
+
+**Example response**
+
+```json
+{
+  "object": "string",
+  "instance_id": "string",
+  "user_id": "string",
+  "sub": "string",
+  "email": "string",
+  "email_verified": true,
+  "family_name": "string",
+  "given_name": "string",
+  "name": "string",
+  "username": "string",
+  "preferred_username": "string",
+  "picture": "string",
+  "public_metadata": {},
+  "private_metadata": {},
+  "unsafe_metadata": {}
+}
+```
+
+The `/oauth/userinfo` endpoint provides the following user properties, depending on the granted scopes:
+
+| Property | Description |
+| - | - |
+| `user_id` | The ID of the user |
+| `sub` | The ID of the user |
+| `given_name` | The user's first name |
+| `family_name` | The user's last name |
+| `name` | The user's full name |
+| `picture` | The user's avatar URL |
+| `preferred_username` | The user's username |
+| `email` | The user's primary email address |
+| `email_verified` | Whether the user's primary email address is verified |
+| `public_metadata` | The user's public metadata |
+| `private_metadata` | The user's private metadata |
+| `unsafe_metadata` | The user's unsafe metadata |
+
+### Get token information
+
+For validating access tokens or refresh tokens and retrieving additional token metadata, Clerk provides a standard OAuth 2.0 [Token Introspection Endpoint](https://datatracker.ietf.org/doc/html/rfc7662) at [`/oauth/token_info`](https://clerk.com/docs/reference/frontend-api/tag/OAuth2-Identify-Provider#operation/getOAuthTokenInfo){{ target: '_blank' }}.
+
+The endpoint returns detailed token information such as if the token is still active, the client ID, and the granted scopes.
+
+> [!WARNING]
+> This endpoint is protected. You must provide your Clerk Client ID and Client Secret credentials to authenticate.
+
+Here’s a Next.js API route example illustrating how to call this endpoint assuming you already have your tokens.
+
+```tsx {{ filename: 'app/api/tokeninfo/route.ts' }}
+import type { NextApiRequest, NextApiResponse } from 'next'
+
+// Assume you already have the access token and refresh token available here
+const tokens = {
+  accessToken: 'YOUR_ACCESS_TOKEN_HERE',
+  refreshToken: 'YOUR_REFRESH_TOKEN_HERE',
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const response = await fetch(`${process.env.FAPI_URL}/oauth/token_info`, {
+      method: 'POST',
+      headers: {
+        // Include the access token in the Authorization header
+        Authorization: `Bearer ${tokens.accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        // Include the refresh token in the body
+        token: tokens.refreshToken,
+      }),
+    })
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch token info' })
+    }
+
+    const data = await response.json()
+    res.status(200).json(data)
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' })
+  }
+}
+```
+
+**Example response**
+
+```json
+{
+  "active": true,
+  "client_id": "string",
+  "iat": 0,
+  "scope": "string",
+  "sub": "string"
+}
+```
+
+## Get additional user information with the OAuth 2.0 flow using the OpenID Connect (OIDC) protocol
+
+> [!IMPORTANT]
+> Not all third-party apps expect or use OIDC. However, this feature was designed with OIDC compatibility in mind, which is why it's included in this guide. Ensure that your integration target supports OIDC before proceeding
+
+In order to enable OIDC in your OAuth flow, you can follow the same steps outlined above, but ensure to select the `openid` scope when configuring your OAuth app in the Clerk Dashboard. This scope triggers OIDC and instructs the authorization server to issue an ID token alongside your access token.
+
+![OAuth scopes openid](/docs/images/oauth/oauth-scopes.png)
+
+You'll also need to include this `openid` scope in the query parameters of your authorization endpoint when initiating the OAuth flow. For example:
+
+```http
+GET /oauth/authorize?
+  client_id=x&
+  response_type=code&
+  state=y&
+  code_challenge=z&
+  redirect_uri=a&
+  scope=openid%20profile%20email&...
+Host: clerk.<INSERT_YOUR_APP_DOMAIN>.com
+```
+
+Once a user successfully authenticates using the OIDC flow, you'll receive:
+
+- An **access token**
+- A **refresh token**
+- An **ID token**
+
+The ID token is a JWT (JSON Web Token) that contains standard JWT claims as defined in [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519), as well as additional custom claims that represent the authenticated user's profile information. The token is signed using your instance's private key.
+
+You must verify the signature on the ID token before using any of the user information it contains. This will require your instance's public key. You can find your instance's public key by loading your **Frontend API URL** (FAPI) with `/.well-known/jwks.json` appended to it. For example:
+
+- `https://verb-noun-00.clerk.accounts.dev/.well-known/jwks.json` for a development environment.
+- `https://clerk.<INSERT_YOUR_APP_DOMAIN>.com/.well-known/jwks.json` for a production environment.
+
+Your **Frontend API URL** can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+
+Here is an example verifying the ID token using the [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) library:
+
+```js
+const jwt = require('jsonwebtoken')
+
+function verifyIdToken(idToken) {
+  jwt.verify(
+    idToken,
+    PUBLIC_KEY,
+    {
+      algorithms: ['RS256'],
+      issuer: 'https://clerk.<YOUR_APP_DOMAIN>.com',
+      audience: '<YOUR_CLIENT_ID>',
+    },
+    (err, decoded) => {
+      if (err) {
+        console.error('Token verification failed:', err)
+      } else {
+        console.log('Token is valid:', decoded)
+      }
+    },
+  )
+}
+```
+
+The ID token includes the following standard claims:
+
+| Standard claim | Description |
+| - | - |
+| `iss` | The issuer of the token, which matches your Clerk Frontend API URL |
+| `sub` | The subject of the token, which matches the authenticated user ID |
+| `aud` | The intended audience of the token, which matches the used Client ID |
+| `exp` | The expiration time of the token |
+| `iat` | The time at which the token was issued |
+| `jti` | A unique identifier for the token |
+
+Depending on the granted scopes, the ID token can include the following additional claims:
+
+| Additional claim | Description |
+| - | - |
+| `nonce` | The nonce provided and used during the request |
+| `family_name` | The user's last name |
+| `given_name` | The user's first name |
+| `name` | The user's full name |
+| `picture` | The user's avatar URL |
+| `preferred_username` | The user's username |
+| `email` | The user's primary email address |
+| `email_verified` | Whether the user's primary email address is verified |
+| `public_metadata` | The user's public metadata |
+| `private_metadata` | The user's private metadata |
+| `unsafe_metadata` | The user's unsafe metadata |

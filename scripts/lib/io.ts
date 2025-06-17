@@ -1,3 +1,4 @@
+import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { errorMessages } from './error-messages'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -6,9 +7,7 @@ import readdirp from 'readdirp'
 import type { SDK } from './schemas'
 
 // Read in a markdown file from the docs folder
-export const readMarkdownFile = (config: BuildConfig) => async (docPath: string) => {
-  const filePath = path.join(config.docsPath, docPath)
-
+export const readMarkdownFile = async (filePath: string) => {
   try {
     const fileContent = await fs.readFile(filePath, { encoding: 'utf-8' })
     return [null, fileContent] as const
@@ -19,14 +18,31 @@ export const readMarkdownFile = (config: BuildConfig) => async (docPath: string)
 
 // list all the docs in the docs folder
 export const readDocsFolder = (config: BuildConfig) => async () => {
-  return readdirp.promise(config.docsPath, {
+  const files = await readdirp.promise(config.docsPath, {
     type: 'files',
     fileFilter: (entry) =>
       // Partials are inside the docs folder, so we need to exclude them
       `${config.docsRelativePath}/${entry.path}`.startsWith(config.partialsRelativePath) === false &&
       entry.path.endsWith('.mdx'),
   })
+
+  return files.map((file) => {
+    const filePath = path.join(config.baseDocsLink, file.path)
+    const href = removeMdxSuffix(filePath)
+
+    return {
+      filePath: filePath as `/docs/${string}.mdx`,
+      relativeFilePath: filePath.substring(1) as `docs/${string}.mdx`,
+      fullFilePath: path.join(config.basePath, '..', filePath) as `${string}.mdx`,
+      filePathInDocsFolder: file.path as `${string}.mdx`,
+
+      href: href as `/docs/${string}`,
+      relativeHref: href.substring(1) as `docs/${string}`,
+    }
+  })
 }
+
+export type DocsFile = Awaited<ReturnType<ReturnType<typeof readDocsFolder>>>[number]
 
 // checks if a folder exists, if not it will be created
 export const ensureDirectory =

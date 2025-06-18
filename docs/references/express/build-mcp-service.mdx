@@ -43,25 +43,24 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   ## Set up your Express app with Clerk and MCP imports
 
-  The following code shows the required imports and setup needed to implement an MCP server.
+  The following code shows the required imports and setup needed to implement an MCP server with Clerk.
 
   ```ts
   import 'dotenv/config'
-  import express from 'express'
+  import { type MachineAuthObject, clerkClient, clerkMiddleware } from '@clerk/express'
+  import {
+    mcpAuthClerk,
+    protectedResourceHandlerClerk,
+    streamableHttpHandler,
+  } from '@clerk/mcp-tools/express'
   import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-  import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-  import { generateClerkProtectedResourceMetadata } from '@clerk/mcp-tools/server'
-  import { createClerkClient } from '@clerk/express'
+  import express from 'express'
 
   const app = express()
   app.use(clerkMiddleware())
   app.use(express.json())
-  ```
 
-  Below these imports, initialize the Clerk client using your Clerk Secret key. This can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
-
-  ```ts
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET })
+  app.listen(3000)
   ```
 
   ## Create your MCP server and define tools
@@ -76,128 +75,107 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
      - Input parameters (none in this case).
      - A callback function that extracts the user's auth info from the OAuth token, fetches the user data using `clerk.users.getUser()` and returns it wrapped in a `content` array, which is MCP's expected response format.
 
-     ```ts
-     const server = new McpServer({
-       name: 'test-server',
-       version: '0.0.1',
-     })
+  ```ts
+  const server = new McpServer({
+    name: 'test-server',
+    version: '0.0.1',
+  })
 
-     server.tool(
-       'get_clerk_user_data',
-       'Gets data about the Clerk user that authorized this request',
-       {},
-       async (_, { authInfo }) => {
-         const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
-         if (!clerkAuthInfo?.userId) {
-           console.error(authInfo)
-           return {
-             content: [{ type: 'text', text: 'Error: User not authenticated' }],
-           }
+  server.tool(
+    'get_clerk_user_data',
+    'Gets data about the Clerk user that authorized this request',
+    {},
+    async (_, { authInfo }) => {
+      const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
+      if (!clerkAuthInfo?.userId) {
+        console.error(authInfo)
+        return {
+          content: [{ type: 'text', text: 'Error: user not authenticated' }],
+        }
+      }
+      const user = await clerkClient.users.getUser(clerkAuthInfo.userId)
+      return {
+        content: [{ type: 'text', text: JSON.stringify(user) }],
+      }
+    },
+  )
+  ```
+
+  ## Secure and expose your MCP server
+
+  Now that your MCP server and tools are defined, the next step is to secure your endpoints and expose them according to the MCP specification. To comply with the MCP specification, your server must expose OAuth resource metadata at a `well-known` endpoint. This metadata allows clients (like LLM tools) to know the authentication requirements and token formats your server accepts.
+
+  Clerk provides prebuilt helpers that handle this for you:
+
+  - `mcpAuthClerk`: Verifies the Authorization header and ensures the request is authenticated with a Clerk-issued OAuth token.
+  - `protectedResourceHandlerClerk`: Exposes metadata required for dynamic client registration.
+  - `streamableHttpHandler`: Sets up a handler that connects your MCP server to incoming requests using the HTTP streaming transport.
+
+  To secure your endpoints and expose your MCP server to a client:
+
+  ```ts
+  app.post('/mcp', mcpAuthClerk, streamableHttpHandler(server))
+  app.get('/.well-known/oauth-protected-resource', protectedResourceHandlerClerk)
+  ```
+
+  ## Connecting your client to the MCP server
+
+  The foundation of your MCP server is now set up. Clients that support the latest MCP spec can now invoke the `get-clerk-user-data` tool to securely fetch user data from your app, assuming the request is authorized with a Clerk OAuth token. Refer to the [verifying OAuth access tokens](/docs/oauth/oauth-verify-tokens) guide for more information.
+
+  To complete the integration, you'll need to connect a MCP-compatible client to your MCP server. Most LLM tools that support MCP allow you to register custom servers in a configuration file.
+
+  > [!IMPORTANT]
+  > Before proceeding, ensure you have toggled on the **Dynamic client registration** option in the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
+  > This setting allows MCP-compatible clients to automatically register themselves with your server during the OAuth flow.
+
+  ### Example: Connecting Cursor to your Express MCP server
+
+  1. Create a `.cursor/mcp.json` file in your project root.
+
+  1. Add the following configuration:
+
+     ```json {{ filename: '.cursor/mcp.json' }}
+     {
+       "mcpServers": {
+         "express-mcp-test": {
+           "url": "http://localhost:3000/mcp"
          }
-         const user = await clerk.users.getUser(clerkAuthInfo.userId)
-         return {
-           content: [{ type: 'text', text: JSON.stringify(user) }],
-         }
-       },
-     )
+       }
+     }
      ```
 
-  ## Implement middleware to secure MCP requests with OAuth token verification
+  1. Start your MCP server by running `npm start`.
 
-  Now that your MCP server and tools are defined, the next step is to secure your endpoints through a middleware that verifies the OAuth token using Clerk's [`getAuth`](/docs/references/express/overview#get-auth) method. This ensures only authenticated requests are passed along to your MCP server before processing.
+  1. Open **Cursor** and navigate to **Cursor Settings**.
 
-  `mcpAuth` is the custom middleware checking for a valid token in the `Authorization` header:
+  1. Select **Tools & Integrations** in the sidenav.
 
-  - If the token is valid, it attaches the authenticated user's info (`userId`) to the request so that tools can use it to fetch protected user data.
-  - If the token is invalid or missing, it returns `401` and includes a `WWW-Authenticate` header with the resource metadata URL, required by the MCP spec.
+  1. Under **MCP Tools**, enable the custom MCP server you just added (`express-mcp-test`) via the toggle.
 
-  ```ts
-  async function verifyToken(_, req: express.Request) {
-    // Verify the OAuth token and return auth data if successful
-    const authData = await getAuth(req, { acceptsToken: 'oauth_token' })
-    return authData.isAuthenticated ? authData : false
-  }
+  1. Select the **Needs login** option once it appears. You'll be redirected to a Clerk OAuth consent screen to authorize Cursor to access your user data.
 
-  async function mcpAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const origin = `${req.protocol}://${req.get('host')}${req.originalUrl}`
+  1. Once authorized, the tool `get_clerk_user_data` should be listed as **enabled**.
 
-    if (!req.headers['authorization']) {
-      return res
-        .status(401)
-        .set({
-          'WWW-Authenticate': `Bearer resource_metadata=${origin}/.well-known/oauth-protected-resource`,
-        })
-        .send()
-    } else {
-      const authHeader = req.headers['authorization']
-      const token = authHeader?.split(' ')[1]
+  You are now ready to open an **Agent chat** in Cursor and prompt it to fetch your Clerk user data (e.g. What is my Clerk user data). You should receive a response similar to this:
 
-      if (!token) {
-        throw new Error(
-          `Invalid authorization header value, expected Bearer <token>, received ${authHeader}`,
-        )
-      }
-
-      const authData = await verifyToken(token, req)
-
-      if (!authData) {
-        return res.status(401).json({ error: 'Unauthorized' })
-      }
-
-      req.auth = {
-        userId: authData.userId,
-      }
-    }
-
-    next()
-  }
-  ```
-
-  ## Handle MCP requests with secure transport
-
-  Now that your middleware is configured, you can expose your MCP server via a `POST /mcp` endpoint and handle incoming requests securely.
-
-  - The `mcpAuth` middleware runs first to validate the OAuth token and attach the authenticated user's info to the request.
-  - A new `StreamableHTTPServerTransport` instance is created to support streaming requests from LLM clients.
-  - `server.connect(transport)` connects the MCP server to the transport layer.
-
-  ```ts
-  app.post('/mcp', mcpAuth, async (req: express.Request, res: express.Response) => {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    })
-
-    await server.connect(transport)
-    await transport.handleRequest(req, res, req.body)
-  })
-  ```
-
-  ## Expose OAuth resource metadata
-
-  To comply with the MCP specification, your server must expose OAuth resource metadata at a `well-known` endpoint. This metadata allows clients (like LLM tools) to know the authentication requirements and token formats your server accepts.
-
-  The `generateClerkProtectedResourceMetadata()` helper from `@clerk/mcp-tools` creates the required metadata object using your Clerk Publishable Key and your app's resource URL. You can retrieve the Clerk Publishable Key from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
-
-  ```ts
-  app.get('/.well-known/oauth-protected-resource', async (_, res) => {
-    const metadata = await generateClerkProtectedResourceMetadata({
-      publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
-      resourceUrl: 'http://localhost:3000',
-    })
-
-    res.json(metadata)
-  })
+  ```yaml
+  Here is your Clerk user data:
+  User ID: <user-id>
+  Username: <username>
+  First Name: <first-name>
+  Last Name: <last-name>
+  Primary Email: <primary-email>
+  Secondary Email: <secondary-name>
+  2FA Enabled: No
+  Account Banned: No
+  Account Locked: No
+  Profile Image: <profile-image>
+  External Accounts: <external-account>
+  Organization Creation Enabled: Yes
+  Delete Self Enabled: Yes
   ```
 
   ## Finished 🎉
 
-  Start your express server
-
-  ```ts
-  app.listen(3000, () => {
-    console.log('MCP server listening at http://localhost:3000/mcp')
-  })
-  ```
-
-  The foundation of the MCP server is now set up. Clients that support the latest MCP spec can invoke the `get-clerk-user-data` tool to securely fetch user data from your app, assuming the request is properly authorized with a Clerk OAuth token. Refer to the [veriying OAuth access tokens](/docs/oauth/oauth-verify-tokens) guide for more information.
+  You've now successfully connected your client to the MCP server and authenticated it using Clerk. Your LLM agent can securely access user data through the exposed tools in your server.
 </Steps>

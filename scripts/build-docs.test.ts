@@ -921,8 +921,8 @@ test`,
 
     expect(output).toContain(`warning Hash "my-heading" not found in /docs/page-2`)
     expect(output).toContain(
-`warning Matching file not found for path: /docs/page-3. Expected file to exist at /docs/page-3.mdx`,
-)
+      `warning Matching file not found for path: /docs/page-3. Expected file to exist at /docs/page-3.mdx`,
+    )
   })
 
   test('should process target="_blank" links in manifest correctly', async () => {
@@ -2142,8 +2142,8 @@ title: Simple Test
     )
 
     expect(output).toContain(
-`warning Matching file not found for path: /docs/non-existent-page. Expected file to exist at /docs/non-existent-page.mdx`,
-)
+      `warning Matching file not found for path: /docs/non-existent-page. Expected file to exist at /docs/non-existent-page.mdx`,
+    )
   })
 
   test('Validate link between two pages is valid', async () => {
@@ -3220,8 +3220,8 @@ title: Document with Warnings
 
     // Check that warnings were reported
     expect(output).toContain(
-'warning Matching file not found for path: /docs/non-existent-document. Expected file to exist at /docs/non-existent-document.mdx',
-)
+      'warning Matching file not found for path: /docs/non-existent-document. Expected file to exist at /docs/non-existent-document.mdx',
+    )
     expect(output).toContain('warning sdk "invalid-sdk" in <If /> is not a valid SDK')
   })
 })
@@ -4379,7 +4379,7 @@ description: Generated API docs
 
     expect(output).toContain(
       'warning Matching file not found for path: /docs/non-existent-file. Expected file to exist at /docs/non-existent-file.mdx',
-)
+    )
   })
 
   test('Should fail if typedoc file links to non-existent hash', async () => {

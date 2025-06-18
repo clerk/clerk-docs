@@ -1,11 +1,11 @@
 <If sdk="astro">
 ```astro {{ filename: 'src/pages/bronze-content.astro' }}
 ---
-import { auth } from '@clerk/astro/server'
+import { useAuth } from '@clerk/astro/react'
 
-const { has } = await auth()
+const { has } = useAuth()
 
-const hasBronzePlan = has({ plan: 'bronze' })
+const hasBronzePlan = has?.({ plan: 'bronze' })
 ---
 
 <html>
@@ -49,11 +49,23 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const clerk = new Clerk(clerkPubKey)
 await clerk.load()
 
-const hasBronzePlan = clerk.user?.has({ plan: 'bronze' })
+document.getElementById('app').innerHTML = `
+  <div id="bronze-content"></div>
+`
 
-document.getElementById('app').innerHTML = hasBronzePlan
-  ? `<h1>For Bronze subscribers only</h1>`
-  : `<h1>Only subscribers to the Bronze plan can access this content.</h1>`
+const bronzeContentDiv = document.getElementById('bronze-content')
+
+const hasBronzePlan = clerk.session.checkAuthorization({ plan: 'bronze' })
+
+if (!hasBronzePlan) {
+  bronzeContentDiv.innerHTML = `
+    <h1>Only subscribers to the Bronze plan can access this content.</h1>
+  `
+} else {
+  bronzeContentDiv.innerHTML = `
+    <h1>For Bronze subscribers only</h1>
+  `
+}
 ```
 </If>
 
@@ -76,9 +88,12 @@ export default async function BronzeContentPage() {
 <If sdk="nuxt">
 ```vue {{ filename: 'pages/bronze-content.vue' }}
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useAuth } from '@clerk/nuxt/composables'
+
 const { has, isLoaded } = useAuth()
 
-const hasBronzePlan = computed(() => has({ plan: 'bronze' }))
+const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
 </script>
 
 <template>
@@ -94,13 +109,14 @@ const hasBronzePlan = computed(() => has({ plan: 'bronze' }))
 </If>
 
 <If sdk="vue">
-```vue {{ filename: 'pages/bronze-content.vue' }}
+```vue {{ filename: 'src/bronze-content.vue' }}
 <script setup lang="ts">
 import { useAuth } from '@clerk/vue'
+import { computed } from 'vue';
 
 const { isLoaded, has } = useAuth()
 
-const hasBronzePlan = computed(() => has({ plan: 'bronze' }))
+const hasBronzePlan = computed(() => has.value?.({ plan: 'bronze' }))
 </script>
 
 <template>
@@ -179,26 +195,95 @@ export default function BronzeContentPage() {
 
 <If sdk="tanstack-react-start">
 ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
-import { useAuth } from '@clerk/tanstack-react-start'
+import { getAuth } from '@clerk/tanstack-react-start/server'
 import { createFileRoute } from '@tanstack/react-router'
+import { getWebRequest } from '@tanstack/react-start/server'
 
 export const Route = createFileRoute('/bronze-content')({
   component: BronzeContentPage,
+  beforeLoad: async () => {
+    const request = getWebRequest()
+    if (!request) throw new Error('Request not found')
+    return { auth: await getAuth(request) }
+  },
+  loader: async ({ context }) => {
+    return { hasBronzePlan: context.auth.has({ plan: 'bronze' }) }
+  },
 })
 
 function BronzeContentPage() {
-  const { isLoaded, has } = useAuth()
+  const { hasBronzePlan } = Route.useLoaderData()
 
-  if (!isLoaded) return <div>Loading...</div>
-
-  const hasBronzePlan = has({ plan: 'bronze' })
-
-  if (!hasBronzePlan)
-    return (
-      <h1>Only subscribers to the Bronze plan can access this content.</h1>
-    )
+  if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
 
   return <h1>For Bronze subscribers only</h1>
 }
+```
+</If>
+
+<If sdk="expo">
+```tsx {{ filename: 'app/(home)/bronze-content.tsx' }}
+import { useAuth } from "@clerk/clerk-expo";
+
+export default function BronzeContentPage() {
+  const { isLoaded, has } = useAuth();
+
+  if (!isLoaded) return <div>Loading...</div>;
+
+  const hasBronzePlan = has({ plan: "bronze" });
+
+  if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>;
+
+  return <h1>For Bronze subscribers only</h1>;
+}
+```
+</If>
+
+<If sdk="expressjs">
+```tsx {{ filename: 'src/routes/bronze-content.ts' }}
+import { getAuth, requireAuth } from "@clerk/express";
+import { Router } from "express";
+
+const router = Router();
+
+router.get("/bronze-content", requireAuth(), async (req, res) => {
+  const { has } = getAuth(req);
+
+  const hasBronzePlan = has({ plan: "bronze" });
+
+  if (hasBronzePlan) {
+    res.send("For Bronze subscribers only");
+  } else {
+    res.send("Only subscribers to the Bronze plan can access this content.");
+  }
+});
+
+export default router;
+```
+</If>
+
+<If sdk="fastify">
+```tsx {{ filename: 'src/routes/bronze-content.ts' }}
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { getAuth } from "@clerk/fastify";
+
+export const bronzeContentRoutes = (fastify: FastifyInstance) => {
+  fastify.get(
+    "/bronze-content",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { has } = getAuth(request);
+
+      const hasBronzePlan = has({ plan: "bronze" });
+
+      if (hasBronzePlan) {
+        reply.send("For Bronze subscribers only");
+      } else {
+        reply.send(
+          "Only subscribers to the Bronze plan can access this content."
+        );
+      }
+    }
+  );
+};
 ```
 </If>

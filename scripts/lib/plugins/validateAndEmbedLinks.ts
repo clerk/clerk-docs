@@ -80,9 +80,17 @@ export const validateAndEmbedLinks =
         return node
       }
 
+      const injectSDK =
+        linkedDoc.frontmatter.sdk !== undefined &&
+        linkedDoc.frontmatter.sdk.length >= 1 &&
+        !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
+        !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
+
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {
-        node.url = scopeHref(url, '~')
+        if (injectSDK) {
+          node.url = scopeHref(url, '~')
+        }
         return node
       }
 
@@ -90,18 +98,20 @@ export const validateAndEmbedLinks =
       const firstChild = node.children?.[0]
       const childIsCodeBlock = firstChild?.type === 'inlineCode'
 
+      const scopedHref = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
+
       if (childIsCodeBlock) {
         firstChild.type = 'text'
 
         return SDKLink({
-          href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+          href: scopedHref,
           sdks: linkedDoc.sdk,
           code: true,
         })
       }
 
       return SDKLink({
-        href: `${scopeHref(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
+        href: scopedHref,
         sdks: linkedDoc.sdk,
         code: false,
         children: node.children,

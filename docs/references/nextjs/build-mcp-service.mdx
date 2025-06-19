@@ -20,89 +20,72 @@ There are two parties involved in MCP:
 - The `client` is the LLM application that wants to access another service on a user's behalf. For example, Claude would be the "client" if it wants to get access to Gmail.
 - The `server` is the system that hosts the protected resources the client wants to access. In this example, this would be Gmail. This is sometimes referred to as the "resource server" or "MCP server".
 
-This guide demonstrates how to build an MCP server using Clerk's OAuth server in your Next.js application. It assumes that you have already integrated Clerk into your app by following the [quickstart](/docs/quickstarts/nextjs).
-
-This example is written for Next.js App Router, but can be used with Next.js Pager Router as well.
+This guide demonstrates how to build an MCP server using Clerk's OAuth server in your Next.js application. This example is written for Next.js App Router, but **can be used with Next.js Pager Router** as well. It assumes that you have already integrated Clerk into your app by following the [quickstart](/docs/quickstarts/nextjs).
 
 > [!NOTE]
 > Each part of the implementation is broken down into steps for clarity, but all logic lives in a single dynamic route file: `app/[transport]/route.ts`.
 
 <Steps>
-  ## Install `@vercel/mcp-adapter`
+  ## Install dependencies
 
-  The [`@vercel/mcp-adapter`](https://github.com/vercel/mcp-adapter) library simplifies building a MCP server. It takes care of handling the protocol mechanics and provides an auth wrapper that allows you to plug in your own token validation - in this case, using Clerk's OAuth tokens. Run the following command to install it:
+  To get started, this implementation requires the following packages to be installed in your project:
+
+  - [`@vercel/mcp-adapter`](https://github.com/vercel/mcp-adapter): A utility library that simplifies building a MCP server by handling the core protocol logic for you. It also includes an authentication wrapper that allows you to plug in your own token validation - in this case, using Clerk's OAuth tokens.
+  - [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools): A helper library built on top of the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) used to connect Clerk OAuth with MCP easily.
+  - [`@clerk/backend`](/docs/references/backend/overview): Clerk's JavaScript Backend SDK provides a `MachineAuthObject` that can be used to authenticate machine requests.
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
     ```bash {{ filename: 'terminal' }}
-    npm install @vercel/mcp-adapter
+    npm install @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
     ```
 
     ```bash {{ filename: 'terminal' }}
-    yarn add @vercel/mcp-adapter
+    yarn add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
     ```
 
     ```bash {{ filename: 'terminal' }}
-    pnpm add @vercel/mcp-adapter
+    pnpm add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
     ```
 
     ```bash {{ filename: 'terminal' }}
-    bun add @vercel/mcp-adapter
+    bun add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
     ```
   </CodeBlockTabs>
 
-  ## Set up the MCP route with required tools
+  ## Set up your Next.js app with Clerk and MCP imports
+
+  The following code shows the required imports and setup needed to implement an MCP server with Clerk in your Next.js app.
 
   1. In your `app/` directory, create a dynamic route file: `[transport]/route.ts`.
 
      > [!NOTE]
      > The dynamic segment `[transport]` allows the MCP server to support different transport protocols used by the LLM tool, like `streamable-http`, based on the value of **transport**.
 
-  1. Inside this file, import the following dependencies:
-     - `createMcpHandler` - used to define LLM-exposed tools.
-     - `withMcpAuth` - wrapper for securing access using your own auth logic.
-     - [`auth`](/docs/references/nextjs/auth) and `clerkClient` from Clerk's SDK - used to verify OAuth tokens and fetch user data.
+  1. Inside this file, add the following imports:
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
   import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { type MachineAuthObject } from '@clerk/backend'
+
+  const clerk = await clerkClient()
   ```
 
-  ## Define a type for the OAuth information
+  ## Create your MCP server and define tools
 
-  This  `ClerkAuthInfo` interface helps TypeScript understand the shape of the authentication information that Clerk provides after verifying the OAuth token. This will help when parsing the `authInfo` object passed to MCP tools.
+  To let external LLM-powered tools securely interact with your app, you need to define an MCP server, and expose one or more [resources](https://modelcontextprotocol.io/docs/concepts/resources), [prompts](https://modelcontextprotocol.io/docs/concepts/prompts), and/or [tools](https://modelcontextprotocol.io/docs/concepts/tools). The following example registers a single tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user.
 
-  ```ts {{ filename: 'app/[transport]/route.ts' }}
-  interface ClerkAuthInfo {
-    id?: string
-    subject?: string
-    tokenType?: string
-    scopes?: string[]
-  }
-  ```
+  The `createMcpHandler()` function is used to create a new MCP server. Inside it, you can define tools that external LLM-based apps can invoke. Each tool includes:
 
-  ## Create the MCP handler and define a tool
+  - A name (`get-clerk-user-data`).
+  - A description of what the tool does.
+  - Input parameters (none in this case).
+  - A function that represents the implementation of the tool, in this case, it extracts the user's auth info from the OAuth token, fetches the user's data using `clerk.users.getUser()` and returns it in MCP's expected response format.
 
-  To let external LLM-powered tools securely interact with your app, you need to define an MCP server and expose at least one tool. The following example registers a single tool called `get-clerk-user-data` that retrieves information about the authenticated Clerk user.
-
-  1. The `createMcpHandler()` function is used to create a new MCP server. Inside it, you can define tools that external LLM-based apps can invoke. Each tool includes:
-
-     - A name (`get-clerk-user-data`).
-     - A description of what the tool does.
-     - Input parameters (none in this case).
-     - A callback function that uses the auth info to identify the user.
-
-  1. The `get-clerk-user-data` tool parses the `authInfo` object from the request, casts it to a `ClerkAuthInfo` shape, and uses the `subject` (the Clerk user ID) to fetch full user data using `clerk.users.getUser()`. The user data is wrapped in a `content` array, which is MCP's expected response format.
-
-  ```ts {{ filename: 'app/[transport]/route.ts', mark: [11, [13, 31]] }}
+  ```ts {{ filename: 'app/[transport]/route.ts', mark: [[7, 27]] }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
   import { auth, clerkClient } from '@clerk/nextjs/server'
-
-  interface ClerkAuthInfo {
-    id?: string
-    subject?: string
-    tokenType?: string
-    scopes?: string[]
-  }
+  import { type MachineAuthObject } from '@clerk/backend'
 
   const clerk = await clerkClient()
 
@@ -112,10 +95,11 @@ This example is written for Next.js App Router, but can be used with Next.js Pag
       'Gets data about the Clerk user that authorized this request',
       {},
       async (_, { authInfo }) => {
-        const clerkAuthInfo = authInfo as unknown as ClerkAuthInfo
+        const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
         if (!clerkAuthInfo?.subject) {
+          console.error(authInfo)
           return {
-            content: [{ type: 'text', text: 'Error: malformed auth info' }],
+            content: [{ type: 'text', text: 'Error: user not authenticated' }],
           }
         }
         const user = await clerk.users.getUser(clerkAuthInfo.subject)
@@ -127,28 +111,75 @@ This example is written for Next.js App Router, but can be used with Next.js Pag
   })
   ```
 
-  ## Wrap the handler with Clerk OAuth authentication
+  ## Secure your MCP server
 
-  1. The `withMcpAuth()` function is used to wrap the MCP handler in authentication logic. It accepts a callback that receives the token from the request, and it uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify that it's a valid OAuth token issued by your app.
+  Now that your MCP server and tools are defined, the next step is to secure your endpoints with OAuth. This ensures only authenticated clients with valid Clerk-issued tokens can access your tools.
 
-  1. The `auth({ acceptsToken: "oauth_token" })` method checks the token format and verifies it with Clerk.
-     - If the token is valid and includes a user ID (`subject`), it returns the associated session/user context.
-     - If the token is invalid or missing, it returns `null`, and access is denied.
+  1. The `withMcpAuth()` function is used to wrap the MCP handler in authentication logic. It uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify the incoming OAuth token [in accordance with the mcp specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-location). [Learn more about verifying OAuth tokens in Next.js apps](/docs/references/nextjs/verifying-oauth-access-tokens).
+
+  {/* TODO: Add note about Authorization header and www-authenticate */}
 
   1. The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   // const handler  = createMcpHandler((server) => {...})
 
-  const authHandler = withMcpAuth(handler, async (_, token) => {
-    if (!token) return null
-    return await auth({ acceptsToken: 'oauth_token' })
-  })
+  const authHandler = withMcpAuth(
+    handler,
+    async (_, token) => {
+      if (!token) return null
+      return await auth({ acceptsToken: 'oauth_token' })
+    },
+    { required: true },
+  )
 
   export { authHandler as GET, authHandler as POST }
   ```
 
+  ## Expose MCP metadata endpoints
+
+  To comply with the MCP specification, your server must expose two `well-known` metadata endpoints: `.well-known/oauth-protected-resource` and \`.well-known/oauth-authorization-server. These metadata endpoints allow clients to discover where to authenticate and some details about how the authentication service works. [OAuth protected resource metadata](https://datatracker.ietf.org/doc/html/rfc9728#section-4.1).
+
+  Clerk provides prebuilt helpers that handle this for you:
+
+  - `authServerMetadataHandlerClerk`: Next.js route handler that serves OAuth 2.0 authorization server metadata in the format expected by MCP clients.
+  - `protectedResourceHandlerClerk`: Next.js route handler that serves OAuth protected resource metadata. This handler automatically uses your `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable.
+
+  {/* TODO: Ensure your have it in your .env file */}
+
+  > [!NOTE]
+  > For a more in-depth explanation of these helpers, see the [MCP Next.js reference](https://github.com/clerk/mcp-tools/tree/main/next).
+
+  To expose your MCP metadata endpoints:
+
+  1. In your `app/` directory, create a `.well-known` folder.
+  1. Inside it, create two subfolders:
+     - `oauth-authorization-server`
+     - `oauth-protected-resource`.
+  1. In each folder, create a `route.ts` file.
+  1. Add the following code in each corresponding file:
+
+  ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
+  import { authServerMetadataHandlerClerk } from '@clerk/mcp-tools/next'
+
+  const handler = authServerMetadataHandlerClerk()
+
+  export { handler as GET }
+  ```
+
+  ```ts {{ filename: 'app/.well-known/oauth-protected-resource/route.ts' }}
+  import { protectedResourceHandlerClerk } from '@clerk/mcp-tools/next'
+
+  const handler = protectedResourceHandlerClerk()
+
+  export { handler as GET }
+  ```
+
+  ## Connecting your client to the MCP server
+
+  <Include src="_partials/connecting-client-mcp-server" />
+
   ## Finished 🎉
 
-  Once this is complete, the `clerk-user-data` tool can be invoked to securely to fetch user data from your app, assuming the request is properly authorized with a Clerk OAuth token. Refer to the [veriying OAuth access tokens](/docs/oauth/oauth-verify-tokens) guide for more information.
+  You've now successfully connected your client to the MCP server and authenticated it using Clerk. Your LLM agent can securely access user data through the exposed tools in your server.
 </Steps>

@@ -5,7 +5,9 @@ import type { SDK } from '../schemas'
 import { u as mdastBuilder } from 'unist-builder'
 
 export const SDKLink = (
-  props: { href: string; sdks: SDK[]; code: true } | { href: string; sdks: SDK[]; code: false; children: unknown },
+  props:
+    | { href: string; sdks: SDK[]; code: true }
+    | { href: string; sdks: SDK[]; code: false; children: unknown; cardTitle: boolean },
 ) => {
   if (props.code) {
     return mdastBuilder('mdxJsxTextElement', {
@@ -42,6 +44,12 @@ export const SDKLink = (
         name: 'sdks',
         value: mdastBuilder('mdxJsxAttributeValueExpression', {
           value: JSON.stringify(props.sdks),
+        }),
+      }),
+      mdastBuilder('mdxJsxAttribute', {
+        name: 'cardTitle',
+        value: mdastBuilder('mdxJsxAttributeValueExpression', {
+          value: props.cardTitle,
         }),
       }),
     ],

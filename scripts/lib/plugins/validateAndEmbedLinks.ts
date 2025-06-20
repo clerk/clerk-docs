@@ -81,10 +81,10 @@ export const validateAndEmbedLinks =
       }
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-      if (inCardsComponent === true) {
-        node.url = scopeHref(url, '~')
-        return node
-      }
+      // if (inCardsComponent === true) {
+      //   node.url = scopeHref(url, '~')
+      //   return node
+      // }
 
       // we are going to swap it for the sdk link component to give the users a great experience
       const firstChild = node.children?.[0]
@@ -105,6 +105,7 @@ export const validateAndEmbedLinks =
         sdks: linkedDoc.sdk,
         code: false,
         children: node.children,
+        cardTitle: inCardsComponent === true,
       })
     })
   }

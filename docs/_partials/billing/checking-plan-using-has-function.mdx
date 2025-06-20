@@ -288,3 +288,37 @@
   }
   ```
 </If>
+
+<If sdk="js-backend">
+  ```ts {{ filename: 'src/routes/bronze-content.ts' }}
+  import { createClerkClient } from '@clerk/backend'
+
+  const clerkClient = createClerkClient({
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY,
+  })
+
+  const domain =
+    process.env.NODE_ENV === 'production' ? 'https://example.com' : 'http://localhost:3000'
+
+  export async function GET(request: Request) {
+    const authenticatedRequest = await clerkClient.authenticateRequest(request, {
+      authorizedParties: [domain],
+    })
+
+    const user = authenticatedRequest.toAuth()
+
+    if (user === null || user.userId === null) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const hasBronzePlan = user.has({ plan: 'bronze' })
+
+    if (!hasBronzePlan) {
+      return new Response('For Bronze subscribers only')
+    }
+
+    return new Response('Only subscribers to the Bronze plan can access this content.')
+  }
+  ```
+</If>

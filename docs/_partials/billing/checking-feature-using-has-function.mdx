@@ -295,3 +295,37 @@
   }
   ```
 </If>
+
+<If sdk="js-backend">
+  ```ts {{ filename: 'src/routes/premium-content.ts' }}
+  import { createClerkClient } from '@clerk/backend'
+
+  const clerkClient = createClerkClient({
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY,
+  })
+
+  const domain =
+    process.env.NODE_ENV === 'production' ? 'https://example.com' : 'http://localhost:3000'
+
+  export async function GET(request: Request) {
+    const authenticatedRequest = await clerkClient.authenticateRequest(request, {
+      authorizedParties: [domain],
+    })
+
+    const user = authenticatedRequest.toAuth()
+
+    if (user === null || user.userId === null) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const hasPremiumAccess = user.has({ feature: 'premium_access' })
+
+    if (!hasPremiumAccess) {
+      return new Response('Only subscribers with the Premium Access feature can access this content.')
+    }
+
+    return new Response('Our Exclusive Content')
+  }
+  ```
+</If>

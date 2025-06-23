@@ -6,24 +6,56 @@ import path from 'path'
 import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
+import chokidar from 'chokidar'
 
 export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)
 
-  const handleFileChange: watcher.SubscribeCallback = async (error, events) => {
+  let abortController: AbortController | null = null
+
+  const handleParcelWatcherChange: watcher.SubscribeCallback = async (error, events) => {
     if (error !== null) {
       console.error(error)
       return
     }
 
-    events.forEach((event) => {
-      invalidate(event.path)
+    handleFilesChanged(events.map((event) => event.path))
+  }
+
+  const pendingFileChanges = new Set<string>()
+  let timeout: NodeJS.Timeout | null = null
+
+  const handleChokidarWatcherChange = (_event: string, path: string) => {
+    pendingFileChanges.add(path)
+
+    if (timeout === null) {
+      timeout = setTimeout(() => {
+        timeout = null
+
+        const paths = Array.from(pendingFileChanges)
+        pendingFileChanges.clear()
+
+        handleFilesChanged(paths)
+      }, 250)
+    }
+  }
+
+  const handleFilesChanged = async (paths: string[]) => {
+    if (abortController !== null) {
+      console.log('aborting current build')
+      abortController.abort()
+    }
+
+    abortController = new AbortController()
+
+    paths.forEach((path) => {
+      invalidate(path)
     })
 
     try {
       const now = performance.now()
 
-      const output = await buildFunc(config, store)
+      const output = await buildFunc(config, store, abortController.signal)
 
       if (config.flags.controlled) {
         console.info('---rebuild-complete---')
@@ -43,28 +75,31 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     }
   }
 
-  watcher.subscribe(config.dataPath, handleFileChange)
+  watcher.subscribe(config.dataPath, handleParcelWatcherChange)
 
   if (config.redirects) {
     const staticDir = path.dirname(config.redirects.static.inputPath)
     const dynamicDir = path.dirname(config.redirects.dynamic.inputPath)
 
     if (staticDir === dynamicDir) {
-      watcher.subscribe(staticDir, handleFileChange)
+      watcher.subscribe(staticDir, handleParcelWatcherChange)
     } else {
-      watcher.subscribe(staticDir, handleFileChange)
-      watcher.subscribe(dynamicDir, handleFileChange)
+      watcher.subscribe(staticDir, handleParcelWatcherChange)
+      watcher.subscribe(dynamicDir, handleParcelWatcherChange)
     }
   }
 
-  watcher.subscribe(config.docsPath, handleFileChange, {
-    // Ignore generated files
-    ignore: [`${config.docsPath}/errors/backend-api.mdx`, `${config.docsPath}/errors/frontend-api.mdx`],
-  })
+  watcher.subscribe(config.docsPath, handleParcelWatcherChange)
 
-  watcher.subscribe(config.typedocPath, handleFileChange)
+  chokidar
+    .watch(config.typedocPath, {
+      followSymlinks: true, // This here is the whole reason for bringing in chokidar, parcel gives us the original file location but we want the symlink location. So we don't need to handle differences between linking to the generated docs and downloading them from github.
+      ignoreInitial: true,
+      awaitWriteFinish: true,
+    })
+    .on('all', handleChokidarWatcherChange)
 
   if (config.publicPath) {
-    watcher.subscribe(config.publicPath, handleFileChange)
+    watcher.subscribe(config.publicPath, handleParcelWatcherChange)
   }
 }

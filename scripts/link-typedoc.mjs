@@ -1,4 +1,3 @@
-
 // eg npm run typedoc:link ../javascript/.typedoc/docs
 
 import symlinkDir from 'symlink-dir'

@@ -28,6 +28,7 @@ type BuildConfigOptions = {
     wrapDefault: boolean
     collapseDefault: boolean
     hideTitleDefault: boolean
+    deprecatedDefault: boolean
   }
   redirects?: {
     static: {
@@ -102,6 +103,7 @@ export async function createConfig(config: BuildConfigOptions) {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
+      deprecatedDefault: false,
     },
 
     redirects: config.redirects

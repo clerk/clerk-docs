@@ -44,6 +44,7 @@ export type ManifestItem = {
   icon?: Icon
   target?: '_blank'
   sdk?: SDK[]
+  deprecated?: boolean
 }
 
 export type ManifestGroup = {
@@ -55,6 +56,7 @@ export type ManifestGroup = {
   icon?: Icon
   hideTitle?: boolean
   sdk?: SDK[]
+  deprecated?: boolean
 }
 
 type Manifest = (ManifestItem | ManifestGroup)[][]
@@ -70,6 +72,7 @@ const createManifestSchema = (config: BuildConfig) => {
       icon: icon.optional(),
       target: z.enum(['_blank']).optional(),
       sdk: z.array(sdk).optional(),
+      deprecated: z.boolean().default(config.manifestOptions.deprecatedDefault),
     })
     .strict()
 
@@ -83,6 +86,7 @@ const createManifestSchema = (config: BuildConfig) => {
       icon: icon.optional(),
       hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
       sdk: z.array(sdk).optional(),
+      deprecated: z.boolean().default(config.manifestOptions.deprecatedDefault),
     })
     .strict()
 

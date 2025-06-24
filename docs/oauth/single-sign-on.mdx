@@ -12,9 +12,9 @@ These features help you streamline authentication for your users, whether they'r
 
 ## Option 1: Let users authenticate into your Clerk application with social providers
 
-This feature allows users to sign up/sign in to your Clerk app using their existing credentials from popular social providers - also known as Identity Providers (IdP) - like Google, Facebook, or Github. For example, if you enable Github as a social provider, then a user can sign in to your Clerk app by selecting Github as an option and authenticating with their Github account credentials.
+This feature allows users to sign up/sign in to your Clerk app using their existing credentials from popular social providers, also known as IdPs, like Google, Facebook, or Github. For example, if you enable Github as a social provider, then a user can sign in to your Clerk app by selecting Github as an option and authenticating with their Github account credentials.
 
-Refer to the [Social connections guide](https://clerk.com/docs/authentication/social-connections/overview) for implementation details.
+Refer to the appropriate provider's [guide](/docs/authentication/social-connections/overview) for implementation details.
 
 ## Option 2: Let users authenticate into third-party applications using Clerk as an Identity Provider (IdP)
 
@@ -24,7 +24,7 @@ For example, if your user wants to sign in to a third-party app, they can select
 
 ## Configure Clerk as an IdP
 
-Clerk is the OAuth 2.0 and OIDC IdP for your application. The "client" is the third party site or tool that you want your users to authenticate to.
+In this case, Clerk is the IdP for your application. The [**client**](/docs/oauth/overview#key-terminology) is the third party site or tool that you want your users to authenticate to.
 
 Here is the general flow to set up your Clerk instance as an OAuth provider:
 
@@ -35,32 +35,22 @@ Here is the general flow to set up your Clerk instance as an OAuth provider:
 
 ### Create a connection or integration in the client
 
-Ensure you have setup a new connection within the third-party client or tool where your users will authenticate. As part of this process, you'll be provided a **redirect URL** that you’ll need to use in the next step.
+Ensure you have setup a new connection within the third-party client or tool where your users will authenticate. As part of this process, you'll be provided a **redirect URL** that you'll need to use in the next step.
 
 ### Create a Clerk OAuth application
 
-To create an OAuth app:
+To create a Clerk OAuth application:
 
 1. In the Clerk Dashboard, navigate to the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
-
 1. Select **Add OAuth application**. A modal will open.
-
 1. Complete the following fields:
    - `Name` - Helps you identify your application.
-   - `Scopes` - The scopes that you would like to leverage. To find out more about the scopes currently supported by Clerk, check out the [OAuth implementation reference documentation](/docs/oauth/how-clerk-implements-oauth#scopes).
+   - `Scopes` - The scopes that you would like to leverage. [Learn more about the scopes currently supported by Clerk](/docs/oauth/how-clerk-implements-oauth#scopes).
+1. Select **Add**. A modal will open with your **Client Secret**. For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so **ensure that you copy it and store it somewhere secure**, like an environment variable.
+1. You'll be redirected to your app's settings page. Under **Application credentials**, save the **Client ID** somewhere secure as you'll need it later.
+1. In the **Redirect URIs** field, add the redirect URI/URL provided by your client [in the earlier step](#create-a-connection-or-integration-in-the-client). This is the URL that Clerk will redirect to after the user has authenticated.
 
-     ![A screenshot of a new OAuth application being created in the Clerk dashboard](/docs/images/oauth/dashboard-create-oauth-application.png)
-
-1. Select **Add**. A modal will open with your **Client Secret**. Ensure that you copy this and store it somewhere secure.
-
-   > [!WARNING]
-   > For security reasons, Clerk does not store your Client Secret and cannot show it to you again, so ensure that you copy it and store it somewhere secure, like an environment variable.
-
-1. You'll be redirected to your app's settings page. Under **Application credentials**, you can find your **Client ID**, which will be necessary for configuring the client to sign in using your Clerk users' credentials.
-
-1. In the **Redirect URIs** field, add the redirect URI provided by your client in the earlier step. This is the URL that Clerk will redirect to after the user has authenticated.
-
-If you'd like to know more about other OAuth application configuration settings, refer to the [dedicated reference documentation](/docs/oauth/how-clerk-implements-oauth).
+To learn more about the other OAuth application configuration settings, like **Dynamic client registration**, see the [dedicated guide](/docs/oauth/how-clerk-implements-oauth).
 
 ### Configure your client
 
@@ -69,7 +59,7 @@ Once you have set up a Clerk OAuth app, you'll need to configure a few settings 
 - **Client ID**: Public identifier of your Clerk OAuth app.
 - **Client Secret**: Confidential secret used to authenticate your Clerk OAuth app.
 
-Both of these will need to be entered into your client's setup interface to complete the integration. Once completed, your users will be able to authenticate into your app using their Clerk credentials.
+Both of these are available in your Clerk OAuth app's settings in the Clerk Dashboard. They need to be entered into your client's setup interface to complete the integration. Once completed, your users will be able to authenticate into your app using their Clerk credentials.
 
 Other available settings that may be useful include:
 
@@ -82,10 +72,9 @@ Other available settings that may be useful include:
 
 After a user has successfully completed an OAuth 2.0 flow, you can retrieve additional user information from Clerk's [`/oauth/userinfo`](https://clerk.com/docs/reference/frontend-api/tag/OAuth2-Identify-Provider#operation/getOAuthUserInfoPOST){{ target: '_blank' }} endpoint. When making the request to this endpoint, you must include the OAuth access token in the `Authorization` header.
 
-This example is written for Next.js App Router but can be adapted for any framework/language. It assumes the OAuth flow has already been completed and that you have obtained an access token from Clerk.
+This example is written for Next.js App Router **but can be adapted for any framework/language**. It assumes the OAuth flow has already been completed and that you have obtained an access token from Clerk.
 
 ```tsx {{ filename: 'app/api/userinfo/route.ts' }}
-import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
@@ -93,9 +82,11 @@ export async function GET() {
   const accessToken = 'YOUR_ACCESS_TOKEN_HERE'
 
   try {
-    const response = await fetch(`${process.env.FAPI_URL}/oauth/userinfo`, {
+    // Your Frontend API URL can be found on the API keys page in the Clerk Dashboard
+    // https://dashboard.clerk.com/last-active?path=api-keys
+    const response = await fetch(`${process.env.CLERK_FRONTEND_API_URL}/oauth/userinfo`, {
       headers: {
-        // Include the access token in the Authorization header
+        // Include the access token as a Bearer token in the Authorization header
         Authorization: `Bearer ${accessToken}`,
       },
     })
@@ -164,10 +155,10 @@ The endpoint returns detailed token information such as if the token is still ac
 > [!WARNING]
 > This endpoint is protected. You must provide your Clerk Client ID and Client Secret credentials to authenticate.
 
-Here’s a Next.js API route example illustrating how to call this endpoint assuming you already have your tokens.
+This example is written for Next.js App Router **but can be adapted for any framework/language**. It demonstrates how to call the `/oauth/token_info` endpoint, assuming you already have the access token and refresh token available.
 
 ```tsx {{ filename: 'app/api/tokeninfo/route.ts' }}
-import type { NextApiRequest, NextApiResponse } from 'next'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Assume you already have the access token and refresh token available here
 const tokens = {
@@ -175,12 +166,14 @@ const tokens = {
   refreshToken: 'YOUR_REFRESH_TOKEN_HERE',
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(req: NextRequest) {
   try {
-    const response = await fetch(`${process.env.FAPI_URL}/oauth/token_info`, {
+    // Your Frontend API URL can be found on the API keys page in the Clerk Dashboard
+    // https://dashboard.clerk.com/last-active?path=api-keys
+    const response = await fetch(`${process.env.CLERK_FRONTEND_API_URL}/oauth/token_info`, {
       method: 'POST',
       headers: {
-        // Include the access token in the Authorization header
+        // Include the access token as a Bearer token in the Authorization header
         Authorization: `Bearer ${tokens.accessToken}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -191,13 +184,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch token info' })
+      return NextResponse.json({ error: 'Failed to fetch token info' }, { status: response.status })
     }
 
     const data = await response.json()
-    res.status(200).json(data)
+    return NextResponse.json(data)
   } catch (error) {
-    res.status(500).json({ error: 'Internal server error' })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 ```
@@ -217,11 +210,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 ## Get additional user information with the OAuth 2.0 flow using the OpenID Connect (OIDC) protocol
 
 > [!IMPORTANT]
-> Not all third-party apps expect or use OIDC. However, this feature was designed with OIDC compatibility in mind, which is why it's included in this guide. Ensure that your integration target supports OIDC before proceeding
+> Not all third-party apps expect or use OIDC. However, this feature was designed with OIDC compatibility in mind, which is why it's included in this guide. Ensure that your integration target supports OIDC before proceeding.
 
 In order to enable OIDC in your OAuth flow, you can follow the same steps outlined above, but ensure to select the `openid` scope when configuring your OAuth app in the Clerk Dashboard. This scope triggers OIDC and instructs the authorization server to issue an ID token alongside your access token.
-
-![OAuth scopes openid](/docs/images/oauth/oauth-scopes.png)
 
 You'll also need to include this `openid` scope in the query parameters of your authorization endpoint when initiating the OAuth flow. For example:
 
@@ -244,14 +235,14 @@ Once a user successfully authenticates using the OIDC flow, you'll receive:
 
 The ID token is a JWT (JSON Web Token) that contains standard JWT claims as defined in [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519), as well as additional custom claims that represent the authenticated user's profile information. The token is signed using your instance's private key.
 
-You must verify the signature on the ID token before using any of the user information it contains. This will require your instance's public key. You can find your instance's public key by loading your **Frontend API URL** (FAPI) with `/.well-known/jwks.json` appended to it. For example:
+You must verify the signature on the ID token before using any of the user information it contains. This will require your instance's public key. You can find your instance's public key by loading your **Frontend API URL** with `/.well-known/jwks.json` appended to it. For example:
 
 - `https://verb-noun-00.clerk.accounts.dev/.well-known/jwks.json` for a development environment.
 - `https://clerk.<INSERT_YOUR_APP_DOMAIN>.com/.well-known/jwks.json` for a production environment.
 
 Your **Frontend API URL** can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
 
-Here is an example verifying the ID token using the [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) library:
+Here is an example verifying the ID token using the [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) library in a production environment:
 
 ```js
 const jwt = require('jsonwebtoken')

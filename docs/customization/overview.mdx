@@ -48,6 +48,13 @@ The `appearance` prop accepts the following properties:
   - `Captcha`
 
   Configuration options that affect the appearance of the CAPTCHA widget. For more information, see the [dedicated guide](/docs/customization/captcha).
+
+  ---
+
+  - `cssLayerName?`
+  - `string`
+
+  The name of the CSS layer for Clerk component styles. This is useful for advanced CSS customization, allowing you to control the cascade and prevent style conflicts by isolating Clerk's styles within a specific layer. For more information on CSS layers, see the [MDN documentation on @layer](https://developer.mozilla.org/en-US/docs/Web/CSS/@layer).
 </Properties>
 
 ## Using a prebuilt theme
@@ -131,109 +138,145 @@ Remove the `cl-` prefix from a class and use it as the key for a new object in t
 
 The following example shows how to style the primary button in a `<SignIn />` component with custom CSS classes:
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-    <CodeBlockTabs options={["App Router", "Pages Router"]}>
-      ```tsx {{ filename: 'app/layout.tsx', mark: [[8, 14]] }}
-      import { ClerkProvider, SignIn } from '@clerk/nextjs'
-
-      export default function RootLayout({ children }: { children: React.ReactNode }) {
-        return (
-          <ClerkProvider>
-            <html lang="en">
-              <body>
-                <SignIn
-                  appearance={{
-                    elements: {
-                      formButtonPrimary: 'your-org-button org-red-button',
-                    },
-                  }}
-                />
-              </body>
-            </html>
-          </ClerkProvider>
-        )
-      }
-      ```
-
-      ```tsx {{ filename: 'app.tsx', mark: [[7, 13]] }}
-      import { ClerkProvider, SignIn } from '@clerk/nextjs'
-      import type { AppProps } from 'next/app'
-
-      function MyApp({ pageProps }: AppProps) {
-        return (
-          <ClerkProvider {...pageProps}>
-            <SignIn
-              appearance={{
-                elements: {
-                  formButtonPrimary: 'your-org-button org-red-button',
-                },
-              }}
-            />
-          </ClerkProvider>
-        )
-      }
-
-      export default MyApp
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+```tsx {{ mark: [4] }}
+<SignIn
+  appearance={{
+    elements: {
+      formButtonPrimary: 'your-org-button org-red-button',
+    },
+  }}
+/>
+```
 
 #### Use Tailwind classes to style Clerk components
 
-You can style the elements of a Clerk component with Tailwind.
+To use Tailwind CSS v4, you must set the `cssLayerName` property to ensure that Tailwind's utility styles are applied after Clerk's styles. It's recommended to add this to the `<ClerkProvider>` that wraps your app so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
 
-The following example shows how to style the primary button in a `<SignIn />` component with Tailwind classes:
-
-<Tabs items={["Next.js"]}>
+<Tabs items={["Next.js", "Astro", "Vue", "JavaScript"]}>
   <Tab>
-    <CodeBlockTabs options={["App Router", "Pages Router"]}>
-      ```tsx {{ filename: 'app/layout.tsx', mark: [[8, 14]] }}
-      import { ClerkProvider, SignIn } from '@clerk/nextjs'
+    <CodeBlockTabs options={["layout.tsx", "global.css"]}>
+      ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+      import { ClerkProvider } from '@clerk/nextjs'
 
       export default function RootLayout({ children }: { children: React.ReactNode }) {
         return (
-          <ClerkProvider>
+          <ClerkProvider
+            appearance={{
+              cssLayerName: 'clerk',
+            }}
+          >
             <html lang="en">
-              <body>
-                <SignIn
-                  appearance={{
-                    elements: {
-                      formButtonPrimary: 'bg-slate-500 hover:bg-slate-400 text-sm',
-                    },
-                  }}
-                />
-              </body>
+              <body>{children}</body>
             </html>
           </ClerkProvider>
         )
       }
       ```
 
-      ```tsx {{ filename: 'app.tsx', mark: [[7, 13]] }}
-      import { ClerkProvider, SignIn } from '@clerk/nextjs'
-      import type { AppProps } from 'next/app'
+      ```css {{ mark: ['clerk'] }}
+      @layer theme, base, clerk, components, utilities;
+      @import 'tailwindcss';
+      ```
+    </CodeBlockTabs>
+  </Tab>
 
-      function MyApp({ pageProps }: AppProps) {
-        return (
-          <ClerkProvider {...pageProps}>
-            <SignIn
-              appearance={{
-                elements: {
-                  formButtonPrimary: 'bg-slate-500 hover:bg-slate-400 text-sm',
-                },
-              }}
-            />
-          </ClerkProvider>
-        )
+  <Tab>
+    <CodeBlockTabs options={["astro.config.mjs", "global.css"]}>
+      ```ts {{ mark: ["cssLayerName: 'clerk'"] }}
+      import { defineConfig } from 'astro/config'
+      import node from '@astrojs/node'
+      import clerk from '@clerk/astro'
+      import tailwind from '@tailwindcss/vite'
+
+      export default defineConfig({
+        integrations: [
+          clerk({
+            appearance: {
+              cssLayerName: 'clerk',
+            },
+          }),
+        ],
+        output: 'server',
+        adapter: node({
+          mode: 'standalone',
+        }),
+        vite: {
+          plugins: [tailwind()],
+        },
+      })
+      ```
+
+      ```css {{ mark: ['clerk'] }}
+      @layer theme, base, clerk, components, utilities;
+      @import 'tailwindcss';
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["main.js", "global.css"]}>
+      ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+      import { createApp } from 'vue'
+      import './style.css'
+      import App from './App.vue'
+      import { clerkPlugin } from '@clerk/vue'
+
+      const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      if (!PUBLISHABLE_KEY) {
+        throw new Error('Add your Clerk Publishable Key to the .env file')
       }
 
-      export default MyApp
+      const app = createApp(App)
+      app.use(clerkPlugin, {
+        appearance: {
+          cssLayerName: 'clerk',
+        },
+        publishableKey: PUBLISHABLE_KEY,
+      })
+      app.mount('#app')
+      ```
+
+      ```css {{ mark: ['clerk'] }}
+      @layer theme, base, clerk, components, utilities;
+      @import 'tailwindcss';
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["index.html", "global.css"]}>
+      ```html {{ mark: ["cssLayerName: 'clerk'"] }}
+      <script>
+        window.addEventListener('load', async function () {
+          await Clerk.load({
+            appearance: {
+              cssLayerName: 'clerk',
+            },
+          })
+        })
+      </script>
+      ```
+
+      ```css {{ mark: ['clerk'] }}
+      @layer theme, base, clerk, components, utilities;
+      @import 'tailwindcss';
       ```
     </CodeBlockTabs>
   </Tab>
 </Tabs>
+
+Then, you can use Tailwind's classes to style the elements of the Clerk component. The following example shows how to use Tailwind classes to style the primary button in a `<SignIn />` component:
+
+```tsx {{ mark: [4] }}
+<SignIn
+  appearance={{
+    elements: {
+      formButtonPrimary: 'bg-slate-500 hover:bg-slate-400 text-sm',
+    },
+  }}
+/>
+```
 
 #### Use CSS modules to style Clerk components
 

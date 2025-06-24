@@ -54,7 +54,15 @@ export const validateAndEmbedLinks =
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
-        safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [url], node.position)
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'link-doc-not-found',
+          [node.url as string, `${url}.mdx`],
+          node.position,
+        )
         return node
       }
 

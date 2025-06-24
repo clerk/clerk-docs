@@ -786,7 +786,12 @@ template: wide
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
-    .map((path) => ({ path }))
+    .map((path) => ({
+      path,
+      url: `${config.baseDocsLink}${removeMdxSuffix(path)
+        .replace(/^index$/, '') // remove root index
+        .replace(/\/index$/, '')}`, // remove /index from the end,
+    }))
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 

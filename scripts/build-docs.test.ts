@@ -1039,8 +1039,8 @@ title: Quickstart
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'quickstart/react.mdx' },
-      { path: 'quickstart/vue.mdx' },
+      { path: 'quickstart/react.mdx', url: '/docs/quickstart/react' },
+      { path: 'quickstart/vue.mdx', url: '/docs/quickstart/vue' },
     ])
 
     const distFiles = await treeDir(pathJoin('./dist'))
@@ -1086,9 +1086,9 @@ Testing with a simple page.`,
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'simple-test.mdx' },
-      { path: '~/simple-test.mdx' },
-      { path: 'react/simple-test.mdx' },
+      { path: 'simple-test.mdx', url: '/docs/simple-test' },
+      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
+      { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
     ])
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
@@ -1153,11 +1153,11 @@ Testing with a simple page.`,
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'simple-test.mdx' },
-      { path: '~/simple-test.mdx' },
-      { path: 'vue/simple-test.mdx' },
-      { path: 'react/simple-test.mdx' },
-      { path: 'astro/simple-test.mdx' },
+      { path: 'simple-test.mdx', url: '/docs/simple-test' },
+      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
+      { path: 'vue/simple-test.mdx', url: '/docs/vue/simple-test' },
+      { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
+      { path: 'astro/simple-test.mdx', url: '/docs/astro/simple-test' },
     ])
 
     const distFiles = await treeDir(pathJoin('./dist'))

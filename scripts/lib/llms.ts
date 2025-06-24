@@ -1,3 +1,4 @@
+import type { BuildConfig } from './config'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import yaml from 'yaml'
 
@@ -12,7 +13,7 @@ export const writeLLMs = async (outputtedDocsFiles: OutputtedDocsFiles) => {
   return `# Clerk\n\n## Docs\n\n${list}`
 }
 
-export const listOutputDocsFiles = (docs: Docs, files: { path: string }[]) => {
+export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { path: string }[]) => {
   return files
     .filter(({ path }) => !path.startsWith('~/')) // Exclude these quick redirect pages
     .map(({ path }) => {
@@ -24,7 +25,7 @@ export const listOutputDocsFiles = (docs: Docs, files: { path: string }[]) => {
 
       return {
         path,
-        url: `{{SITE_URL}}/docs/${removeMdxSuffix(path)
+        url: `{{SITE_URL}}${config.baseDocsLink}${removeMdxSuffix(path)
           .replace(/^index$/, '') // remove root index
           .replace(/\/index$/, '')}`, // remove /index from the end,
         content,

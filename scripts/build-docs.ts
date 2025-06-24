@@ -51,7 +51,7 @@ import { z } from 'zod'
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
-import { errorMessages, shouldIgnoreWarning } from './lib/error-messages'
+import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
@@ -237,7 +237,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   if (abortSignal?.aborted) throw new Error('Build aborted')
 
-  const userManifest = await getManifest()
+  const { manifest: userManifest, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
 
   if (abortSignal?.aborted) throw new Error('Build aborted')
@@ -325,9 +325,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const doc = docsMap.get(item.href)
 
       if (doc === undefined) {
-        if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-not-found')) {
-          throw new Error(errorMessages['doc-not-found'](item.title, item.href))
-        }
+        safeMessage(config, manifestVfile, item.href, 'docs', 'doc-not-found', [item.title, item.href])
         return item
       }
 
@@ -863,9 +861,12 @@ template: wide
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  const warnings = reporter([...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles], {
-    quiet: true,
-  })
+  const warnings = reporter(
+    [...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles, manifestVfile],
+    {
+      quiet: true,
+    },
+  )
 
   if (abortSignal?.aborted) throw new Error('Build aborted')
 

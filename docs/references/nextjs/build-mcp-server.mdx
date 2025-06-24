@@ -62,11 +62,10 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   ## Set up your Next.js app with Clerk and MCP imports
 
-  The following example shows the required imports and setup needed to implement an MCP server with Clerk in your Next.js app.
+  Let's begin creating your MCP server.
 
   1. In your `app/` directory, create a `[transport]` folder. This dynamic segment allows the MCP server to support different transport protocols used by the LLM tool, like `streamable-http`, based on the value of **transport**.
-
-  1. Inside this directory, create a `route.ts` file with the following code.
+  1. Inside this directory, create a `route.ts` file with the following code. This is the starting point for your MCP server. It includes the imports and setup needed to implement an MCP server with Clerk.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
@@ -78,14 +77,16 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   ## Create your MCP server and define tools
 
-  To let external LLM-powered tools securely interact with your app, you need to define an MCP server, and expose one or more [resources](https://modelcontextprotocol.io/docs/concepts/resources), [prompts](https://modelcontextprotocol.io/docs/concepts/prompts), and/or [tools](https://modelcontextprotocol.io/docs/concepts/tools). The following example registers a single tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user.
+  To let external LLM-powered tools securely interact with your app, you need to define an MCP server, and expose one or more [resources](https://modelcontextprotocol.io/docs/concepts/resources), [prompts](https://modelcontextprotocol.io/docs/concepts/prompts), and/or [tools](https://modelcontextprotocol.io/docs/concepts/tools).
 
-  The `createMcpHandler()` function is used to create a new MCP server. Inside it, you can define tools that external LLM-based apps can invoke using `server.tool()`. Each tool includes:
+  Add the following code to your `route.ts` file. This registers a single tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user.
+
+  Vercel's `createMcpHandler()` function is used to create a new MCP server. Inside it, you can define tools that external LLM-based apps can invoke using `server.tool()`. Each tool includes:
 
   - A name (`get-clerk-user-data`).
   - A description of what the tool does.
   - Input parameters (none in this case).
-  - A function that represents the implementation of the tool, in this case, it extracts the user's auth info from the OAuth token, fetches the user's data using `clerk.users.getUser()` and returns it in MCP's expected response format.
+  - A function that represents the implementation of the tool. In this case, it extracts the user's auth info from the Clerk OAuth token and then fetches the user's data using Clerk's [`getUser()`](/docs/references/backend/user/get-user) method. The response is then returned in MCP's expected response format.
 
   ```ts {{ filename: 'app/[transport]/route.ts', mark: [[7, 27]] }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
@@ -120,13 +121,15 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Now that your MCP server and tools are defined, the next step is to secure your endpoints with OAuth. This ensures only authenticated clients with valid Clerk-issued tokens can access your tools.
 
-  1. The `withMcpAuth()` function is used to wrap the MCP handler in authentication logic. It uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify the incoming OAuth token. [Learn more about verifying OAuth tokens in Next.js apps](/docs/references/nextjs/verifying-oauth-access-tokens).
+  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify the incoming OAuth token. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
 
   {/* TODO: Add note about Authorization header and www-authenticate*/}
 
-  1. The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
+  The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
+  // The rest of your code...
+
   const authHandler = withMcpAuth(
     handler,
     async (_, token) => {
@@ -162,21 +165,23 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
      - `oauth-protected-resource`
   1. In each folder, create a `route.ts` file with the following code for that specific route.
 
-  ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
-  import { authServerMetadataHandlerClerk } from '@clerk/mcp-tools/next'
+  <CodeBlockTabs options={["oauth-authorization-server", "oauth-protected-resource"]}>
+    ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
+    import { authServerMetadataHandlerClerk } from '@clerk/mcp-tools/next'
 
-  const handler = authServerMetadataHandlerClerk()
+    const handler = authServerMetadataHandlerClerk()
 
-  export { handler as GET }
-  ```
+    export { handler as GET }
+    ```
 
-  ```ts {{ filename: 'app/.well-known/oauth-protected-resource/route.ts' }}
-  import { protectedResourceHandlerClerk } from '@clerk/mcp-tools/next'
+    ```ts {{ filename: 'app/.well-known/oauth-protected-resource/route.ts' }}
+    import { protectedResourceHandlerClerk } from '@clerk/mcp-tools/next'
 
-  const handler = protectedResourceHandlerClerk()
+    const handler = protectedResourceHandlerClerk()
 
-  export { handler as GET }
-  ```
+    export { handler as GET }
+    ```
+  </CodeBlockTabs>
 
   ## Connect your client LLM to the MCP server
 

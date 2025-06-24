@@ -55,7 +55,10 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     try {
       const now = performance.now()
 
-      const output = await buildFunc(config, store, abortController.signal)
+      // This duplicates the config, re-creating the temp dist folder used so the new run doesn't collide with the old one
+      const newConfig = await config.changeTempDist()
+
+      const output = await buildFunc(newConfig, store, abortController.signal)
 
       if (config.flags.controlled) {
         console.info('---rebuild-complete---')

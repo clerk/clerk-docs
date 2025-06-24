@@ -186,7 +186,7 @@ async function main() {
   }
 }
 
-export async function build(config: BuildConfig, store: Store = createBlankStore()) {
+export async function build(config: BuildConfig, store: Store = createBlankStore(), abortSignal?: AbortSignal) {
   // Apply currying to create functions pre-configured with config
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
@@ -194,7 +194,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
-  const parseMarkdownFile = parseInMarkdownFile(config)
+  const parseMarkdownFile = parseInMarkdownFile(config, store)
   const writeFile = writeDistFile(config, store)
   const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
@@ -202,7 +202,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
 
+  abortSignal?.throwIfAborted()
+
   await ensureDirectory(config.distFinalPath)
+
+  abortSignal?.throwIfAborted()
 
   let staticRedirects: Record<string, Redirect> | null = null
   let dynamicRedirects: Redirect[] | null = null
@@ -219,6 +223,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
+  abortSignal?.throwIfAborted()
+
   let prompts: Prompt[] = []
 
   if (config.prompts) {
@@ -226,24 +232,36 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info(`✓ Read ${prompts.length} prompts`)
   }
 
+  abortSignal?.throwIfAborted()
+
   const apiErrorsFiles = await generateApiErrorDocs(config)
   if (!config.flags.skipApiErrors) {
     console.info('✓ Generated API Error MDX files')
   }
 
+  abortSignal?.throwIfAborted()
+
   const { manifest: userManifest, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
 
+  abortSignal?.throwIfAborted()
+
   const docsFiles = await getDocsFolder()
   console.info('✓ Read Docs Folder')
+
+  abortSignal?.throwIfAborted()
 
   const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
+  abortSignal?.throwIfAborted()
+
   const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
   console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
+
+  abortSignal?.throwIfAborted()
 
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
@@ -261,6 +279,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     return item
   })
   console.info('✓ Parsed in Manifest')
+
+  abortSignal?.throwIfAborted()
 
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
@@ -288,6 +308,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       : []),
   ])
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
+
+  abortSignal?.throwIfAborted()
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifestFirstPass = await traverseTree(
@@ -375,6 +397,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     },
   )
 
+  abortSignal?.throwIfAborted()
+
   const sdkScopedManifest = await traverseTreeItemsFirst(
     { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
     async (item, tree) => item,
@@ -430,7 +454,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info('✓ Applied manifest sdk scoping')
 
+  abortSignal?.throwIfAborted()
+
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
+
+  abortSignal?.throwIfAborted()
 
   const validatedPartials = await Promise.all(
     partials.map(async (partial) => {
@@ -470,6 +498,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
   console.info(`✓ Validated all partials`)
+
+  abortSignal?.throwIfAborted()
 
   const validatedTypedocs = await Promise.all(
     typedocs.map(async (typedoc) => {
@@ -536,6 +566,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all typedocs`)
 
+  abortSignal?.throwIfAborted()
+
   await writeFile(
     'manifest.json',
     JSON.stringify({
@@ -564,6 +596,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       ),
     }),
   )
+
+  abortSignal?.throwIfAborted()
 
   const cachedCoreDocsSize = store.coreDocs.size
   const coreDocs = await Promise.all(
@@ -633,6 +667,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
 
+  abortSignal?.throwIfAborted()
+
   await Promise.all(
     coreDocs.map(async (doc) => {
       if (isValidSdk(config)(doc.file.filePathInDocsFolder.split('/')[0])) {
@@ -666,6 +702,8 @@ template: wide
   )
 
   console.info(`✓ Wrote out all core docs (${coreDocs.length} total)`)
+
+  abortSignal?.throwIfAborted()
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {
@@ -713,6 +751,8 @@ template: wide
       return { targetSdk, vFiles }
     }),
   )
+
+  abortSignal?.throwIfAborted()
 
   const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
@@ -777,6 +817,8 @@ template: wide
     }
   }
 
+  abortSignal?.throwIfAborted()
+
   // Write directory.json with a flat list of all markdown files in dist, excluding partials
   const mdxFiles = await readdirp.promise(config.distTempPath, {
     type: 'files',
@@ -797,18 +839,24 @@ template: wide
 
   console.info('✓ Wrote out directory.json')
 
+  abortSignal?.throwIfAborted()
+
   if (staticRedirects !== null && dynamicRedirects !== null) {
     await writeRedirects(config, staticRedirects, dynamicRedirects)
     console.info('✓ Wrote redirects to disk')
   }
+
+  abortSignal?.throwIfAborted()
 
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
   }
 
+  abortSignal?.throwIfAborted()
+
   if (config.llms?.fullPath || config.llms?.overviewPath) {
-    const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
+    const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
 
     if (config.llms?.fullPath) {
       const llmsFull = await generateLLMsFull(outputtedDocsFiles)
@@ -821,10 +869,14 @@ template: wide
     }
   }
 
+  abortSignal?.throwIfAborted()
+
   if (config.publicPath) {
     await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
     console.info('✓ Copied public assets to dist')
   }
+
+  abortSignal?.throwIfAborted()
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
@@ -841,7 +893,11 @@ template: wide
     },
   )
 
+  abortSignal?.throwIfAborted()
+
   await fs.rm(config.distFinalPath, { recursive: true })
+
+  abortSignal?.throwIfAborted()
 
   if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
@@ -850,6 +906,8 @@ template: wide
   } else {
     await fs.rename(config.distTempPath, config.distFinalPath)
   }
+
+  abortSignal?.throwIfAborted()
 
   return warnings
 }

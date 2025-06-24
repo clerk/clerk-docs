@@ -82,7 +82,7 @@ import {
 } from './lib/redirects'
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
-import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull } from './lib/llms'
+import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -152,6 +152,10 @@ async function main() {
       wrapDefault: true,
       collapseDefault: false,
       hideTitleDefault: false,
+    },
+    llms: {
+      overviewPath: '_llms/llms.txt',
+      fullPath: '_llms/llms-full.txt',
     },
     flags: {
       watch: args.includes('--watch'),
@@ -782,7 +786,6 @@ template: wide
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
-    .filter((filePath) => !filePath.startsWith('~/')) // Exclude these quick redirect pages
     .map((path) => ({ path }))
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
@@ -799,10 +802,19 @@ template: wide
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
   }
 
-  const llmsFull = await generateLLMsFull(store.writtenFiles, mdxFilePaths)
-  await writeFile('_llms/llms-full.txt', llmsFull)
-  const llms = await generateLLMs(store.writtenFiles, mdxFilePaths)
-  await writeFile('_llms/llms.txt', llms)
+  if (config.llms?.fullPath || config.llms?.overviewPath) {
+    const outputtedDocsFiles = listOutputDocsFiles(store.writtenFiles, mdxFilePaths)
+
+    if (config.llms?.fullPath) {
+      const llmsFull = await generateLLMsFull(outputtedDocsFiles)
+      await writeFile(config.llms.fullPath, llmsFull)
+    }
+
+    if (config.llms?.overviewPath) {
+      const llms = await generateLLMs(outputtedDocsFiles)
+      await writeFile(config.llms.overviewPath, llms)
+    }
+  }
 
   if (config.publicPath) {
     await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })

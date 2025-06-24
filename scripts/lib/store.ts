@@ -50,8 +50,36 @@ export const invalidateFile =
         })
       }
     }
-    store.partials.delete(path.relative(config.partialsPath, filePath))
-    store.typedocs.delete(path.relative(config.typedocPath, filePath))
+
+    const relativePartialPath = path.relative(config.partialsPath, filePath)
+
+    if (store.partials.has(relativePartialPath)) {
+      store.partials.delete(relativePartialPath)
+
+      const adjacent = store.dirtyDocMap.get(`_partials/${relativePartialPath}`)
+
+      if (adjacent && invalidateAdjacentDocs) {
+        const invalidate = invalidateFile(store, config)
+        adjacent.forEach((docPath) => {
+          invalidate(docPath, false)
+        })
+      }
+    }
+
+    const relativeTypedocPath = path.relative(config.typedocPath, filePath)
+
+    if (store.typedocs.has(relativeTypedocPath)) {
+      store.typedocs.delete(relativeTypedocPath)
+
+      const adjacent = store.dirtyDocMap.get(relativeTypedocPath)
+
+      if (adjacent && invalidateAdjacentDocs) {
+        const invalidate = invalidateFile(store, config)
+        adjacent.forEach((docPath) => {
+          invalidate(docPath, false)
+        })
+      }
+    }
   }
 
 export const markDocumentDirty =

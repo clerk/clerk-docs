@@ -26,6 +26,7 @@ export const createBlankStore = () => ({
   partials: new Map() as PartialsMap,
   typedocs: new Map() as TypedocsMap,
   dirtyDocMap: new Map() as Map<string, Set<string>>,
+  writtenFiles: new Map() as Map<string, string>,
 })
 
 export type Store = ReturnType<typeof createBlankStore>

@@ -98,7 +98,7 @@ export const checkPrompts =
       )
 
       if (embedPrompt === true) {
-        return Object.assign(node, mdastBuilder('code', { value: prompt.content }))
+        return Object.assign(node, mdastBuilder('code', { lang: 'md', value: prompt.content }))
       }
 
       if (options.update === true && config.prompts !== null) {

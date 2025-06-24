@@ -64,7 +64,8 @@ export const errorMessages = {
   'prompt-not-found': (src: string): string => `Prompt ${src} not found`,
 
   // Link validation errors
-  'link-doc-not-found': (url: string): string => `Doc ${url} not found`,
+  'link-doc-not-found': (url: string, file: string): string =>
+    `Matching file not found for path: ${url}. Expected file to exist at ${file}`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
 
   // File reading errors

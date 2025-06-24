@@ -198,11 +198,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   await ensureDir(config.distFinalPath)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   let staticRedirects: Record<string, Redirect> | null = null
   let dynamicRedirects: Redirect[] | null = null
@@ -219,7 +219,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info('✓ Read, optimized and transformed redirects')
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   let prompts: Prompt[] = []
 
@@ -228,36 +228,36 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     console.info(`✓ Read ${prompts.length} prompts`)
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const apiErrorsFiles = await generateApiErrorDocs(config)
   if (!config.flags.skipApiErrors) {
     console.info('✓ Generated API Error MDX files')
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const { manifest: userManifest, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const docsFiles = await getDocsFolder()
   console.info('✓ Read Docs Folder')
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
   console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const docsMap: DocsMap = new Map()
   const docsInManifest = new Set<string>()
@@ -276,7 +276,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   })
   console.info('✓ Parsed in Manifest')
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
@@ -305,7 +305,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   ])
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   // Goes through and grabs the sdk scoping out of the manifest
   const sdkScopedManifestFirstPass = await traverseTree(
@@ -393,7 +393,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     },
   )
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
     { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
@@ -450,11 +450,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info('✓ Applied manifest sdk scoping')
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const flatSDKScopedManifest = flattenTree(sdkScopedManifest)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const validatedPartials = await Promise.all(
     partials.map(async (partial) => {
@@ -495,7 +495,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all partials`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const validatedTypedocs = await Promise.all(
     typedocs.map(async (typedoc) => {
@@ -562,7 +562,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all typedocs`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   await writeFile(
     'manifest.json',
@@ -593,7 +593,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const cachedCoreDocsSize = store.coreDocs.size
   const coreDocs = await Promise.all(
@@ -663,7 +663,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   )
   console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   await Promise.all(
     coreDocs.map(async (doc) => {
@@ -699,7 +699,7 @@ template: wide
 
   console.info(`✓ Wrote out all core docs (${coreDocs.length} total)`)
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const sdkSpecificVFiles = await Promise.all(
     config.validSdks.map(async (targetSdk) => {
@@ -748,7 +748,7 @@ template: wide
     }),
   )
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
@@ -813,7 +813,7 @@ template: wide
     }
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   // Write directory.json with a flat list of all markdown files in dist, excluding partials
   const mdxFiles = await readdirp.promise(config.distTempPath, {
@@ -830,28 +830,28 @@ template: wide
 
   console.info('✓ Wrote out directory.json')
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   if (staticRedirects !== null && dynamicRedirects !== null) {
     await writeRedirects(config, staticRedirects, dynamicRedirects)
     console.info('✓ Wrote redirects to disk')
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   if (config.publicPath) {
     await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
     console.info('✓ Copied public assets to dist')
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
@@ -868,11 +868,11 @@ template: wide
     },
   )
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   await fs.rm(config.distFinalPath, { recursive: true })
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
@@ -882,7 +882,7 @@ template: wide
     await fs.rename(config.distTempPath, config.distFinalPath)
   }
 
-  if (abortSignal?.aborted) throw new Error('Build aborted')
+  abortSignal?.throwIfAborted()
 
   return warnings
 }

@@ -67,8 +67,9 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   1. Inside this directory, create a `route.ts` file with the following code. This is the starting point for your MCP server. It includes the imports and setup needed to implement an MCP server with Clerk.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
+  import { verifyClerkToken } from '@clerk/mcp-tools/next'
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
-  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { clerkClient } from '@clerk/nextjs/server'
 
   const clerk = await clerkClient()
   ```
@@ -87,6 +88,7 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   - A function that represents the implementation of the tool. In this case, it extracts the user ID from `authInfo.extra.userId`, which is provided by Clerk's OAuth authentication, and then fetches the user's data using Clerk's [`getUser()`](/docs/references/backend/user/get-user) method. The response is then returned in MCP's expected response format.
 
   ```ts {{ filename: 'app/[transport]/route.ts', mark: [[6, 25]] }}
+  import { verifyClerkToken } from '@clerk/mcp-tools/next'
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
   import { auth, clerkClient } from '@clerk/nextjs/server'
 
@@ -98,16 +100,11 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
       'Gets data about the Clerk user that authorized this request',
       {},
       async (_, { authInfo }) => {
-        const userId = authInfo?.extra?.userId as string
-        if (!userId) {
-          console.error(authInfo)
-          return {
-            content: [{ type: 'text', text: 'Error: user not authenticated' }],
-          }
-        }
-        const user = await clerk.users.getUser(userId)
+        const userId = authInfo!.extra!.userId! as string
+        const userData = await clerk.users.getUser(userId)
+
         return {
-          content: [{ type: 'text', text: JSON.stringify(user) }],
+          content: [{ type: 'text', text: JSON.stringify(userData) }],
         }
       },
     )
@@ -118,38 +115,13 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Now that your MCP server and tools are defined, the next step is to secure your endpoints with OAuth. This ensures only authenticated clients with valid Clerk-issued tokens can access your tools.
 
-  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify the incoming OAuth token. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
+  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's `verifyClerkToken` method to verify the incoming OAuth token and extract key metadata such as `scopes`, `clientId`, and `userId`. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
 
-  In this implementation, the OAuth token is validated and key metadata such as `scopes`, `clientId`, and `userId` are extracted from the authenticated session. The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
-
-  {/* TODO: Add note about Authorization header and www-authenticate*/}
+  The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   // The rest of your code...
-
-  const authHandler = withMcpAuth(
-    handler,
-    async (_, token) => {
-      if (!token) return undefined
-
-      const { scopes, clientId, userId } = await auth({
-        acceptsToken: 'oauth_token',
-      })
-
-      if (!clientId || !scopes) {
-        console.error('No scopes or clientId returned from auth()')
-        return undefined
-      }
-
-      return {
-        token,
-        scopes,
-        clientId,
-        extra: { userId },
-      }
-    },
-    { required: true },
-  )
+  const authHandler = withMcpAuth(handler, verifyClerkToken, { required: true })
 
   export { authHandler as GET, authHandler as POST }
   ```

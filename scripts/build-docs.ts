@@ -82,6 +82,7 @@ import {
 } from './lib/redirects'
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -152,6 +153,10 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    llms: {
+      overviewPath: '_llms/llms.txt',
+      fullPath: '_llms/llms-full.txt',
+    },
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
@@ -183,7 +188,6 @@ async function main() {
 
 export async function build(config: BuildConfig, store: Store = createBlankStore(), abortSignal?: AbortSignal) {
   // Apply currying to create functions pre-configured with config
-  const ensureDir = ensureDirectory(config)
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
@@ -191,8 +195,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config, store)
-  const writeFile = writeDistFile(config)
-  const writeSdkFile = writeSDKFile(config)
+  const writeFile = writeDistFile(config, store)
+  const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
@@ -200,7 +204,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  await ensureDir(config.distFinalPath)
+  await ensureDirectory(config.distFinalPath)
 
   abortSignal?.throwIfAborted()
 
@@ -824,7 +828,12 @@ template: wide
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
-    .map((path) => ({ path }))
+    .map((path) => ({
+      path,
+      url: `${config.baseDocsLink}${removeMdxSuffix(path)
+        .replace(/^index$/, '') // remove root index
+        .replace(/\/index$/, '')}`, // remove /index from the end,
+    }))
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
@@ -842,6 +851,22 @@ template: wide
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
+  }
+
+  abortSignal?.throwIfAborted()
+
+  if (config.llms?.fullPath || config.llms?.overviewPath) {
+    const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
+
+    if (config.llms?.fullPath) {
+      const llmsFull = await generateLLMsFull(outputtedDocsFiles)
+      await writeFile(config.llms.fullPath, llmsFull)
+    }
+
+    if (config.llms?.overviewPath) {
+      const llms = await generateLLMs(outputtedDocsFiles)
+      await writeFile(config.llms.overviewPath, llms)
+    }
   }
 
   abortSignal?.throwIfAborted()

@@ -40,23 +40,22 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   - [`@vercel/mcp-adapter`](https://github.com/vercel/mcp-adapter): A utility library that simplifies building an MCP server by handling the core protocol logic for you. It also includes an authentication wrapper that allows you to plug in your own token validation - in this case, using Clerk's OAuth tokens.
   - [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools): A helper library built on top of the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) used to connect Clerk OAuth with MCP easily.
-  - [`@clerk/backend`](/docs/references/backend/overview): Clerk's JavaScript Backend SDK provides a `MachineAuthObject` type that can be used to authenticate machine requests.
 
   <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
     ```bash {{ filename: 'terminal' }}
-    npm install @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
+    npm install @vercel/mcp-adapter @clerk/mcp-tools
     ```
 
     ```bash {{ filename: 'terminal' }}
-    yarn add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
+    yarn add @vercel/mcp-adapter @clerk/mcp-tools
     ```
 
     ```bash {{ filename: 'terminal' }}
-    pnpm add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
+    pnpm add @vercel/mcp-adapter @clerk/mcp-tools
     ```
 
     ```bash {{ filename: 'terminal' }}
-    bun add @vercel/mcp-adapter @clerk/mcp-tools @clerk/backend
+    bun add @vercel/mcp-adapter @clerk/mcp-tools
     ```
   </CodeBlockTabs>
 
@@ -70,7 +69,6 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
   import { auth, clerkClient } from '@clerk/nextjs/server'
-  import { type MachineAuthObject } from '@clerk/backend'
 
   const clerk = await clerkClient()
   ```
@@ -86,12 +84,11 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   - A name (`get-clerk-user-data`).
   - A description of what the tool does.
   - Input parameters (none in this case).
-  - A function that represents the implementation of the tool. In this case, it extracts the user's auth info from the Clerk OAuth token and then fetches the user's data using Clerk's [`getUser()`](/docs/references/backend/user/get-user) method. The response is then returned in MCP's expected response format.
+  - A function that represents the implementation of the tool. In this case, it extracts the user ID from `authInfo.extra.userId`, which is provided by Clerk's OAuth authentication, and then fetches the user's data using Clerk's [`getUser()`](/docs/references/backend/user/get-user) method. The response is then returned in MCP's expected response format.
 
-  ```ts {{ filename: 'app/[transport]/route.ts', mark: [[7, 27]] }}
+  ```ts {{ filename: 'app/[transport]/route.ts', mark: [[6, 25]] }}
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
   import { auth, clerkClient } from '@clerk/nextjs/server'
-  import { type MachineAuthObject } from '@clerk/backend'
 
   const clerk = await clerkClient()
 
@@ -101,17 +98,17 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
       'Gets data about the Clerk user that authorized this request',
       {},
       async (_, { authInfo }) => {
-        const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
-        if (!clerkAuthInfo?.subject) {
-          console.error(authInfo)
+        const userId = authInfo?.extra?.userId as string;
+        if (!userId) {
+          console.error(authInfo);
           return {
-            content: [{ type: 'text', text: 'Error: user not authenticated' }],
-          }
+            content: [{ type: "text", text: "Error: user not authenticated" }],
+          };
         }
-        const user = await clerk.users.getUser(clerkAuthInfo.subject)
+        const user = await clerk.users.getUser(userId);
         return {
-          content: [{ type: 'text', text: JSON.stringify(user) }],
-        }
+          content: [{ type: "text", text: JSON.stringify(user) }],
+        };
       },
     )
   })
@@ -123,9 +120,9 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to verify the incoming OAuth token. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
 
-  {/* TODO: Add note about Authorization header and www-authenticate*/}
+  In this implementation, the OAuth token is validated and key metadata such as `scopes`, `clientId`, and `userId` are extracted from the authenticated session. The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
 
-  The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
+  {/* TODO: Add note about Authorization header and www-authenticate*/}
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   // The rest of your code...
@@ -133,13 +130,28 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   const authHandler = withMcpAuth(
     handler,
     async (_, token) => {
-      if (!token) return null
-      return await auth({ acceptsToken: 'oauth_token' })
-    },
-    { required: true },
-  )
+      if (!token) return undefined;
 
-  export { authHandler as GET, authHandler as POST }
+      const { scopes, clientId, userId } = await auth({
+        acceptsToken: "oauth_token",
+      });
+
+      if (!clientId || !scopes) {
+        console.error("No scopes or clientId returned from auth()");
+        return undefined;
+      }
+
+      return {
+        token,
+        scopes,
+        clientId,
+        extra: { userId },
+      };
+    },
+    { required: true }
+  );
+
+  export { authHandler as GET, authHandler as POST };
   ```
 
   ## Expose MCP metadata endpoints
@@ -151,9 +163,10 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   These metadata endpoints allow clients to discover where to authenticate and some details about how the authentication service works. Clerk provides prebuilt helpers that handle this for you:
 
-  - `authServerMetadataHandlerClerk`: Next.js route handler that serves OAuth authorization server metadata in the format expected by MCP clients.
-  - `protectedResourceHandlerClerk`: Next.js route handler that serves OAuth protected resource metadata in the format expected by MCP clients. **This handler automatically uses your `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable.**
-
+  - `authServerMetadataHandlerClerk`: Next.js route handler that serves OAuth **authorization server metadata** in the format expected by MCP clients.
+  - `protectedResourceHandlerClerk`: Next.js route handler that serves OAuth **protected resource metadata** in the format expected by MCP clients. This handler automatically uses your `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable and lets you specific supported OAuth scopes to declare what access levels your resource supports.
+  - `metadataCorsOptionsRequestHandler`: Handles CORS preflight (`OPTIONS`) requests for OAuth metadata endpoints. Required to ensure browser-based MCP clients can access these endpoints in a standards-compliant way.
+  
   > [!NOTE]
   > For a more in-depth explanation of these helpers, see the [MCP Next.js reference](https://github.com/clerk/mcp-tools/tree/main/next).
 
@@ -167,19 +180,28 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   <CodeBlockTabs options={["oauth-authorization-server", "oauth-protected-resource"]}>
     ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
-    import { authServerMetadataHandlerClerk } from '@clerk/mcp-tools/next'
+    import {
+      authServerMetadataHandlerClerk,
+      metadataCorsOptionsRequestHandler
+    } from "@clerk/mcp-tools/next";
 
-    const handler = authServerMetadataHandlerClerk()
+    const handler = authServerMetadataHandlerClerk();
 
-    export { handler as GET }
+    export { handler as GET, metadataCorsOptionsRequestHandler as OPTIONS };
     ```
 
     ```ts {{ filename: 'app/.well-known/oauth-protected-resource/route.ts' }}
-    import { protectedResourceHandlerClerk } from '@clerk/mcp-tools/next'
+    import {
+      metadataCorsOptionsRequestHandler,
+      protectedResourceHandlerClerk
+    } from "@clerk/mcp-tools/next";
 
-    const handler = protectedResourceHandlerClerk()
+    const handler = protectedResourceHandlerClerk({
+      // Specify which OAuth scopes this protected resource supports
+      scopes_supported: ["profile", "email"],
+    });
 
-    export { handler as GET }
+    export { handler as GET, metadataCorsOptionsRequestHandler as OPTIONS };
     ```
   </CodeBlockTabs>
 

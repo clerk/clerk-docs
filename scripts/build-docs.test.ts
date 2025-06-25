@@ -4578,3 +4578,83 @@ describe('API Errors Generation', () => {
     expect(fapi).toContain('Status Code: 400')
   })
 })
+
+describe('LLMs', () => {
+  test('Should output llms.txt overview', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [API Documentation]({{SITE_URL}}/docs/api-doc)`)
+  })
+
+  test('Should output llms-full.txt full pages', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        llms: {
+          fullPath: 'llms-full.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms-full.txt')).toEqual(`---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`)
+  })
+})

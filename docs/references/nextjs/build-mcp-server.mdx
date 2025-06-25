@@ -12,7 +12,7 @@ description: Learn how to build an MCP server using Clerk's OAuth server in your
   ]}
   beforeYouStart={[
     {
-      title: "A Clerk application is required.",
+      title: "A Clerk application is required",
       link: "/docs/quickstarts/setup-clerk",
       icon: "clerk",
     },
@@ -66,7 +66,7 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   import { verifyClerkToken } from '@clerk/mcp-tools/next'
   import { createMcpHandler, experimental_withMcpAuth as withMcpAuth } from '@vercel/mcp-adapter'
-  import { clerkClient } from '@clerk/nextjs/server'
+  import { auth, clerkClient } from '@clerk/nextjs/server'
 
   const clerk = await clerkClient()
   ```
@@ -112,13 +112,20 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Now that your MCP server and tools are defined, the next step is to secure your endpoints with OAuth. This ensures only authenticated clients with valid Clerk-issued tokens can access your tools.
 
-  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's `verifyClerkToken` method to verify the incoming OAuth token and extract key metadata such as `scopes`, `clientId`, and `userId`. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
+  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to parse the incoming OAuth token and extract the session context. This token is then passed Clerk's `verifyClerkToken` method, which verifies it and extracts key metadata such as `scopes`, `clientId`, and `userId`. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
 
   The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   // The rest of your code...
-  const authHandler = withMcpAuth(handler, verifyClerkToken, { required: true })
+  const authHandler = withMcpAuth(
+    handler,
+    async (_, token) => {
+      const clerkAuth = await auth({ acceptsToken: 'oauth_token' })
+      return verifyClerkToken(clerkAuth, token)
+    },
+    { required: true },
+  )
 
   export { authHandler as GET, authHandler as POST }
   ```

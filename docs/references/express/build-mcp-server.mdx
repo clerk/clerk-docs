@@ -1,0 +1,170 @@
+---
+title: Build an MCP server in your Express application with Clerk
+description: Learn how to build an MCP server using Clerk's OAuth server in your Express application.
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "Express & Clerk MCP Server Repo",
+      link: "https://github.com/clerk/mcp-express-example"
+    }
+  ]}
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate Clerk into your Express application",
+      link: "/docs/quickstarts/express",
+      icon: "expressjs",
+    },
+  ]}
+/>
+
+If you're building an application and want to allow large language model (LLM) apps to securely access user data within your app, you'll need to set up a **Model Context Protocol** (MCP) server. MCP enables external tools like LLM-based apps to request user permission to access specific data from your server. Refer to the [dedicated MCP section](/docs/oauth/how-clerk-implements-oauth#building-a-model-context-protocol-service) for more information.
+
+There are two parties involved in MCP - "client" and "server". In web development, the terms "client" and "server" often refer to the frontend (browser) and backend (web server). However, in this context, these terms have different meanings:
+
+- The "client" is the LLM application that wants to access another service on a user's behalf. For example, Claude would be the "client" if it wants to get access to Gmail.
+- The "server" is the system that hosts the protected resources the client wants to access. In this example, this would be Gmail. This is sometimes referred to as the "resource server" or "MCP server".
+
+This guide demonstrates how to build an MCP server using Clerk's OAuth server in your Express app. It assumes that you have already integrated Clerk into your app by following the [quickstart](/docs/quickstarts/express).
+
+<Steps>
+  ## Install dependencies
+
+  To get started, this implementation requires the following packages to be installed in your project in addition to `express`, `@clerk/express` and `dotenv`:
+
+  - [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk): Provides the core SDK for building an MCP server, including utilities to define tools and handle LLM requests.
+  - [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools): A helper library built on top of the MCP TypeScript SDK used to connect Clerk OAuth with MCP easily.
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @modelcontextprotocol/sdk @clerk/mcp-tools
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @modelcontextprotocol/sdk @clerk/mcp-tools
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @modelcontextprotocol/sdk @clerk/mcp-tools
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bun add @modelcontextprotocol/sdk @clerk/mcp-tools
+    ```
+  </CodeBlockTabs>
+
+  ## Set up your Express app with Clerk and MCP imports
+
+  The following code is the starting point for your MCP server. It includes the imports and setup needed to implement an MCP server with Clerk.
+
+  ```ts {{ filename: 'index.ts' }}
+  import 'dotenv/config'
+  import { type MachineAuthObject, clerkClient, clerkMiddleware } from '@clerk/express'
+  import {
+    mcpAuthClerk,
+    protectedResourceHandlerClerk,
+    streamableHttpHandler,
+  } from '@clerk/mcp-tools/express'
+  import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+  import express from 'express'
+
+  const app = express()
+  app.use(clerkMiddleware())
+  app.use(express.json())
+
+  app.listen(3000)
+  ```
+
+  ## Create your MCP server and define tools
+
+  To let external LLM-powered tools securely interact with your app, you need to define an MCP server, and expose one or more [resources](https://modelcontextprotocol.io/docs/concepts/resources), [prompts](https://modelcontextprotocol.io/docs/concepts/prompts), and/or [tools](https://modelcontextprotocol.io/docs/concepts/tools).
+
+  Add the following code to your `index.ts` file. This registers a single tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user.
+
+  The `McpServer()` function is used to create a new MCP server with a name and version. The `server.tool()` function is used to define a tool that external LLM-based apps can invoke. Each tool includes:
+
+  - A name (`get_clerk_user_data`).
+  - A description of what the tool does.
+  - Input parameters (none in this case).
+  - A function that represents the implementation of the tool. In this case, it extracts the user's auth info from the Clerk OAuth token and then fetches the user's data using Clerk's [`getUser()`](/docs/references/backend/user/get-user) method. The response is then returned in MCP's expected response format.
+
+  ```ts {{ filename: 'index.ts', mark: [[15, 37]], collapsible: true }}
+  import 'dotenv/config'
+  import { type MachineAuthObject, clerkClient, clerkMiddleware } from '@clerk/express'
+  import {
+    mcpAuthClerk,
+    protectedResourceHandlerClerk,
+    streamableHttpHandler,
+  } from '@clerk/mcp-tools/express'
+  import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+  import express from 'express'
+
+  const app = express()
+  app.use(clerkMiddleware())
+  app.use(express.json())
+
+  const server = new McpServer({
+    name: 'test-server',
+    version: '0.0.1',
+  })
+
+  server.tool(
+    'get_clerk_user_data',
+    'Gets data about the Clerk user that authorized this request',
+    {},
+    async (_, { authInfo }) => {
+      const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
+      if (!clerkAuthInfo?.userId) {
+        console.error(authInfo)
+        return {
+          content: [{ type: 'text', text: 'Error: user not authenticated' }],
+        }
+      }
+      const user = await clerkClient.users.getUser(clerkAuthInfo.userId)
+      return {
+        content: [{ type: 'text', text: JSON.stringify(user) }],
+      }
+    },
+  )
+
+  app.listen(3000)
+  ```
+
+  ## Secure and expose your MCP server
+
+  Now that your MCP server and tools are defined, the next step is to secure your endpoints and expose them according to the MCP specification. To comply with the MCP specification, your server must expose [OAuth protected resource metadata](https://datatracker.ietf.org/doc/html/rfc9728#section-4.1) at a specific endpoint (`.well-known/oauth-protected-resource`). This metadata allows clients to discover where to authenticate and some details about how the authentication service works.
+
+  Clerk provides prebuilt helpers that handle this for you:
+
+  - `mcpAuthClerk`: Authentication middleware that automatically verifies the `Authorization` header using Clerk-issued OAuth tokens. If unauthorized, it returns a `www-authenticate` header [in accordance with the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-location).
+  - `protectedResourceHandlerClerk`: Express handler that serves OAuth protected resource metadata.
+  - `streamableHttpHandler`: Express handler that connects your MCP server to incoming requests using the [streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http).
+
+  > [!NOTE]
+  > For a more in-depth explanation of these helpers, see the [MCP Express reference](https://github.com/clerk/mcp-tools/tree/main/express).
+
+  To secure your endpoints and expose your MCP server to a client, add the following code to your file:
+
+  ```ts {{ filename: 'index.ts', mark: [[3, 4]] }}
+  // The rest of your code...
+
+  app.post('/mcp', mcpAuthClerk, streamableHttpHandler(server))
+  app.get('/.well-known/oauth-protected-resource', protectedResourceHandlerClerk)
+
+  app.listen(3000)
+  ```
+
+  ## Connect your client LLM to the MCP server
+
+  <Include src="_partials/connecting-client-mcp-server" />
+
+  ## Finished 🎉
+
+  You've now successfully connected your client to the MCP server and authenticated it using Clerk. Your LLM agent can securely access user data through the exposed tools in your server.
+</Steps>

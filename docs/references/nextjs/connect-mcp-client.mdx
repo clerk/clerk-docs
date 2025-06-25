@@ -13,7 +13,7 @@ description: Learn how to connect MCP-compatible clients, like Cursor, to your M
   ]}
 />
 
-If you're building an application and want to allow large language model (LLM) apps to securely access user data within your app, you'll need to set up a **Model Context Protocol** (MCP) service. MCP enables external tools like LLM-based apps to request user permission to access specific data from your service. Refer to the [dedicated MCP section](/docs/oauth/how-clerk-implements-oauth#building-a-model-context-protocol-service) for more information.
+If you're building an application and want to allow large language model (LLM) apps to securely access user data within your app, you'll need to set up a **Model Context Protocol** (MCP) service. MCP enables external tools like LLM-based apps to request user permission to access specific data from your service.
 
 <Include src="_partials/mcp-explanation" />
 
@@ -21,20 +21,37 @@ This guide demonstrates how to connect an MCP-compatible client (**LLM app**), l
 
 ## Connect your client LLM to your MCP server
 
-Once your MCP server is set up, clients that support the latest MCP spec can now invoke the `get-clerk-user-data` tool to securely fetch user data from your app, assuming the request is authorized with a Clerk OAuth token. Refer to the [guide on verifying OAuth access tokens](/docs/oauth/verify-oauth-tokens) for more information.
+Once your MCP server is set up, clients that support the latest MCP spec can invoke the `get-clerk-user-data` tool to securely fetch user data from your app, assuming the request is [authorized with a Clerk OAuth token](/docs/oauth/verify-oauth-tokens).
 
-To complete the integration, you'll need to connect an MCP-compatible client to your MCP server. Most LLM tools that support MCP can automatically detect your server, and many also allow you to register custom servers in a configuration file.
+To complete the integration, you'll need to connect an MCP-compatible client to your MCP server. Each client has a different way of connecting to MCP servers, and given that the MCP spec is still in development, you may need to refer to the client's documentation for the most up-to-date instructions.
 
 > [!IMPORTANT]
 > Before proceeding, ensure you have toggled on the **Dynamic client registration** option in the [**OAuth Applications**](https://dashboard.clerk.com/last-active?path=user-authentication/oauth-applications) page.
 > This setting allows MCP-compatible clients to automatically register themselves with your server during the OAuth flow.
 
+If you are testing the MCP integration in development, you can start your MCP server by running `npm run dev`. If you have deployed your MCP service to production, make sure that the deployment was successful and you have the correct URL.
+
+<Tabs items={["Cursor", "VSCode"]}>
+  <TabItem value="Cursor">
+
 ### Example: Connecting Cursor to your MCP server
 
-1. Start your MCP server by running `npm run dev`.
 1. Navigate to **Cursor Settings**. To find this, open the **Command Palette** (`Cmd/Ctrl + Shift + P`) and search for **Cursor Settings**, or select the gear icon in the top right corner of the app.
 1. In the sidenav, select **Tools & Integrations**. If you don't see this, you may need to update Cursor to the latest version.
-1. Under **MCP Tools**, enable the listed custom MCP server via the toggle. Cursor should have automatically detected it.
+1. Click the "New MCP Server" button, which will open up a new tab with the MCP configuration json file.
+1. Add the following configuration to the json file:
+
+```json
+{
+  "mcpServers": {
+    // there may be other servers listed here already
+    "name-of-your-mcp-server": {
+      // if you have deployed your MCP service to production, you can use the production URL here instead
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
 1. Select the **Needs login** option when it loads. You'll be redirected to a Clerk OAuth consent screen to authorize Cursor to access your user data.
 1. Select **Allow**. Once authorized, the tool `get_clerk_user_data` should be listed as enabled and you should see a green active status.
 1. Start a new chat in [**Agent Mode**](https://docs.cursor.com/chat/agent) and prompt it to fetch your Clerk user data (e.g. "What is my Clerk user data?").
@@ -57,3 +74,48 @@ Delete Self Enabled: Yes
 ```
 
 You've now successfully connected your client (**Cursor**) to the MCP server and authenticated it using Clerk. Your LLM agent can securely access user data through the exposed tools in your server.
+
+  </TabItem>
+  <TabItem value="VSCode">
+
+1. Navigate to **Settings**. To find this, use the app menu to select "Settings" or press `Cmd/Ctrl + ,`.
+1. In the settings search, type "MCP" and select the "Edit in settings.json" option.
+1. Add the following configuration to the json file:
+
+```json
+{
+  "mcp": {
+    "inputs": [],
+    "servers": {
+      "name-of-your-mcp-server": {
+        // if you have deployed your MCP service to production, you can use the production URL here instead
+        "url": "http://localhost:3000/mcp"
+      }
+    }
+  }
+}
+```
+1. Select "start" above the server url to start the MCP server. This will open up a modal asking you to open a browser to authenticate.
+1. Select **Allow**. Once authorized, the tool `get_clerk_user_data` should be listed as enabled and you should see "✔️ Running" above the server url.
+1. Start a new Copilot chat (`Cmd + Shift + I`) and prompt it to fetch your Clerk user data (e.g. "What is my Clerk user data?").
+1. Select the **Run tool** option once it becomes available. The response will vary based on your prompt, but it should include key details from your Clerk profile, such as:
+
+```yaml
+User ID: <user-id>
+Username: <username>
+First Name: <first-name>
+Last Name: <last-name>
+Primary Email: <primary-email>
+Secondary Email: <secondary-name>
+2FA Enabled: No
+Account Banned: No
+Account Locked: No
+Profile Image: <profile-image>
+External Accounts: <external-account>
+Organization Creation Enabled: Yes
+Delete Self Enabled: Yes
+```
+
+You've now successfully connected your client (**VSCode**) to the MCP server and authenticated it using Clerk. Your LLM agent can securely access user data through the exposed tools in your server.
+  </TabItem>
+</Tabs>

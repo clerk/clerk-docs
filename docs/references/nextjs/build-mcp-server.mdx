@@ -60,7 +60,7 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Let's begin creating your MCP server.
 
-  1. In your `app/` directory, create a `[transport]` folder. This dynamic segment allows the MCP server to support different transport protocols used by the LLM tool, like `streamable-http`, based on the value of **transport**.
+  1. In your `app/` directory, create a `[transport]` folder. This dynamic segment allows the MCP server to support different transport protocols used by the LLM tool. Streamable HTTP is the recommended default transport in the [current MCP spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports), and uses `/mcp` as the base path. SSE is also supported, and uses `/sse` as the base path.
   1. Inside this directory, create a `route.ts` file with the following code. This is the starting point for your MCP server. It includes the imports and setup needed to implement an MCP server with Clerk.
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
@@ -75,9 +75,9 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   To let external LLM-powered tools securely interact with your app, you need to define an MCP server, and expose one or more [resources](https://modelcontextprotocol.io/docs/concepts/resources), [prompts](https://modelcontextprotocol.io/docs/concepts/prompts), and/or [tools](https://modelcontextprotocol.io/docs/concepts/tools).
 
-  Add the following code to your `route.ts` file. This registers a single tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user.
+  For this guide, we will implement a single, example tool called `get_clerk_user_data` that retrieves information about the authenticated Clerk user. For more documentation on how to build MCP tools, see the [MCP documentation](https://modelcontextprotocol.io/docs/concepts/tools).
 
-  Vercel's `createMcpHandler()` function is used to create a new MCP server. Inside it, you can define tools that external LLM-based apps can invoke using `server.tool()`. Each tool includes:
+  Vercel's `createMcpHandler()` function is used to handle the connection and transports required by the MCP protocol. Within its callback function, you can define tools that external LLM-based apps can invoke using `server.tool()`. Each tool includes:
 
   - A name (`get-clerk-user-data`).
   - A description of what the tool does.
@@ -112,9 +112,9 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   Now that your MCP server and tools are defined, the next step is to secure your endpoints with OAuth. This ensures only authenticated clients with valid Clerk-issued tokens can access your tools.
 
-  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to parse the incoming OAuth token and extract the session context. This token is then passed Clerk's `verifyClerkToken` method, which verifies it and extracts key metadata such as `scopes`, `clientId`, and `userId`. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
+  Add the following code to your `route.ts` file. This uses Vercel's `withMcpAuth()` function to wrap the MCP handler in authentication logic and uses Clerk's [`auth()`](/docs/references/nextjs/auth) helper to parse the incoming OAuth token and extract the session context. This data is then passed into Clerk's `verifyClerkToken` helper method, which verifies the OAuth token, extracts key metadata, and makes the current user'd ID available to tool call functions. To learn more about verifying OAuth tokens in Next.js apps, see the [dedicated guide](/docs/references/nextjs/verifying-oauth-access-tokens).
 
-  The `authHandler` is exported for both `GET` and `POST` methods, making your MCP server accessible to external tools using either HTTP method.
+  The `authHandler` is then exported for both `GET` and `POST` methods. The `GET` method is requires for SSE support only - if you do not need to support SSE, you can export only `POST` (and the `[transport]` part of the route).
 
   ```ts {{ filename: 'app/[transport]/route.ts' }}
   // The rest of your code...
@@ -132,16 +132,15 @@ This guide demonstrates how to build an MCP server using Clerk's OAuth server in
 
   ## Expose MCP metadata endpoints
 
-  To comply with the MCP specification, your server must expose:
+  To comply with the MCP specification, your server must expose [OAuth protected resource metadata](https://datatracker.ietf.org/doc/html/rfc9728#section-4.1) at a specific endpoint (`.well-known/oauth-protected-resource`).
 
-  - [OAuth protected resource metadata](https://datatracker.ietf.org/doc/html/rfc9728#section-4.1) at a specific endpoint (`.well-known/oauth-protected-resource`)
-  - [OAuth authorization server metadata](https://datatracker.ietf.org/doc/html/rfc8414) at a specific endpoint (`.well-known/oauth-authorization-server`).
+  Older versions of the MCP spec required that you also expose [OAuth authorization server metadata](https://datatracker.ietf.org/doc/html/rfc8414) at a specific endpoint (`.well-known/oauth-authorization-server`). This is no longer required by the current MCP spec, but it may be necessary for some clients that only support older versions of the spec.
 
-  These metadata endpoints allow clients to discover where to authenticate and some details about how the authentication service works. Clerk provides prebuilt helpers that handle this for you:
+  These metadata endpoints allow clients to discover where to authenticate, and some details about how the authentication service works. Clerk provides prebuilt helpers via [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools) that handle this for you:
 
+  - `protectedResourceHandlerClerk`: Next.js route handler that serves OAuth **protected resource metadata** in the format expected by MCP clients. This handler lets you define specific supported OAuth scopes to declare what access levels your resource requires.
   - `authServerMetadataHandlerClerk`: Next.js route handler that serves OAuth **authorization server metadata** in the format expected by MCP clients.
-  - `protectedResourceHandlerClerk`: Next.js route handler that serves OAuth **protected resource metadata** in the format expected by MCP clients. This handler automatically uses your `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` environment variable and lets you specific supported OAuth scopes to declare what access levels your resource supports.
-  - `metadataCorsOptionsRequestHandler`: Handles CORS preflight (`OPTIONS`) requests for OAuth metadata endpoints. Required to ensure browser-based MCP clients can access these endpoints in a standards-compliant way.
+  - `metadataCorsOptionsRequestHandler`: Handles CORS preflight (`OPTIONS`) requests for OAuth metadata endpoints. Required to ensure public, browser-based MCP clients can access these endpoints.
 
   > [!NOTE]
   > For a more in-depth explanation of these helpers, see the [MCP Next.js reference](https://github.com/clerk/mcp-tools/tree/main/next).

@@ -299,7 +299,7 @@ The [`Auth`](/docs/references/backend/types/auth-object) object contains importa
 
 <Include src="_partials/auth-object-table" />
 
-For example, in a Next.js App Router route handler, you can use the [`auth()`](/docs/references/nextjs/auth) helper to get the user's ID, and then use the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method to get the [Backend User object](/docs/references/backend/types/backend-user).
+The following examples demonstrate how to retrieve the authenticated user's ID using framework-specific auth helpers and how to use the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method to get the [Backend User object](/docs/references/backend/types/backend-user). 
 
 <Tabs items={["Backend SDK", "With other SDKs"]}>
   <Tab>
@@ -307,9 +307,11 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
   </Tab>
 
   <Tab>
-    <Tabs items={["Next.js", "Remix", "Fastify", "Astro", "Express", "Nuxt"]}>
+    <Tabs items={["Next.js", "Astro",  "Express",  "React Router", "Remix", "Tanstack React Start"]}>
       <Tab>
       For example, in a Next.js App Router route handler, you can use the [`auth()`](/docs/references/nextjs/auth) helper to get the user's ID, and then use the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method to get the [Backend User object](/docs/references/backend/types/backend-user).
+
+      For Next.js, the `Auth` object is accessed using the `auth()` helper in App Router apps and the `getAuth()` function in Pages Router apps. [Learn more about using these helpers](/docs/references/nextjs/read-session-data#server-side).
 
       ```tsx {{ filename: 'app/api/example/route.ts' }}
       import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -334,7 +336,105 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
       ```
       </Tab>
       <Tab>
-        Use the following tabs to see examples of how to use the Backend SDK to get the [Backend User object](/docs/references/backend/types/backend-user) in Remix Loader and Action functions.
+      ```tsx
+      import { clerkClient } from '@clerk/astro/server'
+
+      export async function GET(context) {
+        const { userId, redirectToSignIn } = context.locals.auth()
+
+        if (!userId) {
+          return redirectToSignIn()
+        }
+
+        const user = await clerkClient(context).users.getUser(userId)
+
+        return new Response(JSON.stringify({ user }))
+      }
+      ```
+      </Tab>
+       <Tab>
+        <Tabs items={["ESM", "CJS"]}>
+          <Tab>
+           ```tsx
+            import { createClerkClient } from '@clerk/express'
+            import express from 'express'
+
+            const app = express()
+            const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+            app.get('/user', async (req, res) => {
+              // Use `req.auth` to get the user's ID
+              const userId = req.auth.userId
+
+              // Protect the route by checking if the user is signed in
+              if (!userId) {
+                res.status(401).json({ error: 'User not authenticated' })
+              }
+
+              // Use the Backend SDK's `getUser()` method to get the Backend User object
+              const user = await clerkClient.users.getUser(userId)
+
+              // Return the Backend User object
+              res.json(user)
+            })
+            ```
+          </Tab>
+          <Tab>
+           ```tsx
+            const express = require('express');
+            const Clerk = require('@clerk/express')
+
+            const clerkClient = Clerk.createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+
+            app.get('/user', async (req, res) => {
+              // Use `req.auth` to get the user's ID
+              const userId = req.auth.userId
+
+              // Protect the route by checking if the user is signed in
+              if (!userId) {
+                res.status(401).json({ error: 'User not authenticated' })
+              }
+
+              // Use the Backend SDK's `getUser()` method to get the Backend User object
+              const user = await clerkClient.users.getUser(userId)
+
+              // Return the Backend User object
+              res.json(user)
+            })
+            ```
+          </Tab>
+        </Tabs>
+      </Tab>
+      <Tab>
+      ```tsx {{ filename: 'app/routes/profile.tsx' }}
+      import { redirect } from 'react-router'
+      import { getAuth } from '@clerk/react-router/ssr.server'
+      import { createClerkClient } from '@clerk/react-router/api.server'
+      import type { Route } from './+types/profile'
+
+      export async function loader(args: Route.LoaderArgs) {
+        // Use `getAuth()` to get the user's ID
+        const { userId } = await getAuth(args)
+
+        // Protect the route by checking if the user is signed in
+        if (!userId) {
+          return redirect('/sign-in?redirect_url=' + args.request.url)
+        }
+
+        // Use the Backend SDK's `getUser()` method to get the Backend User object
+        const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
+          userId,
+        )
+
+        // Return the Backend User object
+        return {
+          user: JSON.stringify(user),
+        }
+      }
+      ```
+      </Tab>
+      <Tab>
+        Use the following tabs to see examples of how to use the the Backend SDK to get the [`getAuth()`](/docs/references/nextjs/auth) helper to get the user's ID, and then use the Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method to get the [Backend User object](/docs/references/backend/types/backend-user) in Remix Loader and Action functions.
 
         <Tabs items={["Loader Function", "Action Function"]}>
           <Tab>
@@ -344,7 +444,7 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
             import { createClerkClient } from '@clerk/remix/api.server'
 
             export const loader: LoaderFunction = async (args) => {
-              // Use getAuth to retrieve user data
+              // Use `getAuth()` to get the user's ID
               const { userId } = await getAuth(args)
 
               // If there is no userId, then redirect to sign-in route
@@ -352,18 +452,16 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
                 return redirect('/sign-in?redirect_url=' + args.request.url)
               }
 
-              // Initialize clerkClient and perform the action,
-              // which in this case is to get the user
+              // Use the Backend SDK's `getUser()` method to get the Backend User object
               const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
                 userId,
               )
 
-              // Return the user
+              // Return the Backend User object
               return { serialisedUser: JSON.stringify(user) }
             }
             ```
           </Tab>
-
           <Tab>
             ```tsx {{ filename: 'routes/profile.tsx' }}
             import { ActionFunction, redirect } from '@remix-run/node'
@@ -371,7 +469,7 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
             import { createClerkClient } from '@clerk/remix/api.server'
 
             export const action: ActionFunction = async (args) => {
-              // Use getAuth to retrieve user data
+              // Use `getAuth()` to get the user's ID
               const { userId } = await getAuth(args)
 
               // If there is no userId, then redirect to sign-in route
@@ -382,7 +480,7 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
               // Prepare the data for the mutation
               const params = { firstName: 'John', lastName: 'Wicker' }
 
-              // Initialize clerkClient and perform the mutations
+              // // Use the Backend SDK's `updateUser()` method to update the Backend User object
               const updatedUser = await createClerkClient({
                 secretKey: process.env.CLERK_SECRET_KEY,
               }).users.updateUser(userId, params)
@@ -395,95 +493,32 @@ For example, in a Next.js App Router route handler, you can use the [`auth()`](/
         </Tabs>
       </Tab>
       <Tab>
-      ```tsx {{ filename: 'app/api/example/route.ts' }}
-      import { auth, clerkClient } from '@clerk/nextjs/server'
+      ```tsx {{ filename: 'app/routes/api/example.tsx' }}
+      import { createClerkClient } from '@clerk/backend'
+      import { json } from '@tanstack/react-start'
+      import { createAPIFileRoute } from '@tanstack/react-start/api'
+      import { getAuth } from '@clerk/tanstack-react-start/server'
 
-      export async function GET() {
-        // Use `auth()` to get the user's ID
-        const { userId } = await auth()
+      export const Route = createAPIFileRoute('/api/example')({
+        GET: async ({ request, params }) => {
+          // Use `getAuth()` to get the user's ID
+          const { userId } = await getAuth(req)
 
-        // Protect the route by checking if the user is signed in
-        if (!userId) {
-          return new NextResponse('Unauthorized', { status: 401 })
-        }
+          // Protect the route by checking if the user is signed in
+          if (!userId) {
+            return json({ error: 'Unauthorized' }, { status: 401 })
+          }
 
-        const client = await clerkClient()
+          // Instantiate the Backend SDK
+          const clerkClient = createClerkClient({ secretKey: import.meta.env.CLERK_SECRET_KEY })
 
-        // Use the Backend SDK's `getUser()` method to get the Backend User object
-        const user = await client.users.getUser(userId)
+          // Use the Backend SDK's `getUser()` method to get the Backend User object
+          const user = userId ? await clerkClient.users.getUser(userId) : null
 
-        // Return the Backend User object
-        return NextResponse.json({ user: user }, { status: 200 })
-      }
-      ```
-      </Tab>
-      <Tab>
-      ```tsx {{ filename: 'app/api/example/route.ts' }}
-      import { auth, clerkClient } from '@clerk/nextjs/server'
-
-      export async function GET() {
-        // Use `auth()` to get the user's ID
-        const { userId } = await auth()
-
-        // Protect the route by checking if the user is signed in
-        if (!userId) {
-          return new NextResponse('Unauthorized', { status: 401 })
-        }
-
-        const client = await clerkClient()
-
-        // Use the Backend SDK's `getUser()` method to get the Backend User object
-        const user = await client.users.getUser(userId)
-
-        // Return the Backend User object
-        return NextResponse.json({ user: user }, { status: 200 })
-      }
-      ```
-      </Tab>
-      <Tab>
-      ```tsx {{ filename: 'app/api/example/route.ts' }}
-      import { auth, clerkClient } from '@clerk/nextjs/server'
-
-      export async function GET() {
-        // Use `auth()` to get the user's ID
-        const { userId } = await auth()
-
-        // Protect the route by checking if the user is signed in
-        if (!userId) {
-          return new NextResponse('Unauthorized', { status: 401 })
-        }
-
-        const client = await clerkClient()
-
-        // Use the Backend SDK's `getUser()` method to get the Backend User object
-        const user = await client.users.getUser(userId)
-
-        // Return the Backend User object
-        return NextResponse.json({ user: user }, { status: 200 })
-      }
-      ```
-      </Tab>
-      <Tab>
-      ```tsx {{ filename: 'app/api/example/route.ts' }}
-      import { auth, clerkClient } from '@clerk/nextjs/server'
-
-      export async function GET() {
-        // Use `auth()` to get the user's ID
-        const { userId } = await auth()
-
-        // Protect the route by checking if the user is signed in
-        if (!userId) {
-          return new NextResponse('Unauthorized', { status: 401 })
-        }
-
-        const client = await clerkClient()
-
-        // Use the Backend SDK's `getUser()` method to get the Backend User object
-        const user = await client.users.getUser(userId)
-
-        // Return the Backend User object
-        return NextResponse.json({ user: user }, { status: 200 })
-      }
+          // Return the Backend User object
+          return json({ user })
+        },
+      })
       ```
       </Tab>
     </Tabs>

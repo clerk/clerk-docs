@@ -9,6 +9,7 @@ import type { SDK } from './schemas'
 type BuildConfigOptions = {
   basePath: string
   validSdks: readonly SDK[]
+  dataPath: string
   docsPath: string
   baseDocsLink: string
   manifestPath: string
@@ -16,6 +17,7 @@ type BuildConfigOptions = {
   distPath: string
   typedocPath: string
   publicPath?: string
+  ignorePaths: string[]
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
@@ -37,10 +39,19 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
-  cleanDist: boolean
+  prompts?: {
+    inputPath: string
+    outputPath: string
+  }
+  llms?: {
+    overviewPath?: string
+    fullPath?: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
+    skipGit?: boolean
+    skipApiErrors?: boolean
   }
 }
 
@@ -52,65 +63,90 @@ export async function createConfig(config: BuildConfigOptions) {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
   }
 
-  const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
+  const changeTempDist = async () => {
+    const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
 
-  return {
-    basePath: config.basePath,
-    baseDocsLink: config.baseDocsLink,
-    validSdks: config.validSdks,
+    return {
+      basePath: config.basePath,
+      baseDocsLink: config.baseDocsLink,
+      validSdks: config.validSdks,
 
-    manifestRelativePath: config.manifestPath,
-    manifestFilePath: resolve(config.manifestPath),
+      manifestRelativePath: config.manifestPath,
+      manifestFilePath: resolve(config.manifestPath),
 
-    partialsRelativePath: config.partialsPath,
-    partialsPath: resolve(config.partialsPath),
+      partialsRelativePath: config.partialsPath,
+      partialsPath: resolve(config.partialsPath),
 
-    docsRelativePath: config.docsPath,
-    docsPath: resolve(config.docsPath),
+      dataRelativePath: config.dataPath,
+      dataPath: resolve(config.dataPath),
 
-    distTempRelativePath: tempDist,
-    distTempPath: resolve(tempDist),
+      docsRelativePath: config.docsPath,
+      docsPath: resolve(config.docsPath),
 
-    distFinalRelativePath: config.distPath,
-    distFinalPath: resolve(config.distPath),
+      distTempRelativePath: tempDist,
+      distTempPath: resolve(tempDist),
+      changeTempDist,
 
-    typedocRelativePath: config.typedocPath,
-    typedocPath: resolve(config.typedocPath),
+      distFinalRelativePath: config.distPath,
+      distFinalPath: resolve(config.distPath),
 
-    publicRelativePath: config.publicPath,
-    publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
+      typedocRelativePath: config.typedocPath,
+      typedocPath: resolve(config.typedocPath),
 
-    ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
-    ignoreWarnings: config.ignoreWarnings ?? {
-      docs: {},
-      partials: {},
-      typedoc: {},
-    },
+      publicRelativePath: config.publicPath,
+      publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
 
-    manifestOptions: config.manifestOptions ?? {
-      wrapDefault: true,
-      collapseDefault: false,
-      hideTitleDefault: false,
-    },
+      ignoredPaths: (url: string) => config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem)),
+      ignoredLinks: (url: string) => config.ignoreLinks.some((ignoreItem) => url === ignoreItem),
+      ignoreWarnings: config.ignoreWarnings ?? {
+        docs: {},
+        partials: {},
+        typedoc: {},
+      },
 
-    redirects: config.redirects
-      ? {
-          static: {
-            inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
-            outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
-          },
-          dynamic: {
-            inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
-            outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
-          },
-        }
-      : null,
+      manifestOptions: config.manifestOptions ?? {
+        wrapDefault: true,
+        collapseDefault: false,
+        hideTitleDefault: false,
+      },
 
-    cleanDist: config.cleanDist,
+      redirects: config.redirects
+        ? {
+            static: {
+              inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
+              outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+            },
+            dynamic: {
+              inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
+              outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
+            },
+          }
+        : null,
 
-    flags: {
-      watch: config.flags?.watch ?? false,
-      controlled: config.flags?.controlled ?? false,
-    },
+      prompts: config.prompts
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+            inputPathRelative: config.prompts.inputPath,
+            outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+            outputPathRelative: config.prompts.outputPath,
+          }
+        : null,
+
+      llms: config.llms
+        ? {
+            overviewPath: config.llms.overviewPath,
+            fullPath: config.llms.fullPath,
+          }
+        : null,
+
+      flags: {
+        watch: config.flags?.watch ?? false,
+        controlled: config.flags?.controlled ?? false,
+        skipGit: config.flags?.skipGit ?? false,
+        skipApiErrors: config.flags?.skipApiErrors ?? false,
+      },
+    }
   }
+
+  return changeTempDist()
 }

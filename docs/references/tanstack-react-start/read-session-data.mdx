@@ -15,11 +15,12 @@ In the following example, the `userId` is passed to the Backend SDK's `getUser()
 
 <Tabs items={["Server function", "API Route"]}>
   <Tab>
-    ```tsx {{ filename: 'app/routes/index.tsx' }}
-    import { createFileRoute, useRouter, redirect } from '@tanstack/react-router'
+    ```tsx {{ filename: 'src/routes/index.tsx' }}
+    import { createFileRoute, redirect } from '@tanstack/react-router'
     import { createServerFn } from '@tanstack/react-start'
-    import { getAuth } from '@clerk/tanstack-react-start/server'
+    import { clerkClient, getAuth } from '@clerk/tanstack-react-start/server'
     import { getWebRequest } from '@tanstack/react-start/server'
+    import { UserButton } from '@clerk/tanstack-react-start'
 
     const authStateFn = createServerFn({ method: 'GET' }).handler(async () => {
       // Use `getAuth()` to retrieve the user's ID
@@ -29,27 +30,23 @@ In the following example, the `userId` is passed to the Backend SDK's `getUser()
       if (!userId) {
         // This might error if you're redirecting to a path that doesn't exist yet
         // You can create a sign-in route to handle this
+        // See https://clerk.com/docs/references/tanstack-react-start/custom-sign-in-or-up-page
         throw redirect({
           to: '/sign-in/$',
         })
       }
 
-      // Instantiate the Backend SDK
-      const clerkClient = createClerkClient({
-        secretKey: import.meta.env.CLERK_SECRET_KEY,
-      })
-
       // Get the user's full `Backend User` object
-      const user = userId ? await clerkClient.users.getUser(userId) : null
+      const user = userId ? await clerkClient().users.getUser(userId) : null
 
-      return { user }
+      return { userId, firstName: user?.firstName }
     })
 
     export const Route = createFileRoute('/')({
       component: Home,
       beforeLoad: () => authStateFn(),
       loader: async ({ context }) => {
-        return { userId: context.userId, user: context.user }
+        return { userId: context.userId, firstName: context.firstName }
       },
     })
 
@@ -58,8 +55,9 @@ In the following example, the `userId` is passed to the Backend SDK's `getUser()
 
       return (
         <div>
-          <h1>Welcome, {state.user?.firstName}!</h1>
+          <h1>Welcome, {state.firstName}!</h1>
           <p>Your ID is {state.userId}</p>
+          <UserButton />
         </div>
       )
     }
@@ -67,28 +65,23 @@ In the following example, the `userId` is passed to the Backend SDK's `getUser()
   </Tab>
 
   <Tab>
-    ```ts {{ filename: 'app/routes/api/example.ts' }}
-    import { getAuth } from '@clerk/tanstack-react-start/server'
+    ```ts {{ filename: 'src/routes/api/example.ts' }}
+    import { clerkClient, getAuth } from '@clerk/tanstack-react-start/server'
     import { json } from '@tanstack/react-start'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const Route = createAPIFileRoute('/api/example')({
-      GET: async ({ req, params }) => {
+    export const ServerRoute = createServerFileRoute('/api/example').methods({
+      GET: async ({ request, params }) => {
         // Use `getAuth()` to retrieve the user's ID
-        const { userId } = await getAuth(req)
+        const { userId } = await getAuth(request)
 
         // Protect the API route by checking if the user is signed in
         if (!userId) {
           return json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Instantiate the Backend SDK
-        const clerkClient = createClerkClient({
-          secretKey: import.meta.env.CLERK_SECRET_KEY,
-        })
-
         // Get the user's full `Backend User` object
-        const user = userId ? await clerkClient.users.getUser(userId) : null
+        const user = userId ? await clerkClient().users.getUser(userId) : null
 
         return json({ user })
       },

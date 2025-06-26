@@ -5,11 +5,17 @@ description: The Auth object contains information about the current user's sessi
 
 The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
 
+> [!NOTE]
+> The structure of the `Auth` object varies depending on the type of request.
+> For machine-authenticated requests (e.g. using an API key or OAuth token), the object reflects machine-level authentication data instead of user session details.
+>
+> If you're working with machine-authenticated requests, refer to the [Machine properties section](#machine-properties) for a detailed breakdown.
+
 ## How to access the `Auth` object
 
 <Include src="_partials/auth-object-table" />
 
-## Properties
+## Session properties
 
 <Properties>
   - `sessionId`
@@ -89,6 +95,13 @@ The `Auth` object contains important information like the current user's session
 
   ---
 
+  - `tokenType`
+  - `'session_token'`
+
+  The type of request to authenticate.
+
+  ---
+
   - `debug`
   - `AuthObjectDebug`
 
@@ -99,8 +112,8 @@ The `Auth` object contains important information like the current user's session
 
 The `has()` helper can be used to do two types of checks:
 
-- **Authorization:** Check if the user has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value.
-- **Reverification:** Check if the user has verified their credentials within a certain time frame and returns a boolean value.
+- **Authorization:** Check if the user has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value. For examples, see the [guide on verifying if a user is authorized](/docs/guides/authorization-checks).
+- **Reverification:** Check if the user has verified their credentials within a certain time frame and returns a boolean value. For examples, see the [guide on reverification](/docs/guides/reverification).
 
 ```ts
 function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
@@ -198,12 +211,6 @@ The `ReverificationConfig` type has the following properties:
   The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
 </Properties>
 
-#### Examples
-
-**Authorization:** For examples of how to use `has()` to check if a user has been granted a specific type of access control (role, permission, feature, or plan), see the [guide on verifying if a user is authorized](/docs/guides/authorization-checks).
-
-**Reverification:** For examples of how to use `has()` to check if a user has verified their credentials within a certain time frame, see the [guide on reverification](/docs/guides/reverification).
-
 ### `getToken()`
 
 `getToken()` retrieves the current user's [session token](/docs/backend-requests/resources/session-tokens) or a [custom JWT template](/docs/backend-requests/jwt-templates).
@@ -273,9 +280,9 @@ The `Auth` object is not available in the frontend. To use the `getToken()` meth
     ```ts {{ filename: 'app/routes/api/example.ts' }}
     import { getAuth } from '@clerk/tanstack-react-start/server'
     import { json } from '@tanstack/react-start'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const Route = createAPIFileRoute('/api/example')({
+    export const ServerRoute = createServerFileRoute().methods({
       GET: async ({ req, params }) => {
         const { userId, getToken } = await getAuth(req)
 
@@ -351,6 +358,7 @@ The following is an example of the `Auth` object without an active organization.
       iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
       jti: 'aee4d4a5071bdd66e21b',
       nbf: 1744735418,
+      pla: 'u:example-plan',
       role: 'authenticated',
       sid: 'sess_123',
       sub: 'user_123',
@@ -414,6 +422,7 @@ The following is an example of the `Auth` object with an active organization. No
         rol: 'admin',
         slg: 'example-org'
       },
+      pla: 'o:free_org',
       role: 'authenticated',
       sid: 'sess_123',
       sub: 'user_123',
@@ -561,3 +570,79 @@ The following is an example of the `Auth` object of a user without an MFA method
     ```
   </Tab>
 </Tabs>
+
+## Machine properties
+
+<Properties>
+  - `id`
+  - `string`
+
+  The ID of the machine.
+
+  ---
+
+  - `subject`
+  - `string`
+
+  The ID of the user or organization that the machine is associated with.
+
+  ---
+
+  - `name`
+  - `string`
+
+  The name of the machine. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `claims`
+  - `Record<string, unknown> | null`
+
+  The machine's claims. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `scopes`
+  - `string[]`
+
+  The scopes of the machine.
+
+  ---
+
+  - [`getToken()`](#get-token)
+  - `() => Promise<string>`
+
+  A function that gets the machine's token.
+
+  ---
+
+  - `tokenType`
+  - `'api_key' | 'oauth_token' | 'machine_token'`
+
+  The type of request to authenticate.
+
+  ---
+
+  - `debug`
+  - `AuthObjectDebug`
+
+  Used to help debug issues when using Clerk in development.
+</Properties>
+
+## `Auth` object example of a machine request
+
+The following is an example of the `Auth` object of an authenticated machine request (i.e. a request authenticated using a machine token like an API key).
+
+Notice the addition of a `tokenType` property with the value of 'api\_key', which distinguishes the request as a machine request rather than a user session. The `scopes` array defines the permissions granted by the token.
+
+```js {{ prettier: false }}
+{
+  id: 'oat_123',
+  tokenType: 'oauth_token',
+  userId: 'user_123',
+  clientId: 'client_123',
+  name: 'GitHub OAuth',
+  scopes: ['read', 'write'],
+  getToken: [AsyncFunction (anonymous)],
+}
+```

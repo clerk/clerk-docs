@@ -9,7 +9,7 @@ Clerk billing for B2B SaaS allows you to create plans and manage subscriptions *
 
 ## Create a plan
 
-Subscription plans are what your customers subscribe to. There is no limit to the number of plans you can create.
+Subscription plans are what your customers subscribe to. There is no limit to the number of plans you can create. If your Clerk instance has existing custom permissions, the corresponding features from those permissions will automatically be added to the free plan for orgs. This ensures that organization members get the same set of custom permissions when billing is enabled, because all organizations start on the free plan.
 
 To create a plan, navigate to the [**Plans**](https://dashboard.clerk.com/last-active?path=billing/plans) page in the Clerk Dashboard. Here, you can create, edit, and delete plans. To setup B2B billing, select the **Plans for Organizations** tab and select **Add Plan**. When creating a plan, you can also create features for the plan; see the next section for more information.
 
@@ -55,7 +55,9 @@ export default function Page() {
 
 ## Control access with features, plans, and permissions
 
-You can use Clerk's features, plans, and permissions to gate access to the content. There are a few ways to do this, but the recommended and simplest way is either using the [`has()`](/docs/references/backend/types/auth-object#has) method or the [`<Protect>`](/docs/components/protect) component.
+You can use Clerk's features, plans, and permissions to gate access to content using [**authorization checks**](/docs/guides/authorization-checks). There are a few ways to do this, but the recommended and simplest way is either using the [`has()`](/docs/references/backend/types/auth-object#has) method or the [`<Protect>`](/docs/components/protect) component.
+
+Permission-based authorization checks link with feature-based authorization checks. This means that if you are checking a custom permission, it will only work if the feature part of the permission key (`org:<feature>:<permission>`) **is a feature included in the organization's active plan**. For example, say you want to check if an organization member has the custom permission `org:teams:manage`, where `teams` is the feature. Before performing the authorization check, you need to ensure that the user's organization is subscribed to a plan that has the `teams` feature. If the user's organization is not subscribed to a plan that has the `teams` feature, the authorization check will always return `false`, even if the user has the custom permission.
 
 The `has()` method is available for any JavaScript framework, while `<Protect>` is only available for React-based frameworks.
 
@@ -76,6 +78,15 @@ const hasPremiumAccess = has({ feature: 'widgets' })
 ```
 
 The [`has()`](/docs/references/backend/types/auth-object#has) method checks if the organization has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value. It is available on the [`auth` object](/docs/references/backend/types/auth-object) on the server. Depending on the framework you are using, you will access the `auth` object differently.
+
+> [!TIP]
+> Why aren't custom permissions appearing in the session token (JWT) or in API responses (including the result of the `has()` check)?
+>
+> ---
+>
+> Custom permissions will only appear in the session token (JWT) and in API responses (including the result of the `has()` check) if the feature part of the permission key (`org:<feature>:<permission>`) **is a feature included in the organization's active plan**. If the feature is not part of the plan, the `has()` check for permissions using that feature will return `false`, and those permissions will not be represented in the session token.
+>
+> For example, say you want to check if an organization member has the custom permission `org:teams:manage`, where `teams` is the feature. The user's organization must be subscribed to a plan that has the `teams` feature for authorization checks to work. If the user's organization is not subscribed to a plan that has the `teams` feature, the authorization check will always return `false`, even if the user has the custom permission.
 
 The following example accesses the `auth` object and the `has()` method using the [Next.js-specific `auth()` helper](/docs/references/nextjs/auth).
 

@@ -80,7 +80,9 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     }
   }
 
-  watcher.subscribe(config.dataPath, handleParcelWatcherChange)
+  watcher.subscribe(config.dataPath, (err, events) => {
+    handleFilesChanged(['/docs/errors/backend-api.mdx', '/docs/errors/frontend-api.mdx'])
+  })
 
   if (config.redirects) {
     const staticDir = path.dirname(config.redirects.static.inputPath)

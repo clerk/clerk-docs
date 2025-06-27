@@ -841,6 +841,29 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
+  // Create a JSON file with all markdown content
+  const allContentMap: Record<string, string> = {}
+
+  await Promise.all(
+    mdxFiles.map(async (entry) => {
+      const filePath = entry.path.replace(/\\/g, '/') // Replace backslashes with forward slashes
+      const fullPath = path.join(config.distTempPath, entry.path)
+
+      try {
+        const content = await fs.readFile(fullPath, 'utf-8')
+        allContentMap[filePath] = content
+      } catch (error) {
+        console.warn(`Warning: Could not read file ${filePath}:`, error)
+      }
+    }),
+  )
+
+  await writeFile('all-content.json', JSON.stringify(allContentMap, null, 2))
+
+  console.info(`✓ Created all-content.json with ${Object.keys(allContentMap).length} markdown files`)
+
+  abortSignal?.throwIfAborted()
+
   if (staticRedirects !== null && dynamicRedirects !== null) {
     await writeRedirects(config, staticRedirects, dynamicRedirects)
     console.info('✓ Wrote redirects to disk')

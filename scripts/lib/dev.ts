@@ -60,6 +60,8 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
 
       const output = await buildFunc(newConfig, store, abortController.signal)
 
+      abortController = null
+
       if (config.flags.controlled) {
         console.info('---rebuild-complete---')
       }

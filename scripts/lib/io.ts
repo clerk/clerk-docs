@@ -5,6 +5,7 @@ import path from 'node:path'
 import type { BuildConfig } from './config'
 import readdirp from 'readdirp'
 import type { SDK } from './schemas'
+import { Store } from './store'
 
 // Read in a markdown file from the docs folder
 export const readMarkdownFile = async (filePath: string) => {
@@ -45,28 +46,28 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
 export type DocsFile = Awaited<ReturnType<ReturnType<typeof readDocsFolder>>>[number]
 
 // checks if a folder exists, if not it will be created
-export const ensureDirectory =
-  (config: BuildConfig) =>
-  async (dirPath: string): Promise<void> => {
-    try {
-      await fs.access(dirPath)
-    } catch {
-      await fs.mkdir(dirPath, { recursive: true })
-    }
+export const ensureDirectory = async (dirPath: string): Promise<void> => {
+  try {
+    await fs.access(dirPath)
+  } catch {
+    await fs.mkdir(dirPath, { recursive: true })
   }
+}
 
 // write a file to the dist (output) folder
-export const writeDistFile = (config: BuildConfig) => async (filePath: string, contents: string) => {
-  const ensureDir = ensureDirectory(config)
+export const writeDistFile = (config: BuildConfig, store: Store) => async (filePath: string, contents: string) => {
   const fullPath = path.join(config.distTempPath, filePath)
-  await ensureDir(path.dirname(fullPath))
+  await ensureDirectory(path.dirname(fullPath))
   await fs.writeFile(fullPath, contents, { encoding: 'utf-8' })
+  store.writtenFiles.set(filePath, contents)
 }
 
 // write a file to the dist (output) folder, inside the specified sdk folder
-export const writeSDKFile = (config: BuildConfig) => async (sdk: SDK, filePath: string, contents: string) => {
-  const writeFile = writeDistFile(config)
-  await writeFile(path.join(sdk, filePath), contents)
+export const writeSDKFile = (config: BuildConfig, store: Store) => {
+  const writeFile = writeDistFile(config, store)
+  return async (sdk: SDK, filePath: string, contents: string) => {
+    await writeFile(path.join(sdk, filePath), contents)
+  }
 }
 
 // not exactly io, but used to parse the json using a result patten

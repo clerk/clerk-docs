@@ -25,9 +25,10 @@ import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatt
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import { Prompt, checkPrompts } from './prompts'
+import { markDocumentDirty, type Store } from './store'
 
 export const parseInMarkdownFile =
-  (config: BuildConfig) =>
+  (config: BuildConfig, store: Store) =>
   async (
     file: DocsFile & { content?: string },
     partials: { path: string; content: string; node: Node }[],
@@ -36,6 +37,7 @@ export const parseInMarkdownFile =
     inManifest: boolean,
     section: WarningsSection,
   ) => {
+    const markDirty = markDocumentDirty(store)
     const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.fullFilePath)
 
     if (error !== null) {
@@ -69,8 +71,16 @@ export const parseInMarkdownFile =
           frontmatter = fm
         }),
       )
-      .use(checkPartials(config, partials, file, { reportWarnings: true, embed: false }))
-      .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }))
+      .use(
+        checkPartials(config, partials, file, { reportWarnings: true, embed: false }, (partial) => {
+          markDirty(file.filePath, partial)
+        }),
+      )
+      .use(
+        checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
+          markDirty(file.filePath, typedoc)
+        }),
+      )
       .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
       .process({
         path: file.relativeFilePath,

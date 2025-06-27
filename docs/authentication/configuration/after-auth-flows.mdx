@@ -3,9 +3,7 @@ title: Steps after sign-up/sign-in (after-auth flows)
 description: Learn how to configure your application to require users to complete specific actions after signing up or signing in.
 ---
 
-You can configure your application to require users to complete specific actions after signing up or signing in. Clerk refers to these steps as **after-auth flows**. Users who don't complete these required actions will have their session remain in a `pending` status, which, by default, is treated as a signed-out state.
-
-Once you have enabled an after-auth flow through the Clerk Dashboard, no further configuration or code is required. After-auth flows are embedded within the `<SignIn />` and `<SignUp>` components out-of-the-box. Currently, you cannot eject the after-auth flows to custom pages, but we're working on adding this capability.
+You can configure your application to require users to complete specific actions after signing up or signing in. Clerk refers to these steps as **after-auth flows**. Once you have enabled an after-auth flow through the Clerk Dashboard, no further configuration or code is required. After-auth flows are embedded within the `<SignIn />` and `<SignUp>` components out-of-the-box. Currently, you cannot eject the after-auth flows to custom pages, but we're working on adding this capability.
 
 ## Available after-auth flows
 
@@ -13,13 +11,24 @@ The following after-auth flows are available:
 
 - [Disable personal workspaces](/docs/organizations/overview#disable-personal-workspaces)
 
+## How after-auth flows work
+
+Once you have enabled an after-auth flow through the Clerk Dashboard, the sign-up/sign-in process looks like this:
+
+1. Users will use the `<SignUp />` and/or `<SignIn />` components to sign up or sign in. Once they have completed the authentication flow, such as entering their email address and password:
+   - Their session will be in a `pending` state and their session will be treated as signed-out. This means that Clerk's authentication context will treat the user's session as signed-out and they will not be able to access protected content or routes.
+   - They will be prompted to complete the after-auth flow.
+1. Once they have completed the after-auth flow, their session will move from `pending` to a `signed-in` state and they will be able to access protected content or routes.
+
 ## `pending` sessions
 
-A user's authentication state can be considered signed-in, signed-out, or pending. By default, **`pending` sessions are treated as signed-out** across control components and utilities. See the following sections for more information.
+A user's authentication state can be considered signed-in, signed-out, or pending. **By default, `pending` sessions are treated as signed-out** across Clerk's authentication context. This effects features that rely on the user's authentication state, like control components, the `useAuth()` hook, and server utilities that access the `auth` object, such as `getAuth()` or `request.auth`. However, you can set `treatPendingAsSignedOut` to `false` to treat `pending` sessions as signed-in. See the following sections for more information.
 
 ### Control components
 
 Control components manage authentication-related behaviors in your application. They handle tasks such as controlling content visibility based on user authentication status, managing loading states during authentication processes, and redirecting users to appropriate pages.
+
+Control components accept a `treatPendingAsSignedOut` prop, which defaults to `true`. You can pass `false` to treat `pending` sessions as signed-in.
 
 The following examples demonstrate how the different control components respond to `pending` sessions.
 
@@ -38,46 +47,6 @@ The following examples demonstrate how the different control components respond 
       )
     }
     ```
-  </Tab>
-
-  <Tab>
-    The [`<SignedOut />`](/docs/components/signed-out) component renders its children if the user's authentication state is signed-out.
-
-    In the following example, if the user's state is `pending`, they **will** see the content of the component because, by default, `pending` sessions are treated as signed-out.
-
-    ```tsx
-    export default function Page() {
-      return (
-        <SignedOut>
-          <p>Users that are signed-out or pending will see this.</p>
-        </SignedOut>
-      )
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    The [`<SignedIn />`](/docs/components/signed-in) component renders its children if the user's authentication state is signed-in.
-
-    In the following example, if the user's state is `pending`, they **won't** see the content of the component because, by default, `pending` sessions are treated as signed-out.
-
-    ```tsx
-    export default function Page() {
-      return (
-        <SignedIn>
-          <p>Users that are signed-in will see this.</p>
-        </SignedIn>
-      )
-    }
-    ```
-  </Tab>
-</Tabs>
-
-Control components accept a `treatPendingAsSignedOut` prop, which defaults to `true`. You can pass `false` to opt-out of this behavior and treat `pending` sessions as signed-in.
-
-<Tabs items={['<Protect />', '<SignedOut />', '<SignedIn />']}>
-  <Tab>
-    The [`<Protect />`](/docs/components/protect) component accepts a `treatPendingAsSignedOut` prop, which defaults to `true`. You can pass `false` to opt-out of this behavior and treat `pending` sessions as signed-in.
 
     In the following example, if the user's state is `pending`, they will see the protected content because `treatPendingAsSignedOut` is set to `false`.
 
@@ -98,6 +67,18 @@ Control components accept a `treatPendingAsSignedOut` prop, which defaults to `t
   <Tab>
     The [`<SignedOut />`](/docs/components/signed-out) component renders its children if the user's authentication state is signed-out.
 
+    In the following example, if the user's state is `pending`, they **will** see the content of the component because, by default, `pending` sessions are treated as signed-out.
+
+    ```tsx
+    export default function Page() {
+      return (
+        <SignedOut>
+          <p>Users that are signed-out or pending will see this.</p>
+        </SignedOut>
+      )
+    }
+    ```
+
     In the following example, if the user's state is `pending`, they **won't** see the content of the component because `treatPendingAsSignedOut` is set to `false`.
 
     ```tsx
@@ -114,12 +95,24 @@ Control components accept a `treatPendingAsSignedOut` prop, which defaults to `t
   <Tab>
     The [`<SignedIn />`](/docs/components/signed-in) component renders its children if the user's authentication state is signed-in.
 
-    In the following example, if the user's state is `pending`, they **will** see the content of the component because `treatPendingAsSignedOut` is set to `false`.
+    In the following example, if the user's state is `pending`, they **won't** see the content of the component because, by default, `pending` sessions are treated as signed-out.
 
     ```tsx
     export default function Page() {
       return (
         <SignedIn>
+          <p>Users that are signed-in will see this.</p>
+        </SignedIn>
+      )
+    }
+    ```
+
+    In the following example, if the user's state is `pending`, they **will** see the content of the component because `treatPendingAsSignedOut` is set to `false`.
+
+    ```tsx
+    export default function Page() {
+      return (
+        <SignedIn treatPendingAsSignedOut={false}>
           <p>Users that are signed-in or pending will see this.</p>
         </SignedIn>
       )
@@ -128,63 +121,25 @@ Control components accept a `treatPendingAsSignedOut` prop, which defaults to `t
   </Tab>
 </Tabs>
 
-### Server-side protections
+### Other Clerk utilities
 
-Once a user's session is in a `pending` state, server utilities, such as [`useAuth()`](/docs/hooks/use-auth) and [`auth()`](/docs/references/nextjs/auth), treat the session as signed-out by default. Those utilities accept a `treatPendingAsSignedOut` option that defaults to `true`. You can pass `false` to opt-out of this behavior and treat `pending` sessions as signed-in.
+Once a user's session is in a `pending` state, Clerk's authentication context treats the session as signed-out by default. For example, the `useAuth()` hook and any helpers that access the [`auth` object](/docs/references/backend/types/auth-object), such as `getAuth()` or `request.auth`, will return `null` if the user has a `pending` session. However, most of these utilities accept a `treatPendingAsSignedOut` option that defaults to `true`. You can pass `false` to treat `pending` sessions as signed-in.
 
 #### Example: Disable personal workspaces
 
-For example, if you've enabled the [disable personal workspaces](/docs/organizations/overview#disable-personal-workspaces) after-auth flow in the Clerk Dashboard, your users will be required to select or create an organization after signing up or signing in. If they haven't, their session will be in a `pending` state. Any pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
+For example, if you've enabled the [disable personal workspaces](/docs/organizations/overview#disable-personal-workspaces) after-auth flow in the Clerk Dashboard, **your users will be required to select or create an organization after signing up or signing in**. If they haven't, their session will be in a `pending` state. Any pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
 
-For `auth.protect()`, it would redirect `pending` users to the organization selection page so they can fulfill the after-auth requirements, and move their session to a `signed-in` state.
+For `useAuth()`, `userId` and `isSignedIn` will be `null` if the user has a `pending` session.
 
-```tsx {{ filename: 'middleware.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  // pending users won't be able to access protected routes
-  // and will be redirected to the organization selection page
-  if (isProtectedRoute(req)) await auth.protect()
-})
-```
-
-For `auth.userId()`, it would return `null` if the user has a `pending` session. In the following example, the user will be redirected to the sign-in page
-
-{/* TODO: Test and finish writing */}
-
-```tsx {{ filename: 'app/middleware.ts' }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth()
-
-  // `userId` won't be available if the user has a pending session
-  // without an organization
-  if (!userId && isProtectedRoute(req)) {
-    return redirectToSignIn()
-  }
-})
-```
-
-For `auth().userId`, it would return `null` if the user has a `pending` session.
-
-{/* TODO: Test and finish writing */}
-
-```tsx {{ filename: 'app/page.tsx' }}
-import { auth } from '@clerk/nextjs/server'
-
-export default async function Page() {
-  const { userId, orgId } = await auth()
+```tsx
+export default function Dashboard() {
+  const { isSignedIn, userId } = useAuth()
 
   if (!userId) {
     return (
       <p>
-        User has no session or a pending session meaning that it might not have an organization
-        selected
+        User has no session or a pending session. They either need to sign in, or they need to
+        fulfill the after-auth requirements by selecting or creating an organization.
       </p>
     )
   }
@@ -196,3 +151,80 @@ export default async function Page() {
   )
 }
 ```
+
+<If sdk="nextjs">
+  For `auth().userId`, it would return `null` if the user has a `pending` session.
+
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
+
+  export default async function Page() {
+    const { userId, orgId } = await auth()
+
+    if (!userId) {
+      return (
+        <p>
+          User has no session or a pending session. They either need to sign in, or they need to
+          fulfill the after-auth requirements by selecting or creating an organization.
+        </p>
+      )
+    }
+
+    return (
+      <p>
+        <p>User has a valid session and {orgId} is defined</p>
+      </p>
+    )
+  }
+  ```
+
+  For `auth.protect()`, signed-out users will be redirected to the sign-in page. So, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to a `signed-in` state.
+
+  ```tsx {{ filename: 'middleware.ts', mark: [[6, 8]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    // pending users won't be able to access protected routes
+    // and will be redirected to the sign-in page
+    if (isProtectedRoute(req)) await auth.protect()
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+
+  For `auth.userId()`, it would return `null` if the user has a `pending` session. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to a `signed-in` state.
+
+  ```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    const { userId, redirectToSignIn } = await auth()
+
+    // pending users will not have a `userId`
+    // and will be redirected to the sign-in page
+    if (!userId && isProtectedRoute(req)) {
+      return redirectToSignIn()
+    }
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+</If>

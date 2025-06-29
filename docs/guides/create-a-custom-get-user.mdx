@@ -1,0 +1,180 @@
+---
+title: Create a custom getUser function
+description: Build
+---
+
+It can be a bit daunting when getting stated with Clerk on how to make your user data work for you. Bringing Clerk into your application can very easily bring in a split brain situation where managing user data can get complicated (and slow).
+
+Clerk supports a handful of different ways to manage this disconnect. A lot of people turn to using webhooks to sync the Clerk user data in to their own databases, but this can introduce some out of sync issues.
+
+Here we are going to take a different approach, building on top of Clerk's `auth()` function we are going to create our own function. I'm going to call it `getUser` for simplicity, but feel free to use `authenticateUser`, `authRequest`, `fetchUser`, `verifyAuth` or whatever floats your boat.
+
+To get started, we will simply call `auth()` and pull out what we need.
+
+```ts
+// Different Clerk SDKs have different ways import and call `auth()`
+import { auth } from '@clerk/nextjs'
+
+export const getUser = async () => {
+  // I highly recommend taking some time to understand all the methods
+  // and properties this function returns, `has()` is useful for permission
+  // checks, and `getToken()` is great for authenticating external api calls
+  // Alongside `userId`, you'll likely want `orgId` in a b2b setup
+  const { isAuthenticated, userId } = await auth()
+
+  if (!isAuthenticated) {
+    // This is our first major option, and we have many choices
+
+    // A common option is going to be to `throw new Error('Unauthorized')`
+    // ensuring that we can only continue if the user is logged in.
+
+    // But if we are using a framework we may want to `throw new TRPCError()`
+    // or call `unauthorized()` (https://nextjs.org/docs/app/api-reference/functions/unauthorized)
+
+    // A more advanced pattern is to throw a response
+    // `throw new Response("Unauthorized", { status: 401 })`
+    // Using a higher level function to catch and return the response object.
+
+    // If we are using EffectTS we may want to return an Error object
+
+    // Or simply we can just return null, signifying that user can't be
+    // authenticated, letting the request handler do what it wants with
+    // that information
+    return null
+  }
+
+  return {
+    // For now we simply want to return the user identifier.
+    userId,
+  }
+}
+```
+
+Feel free to use this inside a server action, rsc component, a api route, and anywhere else we run code on the server side. But we aren't looking at a particularly helpful return object so lets truck on.
+
+It is not uncommon that Clerk support get's a request to raise our rate limits as someones application is hitting them and causing issues. Commonly it's being the application is abusing `currentUser()`, calling it in every request made to their backend. While this function is useful, giving you all of the users data, that also means we need to limit it's use to stop our infra being overrun.
+
+So you may ask, well how the hell do I get my users data than? Well it's simply, we just need to modify the session token.
+
+1. Head over to [Sessions](https://dashboard.clerk.com/~/sessions) on the dashboard and scroll down to "Customize session token"
+1. Update the claims (if they are not already set to something) to simply include the users email:
+
+```json
+{
+  "email": "{{user.primary_email_address}}"
+}
+```
+
+3. Back at our custom `getUser` function, lets pull something new out of the `auth()` return
+
+```ts
+import { auth } from '@clerk/nextjs'
+
+export const getUser = async () => {
+  // Extract out `sessionClaims` from the `auth()` call for us to use
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  return {
+    userId,
+
+    // for now let's just return it
+    sessionClaims,
+  }
+}
+```
+
+Looking at the return from our custom `getUser()` we will see
+
+```json {{ mark: [8] }}
+{
+  "userId": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+  "sessionClaims": {
+    "azp": "http://localhost:3001",
+    // Here we have it, because we configured in the dashboard to include the
+    // users email, it shows up here, no network request to clerks infra
+    // needed, no rate limits.
+    "email": "your-email@example.me",
+    "exp": 1751214847,
+    "fva": [137, -1],
+    "iat": 1751214787,
+    "iss": "https://awake-cobra-28.clerk.accounts.dev",
+    "jti": "002332cec9e6fb9c9efd",
+    "nbf": 1751214777,
+    "sid": "sess_2zBZjlFCRMOq1LSDOcJwMBAzQSR",
+    "sub": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+    "v": 2
+  }
+}
+```
+
+4. But you may have noticed in your ide that typescript doesn't know that `email` is a key (and what its value is) on the `sessionClaims` object, well theres a trick to fix that.
+
+```ts {{ filename: 'types.d.ts' }}
+declare global {
+  interface CustomJwtSessionClaims {
+    // If you have clerk configured that users can sign up without their email,
+    // you'll want to make the type `string | undefined` to ensure the types
+    // aren't lying.
+    email: string
+    // don't worry about adding the types of the other data we see in
+    // `sessionClaims` above, the Clerk types have already covered that for us
+  }
+}
+
+export {}
+```
+
+By simply creating this file in the root of your project, typescript will pick up and keep us type-safe.
+
+5. Ok so let's go back to our growing `getUser()` function and refine down the return type
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  // Now that sessionClaims is type safe, we are free to extract out our `email`
+  // property, if you marked it as optional you may want to add in a if check.
+  const { email } = sessionClaims
+
+  return {
+    userId,
+    // Return the users email ready to be used.
+    email,
+  }
+}
+```
+
+## Reading and writing custom user data.
+
+This is cool and all, reducing network requests will keep our application quick and reduces dependency on Clerk infra being available. But as soon as we need to attach a `stripeCustomerId` or a `australianBusinessNumber` your out of luck, right?
+
+Wrong, Clerk has `metadata`, in-fact we have three types, `unsafe`, `private`, and `public`. These live on the user object, are separate and private between users, and let us store any kind of information we want. For each type of metadata, per user we have 4kb of available json, to put that in human terms that's about 2 to 3 pages of text, or about 1,000 words.
+
+Before we get in to the code, we need to choice which variant of `metadata` we want to use:
+
+- `unsafe` - Sounds scary! all this means is the user can edit this themselves, they can put anything they want in here, can't really trust this data on the server otherwise you open yourself to security risks.
+- `private` - This is the most secure, it can only be written and read from your server using the `clerkClient`, but this means it can't be included in the session token, as then the user would be able to read it.
+- `public` - Unlike the unsafe metadata, public metadata can't be written by the user directly, but unlike private, this can be read by the user, allowing it to be included in the session token!
+
+So we can't use `private` for what we need, so it's up to you to choice between `unsafe` and `public` but for my use I am going to go with `public`, as I don't trust the user.
+
+1. We need to update the Session Token in the dashboard
+
+- Back on the [Sessions](https://dashboard.clerk.com/~/sessions) page, update it to include `{{user.public_metadata}}`, you can remove email if you don't want it anymore. 
+
+```json
+  {
+    "email": "{{user.primary_email_address}}",
+    // You can call this whatever you'd like,
+    // I went with 'details' but it's completely up to you
++   "details": "{{user.public_metadata}}"
+  }
+```
+
+2. 

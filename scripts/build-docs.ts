@@ -47,6 +47,7 @@ import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import { z } from 'zod'
+import symlinkDir from 'symlink-dir'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -299,7 +300,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       ? apiErrorsFiles.map(async (file) => {
           const inManifest = docsInManifest.has(file.href)
 
-          const markdownFile = await parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs')
+          const markdownFile = await markdownCache(file.filePath, () =>
+            parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+          )
 
           docsMap.set(file.href, markdownFile)
 
@@ -871,13 +874,6 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
-  if (config.publicPath) {
-    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
-    console.info('✓ Copied public assets to dist')
-  }
-
-  abortSignal?.throwIfAborted()
-
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
@@ -905,6 +901,16 @@ template: wide
     await fs.rm(config.distTempPath, { recursive: true })
   } else {
     await fs.rename(config.distTempPath, config.distFinalPath)
+  }
+
+  abortSignal?.throwIfAborted()
+
+  if (config.publicPath) {
+    if (config.flags.watch) {
+      await symlinkDir(config.publicPath, path.join(config.distFinalPath, '_public'))
+    } else {
+      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
+    }
   }
 
   abortSignal?.throwIfAborted()

@@ -131,6 +131,7 @@ Once the `@clerk/localizations` package is installed, you can import the localiz
 
   <Tab>
     ```js {{ filename: 'astro.config.mjs', mark: [2, 3, 8] }}
+    import { defineConfig } from 'astro/config'
     import clerk from '@clerk/astro'
     // fr-FR locale is imported as frFR
     import { frFR } from '@clerk/localizations'
@@ -298,26 +299,211 @@ You can also provide your own localizations for the Clerk components. This is us
 
 ### Example usage: Custom UI text
 
-You can customize the text of UI elements by passing a `localization` prop to the [`<ClerkProvider>`](/docs/components/clerk-provider) with the relevant keys. In the following example, the `socialButtonsBlockButton` key is customized to change the text of the social sign-in button.
+You can customize the text of Clerk's components by providing a **localization** object using the integration method that matches your framework or SDK. This object lets you define specific keys for different Clerk components and assign them custom message strings.
 
-```tsx {{ filename: 'app/layout.tsx' }}
-import { ClerkProvider } from '@clerk/nextjs'
-import './globals.css'
+In the following examples, the `socialButtonsBlockButton` key is customized to change the text of the social sign-in button.
 
-const localization = {
-  socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
-}
+<Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+  <Tab>
+    The localization object is passed to the `localization` prop on the `<ClerkProvider>`.
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider localization={localization}>
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 6], 10] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import './globals.css'
+
+      const localization = {
+        socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+      }
+
+      export default function RootLayout({ children }: { children: React.ReactNode }) {
+        return (
+          <ClerkProvider localization={localization}>
+            <html lang="en">
+              <body>{children}</body>
+            </html>
+          </ClerkProvider>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: '_app.tsx', mark: [[4, 6], 11] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import type { AppProps } from 'next/app'
+
+      const localization = {
+        socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+      }
+
+      function MyApp({ Component, pageProps }: AppProps) {
+        return (
+          // Add the localization prop to the ClerkProvider
+          <ClerkProvider localization={localization} {...pageProps}>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        )
+      }
+
+      export default MyApp
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop on the [`clerk()`](/docs/references/astro/overview) integration.
+
+    ```tsx {{ filename: 'astro.config.mjs', mark: [[7, 9]] }}
+    import { defineConfig } from 'astro/config'
+    import clerk from '@clerk/astro'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          localization: {
+            socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+          },
+        }),
+      ],
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop on the [`clerk.load()`](/docs/references/javascript/clerk#load) method.
+
+    Use the following tabs to view the code necessary for each file.
+
+    <CodeBlockTabs options={["main.js", "index.html"]}>
+      ```js {{ filename: 'main.js', mark: [[6, 10]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        localization: {
+          socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+        },
+      })
+
+      if (clerk.user) {
+        document.getElementById('app').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userButtonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userButtonDiv)
+      } else {
+        document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
+
+        const signInDiv = document.getElementById('sign-in')
+
+        clerk.mountSignIn(signInDiv)
+      }
+      ```
+
+      ```html {{ filename: 'index.html' }}
+      <!doctype html>
       <html lang="en">
-        <body>{children}</body>
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
       </html>
-    </ClerkProvider>
-  )
-}
-```
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop in the [`ClerkApp`](/docs/references/remix/clerk-app) options.
+
+    ```tsx {{ filename: 'app/root.tsx', mark: [[37, 41]] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
+    // Import ClerkApp
+    import { ClerkApp } from '@clerk/remix'
+
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
+
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
+
+    export default ClerkApp(App, {
+      localization: {
+        socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop within the [`clerkPlugin()`](/docs/references/vue/overview) integration.
+
+    ```ts {{ filename: 'src/main.ts', mark: [[7, 9]] }}
+    import { createApp } from 'vue'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      localization: {
+        socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+      },
+    })
+    app.mount('#app')
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop under the `clerk` property in the [`defineNuxtConfig()`](/docs/references/nuxt/clerk-middleware) integration.
+
+    ```ts {{ filename: 'nuxt.config.ts', mark: [[4, 6]] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt'],
+      clerk: {
+        localization: {
+          socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
 
 To find the key for your translation (like the `socialButtonsBlockButton` from the code example below), open up our [English localization file](https://github.com/clerk/javascript/blob/main/packages/localizations/src/en-US.ts). Search the file for the term that you want to customize.
 
@@ -389,27 +575,232 @@ const localization = {
 
 ### Example usage: Custom error messages
 
-You can customize Clerk's default error messages by adding an `unstable__errors` object inside the `localization` prop. You can then pass to this object specific error keys corresponding to different error types and assign them custom message strings. In the following example, the `form_identifier_not_found` error message is customized to display a more user-friendly message when a user tries to sign in with an account that does not exist in your Clerk instance.
+You can customize Clerk's default error messages by adding an `unstable__errors` object inside the **localization** object. This object lets you define specific error keys for different error types and assign them custom message strings.
 
-```tsx {{ filename: 'app/layout.tsx' }}
-import { ClerkProvider } from '@clerk/nextjs'
-import './globals.css'
+In the following examples, a custom `not_allowed_access` error message is defined in a localization object under the `unstable__errors` key. This message appears when a user tries to sign in with an email domain that isn't allowed to access your application.
 
-const localization = {
-  unstable__errors: {
-    form_identifier_not_found: "We couldn't find an account with that email. Please try again.",
-  },
-}
+<Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+  <Tab>
+    The localization object is passed to the `localization` prop on the `<ClerkProvider>`.
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider localization={localization}>
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 9], 14] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import './globals.css'
+
+      const localization = {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      }
+
+      export default function RootLayout({ children }: { children: React.ReactNode }) {
+        return (
+          // Add the localization prop to the ClerkProvider
+          <ClerkProvider localization={localization}>
+            <html lang="en">
+              <body>{children}</body>
+            </html>
+          </ClerkProvider>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: '_app.tsx', mark: [[4, 9], 14] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import type { AppProps } from 'next/app'
+
+      const localization = {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      }
+
+      function MyApp({ Component, pageProps }: AppProps) {
+        return (
+          // Add the localization prop to the ClerkProvider
+          <ClerkProvider localization={localization} {...pageProps}>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        )
+      }
+
+      export default MyApp
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop on the [`clerk()`](/docs/references/astro/overview) integration.
+
+    ```tsx {{ filename: 'astro.config.mjs', mark: [[7, 12]] }}
+    import { defineConfig } from 'astro/config'
+    import clerk from '@clerk/astro'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          localization: {
+            unstable__errors: {
+              not_allowed_access:
+                'Send us an email if you want your corporate email domain allowlisted for access',
+            },
+          },
+        }),
+      ],
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop on the [`clerk.load()`](/docs/references/javascript/clerk#load) method.
+
+    Use the following tabs to view the code necessary for each file.
+
+    <CodeBlockTabs options={["main.js", "index.html"]}>
+      ```js {{ filename: 'main.js', mark: [[6, 13]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        localization: {
+          unstable__errors: {
+            not_allowed_access:
+              'Send us an email if you want your corporate email domain allowlisted for access',
+          },
+        },
+      })
+
+      if (clerk.user) {
+        document.getElementById('app').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userButtonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userButtonDiv)
+      } else {
+        document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
+
+        const signInDiv = document.getElementById('sign-in')
+
+        clerk.mountSignIn(signInDiv)
+      }
+      ```
+
+      ```html {{ filename: 'index.html' }}
+      <!doctype html>
       <html lang="en">
-        <body>{children}</body>
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
       </html>
-    </ClerkProvider>
-  )
-}
-```
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop in the [`ClerkApp`](/docs/references/remix/clerk-app) options.
+
+    ```tsx {{ filename: 'app/root.tsx', mark: [[37, 44]] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
+    // Import ClerkApp
+    import { ClerkApp } from '@clerk/remix'
+
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
+
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
+
+    export default ClerkApp(App, {
+      localization: {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop within the [`clerkPlugin()`](/docs/references/vue/overview) integration.
+
+    ```ts {{ filename: 'src/main.ts', mark: [[7, 12]] }}
+    import { createApp } from 'vue'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      localization: {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      },
+    })
+    app.mount('#app')
+    ```
+  </Tab>
+
+  <Tab>
+    The localization object is passed to the `localization` prop under the `clerk` property in the [`defineNuxtConfig()`](/docs/references/nuxt/clerk-middleware) integration.
+
+    ```ts {{ filename: 'nuxt.config.ts', mark: [[4, 9]] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt'],
+      clerk: {
+        localization: {
+          unstable__errors: {
+            not_allowed_access:
+              'Send us an email if you want your corporate email domain allowlisted for access',
+          },
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
 
 You can find the full list of error keys in the [English localization file](https://github.com/clerk/javascript/blob/main/packages/localizations/src/en-US.ts). Search for the `unstable__errors` object to find the keys you can customize.

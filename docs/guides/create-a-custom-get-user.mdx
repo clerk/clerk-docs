@@ -150,7 +150,7 @@ export const getUser = async () => {
 }
 ```
 
-## Reading and writing custom user data.
+## Custom user data.
 
 This is cool and all, reducing network requests will keep our application quick and reduces dependency on Clerk infra being available. But as soon as we need to attach a `stripeCustomerId` or a `australianBusinessNumber` your out of luck, right?
 
@@ -166,7 +166,7 @@ So we can't use `private` for what we need, so it's up to you to choice between 
 
 1. We need to update the Session Token in the dashboard
 
-- Back on the [Sessions](https://dashboard.clerk.com/~/sessions) page, update it to include `{{user.public_metadata}}`, you can remove email if you don't want it anymore. 
+Back on the [Sessions](https://dashboard.clerk.com/~/sessions) page, update it to include `{{user.public_metadata}}`, you can remove email if you don't want it anymore.
 
 ```json
   {
@@ -177,4 +177,149 @@ So we can't use `private` for what we need, so it's up to you to choice between 
   }
 ```
 
-2. 
+2. To keep everything aligned we will start by updating our magical types.d.ts file
+
+```ts {{ filename: 'types.d.ts' }}
+  declare global {
+    interface CustomJwtSessionClaims {
+      email: string
++     details: {
++       favoriteSnack?: string
++       favoriteMovie?: string
++     }
+    }
+  }
+
+  export {}
+```
+
+Not only do we define that 'details' exists on the users session, but we can now actually in our codebase define our own user data. We no longer need to go over to the dashboard to manage what data we want, it's entirely within our app.
+
+I would start by defining these properties as optional, as any existing users won't have them set. If you're so inclined you could run a migration script to pull the data from say your database and put it in each users metadata, then update the types to make it not optional.
+
+This is a standard json object, so stay away from types that can't be json parsed, eg dates, maps, and sets.
+
+3. Let's update our `getUser()` to now extract and return our custom user data
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  // Just like the email property we added to the custom session, we now can
+  // pull out the `details` property for our use. The magic here is we get
+  // access to this data without any network request to Clerk's infra.
+  // So your website stays fast.
+  const { email, details } = sessionClaims
+
+  // With the details property, we have a couple different options for
+  // how we want to return it.
+
+  // This is the safest option, as we have no risk that a property
+  // inside `details` could conflict with a `userId` or `email`
+  // but it means you'll need to access it one layer deeper
+  // eg user.details.favoritePizza
+  return {
+    userId,
+    email,
+    details,
+  }
+
+  // I wouldn't recommend this option, in the future a developer
+  // may add `email` to the custom metadata by accident
+  // and this would overwrite the users email we are expecting
+  // Clerk to manage for us
+  return {
+    userId,
+    email,
+    ...details,
+  }
+
+  // For me this is the happy middle ground, it keeps the data access
+  // short (eg user.favoritePizza) but doesn't let us accidentally
+  // overright the other properties we are expecting
+  return {
+    ...details,
+    userId,
+    email,
+  }
+}
+```
+
+4. Success!
+
+Depending on which return you picked above, we will get something along these lines.
+
+```json
+{
+  "favoritePizza": "Pepperoni",
+  "favoriteSnack": "Oreos",
+  "userId": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+  "email": "clerk-test@wylynko.me"
+}
+```
+
+Our beautiful `getUser()` function gives us both our standard Clerk info (emails, phone numbers, usernames, etc) and has our custom user data.
+
+## Writing the custom user data
+
+Ok, but we can't spend all day writing the users metadata in the dashboard manually, so how do we update it as we need?
+
+This can be achieved in a couple ways, but for a clean api of our `getUser()` function, my thought is we will return an `update()` function.
+
+```ts
+// We will start by bringing in the `clerkClient`, this can change between Clerk SDKs
+import { auth, clerkClient } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  const { email, details } = sessionClaims
+
+  // Bit of function inception here, we are defining our own update function
+  // inside the getUser function, but trust me, this is perfectly natural
+
+  // One cool typescript trick, We can simply use the typescript tool `typeof`
+  // to extract out our custom type from the types.d.ts, instead of having to 
+  // re-define the type here.
+  const update = async (newDetails: Partial<typeof details>) => {
+    // We are going to need to call the clerk backend api, so we will start by
+    // instantiating it ready for our use. Despite the await here, this is
+    // simply for a dynamic import, no network fetch yet.
+    // `clerkClient()` will pick up our clerk environment variables automatically
+    // no need to pass them in here.
+    const clerk = await clerkClient()
+
+    // Finally we update the metadata, This function actually returns the full
+    // user object (same as calling currentUser()) so we can use that if we want
+    await clerk.users.updateUserMetadata(userId, {
+      // Since we picked public metadata earlier at the start we want to update that
+      publicMetadata: {
+        // Here I am spreading in the existing details first, so any values not
+        // getting updated, won't get deleted
+        ...details,
+        // And second I am spreading in the new details, overwriting or adding
+        // as need be.
+        ...newDetails,
+      },
+    })
+  }
+
+  return {
+    ...details,
+    userId,
+    email,
+
+    // And lets just return our `update()` function ready to be used.
+    update,
+  }
+}
+```
+
+## Using the function
+## Using with a database

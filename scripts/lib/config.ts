@@ -43,6 +43,10 @@ type BuildConfigOptions = {
     inputPath: string
     outputPath: string
   }
+  llms?: {
+    overviewPath?: string
+    fullPath?: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
@@ -125,6 +129,13 @@ export async function createConfig(config: BuildConfigOptions) {
             inputPathRelative: config.prompts.inputPath,
             outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
             outputPathRelative: config.prompts.outputPath,
+          }
+        : null,
+
+      llms: config.llms
+        ? {
+            overviewPath: config.llms.overviewPath,
+            fullPath: config.llms.fullPath,
           }
         : null,
 

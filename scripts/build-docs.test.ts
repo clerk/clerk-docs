@@ -1039,8 +1039,8 @@ title: Quickstart
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'quickstart/react.mdx' },
-      { path: 'quickstart/vue.mdx' },
+      { path: 'quickstart/react.mdx', url: '/docs/quickstart/react' },
+      { path: 'quickstart/vue.mdx', url: '/docs/quickstart/vue' },
     ])
 
     const distFiles = await treeDir(pathJoin('./dist'))
@@ -1086,9 +1086,9 @@ Testing with a simple page.`,
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'simple-test.mdx' },
-      { path: '~/simple-test.mdx' },
-      { path: 'react/simple-test.mdx' },
+      { path: 'simple-test.mdx', url: '/docs/simple-test' },
+      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
+      { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
     ])
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
@@ -1153,11 +1153,11 @@ Testing with a simple page.`,
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
-      { path: 'simple-test.mdx' },
-      { path: '~/simple-test.mdx' },
-      { path: 'vue/simple-test.mdx' },
-      { path: 'react/simple-test.mdx' },
-      { path: 'astro/simple-test.mdx' },
+      { path: 'simple-test.mdx', url: '/docs/simple-test' },
+      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
+      { path: 'vue/simple-test.mdx', url: '/docs/vue/simple-test' },
+      { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
+      { path: 'astro/simple-test.mdx', url: '/docs/astro/simple-test' },
     ])
 
     const distFiles = await treeDir(pathJoin('./dist'))
@@ -2303,6 +2303,57 @@ title: Core Page
 
     expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
       `<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Swap out links for <SDKLink /> when a link points to a sdk manifest filtered page', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'nextjs',
+                sdk: ['nextjs'],
+                items: [[{ title: 'SDK Filtered Page', href: '/docs/reference/nextjs/sdk-filtered-page' }]],
+              },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/reference/nextjs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+---
+
+SDK filtered page`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+---
+
+# Core page
+
+[SDK Filtered Page](/docs/reference/nextjs/sdk-filtered-page)
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
+      `<SDKLink href="/docs/reference/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
     )
   })
 
@@ -4576,5 +4627,85 @@ describe('API Errors Generation', () => {
     // Error status codes
     expect(bapi).toContain('Status Code: 400')
     expect(fapi).toContain('Status Code: 400')
+  })
+})
+
+describe('LLMs', () => {
+  test('Should output llms.txt overview', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        llms: {
+          overviewPath: 'llms.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms.txt')).toEqual(`# Clerk
+
+## Docs
+
+- [API Documentation]({{SITE_URL}}/docs/api-doc)`)
+  })
+
+  test('Should output llms-full.txt full pages', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        llms: {
+          fullPath: 'llms-full.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/llms-full.txt')).toEqual(`---
+title: API Documentation
+description: Generated API docs
+---
+
+# API Documentation
+`)
   })
 })

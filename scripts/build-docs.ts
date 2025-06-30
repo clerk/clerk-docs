@@ -47,6 +47,7 @@ import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import { z } from 'zod'
+import symlinkDir from 'symlink-dir'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -82,6 +83,7 @@ import {
 } from './lib/redirects'
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -152,6 +154,10 @@ async function main() {
       collapseDefault: false,
       hideTitleDefault: false,
     },
+    llms: {
+      overviewPath: '_llms/llms.txt',
+      fullPath: '_llms/llms-full.txt',
+    },
     flags: {
       watch: args.includes('--watch'),
       controlled: args.includes('--controlled'),
@@ -183,7 +189,6 @@ async function main() {
 
 export async function build(config: BuildConfig, store: Store = createBlankStore(), abortSignal?: AbortSignal) {
   // Apply currying to create functions pre-configured with config
-  const ensureDir = ensureDirectory(config)
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
@@ -191,16 +196,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config, store)
-  const writeFile = writeDistFile(config)
-  const writeSdkFile = writeSDKFile(config)
+  const writeFile = writeDistFile(config, store)
+  const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
+  const scopeHref = scopeHrefToSDK(config)
 
   abortSignal?.throwIfAborted()
 
-  await ensureDir(config.distFinalPath)
+  await ensureDirectory(config.distFinalPath)
 
   abortSignal?.throwIfAborted()
 
@@ -295,7 +301,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       ? apiErrorsFiles.map(async (file) => {
           const inManifest = docsInManifest.has(file.href)
 
-          const markdownFile = await parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs')
+          const markdownFile = await markdownCache(file.filePath, () =>
+            parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+          )
 
           docsMap.set(file.href, markdownFile)
 
@@ -397,7 +405,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
     { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
-    async (item, tree) => item,
+    async (item, tree) => {
+      const doc = docsMap.get(item.href)
+
+      if (doc && doc.sdk === undefined && item.sdk !== undefined) {
+        docsMap.set(item.href, { ...doc, sdk: item.sdk })
+      }
+
+      return item
+    },
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
@@ -569,15 +585,25 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     JSON.stringify({
       navigation: await traverseTree(
         { items: sdkScopedManifest },
-        async (item) => ({
-          title: item.title,
-          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-          tag: item.tag,
-          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-          icon: item.icon,
-          target: item.target,
-          sdk: item.sdk,
-        }),
+        async (item) => {
+          const doc = docsMap.get(item.href)
+
+          const injectSDK =
+            doc?.frontmatter?.sdk !== undefined &&
+            doc.frontmatter.sdk.length >= 1 &&
+            !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
+            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`)
+
+          return {
+            title: item.title,
+            href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
+            tag: item.tag,
+            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+            icon: item.icon,
+            target: item.target,
+            sdk: item.sdk,
+          }
+        },
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
@@ -824,7 +850,12 @@ template: wide
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
     .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
-    .map((path) => ({ path }))
+    .map((path) => ({
+      path,
+      url: `${config.baseDocsLink}${removeMdxSuffix(path)
+        .replace(/^index$/, '') // remove root index
+        .replace(/\/index$/, '')}`, // remove /index from the end,
+    }))
 
   await writeFile('directory.json', JSON.stringify(mdxFilePaths))
 
@@ -846,9 +877,18 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
-  if (config.publicPath) {
-    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
-    console.info('✓ Copied public assets to dist')
+  if (config.llms?.fullPath || config.llms?.overviewPath) {
+    const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
+
+    if (config.llms?.fullPath) {
+      const llmsFull = await generateLLMsFull(outputtedDocsFiles)
+      await writeFile(config.llms.fullPath, llmsFull)
+    }
+
+    if (config.llms?.overviewPath) {
+      const llms = await generateLLMs(outputtedDocsFiles)
+      await writeFile(config.llms.overviewPath, llms)
+    }
   }
 
   abortSignal?.throwIfAborted()
@@ -880,6 +920,16 @@ template: wide
     await fs.rm(config.distTempPath, { recursive: true })
   } else {
     await fs.rename(config.distTempPath, config.distFinalPath)
+  }
+
+  abortSignal?.throwIfAborted()
+
+  if (config.publicPath) {
+    if (config.flags.watch) {
+      await symlinkDir(config.publicPath, path.join(config.distFinalPath, '_public'))
+    } else {
+      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
+    }
   }
 
   abortSignal?.throwIfAborted()

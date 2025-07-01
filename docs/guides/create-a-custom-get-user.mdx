@@ -285,7 +285,7 @@ export const getUser = async () => {
   // inside the getUser function, but trust me, this is perfectly natural
 
   // One cool typescript trick, We can simply use the typescript tool `typeof`
-  // to extract out our custom type from the types.d.ts, instead of having to 
+  // to extract out our custom type from the types.d.ts, instead of having to
   // re-define the type here.
   const update = async (newDetails: Partial<typeof details>) => {
     // We are going to need to call the clerk backend api, so we will start by
@@ -328,112 +328,104 @@ With our custom `getUser()` we can use it anywhere on the server to power our ap
 ### On a page load
 
 ```ts
-import { getUser } from "~/lib/get-user"
+import { getUser } from '~/lib/get-user'
 
 export default async function UserPage() {
-  const user = await getUser();
+  const user = await getUser()
 
-  if (!user) return <span>Unauthenticated :(</span>;
+  if (!user) return <span>Unauthenticated :(</span>
 
   return (
     <div>
       <h1>Welcome {user.email}</h1>
-      {user.favoritePizza ? (
-        <span>I hear your favorite pizza is {user.favoritePizza}</span>
-      ) : null}
+      {user.favoritePizza ? <span>I hear your favorite pizza is {user.favoritePizza}</span> : null}
     </div>
-  );
+  )
 }
 ```
 
 ### In a server action
 
 ```ts
-"use server"
+'use server'
 
-import { getUser } from "~/lib/get-user"
+import { getUser } from '~/lib/get-user'
 
-export const processPizzaOrder = async (
-  pizzaChoice: "pepperoni" | "barbecue" | "chicken"
-) => {
-  const user = await getUser();
+export const processPizzaOrder = async (pizzaChoice: 'pepperoni' | 'barbecue' | 'chicken') => {
+  const user = await getUser()
 
   if (user === null) {
     return {
-      error: "Unauthenticated",
-    };
+      error: 'Unauthenticated',
+    }
   }
 
   user.update({
     favoritePizza: pizzaChoice,
-  });
-};
+  })
+}
 ```
 
 ### In a api route
 
 ```ts
 // I am using zod for validation here, but you can use whatever you want
-import { z } from "zod";
-import { getUser } from "~/lib/get-user";
+import { z } from 'zod'
+import { getUser } from '~/lib/get-user'
 
 // In Get requests, you typically don't want to modify any data,
 // so we aren't going to use the `update()` function here.
 export const GET = async (request: Request) => {
-  const user = await getUser();
+  const user = await getUser()
 
   if (user === null) {
     // You may want to fail more gracefully here,
     // for example redirecting to a login page.
     // or returning `We don't know your favorite snack`
-    return new Response("Unauthenticated", { status: 401 });
+    return new Response('Unauthenticated', { status: 401 })
   }
 
-  return new Response(
-    `${user.email}'s favorite snack is ${user.favoriteSnack}`
-  );
-};
+  return new Response(`${user.email}'s favorite snack is ${user.favoriteSnack}`)
+}
 
 const bodySchema = z.object({
   snack: z
     .string()
     .min(1, {
-      message: "Snack is required",
+      message: 'Snack is required',
     })
     .max(20, {
-      message: "Snack must be less than 20 characters",
+      message: 'Snack must be less than 20 characters',
     }),
-});
+})
 
 export const POST = async (request: Request) => {
   // We don't even bother validating the request body yet
   // If the users not authenticated, don't waste the compute
   // validating the request body.
-  const user = await getUser();
+  const user = await getUser()
 
   if (user === null) {
-    return new Response("Unauthenticated", { status: 401 });
+    return new Response('Unauthenticated', { status: 401 })
   }
 
-  const body = bodySchema.safeParse(await request.json());
+  const body = bodySchema.safeParse(await request.json())
 
   if (!body.success) {
-    return new Response(body.error.message, { status: 400 });
+    return new Response(body.error.message, { status: 400 })
   }
-  
+
   // With the new data, we can update the users metadata.
   await user.update({
     favoriteSnack: body.data.snack,
-  });
+  })
 
   // We may want to also send an email notification here
   // Or duel save the data to our own database.
   // Possibly we want to log the change to monitoring server
 
-  return new Response(
-    `${user.email}'s favorite snack is ${body.data.snack}`
-  );
-};
+  return new Response(`${user.email}'s favorite snack is ${body.data.snack}`)
+}
 ```
 
 ## Using with a database
@@ -454,64 +446,59 @@ So we need two database tables, an `orders` table and a `items` table, then we c
 
 ```ts
 // I am using postgres, but none of what I am doing is particularly specific to postgres, so feel free to use whatever dialect you want.
-import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable } from 'drizzle-orm/pg-core'
 
-export const orderStatus = pgEnum("order_status", [
-  "pending",
-  "shipped",
-  "delivered",
-]);
+export const orderStatus = pgEnum('order_status', ['pending', 'shipped', 'delivered'])
 
 export const orders = pgTable(
-  "orders",
+  'orders',
   (t) => ({
     orderId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
 
     // It's possible you will want to call this something more specific, eg `clerkUserId`
     userId: t.varchar().notNull(),
-    status: orderStatus().notNull().default("pending"),
+    status: orderStatus().notNull().default('pending'),
     createdAt: t.timestamp().defaultNow(),
     updatedAt: t.timestamp().defaultNow(),
   }),
 
   // Because this is an external id, we need to index it to tell the database we will be querying by it
-  (table) => [index().on(table.userId)]
-);
+  (table) => [index().on(table.userId)],
+)
 
-export const items = pgTable("items", (t) => ({
+export const items = pgTable('items', (t) => ({
   itemId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
   name: t.varchar().notNull(),
   price: t.integer().notNull(),
   discount: t.integer(),
-}));
+}))
 
-export const orderItems = pgTable("order_items", (t) => ({
+export const orderItems = pgTable('order_items', (t) => ({
   orderId: t.integer().references(() => orders.orderId),
   itemId: t.integer().references(() => items.itemId),
   quantity: t.integer().notNull(),
-}));
+}))
 ```
 
 ```ts {{ filename: 'types.d.ts' }}
 declare global {
   interface CustomJwtSessionClaims {
-    email: string;
+    email: string
 
     // I've added the users phone number to their session token, so we have it to easily send them text message updates
-    phone: string;
+    phone: string
 
     details: {
-
       // I've marked this as possibly null as a user won't always have an active order
       currentOrder: {
-        orderId: number;
-        orderStatus: "pending" | "shipped" | "delivered";
-      } | null;
-    };
+        orderId: number
+        orderStatus: 'pending' | 'shipped' | 'delivered'
+      } | null
+    }
   }
 }
 
-export {};
+export {}
 ```
 
 Here we are making a decision, what data is important enough that we want to be able to access fast, what data can we afford to reach out to a service (eg database) for, and what data do we want shared between the two for access from both.
@@ -519,19 +506,23 @@ Here we are making a decision, what data is important enough that we want to be 
 So with this setup we can create a server action to handle adding an item to an order.
 
 ```ts
-"use server";
+'use server'
 
-import { db } from "~/db";
-import { orderItems, orders } from "~/db/schema";
-import { getUser } from "~/lib/get-user";
+import { db } from '~/db'
+import { orderItems, orders } from '~/db/schema'
+import { getUser } from '~/lib/get-user'
 
 export const addItemToOrder = async (itemId: number, quantity: number) => {
-  const user = await getUser();
+  const user = await getUser()
 
   if (user === null) {
-    return { error: "Unauthenticated" };
+    return { error: 'Unauthenticated' }
   }
 
+  // Here we are handling the situation that no order exists yet
+  // We start by updating the database to create a new order for the user
+  // We use our user.update function to get the important details on the user
+  // And we finish off with inserting the item into the order
   if (user.currentOrder === null) {
     const [newOrder] = await db
       .insert(orders)
@@ -541,38 +532,153 @@ export const addItemToOrder = async (itemId: number, quantity: number) => {
       .returning({
         orderId: orders.orderId,
         status: orders.status,
-      });
+      })
 
     await user.update({
       currentOrder: {
         orderId: newOrder.orderId,
         orderStatus: newOrder.status,
       },
-    });
+    })
 
     await db.insert(orderItems).values({
       orderId: newOrder.orderId,
       itemId,
       quantity,
-    });
+    })
 
     return {
-      message: "Order created and item added",
-    };
+      message: 'Order created and item added',
+    }
   }
 
+  // But once the order is created, we can simply add the item
+  // We don't even need to verify that the order belongs
+  // to the user, as we are using public metadata so it can only be
+  // set server side, as we do above
   await db.insert(orderItems).values({
     orderId: user.currentOrder.orderId,
     itemId,
     quantity,
-  });
+  })
 
   return {
-    message: "Item added to existing order",
-  };
-};
+    message: 'Item added to existing order',
+  }
+}
 ```
 
-### We can place orders
+### Migrating data over to metadata
+
+It wouldn't be unlikely that your using Clerk from the very start, we may very well have a database already, with a `users` table. So we want to pull those important user details out and store them on the Clerk metadata to quick access.
+
+We can run this migration using the expand and contract pattern, starting by finding everywhere the `users` table is currently being updated, adding in a call to update the users metadata in the same fashion. Next we update our `getUser()` function to first try the metadata, and if it doesn't exist, we reach out to the database.
+
+Let's look at this stripe example.
+
+```ts {{ filename: 'app/onboarding/payments/actions.ts' }}
+  'use server'
+
+  import Stripe from 'stripe'
+  import { eq } from 'drizzle-orm'
+  import { db } from '~/db'
+  import { users } from '~/db/schema'
+  import { getUser } from '~/lib/get-user'
+
+  export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-05-28.basil',
+  })
+
+  export const setupStripeCustomer = async () => {
+    const user = await getUser()
+
+    if (user === null) {
+      throw new Error('User not authenticated')
+    }
+
+    const customer = await stripe.customers.create({
+      email: user.email,
+    })
+
+    // We see here an existing insert in to the `users` table, setting a `stripeCustomerId`
+    await db
+      .update(users)
+      .set({
+        stripeCustomerId: customer.id,
+      })
+      .where(eq(users.clerkUserId, user.userId))
+
+    // So let's update it to also write this new id to the clerk user metadata
++   await user.update({
++     stripeCustomerId: customer.id,
++   })
+
+    return customer.id
+  }
+```
+
+The first step is find all the places in your application that you edit the users table, and mirror the update in the clerk metadata. You may be tempted to write complex data in to the metadata, removing the need for entire tables. But until you have a full grasp of migrating the data over I would hold off.
+
+Only once we have the two data stores being kept in sync can we upgrade `getUser()` to handle some of the migration workload.
+
+```ts
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { eq } from 'drizzle-orm'
+  import { db } from '~/db'
+  import { users } from '~/db/schema'
+  import { setupStripeCustomer } from '~/app/onboarding/payments/actions'
+
+  export const getUser = async () => {
+    const { isAuthenticated, userId, sessionClaims } = await auth()
+
+    if (!isAuthenticated) return null
+
+    const { email, details } = sessionClaims
+
+    const update = async (newDetails: Partial<typeof details>) => {
+      const clerk = await clerkClient()
+
+      await clerk.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...details,
+          ...newDetails,
+        },
+      })
+    }
+
++   let stripeCustomerId = details.stripeCustomerId
+
+    // So now anytime this function is called we are going to check if the user doesn't have a stripeCustomerId set
+    // This check alone has no cost, as it's information stored in the users session
++   if (details.stripeCustomerId === undefined) {
++     const [user_db] = await db
++       .select({
++         stripeCustomerId: users.stripeCustomerId,
++       })
++       .from(users)
++       .where(eq(users.clerkUserId, userId))
+
++     if (user_db === undefined) {
++       stripeCustomerId = await setupStripeCustomer()
++     } else {
++       await update({
++         stripeCustomerId: user_db.stripeCustomerId,
++       })
+
++       stripeCustomerId = user_db.stripeCustomerId
++     }
++   }
+
+    return {
+      ...details,
++     stripeCustomerId,
+      userId,
+      email,
+      update,
+    }
+  }
+```
+
+### You probably don't need clerk webhooks
 
 ## Considerations for client side

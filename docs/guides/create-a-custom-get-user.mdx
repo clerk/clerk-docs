@@ -469,8 +469,7 @@ export const orders = pgTable(
 
     // It's possible you will want to call this something more specific, eg `clerkUserId`
     userId: t.varchar().notNull(),
-    status: orderStatus().default("pending"),
-    address: t.varchar().notNull(),
+    status: orderStatus().notNull().default("pending"),
     createdAt: t.timestamp().defaultNow(),
     updatedAt: t.timestamp().defaultNow(),
   }),
@@ -481,19 +480,29 @@ export const orders = pgTable(
 
 export const items = pgTable("items", (t) => ({
   itemId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
-  orderId: t.integer().references(() => orders.orderId),
   name: t.varchar().notNull(),
   price: t.integer().notNull(),
+  discount: t.integer(),
+}));
+
+export const orderItems = pgTable("order_items", (t) => ({
+  orderId: t.integer().references(() => orders.orderId),
+  itemId: t.integer().references(() => items.itemId),
   quantity: t.integer().notNull(),
 }));
 ```
 
-```ts
+```ts {{ filename: 'types.d.ts' }}
 declare global {
   interface CustomJwtSessionClaims {
     email: string;
-    phone: string; // I've added the users phone number to their session token, so we have it to easily send them text message updates
+
+    // I've added the users phone number to their session token, so we have it to easily send them text message updates
+    phone: string;
+
     details: {
+
+      // I've marked this as possibly null as a user won't always have an active order
       currentOrder: {
         orderId: number;
         orderStatus: "pending" | "shipped" | "delivered";
@@ -504,5 +513,66 @@ declare global {
 
 export {};
 ```
+
+Here we are making a decision, what data is important enough that we want to be able to access fast, what data can we afford to reach out to a service (eg database) for, and what data do we want shared between the two for access from both.
+
+So with this setup we can create a server action to handle adding an item to an order.
+
+```ts
+"use server";
+
+import { db } from "~/db";
+import { orderItems, orders } from "~/db/schema";
+import { getUser } from "~/lib/get-user";
+
+export const addItemToOrder = async (itemId: number, quantity: number) => {
+  const user = await getUser();
+
+  if (user === null) {
+    return { error: "Unauthenticated" };
+  }
+
+  if (user.currentOrder === null) {
+    const [newOrder] = await db
+      .insert(orders)
+      .values({
+        userId: user.userId,
+      })
+      .returning({
+        orderId: orders.orderId,
+        status: orders.status,
+      });
+
+    await user.update({
+      currentOrder: {
+        orderId: newOrder.orderId,
+        orderStatus: newOrder.status,
+      },
+    });
+
+    await db.insert(orderItems).values({
+      orderId: newOrder.orderId,
+      itemId,
+      quantity,
+    });
+
+    return {
+      message: "Order created and item added",
+    };
+  }
+
+  await db.insert(orderItems).values({
+    orderId: user.currentOrder.orderId,
+    itemId,
+    quantity,
+  });
+
+  return {
+    message: "Item added to existing order",
+  };
+};
+```
+
+### We can place orders
 
 ## Considerations for client side

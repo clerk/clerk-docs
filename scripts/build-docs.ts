@@ -202,6 +202,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
+  const scopeHref = scopeHrefToSDK(config)
 
   abortSignal?.throwIfAborted()
 
@@ -404,7 +405,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
     { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
-    async (item, tree) => item,
+    async (item, tree) => {
+      const doc = docsMap.get(item.href)
+
+      if (doc && doc.sdk === undefined && item.sdk !== undefined) {
+        docsMap.set(item.href, { ...doc, sdk: item.sdk })
+      }
+
+      return item
+    },
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
@@ -576,15 +585,25 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     JSON.stringify({
       navigation: await traverseTree(
         { items: sdkScopedManifest },
-        async (item) => ({
-          title: item.title,
-          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-          tag: item.tag,
-          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-          icon: item.icon,
-          target: item.target,
-          sdk: item.sdk,
-        }),
+        async (item) => {
+          const doc = docsMap.get(item.href)
+
+          const injectSDK =
+            doc?.frontmatter?.sdk !== undefined &&
+            doc.frontmatter.sdk.length >= 1 &&
+            !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
+            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`)
+
+          return {
+            title: item.title,
+            href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
+            tag: item.tag,
+            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+            icon: item.icon,
+            target: item.target,
+            sdk: item.sdk,
+          }
+        },
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,

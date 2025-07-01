@@ -185,7 +185,7 @@ Back on the [Sessions](https://dashboard.clerk.com/~/sessions) page, update it t
       email: string
 +     details: {
 +       favoriteSnack?: string
-+       favoriteMovie?: string
++       favoritePizza?: string
 +     }
     }
   }
@@ -338,8 +338,8 @@ export default async function UserPage() {
   return (
     <div>
       <h1>Welcome {user.email}</h1>
-      {user.favoriteMovie ? (
-        <span>I hear your favorite movie is {user.favoriteMovie}</span>
+      {user.favoritePizza ? (
+        <span>I hear your favorite pizza is {user.favoritePizza}</span>
       ) : null}
     </div>
   );
@@ -348,4 +348,161 @@ export default async function UserPage() {
 
 ### In a server action
 
+```ts
+"use server"
+
+import { getUser } from "~/lib/get-user"
+
+export const processPizzaOrder = async (
+  pizzaChoice: "pepperoni" | "barbecue" | "chicken"
+) => {
+  const user = await getUser();
+
+  if (user === null) {
+    return {
+      error: "Unauthenticated",
+    };
+  }
+
+  user.update({
+    favoritePizza: pizzaChoice,
+  });
+};
+```
+
+### In a api route
+
+```ts
+// I am using zod for validation here, but you can use whatever you want
+import { z } from "zod";
+import { getUser } from "~/lib/get-user";
+
+// In Get requests, you typically don't want to modify any data,
+// so we aren't going to use the `update()` function here.
+export const GET = async (request: Request) => {
+  const user = await getUser();
+
+  if (user === null) {
+    // You may want to fail more gracefully here,
+    // for example redirecting to a login page.
+    // or returning `We don't know your favorite snack`
+    return new Response("Unauthenticated", { status: 401 });
+  }
+
+  return new Response(
+    `${user.email}'s favorite snack is ${user.favoriteSnack}`
+  );
+};
+
+const bodySchema = z.object({
+  snack: z
+    .string()
+    .min(1, {
+      message: "Snack is required",
+    })
+    .max(20, {
+      message: "Snack must be less than 20 characters",
+    }),
+});
+
+export const POST = async (request: Request) => {
+  // We don't even bother validating the request body yet
+  // If the users not authenticated, don't waste the compute
+  // validating the request body.
+  const user = await getUser();
+
+  if (user === null) {
+    return new Response("Unauthenticated", { status: 401 });
+  }
+
+  const body = bodySchema.safeParse(await request.json());
+
+  if (!body.success) {
+    return new Response(body.error.message, { status: 400 });
+  }
+  
+  // With the new data, we can update the users metadata.
+  await user.update({
+    favoriteSnack: body.data.snack,
+  });
+
+  // We may want to also send an email notification here
+  // Or duel save the data to our own database.
+  // Possibly we want to log the change to monitoring server
+
+  return new Response(
+    `${user.email}'s favorite snack is ${body.data.snack}`
+  );
+};
+```
+
 ## Using with a database
+
+The beauty of everything we have done so far is none of it requires you as a app developer to deploy, manage and scale a database. Just with using Clerk you are enabled to build powerful applications that let your users achieve meaningful results.
+
+But this kind of document based storage does have it's limitations and bringing in a relational database (eg postgres, mysql) will allow your applications to share data between users, store more complex data types, give you strong query performance, and more.
+
+In addition it's very possible you started with a database and webapp before you started using Clerk, and already have custom user data in the database that would need to be migrated out take take advantage of user metadata.
+
+So let's take a look at a couple options you have to land on the perfect setup for your application, giving you the performance you desire with the tradeoffs that make sense for you.
+
+### Starting fresh
+
+Let's imagine we are creating an online food ordering platform, users can place orders for their favorite local Japanese restaurant. Users will need to create a new order, filled with food options, and we will need to know the status of their current order.
+
+So we need two database tables, an `orders` table and a `items` table, then we can store the `orderId` and the `orderStatus` in the Clerk user metadata.
+
+```ts
+// I am using postgres, but none of what I am doing is particularly specific to postgres, so feel free to use whatever dialect you want.
+import { index, pgEnum, pgTable } from "drizzle-orm/pg-core";
+
+export const orderStatus = pgEnum("order_status", [
+  "pending",
+  "shipped",
+  "delivered",
+]);
+
+export const orders = pgTable(
+  "orders",
+  (t) => ({
+    orderId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
+
+    // It's possible you will want to call this something more specific, eg `clerkUserId`
+    userId: t.varchar().notNull(),
+    status: orderStatus().default("pending"),
+    address: t.varchar().notNull(),
+    createdAt: t.timestamp().defaultNow(),
+    updatedAt: t.timestamp().defaultNow(),
+  }),
+
+  // Because this is an external id, we need to index it to tell the database we will be querying by it
+  (table) => [index().on(table.userId)]
+);
+
+export const items = pgTable("items", (t) => ({
+  itemId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
+  orderId: t.integer().references(() => orders.orderId),
+  name: t.varchar().notNull(),
+  price: t.integer().notNull(),
+  quantity: t.integer().notNull(),
+}));
+```
+
+```ts
+declare global {
+  interface CustomJwtSessionClaims {
+    email: string;
+    phone: string; // I've added the users phone number to their session token, so we have it to easily send them text message updates
+    details: {
+      currentOrder: {
+        orderId: number;
+        orderStatus: "pending" | "shipped" | "delivered";
+      } | null;
+    };
+  }
+}
+
+export {};
+```
+
+## Considerations for client side

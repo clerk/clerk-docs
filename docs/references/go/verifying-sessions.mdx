@@ -74,6 +74,66 @@ func protectedRoute(w http.ResponseWriter, r *http.Request) {
   fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
 }
 ```
+## Using Custom Claims in Your Application
+
+After adding custom claims to your application in the Clerk dashboard by following [`this step`](https://clerk.com/docs/backend-requests/custom-session-token#add-custom-claims-to-your-session-token), here's how you can retrieve them from the [`SessionClaims`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaims)
+
+```go {{ filename: 'main.go' }}
+package main
+
+import (
+  "context"
+  "fmt"
+  "net/http"
+
+  "github.com/clerk/clerk-sdk-go/v2"
+  clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+  "github.com/clerk/clerk-sdk-go/v2/user"
+)
+
+type CustomSessionClaims struct {
+   FullName string  `json:"fullName"`
+   PrimaryEmail string `json:"primaryEmail"`
+}
+
+func customClaimsConstructor(ctx context.Context) any {
+   return &CustomSessionClaims{}
+}
+
+func WithCustomClaimsConstructor(params *clerkHttp.AuthorizationParams) error {
+   params.VerifyParams.CustomClaimsConstructor = customClaimsConstructor
+   return nil
+}
+
+func main() {
+  clerk.SetKey("{{secret}}")
+
+  mux := http.NewServeMux()
+  protectedHandler := http.HandlerFunc(protectedRoute)
+  mux.Handle(
+    "/protected",
+    clerkhttp.WithHeaderAuthorization(WithCustomClaimsConstructor)(protectedHandler),
+  )
+
+  http.ListenAndServe(":3000", mux)
+}
+
+func protectedRoute(w http.ResponseWriter, r *http.Request) {
+  claims, ok := clerk.SessionClaimsFromContext(r.Context())
+  if !ok {
+    w.WriteHeader(http.StatusUnauthorized)
+    w.Write([]byte(`{"access": "unauthorized"}`))
+    return
+  }
+
+ customClaims, ok := claims.Custom.(*CustomSessionClaims)
+  if !ok {
+    // handle the error
+  } else {
+    fmt.Fprintf(w, `{"full_name": "%s", "primary_email": "%s"}`, customClaims.FullName, customClaims.PrimaryEmail)
+  }
+}
+```
 
 ## Manually verify a session token
 

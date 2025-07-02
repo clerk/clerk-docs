@@ -55,109 +55,305 @@ export default function Page() {
 
 ## Control access with features and plans
 
-You can use Clerk's features and plans to gate access to the content. There are a few ways to do this, but the recommended and simplest way is either using the [`has()`](/docs/references/backend/types/auth-object#has) method or the [`<Protect>`](/docs/components/protect) component.
+You can use Clerk's features and plans to gate access to the content. There are a few ways to do this, but the recommended approach is to use either the [`has()`](/docs/references/backend/types/auth-object#has) method available for any JavaScript framework or the [`<Protect>`](/docs/components/protect) component, which is only available for React-based frameworks.
 
-The `has()` method is available for any JavaScript framework, while `<Protect>` is only available for React-based frameworks.
+### Example: Using the `has()` method
 
-### Example: Using `has()`
-
-Use the `has()` method to test if the user has access to a **plan**:
-
-```jsx
-const { has } = await auth()
-const hasPremiumAccess = has({ plan: 'gold' })
-```
-
-Or a **feature**:
-
-```jsx
-const { has } = await auth()
-const hasPremiumAccess = has({ feature: 'widgets' })
-```
-
-The [`has()`](/docs/references/backend/types/auth-object#has) method checks if the user has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value. It is available on the [`auth` object](/docs/references/backend/types/auth-object) on the server. Depending on the framework you are using, you will access the `auth` object differently.
-
-The following example accesses the `auth` object and the `has()` method using the [Next.js-specific `auth()` helper](/docs/references/nextjs/auth).
+The [`has()`](/docs/references/backend/types/auth-object#has) method checks if the user has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value. It is available on the [`auth` object](/docs/references/backend/types/auth-object) on the server. Depending on the framework you are using, you'll access the `auth` object differently.
 
 <Tabs items={[ "Plan", "Feature"]}>
   <Tab>
     The following example demonstrates how to use `has()` to check if a user has a plan.
 
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
+    <Tabs items={["Next.js", "Astro", "Express", "React Router", "Remix", "Tanstack React Start"]}>
+      <Tab>
+        ```tsx {{ filename: 'app/page.tsx' }}
+        import { auth } from '@clerk/nextjs/server'
 
-    export default async function Page() {
-      // Use `auth()` helper to access the `has()` method
-      const { has } = await auth()
+        export default async function Page() {
+          // Use `auth()` helper to access the `has()` method
+          const { has } = await auth()
 
-      // Use `has()` method to check if user has a Plan
-      const hasBronzePlan = has({ plan: 'bronze' })
+          // Use `has()` method to check if user has a Plan
+          const hasBronzePlan = has({ plan: 'bronze' })
 
-      if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+          if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
 
-      return <h1>For Bronze subscribers only</h1>
-    }
-    ```
+          return <h1>For Bronze subscribers only</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'src/pages/protected.astro' }}
+        // Use `local.auth()` helper to access the `has()` method
+        const { has } = Astro.locals.auth()
+
+        // Use `has()` method to check if user has a Plan
+        const hasBronzePlan = has({ plan: 'bronze' })
+
+        if (!hasBronzePlan) {
+          return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```js {{ filename: 'server.js' }}
+        import express from 'express'
+        import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+
+        const app = express()
+        const PORT = 3000
+
+        // Apply Clerk middleware to all routes
+        app.use(clerkMiddleware())
+
+        // Custom middleware to check if user has the Bronze plan
+        const bronzePlan = (req, res, next) => {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = getAuth(req)
+
+          // Use `has()` method to check if user has a Plan
+          const hasBronzePlan = has({ plan: 'bronze' })
+
+          if (!hasBronzePlan) {
+            return res.status(403).send('Only subscribers to the Bronze plan can access this content.')
+          }
+
+          return next()
+        }
+
+        // Protected route
+        app.get('/bronze-only', requireAuth(), bronzePlan, (req, res) => {
+          res.send('For Bronze subscribers only')
+        })
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'app/routes/page.tsx' }}
+        import { getAuth } from '@clerk/react-router/ssr.server'
+        import type { Route } from './+types/profile'
+
+        export async function loader(args: Route.LoaderArgs) {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = await getAuth(args)
+
+          // Use `has()` method to check if user has a Plan
+          const hasBronzePlan = has({ plan: 'bronze' })
+
+          return { hasBronzePlan }
+        }
+
+        export default function BronzePage({ loaderData }: Route.ComponentProps) {
+          const { hasBronzePlan } = loaderData
+
+          if (!hasBronzePlan) {
+            return <h1>Only subscribers to the Bronze plan can access this content.</h1>
+          }
+
+          return <h1>For Bronze subscribers only</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'routes/page.tsx' }}
+        import { LoaderFunction } from '@remix-run/node'
+        import { getAuth } from '@clerk/remix/ssr.server'
+
+        export const loader: LoaderFunction = async (args) => {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = await getAuth(args)
+
+          // Use `has()` method to check if user has a Plan
+          const hasBronzePlan = has({ plan: 'bronze' })
+
+          return { hasBronzePlan }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'src/routes/api/example.ts' }}
+        import { clerkClient, getAuth } from '@clerk/tanstack-react-start/server'
+        import { json } from '@tanstack/react-start'
+        import { createServerFileRoute } from '@tanstack/react-start/server'
+
+        export const ServerRoute = createServerFileRoute('/api/example').methods({
+          GET: async ({ request }) => {
+            // Use `getAuth()` helper to access the `has()` method
+            const { has } = await getAuth(request)
+
+            // Use `has()` method to check if user has a Plan
+            const hasBronzePlan = has({ plan: 'bronze' })
+
+            if (!hasBronzePlan) {
+              return json({ error: 'Forbidden - Bronze plan required' }, { status: 403 })
+            }
+
+            return json({ success: true })
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
   </Tab>
 
   <Tab>
     The following example demonstrates how to use `has()` to check if a user has a feature.
 
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
+    <Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+      <Tab>
+        ```tsx {{ filename: 'app/page.tsx' }}
+        import { auth } from '@clerk/nextjs/server'
 
-    export default async function Page() {
-      // Use `auth()` helper to access the `has()` method
-      const { has } = await auth()
+        export default async function Page() {
+          // Use `auth()` helper to access the `has()` method
+          const { has } = await auth()
 
-      // Use `has()` method to check if user has a Feature
-      const hasPremiumAccess = has({ feature: 'premium_access' })
+          // Use `has()` method to check if user has a Feature
+          const hasPremiumAccess = has({ feature: 'premium_access' })
 
-      if (!hasPremiumAccess)
-        return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
+          if (!hasPremiumAccess)
+            return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
 
-      return <h1>Our Exclusive Content</h1>
-    }
-    ```
+          return <h1>Our Exclusive Content</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'src/pages/protected.astro' }}
+        // Use `local.auth()` helper to access the `has()` method
+        const { has } = Astro.locals.auth()
+
+        // Use `has()` method to check if user has a Feature
+        const hasPremiumAccess = has({ feature: 'premium_access' })
+
+        if (!hasPremiumAccess) {
+          return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```js {{ filename: 'server.js' }}
+        import express from 'express'
+        import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+
+        const app = express()
+        const PORT = 3000
+
+        // Apply Clerk middleware to all routes
+        app.use(clerkMiddleware())
+
+        // Custom middleware to check if user has the Bronze plan
+        const premiumAccess = (req, res, next) => {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = getAuth(req)
+
+          // Use `has()` method to check if user has a Feature
+          const hasPremiumAccess = has({ feature: 'premium_access' })
+
+          if (!hasPremiumAccess) {
+            return res
+              .status(403)
+              .send('Only subscribers to the Premium Access feature can access this content.')
+          }
+
+          return next()
+        }
+
+        // Protected route
+        app.get('/premium-only', requireAuth(), premiumAccess, (req, res) => {
+          res.send('For Premium access only')
+        })
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'app/routes/page.tsx' }}
+        import { getAuth } from '@clerk/react-router/ssr.server'
+        import type { Route } from './+types/profile'
+
+        export async function loader(args: Route.LoaderArgs) {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = await getAuth(args)
+
+          // Use `has()` method to check if user has a Feature
+          const hasPremiumAccess = has({ feature: 'premium_access' })
+
+          return { hasPremiumAccess }
+        }
+
+        export default function BronzePage({ loaderData }: Route.ComponentProps) {
+          const { hasPremiumAccess } = loaderData
+
+          if (!hasPremiumAccess) {
+            return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
+          }
+
+          return <h1>For Premium access users only</h1>
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'routes/page.tsx' }}
+        import { LoaderFunction } from '@remix-run/node'
+        import { getAuth } from '@clerk/remix/ssr.server'
+
+        export const loader: LoaderFunction = async (args) => {
+          // Use `getAuth()` helper to access the `has()` method
+          const { has } = await getAuth(args)
+
+          // Use `has()` method to check if user has a Feature
+          const hasPremiumAccess = has({ feature: 'premium_access' })
+
+          return { hasPremiumAccess }
+        }
+        ```
+      </Tab>
+
+      <Tab>
+        ```tsx {{ filename: 'src/routes/api/example.ts' }}
+        import { clerkClient, getAuth } from '@clerk/tanstack-react-start/server'
+        import { json } from '@tanstack/react-start'
+        import { createServerFileRoute } from '@tanstack/react-start/server'
+
+        export const ServerRoute = createServerFileRoute('/api/example').methods({
+          GET: async ({ request }) => {
+            // Use `getAuth()` helper to access the `has()` method
+            const { has } = await getAuth(request)
+
+            // Use `has()` method to check if user has a Feature
+            const hasPremiumAccess = has({ feature: 'premium_access' })
+
+            if (!hasPremiumAccess) {
+              return json({ error: 'Forbidden - Premium access required' }, { status: 403 })
+            }
+
+            return json({ success: true })
+          },
+        })
+        ```
+      </Tab>
+    </Tabs>
   </Tab>
 </Tabs>
 
-### Example: Using `<Protect>`
+### Example: Using the `<Protect>` component
 
 The [`<Protect>`](/docs/components/protect) component protects content or even entire routes by checking if the user has been granted a specific type of access control (role, permission, feature, or plan). You can pass a `fallback` prop to `<Protect>` that will be rendered if the user does not have the access control.
 
 <Tabs items={["Plan", "Feature"]}>
   <Tab>
-    The following example demonstrates how to use `<Protect>` to protect a page by checking if the user has a plan.
-
-    ```tsx
-    export default function ProtectPage() {
-      return (
-        <Protect
-          plan="bronze"
-          fallback={<p>Only subscribers to the Bronze plan can access this content.</p>}
-        >
-          {children}
-        </Protect>
-      )
-    }
-    ```
+    <Include src="_partials/protect-component-plan" />
   </Tab>
 
   <Tab>
-    The following example demonstrates how to use `<Protect>` to protect a page by checking if the user has a feature.
-
-    ```tsx
-    export default function ProtectPage() {
-      return (
-        <Protect
-          feature="premium_access"
-          fallback={<p>Only subscribers with the Premium Access feature can access this content.</p>}
-        >
-          {children}
-        </Protect>
-      )
-    }
-    ```
+    <Include src="_partials/protect-component-feature" />
   </Tab>
 </Tabs>

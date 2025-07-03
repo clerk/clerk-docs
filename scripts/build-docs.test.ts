@@ -1882,6 +1882,40 @@ description: Quickstart page
       'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
     )
   })
+
+  test('Should support id in a call out block', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+description: Quickstart page
+---
+
+> [!NOTE my-callout]
+> This is a call out
+
+[Link to call out](#my-callout)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
 })
 
 describe('Includes and Partials', () => {

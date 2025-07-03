@@ -1746,6 +1746,7 @@ describe('Heading Validation', () => {
         path: './docs/duplicate-headings.mdx',
         content: `---
 title: Duplicate Headings
+description: Duplicate Headings page
 ---
 
 # Heading {{ id: 'custom-id' }}
@@ -1756,7 +1757,7 @@ title: Duplicate Headings
       },
     ])
 
-    const promise = build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1764,7 +1765,7 @@ title: Duplicate Headings
       }),
     )
 
-    await expect(promise).rejects.toThrow(
+    expect(output).toContain(
       'Doc "/docs/duplicate-headings" contains a duplicate heading id "custom-id", please ensure all heading ids are unique',
     )
   })
@@ -1832,7 +1833,7 @@ sdk: react, nextjs
       },
     ])
 
-    const promise = build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1840,7 +1841,7 @@ sdk: react, nextjs
       }),
     )
 
-    await expect(promise).rejects.toThrow(
+    expect(output).toContain(
       'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
     )
   })
@@ -1870,7 +1871,7 @@ description: Quickstart page
       },
     ])
 
-    const promise = build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -1878,7 +1879,7 @@ description: Quickstart page
       }),
     )
 
-    await expect(promise).rejects.toThrow(
+    expect(output).toContain(
       'Doc "/docs/quickstart.mdx" contains a duplicate heading id "title", please ensure all heading ids are unique',
     )
   })

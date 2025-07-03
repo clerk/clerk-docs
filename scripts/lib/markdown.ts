@@ -97,7 +97,7 @@ export const parseInMarkdownFile =
       .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
-      .use(() => (tree, vfile) => {
+      .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
 
         mdastVisit(
@@ -121,7 +121,7 @@ export const parseInMarkdownFile =
 
             if (id !== undefined) {
               if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeFail(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
               }
 
               headingsHashes.add(id)
@@ -137,7 +137,7 @@ export const parseInMarkdownFile =
 
             if (id !== undefined) {
               if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeFail(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
               }
 
               headingsHashes.add(id)
@@ -145,7 +145,7 @@ export const parseInMarkdownFile =
               const slug = slugify(toString(node).trim())
 
               if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
-                safeFail(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
               }
 
               headingsHashes.add(slug)

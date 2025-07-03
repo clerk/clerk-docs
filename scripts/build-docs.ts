@@ -84,6 +84,7 @@ import {
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
+import { VFile } from 'vfile'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -780,6 +781,8 @@ template: wide
   const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
 
+  const headingValidationVFiles: VFile[] = []
+
   for (const doc of docsWithOnlyIfComponents) {
     // Extract all SDK values from <If /> all components
     const availableSDKs = new Set<SDK>()
@@ -807,7 +810,7 @@ template: wide
     })
 
     for (const sdk of availableSDKs) {
-      await remark()
+      const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
         .use(() => (inputTree) => {
@@ -837,6 +840,8 @@ template: wide
           path: doc.file.filePath,
           value: String(doc.vfile),
         })
+
+      headingValidationVFiles.push(vfile)
     }
   }
 
@@ -903,7 +908,14 @@ template: wide
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
   const warnings = reporter(
-    [...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles, manifestVfile],
+    [
+      ...coreVFiles,
+      ...partialsVFiles,
+      ...typedocVFiles,
+      ...flatSdkSpecificVFiles,
+      manifestVfile,
+      ...headingValidationVFiles,
+    ],
     {
       quiet: true,
     },

@@ -6,7 +6,7 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'
-import { safeFail, type WarningsSection } from '../error-messages'
+import { safeMessage, type WarningsSection } from '../error-messages'
 import { extractHeadingFromHeadingNode } from '../utils/extractHeadingFromHeadingNode'
 
 export const validateUniqueHeadings =
@@ -22,7 +22,7 @@ export const validateUniqueHeadings =
 
         if (id !== undefined) {
           if (headingsHashes.has(id)) {
-            safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, id])
+            safeMessage(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, id])
           }
 
           headingsHashes.add(id)
@@ -30,7 +30,7 @@ export const validateUniqueHeadings =
           const slug = slugify(toString(node).trim())
 
           if (headingsHashes.has(slug)) {
-            safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, slug])
+            safeMessage(config, vfile, filePath, section, 'duplicate-heading-id', [filePath, slug])
           }
 
           headingsHashes.add(slug)

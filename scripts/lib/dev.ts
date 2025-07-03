@@ -42,8 +42,7 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
 
   const handleFilesChanged = async (paths: string[]) => {
     if (abortController !== null) {
-      console.log('aborting current build')
-      abortController.abort()
+      abortController.abort(`${paths.length} files changed during build, restarting build`)
     }
 
     abortController = new AbortController()
@@ -75,7 +74,6 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
       }
     } catch (error) {
       console.error(error)
-
       return
     }
   }

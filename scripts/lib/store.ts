@@ -34,8 +34,6 @@ export type Store = ReturnType<typeof createBlankStore>
 export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) =>
   (filePath: string, invalidateAdjacentDocs: boolean = true) => {
-    console.log(`invalidating ${filePath}`)
-
     const docsPath = path.join(config.baseDocsLink, path.relative(config.docsPath, filePath))
 
     if (store.markdown.has(docsPath) && store.coreDocs.has(docsPath)) {

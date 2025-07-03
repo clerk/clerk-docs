@@ -3592,6 +3592,97 @@ sdk: react, nextjs, astro
     )
   })
 
+  test.only('x', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Typedoc Doc', href: '/docs/typedoc-doc' },
+              { title: 'First Doc', href: '/docs/first-doc' },
+              { title: 'Second Doc', href: '/docs/second-doc' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './typedoc/component.mdx',
+        content: `[Link to first Doc](/docs/first-doc)`,
+      },
+      {
+        path: './docs/typedoc-doc.mdx',
+        content: `---
+title: Original Title
+description: x
+---
+
+<Typedoc src="component" />`,
+      },
+      {
+        path: './docs/first-doc.mdx',
+        content: `---
+title: First Doc
+description: x
+---
+
+# First Doc`,
+      },
+      {
+        path: './docs/second-doc.mdx',
+        content: `---
+title: Second Doc
+description: x
+---
+
+# Second Doc`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    const output = await build(config, store)
+
+    expect(output).toBe('')
+
+    expect(await readFile(pathJoin('./dist/typedoc-doc.mdx'))).toBe(
+      `---
+title: Original Title
+description: x
+---
+
+[Link to first Doc](/docs/first-doc)`,
+    )
+
+    // Update file content
+    await fs.writeFile(pathJoin('./typedoc/component.mdx'), `[Link to second Doc](/docs/second-doc)`, 'utf-8')
+
+    invalidate(pathJoin('./typedoc/component.mdx'))
+
+    // Second build with same store (should detect changes)
+    const output2 = await build(config, store)
+
+    expect(output2).toBe('')
+
+    // Check updated content
+    expect(await readFile(pathJoin('./dist/typedoc-doc.mdx'))).toContain(
+      `---
+title: Original Title
+description: x
+---
+
+[Link to second Doc](/docs/second-doc)`,
+    )
+  })
+
   test('should update doc content when the partial changes in a sdk scoped doc', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

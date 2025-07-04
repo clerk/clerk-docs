@@ -84,6 +84,7 @@ import {
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
+import { VFile } from 'vfile'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -145,6 +146,7 @@ async function main() {
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
+        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
       },
       partials: {},
     },
@@ -202,6 +204,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const coreDocCache = getCoreDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
+  const scopeHref = scopeHrefToSDK(config)
 
   abortSignal?.throwIfAborted()
 
@@ -404,7 +407,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const sdkScopedManifest = await traverseTreeItemsFirst(
     { items: sdkScopedManifestFirstPass, sdk: undefined as undefined | SDK[] },
-    async (item, tree) => item,
+    async (item, tree) => {
+      const doc = docsMap.get(item.href)
+
+      if (doc && doc.sdk === undefined && item.sdk !== undefined) {
+        docsMap.set(item.href, { ...doc, sdk: item.sdk })
+      }
+
+      return item
+    },
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
@@ -576,15 +587,25 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     JSON.stringify({
       navigation: await traverseTree(
         { items: sdkScopedManifest },
-        async (item) => ({
-          title: item.title,
-          href: docsMap.get(item.href)?.sdk !== undefined ? scopeHrefToSDK(config)(item.href, ':sdk:') : item.href,
-          tag: item.tag,
-          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-          icon: item.icon,
-          target: item.target,
-          sdk: item.sdk,
-        }),
+        async (item) => {
+          const doc = docsMap.get(item.href)
+
+          const injectSDK =
+            doc?.frontmatter?.sdk !== undefined &&
+            doc.frontmatter.sdk.length >= 1 &&
+            !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
+            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`)
+
+          return {
+            title: item.title,
+            href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
+            tag: item.tag,
+            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+            icon: item.icon,
+            target: item.target,
+            sdk: item.sdk,
+          }
+        },
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
@@ -760,6 +781,8 @@ template: wide
   const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
 
+  const headingValidationVFiles: VFile[] = []
+
   for (const doc of docsWithOnlyIfComponents) {
     // Extract all SDK values from <If /> all components
     const availableSDKs = new Set<SDK>()
@@ -787,7 +810,7 @@ template: wide
     })
 
     for (const sdk of availableSDKs) {
-      await remark()
+      const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
         .use(() => (inputTree) => {
@@ -817,6 +840,8 @@ template: wide
           path: doc.file.filePath,
           value: String(doc.vfile),
         })
+
+      headingValidationVFiles.push(vfile)
     }
   }
 
@@ -883,7 +908,14 @@ template: wide
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
   const warnings = reporter(
-    [...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles, manifestVfile],
+    [
+      ...coreVFiles,
+      ...partialsVFiles,
+      ...typedocVFiles,
+      ...flatSdkSpecificVFiles,
+      manifestVfile,
+      ...headingValidationVFiles,
+    ],
     {
       quiet: true,
     },

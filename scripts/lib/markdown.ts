@@ -27,6 +27,8 @@ import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeading
 import { Prompt, checkPrompts } from './prompts'
 import { markDocumentDirty, type Store } from './store'
 
+const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
+
 export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
   async (
@@ -95,8 +97,37 @@ export const parseInMarkdownFile =
       .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
       .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
-      .use(() => (tree, vfile) => {
+      .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
+
+        mdastVisit(
+          tree,
+          (node) => {
+            if (node.type !== 'text') return false
+            if (!('value' in node)) return false
+            if (typeof node.value !== 'string') return false
+            const lines = node.value.split('\n')
+            const callout = lines[0]
+            return calloutRegex.test(callout)
+          },
+          (node) => {
+            const callout = calloutRegex.exec((node as any).value.split('\n')[0].trim())
+
+            if (callout === null) {
+              throw new Error(`Invalid callout: ${node}`)
+            }
+
+            const id = callout[2]?.trim()
+
+            if (id !== undefined) {
+              if (documentContainsIfComponent === false && headingsHashes.has(id)) {
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+              }
+
+              headingsHashes.add(id)
+            }
+          },
+        )
 
         mdastVisit(
           tree,
@@ -106,7 +137,7 @@ export const parseInMarkdownFile =
 
             if (id !== undefined) {
               if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeFail(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
               }
 
               headingsHashes.add(id)
@@ -114,7 +145,7 @@ export const parseInMarkdownFile =
               const slug = slugify(toString(node).trim())
 
               if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
-                safeFail(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
               }
 
               headingsHashes.add(slug)

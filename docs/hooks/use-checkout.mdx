@@ -1,0 +1,297 @@
+---
+title: useCheckout()
+description: Clerk's useCheckout() hook provides state and methods to manage a subscription checkout flow.
+---
+
+The `useCheckout()` hook is the primary tool for managing checkout flows. It can be used to create, manage, and confirm a checkout session for a user or an organization's subscription plan. The hook provides the state of the current checkout process, such as its status and any errors, along with methods to initiate and complete the checkout.
+
+`useCheckout()` can be used in two ways:
+
+1.  In conjunction with the [`<CheckoutProvider />`](#checkout-components-and-hooks), which provides the checkout context to its children. This is useful when multiple components in a tree need to access the same checkout state.
+2.  As a standalone hook by passing configuration options directly to it. This is ideal for self-contained components that manage their own checkout flow.
+
+## Parameters
+
+The `useCheckout()` hook accepts an optional options object. These options are **required** if the hook is used without a `<CheckoutProvider />` wrapping your component tree.
+
+<Properties>
+  * `options?`
+  * [`UseCheckoutOptions`](#usecheckoutoptions)
+
+  An object containing the configuration for the checkout flow.
+</Properties>
+
+### `UseCheckoutOptions`
+
+<Properties>
+  * `for?`
+  * `'organization'`
+
+  Specifies that the checkout is for an organization. If omitted, the checkout defaults to the current user.
+
+  ***
+
+  * `planId`
+  * `string`
+
+  The ID of the subscription plan to check out (e.g., `cplan_xxxx`).
+
+  ***
+
+  * `planPeriod`
+  * `'monthly' | 'yearly'`
+
+  The billing period for the plan.
+</Properties>
+
+## Returns
+
+The hook returns an object containing a `checkout` object with the current state and methods to control the flow.
+
+<Properties>
+  * `checkout`
+  * `object`
+
+  An object containing the checkout resource properties, state helpers, and methods.
+</Properties>
+
+The `checkout` object contains the following:
+
+### Resource Properties
+
+These properties describe the checkout resource itself. They are `null` until the checkout process is started by calling the `start()` method.
+
+<Properties>
+  * `id`
+  * `string | null`
+
+  The unique identifier for the checkout resource.
+
+  ***
+  * `paymentSource`
+  * `object | null`
+
+  The payment source being used for the checkout.
+
+  ***
+  * `plan`
+  * `object | null`
+
+  The subscription plan details for the checkout.
+
+  ***
+  * `externalClientSecret`
+  * `string | null`
+
+  The client secret from an external payment provider, like Stripe, used to complete the payment on the client-side.
+
+  ***
+  * `planPeriod`
+  * `'monthly' | 'yearly' | null`
+
+  The billing period for the plan.
+
+  ***
+  * `planPeriodStart`
+  * `Date | null`
+
+  The start date of the plan period.
+
+  ***
+  * `totals`
+  * `object | null`
+
+  An object containing the total costs, taxes, and other pricing details.
+
+  ***
+  * `isImmediatePlanChange`
+  * `boolean | null`
+
+  Indicates if the plan change will take effect immediately.
+</Properties>
+
+### State Helpers
+
+These properties provide information about the current state of the hook's operations.
+
+<Properties>
+  * `status`
+  * `'idle' | 'starting' | 'confirming' | 'complete' | 'error'`
+
+  The current status of the checkout flow.
+
+  ***
+  * `isStarting`
+  * `boolean`
+
+  Returns `true` when the `start()` method is in progress.
+
+  ***
+  * `isConfirming`
+  * `boolean`
+
+  Returns `true` when the `confirm()` method is in progress.
+
+  ***
+  * `error`
+  * `ClerkAPIResponseError | null`
+
+  An error object if any part of the checkout process fails.
+
+  ***
+  * `fetchStatus`
+  * `'idle' | 'fetching' | 'error'`
+
+  The data fetching status for the checkout resource.
+</Properties>
+
+### Methods
+
+These methods are used to control the checkout flow.
+
+<Properties>
+  * `start()`
+  * `() => Promise<CommerceCheckoutResource>`
+
+  Initializes the checkout process by creating a checkout resource on the server.
+
+  ***
+  * `confirm()`
+  * `(params: ConfirmCheckoutParams) => Promise<CommerceCheckoutResource>`
+
+  Confirms the checkout, typically after the user has entered payment details.
+
+  ***
+  * `complete()`
+  * `(params?: { redirectUrl: string }) => void`
+
+  Finalizes the checkout process. Can optionally accept a `redirectUrl` to navigate the user to upon completion.
+
+  ***
+  * `clear()`
+  * `() => void`
+
+  Clears the current checkout state from the cache.
+</Properties>
+
+## Examples
+
+The `useCheckout()` hook can be used with a context provider for managing state across multiple components or as a standalone hook for more isolated use cases.
+
+<Tabs items={["With <CheckoutProvider />", "Standalone Hook"]}>
+  <Tab>
+    ### With `<CheckoutProvider />`
+
+    Using the `<CheckoutProvider />` is the recommended approach when checkout state needs to be shared across multiple components. The provider is configured once, and any child component can access the checkout context by calling `useCheckout()`.
+
+    The following example shows a `<SubscriptionPage />` that sets up the provider and a `<CheckoutFlow />` component that consumes the context to manage the checkout UI.
+
+    <Tabs items={["SubscriptionPage", "CheckoutFlow"]}>
+      <Tab>
+        ```tsx {{ filename: 'src/components/SubscriptionPage.tsx', collapsible: true }}
+        import { CheckoutProvider } from '@clerk/clerk-react'; // Fictional import path
+        import { CheckoutFlow } from './CheckoutFlow';
+
+        export function SubscriptionPage() {
+          // The provider sets the context for the checkout flow.
+          // Any child component can now call `useCheckout()` to access this context.
+          return (
+            <CheckoutProvider
+              for="user"
+              planId="cplan_123abc"
+              planPeriod="monthly"
+            >
+              <div>
+                <h1>Upgrade Your Plan</h1>
+                <p>You are about to subscribe to our monthly plan.</p>
+                <CheckoutFlow />
+              </div>
+            </CheckoutProvider>
+          );
+        }
+        ```
+      </Tab>
+      <Tab>
+        ```tsx {{ filename: 'src/components/CheckoutFlow.tsx', collapsible: true }}
+        import { useCheckout } from '@clerk/clerk-react'; // Fictional import path
+
+        export function CheckoutFlow() {
+          // `useCheckout` reads context from the nearest `<CheckoutProvider />`
+          const { checkout } = useCheckout();
+          const { start, status, isStarting, error } = checkout;
+
+          const handleStartCheckout = async () => {
+            try {
+              // This will create the checkout session on the backend
+              await start();
+              // Next steps would involve using a payment element (e.g., Stripe)
+              // and then calling `checkout.confirm()` and `checkout.complete()`.
+            } catch (e) {
+              console.error('Error starting checkout:', e);
+            }
+          };
+
+          return (
+            <div>
+              <p>Current status: {status}</p>
+              <button onClick={handleStartCheckout} disabled={isStarting}>
+                {isStarting ? 'Starting...' : 'Proceed to Payment'}
+              </button>
+              {error && (
+                <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>
+              )}
+              {status === 'starting' && <p>Redirecting to payment...</p>}
+            </div>
+          );
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Tab>
+  <Tab>
+    ### Standalone Hook
+
+    For simple, self-contained components, you can use `useCheckout()` by passing the configuration options directly to the hook. This avoids the need to wrap the component in a provider.
+
+    The following example shows an `<UpgradeButton />` component that manages its own checkout flow.
+
+    ```tsx {{ filename: 'src/components/UpgradeButton.tsx' }}
+    import { useCheckout } from '@clerk/clerk-react'; // Fictional import path
+
+    export function UpgradeButton({ planId, planPeriod }) {
+      // Pass options directly to the hook when not using a provider.
+      const { checkout } = useCheckout({
+        planId,
+        planPeriod,
+        for: 'user',
+      });
+
+      const { start, status, isStarting, error } = checkout;
+
+      const handleStartCheckout = async () => {
+        try {
+          await start();
+          // In a real app, you would now use the `externalClientSecret`
+          // from the checkout object to render a payment form.
+          console.log('Checkout started! Status:', checkout.status);
+        } catch (e) {
+          console.error('Error starting checkout:', e);
+        }
+      };
+
+      return (
+        <div>
+          <button onClick={handleStartCheckout} disabled={isStarting}>
+            {isStarting
+              ? 'Initializing...'
+              : `Upgrade to ${planPeriod} plan`}
+          </button>
+          {error && (
+            <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>
+          )}
+        </div>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>

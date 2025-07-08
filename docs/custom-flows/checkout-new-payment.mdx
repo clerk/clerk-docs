@@ -1,0 +1,147 @@
+---
+title: Build a custom checkout flow for a new payment method
+description: Learn how to use the Clerk API to build a custom checkout flow for a new payment method.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+This guide will walk you through how to build a custom checkout flow with a new payment method.
+
+<Steps>
+  ## Enable billing features
+
+  To use billing features, you first need to ensure they are enabled for your application. Please follow the [Billing documentation](/docs/billing/overview) to enable them and setup your plans.
+
+  ## Checkout flow
+
+  To create a checkout session with a new payment card, you must:
+
+  1. Set up the checkout provider with plan details.
+  1. Initialize the checkout session when the user is ready.
+  1. Render the payment form for card collection.
+  1. Confirm the payment with the collected payment method.
+  1. Complete the checkout process and redirect the user.
+
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      The following example:
+
+      1. Uses the [`useCheckout()`](/docs/hooks/use-checkout) hook to get to initiate and manage the checkout session.
+      1. Uses the [`usePaymentElement()`](/docs/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElementForm/>`.
+      1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
+         1. Copy from the Clerk Dashboard.
+         1. Use the [Clerk Backend API](TBD).
+         1. Use the new [`usePlans()`](/docs/hooks/use-plans) hook to get the plan details.
+
+      This example is written for Next.js App Router but can be adapted for any React-based framework.
+
+      ```tsx {{ filename: 'app/components/CheckoutPage.tsx', mark: [[3, 9], 13, 15, [20, 21], 23, 31,33, 39, 53, [63, 72], 82] }}
+      'use client'
+      import * as React from 'react'
+      import {
+        CheckoutProvider,
+        useCheckout,
+        PaymentElementProvider,
+        PaymentElementForm,
+        usePaymentElement,
+      } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
+
+      export default function CheckoutPage() {
+        return (
+          <CheckoutProvider for="user" planId="cplan_xxxx" planPeriod="monthly">
+            <CustomCheckout />
+          </CheckoutProvider>
+        )
+      }
+
+      function CustomCheckout() {
+        const { checkout } = useCheckout()
+        const { status } = checkout
+
+        if (status === 'awaiting_initialization') {
+          return <CheckoutInitialization />
+        }
+
+        return (
+          <div className="checkout-container">
+            <CheckoutSummary />
+
+            <PaymentElementProvider checkout={checkout}>
+              <PaymentSection />
+            </PaymentElementProvider>
+          </div>
+        )
+      }
+
+      function CheckoutInitialization() {
+        const { start, status, fetchStatus } = useCheckout()
+
+        return (
+          <button onClick={start} disabled={fetchStatus === 'loading'} className="start-checkout-button">
+            {fetchStatus === 'loading' ? 'Initializing...' : 'Start Checkout'}
+          </button>
+        )
+      }
+
+      function PaymentSection() {
+        const { checkout } = useCheckout()
+
+        const { isConfirming, confirm, complete, error } = checkout
+
+        const { isFormReady, submit, isProviderReady } = usePaymentElement()
+        const [isProcessing, setIsProcessing] = React.useState(false)
+        const router = useRouter()
+
+        const handleSubmit = async (e) => {
+          e.preventDefault()
+          if (!isFormReady || isProcessing) return
+          setIsProcessing(true)
+
+          try {
+            // Submit payment form to get payment method
+            const { data, error } = await submit()
+            // Usually a validation error from stripe that you can ignore
+            if (error) {
+              return
+            }
+            // Confirm checkout with payment method
+            await confirm(data)
+            // Complete checkout and redirect
+            await complete({ redirectUrl: '/dashboard' })
+          } catch (error) {
+            console.error('Payment failed:', error)
+          } finally {
+            setIsProcessing(false)
+          }
+        }
+
+        return (
+          <form onSubmit={handleSubmit}>
+            <PaymentElementForm fallback={<PaymentSkeleton />} />
+
+            {error && <div>{error.message}</div>}
+
+            <button type="submit" disabled={!isFormReady || isProcessing || isConfirming}>
+              {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+            </button>
+          </form>
+        )
+      }
+
+      function CheckoutSummary() {
+        const { checkout } = useCheckout()
+        const { plan, totals } = checkout
+
+        return (
+          <div>
+            <h2>Order Summary</h2>
+            <span>{plan?.name}</span>
+            <span>\({totals?.totalDueNow.amountFormatted}\)</span>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
+</Steps>

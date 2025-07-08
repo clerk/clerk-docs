@@ -201,7 +201,7 @@ export default function Dashboard() {
   }
   ```
 
-  For `auth.userId()`, it would return `null` if the user has a `pending` session. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to a `signed-in` state.
+  For `auth().userId`, it would return `null` if the user has a `pending` session. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to a `signed-in` state.
 
   ```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
   import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
@@ -225,6 +225,33 @@ export default function Dashboard() {
       // Always run for API routes
       '/(api|trpc)(.*)',
     ],
+  }
+  ```
+
+  In some cases, you may want to access `auth().userId` on API handlers or UI components even when the user's session is `pending`. This can be useful for internal logging, analytics, or other metadata collection. To enable this, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow access to the user ID.
+
+  ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
+  import { auth } from '@clerk/nextjs/server'
+
+  export const POST = async () => {
+    const { userId, orgId, has } = await auth({ treatPendingAsSignedOut: false })
+
+    // Check if the user is signed-out
+    if (!userId) {
+      return Response.json({ error: 'User is signed-out' }, { status: 401 })
+    }
+
+    // Since `treatPendingAsSignedOut` is false, `userId` will be available for both signed-in and pending sessions, which can be used for logging, analytics, or creating resources.
+    // However, orgId may be null, so be cautious in case the underlying logic relies on it to be defined.
+    try {
+      const newResource = await resources.create({
+        userId,
+      })
+
+      return Response.json({ data: newResource }, { status: 201 })
+    } catch (error) {
+      return Response.json({ error: 'Failed to create resource' }, { status: 500 })
+    }
   }
   ```
 </If>

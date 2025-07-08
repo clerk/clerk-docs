@@ -22,7 +22,9 @@ Once you have enabled an after-auth flow through the Clerk Dashboard, the sign-u
 
 ## `pending` sessions
 
-A user's authentication state can be considered signed-in, signed-out, or pending. **By default, `pending` sessions are treated as signed-out** across Clerk's authentication context. This affects features that rely on the user's authentication state, like control components, the `useAuth()` hook, and server utilities that access the `auth` object, such as `getAuth()` or `request.auth`. However, you can set `treatPendingAsSignedOut` to `false` to treat `pending` sessions as signed-in. See the following sections for more information.
+A user's authentication state can be considered signed-in, signed-out, or pending. **By default, `pending` sessions are treated as signed-out** across Clerk's authentication context. This affects features that rely on the user's authentication state, like control components, the `useAuth()` hook, and server utilities that access the `auth` object, such as `getAuth()` or `request.auth`. However, you can set `treatPendingAsSignedOut` to `false` to treat `pending` sessions as signed-in. This is useful for cases where you may need to access the user's data, like their user ID, regardless if they have completed the after-auth flow.
+
+See the following sections for more information.
 
 ### Control components
 
@@ -228,21 +230,22 @@ export default function Dashboard() {
   }
   ```
 
-  In some cases, you may want to access `auth().userId` on API handlers or UI components even when the user's session is `pending`. This can be useful for internal logging, analytics, or other metadata collection. To enable this, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow access to the user ID.
+  By default, users with a `pending` session are treated as signed-out, and their `userId` will not be available. However, in some cases, you may want to access the user's ID even if their session is still `pending`. In these cases, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow you to access the `userId`.
 
   ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
   import { auth } from '@clerk/nextjs/server'
 
   export const POST = async () => {
-    const { userId, orgId, has } = await auth({ treatPendingAsSignedOut: false })
+    // `treatPendingAsSignedOut` is set to `false` to allow access to the `userId` for pending sessions
+    const { userId, has } = await auth({ treatPendingAsSignedOut: false })
 
     // Check if the user is signed-out
     if (!userId) {
       return Response.json({ error: 'User is signed-out' }, { status: 401 })
     }
 
-    // Since `treatPendingAsSignedOut` is false, `userId` will be available for both signed-in and pending sessions, which can be used for logging, analytics, or creating resources.
-    // However, orgId may be null, so be cautious in case the underlying logic relies on it to be defined.
+    // Now the pending user's `userId` can be used for your use case
+    // This is a basic example of creating a resource using the `userId`
     try {
       const newResource = await resources.create({
         userId,

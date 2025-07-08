@@ -1,6 +1,7 @@
 ---
 title: Create a custom getUser function
 description: Build
+sdk: nextjs
 ---
 
 It can be a bit daunting when getting stated with Clerk on how to make your user data work for you. Bringing Clerk into your application can very easily bring in a split brain situation where managing user data can get complicated (and slow).
@@ -12,7 +13,6 @@ Here we are going to take a different approach, building on top of Clerk's `auth
 To get started, we will simply call `auth()` and pull out what we need.
 
 ```ts
-// Different Clerk SDKs have different ways import and call `auth()`
 import { auth } from '@clerk/nextjs'
 
 export const getUser = async () => {
@@ -679,7 +679,59 @@ Only once we have the two data stores being kept in sync can we upgrade `getUser
   }
 ```
 
-### You probably don't need clerk webhooks
+### Use Clerk webhooks as your plan B
+
+When building an application, it's not unusual that your users will interact with each other, maybe you want to share files between users (Dropdox style), or your users will comment on videos (Youtube style), or possibly users will play a game with each other (Geo-guesser style). It makes sense as such that you'll want to look up a resource in your database, and you will want to know more than just the `userId` of the user that created that resource. This can create an issue when the user details (full name, username, email, etc) are stored in Clerk, you can setup your application to call `await clerk.users.getUser(...)`, but this will be rate-limited and will slow down your page load times. 
+
+Typically developers will turn to using Webhooks to solve this issue, creating a `users` table with the user details they want to store and have at the ready, they will get clerk to call there webhook endpoints on user details changes to store it for later querying. Unfortunately webhooks have some inherit problems that need to be accounted for, two common ones are:
+
+- Race conditions, our infra aims to send out the webhook request in a timely manner, but for new sign ups their can be a sizeable delay, if a new user signs up and leaves a comment on your website, you may have out of sync issues where the comment will fail to be saved because they don't have a row in your `users` table yet.
+- Extra hassle with testing & development, to properly test your webhook endpoints are working, you need to proxy the requests to your local machine, or deploy and test in a preview environment. And can have added complexity with multi developers collaborating on the same application.
+
+So as a counter measure to these issues, I advice you to use webhooks as your plan B, as a backup.
+
+For a more durable, performant application, I suggest you start by creating a `syncUserData()` function.
+
+```ts
+import { getUser } from "~/lib/get-user"
+import { db } from "~/db"
+import { userDetails } from "~/db/schema"
+
+// Call this function whenever we are adding or updating a resource that is tied to a user, for example a user video upload, or a comment in a comment section, or a document getting shared.
+export const syncUserData = async () => {
+  // Use our existing getUser() function to get the user data, whether that is clerk provided information, or custom metadata we are storing.
+  // For this example you would need to update the Session Token to include the users full name, primary email, and profile image.
+  const user = await getUser()
+
+  if (user === null) {
+    throw new Error('User not authenticated')
+  }
+
+  // Do a database upsert, essentially saying add the user details to the database if they don't exist, or update their details if they do.
+  db
+    .insert(userDetails)
+    .values({
+        clerkUserId: user.userId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        imageUrl: user.imageUrl,
+    })
+    .onConflictDoUpdate({
+        target: userDetails.clerkUserId,
+        set: {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            imageUrl: user.imageUrl,
+        },
+    })
+}
+```
+
+Now with this function in hand, whenever a user does any kind of action, eg submitting a rental application on your next gen ai rental platform, just call this during it (or even in a [WaitUntil](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil)) to ensure your database is in sync with Clerk. Removing any race condition issues.
+
+Once that is in place, feel free to setup webhooks as a backup. For example if a user goes in, changes a user data in a clerk component, then leaves without doing any action on your site, you'd still want that to sync through.
 
 ## Considerations for client side
 

@@ -681,7 +681,7 @@ Only once we have the two data stores being kept in sync can we upgrade `getUser
 
 ### Use Clerk webhooks as your plan B
 
-When building an application, it's not unusual that your users will interact with each other, maybe you want to share files between users (Dropdox style), or your users will comment on videos (Youtube style), or possibly users will play a game with each other (Geo-guesser style). It makes sense as such that you'll want to look up a resource in your database, and you will want to know more than just the `userId` of the user that created that resource. This can create an issue when the user details (full name, username, email, etc) are stored in Clerk, you can setup your application to call `await clerk.users.getUser(...)`, but this will be rate-limited and will slow down your page load times. 
+When building an application, it's not unusual that your users will interact with each other, maybe you want to share files between users (Dropdox style), or your users will comment on videos (Youtube style), or possibly users will play a game with each other (Geo-guesser style). It makes sense as such that you'll want to look up a resource in your database, and you will want to know more than just the `userId` of the user that created that resource. This can create an issue when the user details (full name, username, email, etc) are stored in Clerk, you can setup your application to call `await clerk.users.getUser(...)`, but this will be rate-limited and will slow down your page load times.
 
 Typically developers will turn to using Webhooks to solve this issue, creating a `users` table with the user details they want to store and have at the ready, they will get clerk to call there webhook endpoints on user details changes to store it for later querying. Unfortunately webhooks have some inherit problems that need to be accounted for, two common ones are:
 
@@ -693,38 +693,33 @@ So as a counter measure to these issues, I advice you to use webhooks as your pl
 For a more durable, performant application, I suggest you start by creating a `syncUserData()` function.
 
 ```ts
-import { getUser } from "~/lib/get-user"
-import { db } from "~/db"
-import { userDetails } from "~/db/schema"
+import { getUser } from '~/lib/get-user'
+import { db } from '~/db'
+import { userDetails } from '~/db/schema'
 
 // Call this function whenever we are adding or updating a resource that is tied to a user, for example a user video upload, or a comment in a comment section, or a document getting shared.
-export const syncUserData = async () => {
-  // Use our existing getUser() function to get the user data, whether that is clerk provided information, or custom metadata we are storing.
+export const syncUserData = async (user: Awaited<ReturnType<typeof getUser>>) => {
+  // Use our existing getUser() user object to get the user data, whether that is clerk provided information, or custom metadata we are storing.
   // For this example you would need to update the Session Token to include the users full name, primary email, and profile image.
-  const user = await getUser()
-
-  if (user === null) {
-    throw new Error('User not authenticated')
-  }
 
   // Do a database upsert, essentially saying add the user details to the database if they don't exist, or update their details if they do.
-  db
+  await db
     .insert(userDetails)
     .values({
-        clerkUserId: user.userId,
+      clerkUserId: user.userId,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      imageUrl: user.imageUrl,
+    })
+    .onConflictDoUpdate({
+      target: userDetails.clerkUserId,
+      set: {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
         imageUrl: user.imageUrl,
-    })
-    .onConflictDoUpdate({
-        target: userDetails.clerkUserId,
-        set: {
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            imageUrl: user.imageUrl,
-        },
+      },
     })
 }
 ```
@@ -735,4 +730,28 @@ Once that is in place, feel free to setup webhooks as a backup. For example if a
 
 ## Considerations for client side
 
-### Refreshing the client
+Everything in this guide we have touched on so far has been server side, using the new react server components and next.js server actions. This leaves out an important aspect of the web, the users browser. Fortunately we can fully replicate our `getUser()` server side call as a client side `useUser()` react hook.
+
+```ts
+"use client";
+
+import { useAuth } from "@clerk/nextjs";
+
+export const useUser = () => {
+  const { isSignedIn, userId, sessionClaims } = useAuth();
+
+  if (!isSignedIn) return null;
+
+  const { email, details } = sessionClaims;
+
+  return {
+    ...details,
+    userId,
+    email,
+  };
+};
+```
+
+The one main emission is not including an `update()` function, as this is client side we don't particularly trust the user. So to perform an update to the user details, create a server action, validate the request data (using something like zod), run any business logic checks to ensure the data is as expected. The use your `getUser().update()` function to update the users details.
+
+### Refreshing the users Session Token

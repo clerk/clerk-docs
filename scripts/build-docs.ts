@@ -59,7 +59,15 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, markDocumentDirty, Store } from './lib/store'
+import {
+  createBlankStore,
+  DocsMap,
+  getCoreDocCache,
+  getMarkdownCache,
+  getScopedDocCache,
+  markDocumentDirty,
+  Store,
+} from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -201,6 +209,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
+  const scopedDocCache = getScopedDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
@@ -735,30 +744,32 @@ template: wide
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 
-          const vfile = await remark()
-            .use(remarkFrontmatter)
-            .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-            .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-            .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
-            .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-            .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
-            .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-            .use(
-              insertFrontmatter({
-                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
-                lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
+            remark()
+              .use(remarkFrontmatter)
+              .use(remarkMdx)
+              .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
+              .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+              .use(
+                insertFrontmatter({
+                  canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
+                  lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                }),
+              )
+              .process({
+                path: doc.file.filePath,
+                value: doc.fileContent,
               }),
-            )
-            .process({
-              path: doc.file.filePath,
-              value: doc.fileContent,
-            })
+          )
 
           await writeSdkFile(
             targetSdk,
             doc.file.filePathInDocsFolder,
-            typedocTableSpecialCharacters.decode(String(vfile)),
+            typedocTableSpecialCharacters.decode(vfile.value as string),
           )
 
           return vfile

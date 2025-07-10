@@ -713,7 +713,7 @@ export const syncUserData = async (user: Awaited<ReturnType<typeof getUser>>) =>
       imageUrl: user.imageUrl,
 
       // We want to know when this data was last synced, so we don't accidentally overwrite newer details with older details if update requests come in out of order.
-      lastClerkSync: new Date()
+      lastClerkSync: new Date(),
     })
     .onConflictDoUpdate({
       target: userDetails.clerkUserId,
@@ -722,7 +722,7 @@ export const syncUserData = async (user: Awaited<ReturnType<typeof getUser>>) =>
         lastName: user.lastName,
         email: user.email,
         imageUrl: user.imageUrl,
-        lastClerkSync: new Date()
+        lastClerkSync: new Date(),
       },
     })
 }
@@ -737,25 +737,25 @@ Once that is in place, feel free to setup webhooks as a backup. For example if a
 Everything in this guide we have touched on so far has been server side, using the new react server components and next.js server actions. This leaves out an important aspect of the web, the users browser. Fortunately we can fully replicate our `getUser()` server side call as a client side `useUser()` react hook.
 
 ```ts
-"use client";
+'use client'
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from '@clerk/nextjs'
 
 export const useUser = () => {
-  const { isSignedIn, userId, sessionClaims } = useAuth();
+  const { isSignedIn, userId, sessionClaims } = useAuth()
 
   // Like the `getUser()` function, feel free to customize how you want to handle the user not being signed in. If you are expecting this hook to only be used in authenticated components, you could throw an Error() here.
-  if (!isSignedIn) return null;
+  if (!isSignedIn) return null
 
   // Extract out the session claims, when we set the custom token details in the types.d.ts above, those types will work here too, so we keep the type safety.
-  const { email, details } = sessionClaims;
+  const { email, details } = sessionClaims
 
   return {
     ...details,
     userId,
     email,
-  };
-};
+  }
+}
 ```
 
 The one main emission is not including an `update()` function, as this is client side we don't particularly trust the user. So to perform an update to the custom user details, create a server action, validate the request data (using something like zod), run any business logic checks to ensure the data is as expected. The use your `getUser().update()` function to update the users details.
@@ -767,7 +767,7 @@ The beauty of using metadata combined with a customized session token is that no
 To fix this issue, on the client we can force a refresh, getting the users browser to go to Clerk and ask for up to date information. With an up to date JWT requests to your application backend with be accurate.
 
 ```ts
-import { useUser } from "@clerk/nextjs"
+import { useUser } from '@clerk/nextjs'
 
 const { user } = useUser()
 
@@ -775,7 +775,7 @@ user.reload()
 ```
 
 ```ts
-import { useSession } from "@clerk/nextjs"
+import { useSession } from '@clerk/nextjs'
 
 const { session } = useSession()
 
@@ -783,7 +783,7 @@ session.reload()
 ```
 
 ```ts
-import { useAuth } from "@clerk/nextjs"
+import { useAuth } from '@clerk/nextjs'
 
 const { getToken } = useAuth()
 
@@ -791,24 +791,26 @@ await getToken({ skipCache: true })
 ```
 
 ```ts
-"use client";
+'use client'
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from '@clerk/nextjs'
 
 export const useUser = () => {
-  const { isSignedIn, userId, sessionClaims, getToken } = useAuth();
+  const { isSignedIn, userId, sessionClaims, getToken } = useAuth()
 
-  if (!isSignedIn) return null;
+  if (!isSignedIn) return null
 
-  const { email, details } = sessionClaims;
+  const { email, details } = sessionClaims
 
   return {
     ...details,
     userId,
     email,
-    refresh: async () => { await getToken({ skipCache: true }) }
-  };
-};
+    refresh: async () => {
+      await getToken({ skipCache: true })
+    },
+  }
+}
 ```
 
 If you are using a more tradition api, you could add to the `update()` function in our `getUser()` a line that attaches a header to the response say `x-refresh-token` and then client side you could check the response of all requests and run a `refresh()` when the header is present. But in while using server actions we don't get such abilities. So we will need to be diligent and ensure that server actions that change clerk user data, custom or not, also `refresh()` on the client side once resolved back to the user.

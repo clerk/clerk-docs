@@ -34,7 +34,7 @@ Then skip to the [Email link verification](#email-link-verification) section.
 1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
 1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
 
-<Tabs items={["Next.js", "iOS"]}>
+<Tabs items={["Next.js", "iOS", "Android"]}>
   <Tab>
     ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
     'use client'
@@ -237,6 +237,89 @@ Then skip to the [Email link verification](#email-link-verification) section.
           // for more info on error handling
           dump(error)
         }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'AddEmailView.kt', collapsible: true }}
+    @Composable
+    fun AddEmailViewModel(modifier: Modifier = Modifier, viewModel: AddEmailViewModel = viewModel()) {
+      val state by viewModel.uiState.collectAsState()
+      when (state) {
+        AddEmailViewModel.AddEmailUiState.NeedsVerification -> {
+          InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
+             viewModel.createEmailAddress(it) 
+          }
+        }
+
+        AddEmailViewModel.AddEmailUiState.Verified -> {
+          Text("Verified!")
+        }
+
+        AddEmailViewModel.AddEmailUiState.Verifying -> {
+          InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+            viewModel.verifyCode(it, state.emailAddress)
+          }
+        }
+      }
+    }
+
+    @Composable
+    fun InputContentView(buttonText: String, placeholder: String, modifier: Modifier = Modifier, onClick: (String) -> Unit) {
+      var input by remember { mutableStateOf("") }
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        TextField(
+            modifier = Modifier.padding(bottom = 16.dp),
+            value = input,
+            onValueChange = { input = it },
+            placeholder = { Text(placeholder) },
+        )
+        Button(onClick = { onClick(input) }) { Text(buttonText) }
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
+    class AddEmailViewModel: ViewModel() {
+      private val _uiState = MutableStateFlow<AddEmailUiState>(AddEmailUiState.NeedsVerification)
+      val uiState = _uiState.asStateFlow()
+
+      fun createEmailAddress(emailAddress: String) {
+        val user = requireNotNull(Clerk.user)
+
+        // Add an unverified email address to the user,
+        // then send the user an email with the verification code
+        viewModelScope.launch {
+            user
+            .createEmailAddress(emailAddress)
+            .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
+            .onSuccess { 
+              // Update the state to show that the email address has been created
+              // and that the user needs to verify the email address
+              _uiState.value = AddEmailUiState.NeedsVerification(it) 
+            }
+            .onFailure { Log.e("AddEmailViewModel", "Failed to create email address and prepare verification: $it.longErrorMessageOrNull") }
+        }
+      }
+
+      fun verifyCode(code: String, newEmailAddress: EmailAddress) {
+        viewModelScope.launch {
+          newEmailAddress
+            .attemptVerification(code)
+            .onSuccess { 
+              // Update the state to show that the email addresshas been verified
+              _uiState.value = AddEmailUiState.Verified 
+            }
+            .onFailure { Log.e("AddEmailViewModel", "Failed to verify email address: $it.longErrorMessageOrNull") }
+        }
+      }
+
+      sealed interface AddEmailUiState {
+        data object NeedsVerification: AddEmailUiState
+        data class Verifying(val emailAddress: EmailAddress) : AddEmailUiState
+        data object Verified : AddEmailUiState
       }
     }
     ```

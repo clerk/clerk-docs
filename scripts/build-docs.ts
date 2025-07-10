@@ -85,8 +85,8 @@ import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prom
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { VFile } from 'vfile'
-import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { checkTooltips } from './lib/plugins/checkTooltips'
+import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {

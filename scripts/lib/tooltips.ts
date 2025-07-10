@@ -18,7 +18,8 @@ import { getTooltipsCache, type Store } from './store'
 
 export const readTooltipsFolder = (config: BuildConfig) => async () => {
   if (!config.tooltips) {
-    throw new Error('Tooltips are not enabled')
+    console.error('Tooltips are not enabled')
+    return []
   }
 
   return readdirp.promise(config.tooltips.inputPath, {

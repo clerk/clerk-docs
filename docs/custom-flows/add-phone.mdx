@@ -19,7 +19,7 @@ The following example demonstrates how to build a custom user interface that all
 
 <Include src="_partials/custom-flows/phone-number" />
 
-<Tabs items={["Next.js", "iOS"]}>
+<Tabs items={["Next.js", "iOS", "Android"]}>
   <Tab>
     ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
     'use client'
@@ -221,6 +221,89 @@ The following example demonstrates how to build a custom user interface that all
           // for more info on error handling
           dump(error)
         }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'AddPhoneView.kt', collapsible: true }}
+    @Composable
+    fun AddPhoneView(modifier: Modifier = Modifier, viewModel: AddPhoneViewModel = viewModel()) {
+      val state by viewModel.uiState.collectAsState()
+      when (state) {
+        AddPhoneViewModel.AddPhoneUiState.NeedsVerification -> {
+          InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
+             viewModel.createPhoneNumber(it) 
+          }
+        }
+
+        AddPhoneViewModel.AddPhoneUiState.Verified -> {
+          Text("Verified!")
+        }
+
+        AddPhoneViewModel.AddPhoneUiState.Verifying -> {
+          InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+            viewModel.verifyCode(it, state.phoneNumber)
+          }
+        }
+      }
+    }
+
+    @Composable
+    fun InputContentView(buttonText: String, placeholder: String, modifier: Modifier = Modifier, onClick: (String) -> Unit) {
+      var input by remember { mutableStateOf("") }
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        TextField(
+            modifier = Modifier.padding(bottom = 16.dp),
+            value = input,
+            onValueChange = { input = it },
+            placeholder = { Text(placeholder) },
+        )
+        Button(onClick = { onClick(input) }) { Text(buttonText) }
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
+    class AddPhoneViewModel: ViewModel() {
+      private val _uiState = MutableStateFlow<AddPhoneUiState>(AddPhoneUiState.NeedsVerification)
+      val uiState = _uiState.asStateFlow()
+
+      fun createPhoneNumber(phoneNumber: String) {
+        val user = requireNotNull(Clerk.user)
+
+        // Add an unverified phone number to the user,
+        // then send the user an SMS with the verification code
+        viewModelScope.launch {
+            user
+            .createPhoneNumber(phoneNumber)
+            .flatMap { it.prepareVerification() }
+            .onSuccess { 
+              // Update the state to show that the phone number has been created
+              // and that the user needs to verify the phone number
+              _uiState.value = AddPhoneUiState.NeedsVerification(it) 
+            }
+            .onFailure { Log.e("AddPhoneViewModel", "Failed to create phoneNumber and prepare verification: $it.longErrorMessageOrNull") }
+        }
+      }
+
+      fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
+        viewModelScope.launch {
+          newPhoneNumber
+            .attemptVerification(code)
+            .onSuccess { 
+              // Update the state to show that the phone number has been verified
+              _uiState.value = AddPhoneUiState.Verified 
+            }
+            .onFailure { Log.e("AddPhoneUiState", "Failed to verify code: $it.longErrorMessageOrNull") }
+        }
+      }
+
+      sealed interface AddPhoneUiState {
+        data object NeedsVerification: AddPhoneUiState
+        data class Verifying(val phoneNumber: PhoneNumber) : AddPhoneUiState
+        data object Verified : AddPhoneUiState
       }
     }
     ```

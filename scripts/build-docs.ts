@@ -85,7 +85,7 @@ import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prom
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { VFile } from 'vfile'
-import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
+import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { checkTooltips } from './lib/plugins/checkTooltips'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -214,7 +214,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
-  const writeTooltipsToDist = writeTooltips(config, store)
 
   abortSignal?.throwIfAborted()
 
@@ -948,13 +947,6 @@ template: wide
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (config.tooltips) {
-    await writeTooltipsToDist(validatedTooltips)
-    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
   }
 
   abortSignal?.throwIfAborted()

@@ -1,5 +1,5 @@
-// For the test suite to work effectively we need to be able to
-// configure the builds, this file defines the config object
+// For the test suite to work effectively, we need to be able to
+// configure the builds. This file defines the config object.
 
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -62,8 +62,14 @@ type BuildConfigOptions = {
 
 export type BuildConfig = Awaited<ReturnType<typeof createConfig>>
 
-// Takes the basePath and resolves the relative paths to be absolute paths
+/**
+ * Creates a temporary build environment where files (redirects, prompts, tooltips, etc) are written to a temporary directory before being moved to their final location. The temporary directory is used for testing so that the existing files are not interfered with.
+ *
+ * @param config - The configuration object with relative paths.
+ * @returns The configuration object with absolute paths.
+ */
 export async function createConfig(config: BuildConfigOptions) {
+  // Takes the basePath and resolves the relative paths to be absolute paths
   const resolve = (relativePath: string) => {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
   }

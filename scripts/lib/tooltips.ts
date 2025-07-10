@@ -1,6 +1,6 @@
-// responsible for reading in and parsing the partials markdown
-// for validation see validators/checkPartials.ts
-// for partials we currently do not allow them to embed other partials
+// responsible for reading in and parsing the tooltips markdown
+// for validation see validators/checkTooltips.ts
+// for tooltips we currently do not allow them to embed other tooltips
 // this also removes the .mdx suffix from the urls in the markdown
 
 import path from 'node:path'

@@ -77,6 +77,8 @@ export const errorMessages = {
   // Tooltip errors
   'tooltip-read-error': (path: string): string => `Failed to read in ${path} from tooltips file`,
   'tooltip-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+  'tooltip-src-not-tooltip': (): string => `<Tooltip /> prop "src" must start with "_tooltips/"`,
+  'tooltip-not-found': (src: string): string => `Tooltip ${src} not found`,
 
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>

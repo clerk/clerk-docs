@@ -96,7 +96,6 @@ export const writeTooltips = (config: BuildConfig, store: Store) => async (toolt
   const write = writeDistFile(config, store)
 
   for (const tooltip of tooltips) {
-    await write(tooltip.path, tooltip.content)
-    console.info(`✓ Wrote tooltip: ${tooltip.path}`)
+    await write(tooltip.path, tooltip.vfile.value as string)
   }
 }

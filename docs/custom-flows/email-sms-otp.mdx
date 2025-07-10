@@ -29,7 +29,7 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
   1. Attempt to complete the verification with the code the user provides.
   1. If the verification is successful, set the newly created session as the active session.
 
-  <Tabs items={["Next.js", "JavaScript", "iOS"]}>
+  <Tabs items={["Next.js", "JavaScript", "iOS", "Android"]}>
     <Tab>
       This example is written for Next.js App Router but it can be adapted to any React-based framework.
 
@@ -302,6 +302,116 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
       }
       ```
     </Tab>
+
+    <Tab>
+      ```kotlin {{ filename: 'SMSOTPSignUpView.kt', collapsible: true }}
+      @Composable
+      fun SMSOTPSignUpView(viewModel: SMSOTPSignUpViewModel = viewModel()) {
+        val state by viewModel.uiState.collectAsState()
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          when (state) {
+            SMSOTPSignUpViewModel.UiState.Unverified -> {
+              InputContent(
+                placeholder = "Enter your phone number",
+                buttonText = "Continue",
+                onClick = viewModel::submit,
+              )
+            }
+            SMSOTPSignUpViewModel.UiState.Verified -> {
+              Text("Verified")
+            }
+            SMSOTPSignUpViewModel.UiState.Verifying -> {
+              InputContent(
+                placeholder = "Enter your verification code",
+                buttonText = "Verify",
+                onClick = viewModel::verify,
+              )
+            }
+
+            SMSOTPSignUpViewModel.UiState.Loading -> {
+              CircularProgressIndicator()
+            }
+          }
+        }
+      }
+
+      @Composable
+      fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
+        var value by remember { mutableStateOf("") }
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+          Button(onClick = { onClick(value) }) { Text(buttonText) }
+        }
+      }
+      ```
+
+      ```kotlin {{ filename: 'SMSOTPSignUpViewModel.kt', collapsible: true }}
+      class SMSOTPSignUpViewModel : ViewModel() {
+
+        private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+        val uiState = _uiState.asStateFlow()
+
+        init {
+          Clerk.isInitialized
+            .onEach { isInitialized ->
+              if (isInitialized) {
+                if (Clerk.session != null) {  
+                  _uiState.value = UiState.Verified
+                } else {
+                  _uiState.value = UiState.Unverified
+                }
+              }
+            }
+            .launchIn(viewModelScope)
+        }
+
+        fun submit(phoneNumber: String) {
+          viewModelScope.launch {
+            SignUp.create(SignUp.CreateParams.Standard(phoneNumber = phoneNumber))
+              .flatMap { it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.PHONE_CODE) }
+              .onSuccess { _uiState.value = UiState.Verifying }
+              .onFailure {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+              }
+          }
+        }
+
+        fun verify(code: String) {
+          val inProgressSignUp = Clerk.signUp ?: return
+          viewModelScope.launch {
+            inProgressSignUp
+              .attemptVerification(SignUp.AttemptVerificationParams.PhoneCode(code))
+              .onSuccess {
+                if (it.status == SignUp.Status.COMPLETE) {
+                  _uiState.value = UiState.Verified
+                } else {
+                  // The user may need to complete further steps
+                }
+              }
+              .onFailure {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+              }
+          }
+        }
+
+        sealed interface UiState {
+
+          data object Loading : UiState
+
+          data object Unverified : UiState
+
+          data object Verifying : UiState
+
+          data object Verified : UiState
+        }
+      }
+      ```
+    </Tab>
   </Tabs>
 
   To create a sign-up flow for email OTP, use the [`prepareEmailAddressVerification`](/docs/references/javascript/sign-up#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/references/javascript/sign-up#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the previous example. You can find all available methods in the [`SignUp`](/docs/references/javascript/sign-in) object documentation.
@@ -315,7 +425,7 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
   1. Attempt verification with the code the user provides.
   1. If the attempt is successful, set the newly created session as the active session.
 
-  <Tabs items={["Next.js","JavaScript", "iOS"]}>
+  <Tabs items={["Next.js","JavaScript", "iOS", "Android"]}>
     <Tab>
       This example is written for Next.js App Router but it can be adapted to any React-based framework.
 
@@ -618,6 +728,116 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
             // for more info on error handling
             dump(error)
           }
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```kotlin {{ filename: 'SMSOTPSignInView.kt', collapsible: true }}
+      @Composable
+      fun SMSOTPSignInView(viewModel: SMSOTPSignInViewModel = viewModel()) {
+        val state by viewModel.uiState.collectAsState()
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          when (state) {
+            SMSOTPSignInViewModel.UiState.Unverified -> {
+              InputContent(
+                placeholder = "Enter your phone number",
+                buttonText = "Continue",
+                onClick = viewModel::submit,
+              )
+            }
+            SMSOTPSignInViewModel.UiState.Verified -> {
+              Text("Verified")
+            }
+            SMSOTPSignInViewModel.UiState.Verifying -> {
+              InputContent(
+                placeholder = "Enter your verification code",
+                buttonText = "Verify",
+                onClick = viewModel::verify,
+              )
+            }
+
+            SMSOTPSignInViewModel.UiState.Loading -> {
+              CircularProgressIndicator()
+            }
+          }
+        }
+      }
+
+      @Composable
+      fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
+        var value by remember { mutableStateOf("") }
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+          Button(onClick = { onClick(value) }) { Text(buttonText) }
+        }
+      }
+      ```
+
+      ```kotlin {{ filename: 'SMSOTPSignInViewModel.kt', collapsible: true }}
+      class SMSOTPSignInViewModel : ViewModel() {
+
+        private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+        val uiState = _uiState.asStateFlow()
+
+        init {
+          Clerk.isInitialized
+            .onEach { isInitialized ->
+              if (isInitialized) {
+                if (Clerk.session != null) {  
+                  _uiState.value = UiState.Verified
+                } else {
+                  _uiState.value = UiState.Unverified
+                }
+              }
+            }
+            .launchIn(viewModelScope)
+        }
+
+        fun submit(phoneNumber: String) {
+          viewModelScope.launch {
+            SignIn.create(SignIn.CreateParams.Standard(phoneNumber = phoneNumber))
+              .flatMap { it.prepareVerification(SignIn.PrepareVerificationParams.Strategy.PHONE_CODE) }
+              .onSuccess { _uiState.value = UiState.Verifying }
+              .onFailure {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+              }
+          }
+        }
+
+        fun verify(code: String) {
+          val inProgressSignIn = Clerk.SignIn ?: return
+          viewModelScope.launch {
+            inProgressSignUp
+              .attemptVerification(SignIn.AttemptVerificationParams.PhoneCode(code))
+              .onSuccess {
+                if (it.status == SignIn.Status.COMPLETE) {
+                  _uiState.value = UiState.Verified
+                } else {
+                  // The user may need to complete further steps
+                }
+              }
+              .onFailure {
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+              }
+          }
+        }
+
+        sealed interface UiState {
+
+          data object Loading : UiState
+
+          data object Unverified : UiState
+
+          data object Verifying : UiState
+
+          data object Verified : UiState
         }
       }
       ```

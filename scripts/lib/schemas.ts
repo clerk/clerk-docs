@@ -25,6 +25,7 @@ export const VALID_SDKS = [
   'js-backend',
   'sdk-development',
   'community-sdk',
+  'flutter',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]

@@ -1,0 +1,114 @@
+---
+title: Add a new payment method
+description: Learn how to use Clerk's components to allow users to add a new payment method to their account.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+This guide will walk you through how to build a flow for adding a new payment method. This is a common feature in a user's billing or account settings page, allowing them to pre-emptively add a payment method for future use.
+
+<Steps>
+  ### Enable billing features
+
+  To use billing features, you first need to ensure they are enabled for your application. Please follow the [Billing documentation](/docs/billing/overview) to enable them and set up your plans.
+
+  ### Add payment method flow
+
+  To add a new payment method for a user, you must:
+
+  1. Set up the [`<PaymentElementProvider />`](/docs/hooks/use-payment-element) to create a context for the user's payment actions.
+  1. Render the [`<PaymentElementForm />`](/docs/hooks/use-payment-element) to display the secure payment fields from your provider.
+  1. Use the [`usePaymentElement()`](/docs/hooks/use-payment-element) hook to submit the form and create a payment token.
+  1. Use the [`useUser()`](/docs/hooks/use-user) hook to attach the newly created payment method to the user.
+
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      The following example demonstrates how to create a billing page where a user can add a new payment method. It is split into two components:
+
+      - **`<UserBillingPage />`**: This component sets up the `<PaymentElementProvider />`.
+      - **`<AddPaymentMethodForm />`**: This component renders the payment form and handles the submission logic using the `usePaymentElement` and `useUser` hooks.
+
+      <Tabs items={["UserBillingPage", "AddPaymentMethodForm"]}>
+        <Tab>
+          This component is responsible for setting up the provider context. It specifies that the payment actions within its children are `for` the `user`.
+
+          ```tsx {{ filename: 'src/components/UserBillingPage.tsx' }}
+          import { PaymentElementProvider } from '@clerk/nextjs'
+          import { AddPaymentMethodForm } from './AddPaymentMethodForm'
+
+          export function UserBillingPage() {
+            return (
+              <div>
+                <h1>Billing Settings</h1>
+                <p>Manage your saved payment methods.</p>
+
+                <PaymentElementProvider for="user">
+                  <AddPaymentMethodForm />
+                </PaymentElementProvider>
+              </div>
+            )
+          }
+          ```
+        </Tab>
+
+        <Tab>
+          This component contains the form and the logic to handle the submission. It uses `usePaymentElement` to get the `submit` function and `useUser` to get the `user` object. When the form is submitted, it first creates a payment token and then attaches it to the user.
+
+          ```tsx {{ filename: 'src/components/AddPaymentMethodForm.tsx' }}
+          import { usePaymentElement, useUser, PaymentElementForm } from '@clerk/nextjs'
+          import { useState } from 'react'
+
+          export function AddPaymentMethodForm() {
+            const { user } = useUser()
+            const { submit, isFormReady } = usePaymentElement()
+            const [isSubmitting, setIsSubmitting] = useState(false)
+            const [error, setError] = useState<string | null>(null)
+
+            const handleAddPaymentMethod = async (e: React.FormEvent) => {
+              e.preventDefault()
+              if (!isFormReady || !user) {
+                return
+              }
+
+              setError(null)
+              setIsSubmitting(true)
+
+              try {
+                // 1. Submit the form to the payment provider to get a payment token
+                const { data, error } = await submit()
+
+                // Usually a validation error from stripe that you can ignore.
+                if (error) {
+                  setIsSubmitting(false)
+                  return
+                }
+
+                // 2. Use the token to add the payment source to the user
+                await user.addPaymentSource(result.data)
+
+                // 3. Handle success (e.g., show a confirmation, clear the form)
+                alert('Payment method added successfully!')
+              } catch (err: any) {
+                setError(err.message || 'An unexpected error occurred.')
+              } finally {
+                setIsSubmitting(false)
+              }
+            }
+
+            return (
+              <form onSubmit={handleAddPaymentMethod}>
+                <h3>Add a new payment method</h3>
+                <PaymentElementForm />
+                <button type="submit" disabled={!isFormReady || isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save Card'}
+                </button>
+                {error && <p style={{ color: 'red' }}>{error}</p>}
+              </form>
+            )
+          }
+          ```
+        </Tab>
+      </Tabs>
+    </Tab>
+  </Tabs>
+</Steps>

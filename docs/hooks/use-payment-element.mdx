@@ -1,0 +1,171 @@
+---
+title: usePaymentElement()
+description: Clerk's usePaymentElement() hook provides methods and state for interacting with a payment form.
+---
+
+The `usePaymentElement()` hook is used to control the payment form rendered by the `<PaymentElementForm />` component. It provides the necessary state and methods to submit payment details to a payment provider like Stripe.
+
+This hook must be used within a component that is a descendant of the `<PaymentElementProvider />` component. It is typically used in a checkout flow that prompts a user to add a new payment method, or for adding a new payment method outside of a checkout.
+
+## Payment Element Components
+
+The `usePaymentElement()` hook works in conjunction with the `<PaymentElementProvider />` and `<PaymentElementForm />` components.
+
+### `<PaymentElementProvider />`
+
+This provider component sets up the context for the payment element. It fetches all the necessary data from the payment provider (e.g., Stripe) and makes it available to its children.
+
+<Properties>
+  - `checkout?`
+  - `CommerceCheckoutResource`
+
+  An optional checkout resource object. When provided, the payment element is scoped to the specific checkout session.
+
+  ---
+
+  - `for?`
+  - `'user' | 'org'`
+
+  Specifies whether the payment method is being added for a user or an organization. Defaults to `'user'`.
+
+  ---
+
+  - `stripeAppearance?`
+  - `object`
+
+  An optional object to customize the appearance of the Stripe Payment Element. This allows you to match the form's styling to your application's theme.
+
+  ---
+
+  - `paymentDescription?`
+  - `string`
+
+  An optional description to display to the user within the payment element UI.
+</Properties>
+
+### `<PaymentElementForm />`
+
+This component renders the actual payment form from the provider (e.g., the Stripe Payment Element). It should be rendered as a child of `<PaymentElementProvider />`.
+
+<Properties>
+  - `fallback?`
+  - `ReactNode`
+
+  Optional fallback content, such as a loading skeleton, to display while the payment form is being initialized.
+</Properties>
+
+## Parameters
+
+The `usePaymentElement()` hook does not accept any parameters. It derives its state and configuration from the nearest `<PaymentElementProvider />`.
+
+## Returns
+
+The hook returns an object containing state helpers and methods to interact with the payment form.
+
+<Properties>
+  - `submit`
+  - `() => Promise<{ data: { gateway: 'stripe'; paymentToken: string } | null; error: PaymentElementError | null}>`
+
+  A function that submits the payment form data to the payment provider. It returns a promise that resolves with either a `data` object containing a payment token on success, or an `error` object on failure.
+
+  ---
+
+  - `reset`
+  - `() => Promise<void>`
+
+  A function that resets the payment form to its initial, empty state.
+
+  ---
+
+  - `isFormReady`
+  - `boolean`
+
+  Returns `true` when the payment form UI has been rendered and is ready for user input. This is useful for disabling a submit button until the form is interactive.
+
+  ---
+
+  - `isProviderReady`
+  - `boolean`
+
+  Returns `true` when the underlying payment provider (e.g., Stripe.js) has been fully initialized.
+
+  ---
+
+  - `provider`
+  - `{ name: 'stripe' } | undefined`
+
+  An object containing information about the initialized payment provider. It is `undefined` until `isProviderReady` is `true`.
+</Properties>
+
+## Examples
+
+The following example demonstrates the basic structure for adding a new payment method. A parent component, `<AddPaymentMethodView />`, sets up the provider and renders the form. A child component, `<PaymentForm />`, uses the `usePaymentElement()` hook to handle the form submission.
+
+<Tabs items={["AddPaymentMethodView", "PaymentForm"]}>
+  <Tab>
+    ```tsx {{ filename: 'src/components/AddPaymentMethodView.tsx' }}
+    import { PaymentElementProvider, PaymentElementForm } from '@clerk/nextjs'
+    import { PaymentForm } from './PaymentForm'
+    import { PaymentFormSkeleton } from './PaymentFormSkeleton'
+
+    export function AddPaymentMethodView() {
+      // The provider configures the payment context for a user.
+      return (
+        <PaymentElementProvider for="user">
+          <h2>Add a new payment method</h2>
+          <p>Your payment details will be saved securely for future purchases.</p>
+
+          {/* The form component renders the payment UI */}
+          <PaymentElementForm fallback={<PaymentFormSkeleton />}>
+            {/* The child component handles form interaction */}
+            <PaymentForm />
+          </PaymentElementForm>
+        </PaymentElementProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'src/components/PaymentForm.tsx' }}
+    import { usePaymentElement } from '@clerk/nextjs'
+    import { useState } from 'react'
+
+    export function PaymentForm() {
+      // The hook provides the state and methods to control the form.
+      const { submit, isFormReady, isProviderReady } = usePaymentElement()
+      const [isSubmitting, setIsSubmitting] = useState(false)
+
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!isFormReady) {
+          return
+        }
+
+        setIsSubmitting(true)
+        setError(null)
+
+        const { data, error } = await submit()
+
+        // Usually a validation error from stripe that you can ignore
+        if (error) {
+          setIsSubmitting(false)
+          return
+        }
+
+        console.log('Payment token created:', data.paymentToken)
+        setIsSubmitting(false)
+      }
+
+      return (
+        <form onSubmit={handleSubmit}>
+          {/* The actual payment fields are rendered by <PaymentElementForm> */}
+          <button type="submit" disabled={!isFormReady || !isProviderReady || isSubmitting}>
+            {isSubmitting ? 'Creating token...' : 'Create token'}
+          </button>
+        </form>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

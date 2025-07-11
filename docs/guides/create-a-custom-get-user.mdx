@@ -1,0 +1,816 @@
+---
+title: Create a custom `getUser()` function
+description: Build
+sdk: nextjs
+---
+
+It can be a bit daunting when getting stated with Clerk on how to make your user data work for you. Bringing Clerk into your application can very easily bring in a split brain situation where managing user data can get complicated (and slow).
+
+Clerk supports a handful of different ways to manage this disconnect. A lot of people turn to using webhooks to sync the Clerk user data in to their own databases, but this can introduce some out of sync issues.
+
+Here we are going to take a different approach, building on top of Clerk's `auth()` function we are going to create our own function. I'm going to call it `getUser` for simplicity, but feel free to use `authenticateUser`, `authRequest`, `fetchUser`, `verifyAuth` or whatever floats your boat.
+
+To get started, we will simply call `auth()` and pull out what we need.
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  // I highly recommend taking some time to understand all the methods
+  // and properties this function returns, `has()` is useful for permission
+  // checks, and `getToken()` is great for authenticating external api calls
+  // Alongside `userId`, you'll likely want `orgId` in a b2b setup
+  const { isAuthenticated, userId } = await auth()
+
+  if (!isAuthenticated) {
+    // This is our first major option, and we have many choices
+
+    // A common option is going to be to `throw new Error('Unauthorized')`
+    // ensuring that we can only continue if the user is logged in.
+
+    // But if we are using a framework we may want to `throw new TRPCError()`
+    // or call `unauthorized()` (https://nextjs.org/docs/app/api-reference/functions/unauthorized)
+
+    // A more advanced pattern is to throw a response
+    // `throw new Response("Unauthorized", { status: 401 })`
+    // Using a higher level function to catch and return the response object.
+
+    // If we are using EffectTS we may want to return an Error object
+
+    // Or simply we can just return null, signifying that user can't be
+    // authenticated, letting the request handler do what it wants with
+    // that information
+    return null
+  }
+
+  return {
+    // For now we simply want to return the user identifier.
+    userId,
+  }
+}
+```
+
+Feel free to use this inside a server action, rsc component, a api route, and anywhere else we run code on the server side. But we aren't looking at a particularly helpful return object so lets truck on.
+
+It is not uncommon that Clerk support get's a request to raise our rate limits as someones application is hitting them and causing issues. Commonly it's being the application is abusing `currentUser()`, calling it in every request made to their backend. While this function is useful, giving you all of the users data, that also means we need to limit it's use to stop our infra being overrun.
+
+So you may ask, well how the hell do I get my users data than? Well it's simply, we just need to modify the session token.
+
+1. Head over to [Sessions](https://dashboard.clerk.com/~/sessions) on the dashboard and scroll down to "Customize session token"
+1. Update the claims (if they are not already set to something) to simply include the users email:
+
+```json
+{
+  "email": "{{user.primary_email_address}}"
+}
+```
+
+3. Back at our custom `getUser` function, lets pull something new out of the `auth()` return
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  // Extract out `sessionClaims` from the `auth()` call for us to use
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  return {
+    userId,
+
+    // for now let's just return it
+    sessionClaims,
+  }
+}
+```
+
+Looking at the return from our custom `getUser()` we will see
+
+```json {{ mark: [8] }}
+{
+  "userId": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+  "sessionClaims": {
+    "azp": "http://localhost:3001",
+    // Here we have it, because we configured in the dashboard to include the
+    // users email, it shows up here, no network request to clerks infra
+    // needed, no rate limits.
+    "email": "your-email@example.com",
+    "exp": 1751214847,
+    "fva": [137, -1],
+    "iat": 1751214787,
+    "iss": "https://awake-cobra-28.clerk.accounts.dev",
+    "jti": "002332cec9e6fb9c9efd",
+    "nbf": 1751214777,
+    "sid": "sess_2zBZjlFCRMOq1LSDOcJwMBAzQSR",
+    "sub": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+    "v": 2
+  }
+}
+```
+
+4. But you may have noticed in your ide that typescript doesn't know that `email` is a key (and what its value is) on the `sessionClaims` object, well theres a trick to fix that.
+
+```ts {{ filename: 'types.d.ts' }}
+declare global {
+  interface CustomJwtSessionClaims {
+    // If you have clerk configured that users can sign up without their email,
+    // you'll want to make the type `string | undefined` to ensure the types
+    // aren't lying.
+    email: string
+    // don't worry about adding the types of the other data we see in
+    // `sessionClaims` above, the Clerk types have already covered that for us
+  }
+}
+
+export {}
+```
+
+By simply creating this file in the root of your project, typescript will pick up and keep us type-safe.
+
+5. Ok so let's go back to our growing `getUser()` function and refine down the return type
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  // Now that sessionClaims is type safe, we are free to extract out our `email`
+  // property, if you marked it as optional you may want to add in a if check.
+  const { email } = sessionClaims
+
+  return {
+    userId,
+    // Return the users email ready to be used.
+    email,
+  }
+}
+```
+
+## Custom user data.
+
+This is cool and all, reducing network requests will keep our application quick and reduces dependency on Clerk infra being available. But as soon as we need to attach a `stripeCustomerId` or a `australianBusinessNumber` your out of luck, right?
+
+Wrong, Clerk has `metadata`, in-fact we have three types, `unsafe`, `private`, and `public`. These live on the user object, are separate and private between users, and let us store any kind of information we want. For each type of metadata, per user we have 4kb of available json, to put that in human terms that's about 2 to 3 pages of text, or about 1,000 words.
+
+Before we get in to the code, we need to choice which variant of `metadata` we want to use:
+
+- `unsafe` - Sounds scary! all this means is the user can edit this themselves, they can put anything they want in here, can't really trust this data on the server otherwise you open yourself to security risks.
+- `private` - This is the most secure, it can only be written and read from your server using the `clerkClient`, but this means it can't be included in the session token, as then the user would be able to read it.
+- `public` - Unlike the unsafe metadata, public metadata can't be written by the user directly, but unlike private, this can be read by the user, allowing it to be included in the session token!
+
+So we can't use `private` for what we need, so it's up to you to choice between `unsafe` and `public` but for my use I am going to go with `public`, as I don't trust the user.
+
+1. We need to update the Session Token in the dashboard
+
+Back on the [Sessions](https://dashboard.clerk.com/~/sessions) page, update it to include `{{user.public_metadata}}`, you can remove email if you don't want it anymore.
+
+```json
+  {
+    "email": "{{user.primary_email_address}}",
+    // You can call this whatever you'd like,
+    // I went with 'details' but it's completely up to you
++   "details": "{{user.public_metadata}}"
+  }
+```
+
+2. To keep everything aligned we will start by updating our magical types.d.ts file
+
+```ts {{ filename: 'types.d.ts' }}
+  declare global {
+    interface CustomJwtSessionClaims {
+      email: string
++     details: {
++       favoriteSnack?: string
++       favoritePizza?: string
++     }
+    }
+  }
+
+  export {}
+```
+
+Not only do we define that 'details' exists on the users session, but we can now actually in our codebase define our own user data. We no longer need to go over to the dashboard to manage what data we want, it's entirely within our app.
+
+I would start by defining these properties as optional, as any existing users won't have them set. If you're so inclined you could run a migration script to pull the data from say your database and put it in each users metadata, then update the types to make it not optional.
+
+This is a standard json object, so stay away from types that can't be json parsed, eg dates, maps, and sets.
+
+3. Let's update our `getUser()` to now extract and return our custom user data
+
+```ts
+import { auth } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  // Just like the email property we added to the custom session, we now can
+  // pull out the `details` property for our use. The magic here is we get
+  // access to this data without any network request to Clerk's infra.
+  // So your website stays fast.
+  const { email, details } = sessionClaims
+
+  // With the details property, we have a couple different options for
+  // how we want to return it.
+
+  // This is the safest option, as we have no risk that a property
+  // inside `details` could conflict with a `userId` or `email`
+  // but it means you'll need to access it one layer deeper
+  // eg user.details.favoritePizza
+  return {
+    userId,
+    email,
+    details,
+  }
+
+  // I wouldn't recommend this option, in the future a developer
+  // may add `email` to the custom metadata by accident
+  // and this would overwrite the users email we are expecting
+  // Clerk to manage for us
+  return {
+    userId,
+    email,
+    ...details,
+  }
+
+  // For me this is the happy middle ground, it keeps the data access
+  // short (eg user.favoritePizza) but doesn't let us accidentally
+  // overright the other properties we are expecting
+  return {
+    ...details,
+    userId,
+    email,
+  }
+}
+```
+
+4. Success!
+
+Depending on which return you picked above, we will get something along these lines.
+
+```json
+{
+  "favoritePizza": "Pepperoni",
+  "favoriteSnack": "Oreos",
+  "userId": "user_2u823dCrAIzoQfgjnsimCYJvJaI",
+  "email": "your-email@example.com"
+}
+```
+
+Our beautiful `getUser()` function can give us both our standard Clerk info (emails, phone numbers, usernames, etc) and has our custom user data.
+
+## Writing the custom user data
+
+Ok, but we can't spend all day writing the users metadata in the dashboard manually, so how do we update it as we need?
+
+This can be achieved in a couple ways, but for a clean api of our `getUser()` function, my thought is we will return an `update()` function.
+
+```ts
+// We will start by bringing in the `clerkClient`, this can change between Clerk SDKs
+import { auth, clerkClient } from '@clerk/nextjs/server'
+
+export const getUser = async () => {
+  const { isAuthenticated, userId, sessionClaims } = await auth()
+
+  if (!isAuthenticated) return null
+
+  const { email, details } = sessionClaims
+
+  // Bit of function inception here, we are defining our own update function
+  // inside the getUser function, but trust me, this is perfectly natural
+
+  // One cool typescript trick, We can simply use the typescript tool `typeof`
+  // to extract out our custom type from the types.d.ts, instead of having to
+  // re-define the type here.
+  const update = async (newDetails: Partial<typeof details>) => {
+    // We are going to need to call the clerk backend api, so we will start by
+    // instantiating it ready for our use. Despite the await here, this is
+    // simply for a dynamic import, no network fetch yet.
+    // `clerkClient()` will pick up our clerk environment variables automatically
+    // no need to pass them in here.
+    const clerk = await clerkClient()
+
+    // Finally we update the metadata, This function actually returns the full
+    // user object (same as calling currentUser()) so we can use that if we want
+    await clerk.users.updateUserMetadata(userId, {
+      // Since we picked public metadata earlier at the start we want to update that
+      publicMetadata: {
+        // Here I am spreading in the existing details first, so any values not
+        // getting updated, won't get deleted
+        ...details,
+        // And second I am spreading in the new details, overwriting or adding
+        // as need be.
+        ...newDetails,
+      },
+    })
+  }
+
+  return {
+    ...details,
+    userId,
+    email,
+
+    // And lets just return our `update()` function ready to be used.
+    update,
+  }
+}
+```
+
+## Using the function
+
+With our custom `getUser()` we can use it anywhere on the server to power our application.
+
+### On a page load
+
+```ts
+import { getUser } from '~/lib/get-user'
+
+export default async function UserPage() {
+  const user = await getUser()
+
+  if (!user) return <span>Unauthenticated :(</span>
+
+  return (
+    <div>
+      <h1>Welcome {user.email}</h1>
+      {user.favoritePizza ? <span>I hear your favorite pizza is {user.favoritePizza}</span> : null}
+    </div>
+  )
+}
+```
+
+### In a server action
+
+```ts
+'use server'
+
+import { getUser } from '~/lib/get-user'
+
+export const processPizzaOrder = async (pizzaChoice: 'pepperoni' | 'barbecue' | 'chicken') => {
+  const user = await getUser()
+
+  if (user === null) {
+    return {
+      error: 'Unauthenticated',
+    }
+  }
+
+  user.update({
+    favoritePizza: pizzaChoice,
+  })
+}
+```
+
+### In a api route
+
+```ts
+// I am using zod for validation here, but you can use whatever you want
+import { z } from 'zod'
+import { getUser } from '~/lib/get-user'
+
+// In Get requests, you typically don't want to modify any data,
+// so we aren't going to use the `update()` function here.
+export const GET = async (request: Request) => {
+  const user = await getUser()
+
+  if (user === null) {
+    // You may want to fail more gracefully here,
+    // for example redirecting to a login page.
+    // or returning `We don't know your favorite snack`
+    return new Response('Unauthenticated', { status: 401 })
+  }
+
+  return new Response(`${user.email}'s favorite snack is ${user.favoriteSnack}`)
+}
+
+const bodySchema = z.object({
+  snack: z
+    .string()
+    .min(1, {
+      message: 'Snack is required',
+    })
+    .max(20, {
+      message: 'Snack must be less than 20 characters',
+    }),
+})
+
+export const POST = async (request: Request) => {
+  // We don't even bother validating the request body yet
+  // If the users not authenticated, don't waste the compute
+  // validating the request body.
+  const user = await getUser()
+
+  if (user === null) {
+    return new Response('Unauthenticated', { status: 401 })
+  }
+
+  const body = bodySchema.safeParse(await request.json())
+
+  if (!body.success) {
+    return new Response(body.error.message, { status: 400 })
+  }
+
+  // With the new data, we can update the users metadata.
+  await user.update({
+    favoriteSnack: body.data.snack,
+  })
+
+  // We may want to also send an email notification here
+  // Or duel save the data to our own database.
+  // Possibly we want to log the change to monitoring server
+
+  return new Response(`${user.email}'s favorite snack is ${body.data.snack}`)
+}
+```
+
+## Using with a database
+
+The beauty of everything we have done so far is none of it requires you as a app developer to deploy, manage and scale a database. Just with using Clerk you are enabled to build powerful applications that let your users achieve meaningful results.
+
+But this kind of document based storage does have it's limitations and bringing in a relational database (eg postgres, mysql) will allow your applications to share data between users, store more complex data types, give you strong query performance, and more.
+
+In addition it's very possible you started with a database and webapp before you started using Clerk, and already have custom user data in the database that would need to be migrated out take take advantage of user metadata.
+
+So let's take a look at a couple options you have to land on the perfect setup for your application, giving you the performance you desire with the tradeoffs that make sense for you.
+
+### Starting fresh
+
+Let's imagine we are creating an online food ordering platform, users can place orders for their favorite local Japanese restaurant. Users will need to create a new order, filled with food options, and we will need to know the status of their current order.
+
+So we need two database tables, an `orders` table and a `items` table, then we can store the `orderId` and the `orderStatus` in the Clerk user metadata.
+
+```ts
+// I am using postgres, but none of what I am doing is particularly specific to postgres, so feel free to use whatever dialect you want.
+import { index, pgEnum, pgTable } from 'drizzle-orm/pg-core'
+
+export const orderStatus = pgEnum('order_status', ['pending', 'shipped', 'delivered'])
+
+export const orders = pgTable(
+  'orders',
+  (t) => ({
+    orderId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
+
+    // It's possible you will want to call this something more specific, eg `clerkUserId`
+    userId: t.varchar().notNull(),
+    status: orderStatus().notNull().default('pending'),
+    createdAt: t.timestamp().defaultNow(),
+    updatedAt: t.timestamp().defaultNow(),
+  }),
+
+  // Because this is an external id, we need to index it to tell the database we will be querying by it
+  (table) => [index().on(table.userId)],
+)
+
+export const items = pgTable('items', (t) => ({
+  itemId: t.integer().primaryKey().generatedAlwaysAsIdentity(),
+  name: t.varchar().notNull(),
+  price: t.integer().notNull(),
+  discount: t.integer(),
+}))
+
+export const orderItems = pgTable('order_items', (t) => ({
+  orderId: t.integer().references(() => orders.orderId),
+  itemId: t.integer().references(() => items.itemId),
+  quantity: t.integer().notNull(),
+}))
+```
+
+```ts {{ filename: 'types.d.ts' }}
+declare global {
+  interface CustomJwtSessionClaims {
+    email: string
+
+    // I've added the users phone number to their session token, so we have it to easily send them text message updates
+    phone: string
+
+    details: {
+      // I've marked this as possibly null as a user won't always have an active order
+      currentOrder: {
+        orderId: number
+        orderStatus: 'pending' | 'shipped' | 'delivered'
+      } | null
+    }
+  }
+}
+
+export {}
+```
+
+Here we are making a decision, what data is important enough that we want to be able to access fast, what data can we afford to reach out to a service (eg database) for, and what data do we want shared between the two for access from both.
+
+So with this setup we can create a server action to handle adding an item to an order.
+
+```ts
+'use server'
+
+import { db } from '~/db'
+import { orderItems, orders } from '~/db/schema'
+import { getUser } from '~/lib/get-user'
+
+export const addItemToOrder = async (itemId: number, quantity: number) => {
+  const user = await getUser()
+
+  if (user === null) {
+    return { error: 'Unauthenticated' }
+  }
+
+  // Here we are handling the situation that no order exists yet
+  // We start by updating the database to create a new order for the user
+  // We use our user.update function to get the important details on the user
+  // And we finish off with inserting the item into the order
+  if (user.currentOrder === null) {
+    const [newOrder] = await db
+      .insert(orders)
+      .values({
+        userId: user.userId,
+      })
+      .returning({
+        orderId: orders.orderId,
+        status: orders.status,
+      })
+
+    await user.update({
+      currentOrder: {
+        orderId: newOrder.orderId,
+        orderStatus: newOrder.status,
+      },
+    })
+
+    await db.insert(orderItems).values({
+      orderId: newOrder.orderId,
+      itemId,
+      quantity,
+    })
+
+    return {
+      message: 'Order created and item added',
+    }
+  }
+
+  // But once the order is created, we can simply add the item
+  // We don't even need to verify that the order belongs
+  // to the user, as we are using public metadata so it can only be
+  // set server side, as we do above
+  await db.insert(orderItems).values({
+    orderId: user.currentOrder.orderId,
+    itemId,
+    quantity,
+  })
+
+  return {
+    message: 'Item added to existing order',
+  }
+}
+```
+
+### Migrating data over to metadata
+
+It wouldn't be unlikely that your using Clerk from the very start, we may very well have a database already, with a `users` table. So we want to pull those important user details out and store them on the Clerk metadata to quick access.
+
+We can run this migration using the expand and contract pattern, starting by finding everywhere the `users` table is currently being updated, adding in a call to update the users metadata in the same fashion. Next we update our `getUser()` function to first try the metadata, and if it doesn't exist, we reach out to the database.
+
+Let's look at this stripe example.
+
+```ts {{ filename: 'app/onboarding/payments/actions.ts' }}
+  'use server'
+
+  import Stripe from 'stripe'
+  import { eq } from 'drizzle-orm'
+  import { db } from '~/db'
+  import { users } from '~/db/schema'
+  import { getUser } from '~/lib/get-user'
+
+  export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-05-28.basil',
+  })
+
+  export const setupStripeCustomer = async () => {
+    const user = await getUser()
+
+    if (user === null) {
+      throw new Error('User not authenticated')
+    }
+
+    const customer = await stripe.customers.create({
+      email: user.email,
+    })
+
+    // We see here an existing insert in to the `users` table, setting a `stripeCustomerId`
+    await db
+      .update(users)
+      .set({
+        stripeCustomerId: customer.id,
+      })
+      .where(eq(users.clerkUserId, user.userId))
+
+    // So let's update it to also write this new id to the clerk user metadata
++   await user.update({
++     stripeCustomerId: customer.id,
++   })
+
+    return customer.id
+  }
+```
+
+The first step is find all the places in your application that you edit the users table, and mirror the update in the clerk metadata. You may be tempted to write complex data in to the metadata, removing the need for entire tables. But until you have a full grasp of migrating the data over I would hold off.
+
+Only once we have the two data stores being kept in sync can we upgrade `getUser()` to handle some of the migration workload.
+
+```ts
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { eq } from 'drizzle-orm'
+  import { db } from '~/db'
+  import { users } from '~/db/schema'
+  import { setupStripeCustomer } from '~/app/onboarding/payments/actions'
+
+  export const getUser = async () => {
+    const { isAuthenticated, userId, sessionClaims } = await auth()
+
+    if (!isAuthenticated) return null
+
+    const { email, details } = sessionClaims
+
+    const update = async (newDetails: Partial<typeof details>) => {
+      const clerk = await clerkClient()
+
+      await clerk.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...details,
+          ...newDetails,
+        },
+      })
+    }
+
++   let stripeCustomerId = details.stripeCustomerId
+
+    // So now anytime this function is called we are going to check if the user doesn't have a stripeCustomerId set
+    // This check alone has no cost, as it's information stored in the users session
++   if (details.stripeCustomerId === undefined) {
++     const [user_db] = await db
++       .select({
++         stripeCustomerId: users.stripeCustomerId,
++       })
++       .from(users)
++       .where(eq(users.clerkUserId, userId))
+
++     if (user_db.stripeCustomerId === null) {
++       stripeCustomerId = await setupStripeCustomer()
++     } else {
++       await update({
++         stripeCustomerId: user_db.stripeCustomerId,
++       })
+
++       stripeCustomerId = user_db.stripeCustomerId
++     }
++   }
+
+    return {
+      ...details,
++     stripeCustomerId,
+      userId,
+      email,
+      update,
+    }
+  }
+```
+
+### Use Clerk webhooks as your plan B
+
+When building an application, it's not unusual that your users will interact with each other, maybe you want to share files between users (Dropdox style), or your users will comment on videos (Youtube style), or possibly users will play a game with each other (Geo-guesser style). It makes sense as such that you'll want to look up a resource in your database, and you will want to know more than just the `userId` of the user that created that resource. This can create an issue when the user details (full name, username, email, etc) are stored in Clerk, you can setup your application to call `await clerk.users.getUser(...)`, but this will be rate-limited and will slow down your page load times.
+
+Typically developers will turn to using Webhooks to solve this issue, creating a `users` table with the user details they want to store and have at the ready, they will get clerk to call there webhook endpoints on user details changes to store it for later querying. Unfortunately webhooks have some inherit problems that need to be accounted for, two common ones are:
+
+- Race conditions, our infra aims to send out the webhook request in a timely manner, but for new sign ups their can be a sizeable delay, if a new user signs up and leaves a comment on your website, you may have out of sync issues where the comment will fail to be saved because they don't have a row in your `users` table yet.
+- Extra hassle with testing & development, to properly test your webhook endpoints are working, you need to proxy the requests to your local machine, or deploy and test in a preview environment. And can have added complexity with multi developers collaborating on the same application.
+
+So as a counter measure to these issues, I advice you to use webhooks as your plan B, as a backup.
+
+For a more durable, performant application, I suggest you start by creating a `syncUserData()` function.
+
+```ts
+import { getUser } from '~/lib/get-user'
+import { db } from '~/db'
+import { userDetails } from '~/db/schema'
+
+// Call this function whenever we are adding or updating a resource that is tied to a user, for example a user video upload, or a comment in a comment section, or a document getting shared.
+export const syncUserData = async (user: Awaited<ReturnType<typeof getUser>>) => {
+  // Use our existing getUser() user object to get the user data, whether that is clerk provided information, or custom metadata we are storing.
+  // For this example you would need to update the Session Token to include the users full name, primary email, and profile image.
+
+  // Do a database upsert, essentially saying add the user details to the database if they don't exist, or update their details if they do.
+  await db
+    .insert(userDetails)
+    .values({
+      clerkUserId: user.userId,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      imageUrl: user.imageUrl,
+
+      // We want to know when this data was last synced, so we don't accidentally overwrite newer details with older details if update requests come in out of order.
+      lastClerkSync: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: userDetails.clerkUserId,
+      set: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        imageUrl: user.imageUrl,
+        lastClerkSync: new Date(),
+      },
+    })
+}
+```
+
+Now with this function in hand, whenever a user does any kind of action, eg submitting a rental application on your next gen ai rental platform, just call this during it (or even in a [WaitUntil](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil)) to ensure your database is in sync with Clerk. Removing any race condition issues.
+
+Once that is in place, feel free to setup webhooks as a backup. For example if a user goes in, changes a user data in a clerk component, then leaves without doing any action on your site, you'd still want that to sync through. You should check the `lastClerkSync` against the time the webhook is received so you don't accidentally sync outdated webhook information over the latest user data.
+
+## Considerations for client side
+
+Everything in this guide we have touched on so far has been server side, using the new react server components and next.js server actions. This leaves out an important aspect of the web, the users browser. Fortunately we can fully replicate our `getUser()` server side call as a client side `useUser()` react hook.
+
+```ts
+'use client'
+
+import { useAuth } from '@clerk/nextjs'
+
+export const useUser = () => {
+  const { isSignedIn, userId, sessionClaims } = useAuth()
+
+  // Like the `getUser()` function, feel free to customize how you want to handle the user not being signed in. If you are expecting this hook to only be used in authenticated components, you could throw an Error() here.
+  if (!isSignedIn) return null
+
+  // Extract out the session claims, when we set the custom token details in the types.d.ts above, those types will work here too, so we keep the type safety.
+  const { email, details } = sessionClaims
+
+  return {
+    ...details,
+    userId,
+    email,
+  }
+}
+```
+
+The one main emission is not including an `update()` function, as this is client side we don't particularly trust the user. So to perform an update to the custom user details, create a server action, validate the request data (using something like zod), run any business logic checks to ensure the data is as expected. The use your `getUser().update()` function to update the users details.
+
+### Refreshing the users Session Token
+
+The beauty of using metadata combined with a customized session token is that no database query needs to happen to get the data, enabling your website to be very fast, but that information still needs to be stored somewhere. So we bundle it up in to what's know as a `Json Web Token`, cryptographically signing it using public/private keys, and give it to the user to hold on to. When the user sends a request to your website, it can validate the JWT, containing the information we need. But the user will only go and refresh this token once per minute, meaning any recent updates can take a considerable amount of time to pull through.
+
+To fix this issue, on the client we can force a refresh, getting the users browser to go to Clerk and ask for up to date information. With an up to date JWT requests to your application backend with be accurate.
+
+```ts
+import { useUser } from '@clerk/nextjs'
+
+const { user } = useUser()
+
+user.reload()
+```
+
+```ts
+import { useSession } from '@clerk/nextjs'
+
+const { session } = useSession()
+
+session.reload()
+```
+
+```ts
+import { useAuth } from '@clerk/nextjs'
+
+const { getToken } = useAuth()
+
+await getToken({ skipCache: true })
+```
+
+```ts
+'use client'
+
+import { useAuth } from '@clerk/nextjs'
+
+export const useUser = () => {
+  const { isSignedIn, userId, sessionClaims, getToken } = useAuth()
+
+  if (!isSignedIn) return null
+
+  const { email, details } = sessionClaims
+
+  return {
+    ...details,
+    userId,
+    email,
+    refresh: async () => {
+      await getToken({ skipCache: true })
+    },
+  }
+}
+```
+
+If you are using a more tradition api, you could add to the `update()` function in our `getUser()` a line that attaches a header to the response say `x-refresh-token` and then client side you could check the response of all requests and run a `refresh()` when the header is present. But in while using server actions we don't get such abilities. So we will need to be diligent and ensure that server actions that change clerk user data, custom or not, also `refresh()` on the client side once resolved back to the user.

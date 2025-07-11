@@ -35,10 +35,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
       const frontmatter = yaml.parse(file.content.split('---')[1])
       const { title } = frontmatter
 
-      if (!title) {
-        console.error(`Title not found in ${file.path} - will be ignored from llm txt files`)
-        return null
-      }
+      if (!title) return null
 
       return {
         ...file,

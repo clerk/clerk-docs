@@ -765,6 +765,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           doc.file.filePathInDocsFolder,
           `---
 template: wide
+metadata:
+  title: ${doc.frontmatter.title}
+  description: ${doc.frontmatter.description}
 ---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
@@ -773,6 +776,9 @@ template: wide
           `~/${doc.file.filePathInDocsFolder}`,
           `---
 template: wide
+metadata:
+  title: ${doc.frontmatter.title}
+  description: ${doc.frontmatter.description}
 ---
 <SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )

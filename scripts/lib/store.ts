@@ -10,18 +10,21 @@ import type { parseInMarkdownFile } from './markdown'
 import type { readPartial } from './partials'
 import type { readTypedoc } from './typedoc'
 import type { SDK } from './schemas'
+import type { readTooltip } from './tooltips'
 
 type MarkdownFile = Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>
 type CoreDocsFile = VFile
 type ScopedDocsFile = VFile
 type PartialsFile = Awaited<ReturnType<ReturnType<typeof readPartial>>>
 type TypedocsFile = Awaited<ReturnType<ReturnType<typeof readTypedoc>>>
+type TooltipsFile = Awaited<ReturnType<ReturnType<typeof readTooltip>>>
 
 export type DocsMap = Map<string, MarkdownFile>
 export type CoreDocsMap = Map<string, CoreDocsFile>
 export type ScopedDocsMap = Map<string, Map<SDK, ScopedDocsFile>>
 export type PartialsMap = Map<string, PartialsFile>
 export type TypedocsMap = Map<string, TypedocsFile>
+export type TooltipsMap = Map<string, TooltipsFile>
 
 export const createBlankStore = () => ({
   markdown: new Map() as DocsMap,
@@ -29,6 +32,7 @@ export const createBlankStore = () => ({
   scopedDocs: new Map() as ScopedDocsMap,
   partials: new Map() as PartialsMap,
   typedocs: new Map() as TypedocsMap,
+  tooltips: new Map() as TooltipsMap,
   dirtyDocMap: new Map() as Map<string, Set<string>>,
   writtenFiles: new Map() as Map<string, string>,
 })
@@ -85,6 +89,23 @@ export const invalidateFile =
         adjacent.forEach((docPath) => {
           invalidate(docPath, false)
         })
+      }
+    }
+
+    if (config.tooltips) {
+      const relativeTooltipPath = path.relative(config.tooltips.inputPath, filePath)
+
+      if (store.tooltips.has(relativeTooltipPath)) {
+        store.tooltips.delete(relativeTooltipPath)
+
+        const adjacent = store.dirtyDocMap.get(relativeTooltipPath)
+
+        if (adjacent && invalidateAdjacentDocs) {
+          const invalidate = invalidateFile(store, config)
+          adjacent.forEach((docPath) => {
+            invalidate(docPath, false)
+          })
+        }
       }
     }
   }
@@ -156,6 +177,17 @@ export const getPartialsCache = (store: Store) => {
 
     const result = await cacheMiss(key)
     store.partials.set(key, structuredClone(result))
+    return result
+  }
+}
+
+export const getTooltipsCache = (store: Store) => {
+  return async (key: string, cacheMiss: (key: string) => Promise<TooltipsFile>) => {
+    const cached = store.tooltips.get(key)
+    if (cached) return structuredClone(cached)
+
+    const result = await cacheMiss(key)
+    store.tooltips.set(key, structuredClone(result))
     return result
   }
 }

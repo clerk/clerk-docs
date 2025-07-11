@@ -23,6 +23,7 @@ type BuildConfigOptions = {
     docs: Record<string, string[]>
     partials: Record<string, string[]>
     typedoc: Record<string, string[]>
+    tooltips: Record<string, string[]>
   }
   manifestOptions: {
     wrapDefault: boolean
@@ -40,6 +41,10 @@ type BuildConfigOptions = {
     }
   }
   prompts?: {
+    inputPath: string
+    outputPath: string
+  }
+  tooltips?: {
     inputPath: string
     outputPath: string
   }
@@ -102,6 +107,7 @@ export async function createConfig(config: BuildConfigOptions) {
         docs: {},
         partials: {},
         typedoc: {},
+        tooltips: {},
       },
 
       manifestOptions: config.manifestOptions ?? {
@@ -129,6 +135,15 @@ export async function createConfig(config: BuildConfigOptions) {
             inputPathRelative: config.prompts.inputPath,
             outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
             outputPathRelative: config.prompts.outputPath,
+          }
+        : null,
+
+      tooltips: config.tooltips
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.tooltips.inputPath)),
+            inputPathRelative: config.tooltips.inputPath,
+            outputPath: resolve(path.join(tempDist, config.tooltips.outputPath)),
+            outputPathRelative: config.tooltips.outputPath,
           }
         : null,
 

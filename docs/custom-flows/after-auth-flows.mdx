@@ -1,0 +1,260 @@
+---
+title: Tasks after sign-up/sign-in (after-auth flows)
+description: Learn how to use the Clerk API to build custom flows that require users to complete specific tasks after signing up or signing in.
+---
+
+You can configure your application to require users to complete specific actions after signing up or signing in. Clerk refers to these steps as [after-auth flows](/docs/authentication/configuration/after-auth-flows)
+
+After signing up or signing in, users will have a session in a `pending` state. They must complete required tasks before their session transitions to a `signed-in` state. Only then will they be able to access protected content and routes in your application.
+
+## Navigating to tasks after sign-in or sign-up
+
+When a session has a pending task (accessible via [`session.currentTask`](/docs/references/javascript/session#properties)), calling `navigateToTask()` will automatically redirect users to these default paths. You can customize these paths by building your own task resolution flows.
+
+By default, `clerk-js` has default route paths for tasks. Here's the mapping for each task type:
+
+- `orgs` from [Disable personal workspaces](/docs/organizations/overview#disable-personal-workspaces): `/sign-in/tasks/add-organization` or `/sign-up/tasks/add-organization`
+
+## Disable personal workspace
+
+The below snippets demonstrate how to build after-auth flows as custom flows, using [Disable personal workspaces](/docs/organizations/overview#disable-personal-workspaces) as an example.
+
+<Steps>
+  ### Build custom page
+
+  Create a custom page that handles the user's pending session task. For this example, we'll build a page where users can create and select an organization - a required step before they can access the application:
+
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html' }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h1>Create an organization</h1>
+        <form id="create-organization">
+          <label for="name">Name</label>
+          <input id="name" name="name" />
+          <button>Create organization</button>
+        </form>
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js' }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+    }
+
+    const clerk = new Clerk(pubKey)
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      const form = document.getElementById('create-organization')
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault()
+
+        const inputEl = document.getElementById('name')
+
+        if (!inputEl) {
+          // ... handle empty input
+          return
+        }
+
+        clerk
+          .createOrganization({ name: inputEl.value })
+          .then(async (organization) => {
+            // Select organization to the current session
+            await clerk.setActive({ organization: organization.id })
+
+            // Check for and navigate to any pending tasks after setting the active organization
+            await clerk.navigateToTask()
+          })
+          .catch((error) => console.log('An error occurred:', error))
+      })
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `
+
+      const signInDiv = document.getElementById('sign-in')
+
+      clerk.mountSignIn(signInDiv)
+    }
+    ```
+  </CodeBlockTabs>
+
+  ### Handle `pending` sessions after sign-in
+
+  <Tabs items={["Next.js", "JavaScript"]}>
+    <Tab>
+      This example is written for Next.js App Router but it can be adapted for any React-based framework.
+
+      ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', collapsible: true }}
+      'use client'
+
+      import * as React from 'react'
+      import { useSignUp } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
+
+      export default function SignUpPage() {
+        const { navigateToTask } = useClerk()
+        const { isLoaded, signUp, setActive } = useSignUp()
+        const [emailAddress, setEmailAddress] = React.useState('')
+        const [password, setPassword] = React.useState('')
+        const router = useRouter()
+
+        // Handle submission of the sign-up form
+        const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault()
+
+          if (!isLoaded) return
+
+          // Start the sign-up process using the email and password provided
+          try {
+            await signUp.create({
+              emailAddress,
+              password,
+            })
+
+            if (signUpAttempt.status === 'complete') {
+              await setActive({ session: signUpAttempt.createdSessionId })
+
+              // Navigate to page where tasks will get resolved
+              await navigateToTask()
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(signUpAttempt, null, 2))
+            }
+          } catch (err: any) {
+            // See https://clerk.com/docs/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          }
+        }
+
+        return (
+          <>
+            <h1>Sign up</h1>
+            <form onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email">Enter email address</label>
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="password">Enter password</label>
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <div>
+                <button type="submit">Continue</button>
+              </div>
+            </form>
+          </>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      <CodeBlockTabs options={["index.html", "main.js"]}>
+        ```html {{ filename: 'index.html', collapsible: true }}
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="signed-in"></div>
+
+            <div id="sign-up">
+              <h2>Sign up</h2>
+              <form id="sign-up-form">
+                <label for="email">Enter email address</label>
+                <input type="email" name="email" id="sign-up-email" />
+                <label for="password">Enter password</label>
+                <input type="password" name="password" id="sign-up-password" />
+                <button type="submit">Continue</button>
+              </form>
+            </div>
+
+            <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+          </body>
+        </html>
+        ```
+
+        ```js {{ filename: 'main.js', collapsible: true }}
+        import { Clerk } from '@clerk/clerk-js'
+
+        const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+        const clerk = new Clerk(pubKey)
+        await clerk.load()
+
+        if (clerk.isSignedIn) {
+          // Mount user button component
+          document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+          const userbuttonDiv = document.getElementById('user-button')
+
+          clerk.mountUserButton(userbuttonDiv)
+        } else {
+          // Handle the sign-up form
+          document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
+            e.preventDefault()
+
+            const formData = new FormData(e.target)
+            const emailAddress = formData.get('email')
+            const password = formData.get('password')
+
+            try {
+              // Start the sign-up process using the email and password provided
+              const signUpAttempt = await clerk.client.signUp.create({ emailAddress, password })
+
+              if (signUpAttempt.status === 'complete') {
+                await clerk.setActive({ session: signUpAttempt.createdSessionId })
+
+                // Navigate to page where tasks will get resolved
+                await clerk.navigateToTask()
+              }
+            } catch (error) {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(error)
+            }
+          })
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
+  </Tabs>
+</Steps>

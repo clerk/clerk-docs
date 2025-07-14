@@ -1,13 +1,13 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import os from 'node:os'
 import { glob } from 'glob'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import simpleGit from 'simple-git'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { build } from './build-docs'
-import { createBlankStore, invalidateFile } from './lib/store'
 import { createConfig } from './lib/config'
+import { createBlankStore, invalidateFile } from './lib/store'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -160,6 +160,7 @@ const baseConfig = {
     docs: {},
     partials: {},
     typedoc: {},
+    tooltips: {},
   },
   manifestOptions: {
     wrapDefault: true,
@@ -1605,7 +1606,7 @@ sdk: react, nextjs
 
 <If sdk={["nextjs", "react"]}>
   This content is for React users.
-  
+
   <If sdk="nextjs">
     This is nested content specifically for Next.js users who are also using React.
   </If>
@@ -2234,7 +2235,7 @@ title: Core Page
 title: Simple Test
 ---
 
-[Simple Test](/docs/simple-test#non-existent-hash)  
+[Simple Test](/docs/simple-test#non-existent-hash)
 
 # Simple Test Page`,
       },
@@ -3729,6 +3730,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3776,6 +3778,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3827,6 +3830,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3880,6 +3884,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3932,6 +3937,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3972,6 +3978,7 @@ title: Missing Description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4027,6 +4034,7 @@ description: The page being linked to
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4084,6 +4092,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4128,6 +4137,7 @@ description: Test page with partial
             },
             docs: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4313,6 +4323,7 @@ interface Client {
           },
           partials: {},
           typedoc: {},
+          tooltips: {},
         },
       }),
     )
@@ -4741,6 +4752,91 @@ description: Generated API docs
 ---
 
 # API Documentation
+`)
+  })
+})
+
+describe('Multiple document variants for pages', () => {
+  test('Should pick up and use the react specific version of the doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, remix
+---
+
+Documentation specific to Next.js and Remix`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix'],
+        llms: {
+          fullPath: 'llms-full.txt',
+        },
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      navigation: [
+        [
+          {
+            title: 'API Doc',
+            href: '/docs/:sdk:/api-doc',
+            sdk: ['nextjs', 'remix', 'react'],
+          },
+        ],
+      ],
+    })
+
+    expect(await readFile('./dist/nextjs/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdk: nextjs, remix, react
+canonical: /docs/:sdk:/api-doc
+---
+
+Documentation specific to Next.js and Remix
+`)
+
+    expect(await readFile('./dist/remix/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdk: nextjs, remix, react
+canonical: /docs/:sdk:/api-doc
+---
+
+Documentation specific to Next.js and Remix
+`)
+
+    expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
+title: API Documentation for React
+description: x
+canonical: /docs/:sdk:/api-doc
+sdk: nextjs, remix, react
+---
+
+Documentation specific to React.js
 `)
   })
 })

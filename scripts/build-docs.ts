@@ -42,12 +42,12 @@ import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
+import symlinkDir from 'symlink-dir'
 import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import { z } from 'zod'
-import symlinkDir from 'symlink-dir'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -67,6 +67,8 @@ import { extractComponentPropValueFromNode } from './lib/utils/extractComponentP
 import { extractSDKsFromIfProp } from './lib/utils/extractSDKsFromIfProp'
 import { scopeHrefToSDK } from './lib/utils/scopeHrefToSDK'
 
+import { VFile } from 'vfile'
+import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { checkPartials } from './lib/plugins/checkPartials'
 import { checkTypedoc } from './lib/plugins/checkTypedoc'
 import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
@@ -74,6 +76,7 @@ import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
 import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
+import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
 import {
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
@@ -81,11 +84,8 @@ import {
   writeRedirects,
   type Redirect,
 } from './lib/redirects'
-import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
-import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
-import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
-import { VFile } from 'vfile'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -301,31 +301,48 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const cachedDocsSize = store.markdown.size
   // Read in all the docs
-  const docsArray = await Promise.all([
-    ...docsFiles.map(async (file) => {
-      const inManifest = docsInManifest.has(file.href)
+  const docsArray = (
+    await Promise.all([
+      ...docsFiles.map(async (file) => {
+        const inManifest = docsInManifest.has(file.href)
 
-      const markdownFile = await markdownCache(file.filePath, () =>
-        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
-      )
+        const markdownFile = await markdownCache(file.filePath, () =>
+          parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+        )
 
-      docsMap.set(file.href, markdownFile)
-      return markdownFile
-    }),
-    ...(apiErrorsFiles
-      ? apiErrorsFiles.map(async (file) => {
-          const inManifest = docsInManifest.has(file.href)
+        docsMap.set(file.href, markdownFile)
+        return markdownFile
+      }),
+      ...(apiErrorsFiles
+        ? apiErrorsFiles.map(async (file) => {
+            const inManifest = docsInManifest.has(file.href)
 
-          const markdownFile = await markdownCache(file.filePath, () =>
-            parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
-          )
+            const markdownFile = await markdownCache(file.filePath, () =>
+              parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+            )
 
-          docsMap.set(file.href, markdownFile)
+            docsMap.set(file.href, markdownFile)
 
-          return markdownFile
-        })
-      : []),
-  ])
+            return markdownFile
+          })
+        : []),
+    ])
+  ).map((doc) => {
+    if (doc.frontmatter.sdk === undefined) return doc
+
+    const distinctSDKVariants = config.validSdks
+      .map((sdk) => (docsMap.get(`${doc.file.href}.${sdk}`) ? sdk : undefined))
+      .filter((doc) => doc !== undefined)
+
+    const updatedMarkdownDocument = {
+      ...doc,
+      distinctSDKVariants,
+    }
+
+    docsMap.set(doc.file.href, updatedMarkdownDocument)
+
+    return updatedMarkdownDocument
+  })
   console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   abortSignal?.throwIfAborted()
@@ -653,8 +670,21 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
             !item.href.includes(`/${doc.frontmatter.sdk[0]}/`)
 
+          if (injectSDK) {
+            return {
+              title: item.title,
+              href: scopeHref(item.href, ':sdk:'),
+              tag: item.tag,
+              wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+              icon: item.icon,
+              target: item.target,
+              sdk: [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])],
+            }
+          }
+
           return {
             title: item.title,
+            // href: item.href,
             href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
             tag: item.tag,
             wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
@@ -791,7 +821,22 @@ template: wide
       const vFiles = await Promise.all(
         docsArray.map(async (doc) => {
           if (doc.sdk === undefined) return null // skip core docs
-          if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
+
+          // skip docs that are not for the target sdk
+          if (doc.sdk.includes(targetSdk) === false && doc.distinctSDKVariants?.includes(targetSdk) === false)
+            return null
+
+          // if the doc has distinct version, we want to use those instead of the "generic" sdk scoped version
+          const fileContent = (() => {
+            if (doc.distinctSDKVariants?.includes(targetSdk)) {
+              const distinctSDKVariant = docsMap.get(`${doc.file.href}.${targetSdk}`)
+
+              if (distinctSDKVariant === undefined) return doc.fileContent
+
+              return distinctSDKVariant.fileContent
+            }
+            return doc.fileContent
+          })()
 
           const vfile = await remark()
             .use(remarkFrontmatter)
@@ -806,11 +851,12 @@ template: wide
               insertFrontmatter({
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
                 lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                sdk: [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])].join(', '),
               }),
             )
             .process({
               path: doc.file.filePath,
-              value: doc.fileContent,
+              value: fileContent,
             })
 
           await writeSdkFile(

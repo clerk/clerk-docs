@@ -4844,4 +4844,67 @@ template: wide
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
   })
+
+  test('Should have correct sdks in <SDKLink />', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Overview', href: '/docs/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, remix
+---
+
+Documentation specific to Next.js and Remix`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+description: x
+---
+
+[API Doc](/docs/api-doc)`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix'],
+        llms: {
+          fullPath: 'llms-full.txt',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/overview.mdx')).toBe(`---
+title: Overview
+description: x
+---
+
+<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
+`)
+  })
 })

@@ -22,7 +22,7 @@
 
 // Transforms
 // - Content Integration:
-//   - Embeds partial content into markdown files
+//   - Embeds partial and tooltip content into markdown files
 //   - Embeds typedoc content where referenced
 //   - Handles special character encoding in typedoc tables
 // - Link Processing:
@@ -85,6 +85,7 @@ import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prom
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { VFile } from 'vfile'
+import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -118,6 +119,10 @@ async function main() {
       inputPath: '../prompts',
       outputPath: '_prompts',
     },
+    tooltips: {
+      inputPath: '../docs/_tooltips',
+      outputPath: '_tooltips',
+    },
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
       '/docs/core-1',
@@ -149,6 +154,7 @@ async function main() {
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
       },
       partials: {},
+      tooltips: {},
     },
     validSdks: VALID_SDKS,
     manifestOptions: {
@@ -195,6 +201,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
+  const getTooltipsFolder = readTooltipsFolder(config)
+  const getTooltipsMarkdown = readTooltipsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config, store)
@@ -205,6 +213,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
+  const writeTooltipsToDist = writeTooltips(config, store)
 
   abortSignal?.throwIfAborted()
 
@@ -258,6 +267,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
+
+  const cachedTooltipsSize = store.tooltips.size
+  const tooltips = await getTooltipsMarkdown((await getTooltipsFolder()).map((item) => item.path))
+  console.info(`✓ Loaded in ${tooltips.length} tooltips (${cachedTooltipsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
@@ -512,6 +525,50 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     }),
   )
   console.info(`✓ Validated all partials`)
+
+  abortSignal?.throwIfAborted()
+
+  const validatedTooltips = await Promise.all(
+    tooltips.map(async (tooltip) => {
+      if (config.tooltips === null) {
+        throw new Error('Tooltips are not enabled')
+      }
+
+      const tooltipPath = `${config.tooltips.inputPathRelative}/${tooltip.path}`
+
+      try {
+        let node: Node | null = null
+        const links: Set<string> = new Set()
+
+        const vfile = await remark()
+          .use(remarkMdx)
+          .use(
+            validateAndEmbedLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+              links.add(linkInTooltip)
+            }),
+          )
+          .use(() => (tree, vfile) => {
+            node = tree
+          })
+          .process(tooltip.vfile)
+
+        if (node === null) {
+          throw new Error(errorMessages['tooltip-parse-error'](tooltip.path))
+        }
+
+        return {
+          ...tooltip,
+          vfile,
+          node: node as Node,
+          links,
+        }
+      } catch (error) {
+        console.error(`✗ Error validating tooltip: ${tooltip.path}`)
+        throw error
+      }
+    }),
+  )
+  console.info(`✓ Validated all tooltips`)
 
   abortSignal?.throwIfAborted()
 
@@ -883,6 +940,13 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
+  if (config.tooltips) {
+    await writeTooltipsToDist(validatedTooltips)
+    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
+  }
+
+  abortSignal?.throwIfAborted()
+
   if (config.llms?.fullPath || config.llms?.overviewPath) {
     const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
 
@@ -905,12 +969,14 @@ template: wide
 
   const coreVFiles = coreDocs.map((doc) => doc.vfile)
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
+  const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
   const warnings = reporter(
     [
       ...coreVFiles,
       ...partialsVFiles,
+      ...tooltipsVFiles,
       ...typedocVFiles,
       ...flatSdkSpecificVFiles,
       manifestVfile,

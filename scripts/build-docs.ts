@@ -791,12 +791,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       if (doc.sdk !== undefined) {
         // This is a sdk specific doc, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
 
+        const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+
         await writeFile(
           doc.file.filePathInDocsFolder,
           `---
 template: wide
 ---
-<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+<SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
         )
 
         await writeFile(
@@ -804,7 +806,7 @@ template: wide
           `---
 template: wide
 ---
-<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
+<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
         )
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))

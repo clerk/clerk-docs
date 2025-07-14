@@ -4838,5 +4838,10 @@ sdk: nextjs, remix, react
 
 Documentation specific to React.js
 `)
+
+    expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+template: wide
+---
+<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
   })
 })

@@ -24,78 +24,128 @@ The below snippets demonstrate how to build after-auth flows as custom flows, us
 
   Create a custom page that resolves the user's pending session task. For this example, we'll build a page where users can create and select an organization:
 
-  <CodeBlockTabs options={["index.html", "main.js"]}>
-    ```html {{ filename: 'index.html' }}
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Clerk + JavaScript App</title>
-      </head>
-      <body>
-        <div id="app"></div>
+  <Tabs items={["Next.js", "JavaScript"]}>
+    <Tab>
+      ```tsx {{ filename: 'app/components/CreateOrganization.tsx' }}
+      'use client'
 
-        <h1>Create an organization</h1>
-        <form id="create-organization">
-          <label for="name">Name</label>
-          <input id="name" name="name" />
-          <button>Create organization</button>
-        </form>
+      import { useOrganizationList } from '@clerk/nextjs'
+      import { FormEventHandler, useState } from 'react'
 
-        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-      </body>
-    </html>
-    ```
+      export default function CreateOrganization() {
+        const { isLoaded, createOrganization } = useOrganizationList()
+        const [organizationName, setOrganizationName] = useState('')
 
-    ```js {{ filename: 'main.js', mark: [[29, 32]] }}
-    import { Clerk } from '@clerk/clerk-js'
+        if (!isLoaded) return null
 
-    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+        const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
+          e.preventDefault()
+          createOrganization({ name: organizationName })
+            .then((organization) => {
+              // Select organization to the current session
+              await clerk.setActive({ organization: organization.id })
 
-    if (!pubKey) {
-      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
-    }
-
-    const clerk = new Clerk(pubKey)
-    await clerk.load()
-
-    if (clerk.isSignedIn) {
-      const form = document.getElementById('create-organization')
-
-      form.addEventListener('submit', function (e) {
-        e.preventDefault()
-
-        const inputEl = document.getElementById('name')
-
-        if (!inputEl) {
-          // ... handle empty input
-          return
+              // Check for and navigate to any pending tasks after setting the active organization
+              await clerk.navigateToTask()
+            })
+            .catch((err) => {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2))
+            })
+          setOrganizationName('')
         }
 
-        clerk
-          .createOrganization({ name: inputEl.value })
-          .then(async (organization) => {
-            // Select organization to the current session
-            await clerk.setActive({ organization: organization.id })
+        return (
+          <form onSubmit={handleSubmit}>
+            <input
+              type="text"
+              name="organizationName"
+              value={organizationName}
+              onChange={(e) => setOrganizationName(e.currentTarget.value)}
+            />
+            <button type="submit">Create organization</button>
+          </form>
+        )
+      }
+      ```
+    </Tab>
 
-            // Check for and navigate to any pending tasks after setting the active organization
-            await clerk.navigateToTask()
+    <Tab>
+      <CodeBlockTabs options={["index.html", "main.js"]}>
+        ```html {{ filename: 'index.html' }}
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Clerk + JavaScript App</title>
+          </head>
+          <body>
+            <div id="app"></div>
+
+            <h1>Create an organization</h1>
+            <form id="create-organization">
+              <label for="name">Name</label>
+              <input id="name" name="name" />
+              <button>Create organization</button>
+            </form>
+
+            <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+          </body>
+        </html>
+        ```
+
+        ```js {{ filename: 'main.js', mark: [[29, 32]] }}
+        import { Clerk } from '@clerk/clerk-js'
+
+        const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+        if (!pubKey) {
+          throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+        }
+
+        const clerk = new Clerk(pubKey)
+        await clerk.load()
+
+        if (clerk.isSignedIn) {
+          const form = document.getElementById('create-organization')
+
+          form.addEventListener('submit', function (e) {
+            e.preventDefault()
+
+            const inputEl = document.getElementById('name')
+
+            if (!inputEl) {
+              // ... handle empty input
+              return
+            }
+
+            clerk
+              .createOrganization({ name: inputEl.value })
+              .then(async (organization) => {
+                // Select organization to the current session
+                await clerk.setActive({ organization: organization.id })
+
+                // Check for and navigate to any pending tasks after setting the active organization
+                await clerk.navigateToTask()
+              })
+              .catch((error) => console.log('An error occurred:', error))
           })
-          .catch((error) => console.log('An error occurred:', error))
-      })
-    } else {
-      // If there is no active user, mount Clerk's <SignIn />
-      document.getElementById('app').innerHTML = `
-        <div id="sign-in"></div>
-      `
+        } else {
+          // If there is no active user, mount Clerk's <SignIn />
+          document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
 
-      const signInDiv = document.getElementById('sign-in')
+          const signInDiv = document.getElementById('sign-in')
 
-      clerk.mountSignIn(signInDiv)
-    }
-    ```
-  </CodeBlockTabs>
+          clerk.mountSignIn(signInDiv)
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
+  </Tabs>
 
   ### Handle `pending` sessions after sign-in
 

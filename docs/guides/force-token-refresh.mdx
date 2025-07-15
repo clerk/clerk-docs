@@ -1,0 +1,264 @@
+---
+title: Force a session token refresh
+description: Learn how to force a refresh of a user's session token in your Clerk application.
+---
+
+A user's session token is a short-lived JWT that Clerk [refreshes every 60 seconds](/docs/how-clerk-works/overview#token-refresh-mechanism). However, there are some cases where you might want to force a refresh.
+
+There are two recommended approaches to force a user's session token to be refreshed:
+
+- [`getToken({ skipCache: true })`](#get-token-skip-cache-true)
+- [`user.reload()`](#user-reload)
+
+Both perform a network request, but `getToken({ skipCache: true })` will only get a new token, while `user.reload()` will both get a new token and a new `User` object.
+
+## `getToken({ skipCache: true })`
+
+The `getToken()` method retrieves the current user's session token. If `skipCache` is set to `true`, it will force a new token to be minted.
+
+`getToken()` is available on Clerk's authentication context, so it is accessible in both client-side and server-side code.
+
+- **Client-side:** Access `getToken()` from the [`useSession()`](/docs/hooks/use-session.mdx) or [`useAuth()`](/docs/hooks/use-auth.mdx) hooks.
+- **Server-side:** Access `getToken()` from the [`Auth`](/docs/references/backend/types/auth-object.mdx) object.
+
+The following example shows how to force a JWT refresh by using the [`useSession()`](/docs/hooks/use-session.mdx) hook to access the `getToken()` method.
+
+```tsx
+const { session } = useSession()
+
+useEffect(() => {
+  session?.getToken({ skipCache: true })
+}, [])
+```
+
+## `user.reload()`
+
+The `user.reload()` method refreshes the current user's `User` object and their session token. It can be accessed from the [`useUser()`](/docs/hooks/use-user.mdx) hook.
+
+The following example shows how to force a JWT refresh by using the [`useUser()`](/docs/hooks/use-user.mdx) hook to access the `user.reload()` method.
+
+```tsx
+const { user } = useUser()
+
+useEffect(() => {
+  user?.reload()
+}, [])
+```
+
+## Example
+
+Say you're building a user profile page. You want to allow the user to update their information, and also allow them to set and update custom information. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/users/metadata.mdx), which will get stored on the user's `User` object as `User.publicMetadata`.
+
+When using metadata, it's recommended to [store it in the user's session token](/docs/backend-requests/custom-session-token) to avoid making a network request to Clerk's Backend API when retrieving it.
+
+However, when retrieving the user's metadata from the session token, because the session token refreshes every 60 seconds, the metadata may not be up to date if the token hasn't refreshed yet. In this case, you'd want to force a session token refresh. This is when you could use `getToken({ skipCache: true })`.
+
+So why does this example use `user.reload()` instead? Because on this user's profile page, the metadata is not the only information the user can update. They can also update their first and last name. Therefore, you not only want to refresh the session token, which is where the metadata is retrieved from, but also the `User` object, which is where the first and last name is retrieved from. This is why `user.reload()` is the better option. If you were only retrieving the user's metadata, and not using the `User` object, you could use `getToken({ skipCache: true })` instead.
+
+This example requires that the user's metadata has been configured to be stored in the session token under the `metadata` key. To do so, follow the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
+
+<Tabs items={["API route", "Client-side page"]}>
+  <Tab>
+    The API route that uses Clerk's [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata) method to update the user's metadata.
+
+    ```ts {{ filename: 'app/api/update-user-metadata/route.ts', collapsible: true }}
+    import { auth, clerkClient } from '@clerk/nextjs/server'
+    import { NextRequest, NextResponse } from 'next/server'
+
+    export async function POST(req: NextRequest) {
+      // Use `req.json()` to parse the request body
+      const metadata = await req.json()
+
+      // Use `auth()` to access the current user's ID
+      const { userId } = await auth()
+
+      // Protect the route by checking if the user is signed in
+      if (!userId) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      // Use `clerkClient()` to access the Clerk client
+      const client = await clerkClient()
+
+      // Use the Backend SDK's `updateUserMetadata()` method to update the user's metadata
+      await client.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          ...metadata,
+        },
+      })
+
+      // Return the Backend User object
+      return NextResponse.json({ user: user }, { status: 200 })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The client-side page that allows the user to update their first and last name, and their metadata. It retrieves the user's metadata from the session token's claims under the `metadata` key. To update the user's metadata, it calls the `/update-user-metadata` API route, and then uses the [`user.reload()`](/docs/references/javascript/user#reload) method to refresh the user's session token and `User` object.
+
+    ```tsx {{ filename: 'app/user-profile/page.tsx', collapsible: true }}
+    'use client'
+    import { useState, useEffect } from 'react'
+    import { useAuth, useUser } from '@clerk/nextjs'
+
+    export default function Page() {
+      // Use `useAuth()` to access the authentication context,
+      // including the user's session claims, like `metadata`
+      const { isLoaded, userId, sessionClaims } = useAuth()
+      // Use `useUser()` to access the `User` object,
+      // which contains properties like `firstName`, `lastName`, and `publicMetadata`
+      const { user } = useUser()
+
+      const [metadata, setMetadata] = useState('')
+      const [firstName, setFirstName] = useState('')
+      const [lastName, setLastName] = useState('')
+      const [status, setStatus] = useState<'loading' | 'success' | 'error' | null>(null)
+      const [error, setError] = useState<string | null>(null)
+
+      // Update state once the user's data loads
+      useEffect(() => {
+        if (user) {
+          setFirstName(user.firstName || '')
+          setLastName(user.lastName || '')
+          setMetadata(JSON.stringify(sessionClaims?.metadata || {}, null, 2)) // Retrieve the user's metadata from the session token's claims under the `metadata` key
+        }
+      }, [user])
+
+      async function updateUserMetadata(metadata: string) {
+        try {
+          const parsedMetadata = JSON.parse(metadata)
+
+          const response = await fetch('/api/update-user-metadata', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(parsedMetadata),
+          })
+
+          const result = await response.json()
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to update metadata')
+          }
+
+          return { success: true }
+        } catch (err: any) {
+          return { error: err.message || 'Failed to update metadata' }
+        }
+      }
+
+      async function updateUserField(field: 'firstName' | 'lastName', value: string) {
+        try {
+          await user?.update({
+            [field]: value,
+          })
+          return { success: true }
+        } catch (err: any) {
+          return { error: err.message || `Failed to update ${field}` }
+        }
+      }
+
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setStatus('loading')
+        setError(null)
+
+        const updates = []
+
+        // Check which fields have been modified and need updating
+        if (firstName !== (user?.firstName || '')) {
+          updates.push(updateUserField('firstName', firstName))
+        }
+
+        if (lastName !== (user?.lastName || '')) {
+          updates.push(updateUserField('lastName', lastName))
+        }
+
+        if (metadata) {
+          updates.push(updateUserMetadata(metadata))
+        }
+
+        // If no fields have been filled or modified, show error
+        if (updates.length === 0) {
+          setError('Please fill in at least one field to update')
+          setStatus('error')
+          return
+        }
+
+        try {
+          // Execute all updates in parallel
+          const results = await Promise.all(updates)
+
+          // Check if any updates failed
+          const failedUpdates = results.filter((result) => result.error)
+
+          if (failedUpdates.length > 0) {
+            setError(failedUpdates.map((r) => r.error).join(', '))
+            setStatus('error')
+          } else {
+            user?.reload() // Refresh the session and the User object
+            setStatus('success')
+          }
+        } catch (err: any) {
+          setError(err.message || 'Failed to update user information')
+          setStatus('error')
+        }
+      }
+
+      // Check if Clerk has loaded
+      if (!isLoaded) return <div>Loading...</div>
+
+      // Check if the user is authenticated
+      if (!userId) return <div>Not authenticated</div>
+
+      return (
+        <div style={{ maxWidth: 400, margin: '2rem auto' }}>
+          <h1>Welcome, {userId}</h1>
+
+          <form onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="firstName">First Name:</label>
+              <input
+                id="firstName"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="lastName">Last Name:</label>
+              <input
+                id="lastName"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="metadata">Update your metadata (JSON format):</label>
+              <textarea
+                id="metadata"
+                value={metadata}
+                onChange={(e) => setMetadata(e.target.value)}
+                rows={4}
+                style={{ width: '100%', marginBottom: '1rem' }}
+                placeholder='e.g. {"birthday":"2000-01-01"}'
+              />
+            </div>
+
+            <button type="submit" disabled={status === 'loading'}>
+              {status === 'loading' ? 'Updating...' : 'Update'}
+            </button>
+          </form>
+
+          {status === 'success' && <p style={{ color: 'green' }}>Updated successfully!</p>}
+          {status === 'error' && <p style={{ color: 'red' }}>{error}</p>}
+        </div>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

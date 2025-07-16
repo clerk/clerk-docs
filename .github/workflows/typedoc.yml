@@ -2,6 +2,7 @@ name: Generate Typedocs
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   typedoc:
@@ -61,22 +62,39 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-      - name: Commit and push changes
+      - name: Check for changes and create PR
         working-directory: ./clerk-docs
         run: |
-          git checkout -b typedoc-${{ env.sha }}
-          git add .
-          git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
-          git push origin typedoc-${{ env.sha }}
+          # 1. Check if there are any changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "ℹ️  No changes detected in TypeDoc documentation, exiting early"
+            exit 0
+          fi
 
-      - name: Create Pull Request
-        working-directory: ./clerk-docs
-        run: |
-          if gh pr list --head typedoc-${{ env.sha }} --json number --jq length | grep -q "^0$"; then
-            gh pr create --base main --head typedoc-${{ env.sha }} --title "[ci] Update Typedoc (${{ env.sha }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript@${{ env.sha }}"
-            echo "✅ Created new PR for typedoc-${{ env.sha }}"
+          echo "✅ Changes detected, processing..."
+
+          # 2. Check if branch already exists and handle accordingly
+          if git ls-remote --exit-code --heads origin typedoc-${{ env.sha }} > /dev/null 2>&1; then
+            echo "ℹ️  Branch typedoc-${{ env.sha }} already exists, checking it out and updating"
+            git fetch origin typedoc-${{ env.sha }}
+            git checkout typedoc-${{ env.sha }}
+            git add .
+            git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
+            git push origin typedoc-${{ env.sha }}
           else
-            echo "ℹ️  PR already exists for typedoc-${{ env.sha }}, skipping creation"
+            echo "✅ Creating new branch typedoc-${{ env.sha }}"
+            git checkout -b typedoc-${{ env.sha }}
+            git add .
+            git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
+            git push origin typedoc-${{ env.sha }}
+          fi
+
+          # 3. Check if PR already exists
+          if gh pr list --head typedoc-${{ env.sha }} --json number --jq length | grep -q "^0$"; then
+            echo "✅ Creating new PR for typedoc-${{ env.sha }}"
+            gh pr create --base main --head typedoc-${{ env.sha }} --title "[ci] Update Typedoc (${{ env.sha }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript@${{ env.sha }}"
+          else
+            echo "ℹ️  PR already exists for typedoc-${{ env.sha }}, skipping PR creation"
           fi
         env:
           GH_TOKEN: ${{ github.token }}

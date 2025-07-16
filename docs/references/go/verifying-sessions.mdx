@@ -77,7 +77,7 @@ func protectedRoute(w http.ResponseWriter, r *http.Request) {
 
 ## Manually verify a session token
 
-Manually verifying a Clerk session is useful when you want to verify a session in a non-HTTP context, or when you want full control over the verification process. Verifying a session token requires providing a JSON Web Key (JWK). With the solution above, Clerk middleware fetches the JSON Web Key **once** and automatically caches it for you, so it makes the minimum necessary requests to the Clerk Backend API. 
+Manually verifying a Clerk session is useful when you want to verify a session in a non-HTTP context, or when you want full control over the verification process. Verifying a session token requires providing a JSON Web Key (JWK). With the solution above, Clerk middleware fetches the JSON Web Key **once** and automatically caches it for you, so it makes the minimum necessary requests to the Clerk Backend API.
 
 However, when manually verifying a session, you're reponsible for fetching and caching the JSON Web Key yourself, as there is no caching layer for the key. For that reason, you must be mindful of API rate limits and unnecessary requests.
 
@@ -88,60 +88,61 @@ Before verifying the session token, you will need to retrieve it from the client
 The following example demonstrates how to manually verify a session token. If the user tries accessing the route and their session token is valid, the user's ID and banned status will be returned in the response.   Use the following tabs to select your preferred method of retrieving the session token.
 
 <Tabs items={["Using the Authorization Header", "Using the __session cookie"]}>
-	<Tab>
-	```go {{ filename: 'main.go' }}
-	package main
+  <Tab>
+    ```go {{ filename: 'main.go' }}
+    package main
 
-	import (
-		"fmt"
-		"net/http"
-		"strings"
+    import (
+    	"fmt"
+    	"net/http"
+    	"strings"
 
-		"github.com/clerk/clerk-sdk-go/v2"
-		"github.com/clerk/clerk-sdk-go/v2/jwt"
-		"github.com/clerk/clerk-sdk-go/v2/user"
-	)
+    	"github.com/clerk/clerk-sdk-go/v2"
+    	"github.com/clerk/clerk-sdk-go/v2/jwt"
+    	"github.com/clerk/clerk-sdk-go/v2/user"
+    )
 
-	func main() {
-	clerk.SetKey("{{secret}}")
+    func main() {
+    clerk.SetKey("{{secret}}")
 
-		mux := http.NewServeMux()
-		mux.HandleFunc("/", publicRoute)
-		mux.HandleFunc("/protected", protectedRoute)
+    	mux := http.NewServeMux()
+    	mux.HandleFunc("/", publicRoute)
+    	mux.HandleFunc("/protected", protectedRoute)
 
-		http.ListenAndServe(":3000", mux)
-	}
+    	http.ListenAndServe(":3000", mux)
+    }
 
-	func publicRoute(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"access": "public"}`))
-	}
+    func publicRoute(w http.ResponseWriter, r *http.Request) {
+    	w.Write([]byte(`{"access": "public"}`))
+    }
 
-	func protectedRoute(w http.ResponseWriter, r *http.Request) {
-		// Get the session JWT from the Authorization header
-		sessionToken := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+    func protectedRoute(w http.ResponseWriter, r *http.Request) {
+    	// Get the session JWT from the Authorization header
+    	sessionToken := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 
-		// Verify the session
-		claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
-			Token: sessionToken,
-		})
-		if err != nil {
-			// handle the error
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"access": "unauthorized"}`))
-			return
-		}
+    	// Verify the session
+    	claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
+    		Token: sessionToken,
+    	})
+    	if err != nil {
+    		// handle the error
+    		w.WriteHeader(http.StatusUnauthorized)
+    		w.Write([]byte(`{"access": "unauthorized"}`))
+    		return
+    	}
 
-		usr, err := user.Get(r.Context(), claims.Subject)
-		if err != nil {
-			// handle the error
-		}
-		fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
-	}
-	```
-	</Tab>
-	<Tab>
-		Hello
-	</Tab>
+    	usr, err := user.Get(r.Context(), claims.Subject)
+    	if err != nil {
+    		// handle the error
+    	}
+    	fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    Hello
+  </Tab>
 </Tabs>
 
 If you need to verify session tokens frequently, it's recommended to cache the JSON Web Key for your instance in order to avoid making too many requests to the Clerk Backend API.

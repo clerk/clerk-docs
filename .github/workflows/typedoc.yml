@@ -79,7 +79,21 @@ jobs:
             git stash push -u -m "Temporary stash for branch switch"
             git fetch origin typedoc-${{ env.sha }}
             git checkout typedoc-${{ env.sha }}
-            git stash pop
+            
+            # Try to pop stash, but don't fail if it conflicts (files already exist)
+            if git stash pop; then
+              echo "✅ Successfully applied stashed changes"
+            else
+              echo "ℹ️  Stash pop failed (likely files already exist), dropping stash and checking for changes"
+              git stash drop
+            fi
+            
+            # Check if there are any changes to commit after checkout/stash
+            if [ -z "$(git status --porcelain)" ]; then
+              echo "ℹ️  No new changes detected on existing branch, exiting successfully"
+              exit 0
+            fi
+            
             git add .
             git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
             git push origin typedoc-${{ env.sha }}

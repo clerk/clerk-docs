@@ -11,10 +11,6 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      - name: Get current date
-        id: current_date
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
       - name: Checkout current repository
         uses: actions/checkout@v4
         with:
@@ -29,6 +25,11 @@ jobs:
           path: clerk-javascript
           fetch-depth: 1
           show-progress: false
+
+      - name: Get clerk/javascript commit SHA
+        id: clerk_sha
+        working-directory: ./clerk-javascript
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -52,7 +53,7 @@ jobs:
       - name: Copy docs to main repo
         run: |
           # Copy the generated docs to the root of the main repo
-          cp -r ./clerk-javascript/.typedoc/docs ./clerk-docs/clerk-typedoc
+          cp -r ./clerk-javascript/.typedoc/docs/ ./clerk-docs/clerk-typedoc
 
       - name: Configure Git
         working-directory: ./clerk-docs
@@ -63,13 +64,19 @@ jobs:
       - name: Commit and push changes
         working-directory: ./clerk-docs
         run: |
-          git checkout -b typedoc-${{ env.date }}
+          git checkout -b typedoc-${{ env.sha }}
           git add .
-          git commit -m "initial"
-          git push origin typedoc-${{ env.date }}
+          git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
+          git push origin typedoc-${{ env.sha }}
 
       - name: Create Pull Request
         working-directory: ./clerk-docs
-        run: gh pr create --base main --head typedoc-${{ env.date }} --title "[ci] Update Typedoc (${{ env.date }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript"
+        run: |
+          if gh pr list --head typedoc-${{ env.sha }} --json number --jq length | grep -q "^0$"; then
+            gh pr create --base main --head typedoc-${{ env.sha }} --title "[ci] Update Typedoc (${{ env.sha }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript@${{ env.sha }}"
+            echo "✅ Created new PR for typedoc-${{ env.sha }}"
+          else
+            echo "ℹ️  PR already exists for typedoc-${{ env.sha }}, skipping creation"
+          fi
         env:
           GH_TOKEN: ${{ github.token }}

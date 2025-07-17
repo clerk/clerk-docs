@@ -1,0 +1,266 @@
+---
+title: '`usePaymentMethods()`'
+description: Access and manage payment methods in your React application with Clerk's usePaymentMethods() hook.
+---
+
+The `usePaymentMethods()` hook provides access to the payment methods associated with a user or organization. It returns a paginated list of payment methods and includes methods for managing them.
+
+## Parameters
+
+`usePaymentMethods()` accepts a single object with the following properties:
+
+<Properties>
+  - `for?`
+  - `'user' | 'organization'`
+
+  Specifies whether to fetch payment methods for the current user or organization. Defaults to `'user'`.
+
+  ---
+
+  - `pageSize?`
+  - `number`
+
+  The number of payment methods to fetch per page. Defaults to `10`.
+
+  ---
+
+  - `initialPage?`
+  - `number`
+
+  The page number to start fetching from. Defaults to `1`.
+
+  ---
+
+  - `infinite?`
+  - `boolean`
+
+  When `true`, enables infinite pagination mode where new pages are appended to existing data. When `false`, each page replaces the previous data. Defaults to `false`.
+
+  ---
+
+  - `keepPreviousData?`
+  - `boolean`
+
+  When `true`, the previous data will be kept while loading the next page. This helps prevent layout shifts. Defaults to `false`.
+</Properties>
+
+## Returns
+
+The hook returns an object with the following properties:
+
+<Properties>
+  - `data`
+  - `PaymentMethod[] | null`
+
+  An array of payment method objects, or `null` if the data hasn't been loaded yet.
+
+  ---
+
+  - `isLoading`
+  - `boolean`
+
+  `true` while the initial data is being fetched.
+
+  ---
+
+  - `isFetching`
+  - `boolean`
+
+  `true` while any request is in flight, including background updates.
+
+  ---
+
+  - `hasNextPage`
+  - `boolean`
+
+  `true` if there are more pages available to load.
+
+  ---
+
+  - `hasPreviousPage`
+  - `boolean`
+
+  `true` if there are previous pages available to load.
+
+  ---
+
+  - `fetchNext`
+  - `() => Promise<void>`
+
+  Function to fetch the next page of payment methods.
+
+  ---
+
+  - `fetchPrevious`
+  - `() => Promise<void>`
+
+  Function to fetch the previous page of payment methods.
+
+  ---
+
+  - `pageCount`
+  - `number`
+
+  The total number of available pages.
+
+  ---
+
+  - `count`
+  - `number`
+
+  The total number of payment methods available.
+</Properties>
+
+### `PaymentMethod`
+
+Each payment method object contains the following properties:
+
+<Properties>
+  - `id`
+  - `string`
+
+  The unique identifier for the payment method.
+
+  ---
+
+  - `type`
+  - `'card'`
+
+  The type of payment method. Currently, only card payments are supported.
+
+  ---
+
+  - `cardType`
+  - `string`
+
+  The type of card (e.g., 'visa', 'mastercard').
+
+  ---
+
+  - `last4`
+  - `string`
+
+  The last 4 digits of the card number.
+
+  ---
+
+  - `expirationDate`
+  - `string`
+
+  The expiration date of the card in 'MM/YY' format.
+
+  ---
+
+  - `isDefault`
+  - `boolean`
+
+  Whether this is the default payment method.
+</Properties>
+
+## Examples
+
+### Basic Usage
+
+The following example shows how to fetch and display a user's payment methods:
+
+```tsx
+import { usePaymentMethods } from '@clerk/nextjs'
+
+function PaymentMethodsList() {
+  const { data, isLoading } = usePaymentMethods({
+    for: 'user',
+    pageSize: 10,
+  })
+
+  if (isLoading) {
+    return <div>Loading payment methods...</div>
+  }
+
+  return (
+    <ul>
+      {data?.map((method) => (
+        <li key={method.id}>
+          {method.cardType} **** {method.last4}
+          {method.isDefault ? ' (Default)' : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Infinite Pagination
+
+This example demonstrates how to implement infinite scrolling with payment methods:
+
+```tsx
+import { usePaymentMethods } from '@clerk/nextjs'
+
+function InfinitePaymentMethods() {
+  const { data, isLoading, hasNextPage, fetchNext } = usePaymentMethods({
+    for: 'user',
+    infinite: true,
+    pageSize: 20,
+  })
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  return (
+    <div>
+      <ul>
+        {data?.map((method) => (
+          <li key={method.id}>
+            {method.cardType} ending in {method.last4}
+            <br />
+            Expires: {method.expirationDate}
+          </li>
+        ))}
+      </ul>
+
+      {hasNextPage && <button onClick={() => fetchNext()}>Load more payment methods</button>}
+    </div>
+  )
+}
+```
+
+### With Checkout Flow
+
+Here's an example of using `usePaymentMethods` in a checkout flow to select an existing payment method:
+
+```tsx
+import { usePaymentMethods, useCheckout } from '@clerk/nextjs'
+
+function CheckoutPaymentSelection() {
+  const { data, isLoading } = usePaymentMethods({ for: 'user' })
+  const { checkout } = useCheckout()
+  const { confirm, complete } = checkout
+
+  const handlePaymentSubmit = async (paymentMethodId: string) => {
+    try {
+      // Confirm checkout with selected payment method
+      await confirm({ paymentSourceId: paymentMethodId })
+      // Complete checkout and redirect
+      await complete({ redirectUrl: '/dashboard' })
+    } catch (error) {
+      console.error('Payment failed:', error)
+    }
+  }
+
+  if (isLoading) {
+    return <div>Loading payment methods...</div>
+  }
+
+  return (
+    <div>
+      <h3>Select a payment method</h3>
+      {data?.map((method) => (
+        <button key={method.id} onClick={() => handlePaymentSubmit(method.id)}>
+          Pay with {method.cardType} ending in {method.last4}
+        </button>
+      ))}
+    </div>
+  )
+}
+```

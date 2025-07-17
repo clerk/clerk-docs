@@ -1,0 +1,279 @@
+---
+title: '`useSubscription()`'
+description: Access subscription information in your React application with Clerk's useSubscription() hook.
+---
+
+The `useSubscription()` hook provides access to subscription information for users or organizations in your application. It returns the current subscription data and includes methods for managing it.
+
+> [!WARNING]
+> The `useSubscription()` hook should only be used for accessing and displaying subscription information. For authorization purposes (i.e., controlling access to features or content), use the [`has()`](/docs/guides/authorization-checks#use-has-for-authorization-checks) helper or the [`<Protect>`](/docs/components/protect) component instead.
+
+## Parameters
+
+`useSubscription()` accepts a single optional object with the following properties:
+
+<Properties>
+  - `for?`
+  - `'organization' | 'user'`
+
+  Specifies whether to fetch subscription for an organization or user. Defaults to `'user'`.
+
+  ---
+
+  - `keepPreviousData?`
+  - `boolean`
+
+  When `true`, the previous data will be kept in the cache until new data is fetched. This helps prevent layout shifts. Defaults to `false`.
+</Properties>
+
+## Returns
+
+The hook returns an object with the following properties:
+
+<Properties>
+  - `data`
+  - `Subscription | null`
+
+  The subscription object, or `null` if the data hasn't been loaded yet.
+
+  ---
+
+  - `isLoading`
+  - `boolean`
+
+  `true` while the initial data is being fetched.
+
+  ---
+
+  - `isFetching`
+  - `boolean`
+
+  `true` while any request is in flight, including background updates.
+
+  ---
+
+  - `error`
+  - `Error | null`
+
+  Any error that occurred during the data fetch, or `null` if no error occurred.
+
+  ---
+
+  - `revalidate`
+  - `() => Promise<void>`
+
+  Function to manually trigger a refresh of the subscription data.
+</Properties>
+
+### `Subscription`
+
+Each subscription object contains the following properties:
+
+<Properties>
+  - `id`
+  - `string`
+
+  The unique identifier for the subscription.
+
+  ---
+
+  - `status`
+  - `CommerceSubscriptionStatus`
+
+  The current status of the subscription.
+
+  ---
+
+  - `activeAt`
+  - `Date`
+
+  The date when the subscription became active.
+
+  ---
+
+  - `createdAt`
+  - `Date`
+
+  The date when the subscription was created.
+
+  ---
+
+  - `updatedAt`
+  - `Date | null`
+
+  The date when the subscription was last updated, or null if never updated.
+
+  ---
+
+  - `pastDueAt`
+  - `Date | null`
+
+  The date when the subscription became past due, or null if not past due.
+
+  ---
+
+  - `nextPayment`
+  - `{ amount: CommerceMoney; time: Date; } | null`
+
+  Information about the next payment, including the amount and scheduled time. Null if no upcoming payment.
+
+  ---
+
+  - `subscriptionItems`
+  - `CommerceSubscriptionItemResource[]`
+
+  An array of items included in this subscription.
+</Properties>
+
+## Examples
+
+### Basic Usage
+
+The following example shows how to fetch and display subscription information:
+
+```tsx
+import { useSubscription } from '@clerk/nextjs'
+
+function SubscriptionInfo() {
+  const { data, isLoading, error } = useSubscription()
+
+  if (isLoading) {
+    return <div>Loading subscription...</div>
+  }
+
+  if (error) {
+    return <div>Error loading subscription: {error.message}</div>
+  }
+
+  if (!data) {
+    return <div>No subscription found</div>
+  }
+
+  return (
+    <div>
+      <h2>Your Subscription</h2>
+      {/* Display subscription details */}
+    </div>
+  )
+}
+```
+
+### Organization Subscription
+
+Here's an example of fetching an organization's subscription:
+
+```tsx
+import { useSubscription } from '@clerk/nextjs'
+
+function OrganizationSubscription() {
+  const { data, isLoading, revalidate } = useSubscription({
+    for: 'organization',
+    keepPreviousData: true,
+  })
+
+  const handleSubscriptionUpdate = async () => {
+    // After making changes to the subscription
+    await revalidate()
+  }
+
+  if (isLoading) {
+    return <div>Loading organization subscription...</div>
+  }
+
+  return (
+    <div>
+      <h2>Organization Subscription</h2>
+      {/* Display organization subscription details */}
+      <button onClick={handleSubscriptionUpdate}>Refresh Subscription</button>
+    </div>
+  )
+}
+```
+
+### With Error Handling
+
+This example shows how to handle subscription data with proper error states:
+
+```tsx
+import { useSubscription } from '@clerk/nextjs'
+
+function SubscriptionStatus() {
+  const { data, isLoading, error, isFetching } = useSubscription()
+
+  if (error) {
+    return (
+      <div className="error-state">
+        <h3>Failed to load subscription</h3>
+        <p>{error.message}</p>
+        <button onClick={revalidate}>Try Again</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="subscription-status">
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <>
+          <div className="status-indicator">{isFetching && <span>Refreshing...</span>}</div>
+          {data ? (
+            <div className="subscription-details">{/* Display subscription details */}</div>
+          ) : (
+            <div>No active subscription</div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+```
+
+```tsx
+import { useSubscription } from '@clerk/nextjs'
+
+function SubscriptionDetails() {
+  const { data: subscription, isLoading } = useSubscription()
+
+  if (isLoading) {
+    return <div>Loading subscription...</div>
+  }
+
+  if (!subscription) {
+    return <div>No subscription</div>
+  }
+
+  return (
+    <div className="subscription-details">
+      <h2>Subscription Details</h2>
+      <div className="status">
+        Status: <span className={`status-${subscription.status}`}>{subscription.status}</span>
+      </div>
+
+      <div className="dates">
+        <p>Active since: {subscription.activeAt.toLocaleDateString()}</p>
+        {subscription.pastDueAt && (
+          <p className="warning">Past due since: {subscription.pastDueAt.toLocaleDateString()}</p>
+        )}
+      </div>
+
+      {subscription.nextPayment && (
+        <div className="next-payment">
+          <h3>Next Payment</h3>
+          <p>Amount: {subscription.nextPayment.amount}</p>
+          <p>Due: {subscription.nextPayment.time.toLocaleDateString()}</p>
+        </div>
+      )}
+
+      <div className="subscription-items">
+        <h3>Subscription Items</h3>
+        <ul>
+          {subscription.subscriptionItems.map((item) => (
+            <li key={item.id}>{/* Display subscription item details */}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+```

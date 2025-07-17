@@ -20,25 +20,36 @@ const slugify = (str: string) =>
 function parseMarkdownToManifest(content: string) {
   const lines = content.split('\n')
   const navigation: any[] = []
-  let currentTopLevel: { title: string; items: any[] } | null = null
+  let currentTopLevelGroup: { title: string; items: any[] } | null = null
   let currentTopLevelCustomSlug: string | null = null
+  let currentSubGroup: { title: string; items: any[] } | null = null
+  let currentSubGroupCustomSlug: string | null = null
   let currentItemGroup: any[] = []
   let pathStack: string[] = [] // Stack to track nested path components
 
   const finishCurrentItemGroup = () => {
     if (currentItemGroup && currentItemGroup.length > 0) {
-      if (currentTopLevel) {
-        currentTopLevel.items.push([...currentItemGroup])
+      if (currentSubGroup) {
+        currentSubGroup.items.push([...currentItemGroup])
       }
       currentItemGroup = []
     }
   }
 
-  const finishCurrentTopLevel = () => {
+  const finishCurrentSubGroup = () => {
     finishCurrentItemGroup()
-    if (currentTopLevel) {
-      navigation.push([currentTopLevel])
-      currentTopLevel = null
+    if (currentSubGroup && currentTopLevelGroup) {
+      currentTopLevelGroup.items.push([currentSubGroup])
+      currentSubGroup = null
+    }
+    currentSubGroupCustomSlug = null
+  }
+
+  const finishCurrentTopLevelGroup = () => {
+    finishCurrentSubGroup()
+    if (currentTopLevelGroup) {
+      navigation.push([currentTopLevelGroup])
+      currentTopLevelGroup = null
     }
     currentTopLevelCustomSlug = null
     pathStack = []
@@ -55,14 +66,35 @@ function parseMarkdownToManifest(content: string) {
       continue
     }
 
-    // Skip top level sections (## Header) - we'll process their subsections
+    // Top level sections (## Header) - these become top-level groups
     if (trimmed.startsWith('## ')) {
+      finishCurrentTopLevelGroup()
+      const titleWithBrackets = trimmed.substring(3)
+      const bracketMatch = titleWithBrackets.match(/^(.+?)\s*\[([^\]]+)\]$/)
+
+      let title: string, customSlug: string | null
+      if (bracketMatch) {
+        title = bracketMatch[1].trim()
+        customSlug = bracketMatch[2].trim()
+      } else {
+        title = titleWithBrackets.trim()
+        customSlug = null
+      }
+
+      currentTopLevelGroup = {
+        title,
+        items: [],
+      }
+      currentTopLevelCustomSlug = customSlug
+      currentSubGroup = null
+      currentItemGroup = []
+      pathStack = []
       continue
     }
 
-    // Subsections (### Header) - these become top-level sections
+    // Subsections (### Header) - these become sub-groups within top-level groups
     if (trimmed.startsWith('### ')) {
-      finishCurrentTopLevel()
+      finishCurrentSubGroup()
       const titleWithBrackets = trimmed.substring(4)
       const bracketMatch = titleWithBrackets.match(/^(.+?)\s*\[([^\]]+)\]$/)
 
@@ -75,11 +107,11 @@ function parseMarkdownToManifest(content: string) {
         customSlug = null
       }
 
-      currentTopLevel = {
+      currentSubGroup = {
         title,
         items: [],
       }
-      currentTopLevelCustomSlug = customSlug
+      currentSubGroupCustomSlug = customSlug
       currentItemGroup = []
       pathStack = []
       continue
@@ -112,31 +144,66 @@ function parseMarkdownToManifest(content: string) {
       const itemSlug = customSlug || slugify(title)
       pathStack.push(itemSlug)
 
-      // Create the content item
-      const linkItem = {
-        title,
-        href: generateHref(
+      // If this is a level 0 item (no indentation), it could be either a simple item or a group header
+      if (indentLevel === 0) {
+        // Initialize item group if needed
+        if (!currentItemGroup) {
+          currentItemGroup = []
+        }
+
+        // Create the content item
+        const linkItem = {
           title,
-          currentTopLevel?.title,
-          undefined,
-          undefined,
-          itemSlug,
-          currentTopLevelCustomSlug || undefined,
-        ),
-      }
+          href: generateHref(
+            title,
+            currentSubGroup?.title,
+            undefined,
+            undefined,
+            itemSlug,
+            currentSubGroupCustomSlug || undefined,
+          ),
+        }
 
-      // Initialize item group if needed
-      if (!currentItemGroup) {
-        currentItemGroup = []
-      }
+        // Add item to current group
+        currentItemGroup.push(linkItem)
+      } else {
+        // This is an indented item - we need to find or create a group for it
 
-      // Add item to current group
-      currentItemGroup.push(linkItem)
+        // Get the parent item from the current item group
+        if (currentItemGroup && currentItemGroup.length > 0) {
+          const parentItem = currentItemGroup[currentItemGroup.length - 1]
+
+          // Convert the parent item to a group if it's not already one
+          if (!parentItem.items) {
+            // Transform the parent from a simple item to a group
+            parentItem.items = [[]]
+            parentItem.collapse = true
+            delete parentItem.href // Groups don't have hrefs
+          }
+
+          // Create the sub-item
+          const subItem = {
+            title,
+            href: generateHref(
+              title,
+              currentSubGroup?.title,
+              undefined,
+              undefined,
+              itemSlug,
+              currentSubGroupCustomSlug || undefined,
+            ),
+          }
+
+          // Add the sub-item to the parent group's items
+          const lastSubGroup = parentItem.items[parentItem.items.length - 1]
+          lastSubGroup.push(subItem)
+        }
+      }
     }
   }
 
   // Finish any remaining content
-  finishCurrentTopLevel()
+  finishCurrentTopLevelGroup()
 
   return {
     navigation,
@@ -190,6 +257,7 @@ export type ManifestItem = {
 export type ManifestGroup = {
   title: string
   items: Manifest
+  collapse?: boolean
 }
 
 export type Manifest = (ManifestItem | ManifestGroup)[][]
@@ -205,6 +273,7 @@ const manifestGroup: z.ZodType<ManifestGroup> = z
   .object({
     title: z.string(),
     items: z.lazy(() => manifestSchema),
+    collapse: z.boolean().optional(),
   })
   .strict()
 

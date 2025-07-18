@@ -160,6 +160,7 @@ const baseConfig = {
     docs: {},
     partials: {},
     typedoc: {},
+    tooltips: {},
   },
   manifestOptions: {
     wrapDefault: true,
@@ -3729,6 +3730,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3776,6 +3778,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3827,6 +3830,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3880,6 +3884,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3932,6 +3937,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3972,6 +3978,7 @@ title: Missing Description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4027,6 +4034,7 @@ description: The page being linked to
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4084,6 +4092,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4128,6 +4137,7 @@ description: Test page with partial
             },
             docs: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4313,6 +4323,7 @@ interface Client {
           },
           partials: {},
           typedoc: {},
+          tooltips: {},
         },
       }),
     )

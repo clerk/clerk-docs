@@ -160,6 +160,7 @@ const baseConfig = {
     docs: {},
     partials: {},
     typedoc: {},
+    tooltips: {},
   },
   manifestOptions: {
     wrapDefault: true,
@@ -225,6 +226,7 @@ Testing with a simple page.`)
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
     })
   })
@@ -563,6 +565,7 @@ title: Simple Test
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -667,6 +670,7 @@ title: Item 2
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -726,6 +730,7 @@ title: Item 1
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -822,6 +827,7 @@ title: Item 1
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -961,6 +967,7 @@ This is a normal document.`,
     // Check that the manifest contains the target="_blank" attribute
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           { title: 'Normal Link', href: '/docs/normal-link' },
@@ -1022,6 +1029,7 @@ title: Quickstart
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -1082,6 +1090,7 @@ Testing with a simple page.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]],
     })
 
@@ -1149,6 +1158,7 @@ Testing with a simple page.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
     })
 
@@ -1440,6 +1450,7 @@ Content for React users.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -3729,6 +3740,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3776,6 +3788,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3827,6 +3840,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3880,6 +3894,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3932,6 +3947,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3972,6 +3988,7 @@ title: Missing Description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4027,6 +4044,7 @@ description: The page being linked to
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4084,6 +4102,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4128,6 +4147,7 @@ description: Test page with partial
             },
             docs: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4313,6 +4333,7 @@ interface Client {
           },
           partials: {},
           typedoc: {},
+          tooltips: {},
         },
       }),
     )

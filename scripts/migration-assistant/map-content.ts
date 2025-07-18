@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { readFile } from 'fs/promises'
 import { glob } from 'glob'
 import { join, relative } from 'path'
@@ -10,7 +11,7 @@ const MANIFEST_PATH = join(process.cwd(), './public/manifest.json')
 const DOCS_PATH = join(process.cwd(), './docs')
 
 // Environment variable to control output
-const WARNINGS_ONLY = process.env.DOCS_IA_WARNINGS_ONLY === 'true'
+const WARNINGS_ONLY = process.env.DOCS_WARNINGS_ONLY === 'true'
 
 /**
  * Read and parse the mapping.json file
@@ -425,7 +426,7 @@ async function main() {
       console.log(`   • Invalid mappings: ${invalidMappings.length}`)
 
       if (unhandledFiles.length > 0 || pagesToCreate.length > 0) {
-        console.log('\n💡 Run with DOCS_IA_WARNINGS_ONLY=true to see detailed warnings and grouped files')
+        console.log('\n💡 Run with DOCS_WARNINGS_ONLY=true to see detailed warnings and grouped files')
       }
     }
   } catch (error) {

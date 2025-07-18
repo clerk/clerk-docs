@@ -144,60 +144,64 @@ function parseMarkdownToManifest(content: string) {
       const itemSlug = customSlug || slugify(title)
       pathStack.push(itemSlug)
 
-      // If this is a level 0 item (no indentation), it could be either a simple item or a group header
-      if (indentLevel === 0) {
-        // Initialize item group if needed
-        if (!currentItemGroup) {
-          currentItemGroup = []
+      // Helper function to find or create a parent container at a specific nesting level
+      const findOrCreateParentContainer = (targetLevel: number): any[] => {
+        if (targetLevel === 0) {
+          // Level 0: return the current item group
+          if (!currentItemGroup) {
+            currentItemGroup = []
+          }
+          return currentItemGroup
         }
 
-        // Create the content item
-        const linkItem = {
-          title,
-          href: generateHref(
-            title,
-            currentSubGroup?.title,
-            undefined,
-            undefined,
-            itemSlug,
-            currentSubGroupCustomSlug || undefined,
-          ),
+        // For nested levels, navigate through the structure
+        let currentContainer = currentItemGroup
+        if (!currentContainer || currentContainer.length === 0) {
+          return []
         }
 
-        // Add item to current group
-        currentItemGroup.push(linkItem)
-      } else {
-        // This is an indented item - we need to find or create a group for it
+        // Navigate through each level of nesting
+        for (let level = 1; level <= targetLevel; level++) {
+          const parentItem = currentContainer[currentContainer.length - 1]
 
-        // Get the parent item from the current item group
-        if (currentItemGroup && currentItemGroup.length > 0) {
-          const parentItem = currentItemGroup[currentItemGroup.length - 1]
+          if (!parentItem) {
+            return []
+          }
 
           // Convert the parent item to a group if it's not already one
           if (!parentItem.items) {
-            // Transform the parent from a simple item to a group
             parentItem.items = [[]]
             parentItem.collapse = true
             delete parentItem.href // Groups don't have hrefs
           }
 
-          // Create the sub-item
-          const subItem = {
-            title,
-            href: generateHref(
-              title,
-              currentSubGroup?.title,
-              undefined,
-              undefined,
-              itemSlug,
-              currentSubGroupCustomSlug || undefined,
-            ),
-          }
-
-          // Add the sub-item to the parent group's items
+          // Get the last sub-group within this parent
           const lastSubGroup = parentItem.items[parentItem.items.length - 1]
-          lastSubGroup.push(subItem)
+          currentContainer = lastSubGroup
         }
+
+        return currentContainer
+      }
+
+      // Create the new item
+      const newItem = {
+        title,
+        href: generateHref(
+          title,
+          currentSubGroup?.title,
+          undefined,
+          undefined,
+          itemSlug,
+          currentSubGroupCustomSlug || undefined,
+        ),
+      }
+
+      // Find the appropriate container for this indentation level
+      const targetContainer = findOrCreateParentContainer(indentLevel)
+
+      // Add the item to the target container
+      if (targetContainer) {
+        targetContainer.push(newItem)
       }
     }
   }

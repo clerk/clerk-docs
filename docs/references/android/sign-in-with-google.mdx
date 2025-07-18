@@ -20,6 +20,8 @@ description: Learn how to use Clerk to natively Sign in with Google.
 
 This guide will teach you how to add native Sign in with Google to your Clerk apps on Android platforms.
 
+To make the setup process easier, it's recommended to keep two browser tabs open: one for the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) and one for your [Google Cloud Console](https://console.cloud.google.com/).
+
 <Steps>
   ## Enable Google as a social connection
 
@@ -35,14 +37,17 @@ This guide will teach you how to add native Sign in with Google to your Clerk ap
   1. Select a project or [create a new one](https://console.cloud.google.com/projectcreate). You'll be redirected to your project's **Dashboard** page.
   1. In the top-left, select the menu icon (**≡**) and select **APIs & Services**. Then, select **Credentials**.
   1. Next to **Credentials**, select **Create Credentials**. Then, select **OAuth client ID.** You might need to [configure your OAuth consent screen](https://support.google.com/cloud/answer/6158849#userconsent). Otherwise, you'll be redirected to the **Create OAuth client ID** page.
-  1. Select Android for application type for your project.
-  1. Enter your package name and SHA-1 for your Android application.
+  1. For the **Application type**, select **Android**.
+  1. Complete the required fields.
+     - **Package name**: Your package name is in your `build.gradle` file, formatted as `com.example.myclerkapp`.
+     - **SHA-1 certificate fingerprint**: To get your SHA-1, run the `keytool -keystore path-to-debug-or-production-keystore -list -v` command where `path-to-debug-or-production-keystore` needs to be replaced with the path to your debug or production keystore. By default, the debug keystore is located in `~/.android/debug.keystore`. It may ask for a keystore password, which is `android`.
+  1. Select **Create**.
 
   ## Create the Google Developer Web client
 
-  1. In the same project you create above, create a new client.
-  1. Select **Web Application** type for your project.
-  1. In the **Authorized Redirect URIs** setting, paste the **Authorized Redirect URI** value you saved from the Clerk Dashboard.
+  1. In the same project, create another client. Next to **Credentials**, select **Create Credentials**. Then, select **OAuth client ID.**
+  1. For the **Application type**, select **Web Application**.
+  1. Complete the required fields. In the **Authorized Redirect URIs** setting, paste the **Authorized Redirect URI** value you saved from the Clerk Dashboard.
   1. Select **Create**. A modal will open with your **Client ID** and **Client Secret**. Save these values somewhere secure.
 
   ## Set the Client ID and Client Secret in the Clerk Dashboard
@@ -55,77 +60,4 @@ This guide will teach you how to add native Sign in with Google to your Clerk ap
 
   > [!WARNING]
   > Google sign-in [**does not** allow users to sign in via in-app browsers](https://developers.googleblog.com/en/modernizing-oauth-interactions-in-native-apps-for-better-usability-and-security).
-
-  ## Setup the Clerk Android SDK in your project
-
-  <Include src="_partials/android/setup-android-sdk" />
-
-  ## Build your sign-in flow
-
-  Once you have setup your application correctly in the Clerk Dashboard with your client secret and ID you, you can authenticate with Google using Clerk by calling [`SignIn.authenticateWithGoogle()`](https://clerk-android.clerkstage.dev/source/com.clerk.signin/-sign-in/-companion/authenticate-with-google.html) and Clerk will handle the rest!
-
-  First, listen for Clerk SDK initialization to complete in your ViewModel, and add a function that calls `SignIn.authenticateWithGoogle()`
-
-  ```kotlin{{filename: 'HomeViewModel.kt', mark:[[19,24]]}}
-  class HomeViewModel: ViewModel() {
-    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
-    val uiState = _uiState.asStateFlow()
-
-    init {
-      Clerk.isInitialized
-        .onEach { isInitialized ->
-          if (isInitialized) {
-            if (Clerk.user != null) {
-              _uiState.value = HomeUiState.SignedIn
-            } else {
-              _uiState.value = HomeUiState.SignedOut
-            }
-          }
-        }
-        .launchIn(viewModelScope)
-    }
-
-    fun signInWithGoogle() {
-      viewModelScope.launch {
-        SignIn.authenticateWithGoogle().onSuccess { _uiState.value = HomeUiState.SignedIn }
-      }
-    }
-  }
-
-  sealed interface HomeUiState {
-      data object Loading : HomeUiState
-      data object SignedIn : HomeUiState
-      data object SignedOut : HomeUiState
-  }
-  ```
-
-  Then in your activity, listen for state changes and add a button that calls `signInWithGoogle()`
-
-  ```kotlin{{filename: 'HomeActivity.kt', mark:[19]}}
-  class HomeActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-      super.onCreate(savedInstanceState)
-      setContent {
-
-        val viewModel: HomeViewModel by viewModels()
-        val state by viewModel.uiState.collectAsState()
-
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          when (state) {
-            HomeUiState.Loading -> {
-              CircularProgressIndicator()
-            }
-
-            HomeUiState.SignedIn -> {
-              // Show signed in content
-            }
-            HomeUiState.SignedOut -> {
-              Button(onClick = { viewModel.signInWithGoogle() }) { Text("Sign in with Google") }
-            }
-          }
-        }
-      }
-    }
-  }
-  ```
 </Steps>

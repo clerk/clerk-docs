@@ -304,7 +304,7 @@ async function generateManifest() {
 
   // Read the ia-proposal.md file
   const proposalContent = await fs.readFile(PROPOSAL_PATH, 'utf-8')
-  console.log('✅ Read ia-proposal.md')
+  console.log(`✅ Read ${PROPOSAL_PATH}`)
 
   // Parse markdown to multiple navigation structures
   const manifest = parseMarkdownToManifest(proposalContent)

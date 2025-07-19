@@ -1,9 +1,9 @@
 # Top Level Links
 
 - Home (home)
-- Getting Started (globe)
-- Guides (globe)
-- Examples (globe)
+- Getting Started (checkmark-circle)
+- Guides (book)
+- Examples (plus-circle)
 - Reference (globe)
 
 ## Home
@@ -31,6 +31,7 @@
 
 ### Core Concepts
 
+- Overview
 - How Clerk Works
 - Integrate Clerk
 - Clerk Objects
@@ -60,17 +61,16 @@
 
 ## Guides [guides]
 
-### Securing your App [secure]
+### Configuring your App [configure]
 
-- Restricting Access
-- Multifactor Authentication (MFA) [mfa]
-- Bot Detection
-- Banning Users
-- Prevent brute force attacks
-- Re-verification (Step-up)
-- Legal Compliance
-- Security Best Practices [best-practices]
-- Session Options
+- Authentication Strategies [auth-strategies]
+  - Social Connections
+  - Enterprise Connections
+  - Web3
+- Session Token customization
+- Syncing data with webhooks
+- Backend Requests
+- Integrations
 
 ### Managing Users [users]
 
@@ -79,6 +79,15 @@
 - Extending Clerk Data [extending]
 - Syncing Clerk Data [syncing]
 - Impersonation
+
+### Customizing Clerk
+
+- UI Customization (Appearance Prop) [appearance-prop]
+- Account Portal
+- Adding items to UI Components [adding-items]
+- Email and SMS Templates
+- Localization (i18n) [localization]
+- Clerk Elements (beta) [elements]
 
 ### B2B
 
@@ -94,25 +103,17 @@
 - Billing for B2C [for-b2c]
 - Billing for B2B [for-b2b]
 
-### Customizing Clerk
+### Securing your App [secure]
 
-- UI Customization (Appearance Prop) [appearance-prop]
-- Account Portal
-- Adding items to UI Components [adding-items]
-- Email and SMS Templates
-- Localization (i18n) [localization]
-- Clerk Elements (beta) [elements]
-
-### Configuring your App [configure]
-
-- Authentication Strategies [auth-strategies]
-  - Social Connections
-  - Enterprise Connections
-  - Web3
-- Session Token customization
-- Syncing data with webhooks
-- Backend Requests
-- Integrations
+- Restricting Access
+- Multifactor Authentication (MFA) [mfa]
+- Bot Detection
+- Banning Users
+- Prevent brute force attacks
+- Re-verification (Step-up)
+- Legal Compliance
+- Security Best Practices [best-practices]
+- Session Options
 
 ### Clerk Dashboard
 
@@ -148,8 +149,27 @@
 
 ## Reference [reference]
 
-### API Reference [reference]
+### General [reference]
 
-- SDK Reference [sdk]
 - UI Components [components]
-- API Reference
+
+### SDK Reference
+
+- Next.js (nextjs)
+- React (react)
+- Backend SDK (clerk)
+- Node.js (nodejs)
+- Go (go)
+- Tanstack Start (tanstack)
+- Ruby / Rails (ruby)
+- Community SDKs
+  - Vue
+  - Svelte
+  - Hono
+  - Astro
+
+### HTTP API Reference
+
+- Frontend API [fapi]
+- Backend API [bapi]
+- Management API [mapi]

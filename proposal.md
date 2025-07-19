@@ -1,12 +1,33 @@
 # Top Level Links
 
-- Home
-- Getting Started
-- Guides
-- Examples
-- Reference
+- Home (home)
+- Getting Started (globe)
+- Guides (globe)
+- Examples (globe)
+- Reference (globe)
 
 ## Home
+
+### SDK Reference
+
+- Next.js (nextjs)
+- React (react)
+- Backend SDK (clerk)
+- Node.js (nodejs)
+- Go (go)
+- Tanstack Start (tanstack)
+- Ruby / Rails (ruby)
+- Community SDKs
+  - Vue
+  - Svelte
+  - Hono
+  - Astro
+
+### API Reference
+
+- Overview
+- Backend API
+- Frontend API
 
 ### Core Concepts
 

@@ -1,65 +1,16 @@
 # Top Level Links
 
-- Home (home)
+- Home (book)
 - Getting Started (checkmark-circle)
-- Guides (book)
 - Examples (plus-circle)
 - Reference (globe)
 
-## Home
+## Home [guides]
 
-### SDK Reference
+### Getting Started
 
-- Next.js (nextjs)
-- React (react)
-- Backend SDK (clerk)
-- Node.js (nodejs)
-- Go (go)
-- Tanstack Start (tanstack)
-- Ruby / Rails (ruby)
-- Community SDKs
-  - Vue
-  - Svelte
-  - Hono
-  - Astro
-
-### API Reference
-
-- Overview
-- Backend API
-- Frontend API
-
-### Core Concepts
-
-- Overview
-- How Clerk Works
-- Integrate Clerk
-- Clerk Objects
-- Security at Clerk [security]
-- System Limits
-- AI Prompt Library [ai-prompts]
-- Multi-tenant Architecture
-
-## Getting Started [getting-started]
-
-### Quickstart
-
-- App Router
-- Pages Router
-
-### Clerk Dashboard
-
-- Setting up your Clerk account
-- Configure your application
-
-### Next Steps
-
-- Custom sign-in/up pages
-- Protect specific routes
-- Read user and session data
-- Add middleware
-
-## Guides [guides]
+- App Router Quickstart
+- Pages Router Quickstart
 
 ### Configuring your App [configure]
 
@@ -141,6 +92,29 @@
     - Progressive Sign Ups
 - Troubleshooting
 
+## Getting Started [getting-started]
+
+### Quickstart
+
+- App Router
+- Pages Router
+
+### Clerk Dashboard
+
+- Setting up your Clerk account
+- Configure your application
+
+### Next Steps
+
+- Custom sign-in/up pages
+- Protect specific routes
+- Read user and session data
+- Add middleware
+
+### More
+
+- View all guides
+
 ## Examples [examples]
 
 ### Testing
@@ -151,7 +125,7 @@
 
 ### General [reference]
 
-- UI Components [components]
+- UI Components (box) [components]
 
 ### SDK Reference
 

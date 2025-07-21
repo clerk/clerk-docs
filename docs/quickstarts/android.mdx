@@ -45,30 +45,34 @@ description: Add authentication and user management to your Android app with Cle
   In your `app/src/main/java/com/example/myclerkapp/` directory, create a Kotlin class named `MainViewModel` with the following code. `MainViewModel` is a `ViewModel` that sets the state as `Loading` when the Clerk SDK is initializing, `SignedIn` when the user is signed in, or `SignedOut` when the user is signed out. The Clerk SDK initialization is non-blocking. Therefore, it's recommended to listen for the SDK to emit a success from Clerk's `isInitialized` global object to know when it's ready to use.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', collapsible: true }}
+  import android.util.Log
   import androidx.lifecycle.ViewModel
   import androidx.lifecycle.viewModelScope
   import com.clerk.Clerk
+  import com.clerk.network.serialization.longErrorMessageOrNull
+  import com.clerk.network.serialization.onFailure
+  import com.clerk.network.serialization.onSuccess
   import kotlinx.coroutines.flow.MutableStateFlow
   import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.combine
   import kotlinx.coroutines.flow.launchIn
   import kotlinx.coroutines.flow.onEach
+  import kotlinx.coroutines.launch
+
 
   class MainViewModel: ViewModel() {
       private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
       val uiState = _uiState.asStateFlow()
       init {
-          Clerk
-              .isInitialized
-              .onEach { isInitialized ->
-                  if (isInitialized) {
-                      if (Clerk.user != null) {
-                          _uiState.value = MainUiState.SignedIn
-                      } else {
-                          _uiState.value = MainUiState.SignedOut
-                      }
-                  }
+          combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
+              when {
+                !isInitialized -> MainUiState.Loading
+                user != null -> MainUiState.SignedIn
+                else -> MainUiState.SignedOut
               }
-              .launchIn(viewModelScope)
+          }
+          .onEach { state -> _uiState.value = state }
+          .launchIn(viewModelScope)
       }
   }
   sealed interface MainUiState {
@@ -114,17 +118,9 @@ description: Add authentication and user management to your Android app with Cle
                 contentAlignment = Alignment.Center
             ) {
                 when (state) {
-                    MainUiState.Loading -> {
-                        CircularProgressIndicator()
-                    }
-
-                    MainUiState.SignedOut -> {
-                        Text("You're signed out")
-                    }
-
-                    MainUiState.SignedIn -> {
-                        Text("You're signed in")
-                    }
+                    MainUiState.Loading -> CircularProgressIndicator()
+                    MainUiState.SignedOut -> Text("You're signed out")
+                    MainUiState.SignedIn -> Text("You're signed in")
                 }
             }
         }
@@ -162,7 +158,7 @@ description: Add authentication and user management to your Android app with Cle
 
     fun signUp(email: String, password: String) {
         viewModelScope.launch {
-         SignUp.create(SignUp.CreateParams.Standard(emailAddress = email, password = password))
+            SignUp.create(SignUp.CreateParams.Standard(emailAddress = email, password = password))
                 .onSuccess {
                     if (it.status == SignUp.Status.COMPLETE) {
                         _uiState.value = SignUpUiState.Success
@@ -181,11 +177,11 @@ description: Add authentication and user management to your Android app with Cle
     }
 
     fun verify(code: String) {
+        val inProgressSignUp = Clerk.signUp ?: return
         viewModelScope.launch {
-            signUp
-                ?.attemptVerification(SignUp.AttemptVerificationParams.EmailCode(code))
-                ?.onSuccess { _uiState.value = SignUpUiState.Success }
-                ?.onFailure {
+            inProgressSignUp.attemptVerification(SignUp.AttemptVerificationParams.EmailCode(code))
+                .onSuccess { _uiState.value = SignUpUiState.Success }
+                .onFailure {
                     // See https://clerk.com/docs/custom-flows/error-handling
                     // for more info on error handling
                     Log.e("SignUpViewModel", it.longErrorMessageOrNull, it.throwable)
@@ -380,9 +376,9 @@ description: Add authentication and user management to your Android app with Cle
 
         Button(onClick = { isSignUp = !isSignUp }) {
             if (isSignUp) {
-                Text("Don't have an account? Sign up")
+              Text("Already have an account? Sign in")
             } else {
-                Text("Already have an account? Sign in")
+              Text("Don't have an account? Sign up")  
             }
         }
     }

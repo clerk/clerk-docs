@@ -1,9 +1,12 @@
 # Top Level Links
 
-- Home (book)
+- Home (home)
 - Getting Started (checkmark-circle)
-- Examples (plus-circle)
-- Reference (globe)
+- Examples (code-bracket)
+- API Reference (globe)
+  - SDK Reference
+  - HTTP API Reference
+  - UI Components
 
 ## Home [guides]
 
@@ -26,21 +29,20 @@
 ### Managing Users [users]
 
 - Managing Users [managing]
-- Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
 - Syncing Clerk Data [syncing]
-- Impersonation
+- Invitations
+- User Impersonation
 
 ### Customizing Clerk
 
-- UI Customization (Appearance Prop) [appearance-prop]
-- Account Portal
+- UI Customization [appearance-prop]
 - Adding items to UI Components [adding-items]
 - Email and SMS Templates
-- Localization (i18n) [localization]
-- Clerk Elements (beta) [elements]
+- Localization - i18n [localization]
+- Clerk Elements - `BETA` [elements]
 
-### B2B
+### B2B / Organizations [b2b]
 
 - Overview
 - Managing Organizations [managing-orgs]
@@ -56,15 +58,24 @@
 
 ### Securing your App [secure]
 
+- Overview
 - Restricting Access
-- Multifactor Authentication (MFA) [mfa]
+- Multifactor Authentication - MFA [mfa]
 - Bot Detection
 - Banning Users
 - Prevent brute force attacks
-- Re-verification (Step-up)
+- Re-verification / Step-up
 - Legal Compliance
-- Security Best Practices [best-practices]
 - Session Options
+- Security Best Practices [best-practices]
+  - Overview
+  - Security at Clerk
+    - Vulnerability disclosure policy
+    - Clerk telemetry
+  - CSRF protection
+  - CSP headers
+  - Fixation protection
+  - Password protection and rules
 
 ### Clerk Dashboard
 
@@ -92,17 +103,23 @@
     - Progressive Sign Ups
 - Troubleshooting
 
+### Core Concepts
+
+- Overview
+- How Clerk Works
+- Integrate Clerk
+- Clerk Objects
+- Security at Clerk [security]
+- System Limits
+- AI Prompt Library [ai-prompts]
+- Multi-tenant Architecture
+
 ## Getting Started [getting-started]
 
 ### Quickstart
 
 - App Router
 - Pages Router
-
-### Clerk Dashboard
-
-- Setting up your Clerk account
-- Configure your application
 
 ### Next Steps
 
@@ -111,39 +128,53 @@
 - Read user and session data
 - Add middleware
 
-### More
+### Clerk Dashboard
 
-- View all guides
+- Setting up your Clerk account
+- Configure your application
+
+### Learn More
+
+- View all guides (book)
 
 ## Examples [examples]
 
-### Testing
+### Integration Type
 
-- Test Link
+- UI Components (box)
+- Hooks (plug)
 
-## Reference [reference]
+### Sign In
 
-### General [reference]
+- Sign in wth Email & Password
+- Sign In with OAuth
+- Sign in with Email Code
+- Sign in with Email Link
+- Sign in with Passkeys
+- Multi-Factor Authentication
 
-- UI Components (box) [components]
+## API Reference
 
-### SDK Reference
+### App Router
 
-- Next.js (nextjs)
-- React (react)
-- Backend SDK (clerk)
-- Node.js (nodejs)
-- Go (go)
-- Tanstack Start (tanstack)
-- Ruby / Rails (ruby)
-- Community SDKs
-  - Vue
-  - Svelte
-  - Hono
-  - Astro
+- `auth()`
+- `currentUser()`
+- Route Handlers
+- Server Actions
 
-### HTTP API Reference
+### Pages Router
 
-- Frontend API [fapi]
-- Backend API [bapi]
-- Management API [mapi]
+- `getAuth()`
+- `buildClerkProps()`
+
+### Hooks
+
+- `useUser()`
+- `useClerk()`
+- `useAuth()`
+- `useSignIn()`
+- `useSignUp()`
+- `useSession()`
+- `useSessionList()`
+- `useOrganization()`
+- `useOrganizationList()`

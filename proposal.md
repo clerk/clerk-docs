@@ -178,3 +178,92 @@
 - `useSessionList()`
 - `useOrganization()`
 - `useOrganizationList()`
+
+## SDK Reference
+
+### App Router
+
+- `auth()`
+- `currentUser()`
+- Route Handlers
+- Server Actions
+
+### Pages Router
+
+- `getAuth()`
+- `buildClerkProps()`
+
+### Hooks
+
+- `useUser()`
+- `useClerk()`
+- `useAuth()`
+- `useSignIn()`
+- `useSignUp()`
+- `useSession()`
+- `useSessionList()`
+- `useOrganization()`
+- `useOrganizationList()`
+
+## HTTP API Reference
+
+### API Reference
+
+- Overview
+- Backend API
+- Frontend API
+- Management API
+
+## UI Components
+
+### General
+
+- Overview
+- `<ClerkProvider>`
+
+### Authentication Components
+
+- `<SignIn />`
+- `<SignUp />`
+- `<GoogleOneTap />`
+
+### User Components
+
+- `<UserButton />`
+- `<UserProfile />`
+
+### Organization Components
+
+- `<CreateOrganization />`
+- `<OrganizationProfile />`
+- `<OrganizationSwitcher />`
+- `<OrganizationList />`
+
+### Waitlist Component
+
+- `<Waitlist />`
+
+### Billing Components
+
+- `<PricingTable />`
+
+### Control Components
+
+- `<AuthenticateWithRedirectCallback />`
+- `<ClerkLoaded>`
+- `<ClerkLoading>`
+- `<Protect>`
+- `<RedirectToSignIn />`
+- `<RedirectToSignUp />`
+- `<RedirectToUserProfile />`
+- `<RedirectToOrganizationProfile />`
+- `<RedirectToCreateOrganization />`
+- `<SignedIn>`
+- `<SignedOut>`
+
+### Unstyled Components
+
+- `<SignInButton>`
+- `<SignInWithMetamaskButton>`
+- `<SignUpButton>`
+- `<SignOutButton>`

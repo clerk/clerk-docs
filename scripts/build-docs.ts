@@ -86,6 +86,7 @@ import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { VFile } from 'vfile'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
+import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -122,6 +123,10 @@ async function main() {
     tooltips: {
       inputPath: '../docs/_tooltips',
       outputPath: '_tooltips',
+    },
+    siteFlags: {
+      inputPath: '../flags.json',
+      outputPath: '_flags.json',
     },
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
@@ -252,6 +257,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   if (config.prompts) {
     prompts = await readPrompts(config)
     console.info(`✓ Read ${prompts.length} prompts`)
+  }
+
+  abortSignal?.throwIfAborted()
+
+  let siteFlags: Flags = {}
+
+  if (config.siteFlags) {
+    siteFlags = await readSiteFlags(config)
+    console.info(`✓ Read ${Object.keys(siteFlags).length} site flags`)
   }
 
   abortSignal?.throwIfAborted()
@@ -651,6 +665,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   await writeFile(
     'manifest.json',
     JSON.stringify({
+      flags: siteFlags,
       navigation: await traverseTree(
         { items: sdkScopedManifest },
         async (item) => {
@@ -776,14 +791,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 template: wide
 ---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
-        )
-
-        await writeFile(
-          `~/${doc.file.filePathInDocsFolder}`,
-          `---
-template: wide
----
-<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
@@ -968,6 +975,13 @@ template: wide
       const llms = await generateLLMs(outputtedDocsFiles)
       await writeFile(config.llms.overviewPath, llms)
     }
+  }
+
+  abortSignal?.throwIfAborted()
+
+  if (config.siteFlags) {
+    await writeSiteFlags(config, siteFlags)
+    console.info(`✓ Wrote ${Object.keys(siteFlags).length} site flags to disk`)
   }
 
   abortSignal?.throwIfAborted()

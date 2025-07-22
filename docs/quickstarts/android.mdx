@@ -20,25 +20,9 @@ description: Add authentication and user management to your Android app with Cle
 
   Ensure that your project's minimum SDK version is set to 24 or higher, as this is the minimum required by the Clerk Android SDK.
 
-  ## Install the Clerk Android SDK
-
-  The Clerk Android SDK is distributed via Maven Central. Ensure that `mavenCentral()` is added to your projects `settings.gradle.kts` file.
-
-  {/* TODO: Mine looks different, it doesn't have `allprojects` */}
-
-  ```kotlin {{ filename: 'settings.gradle.kts' }}
-  allprojects {
-    //  other settings...
-     repositories {
-        //  other repositories...
-        mavenCentral()
-     }
-  }
-  ```
-
   <Include src="_partials/android/setup-android-sdk" />
 
-  ## Listen for SDK initialization
+  ## Listen for SDK initialization and authentication events
 
   Let's start building out your home page.
 
@@ -65,7 +49,7 @@ description: Add authentication and user management to your Android app with Cle
       val uiState = _uiState.asStateFlow()
       init {
           combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
-              when {
+              _uiState.value = when {
                 !isInitialized -> MainUiState.Loading
                 user != null -> MainUiState.SignedIn
                 else -> MainUiState.SignedOut
@@ -152,7 +136,6 @@ description: Add authentication and user management to your Android app with Cle
 
 
   class SignUpViewModel : ViewModel() {
-    private var signUp: SignUp? = null
     private val _uiState = MutableStateFlow<SignUpUiState>(SignUpUiState.SignedOut)
     val uiState = _uiState.asStateFlow()
 
@@ -163,7 +146,6 @@ description: Add authentication and user management to your Android app with Cle
                     if (it.status == SignUp.Status.COMPLETE) {
                         _uiState.value = SignUpUiState.Success
                     } else {
-                        signUp = it
                         _uiState.value = SignUpUiState.NeedsVerification
                         it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.EmailCode())
                     }
@@ -387,7 +369,7 @@ description: Add authentication and user management to your Android app with Cle
 
   Then, in your `MainActivity` file, render your newly created `SignInOrUpView` when the user isn't signed in.
 
-  ```kotlin {{ filename: 'MainActivity.kt', mark: [21] }}
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt' }}
   package com.example.myclerkapp
 
   import MainUiState
@@ -419,17 +401,9 @@ description: Add authentication and user management to your Android app with Cle
                 contentAlignment = Alignment.Center
             ) {
                 when (state) {
-                    MainUiState.Loading -> {
-                        CircularProgressIndicator()
-                    }
-
-                    MainUiState.SignedOut -> {
-                        SignInOrUpView()
-                    }
-
-                    MainUiState.SignedIn -> {
-                        Text("You're signed in")
-                    }
+                    MainUiState.Loading -> CircularProgressIndicator()
+                    MainUiState.SignedOut -> SignInOrUpView()
+                    MainUiState.SignedIn -> Text("You're signed in")
                 }
             }
         }
@@ -459,23 +433,28 @@ description: Add authentication and user management to your Android app with Cle
   class MainViewModel: ViewModel() {
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
     val uiState = _uiState.asStateFlow()
+   
     init {
-        Clerk
-            .isInitialized
-            .onEach { isInitialized ->
-                if (isInitialized) {
-                    if (Clerk.user != null) {
-                        _uiState.value = MainUiState.SignedIn
-                    } else {
-                        _uiState.value = MainUiState.SignedOut
-                    }
-                }
+        combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
+            _uiState.value = when {
+              !isInitialized -> MainUiState.Loading
+              user != null -> MainUiState.SignedIn
+              else -> MainUiState.SignedOut
             }
-            .launchIn(viewModelScope)
+        }
+        .onEach { state -> _uiState.value = state }
+        .launchIn(viewModelScope)
     }
+
     fun signOut() {
         viewModelScope.launch() {
-            Clerk.signOut().onSuccess { _uiState.value = MainUiState.SignedOut }
+            Clerk.signOut()
+            .onSuccess { _uiState.value = MainUiState.SignedOut }
+            .onFailure { 
+                // See https://clerk.com/docs/custom-flows/error-handling
+                // for more info on error handling
+                Log.e("MainViewModel", it.longErrorMessageOrNull, it.throwable)
+            }
         }
     }
   }
@@ -491,7 +470,7 @@ description: Add authentication and user management to your Android app with Cle
 
   {/* TODO: Add syntax highlighting */}
 
-  ```kotlin {{ filename: 'MainActivity.kt', mark: [21], collapsible: true }}
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt', mark: [35], collapsible: true }}
   package com.example.myclerkapp
 
   import MainUiState
@@ -524,17 +503,9 @@ description: Add authentication and user management to your Android app with Cle
                 contentAlignment = Alignment.Center
             ) {
                 when (state) {
-                    MainUiState.Loading -> {
-                        CircularProgressIndicator()
-                    }
-
-                    MainUiState.SignedOut -> {
-                        SignInOrUpView()
-                    }
-
-                    MainUiState.SignedIn -> {
-                        Button(onClick = { viewModel.signOut() }) { Text("Sign out") }
-                    }
+                    MainUiState.Loading -> CircularProgressIndicator()
+                    MainUiState.SignedOut -> SignInOrUpView()
+                    MainUiState.SignedIn -> Button(onClick = { viewModel.signOut() }) { Text("Sign out") }
                 }
             }
         }

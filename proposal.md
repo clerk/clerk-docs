@@ -1,14 +1,4 @@
-# Top Level Links
-
-- Home
-- Getting Started
-- Guides
-- Examples
-- Reference
-
-## Home
-
-### Core Concepts
+## Core Concepts
 
 - How Clerk Works
 - Integrate Clerk

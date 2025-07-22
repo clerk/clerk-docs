@@ -1,0 +1,74 @@
+name: Generate and update docs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-docs:
+    permissions:
+      contents: write
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: current_date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Checkout clerk/javascript
+        uses: actions/checkout@v4
+        with:
+          repository: clerk/javascript
+          path: clerk-javascript
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9 # Should be the same as clerk/javascript
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # Should be similar to clerk/javascript
+          cache: 'pnpm'
+          cache-dependency-path: 'clerk-javascript/pnpm-lock.yaml'
+
+      - name: Install dependencies and build
+        working-directory: ./clerk-javascript
+        run: |
+          pnpm install
+          pnpm build
+          pnpm build:declarations
+          pnpm typedoc:generate
+
+      - name: Copy docs to main repo
+        run: |
+          # Cleanup the generated docs folders
+          find . -mindepth 1 -maxdepth 1 ! -name '.github' ! -name '.git' ! -name 'clerk-javascript' ! -name 'README.md' -exec rm -rf {} +
+          # Copy the generated docs to the root of the main repo
+          cp -r ./clerk-javascript/.typedoc/docs/* .
+          # Cleanup the clerk-javascript directory
+          rm -rf ./clerk-javascript
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Commit and push changes
+        run: |
+          git checkout -b docs-${{ env.date }}
+          git add .
+          git commit -m "initial"
+          git push origin docs-${{ env.date }}
+
+      - name: Create Pull Request
+        run: gh pr create --base main --head docs-${{ env.date }} --title "[ci] Update docs (${{ env.date }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript"
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,5 +1,5 @@
 ---
-title: Android Quickstart
+title: Android Quickstart (beta)
 description: Add authentication and user management to your Android app with Clerk.
 ---
 
@@ -13,22 +13,24 @@ description: Add authentication and user management to your Android app with Cle
   ]}
 />
 
-<Include src="_partials/native-api-callout" />
-
 <Steps>
   ## Create an Android Project
 
-  To get started using Clerk with Android, create a new project in Android Studio. Clerk Android supports a mimimum SDK of 24.
+  Create a new Android project in Android Studio using the "Empty Activity" template. This tutorial names the app `MyClerkApp`. Code examples reference this name and will need to be updated with your app's name in order to work properly.
+
+  Ensure that your project's minimum SDK version is set to 24 or higher, as this is the minimum required by the Clerk Android SDK.
 
   ## Install the Clerk Android SDK
 
-  The Clerk Android SDK is distributed via Maven Central. To add the Clerk Android SDK, first ensure that you have added `mavenCentral()` to your projects `build.gradle(.kts)`
+  The Clerk Android SDK is distributed via Maven Central. Ensure that `mavenCentral()` is added to your projects `settings.gradle.kts` file.
 
-  ```gradle
+  {/* TODO: Mine looks different, it doesn't have `allprojects` */}
+
+  ```kotlin {{ filename: 'settings.gradle.kts' }}
   allprojects {
-     ...
+    //  other settings...
      repositories {
-        ...
+        //  other repositories...
         mavenCentral()
      }
   }
@@ -36,88 +38,186 @@ description: Add authentication and user management to your Android app with Cle
 
   <Include src="_partials/android/setup-android-sdk" />
 
-  ## Listen for SDK initialization and conditionally render content
+  ## Listen for SDK initialization
 
-  This activity will show a signed in or signed out experience based on the user's authentication state. The Clerk SDK initialization is non-blocking. Therefore it's recommended to
-  listen for the SDK to emit a success from the `isInitialized` Clerk global object to know when it's ready to use.
+  Let's start building out your home page.
 
-  1. Create a HomeActivityViewModel
-  1. Listen for the Clerk SDK to get initialized
-  1. Check if there's an already authenticated User.
-  1. Create a HomeActivity. (Don't forget to add it to the `AndroidManifest.xml`)
-  1. Update the UI
+  In your `app/src/main/java/com/example/myclerkapp/` directory, create a Kotlin class named `MainViewModel` with the following code. `MainViewModel` is a `ViewModel` that sets the state as `Loading` when the Clerk SDK is initializing, `SignedIn` when the user is signed in, or `SignedOut` when the user is signed out. The Clerk SDK initialization is non-blocking. Therefore, it's recommended to listen for the SDK to emit a success from Clerk's `isInitialized` global object to know when it's ready to use.
 
-  ```kotlin{{filename: 'HomeViewModel.kt'}}
-  class HomeViewModel: ViewModel() {
-      private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', collapsible: true }}
+  import android.util.Log
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.Clerk
+  import com.clerk.network.serialization.longErrorMessageOrNull
+  import com.clerk.network.serialization.onFailure
+  import com.clerk.network.serialization.onSuccess
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.combine
+  import kotlinx.coroutines.flow.launchIn
+  import kotlinx.coroutines.flow.onEach
+  import kotlinx.coroutines.launch
+
+
+  class MainViewModel: ViewModel() {
+      private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
       val uiState = _uiState.asStateFlow()
-    init {
-      Clerk.isInitialized
-        .onEach { isInitialized ->
-          if (isInitialized) {
-            if (Clerk.user != null) {
-              _uiState.value = HomeUiState.SignedIn
-            } else {
-              _uiState.value = HomeUiState.SignedOut
-            }
+      init {
+          combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
+              when {
+                !isInitialized -> MainUiState.Loading
+                user != null -> MainUiState.SignedIn
+                else -> MainUiState.SignedOut
+              }
           }
-        }
-        .launchIn(viewModelScope)
-    }
+          .onEach { state -> _uiState.value = state }
+          .launchIn(viewModelScope)
+      }
   }
-  sealed interface HomeUiState {
-      data object Loading : HomeUiState
-      data object SignedIn : HomeUiState
-      data object SignedOut : HomeUiState
+  sealed interface MainUiState {
+      data object Loading : MainUiState
+      data object SignedIn : MainUiState
+      data object SignedOut : MainUiState
   }
   ```
 
-  Now that you're listening for authentication and initialization events, set up your UI to react to them.
+  ## Conditionally render content
 
-  ```kotlin {{ filename: 'HomeActivity.kt' }}
-  class HomeActivity : ComponentActivity() {
+  Now that you're listening for initialization and authentication events, set up your UI to react to them. In your `MainActivity.kt`, add the following code. This will show a loading indicator while the Clerk SDK is initializing, and a signed in or signed out experience based on the user's authentication state.
+
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt', collapsible: true }}
+  package com.example.myclerkapp
+
+  import MainUiState
+  import MainViewModel
+  import android.os.Bundle
+  import androidx.activity.ComponentActivity
+  import androidx.activity.compose.setContent
+  import androidx.activity.viewModels
+  import androidx.compose.foundation.layout.Box
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.material3.CircularProgressIndicator
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.getValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+  class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-      super.onCreate(savedInstanceState)
-      setContent {
+        super.onCreate(savedInstanceState)
+        setContent {
 
-        val viewModel: HomeViewModel by viewModels()
-        val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val viewModel: MainViewModel by viewModels()
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-        Column(
-          modifier = Modifier.fillMaxSize(),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.Center,
-        ) {
-          when (state) {
-            HomeViewModel.HomeUiState.Loading -> {
-              CircularProgressIndicator()
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                when (state) {
+                    MainUiState.Loading -> CircularProgressIndicator()
+                    MainUiState.SignedOut -> Text("You're signed out")
+                    MainUiState.SignedIn -> Text("You're signed in")
+                }
             }
-
-            HomeViewModel.HomeUiState.SignedOut -> {
-              // Show signed out content.
-            }
-
-            HomeViewModel.HomeUiState.SignedIn -> {
-              // Show signed in content.
-            }
-          }
         }
-      }
     }
   }
   ```
 
   ## Create sign-up and sign-in views
 
-  ### `SignUpView`
+  ### Sign-up view
 
-  Create the views and ViewModels that'll allow users to Sign In and Sign Up.
+  Create a `SignUpViewModel` with the following code. It allows users to sign up using their email address and password, and sends an email verification code to confirm their email address.
 
-  1. Create a `SignUpView` that let's users enter their email and password.
-  1. Create a `SignUpViewModel` that creates a new Sign Up.
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignUpViewModel.kt', collapsible: true }}
+  package com.example.myclerkapp
 
-  ```kotlin {{ filename: 'SignUpView.kt' }}
+  import android.util.Log
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.network.serialization.longErrorMessageOrNull
+  import com.clerk.network.serialization.onFailure
+  import com.clerk.network.serialization.onSuccess
+  import com.clerk.signup.SignUp
+  import com.clerk.signup.attemptVerification
+  import com.clerk.signup.prepareVerification
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.launch
+
+
+  class SignUpViewModel : ViewModel() {
+    private var signUp: SignUp? = null
+    private val _uiState = MutableStateFlow<SignUpUiState>(SignUpUiState.SignedOut)
+    val uiState = _uiState.asStateFlow()
+
+    fun signUp(email: String, password: String) {
+        viewModelScope.launch {
+            SignUp.create(SignUp.CreateParams.Standard(emailAddress = email, password = password))
+                .onSuccess {
+                    if (it.status == SignUp.Status.COMPLETE) {
+                        _uiState.value = SignUpUiState.Success
+                    } else {
+                        signUp = it
+                        _uiState.value = SignUpUiState.NeedsVerification
+                        it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.EmailCode())
+                    }
+                }
+                .onFailure {
+                    // See https://clerk.com/docs/custom-flows/error-handling
+                    // for more info on error handling
+                    Log.e("SignUpViewModel", it.longErrorMessageOrNull, it.throwable)
+                }
+        }
+    }
+
+    fun verify(code: String) {
+        val inProgressSignUp = Clerk.signUp ?: return
+        viewModelScope.launch {
+            inProgressSignUp.attemptVerification(SignUp.AttemptVerificationParams.EmailCode(code))
+                .onSuccess { _uiState.value = SignUpUiState.Success }
+                .onFailure {
+                    // See https://clerk.com/docs/custom-flows/error-handling
+                    // for more info on error handling
+                    Log.e("SignUpViewModel", it.longErrorMessageOrNull, it.throwable)
+                }
+        }
+    }
+
+    sealed interface SignUpUiState {
+        data object SignedOut : SignUpUiState
+        data object Success : SignUpUiState
+        data object NeedsVerification : SignUpUiState
+    }
+  }
+  ```
+
+  Then, create a `SignUpView` with the following code to use the `SignUpViewModel`.
+
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignUpView.kt', collapsible: true }}
+  package com.example.myclerkapp
+
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.Text
+  import androidx.compose.material3.TextField
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.collectAsState
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.text.input.PasswordVisualTransformation
+  import androidx.compose.ui.unit.dp
+  import androidx.lifecycle.viewmodel.compose.viewModel
+
 
   @Composable
   fun SignUpView(viewModel: SignUpViewModel = viewModel()) {
@@ -125,83 +225,95 @@ description: Add authentication and user management to your Android app with Cle
     val state by viewModel.uiState.collectAsState()
 
     Column(
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
     ) {
-      Text("Sign Up")
+        Text("Sign Up")
 
-      if (state is SignUpUiState.NeedsVerification) {
-        var code by remember { mutableStateOf("") }
+        if (state is SignUpViewModel.SignUpUiState.NeedsVerification) {
+            var code by remember { mutableStateOf("") }
 
-        TextField(value = code, onValueChange = { code = it })
+            TextField(value = code, onValueChange = { code = it })
 
-        Button(onClick = { viewModel.verify(code) }) { Text("Verify") }
-      } else {
-        var email by remember { mutableStateOf("") }
-        var password by remember { mutableStateOf("") }
+            Button(onClick = { viewModel.verify(code) }) { Text("Verify") }
+        } else {
+            var email by remember { mutableStateOf("") }
+            var password by remember { mutableStateOf("") }
 
-        TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
+            TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
 
-        TextField(
-          value = password,
-          placeholder = { Text("Password") },
-          onValueChange = { password = it },
-          visualTransformation = PasswordVisualTransformation(),
-        )
+            TextField(
+                value = password,
+                placeholder = { Text("Password") },
+                onValueChange = { password = it },
+                visualTransformation = PasswordVisualTransformation(),
+            )
 
-        Button(onClick = { viewModel.signUp(email, password) }) { Text("Sign Up") }
-      }
+            Button(onClick = { viewModel.signUp(email, password) }) { Text("Sign Up") }
+        }
     }
   }
   ```
 
-  > [!IMPORTANT]
-  > All Clerk Android SDK function paramters follow the pattern `Object-Function-Params`
-  > i.e. `signUp.authenticateWithRedirect` paramters would be `SignUp.AuthenticateWithRedirectParams`
+  ### Sign-in view
 
-  ```kotlin {{ filename: 'SignUpViewModel.kt' }}
+  Create a `SignInViewModel` with the following code. It allows users to sign in using their email address and password.
 
-  class SignUpViewModel : ViewModel() {
-    private var signUp: SignUp? = null
-    private val _uiState = MutableStateFlow<SignUpUiState>(SignUpUiState.Idle)
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInViewModel.kt', collapsible: true }}
+  package com.example.myclerkapp
+
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.network.serialization.onFailure
+  import com.clerk.network.serialization.onSuccess
+  import com.clerk.signin.SignIn
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.launch
+
+  class SignInViewModel : ViewModel() {
+
+    private val _uiState = MutableStateFlow<SignInUiState>(SignInUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
-    fun signUp(email: String, password: String) {
-      viewModelScope.launch {
-        SignUp.create(SignUp.CreateParams.Standard(emailAddress = email, password = password))
-          .onSuccess {
-            if (it.status == SignUp.Status.COMPLETE) {
-              _uiState.value = SignUpUiState.Success
-            } else {
-              signUp = it
-              _uiState.value = SignUpUiState.NeedsVerification
-              it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.EMAIL_CODE)
-            }
-          }
-      }
+    fun signIn(email: String, password: String) {
+        viewModelScope.launch {
+            SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
+                .onSuccess { _uiState.value = SignInUiState.Success }
+                .onFailure { _uiState.value = SignInUiState.Error }
+        }
     }
 
-    fun verify(code: String) {
-      viewModelScope.launch {
-        signUp
-          ?.attemptVerification(SignUp.AttemptVerificationParams.EmailCode(code))
-          ?.onSuccess { _uiState.value = SignUpUiState.Success }
-      }
-    }
+    sealed interface SignInUiState {
+        data object Idle : SignInUiState
 
-    sealed interface SignUpUiState {
-      data object Idle : SignUpUiState
-      data object Success : SignUpUiState
-      data object NeedsVerification : SignUpUiState
+        data object Error : SignInUiState
+
+        data object Success : SignInUiState
     }
   }
   ```
 
-  ### `SignInView`
+  Then, create a `SignInView` with the following code to use the `SignInViewModel`.
 
-  Create a `SignInView` with the following code. It allows users to sign in using their email address and password.
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInView.kt', collapsible: true }}
+  package com.example.myclerkapp
 
-  ```kotlin {{ filename: 'SignInView.kt' }}
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.Text
+  import androidx.compose.material3.TextField
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.text.input.PasswordVisualTransformation
+  import androidx.compose.ui.unit.dp
+  import androidx.lifecycle.viewmodel.compose.viewModel
+
 
   @Composable
   fun SignInView(viewModel: SignInViewModel = viewModel()) {
@@ -210,159 +322,222 @@ description: Add authentication and user management to your Android app with Cle
     var password by remember { mutableStateOf("") }
 
     Column(
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
     ) {
-      Text("Sign In")
-      TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
-      TextField(
-        value = password,
-        onValueChange = { password = it },
-        placeholder = { Text("password") },
-        visualTransformation = PasswordVisualTransformation(),
-      )
-      Button(onClick = { viewModel.signIn(email, password) }) { Text("Sign In") }
+        Text("Sign In")
+        TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
+        TextField(
+            value = password,
+            onValueChange = { password = it },
+            placeholder = { Text("password") },
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        Button(onClick = { viewModel.signIn(email, password) }) { Text("Sign In") }
     }
   }
   ```
 
-  ```kotlin {{ filename: 'SignInViewModel.kt' }}
-  class SignInViewModel : ViewModel() {
+  ### Combine the views
 
-    private val _uiState = MutableStateFlow<SignInUiState>(SignInUiState.Idle)
-    val uiState = _uiState.asStateFlow()
+  Commonly, authentication flows will allow users to switch between sign up and sign in, such as a "Already signed up? Sign in" button. To add this to your app, create a `SignInOrUpView` with the following code. This container view combines the `SignUpView` and `SignInView` views, and allows users to switch between them.
 
-    fun signIn(email: String, password: String) {
-      viewModelScope.launch {
-        SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
-          .onSuccess { _uiState.value = SignInUiState.Success }
-          .onFailure { _uiState.value = SignInUiState.Error }
-      }
-    }
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInOrUpView.kt', collapsible: true }}
+  package com.example.myclerkapp
 
-    sealed interface SignInUiState {
-      data object Idle : SignInUiState
+  import androidx.compose.foundation.layout.Arrangement
+  import androidx.compose.foundation.layout.Column
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.Composable
+  import androidx.compose.runtime.getValue
+  import androidx.compose.runtime.mutableStateOf
+  import androidx.compose.runtime.remember
+  import androidx.compose.runtime.setValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.compose.ui.unit.dp
 
-      data object Error : SignInUiState
-
-      data object Success : SignInUiState
-    }
-  }
-  ```
-
-  ### `SignInOrUpView`
-
-  Create a `SignInOrUpView` container view that allows users to switch between sign up and sign in.
-
-  ```kotlin {{ filename: 'SignInOrUpView.kt' }}
   @Composable
   fun SignInOrUpView() {
-      var isSignUp by remember { mutableStateOf(true) }
+    var isSignUp by remember { mutableStateOf(true) }
 
-      Column(
-          modifier = Modifier.fillMaxSize(),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
-      ) {
-          if (isSignUp) {
-              SignUpView()
-          } else {
-              SignInView()
-          }
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+    ) {
+        if (isSignUp) {
+            SignUpView()
+        } else {
+            SignInView()
+        }
 
-          Button(onClick = { isSignUp = !isSignUp }) {
-              if (isSignUp) {
-                  Text("Don't have an account? Sign up")
-              } else {
-                  Text("Already have an account? Sign in")
-              }
-          }
-      }
+        Button(onClick = { isSignUp = !isSignUp }) {
+            if (isSignUp) {
+              Text("Already have an account? Sign in")
+            } else {
+              Text("Don't have an account? Sign up")  
+            }
+        }
+    }
   }
   ```
 
-  ## Render the `SignInOrUpView`
+  Then, in your `MainActivity` file, render your newly created `SignInOrUpView` when the user isn't signed in.
 
-  Go back to your `HomeActivity` and render your newly created `SignInOrUpView` when the user isn't signed in.
+  ```kotlin {{ filename: 'MainActivity.kt', mark: [21] }}
+  package com.example.myclerkapp
 
-  ```kotlin {{ filename: 'HomeActivity.kt', mark: [21] }}
-  class HomeActivity : ComponentActivity() {
+  import MainUiState
+  import MainViewModel
+  import android.os.Bundle
+  import androidx.activity.ComponentActivity
+  import androidx.activity.compose.setContent
+  import androidx.activity.viewModels
+  import androidx.compose.foundation.layout.Box
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.material3.CircularProgressIndicator
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.getValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+  class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-      super.onCreate(savedInstanceState)
-      setContent {
+        super.onCreate(savedInstanceState)
+        setContent {
 
-        val viewModel: HomeViewModel by viewModels()
-        val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val viewModel: MainViewModel by viewModels()
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-        Box(
-          modifier = Modifier.fillMaxSize(),
-          contentAlignment = Alignment.Center,z
-        ) {
-          when (state) {
-            HomeViewModel.HomeUiState.Loading -> {
-              CircularProgressIndicator()
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                when (state) {
+                    MainUiState.Loading -> {
+                        CircularProgressIndicator()
+                    }
+
+                    MainUiState.SignedOut -> {
+                        SignInOrUpView()
+                    }
+
+                    MainUiState.SignedIn -> {
+                        Text("You're signed in")
+                    }
+                }
             }
-
-            HomeViewModel.HomeUiState.SignedOut -> {
-              SignInOrUpView()
-            }
-
-            HomeViewModel.HomeUiState.SignedIn -> {
-              // Show signed in content.
-            }
-          }
         }
-      }
     }
   }
   ```
 
   ## Allow users to sign out
 
-  Finally, provide users with a way to sign out of your app. You can do this by adding a `signOut()` function to your `HomeViewModel` and calling it when the user clicks on a Sign out button.
+  Finally, provide users with a way to sign out of your app.
 
-  ```kotlin {{ filename: 'HomeViewModel.kt', mark: [[7, 11]] }}
-    class HomeViewModel: ViewModel() {
-      private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
-      val uiState = _uiState.asStateFlow()
+  In your `MainViewModel`, add a `signOut` function that calls `Clerk.signOut()`.
 
-      ...
+  {/* TODO: add syntax highlighting  */}
 
-      fun signOut() {
-          viewModelScope.launch() {
-              Clerk.signOut().onSuccess { _uiState.value = HomeUiState.SignedOut }    
-          }
-      }
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', mark: [[7, 11]], collapsible: true }}
+  import androidx.lifecycle.ViewModel
+  import androidx.lifecycle.viewModelScope
+  import com.clerk.Clerk
+  import com.clerk.network.serialization.onSuccess
+  import kotlinx.coroutines.flow.MutableStateFlow
+  import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.launchIn
+  import kotlinx.coroutines.flow.onEach
+  import kotlinx.coroutines.launch
+
+  class MainViewModel: ViewModel() {
+    private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
+    val uiState = _uiState.asStateFlow()
+    init {
+        Clerk
+            .isInitialized
+            .onEach { isInitialized ->
+                if (isInitialized) {
+                    if (Clerk.user != null) {
+                        _uiState.value = MainUiState.SignedIn
+                    } else {
+                        _uiState.value = MainUiState.SignedOut
+                    }
+                }
+            }
+            .launchIn(viewModelScope)
+    }
+    fun signOut() {
+        viewModelScope.launch() {
+            Clerk.signOut().onSuccess { _uiState.value = MainUiState.SignedOut }
+        }
+    }
+  }
+
+  sealed interface MainUiState {
+    data object Loading : MainUiState
+    data object SignedIn : MainUiState
+    data object SignedOut : MainUiState
   }
   ```
 
-  Call that `signOut` function in your view
+  Then, in your `MainActivity`, add a button that calls the `signOut` function when clicked.
 
-  ```kotlin {{ filename: 'HomeActivity.kt', mark: [21] }}
-  class HomeActivity : ComponentActivity() {
+  {/* TODO: Add syntax highlighting */}
+
+  ```kotlin {{ filename: 'MainActivity.kt', mark: [21], collapsible: true }}
+  package com.example.myclerkapp
+
+  import MainUiState
+  import MainViewModel
+  import android.os.Bundle
+  import androidx.activity.ComponentActivity
+  import androidx.activity.compose.setContent
+  import androidx.activity.viewModels
+  import androidx.compose.foundation.layout.Box
+  import androidx.compose.foundation.layout.fillMaxSize
+  import androidx.compose.material3.Button
+  import androidx.compose.material3.CircularProgressIndicator
+  import androidx.compose.material3.Text
+  import androidx.compose.runtime.getValue
+  import androidx.compose.ui.Alignment
+  import androidx.compose.ui.Modifier
+  import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+  class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-       ...
+        super.onCreate(savedInstanceState)
+        setContent {
 
-      Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-      ) {
-        when (state) {
-          HomeViewModel.HomeUiState.Loading -> {
-            CircularProgressIndicator()
-          }
+            val viewModel: MainViewModel by viewModels()
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-          HomeViewModel.HomeUiState.SignedOut -> {
-            SignInOrUpView()
-          }
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                when (state) {
+                    MainUiState.Loading -> {
+                        CircularProgressIndicator()
+                    }
 
-          HomeViewModel.HomeUiState.SignedIn -> {
-            Button(onClick = { viewModel.signOut() }) { Text("Sign out") }
-          }
+                    MainUiState.SignedOut -> {
+                        SignInOrUpView()
+                    }
+
+                    MainUiState.SignedIn -> {
+                        Button(onClick = { viewModel.signOut() }) { Text("Sign out") }
+                    }
+                }
+            }
         }
-      }
     }
   }
   ```

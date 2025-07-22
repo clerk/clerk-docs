@@ -957,7 +957,7 @@ The `<Typedoc />` component is used to inject the contents of an MDX file from t
 - If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
 - Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
 
-For example, in the `/references/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
+For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
 <Typedoc src="clerk-react/use-auth" />

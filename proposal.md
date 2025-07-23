@@ -1,43 +1,31 @@
-# Top Level Links
+## Getting Started
 
-- Home
-- Getting Started
-- Guides
-- Examples
-- Reference
-
-## Home
-
-### Core Concepts
-
-- How Clerk Works
-- Integrate Clerk
-- Clerk Objects
-- Security at Clerk [security]
-- System Limits
-- AI Prompt Library [ai-prompts]
-- Multi-tenant Architecture
-
-## Getting Started [getting-started]
-
-### Quickstart
-
-- App Router
-- Pages Router
+- Quickstart
 
 ### Clerk Dashboard
 
 - Setting up your Clerk account
 - Configure your application
+  - Production vs Development Environments
+- Setting up organizations
+- Get started with Billing
 
 ### Next Steps
 
+- Migrating in Existing Users
 - Custom sign-in/up pages
-- Protect specific routes
-- Read user and session data
-- Add middleware
+- Protect specific routes and pages
+- Read and write user data
+- Get started with B2B
+- Get started with Billing
 
-## Guides [guides]
+## Guides
+
+### Clerk Concepts
+
+- Environment variables
+- Components and Hooks
+- User Sessions and Tokens
 
 ### Securing your App [secure]
 
@@ -53,13 +41,17 @@
 
 ### Managing Users [users]
 
-- Managing Users [managing]
-- Reading Clerk Data [reading]
-- Extending Clerk Data [extending]
-- Syncing Clerk Data [syncing]
+- Managing Users in the Dashboard [managing]
+- Reading user data [reading]
+- Writing custom user data [extending]
+- Syncing user data to your database [syncing]
 - Impersonation
+- Authentication Strategies [auth-strategies]
+  - Social Connections
+  - Enterprise Connections
+  - Web3
 
-### B2B
+### B2B (Organizations)
 
 - Overview
 - Managing Organizations [managing-orgs]
@@ -70,10 +62,11 @@
 ### Billing
 
 - Overview
+- Creating a pricing table
 - Billing for B2C [for-b2c]
 - Billing for B2B [for-b2b]
 
-### Customizing Clerk
+### Using Clerk in your app
 
 - UI Customization (Appearance Prop) [appearance-prop]
 - Account Portal
@@ -81,33 +74,14 @@
 - Email and SMS Templates
 - Localization (i18n) [localization]
 - Clerk Elements (beta) [elements]
-
-### Configuring your App [configure]
-
-- Authentication Strategies [auth-strategies]
-  - Social Connections
-  - Enterprise Connections
-  - Web3
-- Session Token customization
-- Syncing data with webhooks
-- Backend Requests
-- Integrations
-
-### Clerk Dashboard
-
-- Overview
-- Account Portal
-- DNS & Domains
-- Plans & Billing
+- Using Clerks API
 
 ### Development
 
-- Deployment
+- Local Deployment
 - Testing with Clerk
 - Managing Environments
-- Migrating your Data
-- Clerk environment variables
-- SDK Development
+- Troubleshooting
 - Upgrading Clerk [upgrading]
   - Versioning & LTS [versioning]
   - Upgrade Guides
@@ -117,18 +91,41 @@
     - @clerk/nextjs v6 [next-v6]
     - URL based session syncing [url-session-syncing]
     - Progressive Sign Ups
-- Troubleshooting
+
+### Advanced
+
+- SDK Development
 
 ## Examples [examples]
 
-### Testing
+### Full Project Repositories
 
-- Test Link
+- Chat app with Clerk
+- Ecommerce site with Clerk
+- LLM ai assistant with Clerk
+
+### Integration Repositories
+
+- Clerk + Next.js + Neon DB
+
+### Component Examples
+
+- `<UserButton />`
 
 ## Reference [reference]
 
-### API Reference [reference]
+### Components
 
-- SDK Reference [sdk]
-- UI Components [components]
-- API Reference
+- `<UserProfile />`
+
+### Hooks
+
+- `useUser()`
+
+### Frontend API
+
+- POST `/api/user`
+
+### Backend API
+
+- POST `/api/create-user`

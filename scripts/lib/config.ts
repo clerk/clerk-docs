@@ -52,6 +52,10 @@ type BuildConfigOptions = {
     overviewPath?: string
     fullPath?: string
   }
+  siteFlags?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
@@ -151,6 +155,15 @@ export async function createConfig(config: BuildConfigOptions) {
         ? {
             overviewPath: config.llms.overviewPath,
             fullPath: config.llms.fullPath,
+          }
+        : null,
+
+      siteFlags: config.siteFlags
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.siteFlags.inputPath)),
+            inputPathRelative: config.siteFlags.inputPath,
+            outputPath: resolve(path.join(tempDist, config.siteFlags.outputPath)),
+            outputPathRelative: config.siteFlags.outputPath,
           }
         : null,
 

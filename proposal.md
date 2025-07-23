@@ -65,9 +65,11 @@
     - Xero
   - Enterprise Connections
   - Web3
-
 - Session Token customization
-- Syncing data with webhooks
+- Webhooks
+  - Overview
+  - Syncing data with webhooks [syncing]
+  - Debugging webhooks [debugging]
 - Backend Requests
 - Integrations
 

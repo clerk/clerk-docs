@@ -1,19 +1,37 @@
 # Top Level Links
 
-- Home (home)
 - Getting Started (checkmark-circle)
-- Examples (code-bracket)
-- API Reference (globe)
-  - SDK Reference
-  - HTTP API Reference
+- Guides (book)
+- Examples (plus-circle)
+- Reference (globe)
+- SDK Reference
+  - API Reference
   - UI Components
 
-## Home [guides]
+## Getting Started [getting-started]
 
-### Getting Started
+### Quickstart
 
-- App Router Quickstart
-- Pages Router Quickstart
+- App Router
+- Pages Router
+
+### Clerk Dashboard
+
+- Setting up your Clerk account
+- Configure your application
+
+### Next Steps
+
+- Custom sign-in/up pages
+- Protect specific routes
+- Read user and session data
+- Add middleware
+
+### More
+
+- View all guides
+
+## Guides [guides]
 
 ### Configuring your App [configure]
 
@@ -29,20 +47,21 @@
 ### Managing Users [users]
 
 - Managing Users [managing]
+- Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
 - Syncing Clerk Data [syncing]
-- Invitations
-- User Impersonation
+- Impersonation
 
 ### Customizing Clerk
 
-- UI Customization [appearance-prop]
+- UI Customization (Appearance Prop) [appearance-prop]
+- Account Portal
 - Adding items to UI Components [adding-items]
 - Email and SMS Templates
-- Localization - i18n [localization]
-- Clerk Elements - `BETA` [elements]
+- Localization (i18n) [localization]
+- Clerk Elements (beta) [elements]
 
-### B2B / Organizations [b2b]
+### B2B
 
 - Overview
 - Managing Organizations [managing-orgs]
@@ -58,31 +77,15 @@
 
 ### Securing your App [secure]
 
-- Overview
 - Restricting Access
-- Multifactor Authentication - MFA [mfa]
+- Multifactor Authentication (MFA) [mfa]
 - Bot Detection
 - Banning Users
 - Prevent brute force attacks
-- Re-verification / Step-up
+- Re-verification (Step-up)
 - Legal Compliance
-- Session Options
 - Security Best Practices [best-practices]
-  - Overview
-  - Security at Clerk
-    - Vulnerability disclosure policy
-    - Clerk telemetry
-  - CSRF protection
-  - CSP headers
-  - Fixation protection
-  - Password protection and rules
-
-### Clerk Dashboard
-
-- Overview
-- Account Portal
-- DNS & Domains
-- Plans & Billing
+- Session Options
 
 ### Development
 
@@ -103,167 +106,54 @@
     - Progressive Sign Ups
 - Troubleshooting
 
-### Core Concepts
-
-- Overview
-- How Clerk Works
-- Integrate Clerk
-- Clerk Objects
-- Security at Clerk [security]
-- System Limits
-- AI Prompt Library [ai-prompts]
-- Multi-tenant Architecture
-
-## Getting Started [getting-started]
-
-### Quickstart
-
-- App Router
-- Pages Router
-
-### Next Steps
-
-- Custom sign-in/up pages
-- Protect specific routes
-- Read user and session data
-- Add middleware
-
 ### Clerk Dashboard
 
-- Setting up your Clerk account
-- Configure your application
+- Overview
+- Account Portal
+- DNS & Domains
+- Plans & Billing
 
-### Learn More
+### How Clerk works
 
-- View all guides (book)
+- Overview
+- Integrating Clerk
+- Cookies
+- System limits
+- Routing
+- Session tokens
+- Tokens & signatures
+- Clerk environment variables
+- Security at Clerk [security]
 
 ## Examples [examples]
 
-### Integration Type
+### Testing
 
-- UI Components (box)
-- Hooks (plug)
+- Test Link
 
-### Sign In
+## Reference [reference]
 
-- Sign in wth Email & Password
-- Sign In with OAuth
-- Sign in with Email Code
-- Sign in with Email Link
-- Sign in with Passkeys
-- Multi-Factor Authentication
+### General [reference]
 
-## API Reference
+- UI Components (box) [components]
 
-### App Router
+### SDK Reference
 
-- `auth()`
-- `currentUser()`
-- Route Handlers
-- Server Actions
+- Next.js (nextjs)
+- React (react)
+- Backend SDK (clerk)
+- Node.js (nodejs)
+- Go (go)
+- Tanstack Start (tanstack)
+- Ruby / Rails (ruby)
+- Community SDKs
+  - Vue
+  - Svelte
+  - Hono
+  - Astro
 
-### Pages Router
+### HTTP API Reference
 
-- `getAuth()`
-- `buildClerkProps()`
-
-### Hooks
-
-- `useUser()`
-- `useClerk()`
-- `useAuth()`
-- `useSignIn()`
-- `useSignUp()`
-- `useSession()`
-- `useSessionList()`
-- `useOrganization()`
-- `useOrganizationList()`
-
-## SDK Reference
-
-### App Router
-
-- `auth()`
-- `currentUser()`
-- Route Handlers
-- Server Actions
-
-### Pages Router
-
-- `getAuth()`
-- `buildClerkProps()`
-
-### Hooks
-
-- `useUser()`
-- `useClerk()`
-- `useAuth()`
-- `useSignIn()`
-- `useSignUp()`
-- `useSession()`
-- `useSessionList()`
-- `useOrganization()`
-- `useOrganizationList()`
-
-## HTTP API Reference
-
-### API Reference
-
-- Overview
-- Backend API
-- Frontend API
-- Management API
-
-## UI Components
-
-### General
-
-- Overview
-- `<ClerkProvider>`
-
-### Authentication Components
-
-- `<SignIn />`
-- `<SignUp />`
-- `<GoogleOneTap />`
-
-### User Components
-
-- `<UserButton />`
-- `<UserProfile />`
-
-### Organization Components
-
-- `<CreateOrganization />`
-- `<OrganizationProfile />`
-- `<OrganizationSwitcher />`
-- `<OrganizationList />`
-
-### Waitlist Component
-
-- `<Waitlist />`
-
-### Billing Components
-
-- `<PricingTable />`
-
-### Control Components
-
-- `<AuthenticateWithRedirectCallback />`
-- `<ClerkLoaded>`
-- `<ClerkLoading>`
-- `<Protect>`
-- `<RedirectToSignIn />`
-- `<RedirectToSignUp />`
-- `<RedirectToUserProfile />`
-- `<RedirectToOrganizationProfile />`
-- `<RedirectToCreateOrganization />`
-- `<SignedIn>`
-- `<SignedOut>`
-
-### Unstyled Components
-
-- `<SignInButton>`
-- `<SignInWithMetamaskButton>`
-- `<SignUpButton>`
-- `<SignOutButton>`
+- Frontend API [fapi]
+- Backend API [bapi]
+- Management API [mapi]

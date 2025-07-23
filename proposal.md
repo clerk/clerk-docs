@@ -37,8 +37,35 @@
 
 - Authentication Strategies [auth-strategies]
   - Social Connections
+    - Apple
+    - Atlassian
+    - Bitbucket
+    - Box
+    - Coinbase
+    - Discord
+    - Dropbox
+    - Facebook
+    - GitHub
+    - GitLab
+    - Google
+    - HubSpot
+    - Hugging Face
+    - Line
+    - Linear
+    - LinkedIn
+    - LinkedIn (deprecated)
+    - Microsoft
+    - Notion
+    - Slack
+    - Spotify
+    - TikTok
+    - Twitch
+    - Twitter v1 (deprecated)
+    - X/Twitter v2
+    - Xero
   - Enterprise Connections
   - Web3
+
 - Session Token customization
 - Syncing data with webhooks
 - Backend Requests
@@ -105,12 +132,16 @@
     - URL based session syncing [url-session-syncing]
     - Progressive Sign Ups
 - Troubleshooting
+- AI Prompts
 
-### Clerk Dashboard
+### Clerk Dashboard [dashboard]
 
 - Overview
 - Account Portal
 - DNS & Domains
+  - Overview
+  - Satellite Domains
+  - Proxy Clerk Frontend API [proxy-fapi]
 - Plans & Billing
 
 ### How Clerk works

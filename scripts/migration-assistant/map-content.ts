@@ -356,6 +356,40 @@ function findInvalidMappings(expandedMapping: Mapping, manifestPaths: string[]) 
 type InvalidMapping = Awaited<ReturnType<typeof findInvalidMappings>>
 
 /**
+ * Display only unhandled files
+ * @param {string[]} unhandledFiles - Array of unhandled file paths
+ */
+function displayUnhandledFilesOnly(unhandledFiles: string[]) {
+  if (unhandledFiles.length === 0) {
+    console.log('✅ All legacy files are handled')
+    return
+  }
+
+  console.log(`⚠️  Found ${unhandledFiles.length} unhandled legacy files:\n`)
+
+  // Group by directory for better readability
+  const groupedFiles: Record<string, string[]> = {}
+  unhandledFiles.forEach((file) => {
+    const dir = file.includes('/') ? file.split('/')[0] : 'root'
+    if (!groupedFiles[dir]) groupedFiles[dir] = []
+    groupedFiles[dir].push(file)
+  })
+
+  // Display grouped warnings
+  Object.entries(groupedFiles)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([dir, files]) => {
+      console.log(`📁 ${dir}/ (${files.length} files)`)
+      files.sort().forEach((file) => {
+        console.log(`   • ${file}`)
+      })
+      console.log()
+    })
+
+  console.log(`📊 Summary: ${unhandledFiles.length} unhandled files`)
+}
+
+/**
  * Main function to parse docs content and check mappings
  */
 async function main() {
@@ -378,8 +412,8 @@ async function main() {
     const invalidMappings = findInvalidMappings(expandedMapping, manifestPaths)
 
     if (WARNINGS_ONLY) {
-      console.log('🔍 Checking for unhandled legacy files and pages to create...\n')
-      displayWarnings(unhandledFiles, pagesToCreate, expandedMapping, invalidMappings)
+      console.log('🔍 Checking for unhandled legacy files...\n')
+      displayUnhandledFilesOnly(unhandledFiles)
     } else {
       // Simplified output mode
       console.log('📋 UNHANDLED LEGACY FILES:\n')

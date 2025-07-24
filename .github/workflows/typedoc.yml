@@ -1,0 +1,115 @@
+name: Generate Typedocs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  typedoc:
+    permissions:
+      contents: write
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          path: clerk-docs
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Checkout clerk/javascript
+        uses: actions/checkout@v4
+        with:
+          repository: clerk/javascript
+          path: clerk-javascript
+          fetch-depth: 1
+          show-progress: false
+
+      - name: Get clerk/javascript commit SHA
+        id: clerk_sha
+        working-directory: ./clerk-javascript
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10 # Should be the same as clerk/javascript
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # Should be similar to clerk/javascript
+          cache: 'pnpm'
+          cache-dependency-path: 'clerk-javascript/pnpm-lock.yaml'
+
+      - name: Install dependencies and build
+        working-directory: ./clerk-javascript
+        run: |
+          pnpm install
+          pnpm typedoc:generate
+
+      - name: Copy docs to main repo
+        run: |
+          # Copy the generated docs to the root of the main repo
+          cp -r ./clerk-javascript/.typedoc/docs/* ./clerk-docs/clerk-typedoc
+
+      - name: Configure Git
+        working-directory: ./clerk-docs
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Check for changes and create PR
+        working-directory: ./clerk-docs
+        run: |
+          # 1. Check if there are any changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "ℹ️  No changes detected in TypeDoc documentation, exiting early"
+            exit 0
+          fi
+
+          echo "✅ Changes detected, processing..."
+
+          # 2. Check if branch already exists and handle accordingly
+          if git ls-remote --exit-code --heads origin typedoc-${{ env.sha }} > /dev/null 2>&1; then
+            echo "ℹ️  Branch typedoc-${{ env.sha }} already exists, checking it out and updating"
+            git stash push -u -m "Temporary stash for branch switch"
+            git fetch origin typedoc-${{ env.sha }}
+            git checkout typedoc-${{ env.sha }}
+            
+            # Try to pop stash, but don't fail if it conflicts (files already exist)
+            if git stash pop; then
+              echo "✅ Successfully applied stashed changes"
+            else
+              echo "ℹ️  Stash pop failed (likely files already exist), dropping stash and checking for changes"
+              git stash drop
+            fi
+            
+            # Check if there are any changes to commit after checkout/stash
+            if [ -z "$(git status --porcelain)" ]; then
+              echo "ℹ️  No new changes detected on existing branch, exiting successfully"
+              exit 0
+            fi
+            
+            git add .
+            git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
+            git push origin typedoc-${{ env.sha }}
+          else
+            echo "✅ Creating new branch typedoc-${{ env.sha }}"
+            git checkout -b typedoc-${{ env.sha }}
+            git add .
+            git commit -m "docs: update TypeDoc documentation from clerk/javascript@${{ env.sha }}"
+            git push origin typedoc-${{ env.sha }}
+          fi
+
+          # 3. Check if PR already exists
+          if gh pr list --head typedoc-${{ env.sha }} --json number --jq length | grep -q "^0$"; then
+            echo "✅ Creating new PR for typedoc-${{ env.sha }}"
+            gh pr create --base main --head typedoc-${{ env.sha }} --title "[ci] Update Typedoc (${{ env.sha }})" --body "Auto-generated PR to update Typedoc documentation from clerk/javascript@${{ env.sha }}"
+          else
+            echo "ℹ️  PR already exists for typedoc-${{ env.sha }}, skipping PR creation"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

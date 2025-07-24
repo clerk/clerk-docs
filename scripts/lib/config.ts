@@ -23,6 +23,7 @@ type BuildConfigOptions = {
     docs: Record<string, string[]>
     partials: Record<string, string[]>
     typedoc: Record<string, string[]>
+    tooltips: Record<string, string[]>
   }
   manifestOptions: {
     wrapDefault: boolean
@@ -43,9 +44,17 @@ type BuildConfigOptions = {
     inputPath: string
     outputPath: string
   }
+  tooltips?: {
+    inputPath: string
+    outputPath: string
+  }
   llms?: {
     overviewPath?: string
     fullPath?: string
+  }
+  siteFlags?: {
+    inputPath: string
+    outputPath: string
   }
   flags?: {
     watch?: boolean
@@ -102,6 +111,7 @@ export async function createConfig(config: BuildConfigOptions) {
         docs: {},
         partials: {},
         typedoc: {},
+        tooltips: {},
       },
 
       manifestOptions: config.manifestOptions ?? {
@@ -132,10 +142,28 @@ export async function createConfig(config: BuildConfigOptions) {
           }
         : null,
 
+      tooltips: config.tooltips
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.tooltips.inputPath)),
+            inputPathRelative: config.tooltips.inputPath,
+            outputPath: resolve(path.join(tempDist, config.tooltips.outputPath)),
+            outputPathRelative: config.tooltips.outputPath,
+          }
+        : null,
+
       llms: config.llms
         ? {
             overviewPath: config.llms.overviewPath,
             fullPath: config.llms.fullPath,
+          }
+        : null,
+
+      siteFlags: config.siteFlags
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.siteFlags.inputPath)),
+            inputPathRelative: config.siteFlags.inputPath,
+            outputPath: resolve(path.join(tempDist, config.siteFlags.outputPath)),
+            outputPathRelative: config.siteFlags.outputPath,
           }
         : null,
 

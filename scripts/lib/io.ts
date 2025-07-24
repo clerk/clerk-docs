@@ -24,6 +24,11 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
     fileFilter: (entry) =>
       // Partials are inside the docs folder, so we need to exclude them
       `${config.docsRelativePath}/${entry.path}`.startsWith(config.partialsRelativePath) === false &&
+      // Tooltips are inside the docs folder too, also ignore them as they are not full pages
+      (config.tooltips?.inputPathRelative
+        ? `${config.docsRelativePath}/${entry.path}`.startsWith(config.tooltips.inputPathRelative) === false
+        : true) &&
+      // Ignore anything that isn't an .mdx file
       entry.path.endsWith('.mdx'),
   })
 

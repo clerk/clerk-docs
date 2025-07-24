@@ -74,6 +74,10 @@ export const errorMessages = {
   'markdown-read-error': (href: string): string => `Attempting to read in ${href}.mdx failed`,
   'partial-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
 
+  // Tooltip errors
+  'tooltip-read-error': (path: string): string => `Failed to read in ${path} from tooltips file`,
+  'tooltip-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>
     `Typedoc folder ${path} not found, run "npm run typedoc:download"`,

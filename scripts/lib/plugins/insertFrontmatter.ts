@@ -4,7 +4,7 @@ import yaml from 'yaml'
 import type { Node } from 'unist'
 
 export const insertFrontmatter =
-  (newFrontmatter: Record<string, string | boolean | undefined>) => () => (tree: Node, vfile: VFile) => {
+  (newFrontmatter: Record<string, string | undefined>) => () => (tree: Node, vfile: VFile) => {
     return mdastMap(tree, (node) => {
       if (node.type !== 'yaml') return node
       if (!('value' in node)) return node

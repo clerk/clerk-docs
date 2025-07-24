@@ -1102,7 +1102,7 @@ Testing with a simple page.`,
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
-sdkScoped: true
+sdkScoped: "true"
 canonical: /docs/:sdk:/simple-test
 availableSdks: react
 notAvailableSdks: ""
@@ -1116,7 +1116,7 @@ Testing with a simple page.`)
     expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(
       `---
 template: wide
-redirectPage: true
+redirectPage: "true"
 availableSdks: react
 notAvailableSdks: ""
 ---
@@ -1381,7 +1381,7 @@ This document is available for React and Next.js.`,
     expect(await readFile(pathJoin('./dist/sdk-document.mdx'))).toBe(
       `---
 template: wide
-redirectPage: true
+redirectPage: "true"
 availableSdks: react,nextjs
 notAvailableSdks: ""
 ---

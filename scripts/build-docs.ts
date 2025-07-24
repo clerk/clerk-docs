@@ -791,7 +791,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           `---
 ${yaml.stringify({
   template: 'wide',
-  redirectPage: true,
+  redirectPage: 'true',
   availableSdks: doc.sdk.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
 })}---
@@ -825,7 +825,7 @@ ${yaml.stringify({
             .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
             .use(
               insertFrontmatter({
-                sdkScoped: true,
+                sdkScoped: 'true',
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
                 lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
                 availableSdks: doc.sdk.join(','),

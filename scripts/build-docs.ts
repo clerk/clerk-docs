@@ -1,3 +1,4 @@
+import yaml from 'yaml'
 // Things this script does
 
 // Validates
@@ -788,8 +789,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         await writeFile(
           doc.file.filePathInDocsFolder,
           `---
-template: wide
----
+${yaml.stringify({
+  template: 'wide',
+  redirectPage: 'true',
+  availableSdks: doc.sdk.join(','),
+  notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
+})}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
       } else {
@@ -820,8 +825,12 @@ template: wide
             .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
             .use(
               insertFrontmatter({
+                sdkScoped: 'true',
                 canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
                 lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                availableSdks: doc.sdk.join(','),
+                notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
+                activeSdk: targetSdk,
               }),
             )
             .process({

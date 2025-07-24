@@ -80,11 +80,11 @@ export const checkTooltips =
             attributes: [],
             children: [
               mdastBuilder('mdxJsxTextElement', {
-                name: 'TooltipTitle',
+                name: 'TooltipTrigger',
                 children: (node as any).children,
               }),
               mdastBuilder('mdxJsxTextElement', {
-                name: 'TooltipDescription',
+                name: 'TooltipContent',
                 children: [tooltip.node],
               }),
             ],

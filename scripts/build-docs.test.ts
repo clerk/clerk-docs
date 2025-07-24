@@ -1295,7 +1295,7 @@ Testing with a simple page.`,
                     {
                       title: 'Login',
                       href: '/docs/auth/login',
-                      sdk: ['react', 'python'], // python not in parent
+                      sdk: ['react', 'remix'], // remix not in parent
                     },
                   ],
                 ],
@@ -1308,7 +1308,7 @@ Testing with a simple page.`,
         path: './docs/auth/login.mdx',
         content: `---
 title: Login
-sdk: react, python
+sdk: react, remix
 ---
 
 # Login Page
@@ -1321,12 +1321,12 @@ Authentication login documentation.`,
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'python', 'nextjs'],
+        validSdks: ['react', 'remix', 'nextjs'],
       }),
     )
 
     await expect(promise).rejects.toThrow(
-      'Doc "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+      'Doc "Login" is attempting to use ["react","remix"] But its being filtered down to ["react"] in the manifest.json',
     )
   })
 

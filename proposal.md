@@ -4,7 +4,7 @@
 - Guides (book)
 - Examples (plus-circle)
 - Reference (globe)
-- SDK Reference
+  - SDK Reference
   - API Reference
   - UI Components
 
@@ -36,6 +36,7 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
+  - Sign-up and sign-in options
   - Social Connections
     - Apple
     - Atlassian
@@ -64,38 +65,82 @@
     - X/Twitter v2
     - Xero
   - Enterprise Connections
+    - Overview
+    - Authentication flows
+    - Account linking
+    - Just-in-Time account provisioning
+    - SAML providers
+      - Azure
+      - Google
+      - Okta
+      - Custom provider
+    - OIDC providers
+      - Custom provider
+    - EASIE provider
+      - Microsoft
+      - Google
   - Web3
+    - Coinbase Wallet
+    - Metamask
+    - OKX Wallet
+  - OAuth
+    - What are OAuth & OIDC
+    - How Clerk implements OAuth
+    - Use OAuth for Single Sign-On (SSO)
+    - Use OAuth for scoped access
+    - Verify OAuth tokens
 - Session Token customization
 - Webhooks
   - Overview
   - Syncing data with webhooks [syncing]
   - Debugging webhooks [debugging]
-- Backend Requests
 - Integrations
+  - Overview
+  - Databases
+    - Convex
+    - Fauna
+    - Firebase
+    - Grafbase
+    - Hasura
+    - InstantDB
+    - Nhost
+    - Supabase
+    - Neon
+  - Platforms
+    - Shopify
+    - Vercel Marketplace
+  - Analytics
+    - Google Analytics
 
 ### Managing Users [users]
 
 - Managing Users [managing]
 - Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
-- Syncing Clerk Data [syncing]
 - Impersonation
 
 ### Customizing Clerk
 
 - UI Customization (Appearance Prop) [appearance-prop]
+  - Overview
+  - Layout
+  - Theme
+  - Variables
+  - CAPTCHA
 - Account Portal
 - Adding items to UI Components [adding-items]
 - Email and SMS Templates
 - Localization (i18n) [localization]
 - Clerk Elements (beta) [elements]
 
-### B2B
+### B2B (Organizations) [organizations]
 
 - Overview
 - Managing Organizations [managing-orgs]
 - Verified Domains
 - Roles and Permissions
+- Invitations
+- Metadata
 - SSO / Enterprise Connections
 
 ### Billing
@@ -108,21 +153,48 @@
 
 - Restricting Access
 - Multifactor Authentication (MFA) [mfa]
+- Authorization Checks
 - Bot Detection
 - Banning Users
 - Prevent brute force attacks
 - Re-verification (Step-up)
 - Legal Compliance
+- Password protection and rules
 - Security Best Practices [best-practices]
+  - XSS leak protection
+  - CSRF protection
+  - CSP Headers
+  - Fixation protection
+  - Brute force attacks and locking user accounts
+  - Protect sign ups from bots
+  - Protect email link sign-ins and sign-ups
+  - Unauthorized sign-in
 - Session Options
 
 ### Development
 
-- Deployment
-- Testing with Clerk
 - Managing Environments
-- Migrating your Data
-- Clerk environment variables
+- Clerk Environment Variables
+- Customize Redirect URLs
+- Override Clerk Types/Interfaces
+- Image Optimization
+- Testing with Clerk [testing]
+- Errors
+- Troubleshooting
+- Deployment
+  - Changing domains
+  - Deploy to production
+  - Deploy to Vercel
+  - Deploy behind a proxy
+  - Deploy an Astro app to production
+  - Deploy a Chrome Extension to production
+  - Deploy an Expo app to production
+  - Set up a staging environment
+  - Set up a preview environment
+- Migrating your Data [migrating]
+  - Overview
+  - Migrate from Firebase
+  - Migrate from Cognito
 - SDK Development
 - Upgrading Clerk [upgrading]
   - Versioning & LTS [versioning]
@@ -133,13 +205,11 @@
     - @clerk/nextjs v6 [next-v6]
     - URL based session syncing [url-session-syncing]
     - Progressive Sign Ups
-- Troubleshooting
 - AI Prompts
 
 ### Clerk Dashboard [dashboard]
 
 - Overview
-- Account Portal
 - DNS & Domains
   - Overview
   - Satellite Domains
@@ -157,6 +227,9 @@
 - Tokens & signatures
 - Clerk environment variables
 - Security at Clerk [security]
+  - Vulnerability disclosure policy
+  - Clerk Telemetry
+- Multi-tenant architecture
 
 ## Examples [examples]
 

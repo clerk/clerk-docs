@@ -88,9 +88,6 @@ export const validateAndEmbedLinks =
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {
-        if (injectSDK) {
-          node.url = scopeHref(url, '~')
-        }
         return node
       }
 

@@ -244,63 +244,59 @@ Then skip to the [Email link verification](#email-link-verification) section.
 
   <Tab>
     ```kotlin {{ filename: 'AddEmailView.kt', collapsible: true }}
-    @Composable
-    fun AddEmailViewModel(modifier: Modifier = Modifier, viewModel: AddEmailViewModel = viewModel()) {
-      val state by viewModel.uiState.collectAsState()
-      when (state) {
-        AddEmailViewModel.AddEmailUiState.NeedsVerification -> {
-          InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
-             viewModel.createEmailAddress(it) 
-          }
-        }
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.Clerk
+    import com.clerk.emailaddress.EmailAddress
+    import com.clerk.emailaddress.attemptVerification
+    import com.clerk.emailaddress.prepareVerification
+    import com.clerk.network.serialization.flatMap
+    import com.clerk.network.serialization.longErrorMessageOrNull
+    import com.clerk.network.serialization.onFailure
+    import com.clerk.network.serialization.onSuccess
+    import com.clerk.user.createEmailAddress
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.launch
 
-        AddEmailViewModel.AddEmailUiState.Verified -> {
-          Text("Verified!")
-        }
-
-        is AddEmailViewModel.AddEmailUiState.Verifying -> {
-          InputContentView(buttonText = "Verify", placeholder = "Enter code") {
-            viewModel.verifyCode(it, state.emailAddress)
-          }
-        }
-      }
-    }
-
-    @Composable
-    fun InputContentView(buttonText: String, placeholder: String, modifier: Modifier = Modifier, onClick: (String) -> Unit) {
-      var input by remember { mutableStateOf("") }
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        TextField(
-            modifier = Modifier.padding(bottom = 16.dp),
-            value = input,
-            onValueChange = { input = it },
-            placeholder = { Text(placeholder) },
-        )
-        Button(onClick = { onClick(input) }) { Text(buttonText) }
-      }
-    }
-    ```
-
-    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
-    class AddEmailViewModel: ViewModel() {
-      private val _uiState = MutableStateFlow<AddEmailUiState>(AddEmailUiState.NeedsVerification)
+    class AddEmailViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
       val uiState = _uiState.asStateFlow()
 
+      init {
+        combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
+      }
+
       fun createEmailAddress(emailAddress: String) {
-        val user = requireNotNull(Clerk.user)
+        val user = requireNotNull(Clerk.user.value)
 
         // Add an unverified email address to the user,
         // then send the user an email with the verification code
         viewModelScope.launch {
-            user
+          user
             .createEmailAddress(emailAddress)
             .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
-            .onSuccess { 
+            .onSuccess {
               // Update the state to show that the email address has been created
               // and that the user needs to verify the email address
-              _uiState.value = AddEmailUiState.Verifying(it) 
+              _uiState.value = UiState.Verifying(it)
             }
-            .onFailure { Log.e("AddEmailViewModel", "Failed to create email address and prepare verification: ${it.longErrorMessageOrNull}") }
+            .onFailure {
+              Log.e(
+                "AddEmailViewModel",
+                "Failed to create email address and prepare verification: ${it.longErrorMessageOrNull}",
+              )
+            }
         }
       }
 
@@ -308,18 +304,110 @@ Then skip to the [Email link verification](#email-link-verification) section.
         viewModelScope.launch {
           newEmailAddress
             .attemptVerification(code)
-            .onSuccess { 
+            .onSuccess {
               // Update the state to show that the email addresshas been verified
-              _uiState.value = AddEmailUiState.Verified 
+              _uiState.value = UiState.Verified
             }
-            .onFailure { Log.e("AddEmailViewModel", "Failed to verify email address: ${it.longErrorMessageOrNull}") }
+            .onFailure {
+              Log.e("AddEmailViewModel", "Failed to verify email address: ${it.longErrorMessageOrNull}")
+            }
         }
       }
 
-      sealed interface AddEmailUiState {
-        data object NeedsVerification: AddEmailUiState
-        data class Verifying(val emailAddress: EmailAddress) : AddEmailUiState
-        data object Verified : AddEmailUiState
+      sealed interface UiState {
+        data object Loading : UiState
+        data object NeedsVerification : UiState
+        data class Verifying(val emailAddress: EmailAddress) : UiState
+        data object Verified : UiState
+        data object SignedOut : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'AddEmailActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.material3.TextField
+    import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.mutableStateOf
+    import androidx.compose.runtime.remember
+    import androidx.compose.runtime.setValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+    import com.clerk.emailaddress.EmailAddress
+
+    class AddEmailActivity : ComponentActivity() {
+      val viewModel: AddEmailViewModel by viewModels()
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+          val state by viewModel.uiState.collectAsStateWithLifecycle()
+          AddEmailView(
+            state = state,
+            onCreateEmailAddress = viewModel::createEmailAddress,
+            onVerifyCode = viewModel::verifyCode,
+          )
+        }
+      }
+    }
+
+    @Composable
+    fun AddEmailView(
+      state: AddEmailViewModel.UiState,
+      onCreateEmailAddress: (String) -> Unit,
+      onVerifyCode: (String, EmailAddress) -> Unit,
+    ) {
+      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when (state) {
+          AddEmailViewModel.UiState.NeedsVerification -> {
+            InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
+              onCreateEmailAddress(it)
+            }
+          }
+
+          AddEmailViewModel.UiState.Verified -> Text("Verified!")
+
+          is AddEmailViewModel.UiState.Verifying -> {
+            InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+              onVerifyCode(it, state.emailAddress)
+            }
+          }
+
+          AddEmailViewModel.UiState.Loading -> CircularProgressIndicator()
+          AddEmailViewModel.UiState.SignedOut -> Text("You must be signed in to add an email address.")
+        }
+      }
+    }
+
+    @Composable
+    fun InputContentView(
+      buttonText: String,
+      placeholder: String,
+      modifier: Modifier = Modifier,
+      onClick: (String) -> Unit,
+    ) {
+      var input by remember { mutableStateOf("") }
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        TextField(
+          modifier = Modifier.padding(bottom = 16.dp),
+          value = input,
+          onValueChange = { input = it },
+          placeholder = { Text(placeholder) },
+        )
+        Button(onClick = { onClick(input) }) { Text(buttonText) }
       }
     }
     ```

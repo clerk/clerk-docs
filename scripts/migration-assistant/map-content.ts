@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { readFile } from 'fs/promises'
+import { readFile, access } from 'fs/promises'
 import { glob } from 'glob'
 import { join, relative } from 'path'
 import type { Manifest } from './generate-manifest'
@@ -22,7 +22,19 @@ async function readMapping() {
     const mappingContent = await readFile(MAPPING_PATH, 'utf-8')
     return JSON.parse(mappingContent) as Record<
       string,
-      { newPath: string; action: 'consolidate' | 'move' | 'generate' | 'convert-to-example' | 'drop' }
+      {
+        newPath: string
+        action:
+          | 'consolidate'
+          | 'move'
+          | 'generate'
+          | 'convert-to-example'
+          | 'move-to-examples'
+          | 'drop'
+          | 'delete'
+          | 'deleted'
+          | 'TODO'
+      }
     >
   } catch (error) {
     console.error(`❌ Error reading mapping.json: ${error.message}`)
@@ -331,7 +343,7 @@ function expandGlobMapping(mapping: Mapping, allFiles: string[]) {
  */
 function findInvalidMappings(expandedMapping: Mapping, manifestPaths: string[]) {
   const manifestPathsSet = new Set(manifestPaths)
-  const invalidMappings: Array<{ source: string; destination: string; action: 'consolidate' | 'move' }> = []
+  const invalidMappings: Array<{ source: string; destination: string; action: string }> = []
 
   for (const [sourcePath, mapping] of Object.entries(expandedMapping)) {
     // Skip drop actions - they're intentionally removing paths
@@ -390,83 +402,353 @@ function displayUnhandledFilesOnly(unhandledFiles: string[]) {
 }
 
 /**
- * Main function to parse docs content and check mappings
+ * Check if a file exists
  */
-async function main() {
-  if (!WARNINGS_ONLY) {
-    console.log('🔍 Scanning for MDX files in ./docs')
-  }
-
+async function fileExists(filePath: string): Promise<boolean> {
   try {
-    const [mdxFiles, mapping, { paths: manifestPaths }] = await Promise.all([
-      findMdxFiles(DOCS_PATH),
-      readMapping(),
-      readProposalManifestPaths(),
-    ])
+    await access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
 
-    // Expand glob patterns in mapping to actual file matches
-    const expandedMapping = expandGlobMapping(mapping, mdxFiles)
+/**
+ * Get icon for action type
+ */
+function getActionIcon(action: string): string {
+  const icons = {
+    move: '📁',
+    consolidate: '🔀',
+    generate: '✨',
+    'convert-to-example': '📄',
+    'move-to-examples': '📚',
+    delete: '🗑️',
+    deleted: '❌',
+    drop: '⬇️',
+    TODO: '❓',
+  }
+  return icons[action] || '•'
+}
 
-    const unhandledFiles = findUnhandledFiles(mdxFiles, expandedMapping)
-    const pagesToCreate = findPagesToCreate(manifestPaths, expandedMapping)
-    const invalidMappings = findInvalidMappings(expandedMapping, manifestPaths)
+/**
+ * Find common patterns in move tasks that can be consolidated with globs
+ */
+function consolidateMoveTasks(moveTasks: Array<{ source: string; destination: string }>) {
+  const patterns: Array<{
+    pattern: string
+    destPattern: string
+    files: Array<{ source: string; destination: string }>
+    command: string
+  }> = []
+  const individual: Array<{ source: string; destination: string }> = []
 
-    if (WARNINGS_ONLY) {
-      console.log('🔍 Checking for unhandled legacy files...\n')
-      displayUnhandledFilesOnly(unhandledFiles)
-    } else {
-      // Simplified output mode
-      console.log('📋 UNHANDLED LEGACY FILES:\n')
-      if (unhandledFiles.length > 0) {
-        unhandledFiles.sort().forEach((file) => {
-          console.log(`   • ${file}`)
-        })
-      } else {
-        console.log('   ✅ All legacy files are handled')
+  // Group by common directory patterns
+  const groups: Record<string, Array<{ source: string; destination: string }>> = {}
+
+  moveTasks.forEach((task) => {
+    // Find the common directory pattern
+    const sourceParts = task.source.split('/')
+    const destParts = task.destination
+      .replace(/^\/docs\//, '')
+      .split('/')
+      .filter((p) => p) // Remove empty parts
+
+    // Look for directory-level patterns (at least 2 files in same directory)
+    if (sourceParts.length >= 2) {
+      const baseDir = sourceParts.slice(0, -1).join('/')
+      const destBaseDir = destParts.slice(0, -1).join('/')
+      const groupKey = `${baseDir} → ${destBaseDir}`
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
       }
+      groups[groupKey].push(task)
+    }
+  })
 
-      console.log('\n❌ INVALID MAPPINGS (destinations not in manifests):\n')
-      if (invalidMappings.length > 0) {
-        invalidMappings.forEach((mapping) => {
-          console.log(`   • ${mapping.source} → ${mapping.destination} (${mapping.action})`)
-        })
-      } else {
-        console.log('   ✅ All mappings point to valid manifest paths')
-      }
+  // Convert groups with 2+ files into glob patterns
+  Object.entries(groups).forEach(([groupKey, files]) => {
+    if (files.length >= 2) {
+      const [sourceBase, destBase] = groupKey.split(' → ')
 
-      console.log('\n📝 MANIFEST PATHS:\n')
-      manifestPaths.forEach((path) => {
-        console.log(`   • ${path}`)
+      // Check if all files in this group follow the same pattern
+      const allSamePattern = files.every((file) => {
+        const expectedSource = `${sourceBase}/${file.source.split('/').pop()}`
+        const destWithoutDocs = file.destination.replace(/^\/docs\//, '').replace(/^\//, '')
+        const expectedDest = `${destBase}/${destWithoutDocs.split('/').pop()}`
+        return file.source === expectedSource && destWithoutDocs === expectedDest
       })
 
-      // Count files that need to be converted to examples
-      const convertToExampleFiles = Object.values(expandedMapping).filter(
-        (mapping) => mapping.action === 'convert-to-example',
-      ).length
-
-      // Count files that will be generated
-      const generateFiles = Object.values(expandedMapping).filter((mapping) => mapping.action === 'generate').length
-
-      console.log('\n📊 SUMMARY:')
-      console.log(`   • Legacy files: ${mdxFiles.length}`)
-      console.log(`   • Manifest paths: ${manifestPaths.length}`)
-      console.log(`   • Original mapping entries: ${Object.keys(mapping).length}`)
-      console.log(`   • Expanded mapping entries: ${Object.keys(expandedMapping).length}`)
-      console.log(`   • Handled files: ${Object.keys(expandedMapping).length}`)
-      console.log(`   • Unhandled files: ${unhandledFiles.length}`)
-      console.log(`   • Pages needing new content: ${pagesToCreate.length}`)
-      console.log(`   • Convert to examples: ${convertToExampleFiles}`)
-      console.log(`   • Pages need to be generated: ${generateFiles}`)
-      console.log(`   • Invalid mappings: ${invalidMappings.length}`)
-
-      if (unhandledFiles.length > 0 || pagesToCreate.length > 0) {
-        console.log('\n💡 Run with DOCS_WARNINGS_ONLY=true to see detailed warnings and grouped files')
+      if (allSamePattern) {
+        patterns.push({
+          pattern: `/docs/${sourceBase}/*`,
+          destPattern: `/docs/${destBase}/*`,
+          files,
+          command: `node scripts/move-doc.mjs "/docs/${sourceBase}/*" "/docs/${destBase}/*"`,
+        })
+      } else {
+        // If not exact pattern match, add to individual
+        individual.push(...files)
       }
+    } else {
+      // Single files go to individual
+      individual.push(...files)
     }
-  } catch (error) {
-    console.error('❌ Error scanning docs:', error.message)
-    process.exit(1)
+  })
+
+  return { patterns, individual }
+}
+
+/**
+ * Group consolidation tasks by destination
+ */
+function groupConsolidationTasks(consolidateTasks: Array<{ source: string; destination: string }>) {
+  const groups: Record<string, Array<string>> = {}
+
+  consolidateTasks.forEach((task) => {
+    if (!groups[task.destination]) {
+      groups[task.destination] = []
+    }
+    groups[task.destination].push(task.source)
+  })
+
+  return Object.entries(groups).map(([destination, sources]) => ({
+    destination,
+    sources: sources.sort(),
+    count: sources.length,
+  }))
+}
+
+/**
+ * Display actions needed for each mapping item
+ */
+async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[]) {
+  // Collect all tasks, filtering out completed tasks
+  const allTasks: Array<{ source: string; destination: string; action: string }> = []
+  const moveTasks: Array<{ source: string; destination: string }> = []
+  const consolidateTasks: Array<{ source: string; destination: string }> = []
+  let skippedCount = 0
+
+  for (const [source, mapping] of Object.entries(expandedMapping)) {
+    const sourcePath = join(DOCS_PATH, source)
+
+    // Skip checking file existence for actions without destination paths
+    if (
+      !mapping.newPath ||
+      mapping.action === 'delete' ||
+      mapping.action === 'deleted' ||
+      mapping.action === 'drop' ||
+      mapping.action === 'TODO'
+    ) {
+      allTasks.push({ source, destination: mapping.newPath || '', action: mapping.action })
+      continue
+    }
+
+    // Construct destination path - remove leading slash and add .mdx extension
+    let destinationRelativePath = mapping.newPath.replace(/^\//, '')
+    if (!destinationRelativePath.endsWith('.mdx')) {
+      destinationRelativePath += '.mdx'
+    }
+    const destinationPath = join(DOCS_PATH, destinationRelativePath)
+
+    // Check if task is already completed (source doesn't exist but destination does)
+    const sourceExists = await fileExists(sourcePath)
+    const destinationExists = await fileExists(destinationPath)
+
+    if (!sourceExists && destinationExists) {
+      skippedCount++
+      continue // Skip this task as it's already completed
+    }
+
+    if (mapping.action === 'move') {
+      moveTasks.push({ source, destination: mapping.newPath })
+    } else if (mapping.action === 'consolidate') {
+      consolidateTasks.push({ source, destination: mapping.newPath })
+    } else {
+      allTasks.push({ source, destination: mapping.newPath, action: mapping.action })
+    }
   }
+
+  console.log('📋 PROPOSAL MAPPING TASKS:\n')
+
+  // Consolidate move tasks into patterns
+  const { patterns, individual: individualMoves } = consolidateMoveTasks(moveTasks)
+
+  // Group consolidation tasks by destination
+  const consolidationGroups = groupConsolidationTasks(consolidateTasks)
+
+  let taskNumber = 1
+
+  // Show consolidated move patterns first
+  if (patterns.length > 0) {
+    console.log('🚀 BATCH MOVE COMMANDS (using glob patterns):\n')
+
+    patterns.forEach((pattern) => {
+      const paddedNumber = taskNumber.toString().padStart(3, '0')
+      console.log(
+        `${paddedNumber}. 📁 [BATCH MOVE] ${pattern.files.length} files: ${pattern.pattern} → ${pattern.destPattern}`,
+      )
+      console.log(`     ${pattern.command}`)
+      console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
+      console.log('')
+      taskNumber++
+    })
+
+    console.log('─'.repeat(80) + '\n')
+  }
+
+  // Show consolidation tasks grouped by destination
+  if (consolidationGroups.length > 0) {
+    console.log('🔀 CONSOLIDATION TASKS (grouped by destination):\n')
+
+    consolidationGroups.forEach((group) => {
+      const paddedNumber = taskNumber.toString().padStart(3, '0')
+      console.log(`${paddedNumber}. 🔀 [CONSOLIDATE] Create guide: ${group.destination}`)
+      console.log(`     Consolidate content from ${group.count} files:`)
+      group.sources.forEach((source) => {
+        console.log(`       • ${source}`)
+      })
+      console.log('')
+      taskNumber++
+    })
+
+    console.log('─'.repeat(80) + '\n')
+  }
+
+  // Add individual move tasks to allTasks
+  individualMoves.forEach((move) => {
+    allTasks.push({ source: move.source, destination: move.destination, action: 'move' })
+  })
+
+  // Sort all remaining tasks by source path
+  allTasks.sort((a, b) => a.source.localeCompare(b.source))
+
+  // Display individual tasks
+  allTasks.forEach((task) => {
+    const icon = getActionIcon(task.action)
+    const paddedNumber = taskNumber.toString().padStart(3, '0')
+
+    // Always show the task description first
+    if (task.action === 'delete' || task.action === 'deleted' || task.action === 'drop') {
+      console.log(`${paddedNumber}. ${icon} [${task.action.toUpperCase()}] ${task.source}`)
+    } else if (task.action === 'TODO') {
+      console.log(`${paddedNumber}. ${icon} [${task.action.toUpperCase()}] ${task.source} → NEEDS MANUAL REVIEW`)
+    } else {
+      console.log(`${paddedNumber}. ${icon} [${task.action.toUpperCase()}] ${task.source} → ${task.destination}`)
+    }
+
+    // Show the executable command if available
+    if (task.action === 'move') {
+      const sourcePath = `/docs/${task.source.replace(/\.mdx$/, '')}`
+      const destPath = task.destination.startsWith('/docs/')
+        ? task.destination.replace(/\.mdx$/, '')
+        : `/docs${task.destination.replace(/\.mdx$/, '')}`
+      console.log(`     node scripts/move-doc.mjs ${sourcePath} ${destPath}`)
+    } else if (task.action === 'delete') {
+      const filePath = `docs/${task.source}`
+      console.log(`     rm ${filePath}`)
+    }
+
+    // Add a line break between tasks
+    console.log('')
+    taskNumber++
+  })
+
+  // Show summary
+  const totalMapped = Object.keys(expandedMapping).length
+  const totalFiles = mdxFiles.length
+  const unmappedCount = totalFiles - totalMapped
+  const batchMoveFiles = patterns.reduce((sum, pattern) => sum + pattern.files.length, 0)
+  const individualMoveFiles = individualMoves.length
+  const consolidationFiles = consolidateTasks.length
+  const remainingTasks = patterns.length + consolidationGroups.length + allTasks.length
+
+  console.log(`\n📊 SUMMARY:`)
+  console.log(`   • Total legacy files: ${totalFiles}`)
+  console.log(`   • Files with mappings: ${totalMapped}`)
+  console.log(`   • Unmapped files: ${unmappedCount}`)
+  if (skippedCount > 0) {
+    console.log(`   • ✅ Completed tasks (skipped): ${skippedCount}`)
+  }
+  console.log(
+    `   • Remaining tasks: ${remainingTasks} (${patterns.length} batch + ${consolidationGroups.length} consolidation + ${allTasks.length} individual)`,
+  )
+
+  // Show action counts
+  const actionCounts: Record<string, number> = {}
+  allTasks.forEach((task) => {
+    actionCounts[task.action] = (actionCounts[task.action] || 0) + 1
+  })
+
+  // Add batch moves and consolidations to counts
+  if (patterns.length > 0) {
+    actionCounts['batch-move'] = patterns.length
+    actionCounts['move'] = individualMoveFiles // Individual moves only
+  }
+  if (consolidationGroups.length > 0) {
+    actionCounts['consolidate'] = consolidationGroups.length
+  }
+
+  console.log(`\n📈 ACTION BREAKDOWN:`)
+  if (patterns.length > 0) {
+    console.log(`   • batch-move: ${patterns.length} commands (${batchMoveFiles} files)`)
+  }
+  if (consolidationGroups.length > 0) {
+    console.log(`   • consolidate: ${consolidationGroups.length} guides (${consolidationFiles} source files)`)
+  }
+  Object.entries(actionCounts)
+    .filter(([action]) => action !== 'batch-move' && action !== 'consolidate') // Already shown above
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([action, count]) => {
+      console.log(`   • ${action}: ${count} files`)
+    })
+
+  console.log(`\n💡 Optimizations:`)
+  if (patterns.length > 0) {
+    console.log(`   • Batch commands can move ${batchMoveFiles} files with just ${patterns.length} commands!`)
+  }
+  if (consolidationGroups.length > 0) {
+    console.log(
+      `   • Consolidation creates ${consolidationGroups.length} guides from ${consolidationFiles} source files!`,
+    )
+  }
+}
+
+/**
+ * Main function to parse docs content and show mapping actions
+ */
+async function main() {
+  const [mdxFiles, mapping, { paths: manifestPaths }] = await Promise.all([
+    findMdxFiles(DOCS_PATH),
+    readMapping(),
+    readProposalManifestPaths(),
+  ])
+
+  // Expand glob patterns in mapping to actual file matches
+  const expandedMapping = expandGlobMapping(mapping, mdxFiles)
+
+  if (WARNINGS_ONLY) {
+    const unhandledFiles = findUnhandledFiles(mdxFiles, expandedMapping)
+    console.log('🔍 Checking for unhandled legacy files...\n')
+    displayUnhandledFilesOnly(unhandledFiles)
+    return
+  }
+
+  // Show what actions are needed for each mapping
+  await displayMappingActions(expandedMapping, mdxFiles)
+
+  // Show unhandled files
+  const unhandledFiles = findUnhandledFiles(mdxFiles, expandedMapping)
+  if (unhandledFiles.length > 0) {
+    console.log(`\n⚠️  UNHANDLED LEGACY FILES (${unhandledFiles.length} files):`)
+    console.log(`   These files exist but have no mapping defined:\n`)
+    unhandledFiles.sort().forEach((file) => {
+      console.log(`   • ${file}`)
+    })
+  }
+
+  console.log('\n💡 Run with DOCS_WARNINGS_ONLY=true to see only unhandled files')
 }
 
 // Run the script

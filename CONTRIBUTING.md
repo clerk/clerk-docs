@@ -401,7 +401,7 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
-If you'd like to add support for a new SDK in a guide, but don't want to use the `<If />` component to swap in sdk specific documentation. Another option is to use the `.sdk.mdx` file extension. For example say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter. You could create a `docs/setup-clerk.remix.mdx` file. Then write out a remix specific version of the guide. This will act the same way as above, treating the `remix` sdk as a distinct variant of the guide. Creating a `/docs/remix/setup-clerk` page along side the `/docs/nextjs/setup-clerk` and `/docs/expo/setup-clerk` pages.
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
 
 ### Headings
 

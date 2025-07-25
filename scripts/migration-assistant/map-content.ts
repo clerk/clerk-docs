@@ -128,6 +128,22 @@ async function findMdxFiles(dir: string, baseDir = dir) {
 }
 
 /**
+ * Check if a file matches a destination glob pattern
+ */
+function matchesDestinationPattern(filePath: string, destPattern: string): boolean {
+  // Convert destination pattern to file format: /docs/path/** → path/**
+  let pattern = destPattern.replace(/^\/docs\//, '').replace(/^\//, '')
+
+  // Convert glob pattern to regex for matching
+  const regexPattern = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special regex chars
+    .replace(/\*\*/g, '.*') // ** matches anything
+    .replace(/\*/g, '[^/]*') // * matches anything except /
+
+  return new RegExp(`^${regexPattern}$`).test(filePath) || new RegExp(`^${regexPattern}\\.mdx$`).test(filePath)
+}
+
+/**
  * Find unhandled files by comparing with mapping
  * @param {string[]} allFiles - All MDX files found
  * @param {Object} mapping - Mapping configuration
@@ -135,7 +151,43 @@ async function findMdxFiles(dir: string, baseDir = dir) {
  */
 function findUnhandledFiles(allFiles: string[], mapping: Mapping) {
   const handledFiles = new Set(Object.keys(mapping))
-  return allFiles.filter((file) => !handledFiles.has(file))
+
+  return allFiles.filter((file) => {
+    // Skip if it's an exact source file in the mapping
+    if (handledFiles.has(file)) {
+      return false
+    }
+
+    // Check if this file matches any source or destination pattern
+    for (const [sourcePattern, value] of Object.entries(mapping)) {
+      // Check if file matches source pattern (means it has a mapping)
+      if (isGlobPattern(sourcePattern)) {
+        const regex = globToRegex(sourcePattern)
+        if (regex.test(file)) {
+          return false // This file matches a source pattern, so it's handled
+        }
+      }
+
+      // Check if file matches destination pattern (means it's a successful migration)
+      if (value.newPath && value.action !== 'drop' && value.action !== 'delete' && value.action !== 'deleted') {
+        // Check exact match first
+        let destinationFile = value.newPath.replace(/^\/docs\//, '').replace(/^\//, '')
+        if (!destinationFile.endsWith('.mdx')) {
+          destinationFile += '.mdx'
+        }
+        if (file === destinationFile) {
+          return false // This file is a successful migration
+        }
+
+        // Check destination glob pattern match
+        if (isGlobPattern(value.newPath) && matchesDestinationPattern(file, value.newPath)) {
+          return false // This file matches a destination glob pattern
+        }
+      }
+    }
+
+    return true // This file is truly unhandled
+  })
 }
 
 /**
@@ -636,7 +688,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
           executionResults.batchMoves.errors.push(`${pattern.pattern}: ${result.error}`)
         }
       } else {
-        console.log(`     ${pattern.command}`)
+        console.log(`     Batch move ${pattern.files.length} files using glob patterns`)
+        console.log(`     Command: ${pattern.command}`)
         console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
       }
       console.log('')
@@ -706,7 +759,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
           executionResults.individualMoves.errors.push(`${task.source}: ${result.error}`)
         }
       } else {
-        console.log(`     ${command}`)
+        console.log(`     Move file, update manifest links, update internal links, add redirect`)
+        console.log(`     Command: ${command}`)
       }
     } else if (task.action === 'delete') {
       const docPath = `/docs/${task.source.replace(/\.mdx$/, '')}`
@@ -716,7 +770,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
         console.log(`     ⚠️  Manual task: Use delete-doc.mjs script (checks for references)`)
         console.log(`     Command: ${command}`)
       } else {
-        console.log(`     ${command}`)
+        console.log(`     Check for references, remove from manifest, add redirect, delete file`)
+        console.log(`     Command: ${command}`)
       }
     } else if (
       FIX_MODE &&
@@ -846,7 +901,7 @@ async function main() {
   const expandedMapping = expandGlobMapping(mapping, mdxFiles)
 
   if (WARNINGS_ONLY) {
-    const unhandledFiles = findUnhandledFiles(mdxFiles, expandedMapping)
+    const unhandledFiles = findUnhandledFiles(mdxFiles, mapping)
     console.log('🔍 Checking for unhandled legacy files...\n')
     displayUnhandledFilesOnly(unhandledFiles)
     return
@@ -856,7 +911,7 @@ async function main() {
   await displayMappingActions(expandedMapping, mdxFiles)
 
   // Show unhandled files
-  const unhandledFiles = findUnhandledFiles(mdxFiles, expandedMapping)
+  const unhandledFiles = findUnhandledFiles(mdxFiles, mapping)
   if (unhandledFiles.length > 0) {
     console.log(`\n⚠️  UNHANDLED LEGACY FILES (${unhandledFiles.length} files):`)
     console.log(`   These files exist but have no mapping defined:\n`)

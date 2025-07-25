@@ -25,12 +25,21 @@ async function executeCommand(command: string, description: string): Promise<{ s
     console.log(`🔄 Executing: ${description}`)
     console.log(`   Command: ${command}`)
 
-    execSync(command, { stdio: 'inherit', cwd: process.cwd() })
+    execSync(command, { stdio: ['inherit', 'inherit', 'pipe'], cwd: process.cwd() })
 
     console.log(`✅ Success: ${description}`)
     return { success: true }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+  } catch (error: any) {
+    let errorMessage = 'Unknown error'
+
+    if (error?.stderr) {
+      errorMessage = error.stderr.toString().trim()
+    } else if (error?.stdout) {
+      errorMessage = error.stdout.toString().trim()
+    } else if (error?.message) {
+      errorMessage = error.message
+    }
+
     console.log(`❌ Failed: ${description}`)
     console.log(`   Error: ${errorMessage}`)
     return { success: false, error: errorMessage }
@@ -606,7 +615,6 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   const executionResults = {
     batchMoves: { successful: 0, failed: 0, errors: [] as string[] },
     individualMoves: { successful: 0, failed: 0, errors: [] as string[] },
-    deletes: { successful: 0, failed: 0, errors: [] as string[] },
   }
 
   // Show consolidated move patterns first
@@ -701,17 +709,12 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
         console.log(`     ${command}`)
       }
     } else if (task.action === 'delete') {
-      const filePath = `docs/${task.source}`
-      const command = `rm ${filePath}`
+      const docPath = `/docs/${task.source.replace(/\.mdx$/, '')}`
+      const command = `node scripts/delete-doc.mjs ${docPath}`
 
       if (FIX_MODE) {
-        const result = await executeCommand(command, `Delete ${task.source}`)
-        if (result.success) {
-          executionResults.deletes.successful++
-        } else {
-          executionResults.deletes.failed++
-          executionResults.deletes.errors.push(`${task.source}: ${result.error}`)
-        }
+        console.log(`     ⚠️  Manual task: Use delete-doc.mjs script (checks for references)`)
+        console.log(`     Command: ${command}`)
       } else {
         console.log(`     ${command}`)
       }
@@ -793,12 +796,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   if (FIX_MODE) {
     console.log(`\n🔧 EXECUTION RESULTS:`)
 
-    const totalSuccessful =
-      executionResults.batchMoves.successful +
-      executionResults.individualMoves.successful +
-      executionResults.deletes.successful
-    const totalFailed =
-      executionResults.batchMoves.failed + executionResults.individualMoves.failed + executionResults.deletes.failed
+    const totalSuccessful = executionResults.batchMoves.successful + executionResults.individualMoves.successful
+    const totalFailed = executionResults.batchMoves.failed + executionResults.individualMoves.failed
     const totalExecuted = totalSuccessful + totalFailed
 
     console.log(`   • Commands executed: ${totalExecuted}`)
@@ -815,18 +814,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
         `   • Individual moves: ${executionResults.individualMoves.successful} successful, ${executionResults.individualMoves.failed} failed`,
       )
     }
-    if (executionResults.deletes.successful > 0 || executionResults.deletes.failed > 0) {
-      console.log(
-        `   • Deletes: ${executionResults.deletes.successful} successful, ${executionResults.deletes.failed} failed`,
-      )
-    }
-
     // Show errors if any
-    const allErrors = [
-      ...executionResults.batchMoves.errors,
-      ...executionResults.individualMoves.errors,
-      ...executionResults.deletes.errors,
-    ]
+    const allErrors = [...executionResults.batchMoves.errors, ...executionResults.individualMoves.errors]
 
     if (allErrors.length > 0) {
       console.log(`\n❌ ERRORS:`)

@@ -85,22 +85,23 @@ sdk: nextjs, expressjs
   <If sdk="expressjs">
     - [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk): Provides the core SDK for building an MCP server, including utilities to define tools and handle LLM requests.
     - [`@clerk/mcp-tools`](https://github.com/clerk/mcp-tools): A helper library built on top of the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) used to connect Clerk OAuth with MCP easily.
+    - [`cors`](https://github.com/expressjs/cors): Express middleware for handling CORS requests, which is needed for public clients to access your MCP server.
 
     <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
       ```bash {{ filename: 'terminal' }}
-      npm install @modelcontextprotocol/sdk @clerk/mcp-tools
+      npm install @modelcontextprotocol/sdk @clerk/mcp-tools cors
       ```
 
       ```bash {{ filename: 'terminal' }}
-      yarn add @modelcontextprotocol/sdk @clerk/mcp-tools
+      yarn add @modelcontextprotocol/sdk @clerk/mcp-tools cors
       ```
 
       ```bash {{ filename: 'terminal' }}
-      pnpm add @modelcontextprotocol/sdk @clerk/mcp-tools
+      pnpm add @modelcontextprotocol/sdk @clerk/mcp-tools cors
       ```
 
       ```bash {{ filename: 'terminal' }}
-      bun add @modelcontextprotocol/sdk @clerk/mcp-tools
+      bun add @modelcontextprotocol/sdk @clerk/mcp-tools cors
       ```
     </CodeBlockTabs>
   </If>
@@ -133,8 +134,11 @@ sdk: nextjs, expressjs
     } from '@clerk/mcp-tools/express'
     import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
     import express from 'express'
+    import cors from 'cors'
 
     const app = express()
+    // if you need to interface with a public client, this is required
+    app.use(cors({ exposedHeaders: ["WWW-Authenticate"] }));
     app.use(clerkMiddleware())
     app.use(express.json())
 
@@ -209,23 +213,19 @@ sdk: nextjs, expressjs
     })
 
     server.tool(
-      'get_clerk_user_data',
-      'Gets data about the Clerk user that authorized this request',
+      "get_clerk_user_data",
+      "Gets data about the Clerk user that authorized this request",
       {},
       async (_, { authInfo }) => {
-        const clerkAuthInfo = authInfo as unknown as MachineAuthObject<'oauth_token'>
-        if (!clerkAuthInfo?.userId) {
-          console.error(authInfo)
-          return {
-            content: [{ type: 'text', text: 'Error: user not authenticated' }],
-          }
-        }
-        const user = await clerkClient.users.getUser(clerkAuthInfo.userId)
+        // non-null assertion is safe here, mcpAuthClerk ensures presence
+        const userId = authInfo!.extra!.userId! as string;
+        const userData = await clerkClient.users.getUser(userId);
+
         return {
-          content: [{ type: 'text', text: JSON.stringify(user) }],
-        }
-      },
-    )
+          content: [{ type: "text", text: JSON.stringify(userData) }],
+        };
+      }
+    );
 
     app.listen(3000)
     ```
@@ -320,6 +320,7 @@ sdk: nextjs, expressjs
 
     - `mcpAuthClerk`: Authentication middleware that automatically verifies the `Authorization` header using Clerk-issued OAuth tokens. If unauthorized, it returns a `www-authenticate` header [in accordance with the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#authorization-server-location).
     - `protectedResourceHandlerClerk`: Express handler that serves OAuth **protected resource metadata** in the format expected by MCP clients. This handler lets you define specific supported OAuth scopes to declare what access levels your resource requires.
+    - `authServerMetadataHandlerClerk`: Express handler that serves OAuth **authorization server metadata** in the format expected by MCP clients. This is still often needed for clients that implement older mcp spec versions.
     - `streamableHttpHandler`: Express handler that connects your MCP server to incoming requests using the [streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http).
 
     > [!NOTE]
@@ -330,7 +331,16 @@ sdk: nextjs, expressjs
     // The rest of your code...
 
     app.post('/mcp', mcpAuthClerk, streamableHttpHandler(server))
-    app.get('/.well-known/oauth-protected-resource', protectedResourceHandlerClerk)
+    app.get(
+      "/.well-known/oauth-protected-resource/mcp",
+      // Specify the scopes that your MCP server needs here
+      protectedResourceHandlerClerk({ scopes_supported: ["email", "profile"] })
+    );
+    // This is still often needed for clients that implement the older mcp spec
+    app.get(
+      "/.well-known/oauth-authorization-server",
+      authServerMetadataHandlerClerk
+    );
 
     app.listen(3000)
     ```

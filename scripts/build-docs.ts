@@ -48,6 +48,7 @@ import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import { z } from 'zod'
+import yaml from 'yaml'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -59,7 +60,15 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, markDocumentDirty, Store } from './lib/store'
+import {
+  createBlankStore,
+  DocsMap,
+  getCoreDocCache,
+  getMarkdownCache,
+  getScopedDocCache,
+  markDocumentDirty,
+  Store,
+} from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -86,6 +95,7 @@ import {
 } from './lib/redirects'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -123,6 +133,10 @@ async function main() {
       inputPath: '../docs/_tooltips',
       outputPath: '_tooltips',
     },
+    siteFlags: {
+      inputPath: '../flags.json',
+      outputPath: '_flags.json',
+    },
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
       '/docs/core-1',
@@ -147,6 +161,15 @@ async function main() {
         'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
         'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/node.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/expo.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/fastify.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/chrome-extension.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -210,6 +233,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
+  const scopedDocCache = getScopedDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
@@ -243,6 +267,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   if (config.prompts) {
     prompts = await readPrompts(config)
     console.info(`✓ Read ${prompts.length} prompts`)
+  }
+
+  abortSignal?.throwIfAborted()
+
+  let siteFlags: Flags = {}
+
+  if (config.siteFlags) {
+    siteFlags = await readSiteFlags(config)
+    console.info(`✓ Read ${Object.keys(siteFlags).length} site flags`)
   }
 
   abortSignal?.throwIfAborted()
@@ -659,6 +692,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   await writeFile(
     'manifest.json',
     JSON.stringify({
+      flags: siteFlags,
       navigation: await traverseTree(
         { items: sdkScopedManifest },
         async (item) => {
@@ -796,17 +830,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         await writeFile(
           doc.file.filePathInDocsFolder,
           `---
-template: wide
----
+${yaml.stringify({
+  template: 'wide',
+  redirectPage: 'true',
+  availableSdks: sdks.join(','),
+  notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+})}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
-        )
-
-        await writeFile(
-          `~/${doc.file.filePathInDocsFolder}`,
-          `---
-template: wide
----
-<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
         )
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
@@ -840,31 +870,39 @@ template: wide
             return doc.fileContent
           })()
 
-          const vfile = await remark()
-            .use(remarkFrontmatter)
-            .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-            .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-            .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
-            .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-            .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
-            .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-            .use(
-              insertFrontmatter({
-                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
-                lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
-                sdk: [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])].join(', '),
+          const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+
+          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
+            remark()
+              .use(remarkFrontmatter)
+              .use(remarkMdx)
+              .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
+              .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+              .use(
+                insertFrontmatter({
+                  sdkScoped: 'true',
+                  canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
+                  lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                  sdk: sdks.join(', '),
+                  availableSdks: sdks?.join(','),
+                  notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+                  activeSdk: targetSdk,
+                }),
+              )
+              .process({
+                path: doc.file.filePath,
+                value: fileContent,
               }),
-            )
-            .process({
-              path: doc.file.filePath,
-              value: fileContent,
-            })
+          )
 
           await writeSdkFile(
             targetSdk,
             doc.file.filePathInDocsFolder,
-            typedocTableSpecialCharacters.decode(String(vfile)),
+            typedocTableSpecialCharacters.decode(vfile.value as string),
           )
 
           return vfile
@@ -1007,6 +1045,13 @@ template: wide
       const llms = await generateLLMs(outputtedDocsFiles)
       await writeFile(config.llms.overviewPath, llms)
     }
+  }
+
+  abortSignal?.throwIfAborted()
+
+  if (config.siteFlags) {
+    await writeSiteFlags(config, siteFlags)
+    console.info(`✓ Wrote ${Object.keys(siteFlags).length} site flags to disk`)
   }
 
   abortSignal?.throwIfAborted()

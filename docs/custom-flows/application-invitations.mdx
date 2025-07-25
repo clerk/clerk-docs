@@ -25,12 +25,14 @@ To create a sign-up flow using the invitation token, you need to extract the tok
     'use client'
 
     import * as React from 'react'
+    import { useClerk } from '@clerk/nextjs'
     import { useSignUp, useUser } from '@clerk/nextjs'
     import { useSearchParams, useRouter } from 'next/navigation'
 
     export default function Page() {
       const { isSignedIn, user } = useUser()
       const router = useRouter()
+      const { session } = useClerk()
       const { isLoaded, signUp, setActive } = useSignUp()
       const [firstName, setFirstName] = React.useState('')
       const [lastName, setLastName] = React.useState('')
@@ -77,9 +79,15 @@ To create a sign-up flow using the invitation token, you need to extract the tok
           if (signUpAttempt.status === 'complete') {
             await setActive({ session: signUpAttempt.createdSessionId })
           } else {
-            // If the status is not complete, check why. User may need to
+            // If the sign-up status is not complete, check why. User may need to
             // complete further steps.
             console.error(JSON.stringify(signUpAttempt, null, 2))
+          }
+
+          if (session.currentTask) {
+            // If there's a pending session task, check why. User may need
+            // to complete after-auth flow
+            console.log(session.currentTask)
           }
         } catch (err) {
           console.error(JSON.stringify(err, null, 2))
@@ -179,6 +187,10 @@ To create a sign-up flow using the invitation token, you need to extract the tok
         const userbuttonDiv = document.getElementById('user-button')
 
         clerk.mountUserButton(userbuttonDiv)
+      } else if (clerk.session.currentTask) {
+        // If there's a pending session task, check why. User may need
+        // to complete after-auth flow
+        console.log(session.currentTask)
       } else {
         // Get the token from the query parameter
         const param = '__clerk_ticket'
@@ -206,6 +218,8 @@ To create a sign-up flow using the invitation token, you need to extract the tok
             // If sign-up was successful, set the session to active
             if (signUpAttempt.status === 'complete') {
               await clerk.setActive({ session: signUpAttempt.createdSessionId })
+
+              location.reload()
             } else {
               // If the status is not complete, check why. User may need to
               // complete further steps.

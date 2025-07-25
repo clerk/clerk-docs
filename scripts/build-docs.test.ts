@@ -4812,6 +4812,7 @@ Documentation specific to React.js`,
     )
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -4827,7 +4828,11 @@ Documentation specific to React.js`,
 title: API Documentation
 description: x
 sdk: nextjs, remix, react
+sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: nextjs
 ---
 
 Documentation specific to Next.js and Remix
@@ -4837,7 +4842,11 @@ Documentation specific to Next.js and Remix
 title: API Documentation
 description: x
 sdk: nextjs, remix, react
+sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: remix
 ---
 
 Documentation specific to Next.js and Remix
@@ -4846,8 +4855,12 @@ Documentation specific to Next.js and Remix
     expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
 title: API Documentation for React
 description: x
+sdkScoped: "true"
 canonical: /docs/:sdk:/api-doc
 sdk: nextjs, remix, react
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: react
 ---
 
 Documentation specific to React.js
@@ -4855,6 +4868,9 @@ Documentation specific to React.js
 
     expect(await readFile('./dist/api-doc.mdx')).toBe(`---
 template: wide
+redirectPage: "true"
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
   })

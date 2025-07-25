@@ -160,6 +160,7 @@ const baseConfig = {
     docs: {},
     partials: {},
     typedoc: {},
+    tooltips: {},
   },
   manifestOptions: {
     wrapDefault: true,
@@ -225,6 +226,7 @@ Testing with a simple page.`)
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
     })
   })
@@ -563,6 +565,7 @@ title: Simple Test
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -667,6 +670,7 @@ title: Item 2
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -726,6 +730,7 @@ title: Item 1
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -822,6 +827,7 @@ title: Item 1
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
 
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -961,6 +967,7 @@ This is a normal document.`,
     // Check that the manifest contains the target="_blank" attribute
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
     expect(manifest).toEqual({
+      flags: {},
       navigation: [
         [
           { title: 'Normal Link', href: '/docs/normal-link' },
@@ -1022,6 +1029,7 @@ title: Quickstart
 
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -1082,19 +1090,23 @@ Testing with a simple page.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react'] }]],
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
       { path: 'simple-test.mdx', url: '/docs/simple-test' },
-      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
       { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
     ])
 
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
+sdkScoped: "true"
 canonical: /docs/:sdk:/simple-test
+availableSdks: react
+notAvailableSdks: ""
+activeSdk: react
 ---
 
 # Simple Test Page
@@ -1102,21 +1114,22 @@ canonical: /docs/:sdk:/simple-test
 Testing with a simple page.`)
 
     expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
-    )
-
-    expect(await readFile(pathJoin('./dist/~/simple-test.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage instant title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
+      `---
+template: wide
+redirectPage: "true"
+availableSdks: react
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
     )
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(5)
+    expect(distFiles.length).toBe(4)
     expect(distFiles).toContain('simple-test.mdx')
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('react/simple-test.mdx')
-    expect(distFiles).toContain('~/simple-test.mdx')
   })
 
   test('3 sdks in frontmatter generates 3 variants', async () => {
@@ -1149,12 +1162,12 @@ Testing with a simple page.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
       { path: 'simple-test.mdx', url: '/docs/simple-test' },
-      { path: '~/simple-test.mdx', url: '/docs/~/simple-test' },
       { path: 'vue/simple-test.mdx', url: '/docs/vue/simple-test' },
       { path: 'react/simple-test.mdx', url: '/docs/react/simple-test' },
       { path: 'astro/simple-test.mdx', url: '/docs/astro/simple-test' },
@@ -1162,11 +1175,10 @@ Testing with a simple page.`,
 
     const distFiles = await treeDir(pathJoin('./dist'))
 
-    expect(distFiles.length).toBe(7)
+    expect(distFiles.length).toBe(6)
     expect(distFiles).toContain('manifest.json')
     expect(distFiles).toContain('directory.json')
     expect(distFiles).toContain('simple-test.mdx')
-    expect(distFiles).toContain('~/simple-test.mdx')
     expect(distFiles).toContain('react/simple-test.mdx')
     expect(distFiles).toContain('vue/simple-test.mdx')
     expect(distFiles).toContain('astro/simple-test.mdx')
@@ -1293,7 +1305,7 @@ Testing with a simple page.`,
                     {
                       title: 'Login',
                       href: '/docs/auth/login',
-                      sdk: ['react', 'python'], // python not in parent
+                      sdk: ['react', 'remix'], // remix not in parent
                     },
                   ],
                 ],
@@ -1306,7 +1318,7 @@ Testing with a simple page.`,
         path: './docs/auth/login.mdx',
         content: `---
 title: Login
-sdk: react, python
+sdk: react, remix
 ---
 
 # Login Page
@@ -1319,12 +1331,12 @@ Authentication login documentation.`,
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'python', 'nextjs'],
+        validSdks: ['react', 'remix', 'nextjs'],
       }),
     )
 
     await expect(promise).rejects.toThrow(
-      'Doc "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+      'Doc "Login" is attempting to use ["react","remix"] But its being filtered down to ["react"] in the manifest.json',
     )
   })
 
@@ -1367,11 +1379,13 @@ This document is available for React and Next.js.`,
 
     // Verify landing page content
     expect(await readFile(pathJoin('./dist/sdk-document.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
-    )
-
-    expect(await readFile(pathJoin('./dist/~/sdk-document.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage instant title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
+      `---
+template: wide
+redirectPage: "true"
+availableSdks: react,nextjs
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
   })
 
@@ -1440,6 +1454,7 @@ Content for React users.`,
     )
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
+      flags: {},
       navigation: [
         [
           {
@@ -2791,7 +2806,7 @@ description: A page that contains cards
     const indexContent = await readFile('./dist/index.mdx')
 
     expect(indexContent).toContain('* [Standard card](/docs/standard-card)')
-    expect(indexContent).toContain('* [SDK Scoped Card](/docs/~/sdk-scoped-page)')
+    expect(indexContent).toContain('* [SDK Scoped Card](/docs/sdk-scoped-page)')
   })
 
   test('Url hash links should be included when swapping out sdk scoped links to <SDKLink />', async () => {
@@ -3729,6 +3744,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3776,6 +3792,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3827,6 +3844,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3880,6 +3898,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3932,6 +3951,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -3972,6 +3992,7 @@ title: Missing Description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4027,6 +4048,7 @@ description: The page being linked to
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4084,6 +4106,7 @@ description: This page has a description
             },
             partials: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4128,6 +4151,7 @@ description: Test page with partial
             },
             docs: {},
             typedoc: {},
+            tooltips: {},
           },
         }),
       )
@@ -4313,6 +4337,7 @@ interface Client {
           },
           partials: {},
           typedoc: {},
+          tooltips: {},
         },
       }),
     )

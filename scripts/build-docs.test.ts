@@ -4772,7 +4772,7 @@ description: Generated API docs
 
 describe('Multiple document variants for pages', () => {
   test('Should pick up and use the react specific version of the doc', async () => {
-    const { tempDir, readFile } = await createTempFiles([
+    const { tempDir, readFile, listFiles } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
@@ -4805,9 +4805,6 @@ Documentation specific to React.js`,
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs', 'remix'],
-        llms: {
-          fullPath: 'llms-full.txt',
-        },
       }),
     )
 
@@ -4873,6 +4870,15 @@ availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
+
+    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
+      'dist/manifest.json',
+      'dist/directory.json',
+      'dist/api-doc.mdx',
+      'dist/remix/api-doc.mdx',
+      'dist/react/api-doc.mdx',
+      'dist/nextjs/api-doc.mdx',
+    ])
   })
 
   test('Should have correct sdks in <SDKLink />', async () => {
@@ -4923,9 +4929,6 @@ description: x
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs', 'remix'],
-        llms: {
-          fullPath: 'llms-full.txt',
-        },
       }),
     )
 

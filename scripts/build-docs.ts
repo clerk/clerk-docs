@@ -816,6 +816,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   await Promise.all(
     coreDocs.map(async (doc) => {
+      // Skip SDK variant files (e.g., file.react.mdx, file.nextjs.mdx) - they should not be written as standalone files
+      if (VALID_SDKS.some((sdk) => doc.file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))) {
+        return
+      }
+
       if (isValidSdk(config)(doc.file.filePathInDocsFolder.split('/')[0])) {
         if (!shouldIgnoreWarning(config, doc.file.filePath, 'docs', 'sdk-path-conflict')) {
           throw new Error(errorMessages['sdk-path-conflict'](doc.file.href, doc.file.filePathInDocsFolder))

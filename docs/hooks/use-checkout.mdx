@@ -56,7 +56,7 @@ There are two ways to use `useCheckout()`:
   ---
 
   - `planPeriod`
-  - `'monthly' | 'yearly'`
+  - `'month' | 'annual'`
 
   The billing period for the plan.
 </Properties>
@@ -95,7 +95,7 @@ The `checkout` object contains the following properties. They are `null` until t
   ---
 
   - `planPeriod`
-  - `'monthly' | 'yearly' | null`
+  - `'month' | 'annual' | null`
 
   The billing period for the plan.
 
@@ -212,7 +212,7 @@ The `useCheckout()` hook can be used with a context provider for managing state 
           // The provider sets the context for the checkout flow.
           // Any child component can now call `useCheckout()` to access this context.
           return (
-            <CheckoutProvider for="user" planId="cplan_123abc" planPeriod="monthly">
+            <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
               <div>
                 <h1>Upgrade Your Plan</h1>
                 <p>You are about to subscribe to our monthly plan.</p>
@@ -229,29 +229,81 @@ The `useCheckout()` hook can be used with a context provider for managing state 
         import { useCheckout } from '@clerk/clerk-react/experimental'
 
         export function CheckoutFlow() {
-          // `useCheckout` reads context from the nearest `<CheckoutProvider />`
           const { checkout } = useCheckout()
-          const { start, status, isStarting, error } = checkout
+          const { status } = checkout
 
-          const handleStartCheckout = async () => {
+          if (status === 'awaiting_initialization') {
+            return <CheckoutInitialization />
+          }
+
+          return (
+            <div className="checkout-container">
+              <CheckoutSummary />
+              <PaymentSection />
+            </div>
+          )
+        }
+
+        function CheckoutInitialization() {
+          const { checkout } = useCheckout()
+          const { start, status, fetchStatus } = checkout
+
+          return (
+            <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+              {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
+            </button>
+          )
+        }
+
+        function PaymentSection() {
+          const { checkout } = useCheckout()
+
+          const { isConfirming, confirm, complete, error } = checkout
+
+          const [isProcessing, setIsProcessing] = useState(false)
+          const [selectedMethod, setSelectedMethod] = useState<(typeof data)[number] | null>(null)
+
+          const submitSelectedMethod = async () => {
+            if (isProcessing || !selectedMethod) return
+            setIsProcessing(true)
+
             try {
-              // This will create the checkout session on the backend
-              await start()
-              // Next steps would involve using a payment element (e.g., Stripe)
-              // and then calling `checkout.confirm()` and `checkout.finalize()`.
-            } catch (e) {
-              console.error('Error starting checkout:', e)
+              // Confirm checkout with payment method
+              await confirm({
+                paymentSourceId: selectedMethod.id,
+              })
+              // Calling `.complete` enables you to sync the client side state with the server side state of your users.
+              // It revalidates all authorization checks computed within server components.
+              await complete({ redirectUrl: '/dashboard' })
+            } catch (error) {
+              console.error('Payment failed:', error)
+            } finally {
+              setIsProcessing(false)
             }
           }
 
           return (
-            <div>
-              <p>Current status: {status}</p>
-              <button onClick={handleStartCheckout} disabled={isStarting}>
-                {isStarting ? 'Starting...' : 'Proceed to Payment'}
+            <>
+              <PaymentMethods onChange={setSelectedMethod} />
+
+              {error && <div>{error.message}</div>}
+
+              <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
+                {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
               </button>
-              {error && <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>}
-              {status === 'starting' && <p>Redirecting to payment...</p>}
+            </>
+          )
+        }
+
+        function CheckoutSummary() {
+          const { checkout } = useCheckout()
+          const { plan, totals } = checkout
+
+          return (
+            <div>
+              <h2>Order Summary</h2>
+              <span>{plan?.name}</span>
+              <span>{totals?.totalDueNow.currencySymbol}{totals?.totalDueNow.amountFormatted}</span>
             </div>
           )
         }

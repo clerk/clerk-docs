@@ -337,14 +337,22 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const docsArray = (
     await Promise.all([
       ...docsFiles.map(async (file) => {
-        const inManifest = docsInManifest.has(file.href)
+        // Check if this is an SDK variant file (e.g., api-doc.react.mdx)
+        const sdkMatch = VALID_SDKS.find((sdk) => file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))
+
+        // For SDK variant files, check if the base href is in manifest instead of the variant href
+        let inManifest: boolean
+        if (sdkMatch) {
+          const baseHref = file.href.replace(`.${sdkMatch}`, '')
+          inManifest = docsInManifest.has(baseHref)
+        } else {
+          inManifest = docsInManifest.has(file.href)
+        }
 
         const markdownFile = await markdownCache(file.filePath, () =>
           parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
         )
 
-        // Check if this is an SDK variant file (e.g., api-doc.react.mdx)
-        const sdkMatch = VALID_SDKS.find((sdk) => file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))
         if (sdkMatch) {
           // This is an SDK variant file - store it with the special key format for distinct SDK variants lookup
           // e.g., /docs/api-doc.react.mdx becomes /docs/api-doc.react

@@ -343,7 +343,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
         )
 
+        // Check if this is an SDK variant file (e.g., api-doc.react.mdx)
+        const sdkMatch = VALID_SDKS.find((sdk) => file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))
+        if (sdkMatch) {
+          // This is an SDK variant file - store it with the special key format for distinct SDK variants lookup
+          // e.g., /docs/api-doc.react.mdx becomes /docs/api-doc.react
+          const baseHref = file.href.replace(`.${sdkMatch}`, '')
+          const variantKey = `${baseHref}.${sdkMatch}`
+          docsMap.set(variantKey, markdownFile)
+        }
         docsMap.set(file.href, markdownFile)
+
         return markdownFile
       }),
       ...(apiErrorsFiles

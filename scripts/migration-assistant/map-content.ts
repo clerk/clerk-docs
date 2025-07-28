@@ -617,6 +617,13 @@ function consolidateMoveTasks(moveTasks: Array<{ source: string; destination: st
     if (files.length >= 2) {
       const [sourceBase, destBase] = groupKey.split(' → ')
 
+      // Skip redundant moves where source and destination are the same
+      if (sourceBase === destBase) {
+        // Add these files to individual tasks instead (they'll be filtered out there too)
+        individual.push(...files)
+        return
+      }
+
       // Check if all files in this group follow the same pattern
       const allSamePattern = files.every((file) => {
         const expectedSource = `${sourceBase}/${file.source.split('/').pop()}`
@@ -785,11 +792,29 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
     allTasks.push({ source: move.source, destination: move.destination, action: 'move' })
   })
 
+  // Filter out redundant tasks where source equals destination
+  const filteredTasks = allTasks.filter((task) => {
+    if (task.action === 'move') {
+      // Normalize paths for comparison
+      const sourcePath = task.source.replace(/\.mdx$/, '')
+      const destPath = task.destination
+        .replace(/^\/docs\//, '')
+        .replace(/^\//, '')
+        .replace(/\.mdx$/, '')
+
+      // Skip if source and destination are the same
+      if (sourcePath === destPath) {
+        return false
+      }
+    }
+    return true
+  })
+
   // Sort all remaining tasks by source path
-  allTasks.sort((a, b) => a.source.localeCompare(b.source))
+  filteredTasks.sort((a, b) => a.source.localeCompare(b.source))
 
   // Display individual tasks
-  for (const task of allTasks) {
+  for (const task of filteredTasks) {
     const icon = getActionIcon(task.action)
     const paddedNumber = taskNumber.toString().padStart(3, '0')
 
@@ -855,7 +880,7 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   const batchMoveFiles = patterns.reduce((sum, pattern) => sum + pattern.files.length, 0)
   const individualMoveFiles = individualMoves.length
   const consolidationFiles = consolidateTasks.length
-  const remainingTasks = patterns.length + consolidationGroups.length + allTasks.length
+  const remainingTasks = patterns.length + consolidationGroups.length + filteredTasks.length
 
   console.log(`\n📊 SUMMARY:`)
   console.log(`   • Total legacy files: ${totalFiles}`)
@@ -865,12 +890,12 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
     console.log(`   • ✅ Completed tasks (skipped): ${skippedCount}`)
   }
   console.log(
-    `   • Remaining tasks: ${remainingTasks} (${patterns.length} batch + ${consolidationGroups.length} consolidation + ${allTasks.length} individual)`,
+    `   • Remaining tasks: ${remainingTasks} (${patterns.length} batch + ${consolidationGroups.length} consolidation + ${filteredTasks.length} individual)`,
   )
 
   // Show action counts
   const actionCounts: Record<string, number> = {}
-  allTasks.forEach((task) => {
+  filteredTasks.forEach((task) => {
     actionCounts[task.action] = (actionCounts[task.action] || 0) + 1
   })
 

@@ -121,7 +121,7 @@
 
 ### Customizing Clerk
 
-- UI Customization (Appearance Prop) [appearance-prop]
+- Component customization [appearance-prop]
   - Overview
   - Layout
   - Theme

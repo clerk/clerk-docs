@@ -242,6 +242,7 @@
 ### General [reference]
 
 - UI Components (box) [components]
+- Hooks
 
 ### SDK Reference
 

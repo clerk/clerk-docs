@@ -279,11 +279,13 @@ function parseMarkdownToManifest(content: string) {
         title,
         href: generateHref(
           title,
+          currentTopLevelGroup?.title,
           currentSubGroup?.title,
           undefined,
-          undefined,
           itemSlug,
+          currentTopLevelCustomSlug || undefined,
           currentSubGroupCustomSlug || undefined,
+          pathStack.slice(0, -1), // Pass all parent path segments except the current item
         ),
       }
 
@@ -327,46 +329,57 @@ function parseMarkdownToManifest(content: string) {
 }
 
 /**
- * Generate href for top-level navigation items
- * @param {string} title - The item title
- * @param {string} customSlug - The custom slug for the item
- * @returns {string} - The generated href
- */
-function generateTopLevelHref(title: string, customSlug?: string) {
-  const itemSlug = customSlug || slugify(title)
-  return `/docs/${itemSlug}`
-}
-
-/**
  * Generate href from title and context
  * @param {string} title - The item title
- * @param {string} topLevel - The section title (formerly subsection)
- * @param {string} section - Unused (kept for backward compatibility)
+ * @param {string} topLevel - The top-level group title
+ * @param {string} subLevel - The sub-level group title
  * @param {string} manifestKey - The manifest key for separate manifests
  * @param {string} customSlug - The custom slug for the item
- * @param {string} topLevelCustomSlug - The custom slug for the top-level section
+ * @param {string} topLevelCustomSlug - The custom slug for the top-level group
+ * @param {string} subLevelCustomSlug - The custom slug for the sub-level group
+ * @param {string[]} parentPathSegments - Array of parent path segments for nested items
  * @returns {string} - The generated href
  */
 function generateHref(
   title: string,
-  topLevel?: string,
-  section?: string,
+  _topLevel?: string,
+  subLevel?: string,
   manifestKey?: string,
   customSlug?: string,
   topLevelCustomSlug?: string,
+  subLevelCustomSlug?: string,
+  parentPathSegments?: string[],
 ) {
   let href = '/docs'
+  let topLevel = _topLevel
+
+  // Special case for Home section - use root path
+  if (topLevel === 'Home') {
+    topLevel = ''
+  }
 
   // If this is a separate manifest, use the manifest key as the base path
   if (manifestKey) {
     href += `/${manifestKey}`
   }
 
-  // Add the section path (what used to be subsection, now top-level)
+  // Add the top-level group path
   if (topLevel) {
-    // Use custom slug if provided, otherwise slugify the title
-    const sectionSlug = topLevelCustomSlug || slugify(topLevel)
-    href += `/${sectionSlug}`
+    const topLevelSlug = topLevelCustomSlug || slugify(topLevel)
+    href += `/${topLevelSlug}`
+  }
+
+  // Add the sub-level group path
+  if (subLevel) {
+    const subLevelSlug = subLevelCustomSlug || slugify(subLevel)
+    href += `/${subLevelSlug}`
+  }
+
+  // Add any nested parent path segments (for deeply nested items)
+  if (parentPathSegments && parentPathSegments.length > 0) {
+    for (const segment of parentPathSegments) {
+      href += `/${segment}`
+    }
   }
 
   // Use custom slug for the item if provided, otherwise slugify the title

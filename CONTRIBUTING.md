@@ -401,6 +401,8 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
+
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.

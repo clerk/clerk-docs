@@ -2,7 +2,6 @@ import 'dotenv/config'
 import { readFile, access } from 'fs/promises'
 import { glob } from 'glob'
 import { join, relative } from 'path'
-import { execSync } from 'child_process'
 import type { Manifest } from './generate-manifest'
 
 /**
@@ -27,38 +26,6 @@ const DOCS_PATH = join(process.cwd(), './docs')
 
 // Environment variable to control output
 const WARNINGS_ONLY = process.env.DOCS_WARNINGS_ONLY === 'true'
-
-// Command line arguments
-const FIX_MODE = process.argv.includes('--fix')
-
-/**
- * Execute a command and return success/failure
- */
-async function executeCommand(command: string, description: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    console.log(`🔄 Executing: ${description}`)
-    console.log(`   Command: ${command}`)
-
-    execSync(command, { stdio: ['inherit', 'inherit', 'pipe'], cwd: process.cwd() })
-
-    console.log(`✅ Success: ${description}`)
-    return { success: true }
-  } catch (error: any) {
-    let errorMessage = 'Unknown error'
-
-    if (error?.stderr) {
-      errorMessage = error.stderr.toString().trim()
-    } else if (error?.stdout) {
-      errorMessage = error.stdout.toString().trim()
-    } else if (error?.message) {
-      errorMessage = error.message
-    }
-
-    console.log(`❌ Failed: ${description}`)
-    console.log(`   Error: ${errorMessage}`)
-    return { success: false, error: errorMessage }
-  }
-}
 
 /**
  * Read and parse the mapping.json file
@@ -739,7 +706,7 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
     }
   }
 
-  console.log(`📋 PROPOSAL MAPPING TASKS${FIX_MODE ? ' (--fix mode: executing commands)' : ''}:\n`)
+  console.log(`📋 PROPOSAL MAPPING TASKS:\n`)
 
   // Consolidate move tasks into patterns
   const { patterns, individual: individualMoves } = consolidateMoveTasks(moveTasks)
@@ -748,10 +715,6 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   const consolidationGroups = groupConsolidationTasks(consolidateTasks)
 
   let taskNumber = 1
-  const executionResults = {
-    batchMoves: { successful: 0, failed: 0, errors: [] as string[] },
-    individualMoves: { successful: 0, failed: 0, errors: [] as string[] },
-  }
 
   // Show consolidated move patterns first
   if (patterns.length > 0) {
@@ -763,19 +726,9 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
         `${paddedNumber}. 📁 [BATCH MOVE] ${pattern.files.length} files: ${pattern.pattern} → ${pattern.destPattern}`,
       )
 
-      if (FIX_MODE) {
-        const result = await executeCommand(pattern.command, `Batch move ${pattern.files.length} files`)
-        if (result.success) {
-          executionResults.batchMoves.successful++
-        } else {
-          executionResults.batchMoves.failed++
-          executionResults.batchMoves.errors.push(`${pattern.pattern}: ${result.error}`)
-        }
-      } else {
-        console.log(`     Batch move ${pattern.files.length} files using glob patterns`)
-        console.log(`     Command: ${pattern.command}`)
-        console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
-      }
+      console.log(`     Batch move ${pattern.files.length} files using glob patterns`)
+      console.log(`     Command: ${pattern.command}`)
+      console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
       console.log('')
       taskNumber++
     }
@@ -794,9 +747,7 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       group.sources.forEach((source) => {
         console.log(`       • ${source}`)
       })
-      if (FIX_MODE) {
-        console.log(`     ⚠️  Manual task: Cannot be automated`)
-      }
+      console.log(`     ⚠️  Manual task: Cannot be automated`)
       console.log('')
       taskNumber++
     })
@@ -841,41 +792,25 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       console.log(`${paddedNumber}. ${icon} [${task.action.toUpperCase()}] ${task.source} → ${task.destination}`)
     }
 
-    // Show the executable command if available or execute it
+    // Show the executable command
     if (task.action === 'move') {
       const sourcePath = `/docs/${task.source}`
       const destPath = `/docs/${task.destination}`
       const command = `node scripts/move-doc.mjs ${sourcePath} ${destPath}`
 
-      if (FIX_MODE) {
-        const result = await executeCommand(command, `Move ${task.source}`)
-        if (result.success) {
-          executionResults.individualMoves.successful++
-        } else {
-          executionResults.individualMoves.failed++
-          executionResults.individualMoves.errors.push(`${task.source}: ${result.error}`)
-        }
-      } else {
-        console.log(`     Move file, update manifest links, update internal links, add redirect`)
-        console.log(`     Command: ${command}`)
-      }
+      console.log(`     Move file, update manifest links, update internal links, add redirect`)
+      console.log(`     Command: ${command}`)
     } else if (task.action === 'delete') {
       const docPath = `/docs/${task.source}`
       const command = `node scripts/delete-doc.mjs ${docPath}`
 
-      if (FIX_MODE) {
-        console.log(`     ⚠️  Manual task: Use delete-doc.mjs script (checks for references)`)
-        console.log(`     Command: ${command}`)
-      } else {
-        console.log(`     Check for references, remove from manifest, add redirect, delete file`)
-        console.log(`     Command: ${command}`)
-      }
+      console.log(`     Check for references, remove from manifest, add redirect, delete file`)
+      console.log(`     Command: ${command}`)
     } else if (
-      FIX_MODE &&
-      (task.action === 'move-to-examples' ||
-        task.action === 'TODO' ||
-        task.action === 'deleted' ||
-        task.action === 'drop')
+      task.action === 'move-to-examples' ||
+      task.action === 'TODO' ||
+      task.action === 'deleted' ||
+      task.action === 'drop'
     ) {
       console.log(`     ⚠️  Manual task: Cannot be automated`)
     }
@@ -943,45 +878,6 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       `   • Consolidation creates ${consolidationGroups.length} guides from ${consolidationFiles} source files!`,
     )
   }
-
-  // Show execution results if in fix mode
-  if (FIX_MODE) {
-    console.log(`\n🔧 EXECUTION RESULTS:`)
-
-    const totalSuccessful = executionResults.batchMoves.successful + executionResults.individualMoves.successful
-    const totalFailed = executionResults.batchMoves.failed + executionResults.individualMoves.failed
-    const totalExecuted = totalSuccessful + totalFailed
-
-    console.log(`   • Commands executed: ${totalExecuted}`)
-    console.log(`   • Successful: ${totalSuccessful}`)
-    console.log(`   • Failed: ${totalFailed}`)
-
-    if (executionResults.batchMoves.successful > 0 || executionResults.batchMoves.failed > 0) {
-      console.log(
-        `   • Batch moves: ${executionResults.batchMoves.successful} successful, ${executionResults.batchMoves.failed} failed`,
-      )
-    }
-    if (executionResults.individualMoves.successful > 0 || executionResults.individualMoves.failed > 0) {
-      console.log(
-        `   • Individual moves: ${executionResults.individualMoves.successful} successful, ${executionResults.individualMoves.failed} failed`,
-      )
-    }
-    // Show errors if any
-    const allErrors = [...executionResults.batchMoves.errors, ...executionResults.individualMoves.errors]
-
-    if (allErrors.length > 0) {
-      console.log(`\n❌ ERRORS:`)
-      allErrors.forEach((error) => {
-        console.log(`   • ${error}`)
-      })
-    }
-
-    if (totalFailed === 0) {
-      console.log(`\n🎉 All automated tasks completed successfully!`)
-    } else {
-      console.log(`\n⚠️  Some tasks failed. Please review the errors above and retry if needed.`)
-    }
-  }
 }
 
 /**
@@ -1020,11 +916,8 @@ async function main() {
   console.log('\n' + '═'.repeat(80) + '\n')
   displayWarnings(unhandledFiles, pagesToCreate, expandedMapping, invalidMappings)
 
-  if (!FIX_MODE) {
-    console.log('\n💡 Usage options:')
-    console.log('   • Run with DOCS_WARNINGS_ONLY=true to see only unhandled files')
-    console.log('   • Run with --fix to automatically execute all automated commands')
-  }
+  console.log('\n💡 Usage options:')
+  console.log('   • Run with DOCS_WARNINGS_ONLY=true to see only unhandled files')
 }
 
 // Run the script

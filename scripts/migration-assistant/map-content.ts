@@ -173,68 +173,6 @@ function findUnhandledFiles(allFiles: string[], mapping: Mapping, expandedMappin
       }
     }
 
-    // TEMPORARY FIX: Check if this file appears to be a "misplaced" migration result
-    // These are files that exist in the new structure but ended up in slightly different locations
-    // than intended during migration execution
-    const possibleMisplacedFiles = [
-      // Files that should have gone to configure/ but ended up in development/
-      { pattern: /^development\/custom-session-token$/, intended: 'guides/configure/session-token-customization' },
-      { pattern: /^development\/jwt-templates$/, intended: 'guides/development/jwt-templates' }, // This one might be correct
-      { pattern: /^development\/making-requests$/, intended: 'guides/development/making-requests' }, // This one might be correct
-      { pattern: /^development\/manual-jwt$/, intended: 'guides/development/manual-jwt' }, // This one might be correct
-
-      // Files that ended up in slightly different webhook locations
-      { pattern: /^configure\/webhooks\/debug-your-webhooks$/, intended: 'guides/configure/webhooks/debugging' },
-      { pattern: /^configure\/webhooks\/sync-data$/, intended: 'guides/configure/webhooks/syncing' },
-
-      // Files that ended up with slightly different proxy locations
-      { pattern: /^dashboard\/using-proxies$/, intended: 'guides/dashboard/dns-domains/proxy-fapi' },
-
-      // Files in appearance-prop that should be in parent directories
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/organization-profile$/,
-        intended: 'guides/customizing-clerk/adding-items',
-      },
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/user-button$/,
-        intended: 'guides/customizing-clerk/adding-items',
-      },
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/user-profile$/,
-        intended: 'guides/customizing-clerk/adding-items',
-      },
-
-      // Development/deployment files that are misplaced or consolidated
-      { pattern: /^development\/deployment\/exporting-users$/, intended: 'guides/development/migrating/overview' },
-      {
-        pattern: /^development\/deployment\/migrate-from-cognito$/,
-        intended: 'guides/development/migrating/migrate-from-cognito',
-      },
-      {
-        pattern: /^development\/deployment\/migrate-from-firebase$/,
-        intended: 'guides/development/migrating/migrate-from-firebase',
-      },
-      { pattern: /^development\/deployment\/migrate-overview$/, intended: 'guides/development/migrating/overview' },
-      {
-        pattern: /^development\/deployment\/overview$/,
-        intended: 'guides/development/deployment/deploy-to-production',
-      },
-      { pattern: /^development\/overview$/, intended: 'guides/development/making-requests' }, // might be consolidated
-
-      // Other common misplaced patterns from the unhandled list
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/localization$/,
-        intended: 'guides/customizing-clerk/localization',
-      },
-      { pattern: /^secure\/.*$/, intended: '' }, // Many files moved to secure/ directory
-    ]
-
-    for (const { pattern, intended } of possibleMisplacedFiles) {
-      if (pattern.test(file)) {
-        return false // Treat misplaced files as handled to avoid false positives
-      }
-    }
-
     return true // This file is truly unhandled
   })
 }

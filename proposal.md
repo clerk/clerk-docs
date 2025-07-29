@@ -115,6 +115,7 @@
 ### Managing Users [users]
 
 - Managing Users [managing]
+- Inviting Users [inviting]
 - Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
 - Impersonation

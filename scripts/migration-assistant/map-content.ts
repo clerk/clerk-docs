@@ -2,49 +2,30 @@ import 'dotenv/config'
 import { readFile, access } from 'fs/promises'
 import { glob } from 'glob'
 import { join, relative } from 'path'
-import { execSync } from 'child_process'
 import type { Manifest } from './generate-manifest'
+
+/**
+ * Migration Assistant - Map Content Script
+ *
+ * This script validates content mapping configurations against the PROPOSAL manifest structure
+ * to ensure that planned migrations move docs in the direction of the proposed new structure.
+ *
+ * Key features:
+ * - Shows migration tasks needed for each mapping
+ * - Identifies invalid mappings (destinations not in proposal manifest)
+ * - Identifies new pages needed for proposal structure
+ * - Identifies unhandled legacy files
+ * - Can execute migration commands with --fix flag
+ */
 
 // Path to the docs directory and mapping file
 const MAPPING_PATH = join(process.cwd(), './proposal-mapping.json')
 const MANIFEST_PROPOSAL_PATH = join(process.cwd(), './public/manifest.proposal.json')
-const MANIFEST_PATH = join(process.cwd(), './public/manifest.json')
+const MANIFEST_PATH = join(process.cwd(), './docs/manifest.json')
 const DOCS_PATH = join(process.cwd(), './docs')
 
 // Environment variable to control output
 const WARNINGS_ONLY = process.env.DOCS_WARNINGS_ONLY === 'true'
-
-// Command line arguments
-const FIX_MODE = process.argv.includes('--fix')
-
-/**
- * Execute a command and return success/failure
- */
-async function executeCommand(command: string, description: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    console.log(`🔄 Executing: ${description}`)
-    console.log(`   Command: ${command}`)
-
-    execSync(command, { stdio: ['inherit', 'inherit', 'pipe'], cwd: process.cwd() })
-
-    console.log(`✅ Success: ${description}`)
-    return { success: true }
-  } catch (error: any) {
-    let errorMessage = 'Unknown error'
-
-    if (error?.stderr) {
-      errorMessage = error.stderr.toString().trim()
-    } else if (error?.stdout) {
-      errorMessage = error.stdout.toString().trim()
-    } else if (error?.message) {
-      errorMessage = error.message
-    }
-
-    console.log(`❌ Failed: ${description}`)
-    console.log(`   Error: ${errorMessage}`)
-    return { success: false, error: errorMessage }
-  }
-}
 
 /**
  * Read and parse the mapping.json file
@@ -70,12 +51,19 @@ async function readMapping() {
       }
     >
   } catch (error) {
-    console.error(`❌ Error reading mapping.json: ${error.message}`)
+    console.error(`❌ Error reading mapping.json: ${error instanceof Error ? error.message : String(error)}`)
     return {}
   }
 }
 
 type Mapping = Awaited<ReturnType<typeof readMapping>>
+
+/**
+ * Convert href path to relative docs path
+ */
+function hrefToDocsPath(href: string): string {
+  return href.replace(/^\/docs\//, '')
+}
 
 /**
  * Read all manifest files and extract destination paths
@@ -87,7 +75,7 @@ async function readProposalManifestPaths() {
   return { manifest, paths: parseManifestPaths(manifest) }
 }
 
-async function getManifestPaths() {
+async function readManifestPaths() {
   const content = await readFile(MANIFEST_PATH, 'utf-8')
   const manifest = JSON.parse(content) as { navigation: Manifest }
   return { manifest, paths: parseManifestPaths(manifest) }
@@ -101,7 +89,8 @@ function parseManifestPaths(manifest: { navigation: Manifest }) {
     for (const group of groups) {
       for (const item of group) {
         if ('href' in item) {
-          manifestPaths.push(item.href)
+          // Convert /docs/path to path (relative to docs folder)
+          manifestPaths.push(hrefToDocsPath(item.href))
         }
 
         if ('items' in item) {
@@ -120,19 +109,19 @@ function parseManifestPaths(manifest: { navigation: Manifest }) {
  * Recursively find all .mdx files in a directory
  * @param {string} dir - Directory to search
  * @param {string} baseDir - Base directory for relative paths
- * @returns {Promise<string[]>} Array of relative file paths
+ * @returns {Promise<string[]>} Array of relative file paths without .mdx extension
  */
 async function findMdxFiles(dir: string, baseDir = dir) {
   const files = await glob(`${dir}/**/*.mdx`, { ignore: ['**/_*/**'] })
-  return files.map((file) => relative(baseDir, file))
+  return files.map((file) => relative(baseDir, file).replace(/\.mdx$/, ''))
 }
 
 /**
  * Check if a file matches a destination glob pattern
  */
 function matchesDestinationPattern(filePath: string, destPattern: string): boolean {
-  // Convert destination pattern to file format: /docs/path/** → path/**
-  let pattern = destPattern.replace(/^\/docs\//, '').replace(/^\//, '')
+  // Convert destination pattern to file format
+  let pattern = destPattern
 
   // Convert glob pattern to regex for matching
   // Important: Replace ** first, then *, to avoid ** being overridden
@@ -142,7 +131,7 @@ function matchesDestinationPattern(filePath: string, destPattern: string): boole
     .replace(/\*/g, '[^/]*') // * matches anything except /
     .replace(/___DOUBLESTAR___/g, '.*') // ** matches anything including /
 
-  return new RegExp(`^${regexPattern}$`).test(filePath) || new RegExp(`^${regexPattern}\\.mdx$`).test(filePath)
+  return new RegExp(`^${regexPattern}$`).test(filePath)
 }
 
 /**
@@ -166,10 +155,7 @@ function findUnhandledFiles(allFiles: string[], mapping: Mapping, expandedMappin
       // Check if file matches destination pattern (means it's a successful migration)
       if (value.newPath && value.action !== 'drop' && value.action !== 'delete' && value.action !== 'deleted') {
         // Check exact match first
-        let destinationFile = value.newPath.replace(/^\/docs\//, '').replace(/^\//, '')
-        if (!destinationFile.endsWith('.mdx')) {
-          destinationFile += '.mdx'
-        }
+        let destinationFile = value.newPath
         if (file === destinationFile) {
           return false // This file is a successful migration
         }
@@ -187,87 +173,8 @@ function findUnhandledFiles(allFiles: string[], mapping: Mapping, expandedMappin
       }
     }
 
-    // TEMPORARY FIX: Check if this file appears to be a "misplaced" migration result
-    // These are files that exist in the new structure but ended up in slightly different locations
-    // than intended during migration execution
-    const possibleMisplacedFiles = [
-      // Files that should have gone to /configure/ but ended up in /development/
-      { pattern: /^development\/custom-session-token\.mdx$/, intended: 'configure/session-token.mdx' },
-      { pattern: /^development\/jwt-templates\.mdx$/, intended: 'development/jwt-templates.mdx' }, // This one might be correct
-      { pattern: /^development\/making-requests\.mdx$/, intended: 'development/making-requests.mdx' }, // This one might be correct
-      { pattern: /^development\/manual-jwt\.mdx$/, intended: 'development/manual-jwt.mdx' }, // This one might be correct
-
-      // Files that ended up in slightly different webhook locations
-      { pattern: /^configure\/webhooks\/debug-your-webhooks\.mdx$/, intended: 'configure/webhooks/debugging.mdx' },
-      { pattern: /^configure\/webhooks\/sync-data\.mdx$/, intended: 'configure/webhooks/syncing.mdx' },
-
-      // Files that ended up with slightly different proxy locations
-      { pattern: /^dashboard\/using-proxies\.mdx$/, intended: 'dashboard/proxy-fapi.mdx' },
-
-      // Files in appearance-prop that should be in parent directories
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/organization-profile\.mdx$/,
-        intended: 'customizing-clerk/adding-items/organization-profile.mdx',
-      },
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/user-button\.mdx$/,
-        intended: 'customizing-clerk/adding-items/user-button.mdx',
-      },
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/user-profile\.mdx$/,
-        intended: 'customizing-clerk/adding-items/user-profile.mdx',
-      },
-
-      // Development/deployment files that are misplaced or consolidated
-      { pattern: /^development\/deployment\/exporting-users\.mdx$/, intended: 'development/migrating/overview.mdx' },
-      {
-        pattern: /^development\/deployment\/migrate-from-cognito\.mdx$/,
-        intended: 'development/migrating/migrate-from-cognito.mdx',
-      },
-      {
-        pattern: /^development\/deployment\/migrate-from-firebase\.mdx$/,
-        intended: 'development/migrating/migrate-from-firebase.mdx',
-      },
-      { pattern: /^development\/deployment\/migrate-overview\.mdx$/, intended: 'development/migrating/overview.mdx' },
-      { pattern: /^development\/deployment\/overview\.mdx$/, intended: 'development/deployment/production.mdx' },
-      { pattern: /^development\/overview\.mdx$/, intended: 'development/making-requests.mdx' }, // might be consolidated
-
-      // Other common misplaced patterns from the unhandled list
-      {
-        pattern: /^customizing-clerk\/appearance-prop\/localization\.mdx$/,
-        intended: 'customizing-clerk/localization.mdx',
-      },
-      { pattern: /^secure\/.*\.mdx$/, intended: '' }, // Many files moved to secure/ directory
-    ]
-
-    for (const { pattern, intended } of possibleMisplacedFiles) {
-      if (pattern.test(file)) {
-        return false // Treat misplaced files as handled to avoid false positives
-      }
-    }
-
     return true // This file is truly unhandled
   })
-}
-
-/**
- * Find pages that need to be created (in manifest but no mapping source)
- * @param manifestPaths - All paths from manifest files
- * @param mapping - Mapping configuration
- * @returns Array of paths that need new content
- */
-function findPagesToCreate(manifestPaths: string[], mapping: Mapping) {
-  const mappedDestinations = new Set(Object.values(mapping).map((entry) => entry.newPath))
-
-  // Also collect manifest paths that are explicitly marked for dropping
-  const droppedPaths = new Set()
-  for (const [key, value] of Object.entries(mapping)) {
-    if (value.action === 'drop' && key.startsWith('/docs/')) {
-      droppedPaths.add(key)
-    }
-  }
-
-  return manifestPaths.filter((path) => !mappedDestinations.has(path) && !droppedPaths.has(path))
 }
 
 /**
@@ -313,13 +220,14 @@ function displayWarnings(
     hasWarnings = true
     if (unhandledFiles.length > 0) console.log('\n' + '─'.repeat(60) + '\n')
 
-    console.log(`❌ Found ${invalidMappings.length} invalid mappings (destinations not in manifests):\n`)
+    console.log(`❌ Found ${invalidMappings.length} invalid mappings (destinations not in proposal manifest):\n`)
 
     // Group by destination directory for better readability
     const groupedMappings: Record<string, InvalidMapping> = {}
     invalidMappings.forEach((mapping) => {
+      if (!mapping.destination) return // Skip mappings without destinations
       const parts = mapping.destination.split('/')
-      const section = parts.length > 2 ? parts[2] : 'root' // /docs/[section]/...
+      const section = parts.length > 1 ? parts[1] : 'root' // guides/[section]/...
       if (!groupedMappings[section]) groupedMappings[section] = []
       groupedMappings[section].push(mapping)
     })
@@ -340,13 +248,13 @@ function displayWarnings(
     hasWarnings = true
     if (unhandledFiles.length > 0 || invalidMappings.length > 0) console.log('\n' + '─'.repeat(60) + '\n')
 
-    console.log(`📝 Found ${pagesToCreate.length} pages that need new content:\n`)
+    console.log(`📝 Found ${pagesToCreate.length} pages that need new content in proposal:\n`)
 
     // Group by section for better readability
     const groupedPages: Record<string, string[]> = {}
     pagesToCreate.forEach((path) => {
       const parts = path.split('/')
-      const section = parts.length > 2 ? parts[2] : 'root' // /docs/[section]/...
+      const section = parts.length > 1 ? parts[1] : 'root' // guides/[section]/...
       if (!groupedPages[section]) groupedPages[section] = []
       groupedPages[section].push(path)
     })
@@ -364,7 +272,9 @@ function displayWarnings(
   }
 
   if (!hasWarnings) {
-    console.log('✅ All legacy files are handled, all mappings are valid, and all manifest pages have content sources')
+    console.log(
+      '✅ All legacy files are handled, all mappings are valid against proposal, and all proposal pages have content sources',
+    )
     return
   }
 
@@ -377,7 +287,7 @@ function displayWarnings(
   const generateFiles = Object.values(expandedMapping).filter((mapping) => mapping.action === 'generate').length
 
   console.log(
-    `\n📊 Summary: ${unhandledFiles.length} unhandled files, ${invalidMappings.length} invalid mappings, ${pagesToCreate.length} pages need new content, ${convertToExampleFiles} convert to examples, ${generateFiles} pages need to be generated, ${Object.keys(expandedMapping).length} files mapped`,
+    `\n📊 Summary: ${unhandledFiles.length} unhandled files, ${invalidMappings.length} invalid mappings (against proposal), ${pagesToCreate.length} proposal pages need new content, ${convertToExampleFiles} convert to examples, ${generateFiles} pages need to be generated, ${Object.keys(expandedMapping).length} files mapped`,
   )
 }
 
@@ -428,7 +338,7 @@ function applyGlobMapping(filePath: string, globPattern: string, newPathPattern:
 
     if (filePath.startsWith(globPrefix)) {
       const matchedPart = filePath.slice(globPrefix.length)
-      return newPathPrefix + matchedPart.replace(/\.mdx$/, '') + newPathSuffix
+      return newPathPrefix + matchedPart + newPathSuffix
     }
   }
 
@@ -481,13 +391,13 @@ function expandGlobMapping(mapping: Mapping, allFiles: string[]) {
 }
 
 /**
- * Find invalid mapping destinations (mapped to paths that don't exist in manifests)
+ * Find invalid mapping destinations (mapped to paths that don't exist in proposal manifests)
  * @param {Object} expandedMapping - Expanded mapping configuration
- * @param {string[]} manifestPaths - All paths from manifest files
+ * @param {string[]} proposalManifestPaths - All paths from proposal manifest files
  * @returns {string[]} Array of invalid mapping destinations
  */
-function findInvalidMappings(expandedMapping: Mapping, manifestPaths: string[]) {
-  const manifestPathsSet = new Set(manifestPaths)
+function findInvalidMappings(expandedMapping: Mapping, proposalManifestPaths: string[]) {
+  const proposalPathsSet = new Set(proposalManifestPaths)
   const invalidMappings: Array<{ source: string; destination: string; action: string }> = []
 
   for (const [sourcePath, mapping] of Object.entries(expandedMapping)) {
@@ -498,7 +408,7 @@ function findInvalidMappings(expandedMapping: Mapping, manifestPaths: string[]) 
       continue
     }
 
-    if (!manifestPathsSet.has(mapping.newPath)) {
+    if (!proposalPathsSet.has(mapping.newPath)) {
       invalidMappings.push({
         source: sourcePath,
         destination: mapping.newPath,
@@ -511,6 +421,26 @@ function findInvalidMappings(expandedMapping: Mapping, manifestPaths: string[]) 
 }
 
 type InvalidMapping = Awaited<ReturnType<typeof findInvalidMappings>>
+
+/**
+ * Find pages that need to be created (in proposal manifest but no mapping source)
+ * @param proposalManifestPaths - All paths from proposal manifest files
+ * @param mapping - Mapping configuration
+ * @returns Array of paths that need new content
+ */
+function findPagesToCreate(proposalManifestPaths: string[], mapping: Mapping) {
+  const mappedDestinations = new Set(Object.values(mapping).map((entry) => entry.newPath))
+
+  // Also collect proposal manifest paths that are explicitly marked for dropping
+  const droppedPaths = new Set()
+  for (const [key, value] of Object.entries(mapping)) {
+    if (value.action === 'drop') {
+      droppedPaths.add(key)
+    }
+  }
+
+  return proposalManifestPaths.filter((path) => !mappedDestinations.has(path) && !droppedPaths.has(path))
+}
 
 /**
  * Display only unhandled files
@@ -562,7 +492,7 @@ async function fileExists(filePath: string): Promise<boolean> {
  * Get icon for action type
  */
 function getActionIcon(action: string): string {
-  const icons = {
+  const icons: Record<string, string> = {
     move: '📁',
     consolidate: '🔀',
     generate: '✨',
@@ -594,10 +524,7 @@ function consolidateMoveTasks(moveTasks: Array<{ source: string; destination: st
   moveTasks.forEach((task) => {
     // Find the common directory pattern
     const sourceParts = task.source.split('/')
-    const destParts = task.destination
-      .replace(/^\/docs\//, '')
-      .split('/')
-      .filter((p) => p) // Remove empty parts
+    const destParts = task.destination.split('/').filter((p) => p) // Remove empty parts
 
     // Look for directory-level patterns (at least 2 files in same directory)
     if (sourceParts.length >= 2) {
@@ -627,9 +554,8 @@ function consolidateMoveTasks(moveTasks: Array<{ source: string; destination: st
       // Check if all files in this group follow the same pattern
       const allSamePattern = files.every((file) => {
         const expectedSource = `${sourceBase}/${file.source.split('/').pop()}`
-        const destWithoutDocs = file.destination.replace(/^\/docs\//, '').replace(/^\//, '')
-        const expectedDest = `${destBase}/${destWithoutDocs.split('/').pop()}`
-        return file.source === expectedSource && destWithoutDocs === expectedDest
+        const expectedDest = `${destBase}/${file.destination.split('/').pop()}`
+        return file.source === expectedSource && file.destination === expectedDest
       })
 
       if (allSamePattern) {
@@ -683,7 +609,7 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   let skippedCount = 0
 
   for (const [source, mapping] of Object.entries(expandedMapping)) {
-    const sourcePath = join(DOCS_PATH, source)
+    const sourcePath = join(DOCS_PATH, source + '.mdx')
 
     // Skip checking file existence for actions without destination paths
     if (
@@ -697,12 +623,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       continue
     }
 
-    // Construct destination path - remove leading slash and add .mdx extension
-    let destinationRelativePath = mapping.newPath.replace(/^\//, '')
-    if (!destinationRelativePath.endsWith('.mdx')) {
-      destinationRelativePath += '.mdx'
-    }
-    const destinationPath = join(DOCS_PATH, destinationRelativePath)
+    // Construct destination path
+    const destinationPath = join(DOCS_PATH, mapping.newPath + '.mdx')
 
     // Check if task is already completed (source doesn't exist but destination does)
     const sourceExists = await fileExists(sourcePath)
@@ -722,7 +644,7 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
     }
   }
 
-  console.log(`📋 PROPOSAL MAPPING TASKS${FIX_MODE ? ' (--fix mode: executing commands)' : ''}:\n`)
+  console.log(`📋 PROPOSAL MAPPING TASKS:\n`)
 
   // Consolidate move tasks into patterns
   const { patterns, individual: individualMoves } = consolidateMoveTasks(moveTasks)
@@ -731,10 +653,6 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   const consolidationGroups = groupConsolidationTasks(consolidateTasks)
 
   let taskNumber = 1
-  const executionResults = {
-    batchMoves: { successful: 0, failed: 0, errors: [] as string[] },
-    individualMoves: { successful: 0, failed: 0, errors: [] as string[] },
-  }
 
   // Show consolidated move patterns first
   if (patterns.length > 0) {
@@ -746,19 +664,9 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
         `${paddedNumber}. 📁 [BATCH MOVE] ${pattern.files.length} files: ${pattern.pattern} → ${pattern.destPattern}`,
       )
 
-      if (FIX_MODE) {
-        const result = await executeCommand(pattern.command, `Batch move ${pattern.files.length} files`)
-        if (result.success) {
-          executionResults.batchMoves.successful++
-        } else {
-          executionResults.batchMoves.failed++
-          executionResults.batchMoves.errors.push(`${pattern.pattern}: ${result.error}`)
-        }
-      } else {
-        console.log(`     Batch move ${pattern.files.length} files using glob patterns`)
-        console.log(`     Command: ${pattern.command}`)
-        console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
-      }
+      console.log(`     Batch move ${pattern.files.length} files using glob patterns`)
+      console.log(`     Command: ${pattern.command}`)
+      console.log(`     Files: ${pattern.files.map((f) => f.source).join(', ')}`)
       console.log('')
       taskNumber++
     }
@@ -772,14 +680,12 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
 
     consolidationGroups.forEach((group) => {
       const paddedNumber = taskNumber.toString().padStart(3, '0')
-      console.log(`${paddedNumber}. 🔀 [CONSOLIDATE] Create guide: ${group.destination}`)
+      console.log(`${paddedNumber}. 🔀 [CONSOLIDATE] Create guide: /docs/${group.destination}`)
       console.log(`     Consolidate content from ${group.count} files:`)
       group.sources.forEach((source) => {
         console.log(`       • ${source}`)
       })
-      if (FIX_MODE) {
-        console.log(`     ⚠️  Manual task: Cannot be automated`)
-      }
+      console.log(`     ⚠️  Manual task: Cannot be automated`)
       console.log('')
       taskNumber++
     })
@@ -796,11 +702,8 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
   const filteredTasks = allTasks.filter((task) => {
     if (task.action === 'move') {
       // Normalize paths for comparison
-      const sourcePath = task.source.replace(/\.mdx$/, '')
+      const sourcePath = task.source
       const destPath = task.destination
-        .replace(/^\/docs\//, '')
-        .replace(/^\//, '')
-        .replace(/\.mdx$/, '')
 
       // Skip if source and destination are the same
       if (sourcePath === destPath) {
@@ -827,43 +730,25 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       console.log(`${paddedNumber}. ${icon} [${task.action.toUpperCase()}] ${task.source} → ${task.destination}`)
     }
 
-    // Show the executable command if available or execute it
+    // Show the executable command
     if (task.action === 'move') {
-      const sourcePath = `/docs/${task.source.replace(/\.mdx$/, '')}`
-      const destPath = task.destination.startsWith('/docs/')
-        ? task.destination.replace(/\.mdx$/, '')
-        : `/docs${task.destination.replace(/\.mdx$/, '')}`
+      const sourcePath = `/docs/${task.source}`
+      const destPath = `/docs/${task.destination}`
       const command = `node scripts/move-doc.mjs ${sourcePath} ${destPath}`
 
-      if (FIX_MODE) {
-        const result = await executeCommand(command, `Move ${task.source}`)
-        if (result.success) {
-          executionResults.individualMoves.successful++
-        } else {
-          executionResults.individualMoves.failed++
-          executionResults.individualMoves.errors.push(`${task.source}: ${result.error}`)
-        }
-      } else {
-        console.log(`     Move file, update manifest links, update internal links, add redirect`)
-        console.log(`     Command: ${command}`)
-      }
+      console.log(`     Move file, update manifest links, update internal links, add redirect`)
+      console.log(`     Command: ${command}`)
     } else if (task.action === 'delete') {
-      const docPath = `/docs/${task.source.replace(/\.mdx$/, '')}`
+      const docPath = `/docs/${task.source}`
       const command = `node scripts/delete-doc.mjs ${docPath}`
 
-      if (FIX_MODE) {
-        console.log(`     ⚠️  Manual task: Use delete-doc.mjs script (checks for references)`)
-        console.log(`     Command: ${command}`)
-      } else {
-        console.log(`     Check for references, remove from manifest, add redirect, delete file`)
-        console.log(`     Command: ${command}`)
-      }
+      console.log(`     Check for references, remove from manifest, add redirect, delete file`)
+      console.log(`     Command: ${command}`)
     } else if (
-      FIX_MODE &&
-      (task.action === 'move-to-examples' ||
-        task.action === 'TODO' ||
-        task.action === 'deleted' ||
-        task.action === 'drop')
+      task.action === 'move-to-examples' ||
+      task.action === 'TODO' ||
+      task.action === 'deleted' ||
+      task.action === 'drop'
     ) {
       console.log(`     ⚠️  Manual task: Cannot be automated`)
     }
@@ -931,52 +816,13 @@ async function displayMappingActions(expandedMapping: Mapping, mdxFiles: string[
       `   • Consolidation creates ${consolidationGroups.length} guides from ${consolidationFiles} source files!`,
     )
   }
-
-  // Show execution results if in fix mode
-  if (FIX_MODE) {
-    console.log(`\n🔧 EXECUTION RESULTS:`)
-
-    const totalSuccessful = executionResults.batchMoves.successful + executionResults.individualMoves.successful
-    const totalFailed = executionResults.batchMoves.failed + executionResults.individualMoves.failed
-    const totalExecuted = totalSuccessful + totalFailed
-
-    console.log(`   • Commands executed: ${totalExecuted}`)
-    console.log(`   • Successful: ${totalSuccessful}`)
-    console.log(`   • Failed: ${totalFailed}`)
-
-    if (executionResults.batchMoves.successful > 0 || executionResults.batchMoves.failed > 0) {
-      console.log(
-        `   • Batch moves: ${executionResults.batchMoves.successful} successful, ${executionResults.batchMoves.failed} failed`,
-      )
-    }
-    if (executionResults.individualMoves.successful > 0 || executionResults.individualMoves.failed > 0) {
-      console.log(
-        `   • Individual moves: ${executionResults.individualMoves.successful} successful, ${executionResults.individualMoves.failed} failed`,
-      )
-    }
-    // Show errors if any
-    const allErrors = [...executionResults.batchMoves.errors, ...executionResults.individualMoves.errors]
-
-    if (allErrors.length > 0) {
-      console.log(`\n❌ ERRORS:`)
-      allErrors.forEach((error) => {
-        console.log(`   • ${error}`)
-      })
-    }
-
-    if (totalFailed === 0) {
-      console.log(`\n🎉 All automated tasks completed successfully!`)
-    } else {
-      console.log(`\n⚠️  Some tasks failed. Please review the errors above and retry if needed.`)
-    }
-  }
 }
 
 /**
  * Main function to parse docs content and show mapping actions
  */
 async function main() {
-  const [mdxFiles, mapping, { paths: manifestPaths }] = await Promise.all([
+  const [mdxFiles, mapping, { paths: proposalManifestPaths }] = await Promise.all([
     findMdxFiles(DOCS_PATH),
     readMapping(),
     readProposalManifestPaths(),
@@ -995,21 +841,21 @@ async function main() {
   // Show what actions are needed for each mapping
   await displayMappingActions(expandedMapping, mdxFiles)
 
-  // Show unhandled files
-  const unhandledFiles = findUnhandledFiles(mdxFiles, mapping, expandedMapping)
-  if (unhandledFiles.length > 0) {
-    console.log(`\n⚠️  UNHANDLED LEGACY FILES (${unhandledFiles.length} files):`)
-    console.log(`   These files exist but have no mapping defined:\n`)
-    unhandledFiles.sort().forEach((file) => {
-      console.log(`   • ${file}`)
-    })
-  }
+  // Find invalid mappings (against proposal manifest)
+  const invalidMappings = findInvalidMappings(expandedMapping, proposalManifestPaths)
 
-  if (!FIX_MODE) {
-    console.log('\n💡 Usage options:')
-    console.log('   • Run with DOCS_WARNINGS_ONLY=true to see only unhandled files')
-    console.log('   • Run with --fix to automatically execute all automated commands')
-  }
+  // Find pages that need to be created (from proposal manifest)
+  const pagesToCreate = findPagesToCreate(proposalManifestPaths, mapping)
+
+  // Show unhandled files and validation results
+  const unhandledFiles = findUnhandledFiles(mdxFiles, mapping, expandedMapping)
+
+  // Show warnings section
+  console.log('\n' + '═'.repeat(80) + '\n')
+  displayWarnings(unhandledFiles, pagesToCreate, expandedMapping, invalidMappings)
+
+  console.log('\n💡 Usage options:')
+  console.log('   • Run with DOCS_WARNINGS_ONLY=true to see only unhandled files')
 }
 
 // Run the script

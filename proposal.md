@@ -36,7 +36,7 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
-  - Sign-up and sign-in options
+  - Sign-up and sign-in options [sign-up-sign-in-options]
   - Social Connections
     - Apple
     - Atlassian
@@ -124,11 +124,14 @@
 - UI Customization (Appearance Prop) [appearance-prop]
   - Overview
   - Layout
-  - Theme
+  - Themes
   - Variables
   - CAPTCHA
 - Account Portal
 - Adding items to UI Components [adding-items]
+  - Organization profile
+  - User profile
+  - User button
 - Email and SMS Templates
 - Localization (i18n) [localization]
 - Clerk Elements (beta) [elements]
@@ -154,10 +157,10 @@
 - Restricting Access
 - Multifactor Authentication (MFA) [mfa]
 - Authorization Checks
-- Bot Detection
+- Bot Protection
 - Banning Users
-- Prevent brute force attacks
-- Re-verification (Step-up)
+- Prevent brute force attacks [user-lockout]
+- Reverification (Step-up)
 - Legal Compliance
 - Password protection and rules
 - Security Best Practices [best-practices]
@@ -165,9 +168,7 @@
   - CSRF protection
   - CSP Headers
   - Fixation protection
-  - Brute force attacks and locking user accounts
-  - Protect sign ups from bots
-  - Protect email link sign-ins and sign-ups
+  - Protect email link sign-ups and sign-ins [protect-email-links]
   - Unauthorized sign-in
 - Session Options
 
@@ -179,22 +180,38 @@
 - Override Clerk Types/Interfaces
 - Image Optimization
 - Testing with Clerk [testing]
+  - Overview
+  - Test emails and phones
+  - Cypress
+    - Overview
+    - Custom commands
+    - Test Account Portal
+  - Playwright
+    - Overview
+    - Test helpers
+    - Test authenticated flows
+  - Postman or Insomnia
 - Errors
 - Troubleshooting
+  - Overview
+  - Email deliverability
+  - Script loading
+  - Help & Support
+    - Create a minimal reproduction
+    - Community Discord
+    - Contact Support
 - Deployment
   - Changing domains
-  - Deploy to production
-  - Deploy to Vercel
-  - Deploy behind a proxy
-  - Deploy an Astro app to production
-  - Deploy a Chrome Extension to production
-  - Deploy an Expo app to production
-  - Set up a staging environment
-  - Set up a preview environment
+  - Deploy to production [production]
+  - Deploy to Vercel [vercel]
+  - Deploy behind a proxy [behind-a-proxy]
+  - Deploy an Astro app to production [astro]
+  - Deploy a Chrome Extension to production [chrome-extension]
+  - Deploy an Expo app to production [expo]
 - Migrating your Data [migrating]
   - Overview
-  - Migrate from Firebase
-  - Migrate from Cognito
+  - Migrate from Firebase [firebase]
+  - Migrate from Cognito [cognito]
 - SDK Development
 - Upgrading Clerk [upgrading]
   - Versioning & LTS [versioning]
@@ -225,7 +242,6 @@
 - Routing
 - Session tokens
 - Tokens & signatures
-- Clerk environment variables
 - Security at Clerk [security]
   - Vulnerability disclosure policy
   - Clerk Telemetry

@@ -242,21 +242,39 @@
 ### General [reference]
 
 - UI Components (box) [components]
+- Hooks
 
 ### SDK Reference
 
 - Next.js (nextjs)
 - React (react)
-- Backend SDK (clerk)
-- Node.js (nodejs)
-- Go (go)
+- Expo (expo)
+- JavaScript (javascript)
+- Express (express)
+- React Router (react-router)
+- Astro (astro)
+- iOS (ios)
+- Nuxt (nuxt)
+- Vue (vue)
+- Chrome Extension (chrome)
+- Fastify (fastify)
+- Remix (remix)
 - Tanstack Start (tanstack)
+- JS Backend SDK (clerk)
+- C# (c-sharp)
+- Go (go)
+- Java (java)
+- Python (python)
 - Ruby / Rails (ruby)
 - Community SDKs
-  - Vue
-  - Svelte
-  - Hono
-  - Astro
+  - Angular (angular)
+  - Elysia (elysia)
+  - Hono (hono)
+  - Koa (koa)
+  - SolidJS (solid)
+  - Svelte (svelte)
+  - RedwoodJS (redwood)
+  - Rust (rust)
 
 ### HTTP API Reference
 

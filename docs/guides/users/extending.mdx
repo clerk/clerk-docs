@@ -1,18 +1,123 @@
 ---
 title: User metadata
-description: Metadata allows for custom data to be saved on the User object.
+description: Learn how to store information about a user that Clerk doesn't collect and extend the User object.
 ---
 
-Metadata allows for custom data to be saved on the [`User` object](/docs/guides/users/managing). There are three types of metadata: "unsafe", "public", and "private".
+To store information about a user that Clerk doesn't collect, you can use metadata, which will get stored on the user's [`User` object](/docs/guides/users/managing). There are three types of metadata: "public", "private", and "unsafe".
 
 | Metadata | Frontend API | Backend API |
 | - | - | - |
-| Private | No read or write access | Read & write access |
 | Public | Read access | Read & write access |
+| Private | No read or write access | Read & write access |
 | Unsafe | Read & write access | Read & write access |
 
 > [!WARNING]
 > Metadata is limited to **8KB** maximum.
+
+## Public metadata
+
+Public metadata is accessible by both the frontend and the backend, but can only be set on the backend. This is useful for storing data that you want to expose to the frontend, but don't want the user to be able to modify. For example, you could store a custom role for a user.
+
+### Set public metadata
+
+<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
+  <Tab>
+    <Include src="_partials/backend/usage" />
+
+    ```ts {{ filename: 'route.ts' }}
+    export async function POST(req) {
+      const { role, userId } = await req.json()
+
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          role,
+        },
+      })
+
+      return Response.json({ success: true })
+    }
+    ```
+
+    <If sdk="nextjs">
+      If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
+
+      ```ts
+      const client = await clerkClient()
+
+      const response = await client.users.updateUserMetadata()
+      ```
+    </If>
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'public.ts' }}
+    import { clerkClient } from '@clerk/express'
+
+    app.post('/updateRole', async (req, res) => {
+      const { role, userId } = req.body
+
+      await clerkClient.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          role,
+        },
+      })
+      res.status(200).json({ success: true })
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    ```go {{ filename: 'public.go' }}
+    var client clerk.Client
+
+    func addStripeCustomerID(user *clerk.User, role string) error {
+        Role := map[string]interface{}{
+            "role": role,
+        }
+      user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
+        PublicMetadata: role,
+      })
+
+      if err != nil {
+        panic(err)
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ruby {{ filename: 'public.rb' }}
+    # ruby json example with a private metadata and stripe id
+    require 'clerk'
+    require 'json'
+
+    publicMetadata = {
+      "role": "awesome-user",
+    }
+
+    clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
+    clerk.users.updateMetadata("user_xyz", public_metadata: publicMetadata)
+    ```
+  </Tab>
+
+  <Tab>
+    ```bash {{ filename: 'curl.sh' }}
+    curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
+      "public_metadata": {
+        "role": "shopper"
+      }
+    }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
+    ```
+  </Tab>
+</Tabs>
+
+### Retrieve public metadata
+
+There are multiple ways to retrieve public metadata.
+
+On the frontend, it's available on the [`User`](/docs/references/javascript/user) object which can be accessed using the [`useUser()`](/docs/hooks/use-user) hook.
+
+On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. It can also be attached to a session token, and the `sessionClaims` of the session token can be retrieved on the [`Auth`](/docs/references/backend/types/auth-object) object. If you need to retrieve public metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token. See the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
 
 ## Private metadata
 
@@ -185,111 +290,6 @@ You can retrieve the private metadata for a user by using the JavaScript Backend
     ```
   </Tab>
 </Tabs>
-
-## Public metadata
-
-Public metadata is accessible by both the frontend and the backend, but can only be set on the backend. This is useful for storing data that you want to expose to the frontend, but don't want the user to be able to modify. For example, you could store a custom role for a user.
-
-### Set public metadata
-
-<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
-  <Tab>
-    <Include src="_partials/backend/usage" />
-
-    ```ts {{ filename: 'route.ts' }}
-    export async function POST(req) {
-      const { role, userId } = await req.json()
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          role,
-        },
-      })
-
-      return Response.json({ success: true })
-    }
-    ```
-
-    <If sdk="nextjs">
-      If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
-
-      ```ts
-      const client = await clerkClient()
-
-      const response = await client.users.updateUserMetadata()
-      ```
-    </If>
-  </Tab>
-
-  <Tab>
-    ```ts {{ filename: 'public.ts' }}
-    import { clerkClient } from '@clerk/express'
-
-    app.post('/updateRole', async (req, res) => {
-      const { role, userId } = req.body
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          role,
-        },
-      })
-      res.status(200).json({ success: true })
-    })
-    ```
-  </Tab>
-
-  <Tab>
-    ```go {{ filename: 'public.go' }}
-    var client clerk.Client
-
-    func addStripeCustomerID(user *clerk.User, role string) error {
-        Role := map[string]interface{}{
-            "role": role,
-        }
-      user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-        PublicMetadata: role,
-      })
-
-      if err != nil {
-        panic(err)
-      }
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```ruby {{ filename: 'public.rb' }}
-    # ruby json example with a private metadata and stripe id
-    require 'clerk'
-    require 'json'
-
-    publicMetadata = {
-      "role": "awesome-user",
-    }
-
-    clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-    clerk.users.updateMetadata("user_xyz", public_metadata: publicMetadata)
-    ```
-  </Tab>
-
-  <Tab>
-    ```bash {{ filename: 'curl.sh' }}
-    curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-      "public_metadata": {
-        "role": "shopper"
-      }
-    }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-    ```
-  </Tab>
-</Tabs>
-
-### Retrieve public metadata
-
-There are multiple ways to retrieve public metadata.
-
-On the frontend, it's available on the [`User`](/docs/references/javascript/user) object which can be accessed using the [`useUser()`](/docs/hooks/use-user) hook.
-
-On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. It can also be attached to a session token, and the `sessionClaims` of the session token can be retrieved on the [`Auth`](/docs/references/backend/types/auth-object) object. If you need to retrieve public metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token. See the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
 
 ## Unsafe metadata
 

@@ -199,6 +199,7 @@ The `useCheckout()` hook can be used with a context provider for managing state 
       <Tab>
         ```tsx {{ filename: 'src/components/SubscriptionPage.tsx', collapsible: true }}
         import { CheckoutProvider } from '@clerk/clerk-react/experimental'
+        import { ClerkLoaded } from '@clerk/clerk-react'
         import { CheckoutFlow } from './CheckoutFlow'
 
         export function SubscriptionPage() {
@@ -209,7 +210,9 @@ The `useCheckout()` hook can be used with a context provider for managing state 
               <div>
                 <h1>Upgrade Your Plan</h1>
                 <p>You are about to subscribe to our monthly plan.</p>
-                <CheckoutFlow />
+                <ClerkLoaded>
+                  <CheckoutFlow />
+                </ClerkLoaded>
               </div>
             </CheckoutProvider>
           )
@@ -251,23 +254,23 @@ The `useCheckout()` hook can be used with a context provider for managing state 
         function PaymentSection() {
           const { checkout } = useCheckout()
 
-          const { isConfirming, confirm, complete, error } = checkout
+          const { isConfirming, confirm, finalize, error } = checkout
 
           const [isProcessing, setIsProcessing] = useState(false)
-          const [selectedMethod, setSelectedMethod] = useState<(typeof data)[number] | null>(null)
+          const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
 
           const submitSelectedMethod = async () => {
-            if (isProcessing || !selectedMethod) return
+            if (isProcessing || !paymentMethodId) return
             setIsProcessing(true)
 
             try {
               // Confirm checkout with payment method
               await confirm({
-                paymentSourceId: selectedMethod.id,
+                paymentSourceId: paymentMethodId,
               })
-              // Calling `.complete` enables you to sync the client side state with the server side state of your users.
+              // Calling `.finalize` enables you to sync the client side state with the server side state of your users.
               // It revalidates all authorization checks computed within server components.
-              await complete({ redirectUrl: '/dashboard' })
+              await finalize({ redirectUrl: '/dashboard' })
             } catch (error) {
               console.error('Payment failed:', error)
             } finally {
@@ -277,7 +280,7 @@ The `useCheckout()` hook can be used with a context provider for managing state 
 
           return (
             <>
-              <PaymentMethods onChange={setSelectedMethod} />
+              <PaymentMethods onChange={setPaymentMethodId} />
 
               {error && <div>{error.message}</div>}
 
@@ -316,7 +319,13 @@ The `useCheckout()` hook can be used with a context provider for managing state 
     ```tsx {{ filename: 'src/components/UpgradeButton.tsx' }}
     import { useCheckout } from '@clerk/clerk-react/experimental'
 
-    export function UpgradeButton({ planId, planPeriod }) {
+    export function UpgradeButton({
+      planId,
+      planPeriod,
+    }: {
+      planId: string
+      planPeriod: 'month' | 'annual'
+    }) {
       // Pass options directly to the hook when not using a provider.
       const { checkout } = useCheckout({
         planId,

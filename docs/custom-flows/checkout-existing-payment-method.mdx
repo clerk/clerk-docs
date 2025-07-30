@@ -1,11 +1,11 @@
 ---
 title: Build a custom checkout flow with an existing payment method
-description: Learn how to use the Clerk API to build a custom checkout flow using an existing payment method.
+description: Learn how to use the Clerk API to build a custom checkout flow that allows users to checkout with an existing payment method.
 ---
 
 <Include src="_partials/billing/api-experimental-guide" />
 
-This guide will walk you through how to build a custom checkout flow using an existing payment method.
+This guide will walk you through how to build a custom user interface for a checkout flow that allows users to checkout **with an existing payment method**. For the custom flow that allows users to **add a new payment method** during checkout, see the [dedicated guide](/docs/custom-flows/checkout-new-payment-method).
 
 <Steps>
   ## Enable billing features
@@ -29,13 +29,13 @@ This guide will walk you through how to build a custom checkout flow using an ex
       1. Uses the [`useCheckout()`](/docs/hooks/use-checkout) hook to initiate and manage the checkout session.
       1. Uses the [`usePaymentMethods()`](/docs/hooks/use-payment-methods) hook to fetch the user's existing payment methods.
       1. Assumes that you have already have a valid `planId`, which you can acquire in many ways:
-         1. Copy from the Clerk Dashboard.
-         1. Use the [Clerk Backend API](TBD).
-         1. Use the new [`usePlans()`](/docs/hooks/use-plans) hook to get the plan details.
+         - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/last-active?path=billing/plans?tab=user).
+         - Use the [Clerk Backend API](TODO).
+         - Use the new [`usePlans()`](/docs/hooks/use-plans) hook to get the plan details.
 
       This example is written for Next.js App Router but can be adapted for any React-based framework.
 
-      ```tsx {{ filename: 'app/components/CheckoutPage.tsx', mark: [[3, 9], 14, 15, 17, 18, 23, [26, 28], [55, 58], [71, 77], [102, 104]] }}
+      ```tsx {{ filename: 'app/checkout/page.tsx' }}
       'use client'
       import * as React from 'react'
       import { SignedIn, ClerkLoaded } from '@clerk/nextjs'
@@ -44,7 +44,7 @@ This guide will walk you through how to build a custom checkout flow using an ex
 
       export default function CheckoutPage() {
         return (
-          <CheckoutProvider planId="cplan_xxxx" planPeriod="month">
+          <CheckoutProvider planId="cplan_xxx" planPeriod="month">
             <ClerkLoaded>
               <SignedIn>
                 <CustomCheckout />
@@ -92,7 +92,7 @@ This guide will walk you through how to build a custom checkout flow using an ex
           pageSize: 20,
         })
 
-        const { isConfirming, confirm, complete, error } = checkout
+        const { isConfirming, confirm, finalize, error } = checkout
 
         const [isProcessing, setIsProcessing] = useState(false)
         const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
@@ -100,7 +100,7 @@ This guide will walk you through how to build a custom checkout flow using an ex
         const defaultMethod = useMemo(() => data?.find((method) => method.isDefault), [data])
 
         const submitSelectedMethod = async () => {
-          const paymentSourceId = paymentMethodId || defaultMethod?.id;
+          const paymentSourceId = paymentMethodId || defaultMethod?.id
           if (isProcessing || !paymentSourceId) return
           setIsProcessing(true)
 
@@ -108,7 +108,7 @@ This guide will walk you through how to build a custom checkout flow using an ex
             // Confirm checkout with payment method
             await confirm({ paymentSourceId })
             // Complete checkout and redirect
-            await finalize({ redirectUrl: '/dashboard' })
+            finalize({ redirectUrl: '/dashboard' })
           } catch (error) {
             console.error('Payment failed:', error)
           } finally {
@@ -128,7 +128,7 @@ This guide will walk you through how to build a custom checkout flow using an ex
                 const methodId = e.target.value
                 const method = data?.find((method) => method.id === methodId)
                 if (method) {
-                  setSelectedMethod(method)
+                  setPaymentMethodId(method.id)
                 }
               }}
             >

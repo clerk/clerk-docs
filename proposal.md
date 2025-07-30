@@ -144,7 +144,7 @@
 - Roles and Permissions
 - Invitations
 - Metadata
-- SSO / Enterprise Connections
+- Manage enterprise SSO connections [sso]
 
 ### Billing
 

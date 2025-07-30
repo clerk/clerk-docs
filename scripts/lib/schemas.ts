@@ -22,10 +22,8 @@ export const VALID_SDKS = [
   'nuxt',
   'vue',
   'ruby',
-  'python',
   'js-backend',
   'sdk-development',
-  'community-sdk',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]

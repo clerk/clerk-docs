@@ -2,7 +2,7 @@
  * Deletes MDX files and cleans up references.
  *
  * At a high level, the script does the following in the /clerk-docs repo:
- * 1. Checks if any other MDX files link to the file to be deleted (fails if found)
+ * 1. Updates any links in MDX files that point to the deleted path
  * 2. Removes the file from the manifest.json
  * 3. Adds a redirect to the redirects/static/docs.json file
  * 4. Deletes the MDX file
@@ -100,6 +100,78 @@ const checkMdxReferences = async (targetPath) => {
   return referencingFiles
 }
 
+const updateMdxLinks = async (deletedPath, newPath) => {
+  const processFile = async (filePath) => {
+    const content = await fs.readFile(filePath, 'utf-8')
+    let updatedContent = content
+
+    const { path: oldBasePath } = splitPathAndHash(deletedPath)
+    const { path: newBasePath, hash: newHash } = splitPathAndHash(newPath)
+
+    // 1. Update markdown links
+    const markdownLinkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${oldBasePath}(?:#[^)]*)?\\)`, 'g')
+    updatedContent = updatedContent.replace(markdownLinkRegex, (match, linkText) => {
+      const existingHash = match.match(/#[^)]*(?=\))/)?.[0] || ''
+      if (existingHash) {
+        console.log(
+          `⚠️ Hash found in markdown link: ${existingHash}. Ensure that the new path has the same hash, or update the hash accordingly.`,
+        )
+      }
+      const finalHash = newHash || existingHash || ''
+      return `[${linkText}](${newBasePath}${finalHash})`
+    })
+
+    // 2. Update JSX/TSX component link props
+    // This regex looks for link="..." or link='...' patterns, being careful about quotes
+    const jsxLinkRegex = new RegExp(`(link=["'])(${oldBasePath}(?:#[^"']*)?)(["'])`, 'g')
+    updatedContent = updatedContent.replace(jsxLinkRegex, (match, prefix, linkPath, suffix) => {
+      const { hash: linkHash } = splitPathAndHash(linkPath)
+      if (linkHash) {
+        console.log(
+          `⚠️ Hash found in JSX link: ${linkHash}. Ensure that the new path has the same hash, or update the hash accordingly.`,
+        )
+      }
+      const finalHash = newHash || linkHash || ''
+      return `${prefix}${newBasePath}${finalHash}${suffix}`
+    })
+
+    // 3. Update link prop in arrays
+    const arrayLinkRegex = new RegExp(`(link:\\s*["'])(${oldBasePath}(?:#[^"']*)?)(["'])`, 'g')
+    updatedContent = updatedContent.replace(arrayLinkRegex, (match, prefix, linkPath, suffix) => {
+      const { hash: linkHash } = splitPathAndHash(linkPath)
+      if (linkHash) {
+        console.log(
+          `⚠️ Hash found in array link: ${linkHash}. Ensure that the new path has the same hash, or update the hash accordingly.`,
+        )
+      }
+      const finalHash = newHash || linkHash || ''
+      return `${prefix}${newBasePath}${finalHash}${suffix}`
+    })
+
+    if (content !== updatedContent) {
+      await fs.writeFile(filePath, updatedContent)
+      console.log(`Updated links in ${filePath}`)
+    }
+  }
+
+  // Recursively process all MDX files
+  const processDirectory = async (dir) => {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+
+      if (entry.isDirectory()) {
+        await processDirectory(fullPath)
+      } else if (entry.name.endsWith('.mdx')) {
+        await processFile(fullPath)
+      }
+    }
+  }
+
+  await processDirectory(DOCS_DIR)
+}
+
 // Remove the path from manifest.json
 const removeFromManifest = async (targetPath) => {
   const manifest = await readJsonFile(MANIFEST_FILE)
@@ -174,7 +246,6 @@ const addRedirect = async (deletedPath, redirectTo) => {
     console.log(`Redirect already exists for ${deletedPath}, updating destination to ${redirectTo}`)
     existingRedirect.destination = redirectTo
   } else {
-    console.log(`Adding new redirect: ${deletedPath} → ${redirectTo}`)
     redirects.push({
       source: deletedPath,
       destination: redirectTo,
@@ -205,20 +276,24 @@ const deleteDoc = async (targetPath, redirectTo = '/docs/') => {
     throw new Error(`Target file does not exist: ${fullPath}`)
   }
 
-  console.log(`🔍 Checking for references to ${targetPath}...`)
+  // console.log(`🔍 Checking for references to ${targetPath}...`)
 
-  // Check if any files reference this path
-  const referencingFiles = await checkMdxReferences(targetPath)
+  // // Check if any files reference this path
+  // const referencingFiles = await checkMdxReferences(targetPath)
 
-  if (referencingFiles.length > 0) {
-    console.error(`❌ Cannot delete ${targetPath} - it is referenced by the following files:`)
-    referencingFiles.forEach((file) => console.error(`   • ${file}`))
-    throw new Error(`File ${targetPath} is still referenced by ${referencingFiles.length} other files`)
-  }
+  // if (referencingFiles.length > 0) {
+  //   console.error(`❌ Cannot delete ${targetPath} - it is referenced by the following files:`)
+  //   referencingFiles.forEach((file) => console.error(`   • ${file}`))
+  //   throw new Error(`File ${targetPath} is still referenced by ${referencingFiles.length} other files`)
+  // }
 
-  console.log(`✅ No references found to ${targetPath}`)
+  // console.log(`✅ No references found to ${targetPath}`)
 
   try {
+    // Update links in MDX files
+    console.log(`🔗 Updating links in MDX files...`)
+    await updateMdxLinks(targetPath, redirectTo)
+
     // Remove from manifest
     console.log(`📝 Removing ${targetPath} from manifest.json...`)
     await removeFromManifest(targetPath)
@@ -228,7 +303,7 @@ const deleteDoc = async (targetPath, redirectTo = '/docs/') => {
     await addRedirect(targetPath, redirectTo)
 
     // Delete the file
-    console.log(`🗑️  Deleting file: ${fullPath}`)
+    console.log(`🗑️ Deleting file: ${fullPath}`)
     await fs.unlink(fullPath)
 
     console.log(`✅ Successfully deleted ${targetPath}`)

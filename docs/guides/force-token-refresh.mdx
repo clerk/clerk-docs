@@ -27,19 +27,27 @@ The `user.reload()` method refreshes the current user's `User` object and their 
 
 ## Example
 
-Say you're building a user profile page. You want to allow the user to update their information, and also allow them to set and update custom information. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/users/metadata), which will get stored on the user's `User` object as `User.publicMetadata`.
+Say you're building a user profile page. You want to allow the user to update their information, and also allow them to set and update custom information. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/users/metadata), which will get stored on the user's `User` object.
 
-When using metadata, it's recommended to [store it in the user's session token](/docs/backend-requests/custom-session-token) to avoid making a network request to Clerk's Backend API when retrieving it.
+When using metadata, it's recommended to [store it in the user's session token](/docs/backend-requests/custom-session-token) to avoid making an API request to Clerk's Backend API when retrieving it.
 
 However, when retrieving the user's metadata from the session token, because the session token refreshes every 60 seconds, the metadata may not be up to date if the token hasn't refreshed yet. In this case, you'd want to force a session token refresh. This is when you could use `getToken({ skipCache: true })`.
 
-So why does this example use `user.reload()` instead? Because on this user's profile page, the metadata is not the only information the user can update. They can also update their first and last name. Therefore, you not only want to refresh the session token, which is where the metadata is retrieved from, but also the `User` object, which is where the first and last name is retrieved from. This is why `user.reload()` is the better option. If you were only retrieving the user's metadata, and not using the `User` object, you could use `getToken({ skipCache: true })` instead.
+The following example uses `user.reload()` instead, because on this user's profile page, the metadata is not the only information the user can update. They can also update their first and last name. Therefore, you not only want to refresh the session token, which is where the metadata is retrieved from, but also the `User` object, which is where the first and last name is retrieved from. This is why `user.reload()` is the better option. If you were only retrieving the user's metadata, and not using the `User` object, you could use `getToken({ skipCache: true })` instead.
 
-**This example requires that the user's metadata has been configured to be stored in the session token under the `metadata` key.** To do so, follow the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
+**This example requires that the user's birthday has been configured to be stored in the session token** like:
+
+```json
+{
+  "birthday": "{{user.public_metadata.birthday}}"
+}
+```
+
+To do so, follow the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
 
 <Tabs items={["API route", "Client-side page"]}>
   <Tab>
-    The API route that uses Clerk's [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata) method to update the user's metadata.
+    The API route that uses Clerk's [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata) method to update the user's birthday metadata.
 
     ```ts {{ filename: 'app/api/update-user-metadata/route.ts', collapsible: true }}
     import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -47,7 +55,7 @@ So why does this example use `user.reload()` instead? Because on this user's pro
 
     export async function POST(req: NextRequest) {
       // Use `req.json()` to parse the request body
-      const metadata = await req.json()
+      const { birthday } = await req.json()
 
       // Use `auth()` to access the current user's ID
       const { userId } = await auth()
@@ -60,21 +68,20 @@ So why does this example use `user.reload()` instead? Because on this user's pro
       // Use `clerkClient()` to access the Clerk client
       const client = await clerkClient()
 
-      // Use the Backend SDK's `updateUserMetadata()` method to update the user's metadata
+      // Use the Backend SDK's `updateUserMetadata()` method to update the user's birthday
       await client.users.updateUserMetadata(userId, {
         publicMetadata: {
-          ...metadata,
+          birthday,
         },
       })
 
-      // Return the Backend User object
-      return NextResponse.json({ user: user }, { status: 200 })
+      return NextResponse.json({ success: true }, { status: 200 })
     }
     ```
   </Tab>
 
   <Tab>
-    The client-side page that allows the user to update their first and last name, and their metadata. It retrieves the user's metadata from the session token's claims under the `metadata` key. To update the user's metadata, it calls the `/update-user-metadata` API route, and then uses the [`user.reload()`](/docs/references/javascript/user#reload) method to refresh the user's session token and `User` object.
+    The client-side page that allows the user to update their first and last name and their birthday. It retrieves the user's birthday from the session token's claims under the `birthday` key. To update the user's birthday, it calls the `/update-user-metadata` API route, and then uses the [`user.reload()`](/docs/references/javascript/user#reload) method to refresh the user's session token and `User` object.
 
     ```tsx {{ filename: 'app/user-profile/page.tsx', collapsible: true }}
     'use client'
@@ -89,7 +96,7 @@ So why does this example use `user.reload()` instead? Because on this user's pro
       // which contains properties like `firstName`, `lastName`, and `publicMetadata`
       const { user } = useUser()
 
-      const [metadata, setMetadata] = useState('')
+      const [birthday, setBirthday] = useState('')
       const [firstName, setFirstName] = useState('')
       const [lastName, setLastName] = useState('')
       const [status, setStatus] = useState<'loading' | 'success' | 'error' | null>(null)
@@ -100,31 +107,30 @@ So why does this example use `user.reload()` instead? Because on this user's pro
         if (user) {
           setFirstName(user.firstName || '')
           setLastName(user.lastName || '')
-          setMetadata(JSON.stringify(sessionClaims?.metadata || {}, null, 2)) // Retrieve the user's metadata from the session token's claims under the `metadata` key
+          // Retrieve the user's birthday from the session token's claims under the `birthday` key
+          setBirthday(sessionClaims?.birthday || '')
         }
-      }, [user])
+      }, [user, sessionClaims])
 
-      async function updateUserMetadata(metadata: string) {
+      async function updateUserBirthday(birthday: string) {
         try {
-          const parsedMetadata = JSON.parse(metadata)
-
           const response = await fetch('/api/update-user-metadata', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(parsedMetadata),
+            body: JSON.stringify({ birthday }),
           })
 
           const result = await response.json()
 
           if (!response.ok) {
-            throw new Error(result.error || 'Failed to update metadata')
+            throw new Error(result.error || 'Failed to update birthday')
           }
 
           return { success: true }
         } catch (err: any) {
-          return { error: err.message || 'Failed to update metadata' }
+          return { error: err.message || 'Failed to update birthday' }
         }
       }
 
@@ -155,8 +161,8 @@ So why does this example use `user.reload()` instead? Because on this user's pro
           updates.push(updateUserField('lastName', lastName))
         }
 
-        if (metadata) {
-          updates.push(updateUserMetadata(metadata))
+        if (birthday !== (sessionClaims?.metadata?.birthday || '')) {
+          updates.push(updateUserBirthday(birthday))
         }
 
         // If no fields have been filled or modified, show error
@@ -218,14 +224,12 @@ So why does this example use `user.reload()` instead? Because on this user's pro
             </div>
 
             <div>
-              <label htmlFor="metadata">Update your metadata (JSON format):</label>
-              <textarea
-                id="metadata"
-                value={metadata}
-                onChange={(e) => setMetadata(e.target.value)}
-                rows={4}
-                style={{ width: '100%', marginBottom: '1rem' }}
-                placeholder='e.g. {"birthday":"2000-01-01"}'
+              <label htmlFor="birthday">Birthday (YYYY-MM-DD):</label>
+              <input
+                id="birthday"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
               />
             </div>
 

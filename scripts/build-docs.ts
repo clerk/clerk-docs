@@ -1,3 +1,4 @@
+import yaml from 'yaml'
 // Things this script does
 
 // Validates
@@ -22,7 +23,7 @@
 
 // Transforms
 // - Content Integration:
-//   - Embeds partial content into markdown files
+//   - Embeds partial and tooltip content into markdown files
 //   - Embeds typedoc content where referenced
 //   - Handles special character encoding in typedoc tables
 // - Link Processing:
@@ -59,7 +60,15 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import { createBlankStore, DocsMap, getCoreDocCache, getMarkdownCache, markDocumentDirty, Store } from './lib/store'
+import {
+  createBlankStore,
+  DocsMap,
+  getCoreDocCache,
+  getMarkdownCache,
+  getScopedDocCache,
+  markDocumentDirty,
+  Store,
+} from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -84,6 +93,9 @@ import {
 import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prompts'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
+import { VFile } from 'vfile'
+import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
+import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -117,6 +129,14 @@ async function main() {
       inputPath: '../prompts',
       outputPath: '_prompts',
     },
+    tooltips: {
+      inputPath: '../docs/_tooltips',
+      outputPath: '_tooltips',
+    },
+    siteFlags: {
+      inputPath: '../flags.json',
+      outputPath: '_flags.json',
+    },
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
       '/docs/core-1',
@@ -141,6 +161,15 @@ async function main() {
         'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
         'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/node.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/expo.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/fastify.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/chrome-extension.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
+        'upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -148,6 +177,7 @@ async function main() {
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
       },
       partials: {},
+      tooltips: {},
     },
     validSdks: VALID_SDKS,
     manifestOptions: {
@@ -194,6 +224,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
+  const getTooltipsFolder = readTooltipsFolder(config)
+  const getTooltipsMarkdown = readTooltipsMarkdown(config, store)
   const getTypedocsFolder = readTypedocsFolder(config)
   const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
   const parseMarkdownFile = parseInMarkdownFile(config, store)
@@ -201,9 +233,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const writeSdkFile = writeSDKFile(config, store)
   const markdownCache = getMarkdownCache(store)
   const coreDocCache = getCoreDocCache(store)
+  const scopedDocCache = getScopedDocCache(store)
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
+  const writeTooltipsToDist = writeTooltips(config, store)
 
   abortSignal?.throwIfAborted()
 
@@ -237,6 +271,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  let siteFlags: Flags = {}
+
+  if (config.siteFlags) {
+    siteFlags = await readSiteFlags(config)
+    console.info(`✓ Read ${Object.keys(siteFlags).length} site flags`)
+  }
+
+  abortSignal?.throwIfAborted()
+
   const apiErrorsFiles = await generateApiErrorDocs(config)
   if (!config.flags.skipApiErrors) {
     console.info('✓ Generated API Error MDX files')
@@ -257,6 +300,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
+
+  const cachedTooltipsSize = store.tooltips.size
+  const tooltips = await getTooltipsMarkdown((await getTooltipsFolder()).map((item) => item.path))
+  console.info(`✓ Loaded in ${tooltips.length} tooltips (${cachedTooltipsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
@@ -514,6 +561,50 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  const validatedTooltips = await Promise.all(
+    tooltips.map(async (tooltip) => {
+      if (config.tooltips === null) {
+        throw new Error('Tooltips are not enabled')
+      }
+
+      const tooltipPath = `${config.tooltips.inputPathRelative}/${tooltip.path}`
+
+      try {
+        let node: Node | null = null
+        const links: Set<string> = new Set()
+
+        const vfile = await remark()
+          .use(remarkMdx)
+          .use(
+            validateAndEmbedLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+              links.add(linkInTooltip)
+            }),
+          )
+          .use(() => (tree, vfile) => {
+            node = tree
+          })
+          .process(tooltip.vfile)
+
+        if (node === null) {
+          throw new Error(errorMessages['tooltip-parse-error'](tooltip.path))
+        }
+
+        return {
+          ...tooltip,
+          vfile,
+          node: node as Node,
+          links,
+        }
+      } catch (error) {
+        console.error(`✗ Error validating tooltip: ${tooltip.path}`)
+        throw error
+      }
+    }),
+  )
+  console.info(`✓ Validated all tooltips`)
+
+  abortSignal?.throwIfAborted()
+
   const validatedTypedocs = await Promise.all(
     typedocs.map(async (typedoc) => {
       const filePath = path.join(config.typedocRelativePath, typedoc.path)
@@ -584,6 +675,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   await writeFile(
     'manifest.json',
     JSON.stringify({
+      flags: siteFlags,
       navigation: await traverseTree(
         { items: sdkScopedManifest },
         async (item) => {
@@ -706,17 +798,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         await writeFile(
           doc.file.filePathInDocsFolder,
           `---
-template: wide
----
+${yaml.stringify({
+  template: 'wide',
+  redirectPage: 'true',
+  availableSdks: doc.sdk.join(','),
+  notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
+})}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
-        )
-
-        await writeFile(
-          `~/${doc.file.filePathInDocsFolder}`,
-          `---
-template: wide
----
-<SDKDocRedirectPage instant title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
         )
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
@@ -735,30 +823,36 @@ template: wide
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 
-          const vfile = await remark()
-            .use(remarkFrontmatter)
-            .use(remarkMdx)
-            .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-            .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-            .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
-            .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-            .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
-            .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-            .use(
-              insertFrontmatter({
-                canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
-                lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
+            remark()
+              .use(remarkFrontmatter)
+              .use(remarkMdx)
+              .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
+              .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+              .use(
+                insertFrontmatter({
+                  sdkScoped: 'true',
+                  canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
+                  lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                  availableSdks: doc.sdk?.join(','),
+                  notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
+                  activeSdk: targetSdk,
+                }),
+              )
+              .process({
+                path: doc.file.filePath,
+                value: doc.fileContent,
               }),
-            )
-            .process({
-              path: doc.file.filePath,
-              value: doc.fileContent,
-            })
+          )
 
           await writeSdkFile(
             targetSdk,
             doc.file.filePathInDocsFolder,
-            typedocTableSpecialCharacters.decode(String(vfile)),
+            typedocTableSpecialCharacters.decode(vfile.value as string),
           )
 
           return vfile
@@ -779,6 +873,8 @@ template: wide
 
   const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
   const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
+
+  const headingValidationVFiles: VFile[] = []
 
   for (const doc of docsWithOnlyIfComponents) {
     // Extract all SDK values from <If /> all components
@@ -807,7 +903,7 @@ template: wide
     })
 
     for (const sdk of availableSDKs) {
-      await remark()
+      const vfile = await remark()
         .use(remarkFrontmatter)
         .use(remarkMdx)
         .use(() => (inputTree) => {
@@ -837,6 +933,8 @@ template: wide
           path: doc.file.filePath,
           value: String(doc.vfile),
         })
+
+      headingValidationVFiles.push(vfile)
     }
   }
 
@@ -878,6 +976,13 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
+  if (config.tooltips) {
+    await writeTooltipsToDist(validatedTooltips)
+    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
+  }
+
+  abortSignal?.throwIfAborted()
+
   if (config.llms?.fullPath || config.llms?.overviewPath) {
     const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
 
@@ -894,16 +999,32 @@ template: wide
 
   abortSignal?.throwIfAborted()
 
+  if (config.siteFlags) {
+    await writeSiteFlags(config, siteFlags)
+    console.info(`✓ Wrote ${Object.keys(siteFlags).length} site flags to disk`)
+  }
+
+  abortSignal?.throwIfAborted()
+
   const flatSdkSpecificVFiles = sdkSpecificVFiles
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
   const coreVFiles = coreDocs.map((doc) => doc.vfile)
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
+  const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
   const warnings = reporter(
-    [...coreVFiles, ...partialsVFiles, ...typedocVFiles, ...flatSdkSpecificVFiles, manifestVfile],
+    [
+      ...coreVFiles,
+      ...partialsVFiles,
+      ...tooltipsVFiles,
+      ...typedocVFiles,
+      ...flatSdkSpecificVFiles,
+      manifestVfile,
+      ...headingValidationVFiles,
+    ],
     {
       quiet: true,
     },

@@ -21,19 +21,13 @@ The `getToken()` method retrieves the current user's session token. If `skipCach
 - **Client-side:** Access `getToken()` from the [`useSession()`](/docs/hooks/use-session) or [`useAuth()`](/docs/hooks/use-auth) hooks.
 - **Server-side:** Access `getToken()` from the [`Auth`](/docs/references/backend/types/auth-object) object.
 
-## `user.reload()`
+### Example
 
-The `user.reload()` method refreshes the current user's `User` object and their session token. It can be accessed from the [`useUser()`](/docs/hooks/use-user) hook.
+Say you're building a user profile page and want to allow the user to set their birthday, but Clerk doesn't collect birthdays. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/users/metadata), which will get stored on the user's `User` object.
 
-## Example
+When using metadata, it's recommended to [store it in the user's session token](/docs/backend-requests/custom-session-token) to avoid making an API request to Clerk's Backend API when retrieving it, as API requests are slower and are subject to rate limits.
 
-Say you're building a user profile page. You want to allow the user to update their information, and also allow them to set and update custom information. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/users/metadata), which will get stored on the user's `User` object.
-
-When using metadata, it's recommended to [store it in the user's session token](/docs/backend-requests/custom-session-token) to avoid making an API request to Clerk's Backend API when retrieving it.
-
-However, when retrieving the user's metadata from the session token, because the session token refreshes every 60 seconds, the metadata may not be up to date if the token hasn't refreshed yet. In this case, you'd want to force a session token refresh. This is when you could use `getToken({ skipCache: true })`.
-
-The following example uses `user.reload()` instead, because on this user's profile page, the metadata is not the only information the user can update. They can also update their first and last name. Therefore, you not only want to refresh the session token, which is where the metadata is retrieved from, but also the `User` object, which is where the first and last name is retrieved from. This is why `user.reload()` is the better option. If you were only retrieving the user's metadata, and not using the `User` object, you could use `getToken({ skipCache: true })` instead.
+However, when retrieving the user's metadata from the session token, because the session token refreshes every 60 seconds, the metadata may not be up to date if the token hasn't refreshed yet. In this case, you'd want to force a session token refresh after updating the metadata to ensure that when the metadata is retrieved, it is the latest version.
 
 **This example requires that the user's birthday has been configured to be stored in the session token** like:
 
@@ -47,7 +41,7 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
 
 <Tabs items={["API route", "Client-side page"]}>
   <Tab>
-    The API route that uses Clerk's [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata) method to update the user's birthday metadata.
+    The `/update-user-metadata` API route uses Clerk's [`updateUserMetadata()`](/docs/references/backend/user/update-user-metadata) method from the [JavaScript Backend SDK](/docs/references/backend/overview) to update the user's birthday metadata.
 
     ```ts {{ filename: 'app/api/update-user-metadata/route.ts', collapsible: true }}
     import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -66,6 +60,8 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
       }
 
       // Use `clerkClient()` to access the Clerk client
+      // The Clerk client gives you access to Clerk Backend API resources,
+      // such as the `users` resource, which includes methods for managing users
       const client = await clerkClient()
 
       // Use the Backend SDK's `updateUserMetadata()` method to update the user's birthday
@@ -81,36 +77,27 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
   </Tab>
 
   <Tab>
-    The client-side page that allows the user to update their first and last name and their birthday. It retrieves the user's birthday from the session token's claims under the `birthday` key. To update the user's birthday, it calls the `/update-user-metadata` API route, and then uses the [`user.reload()`](/docs/references/javascript/user#reload) method to refresh the user's session token and `User` object.
+    The `/user-profile` page allows the user to update their birthday. It retrieves the user's birthday from the session token's claims under the `birthday` key. To update the user's birthday, it calls the `/update-user-metadata` API route, which handles the metadata update, and then forces a session token refresh using `getToken({ skipCache: true })`.
 
     ```tsx {{ filename: 'app/user-profile/page.tsx', collapsible: true }}
     'use client'
     import { useState, useEffect } from 'react'
-    import { useAuth, useUser } from '@clerk/nextjs'
+    import { useAuth } from '@clerk/nextjs'
 
     export default function Page() {
       // Use `useAuth()` to access the authentication context,
-      // including the user's session claims, like `metadata`
-      const { isLoaded, userId, sessionClaims } = useAuth()
-      // Use `useUser()` to access the `User` object,
-      // which contains properties like `firstName`, `lastName`, and `publicMetadata`
-      const { user } = useUser()
+      // including the user's session claims
+      const { isLoaded, userId, sessionClaims, getToken } = useAuth()
 
       const [birthday, setBirthday] = useState('')
-      const [firstName, setFirstName] = useState('')
-      const [lastName, setLastName] = useState('')
       const [status, setStatus] = useState<'loading' | 'success' | 'error' | null>(null)
       const [error, setError] = useState<string | null>(null)
 
       // Update state once the user's data loads
       useEffect(() => {
-        if (user) {
-          setFirstName(user.firstName || '')
-          setLastName(user.lastName || '')
-          // Retrieve the user's birthday from the session token's claims under the `birthday` key
-          setBirthday(sessionClaims?.birthday || '')
-        }
-      }, [user, sessionClaims])
+        // Retrieve the user's birthday from the session token's claims under the `birthday` key
+        setBirthday((sessionClaims?.birthday as string) || '')
+      }, [sessionClaims])
 
       async function updateUserBirthday(birthday: string) {
         try {
@@ -128,20 +115,13 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
             throw new Error(result.error || 'Failed to update birthday')
           }
 
+          // Force token refresh
+          // so that the token is updated with the new birthday metadata
+          await getToken({ skipCache: true })
+
           return { success: true }
         } catch (err: any) {
           return { error: err.message || 'Failed to update birthday' }
-        }
-      }
-
-      async function updateUserField(field: 'firstName' | 'lastName', value: string) {
-        try {
-          await user?.update({
-            [field]: value,
-          })
-          return { success: true }
-        } catch (err: any) {
-          return { error: err.message || `Failed to update ${field}` }
         }
       }
 
@@ -150,44 +130,24 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
         setStatus('loading')
         setError(null)
 
-        const updates = []
-
-        // Check which fields have been modified and need updating
-        if (firstName !== (user?.firstName || '')) {
-          updates.push(updateUserField('firstName', firstName))
-        }
-
-        if (lastName !== (user?.lastName || '')) {
-          updates.push(updateUserField('lastName', lastName))
-        }
-
-        if (birthday !== (sessionClaims?.metadata?.birthday || '')) {
-          updates.push(updateUserBirthday(birthday))
-        }
-
-        // If no fields have been filled or modified, show error
-        if (updates.length === 0) {
-          setError('Please fill in at least one field to update')
+        // Check if the birthday has been modified
+        if (birthday === (sessionClaims?.birthday || '')) {
+          setError('Please enter a new birthday to update')
           setStatus('error')
           return
         }
 
         try {
-          // Execute all updates in parallel
-          const results = await Promise.all(updates)
+          const result = await updateUserBirthday(birthday)
 
-          // Check if any updates failed
-          const failedUpdates = results.filter((result) => result.error)
-
-          if (failedUpdates.length > 0) {
-            setError(failedUpdates.map((r) => r.error).join(', '))
+          if (result.error) {
+            setError(result.error)
             setStatus('error')
           } else {
-            user?.reload() // Refresh the session and the User object
             setStatus('success')
           }
         } catch (err: any) {
-          setError(err.message || 'Failed to update user information')
+          setError(err.message || 'Failed to update birthday')
           setStatus('error')
         }
       }
@@ -196,33 +156,13 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
       if (!isLoaded) return <div>Loading...</div>
 
       // Check if the user is authenticated
-      if (!userId) return <div>Not authenticated</div>
+      if (!userId) return <div>Sign in to view your profile</div>
 
       return (
         <div style={{ maxWidth: 400, margin: '2rem auto' }}>
-          <h1>Welcome, {userId}</h1>
+          <h1>Update Your Birthday</h1>
 
           <form onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="firstName">First Name:</label>
-              <input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="lastName">Last Name:</label>
-              <input
-                id="lastName"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-            </div>
-
             <div>
               <label htmlFor="birthday">Birthday (YYYY-MM-DD):</label>
               <input
@@ -234,11 +174,11 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
             </div>
 
             <button type="submit" disabled={status === 'loading'}>
-              {status === 'loading' ? 'Updating...' : 'Update'}
+              {status === 'loading' ? 'Updating...' : 'Update Birthday'}
             </button>
           </form>
 
-          {status === 'success' && <p style={{ color: 'green' }}>Updated successfully!</p>}
+          {status === 'success' && <p style={{ color: 'green' }}>Birthday updated successfully!</p>}
           {status === 'error' && <p style={{ color: 'red' }}>{error}</p>}
         </div>
       )
@@ -246,3 +186,9 @@ To do so, follow the [guide on customizing your session token](/docs/backend-req
     ```
   </Tab>
 </Tabs>
+
+## `user.reload()`
+
+The `user.reload()` method refreshes the current user's `User` object and their session token. It can be accessed from the [`useUser()`](/docs/hooks/use-user) hook.
+
+<Include src="_partials/user-reload" />

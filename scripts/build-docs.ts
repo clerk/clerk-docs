@@ -175,6 +175,13 @@ async function main() {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+
+        // temp migration ignores
+        'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
+        'backend/organization-sync-options.mdx': ['link-doc-not-found'],
+        'nextjs/clerk-middleware-options.mdx': ['link-doc-not-found'],
+        'shared/use-organization-params.mdx': ['link-doc-not-found'],
+        'types/check-authorization-params-from-session-claims.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

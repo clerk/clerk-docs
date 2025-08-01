@@ -4,9 +4,6 @@
 - Guides (book)
 - Examples (plus-circle)
 - Reference (globe)
-  - SDK Reference
-  - API Reference
-  - UI Components
 
 ## Getting Started [getting-started]
 

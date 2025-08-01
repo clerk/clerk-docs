@@ -175,6 +175,12 @@ async function main() {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+
+        // temp migration ignores
+        'backend/session.mdx': ['link-doc-not-found'],
+        'clerk-react/use-auth.mdx': ['link-doc-not-found'],
+        'types/use-auth-return.mdx': ['link-doc-not-found'],
+        'types/user-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

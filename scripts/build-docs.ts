@@ -175,6 +175,14 @@ async function main() {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+
+        // temp migration ignores
+        'backend/allowlist-identifier.mdx': ['link-doc-not-found'],
+        'backend/email-address.mdx': ['link-doc-not-found'],
+        'backend/organization-membership-public-user-data.mdx': ['link-doc-not-found'],
+        'backend/phone-number.mdx': ['link-doc-not-found'],
+        'backend/verify-webhook.mdx': ['link-doc-not-found'],
+        'types/user-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

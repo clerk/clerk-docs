@@ -89,7 +89,7 @@
     - Use OAuth for Single Sign-On (SSO)
     - Use OAuth for scoped access
     - Verify OAuth tokens
-- Session Token customization
+- Session token customization [session-token]
 - Webhooks
   - Overview
   - Syncing data with webhooks [syncing]

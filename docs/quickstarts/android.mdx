@@ -18,9 +18,53 @@ description: Add authentication and user management to your Android app with Cle
 
   Create a new Android project in Android Studio using the "Empty Activity" template. This tutorial names the app `MyClerkApp`. Code examples reference this name and will need to be updated with your app's name in order to work properly.
 
-  Ensure that your project's minimum SDK version is set to 24 or higher, as this is the minimum required by the Clerk Android SDK.
+  Ensure that your project's minimum SDK version is set to 24 or higher, and that your project's Java version is set to 17 or higher, as these are the minimum requirements for the Clerk Android SDK.
 
-  <Include src="_partials/android/setup-android-sdk" />
+  Add the Clerk Android SDK and Android's Lifecycle ViewModel Compose library to your application's dependencies:
+
+  ```gradle
+  dependencies {
+     ...
+     implementation("com.clerk:clerk-android:<latest-version>")
+     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
+     ...
+  }
+  ```
+
+  ## Initialize Clerk
+
+  In `app/src/main/java/com/example/myclerkapp/`, create a Kotlin class named `MyClerkApp`. Add the following code to:
+
+  <SignedIn>
+    1. Create a subclass of `Application` named after your application (e.g., `MyClerkApp`).
+    1. In this subclass, override the `onCreate()` method and call `Clerk.initialize()` to initialize the Clerk Android SDK with your application context (`this`) and Clerk Publishable Key. Your Publishable Key can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  </SignedIn>
+
+  <SignedOut>
+    1. Create a subclass of `Application` named after your application (e.g., `MyClerkApp`).
+    1. In this subclass, override the `onCreate()` method and call `Clerk.initialize()` to initialize the Clerk Android SDK with your application context (`this`) and Clerk Publishable Key.
+
+    To find your Publishable Key:
+
+    1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+    1. Copy your Clerk Publishable Key. It's prefixed with `pk_test_` for development instances and `pk_live_` for production instances.
+  </SignedOut>
+
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MyClerkApp.kt', mark: [[7, 10]] }}
+  import.com.clerk.Clerk
+
+  class MyClerkApp: Application() {
+      override fun onCreate() {
+        super.onCreate()
+        ...
+        Clerk.initialize(
+            this,
+            publishableKey = {{pub_key}}
+        )
+        ...
+      }
+  }
+  ```
 
   ## Listen for SDK initialization and authentication events
 
@@ -360,7 +404,7 @@ description: Add authentication and user management to your Android app with Cle
             if (isSignUp) {
               Text("Already have an account? Sign in")
             } else {
-              Text("Don't have an account? Sign up")  
+              Text("Don't have an account? Sign up")
             }
         }
     }
@@ -433,7 +477,7 @@ description: Add authentication and user management to your Android app with Cle
   class MainViewModel: ViewModel() {
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
     val uiState = _uiState.asStateFlow()
-   
+
     init {
         combine(Clerk.isInitialized, Clerk.user) { isInitialized, user ->
             _uiState.value = when {
@@ -450,7 +494,7 @@ description: Add authentication and user management to your Android app with Cle
         viewModelScope.launch() {
             Clerk.signOut()
             .onSuccess { _uiState.value = MainUiState.SignedOut }
-            .onFailure { 
+            .onFailure {
                 // See https://clerk.com/docs/custom-flows/error-handling
                 // for more info on error handling
                 Log.e("MainViewModel", it.longErrorMessageOrNull, it.throwable)

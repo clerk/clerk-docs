@@ -144,7 +144,8 @@
 - Roles and Permissions
 - Invitations
 - Metadata
-- SSO / Enterprise Connections
+- Manage enterprise SSO connections [sso]
+- Use org slugs in URLs [org-slugs-in-urls]
 
 ### Billing
 

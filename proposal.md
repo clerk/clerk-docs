@@ -241,7 +241,7 @@
 - System limits
 - Routing
 - Session tokens
-- Tokens & signatures
+- Tokens and signatures
 - Security at Clerk [security]
   - Vulnerability disclosure policy
   - Clerk Telemetry

@@ -1,6 +1,9 @@
 module.exports = async ({ github, context, core }) => {
   const { owner, repo, number } = context.issue
 
+  console.log({ owner, repo, number })
+  console.log(context.issue)
+
   // Check if we've already commented on this PR
   const comments = await github.rest.issues.listComments({
     owner,

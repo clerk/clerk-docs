@@ -25,16 +25,12 @@ module.exports = async ({ github, context, core }) => {
       issue_number: number,
       body: `⚠️ **TypeDoc files detected in this PR**
   
-  This PR modifies files in the 'clerk-typedoc/' folder. These files are **auto-generated** from the ['clerk/javascript'](https://github.com/clerk/javascript) repository and should not be edited directly.
+  This PR modifies files in the 'clerk-typedoc/' folder. These files are **auto-generated** from the [clerk/javascript](https://github.com/clerk/javascript) repository and should not be edited directly.
   
   **To make changes to TypeDoc documentation:**
   
-  1. 🔄 Make your changes in the appropriate files in the ['clerk/javascript'](https://github.com/clerk/javascript) repository
-  2. 🚀 The TypeDoc documentation will be automatically updated in this repository via our CI workflow
-  
-  **Please:**
-  - ❌ Do not edit files in 'clerk-typedoc/' directly
-  - ✅ Make your changes in 'clerk/javascript' instead
+  1. 🔄 Make your changes in the appropriate files in the [clerk/javascript](https://github.com/clerk/javascript) repository
+  2. 🚀 The TypeDoc documentation will be pulled through to this repository via a CI action
   
   Thanks for contributing! 🙏`,
     })

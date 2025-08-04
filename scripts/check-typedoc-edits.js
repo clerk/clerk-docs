@@ -14,7 +14,7 @@ module.exports = async ({ github, context, core }) => {
   })
 
   const botComment = comments.data.find(
-    (comment) => comment.user.type === 'Bot' && comment.body.includes('⚠️ TypeDoc files detected'),
+    (comment) => comment.user.type === 'Bot' && comment.body.includes('TypeDoc files detected in this PR'),
   )
 
   // Only comment if we haven't already

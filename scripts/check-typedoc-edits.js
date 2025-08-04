@@ -1,8 +1,12 @@
 module.exports = async ({ github, context, core }) => {
   const { owner, repo, number } = context.issue
 
-  console.log({ owner, repo, number })
-  console.log(context)
+  console.log(core)
+
+  //   if (number === undefined) {
+  //     core.setFailed('No issue number found')
+  //     return
+  //   }
 
   // Check if we've already commented on this PR
   const comments = await github.rest.issues.listComments({
@@ -27,12 +31,12 @@ module.exports = async ({ github, context, core }) => {
   
   **To make changes to TypeDoc documentation:**
   
-  1. 🔄 Make your changes in the appropriate files in the [\`clerk/javascript\`](https://github.com/clerk/javascript) repository
+  1. 🔄 Make your changes in the appropriate files in the ['clerk/javascript'](https://github.com/clerk/javascript) repository
   2. 🚀 The TypeDoc documentation will be automatically updated in this repository via our CI workflow
   
   **Please:**
-  - ❌ Do not edit files in \`clerk-typedoc/\` directly
-  - ✅ Make your changes in \`clerk/javascript\` instead
+  - ❌ Do not edit files in 'clerk-typedoc/' directly
+  - ✅ Make your changes in 'clerk/javascript' instead
   
   Thanks for contributing! 🙏`,
     })

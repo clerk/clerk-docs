@@ -17,13 +17,16 @@ module.exports = async ({ github, context, core }) => {
     (comment) => comment.user.type === 'Bot' && comment.body.includes('TypeDoc files detected in this PR'),
   )
 
-  // Only comment if we haven't already
-  if (!botComment) {
-    await github.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: number,
-      body: `⚠️ **TypeDoc files detected in this PR**
+  if (botComment) {
+    console.log('Comment already exists')
+    return
+  }
+
+  await github.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: number,
+    body: `⚠️ **TypeDoc files detected in this PR**
   
   This PR modifies files in the 'clerk-typedoc/' folder. These files are **auto-generated** from the [clerk/javascript](https://github.com/clerk/javascript) repository and should not be edited directly.
   
@@ -33,6 +36,5 @@ module.exports = async ({ github, context, core }) => {
   2. 🚀 The TypeDoc documentation will be pulled through to this repository via a CI action
   
   Thanks for contributing! 🙏`,
-    })
-  }
+  })
 }

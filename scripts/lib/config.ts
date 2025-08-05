@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import type { SDK } from './schemas'
+import { existsSync } from 'node:fs'
 
 type BuildConfigOptions = {
   basePath: string
@@ -16,6 +17,7 @@ type BuildConfigOptions = {
   partialsPath: string
   distPath: string
   typedocPath: string
+  localTypedocOverridePath?: string
   publicPath?: string
   ignorePaths: string[]
   ignoreLinks: string[]
@@ -52,6 +54,10 @@ type BuildConfigOptions = {
     overviewPath?: string
     fullPath?: string
   }
+  siteFlags?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
@@ -66,6 +72,20 @@ export type BuildConfig = Awaited<ReturnType<typeof createConfig>>
 export async function createConfig(config: BuildConfigOptions) {
   const resolve = (relativePath: string) => {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
+  }
+
+  const find = (...paths: [...(string | undefined | null)[], string]) => {
+    for (const path of paths) {
+      if (path && existsSync(resolve(path))) {
+        return path
+      }
+    }
+
+    const lastItem = paths[paths.length - 1]
+    if (lastItem) {
+      return lastItem
+    }
+    throw new Error('No path found')
   }
 
   const changeTempDist = async () => {
@@ -95,8 +115,8 @@ export async function createConfig(config: BuildConfigOptions) {
       distFinalRelativePath: config.distPath,
       distFinalPath: resolve(config.distPath),
 
-      typedocRelativePath: config.typedocPath,
-      typedocPath: resolve(config.typedocPath),
+      typedocRelativePath: find(config.localTypedocOverridePath, config.typedocPath),
+      typedocPath: resolve(find(config.localTypedocOverridePath, config.typedocPath)),
 
       publicRelativePath: config.publicPath,
       publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
@@ -151,6 +171,15 @@ export async function createConfig(config: BuildConfigOptions) {
         ? {
             overviewPath: config.llms.overviewPath,
             fullPath: config.llms.fullPath,
+          }
+        : null,
+
+      siteFlags: config.siteFlags
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.siteFlags.inputPath)),
+            inputPathRelative: config.siteFlags.inputPath,
+            outputPath: resolve(path.join(tempDist, config.siteFlags.outputPath)),
+            outputPathRelative: config.siteFlags.outputPath,
           }
         : null,
 

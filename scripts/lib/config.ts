@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import type { SDK } from './schemas'
+import { existsSync } from 'node:fs'
 
 type BuildConfigOptions = {
   basePath: string
@@ -16,6 +17,7 @@ type BuildConfigOptions = {
   partialsPath: string
   distPath: string
   typedocPath: string
+  localTypedocOverridePath?: string
   publicPath?: string
   ignorePaths: string[]
   ignoreLinks: string[]
@@ -72,6 +74,20 @@ export async function createConfig(config: BuildConfigOptions) {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
   }
 
+  const find = (...paths: [...(string | undefined | null)[], string]) => {
+    for (const path of paths) {
+      if (path && existsSync(resolve(path))) {
+        return path
+      }
+    }
+
+    const lastItem = paths[paths.length - 1]
+    if (lastItem) {
+      return lastItem
+    }
+    throw new Error('No path found')
+  }
+
   const changeTempDist = async () => {
     const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
 
@@ -99,8 +115,8 @@ export async function createConfig(config: BuildConfigOptions) {
       distFinalRelativePath: config.distPath,
       distFinalPath: resolve(config.distPath),
 
-      typedocRelativePath: config.typedocPath,
-      typedocPath: resolve(config.typedocPath),
+      typedocRelativePath: find(config.localTypedocOverridePath, config.typedocPath),
+      typedocPath: resolve(find(config.localTypedocOverridePath, config.typedocPath)),
 
       publicRelativePath: config.publicPath,
       publicPath: config.publicPath ? resolve(config.publicPath) : undefined,

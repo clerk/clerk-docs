@@ -139,7 +139,6 @@
 ### B2B (Organizations) [organizations]
 
 - Overview
-- Managing Organizations [managing-orgs]
 - Verified Domains
 - Roles and Permissions
 - Invitations
@@ -229,7 +228,6 @@
 
 - Overview
 - DNS & Domains
-  - Overview
   - Satellite Domains
   - Proxy Clerk Frontend API [proxy-fapi]
 - Plans & Billing

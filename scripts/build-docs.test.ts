@@ -1102,7 +1102,11 @@ Testing with a simple page.`,
     expect(await readFile(pathJoin('./dist/react/simple-test.mdx'))).toBe(`---
 title: Simple Test
 sdk: react
+sdkScoped: "true"
 canonical: /docs/:sdk:/simple-test
+availableSdks: react
+notAvailableSdks: ""
+activeSdk: react
 ---
 
 # Simple Test Page
@@ -1110,7 +1114,13 @@ canonical: /docs/:sdk:/simple-test
 Testing with a simple page.`)
 
     expect(await readFile(pathJoin('./dist/simple-test.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
+      `---
+template: wide
+redirectPage: "true"
+availableSdks: react
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="Simple Test" href="/docs/:sdk:/simple-test" sdks={["react"]} />`,
     )
 
     const distFiles = await treeDir(pathJoin('./dist'))
@@ -1295,7 +1305,7 @@ Testing with a simple page.`,
                     {
                       title: 'Login',
                       href: '/docs/auth/login',
-                      sdk: ['react', 'python'], // python not in parent
+                      sdk: ['react', 'remix'], // remix not in parent
                     },
                   ],
                 ],
@@ -1308,7 +1318,7 @@ Testing with a simple page.`,
         path: './docs/auth/login.mdx',
         content: `---
 title: Login
-sdk: react, python
+sdk: react, remix
 ---
 
 # Login Page
@@ -1321,12 +1331,12 @@ Authentication login documentation.`,
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react', 'python', 'nextjs'],
+        validSdks: ['react', 'remix', 'nextjs'],
       }),
     )
 
     await expect(promise).rejects.toThrow(
-      'Doc "Login" is attempting to use ["react","python"] But its being filtered down to ["react"] in the manifest.json',
+      'Doc "Login" is attempting to use ["react","remix"] But its being filtered down to ["react"] in the manifest.json',
     )
   })
 
@@ -1369,7 +1379,13 @@ This document is available for React and Next.js.`,
 
     // Verify landing page content
     expect(await readFile(pathJoin('./dist/sdk-document.mdx'))).toBe(
-      `---\ntemplate: wide\n---\n<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
+      `---
+template: wide
+redirectPage: "true"
+availableSdks: react,nextjs
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
   })
 

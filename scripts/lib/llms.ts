@@ -36,7 +36,7 @@ export const listOutputDocsFiles = (config: BuildConfig, docs: Docs, files: { pa
       const { title } = frontmatter
 
       if (!title) {
-        console.error(`Title not found in ${file.path} - will be ignored from llm txt files`)
+        // console.error(`Title not found in ${file.path} - will be ignored from llm txt files`)
         return null
       }
 

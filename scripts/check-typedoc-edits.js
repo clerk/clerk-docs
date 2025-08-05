@@ -32,8 +32,8 @@ module.exports = async ({ github, context, core }) => {
   
   **To make changes to TypeDoc documentation:**
   
-  1. 🔄 Make your changes in the appropriate files in the [clerk/javascript](https://github.com/clerk/javascript) repository
-  2. 🚀 The TypeDoc documentation will be pulled through to this repository via a CI action
+  1. 🔄 Make your changes in the appropriate files in the [clerk/javascript](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information) repository.
+  2. 🚀 The TypeDoc documentation will be pulled through to this repository via a CI action.
   
   Thanks for contributing! 🙏`,
   })

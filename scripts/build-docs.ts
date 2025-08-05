@@ -114,6 +114,7 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
+    localTypedocOverridePath: '../local-clerk-typedoc',
     publicPath: '../public',
     redirects: {
       static: {

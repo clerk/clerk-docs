@@ -53,30 +53,30 @@
     - Hugging Face
     - Line
     - Linear
-    - LinkedIn
-    - LinkedIn (deprecated)
+    - LinkedIn [linkedin-oidc]
+    - LinkedIn (deprecated) [linkedin]
     - Microsoft
     - Notion
     - Slack
     - Spotify
     - TikTok
     - Twitch
-    - Twitter v1 (deprecated)
-    - X/Twitter v2
+    - Twitter v1 (deprecated) [twitter]
+    - X/Twitter v2 [x-twitter]
     - Xero
   - Enterprise Connections
     - Overview
     - Authentication flows
     - Account linking
-    - Just-in-Time account provisioning
-    - SAML providers
+    - Just-in-Time account provisioning [jit-provisioning]
+    - SAML providers [saml]
       - Azure
       - Google
       - Okta
       - Custom provider
-    - OIDC providers
+    - OIDC providers [oidc]
       - Custom provider
-    - EASIE provider
+    - EASIE provider [easie]
       - Microsoft
       - Google
   - Web3
@@ -84,10 +84,10 @@
     - Metamask
     - OKX Wallet
   - OAuth
-    - What are OAuth & OIDC
+    - What are OAuth & OIDC [overview]
     - How Clerk implements OAuth
-    - Use OAuth for Single Sign-On (SSO)
-    - Use OAuth for scoped access
+    - Use OAuth for Single Sign-On (SSO) [single-sign-on]
+    - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
 - Session token customization [session-token]
 - Webhooks

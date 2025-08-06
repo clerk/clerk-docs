@@ -98,7 +98,7 @@ export const invalidateFile =
       if (store.tooltips.has(relativeTooltipPath)) {
         store.tooltips.delete(relativeTooltipPath)
 
-        const adjacent = store.dirtyDocMap.get(relativeTooltipPath)
+        const adjacent = store.dirtyDocMap.get(`_tooltips/${relativeTooltipPath}`)
 
         if (adjacent && invalidateAdjacentDocs) {
           const invalidate = invalidateFile(store, config)

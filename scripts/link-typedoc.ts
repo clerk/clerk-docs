@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import symlinkDir from 'symlink-dir'
 
-const TYPEDOC_DIR = './clerk-typedoc'
+const TYPEDOC_DIR = './local-clerk-typedoc'
 
 const main = async () => {
   const typedocFolderLocation = process.argv[2]

@@ -1,17 +1,17 @@
 ---
-title: Upgrading `@clerk/fastify` to Core 2
-description: "Learn how to upgrade Clerk's Fastify SDK to the latest version."
+title: Upgrading `@clerk/chrome-extension` to Core 2
+description: "Learn how to upgrade Clerk's Chrome Extension SDK to the latest version."
 ---
 
 {/* WARNING: This is a generated file and should not be edited directly. To update its contents, see the "upgrade" package in the clerk/javascript repo. */}
 
-Core 2 is included in the Fastify SDK starting with version 1. This release ships with a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
+Core 2 is included in the Chrome Extension SDK starting with version 1. This new version ships with an improved design and UX for its built-in components, no "flash of white page" when authenticating, and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
 
-By the end of this guide, you’ll have successfully upgraded your Fastify project to use `@clerk/fastify` v5. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
+By the end of this guide, you’ll have successfully upgraded your project to use `@clerk/chrome-extension` v1. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
 
 ## Preparing to upgrade
 
-Before upgrading, it's highly recommended that you update your Clerk SDKs to the latest Core 1 version (`npm i @clerk/fastify@0`). Some changes required for Core 2 SDKs can be applied incrementally to the v1 release, which should contribute to a smoother upgrading experience. After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip many breaking changes from Core 2.
+Before upgrading, it's highly recommended that you update your Clerk SDKs to the latest Core 1 version (`npm i @clerk/chrome-extension@0`). Some changes required for Core 2 SDKs can be applied incrementally to the v1 release, which should contribute to a smoother upgrading experience. After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip many breaking changes from Core 2.
 
 Additionally, some of the minimum version requirements for some base dependencies have been updated such that versions that are no longer supported or are at end-of-life are no longer guaranteed to work correctly with Clerk.
 
@@ -19,25 +19,49 @@ Additionally, some of the minimum version requirements for some base dependencie
 
 You need to have Node.js `18.17.0` or later installed. Last year, Node.js 16 entered EOL (End of life) status, so support for this version has been removed across Clerk SDKs. You can check your Node.js version by running `node -v` in your terminal. Learn more about how to [update and install Node.js](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs).
 
+**Updating React**
+
+All react-dependent Clerk SDKs now require you to use React 18 or higher. You can update your project by installing the latest version of `react` and `react-dom`.
+
+<CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+  ```bash {{ filename: 'terminal' }}
+  npm install react@latest react-dom@latest
+  ```
+
+  ```bash {{ filename: 'terminal' }}
+  yarn add react@latest react-dom@latest
+  ```
+
+  ```bash {{ filename: 'terminal' }}
+  pnpm add react@latest react-dom@latest
+  ```
+
+  ```bash {{ filename: 'terminal' }}
+  bun add react@latest react-dom@latest
+  ```
+</CodeBlockTabs>
+
+If you are upgrading from React 17 or lower, make sure to [learn about how to upgrade your React version to 18](https://react.dev/blog/2022/03/08/react-18-upgrade-guide) as well.
+
 ## Updating to Core 2
 
 Whenever you feel ready, go ahead and install the latest version of any Clerk SDKs you are using. Make sure that you are prepared to patch some breaking changes before your app will work properly, however. The commands below demonstrate how to install the latest version.
 
 <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
   ```bash {{ filename: 'terminal' }}
-  npm install @clerk/fastify
+  npm install @clerk/chrome-extension
   ```
 
   ```bash {{ filename: 'terminal' }}
-  yarn add @clerk/fastify
+  yarn add @clerk/chrome-extension
   ```
 
   ```bash {{ filename: 'terminal' }}
-  pnpm add @clerk/fastify
+  pnpm add @clerk/chrome-extension
   ```
 
   ```bash {{ filename: 'terminal' }}
-  bun add @clerk/fastify
+  bun add @clerk/chrome-extension
   ```
 </CodeBlockTabs>
 
@@ -68,6 +92,45 @@ To run the CLI tool, navigate to your project and run it in the terminal:
 If you are having trouble with `npx`, it's also possible to install directly with `npm i @clerk/upgrade -g`, and can then be run with the `clerk-upgrade` command.
 
 ## Breaking Changes
+
+### `tokenCache` -> `storageCache` as `<ClerkProvider>` props
+
+The `tokenCache` prop has been renamed to `storageCache` in order to accommodate the new [WebSSO feature](https://github.com/clerk/javascript/pull/2277). With the prop change from `tokenCache` to `storageCache`, the interface has been expanded to allow for more flexibility. The new interface is as follows:
+
+```ts
+type StorageCache = {
+  createKey: (...keys: string[]) => string
+  get: <T = any>(key: string) => Promise<T>
+  remove: (key: string) => Promise<void>
+  set: (key: string, value: string) => Promise<void>
+}
+```
+
+And here's a full before/after example:
+
+```jsx {{ prettier: false, del: [1], ins: [2] }}
+<ClerkProvider tokenCache={/* ... */}>
+<ClerkProvider storageCache={/* ... */}>
+```
+
+### Component design adjustments
+
+The new version ships with improved design and UX across all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/customization/overview) or tokens for a [custom theme](/docs/customization/overview), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
+
+[More detail on these changes »](/docs/guides/development/upgrading/upgrade-guides/core-2#component-redesign)
+
+### After sign up/in/out default value change
+
+In Core 2, defining redirect URLs for after sign-up, sign-in, or sign-out via the Clerk Dashboard has been removed. Previously, the "Paths" section in the Clerk Dashboard included "Component paths" where URLs could be defined, accompanied by a deprecation warning. This functionality is now removed, and specifying redirect paths via the dashboard is no longer supported.
+
+If you need to pass a redirect URL for after sign-up, sign-in, or sign-out, there are [several ways to achieve this](/docs/guides/development/customize-redirect-urls), including environment variables, middleware, or passing them directly to the relevant components.
+
+As part of this change, the default URL for each of these props has been set to `/`, so if you are passing `/` explicitly to any one of the above props, that line is no longer necessary and can be removed.
+
+```jsx {{ prettier: false, del: [1], ins: [2] }}
+<UserButton afterSignOutUrl="/" />
+<UserButton />
+```
 
 ### Removed: `orgs` claim on JWT
 
@@ -119,12 +182,41 @@ The `orgs` claim was part of the `JwtPayload`. Here are a few examples of where 
 
 If you would like to have your JWT return all of the user's organizations, you can create a [custom JWT template](/docs/guides/development/jwt-templates) in your dashboard. Add `{ "orgs": "user.organizations" }` to it.
 
+### Path routing is now the default
+
+On components like [`<SignIn />`](/docs/components/authentication/sign-in) you can define the props `routing` and `path`. `routing` can be set to `'hash' | 'path'` and describes the routing strategy that should be used. `path` defines where the component is mounted when `routing="path"` is used. [Learn more about Clerk routing](/docs/guides/routing).
+
+In Core 2, the **default** `routing` strategy has become `'path'`. Unless you change the `routing` prop, you'll need to define the `path` prop. The affected components are:
+
+- `<SignIn />`
+- `<SignUp />`
+- `<UserProfile />`
+- `<CreateOrganization />`
+- `<OrganizationProfile />`
+
+Here's how you'd use the components going forward:
+
+```jsx {{ prettier: false }}
+<SignIn path="/sign-in" />
+<SignUp path="/sign-up" />
+<UserProfile path="/user-profile" />
+<CreateOrganization path="/create-org" />
+<OrganizationProfile path="/org-profile" />
+```
+
+If you don't define the `path` prop an error will be thrown. Of course, you can still use `routing="hash"` or `routing="virtual"`.
+
+```jsx {{ prettier: false }}
+<UserProfile routing="hash" />
+<OrganizationProfile routing="virtual" />
+```
+
 ### Image URL Name Consolidation
 
 There are a number of Clerk primitives that contain images, and previously they each had different property names, like `avatarUrl`, `logoUrl`, `profileImageUrl`, etc. In order to promote consistency and make it simpler for developers to know where to find associated images, all image properties are now named `imageUrl`. See the list below for all affected classes:
 
 <Accordion
-  titles={["<code>Organization.logoUrl</code> -&gt; <code>Organization.imageUrl</code>", "<code>User.profileImageUrl</code> -&gt; <code>.imageUrl</code>", "<code>ExternalAccount.avatarUrl</code> -&gt; <code>.imageUrl</code>", "<code>OrganizationMembershipPublicUserData.profileImageUrl</code> -&gt; <code>.imageUrl</code>"]}
+  titles={["<code>Organization.logoUrl</code> -&gt; <code>Organization.imageUrl</code>", "<code>User.profileImageUrl</code> -&gt; <code>.imageUrl</code>"]}
 >
   <AccordionPanel>
     The `logoUrl` property of any [`Organization` object](/docs/references/javascript/organization) has been changed to `imageUrl`.
@@ -132,14 +224,6 @@ There are a number of Clerk primitives that contain images, and previously they 
 
   <AccordionPanel>
     The `profileImageUrl` property of any `User` object has been changed to `imageUrl`.
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `avatarUrl` property of any [`ExternalAccount` object](/docs/references/javascript/types/external-account) has been changed to `imageUrl`.
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `profileImageUrl` property of any `OrganizationMembershipPublicUserData` object has been changed to `imageUrl`.
   </AccordionPanel>
 </Accordion>
 
@@ -154,7 +238,7 @@ As part of this major version, a number of previously deprecated props, argument
 #### Deprecation removals
 
 <Accordion
-  titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>", "<code>CLERK_API_KEY</code> replaced by <code>CLERK_SECRET_KEY</code>", "<code>CLERK_FRONTEND_API</code> replaced by <code>CLERK_PUBLISHABLE_KEY</code>", "<code>apiKey</code> -&gt; <code>secretKey</code> as param to createClerkClient", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to createClerkClient", "<code>frontendApi</code> -&gt; <code>publishableKey</code> as param to clerkPlugin"]}
+  titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>"]}
 >
   <AccordionPanel>
     If you are updating a user's password via the [`User.update` method](/docs/references/javascript/user#update), it must be changed to [`User.updatePassword`](/docs/references/javascript/user#update-password) instead. This method will require the current password as well as the desired new password. We made this update to improve the security of password changes. Example below:
@@ -169,53 +253,12 @@ As part of this major version, a number of previously deprecated props, argument
     })
     ```
   </AccordionPanel>
-
-  <AccordionPanel>
-    The `CLERK_API_KEY` environment variable was renamed to `CLERK_SECRET_KEY`. To update, go to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. After choosing your framework, copy and paste the new keys. Ensure this update is applied across all environments (e.g., development, staging, production).
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `CLERK_FRONTEND_API` environment variable was renamed to `CLERK_PUBLISHABLE_KEY`. To update, go to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. After choosing your framework, copy and paste the new keys. Ensure this update is applied across all environments (e.g., development, staging, production). **Note:** The values are different, so this isn't just a key replacement. [More information](/docs/guides/development/production#api-keys-and-environment-variables).
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `apiKey` argument passed to `createClerkClient` must be changed to `secretKey`.
-
-    ```js {{ del: [3], ins: [4] }}
-    import { createClerkClient } from '@clerk/fastify'
-
-    createClerkClient({ apiKey: '...' })
-    createClerkClient({ secretKey: '...' })
-    ```
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `frontendApi` argument passed to `createClerkClient` must be changed to `publishableKey`. Note that the values of the two keys are different, so both keys and values need to be changed. You can find your application's Publishable Key in the Clerk Dashboard.
-
-    ```js {{ del: [3], ins: [4] }}
-    import { createClerkClient } from '@clerk/fastify'
-
-    createClerkClient({ frontendApi: '...' })
-    createClerkClient({ publishableKey: '...' })
-    ```
-  </AccordionPanel>
-
-  <AccordionPanel>
-    The `frontendApi` argument passed to `clerkPlugin` must be changed to `publishableKey`. Note that the values of the two keys are different, so both keys and values need to be changed. You can find your application's Publishable Key in the Clerk Dashboard.
-
-    ```js {{ del: [3], ins: [4] }}
-    import { clerkPlugin } from '@clerk/fastify'
-
-    fastify.register(clerkPlugin, { frontendApi: '...' })
-    fastify.register(clerkPlugin, { publishableKey: '...' })
-    ```
-  </AccordionPanel>
 </Accordion>
 
 #### Other Breaking changes
 
 <Accordion
-  titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed", "<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed", "<code>API_URL</code> value has changed", "<code>Clerk</code> -&gt; <code>{ createClerkClient }</code>"]}
+  titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed", "<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed", "<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>"]}
 >
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
@@ -469,15 +512,50 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The value of this export has changed from `https://api.clerk.dev` to `https://api.clerk.com`. If you were relying on the text content of this value not changing, you may need to make adjustments.
+    `setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
+
+    ```js {{ prettier: false, del: [1, 4, 7], ins: [2, 5, 8] }}
+    await setSession('sessionID', () => void)
+    await setActive({ session: 'sessionID', beforeEmit: () => void })
+
+    await setSession(sessionObj)
+    await setActive({ session: sessionObj })
+
+    await setSession(sessionObj, () => void)
+    await setActive({ session: sessionObj, beforeEmit: () => void })
+    ```
+
+    `setActive` also supports setting an active organization:
+
+    ```js {{ prettier: false }}
+    await setActive({
+      session: 'sessionID',
+      organization: 'orgID',
+      beforeEmit: () => void,
+    })
+    await setActive({
+      session: sessionObj,
+      organization: orgObj,
+      beforeEmit: () => void,
+    })
+    ```
   </AccordionPanel>
 
   <AccordionPanel>
-    The `Clerk` default import has changed to `createClerkClient` and been moved to a named import rather than default. You must update your import path in order for it to work correctly. Example below of the fix that needs to be made:
+    Passing a string as an argument to `Organization.create` is no longer possible - instead, pass an object with the `name` property.
 
     ```js {{ del: [1], ins: [2] }}
-    import Clerk from '@clerk/fastify'
-    import { createClerkClient } from '@clerk/fastify'
+    Organization.create('...')
+    Organization.create({ name: '...' })
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `Organization.getPendingInvitations()` method has been removed. You can use `Organization.getInvitations` instead.
+
+    ```js {{ del: [1], ins: [2] }}
+    Organization.getPendingInvitations()
+    Organization.getInvitations({ status: 'pending' })
     ```
   </AccordionPanel>
 </Accordion>

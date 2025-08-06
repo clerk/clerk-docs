@@ -192,6 +192,7 @@
     - Test authenticated flows
   - Postman or Insomnia
 - Errors
+  - Overview
 - Troubleshooting
   - Overview
   - Email deliverability
@@ -219,9 +220,9 @@
     - Core 2
     - Node to Express
     - Expo v2 [expo-v2]
-    - @clerk/nextjs v6 [next-v6]
-    - URL based session syncing [url-session-syncing]
-    - Progressive Sign Ups
+    - @clerk/nextjs v6 [nextjs-v6]
+    - URL based session syncing
+    - Progressive Sign Up
 - AI Prompts
 
 ### Clerk Dashboard [dashboard]

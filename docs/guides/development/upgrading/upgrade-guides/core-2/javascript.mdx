@@ -1,47 +1,19 @@
 ---
-title: Upgrading `@clerk/clerk-expo` to Core 2
-description: "Learn how to upgrade Clerk's Expo SDK to the latest version."
+title: Upgrading `@clerk/clerk-js` to Core 2
+description: "Learn how to upgrade Clerk's Javascript SDK to the latest version."
 ---
 
 {/* WARNING: This is a generated file and should not be edited directly. To update its contents, see the "upgrade" package in the clerk/javascript repo. */}
 
-Core 2 is included in the Expo SDK starting with version 1. This release ships with an improved design and UX for its built-in components and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
+Core 2 is included in the Javascript SDK starting with version 5. This new version ships with an improved design and UX for its built-in components, no "flash of white page" when authenticating, and a variety of smaller DX improvements and housekeeping items. Each of the potentially breaking changes are detailed in this guide, below.
 
-By the end of this guide, you’ll have successfully upgraded your Expo project to use `@clerk/clerk-expo` v1. You’ll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
+By the end of this guide, you'll have successfully upgraded your JS project to use `@clerk/clerk-js` v5. You'll learn how to update your dependencies, resolve breaking changes, and find deprecations. Step-by-step instructions will lead you through the process.
 
 ## Preparing to upgrade
 
-Before upgrading, it's highly recommended that you update your Clerk SDKs to the latest Core 1 version (`npm i @clerk/clerk-expo@0`). Some changes required for Core 2 SDKs can be applied incrementally to the v1 release, which should contribute to a smoother upgrading experience. After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip many breaking changes from Core 2.
+Before upgrading, it's highly recommended that you update your Clerk SDKs to the latest Core 1 version (`npm i @clerk/clerk-js@4`). Some changes required for Core 2 SDKs can be applied incrementally to the v5 release, which should contribute to a smoother upgrading experience. After updating, look out for deprecation messages in your terminal and browser console. By resolving these deprecations you'll be able to skip many breaking changes from Core 2.
 
 Additionally, some of the minimum version requirements for some base dependencies have been updated such that versions that are no longer supported or are at end-of-life are no longer guaranteed to work correctly with Clerk.
-
-**Updating Node.js**
-
-You need to have Node.js `18.17.0` or later installed. Last year, Node.js 16 entered EOL (End of life) status, so support for this version has been removed across Clerk SDKs. You can check your Node.js version by running `node -v` in your terminal. Learn more about how to [update and install Node.js](https://nodejs.org/en/learn/getting-started/how-to-install-nodejs).
-
-**Updating React**
-
-All react-dependent Clerk SDKs now require you to use React 18 or higher. You can update your project by installing the latest version of `react` and `react-dom`.
-
-<CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
-  ```bash {{ filename: 'terminal' }}
-  npm install react@latest react-dom@latest
-  ```
-
-  ```bash {{ filename: 'terminal' }}
-  yarn add react@latest react-dom@latest
-  ```
-
-  ```bash {{ filename: 'terminal' }}
-  pnpm add react@latest react-dom@latest
-  ```
-
-  ```bash {{ filename: 'terminal' }}
-  bun add react@latest react-dom@latest
-  ```
-</CodeBlockTabs>
-
-If you are upgrading from React 17 or lower, make sure to [learn about how to upgrade your React version to 18](https://react.dev/blog/2022/03/08/react-18-upgrade-guide) as well.
 
 ## Updating to Core 2
 
@@ -49,19 +21,19 @@ Whenever you feel ready, go ahead and install the latest version of any Clerk SD
 
 <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
   ```bash {{ filename: 'terminal' }}
-  npm install @clerk/clerk-expo
+  npm install @clerk/clerk-js
   ```
 
   ```bash {{ filename: 'terminal' }}
-  yarn add @clerk/clerk-expo
+  yarn add @clerk/clerk-js
   ```
 
   ```bash {{ filename: 'terminal' }}
-  pnpm add @clerk/clerk-expo
+  pnpm add @clerk/clerk-js
   ```
 
   ```bash {{ filename: 'terminal' }}
-  bun add @clerk/clerk-expo
+  bun add @clerk/clerk-js
   ```
 </CodeBlockTabs>
 
@@ -97,7 +69,7 @@ If you are having trouble with `npx`, it's also possible to install directly wit
 
 The new version ships with improved design and UX across all of Clerk's [UI components](/docs/components/overview). If you have used the [`appearance` prop](/docs/customization/overview) or tokens for a [custom theme](/docs/customization/overview), you will likely need to make some adjustments to ensure your styling is still looking great. If you're using the [localization prop](/docs/customization/localization) you will likely need to make adjustments to account for added or removed localization keys.
 
-[More detail on these changes »](/docs/upgrade-guides/core-2/overview#component-redesign)
+[More detail on these changes »](/docs/guides/development/upgrading/upgrade-guides/core-2#component-redesign)
 
 ### After sign up/in/out default value change
 
@@ -111,6 +83,39 @@ As part of this change, the default URL for each of these props has been set to 
 <UserButton afterSignOutUrl="/" />
 <UserButton />
 ```
+
+### `afterSignXUrl` changes
+
+> [!NOTE]
+> This section refers to `afterSignXUrl` where `X` could be `Up` or `In` depending on the context.
+
+All `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables have been deprecated, and should be replaced by one of the following options:
+
+- `CLERK_SIGN_X_FORCE_REDIRECT_URL` / `signXForceRedirectUrl` – If set, Clerk will always redirect to provided URL, regardless of what page the user was on before. Use this option with caution, as it will interrupt the user's flow by taking them away from the page they were on before.
+- `CLERK_SIGN_X_FALLBACK_REDIRECT_URL` / `signXFallbackRedirectUrl` – If set, this will mirror the previous behavior, only redirecting to the provided URL if there is no `redirect_url` in the querystring.
+
+In general, use the environment variables over the props.
+
+> [!WARNING]
+> If neither value is set, Clerk will redirect to the `redirect_url` if present, otherwise it will redirect to `/`.
+
+To retain the current behavior of your app without any changes, you can switch `afterSignXUrl` with `signXFallbackRedirectUrl` as such:
+
+```jsx {{ prettier: false, del: [1], ins: [2] }}
+<SignIn afterSignInUrl="/foo" />
+<SignIn signInFallbackRedirectUrl="/foo" />
+```
+
+#### Why this is changing
+
+To make redirect behavior more clear and predictable, Clerk is changing the way "after sign up/in url"s and redirect url props are handled in Core 2.
+
+The `afterSignXUrl` props and `CLERK_AFTER_SIGN_X_URL` environment variables behave differently based on how a user reaches a sign up/in page:
+
+- **Via a link** – When users visit a sign up/in page via a link, Clerk sets the previous page URL to a `redirect_url` querystring. When done signing up/in, these users are redirected to the previous page, and the `CLERK_AFTER_SIGN_X_URL` variables are ignored. This is a common sign up/in flow pattern that interrupts the user's navigation the least.
+- **Direct navigation** – When users navigate directly to a sign up/in page, no value is set to `redirect_url` and the appropriate `CLERK_AFTER_SIGN_X_URL` is used.
+
+Overall, this behavior is unintuitive and doesn't give a way to force a redirect after sign up/in, so the behavior is changing.
 
 ### Removed: `orgs` claim on JWT
 
@@ -215,42 +220,12 @@ There are a number of Clerk primitives that contain images, and previously they 
   </AccordionPanel>
 </Accordion>
 
-### Deprecation removals & housekeeping
+### Changes to pagination arguments for some functions
 
-As part of this major version, a number of previously deprecated props, arguments, methods, etc. have been removed. Additionally there have been some changes to things that are only used internally, or only used very rarely. It's highly unlikely that any given app will encounter any of these items, but they are all breaking changes, so they have all been documented below.
-
-> [!NOTE]
-> For this section more than any other one, use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
-> section are very unlikely to appear in your codebase, the tool will save time looking for them.
-
-#### Deprecation removals
+There were some changes made to pagination-related arguments passed into functions, in order to make it more clear how to control paginated results. See each function impacted by these changes below:
 
 <Accordion
-  titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>", "<code>CLERK_FRONTEND_API</code> replaced by <code>CLERK_PUBLISHABLE_KEY</code>"]}
->
-  <AccordionPanel>
-    If you are updating a user's password via the [`User.update` method](/docs/references/javascript/user#update), it must be changed to [`User.updatePassword`](/docs/references/javascript/user#update-password) instead. This method will require the current password as well as the desired new password. We made this update to improve the security of password changes. Example below:
-
-    ```js {{ del: [1], ins: [[3, 7]] }}
-    user.update({ password: 'foo' })
-
-    user.updatePassword({
-      currentPassword: 'bar',
-      newPassword: 'foo',
-      signOutOfOtherSessions: true,
-    })
-    ```
-  </AccordionPanel>
-
-  <AccordionPanel>
-    If you are using a `CLERK_FRONTEND_API` environment variable, the name must be changed to `CLERK_PUBLISHABLE_KEY` instead. The values are different, so this isn't just a key replacement. To update, go to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard. After choosing your framework, copy and paste the new keys. Ensure this update is applied across all environments (e.g., development, staging, production).
-  </AccordionPanel>
-</Accordion>
-
-#### Other Breaking changes
-
-<Accordion
-  titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed", "<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed", "<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>"]}
+  titles={["<code>Organization.getRoles</code> arguments changed", "<code>Organization.getMemberships</code> arguments changed", "<code>Organization.getDomains</code> arguments changed", "<code>Organization.getInvitations</code> arguments changed", "<code>Organization.getMembershipRequests</code> arguments changed", "<code>User.getOrganizationInvitations</code> arguments changed", "<code>User.getOrganizationSuggestions</code> arguments changed", "<code>User.getOrganizationMemberships</code> arguments changed"]}
 >
   <AccordionPanel>
     There have been a couple changes to the pagination arguments that can be passed into this function - `limit` has been renamed to `pageSize`, and `offset` has been renamed to `initialPage`. This will help to make it more clear and simple to reason about pagination control. Example of how changes might look below:
@@ -355,7 +330,15 @@ As part of this major version, a number of previously deprecated props, argument
     })
     ```
   </AccordionPanel>
+</Accordion>
 
+### Changes to some function return signatures
+
+There have been changes to return signatures for some functions. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. This change also aligns the response shape with what is returned from the Clerk Backend API. Each impacted function is listed below, along with code examples:
+
+<Accordion
+  titles={["<code>Users.getOrganizationMembershipList</code> return signature changed", "<code>Users.getOrganizationInvitationList</code> return signature changed", "<code>Organizations.getOrganizationInvitationList</code> return type changed", "<code>User.getOrganizationMembershipList</code> return type changed", "<code>Users.getOrganizationList</code> return signature changed", "<code>Organization.getOrganizationList</code> return type changed", "<code>Invitations.getInvitationList</code> return signature changed", "<code>Sessions.getSessionList</code> return signature changed", "<code>Users.getUserList</code> return signature changed", "<code>AllowlistIdentifiers.getAllowlistIdentifierList</code> return signature changed", "<code>Clients.getClientList</code> return signature changed", "<code>RedirectUrls.getRedirectUrlList</code> return signature changed", "<code>Users.getUserOauthAccessToken</code> return signature changed"]}
+>
   <AccordionPanel>
     The response payload of `Users.getOrganizationMembershipList` was changed as part of the core 2 release. Rather than directly returning ` data`, the return signature is now `{ data, totalCount }`. Since Backend API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily, and this change in the backend SDK aligns the response shape with what the Backend API returns directly.
 
@@ -379,7 +362,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [5], ins: [6] }}
     const data = await clerkClient.organizations.getOrganizationInvitationList({
@@ -392,7 +375,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [4], ins: [5] }}
     const { user } = useUser()
@@ -415,7 +398,7 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since Clerk's API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
+    The return type for this function was previously `[Items]` but has now been updated to `{ data: [Items], totalCount: number }`. Since the Clerk API responses are paginated, the `totalCount` property is helpful in determining the total number of items in the response easily. A before/after code example can be seen below:
 
     ```js {{ del: [4], ins: [5] }}
     const { organization } = useOrganization()
@@ -502,7 +485,83 @@ As part of this major version, a number of previously deprecated props, argument
     const { data, totalCount } = await clerkClient.users.getUserOauthAccessToken()
     ```
   </AccordionPanel>
+</Accordion>
 
+### Deprecation removals & housekeeping
+
+As part of this major version, a number of previously deprecated props, arguments, methods, etc. have been removed. Additionally there have been some changes to things that are only used internally, or only used very rarely. It's highly unlikely that any given app will encounter any of these items, but they are all breaking changes, so they have all been documented below.
+
+> [!NOTE]
+> For this section more than any other one, use the CLI upgrade tool (`npx @clerk/upgrade`). Changes in this
+> section are very unlikely to appear in your codebase, the tool will save time looking for them.
+
+#### Deprecation removals
+
+<Accordion
+  titles={["<code>User.update({ password: &#39;x&#39; })</code> -&gt; <code>User.updatePassword(&#39;x&#39;)</code>", "<code>Clerk.experimental_canUseCaptcha</code> property removed", "<code>Clerk.experimental_captchaURL</code> property removed", "<code>Clerk.experimental_captchaSiteKey</code> property removed", "<code>Clerk.__unstable__invitationUpdate</code> removed", "<code>Clerk.__unstable__membershipUpdate</code> removed", "<code>redirect_url</code> -&gt; <code>redirectUrl</code> as param of <code>User.createExternalAccount</code>", "<code>generatedSignature</code> -&gt; <code>signature</code> as param of <code>Signup.attemptWeb3WalletVerification</code>"]}
+>
+  <AccordionPanel>
+    If you are updating a user's password via the [`User.update` method](/docs/references/javascript/user#update), it must be changed to [`User.updatePassword`](/docs/references/javascript/user#update-password) instead. This method will require the current password as well as the desired new password. We made this update to improve the security of password changes. Example below:
+
+    ```js {{ del: [1], ins: [[3, 7]] }}
+    user.update({ password: 'foo' })
+
+    user.updatePassword({
+      currentPassword: 'bar',
+      newPassword: 'foo',
+      signOutOfOtherSessions: true,
+    })
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The experimental property `Clerk.experimental_canUseCaptcha` has been removed. There is no replacement for this functionality currently. If this is problematic for your application, [contact support](/contact/support){{ target: '_blank' }}!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The experimental property `Clerk.experimental_captchaURL` has been removed. There is no replacement for this functionality currently. If this is problematic for your application, [contact support](/contact/support){{ target: '_blank' }}!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The experimental property `Clerk.experimental_captchaSiteKey` has been removed. There is no replacement for this functionality currently. If this is problematic for your application, [contact support](/contact/support){{ target: '_blank' }}!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `Clerk.__unstable__invitationUpdate` experimental property has been removed, and has no current replacement. If this is an issue in your codebase, [contact support](/contact/support){{ target: '_blank' }}!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `Clerk.__unstable__membershipUpdate` experimental property has been removed, and has no current replacement. If this is an issue in your codebase, [contact support](/contact/support){{ target: '_blank' }}!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The param `redirect_url` of [`User.createExternalAccount`](/docs/references/javascript/user#create-external-account) has been updated to `redirectUrl`. This is a simple text replacement without any signature changes.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `generatedSignature` param to [`Signup.attemptWeb3WalletVerification()`](/docs/references/javascript/sign-up#attempt-web3-wallet-verification) has been removed. Instead, use the `signature` param. Note that this param takes a string, where the `generatedSignature` param took a function, so both key and value will need to change.
+
+    ```js
+    // before
+    s.attemptWeb3WalletVerification({
+      generatedSignature: async () => 'signatureString',
+    })
+
+    // after
+    s.attemptWeb3WalletVerification({ signature: 'signatureString' })
+
+    // or, if you still need to fetch the signature async
+    const signatureString = await (async () => 'signatureString')
+    s.attemptWeb3WalletVerification({ signature: signatureString })
+    ```
+  </AccordionPanel>
+</Accordion>
+
+#### Other Breaking changes
+
+<Accordion
+  titles={["<code>setSession</code> -&gt; <code>setActive</code>", "<code>Organization.create(&#39;x&#39;)</code> -&gt; <code>Organization.create({ name: &#39;x&#39; })</code>", "<code>Organization.getPendingInvitations()</code> -&gt; <code>Organization.getInvitations({ status: &#39;pending&#39; })</code>", "<code>MagicLinkError</code> -&gt; <code>EmailLinkError</code>", "<code>isMagicLinkError</code> -&gt; <code>isEmailLinkError</code>", "<code>MagicLinkErrorCode</code> -&gt; <code>EmailLinkErrorCode</code>", "<code>useMagicLink</code> -&gt; <code>useEmailLink</code>", "<code>handleMagicLinkVerification</code> -&gt; <code>handleEmailLinkVerification</code>", "<code>[User|OrganizationMembershipPublicData].profileImageUrl</code> -&gt; <code>[User|OrganizationMembershipPublicData].imageUrl</code>", "<code>Clerk.getOrganizationMemberships()</code> -&gt; <code>user.getOrganizationMemberships()</code>", "<code>lastOrganizationInvitation</code> and <code>lastOrganizationMember</code> dropped from event emitter", "<code>Clerk.redirectToHome()</code> removed", "<code>Clerk.isReady()</code> removed", "Replace <code>signOutCallback</code> prop on <code>SignOutButton</code> with <code>redirectUrl</code>", "<code>Clerk</code> import changed"]}
+>
   <AccordionPanel>
     `setSession` should be replaced with `setActive`. The format of the parameters has changed slightly - `setActive` takes an object where `setSession` took params directly. The `setActive` function also can accept an `organization` param that is used to set the currently active organization. The return signature did not change. Read the [API documentation](/docs/references/javascript/clerk#set-active) for more detail. This function should be expected to be returned from one of the following Clerk hooks: `useSessionList`, `useSignUp`, or `useSignIn`. Some migration examples:
 
@@ -557,11 +616,51 @@ As part of this major version, a number of previously deprecated props, argument
   </AccordionPanel>
 
   <AccordionPanel>
-    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects functionality.
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
   </AccordionPanel>
 
   <AccordionPanel>
     Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects the functionality.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects functionality.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    Across Clerk's documentation and codebases the term "magic link" was changed to "email link" as it more accurately reflects functionality.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `profileImageUrl` property of any [`User` object](/docs/references/javascript/user) or [`OrganizationMembershipPublicData` object](https://github.com/clerk/javascript/blob/37f36e538d8879981f76f4a433066e057afb06de/packages/backend/src/api/resources/OrganizationMembership.ts#L31) has been changed to `imageUrl`.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `getOrganizationMemberships` [method on the `Clerk` class](/docs/references/javascript/clerk) has been removed. Instead, use `getOrganizationMemberships` on a user instance.
+
+    ```js {{ del: [1], ins: [2] }}
+    Clerk.getOrganizationMemberships()
+    user.getOrganizationMemberships()
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    If you are using [`Clerk.addListener`](/docs/references/javascript/clerk#add-listener) or `OrganizationContext` and utilizing either the `lastOrganizationInvitation` and/or `lastOrganizationMember` emitted events, these properties have been removed, as they were only relevant for internal use. We are not providing a way to backfill this functionality at the moment. If you are using it and this is an issue for you, [contact support](/contact/support){{ target: '_blank' }} and we can find a way to resolve the issue!
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `Clerk.redirectToHome` method has been removed. If you are looking for a generic replacement for this method, you can instead use `window.Clerk.redirectToAfterSignUp()` or `window.Clerk.redirectAfterSignIn()`.
+
+    To set the `afterSignUpUrl` or `afterSignInUrl`, you can:
+
+    - If not using a react-based SDK, pass the values into `Clerk.load` as such: `Clerk.load({ afterSignUpUrl: 'x', afterSignInUrl: 'y' })`
+    - If using a React-based SDK, pass the desired values into [`<ClerkProvider>`](/docs/components/clerk-provider#properties).
+    - If using the Next.js SDK, set with `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` or `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL`
+    - If using remix SDK, set with `CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` or `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL`
+  </AccordionPanel>
+
+  <AccordionPanel>
+    We have removed the `Clerk.isReady()` function - instead, use the `Clerk.loaded` property to check whether Clerk has completed loading.
   </AccordionPanel>
 
   <AccordionPanel>
@@ -582,6 +681,15 @@ As part of this major version, a number of previously deprecated props, argument
         </SignOutButton>
       )
     }
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The top level `Clerk` import was changed to a named export, like `{ Clerk }`. This is just a name change and can be treated as a text replacement, no changes to the params or return types.
+
+    ```js {{ del: [1], ins: [2] }}
+    import Clerk from '@clerk/clerk-js'
+    import { Clerk } from '@clerk/clerk-js'
     ```
   </AccordionPanel>
 </Accordion>

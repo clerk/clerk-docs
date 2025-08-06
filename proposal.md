@@ -252,10 +252,26 @@
 
 ## Reference [reference]
 
-### General [reference]
+### General
 
 - UI Components (box) [components]
 - Hooks
+  - Overview
+  - useUser()
+  - useClerk()
+  - useAuth()
+  - useSignIn()
+  - useSignUp()
+  - useSession()
+  - useSessionList()
+  - useOrganization()
+  - useOrganizationList()
+  - useReverification()
+  - useCheckout()
+  - usePaymentElement()
+  - usePaymentMethods()
+  - usePlans()
+  - useSubscription()
 
 ### SDK Reference
 

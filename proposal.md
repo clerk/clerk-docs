@@ -159,17 +159,17 @@
 - Authorization Checks
 - Bot Protection
 - Banning Users
-- Prevent brute force attacks [user-lockout]
+- Prevent Brute Force Attacks [user-lockout]
 - Reverification (Step-up)
 - Legal Compliance
-- Password protection and rules
+- Password Protection and Rules
 - Security Best Practices [best-practices]
-  - XSS leak protection
-  - CSRF protection
+  - XSS Leak Protection
+  - CSRF Protection
   - CSP Headers
-  - Fixation protection
-  - Protect email link sign-ups and sign-ins [protect-email-links]
-  - Unauthorized sign-in
+  - Fixation Protection
+  - Protect Email Link Sign-ups and Sign-ins [protect-email-links]
+  - Unauthorized Sign-in
 - Session Options
 
 ### Development

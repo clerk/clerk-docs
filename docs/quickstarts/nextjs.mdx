@@ -3,152 +3,353 @@ title: Next.js Quickstart (App Router)
 description: Add authentication and user management to your Next.js app.
 ---
 
-<LLMPrompt displayText="Use this pre-built prompt to get started faster." src="prompts/nextjs-quickstart.md" />
+<If condition={experiment.enabled}>
+  <LLMPrompt displayText="Use this pre-built prompt to get started faster." src="prompts/nextjs-quickstart.md" />
 
-<Steps>
-  ## Create a new Next.js application
+  Choose one of the options below to get started with Clerk
 
-  Run the following command to [create a new Next.js application](https://nextjs.org/docs/getting-started/installation). It will create an app with the name `my-clerk-app`, but you can replace it with any name you want.
+  <Tabs items={["Create a new Next.js app with Clerk", "Add Clerk to an existing Next.js app"]}>
+    <Tab>
+      <Steps>
+        ## Create a new Next.js application
 
-  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
-    ```bash {{ filename: 'terminal' }}
-    npm create next-app@latest my-clerk-app -- --yes
+        Run the following command to [create a new Next.js application](https://nextjs.org/docs/getting-started/installation). It will create an app with the name `my-clerk-app`, but you can replace it with any name you want.
+
+        <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+          ```bash {{ filename: 'terminal' }}
+          npx create-next-app@latest --example "https://github.com/clerk/clerk-nextjs-quickstart-demo-app" my-clerk-app
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          yarn create next-app --example "https://github.com/clerk/clerk-nextjs-quickstart-demo-app" my-clerk-app
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          pnpm create next-app --example "https://github.com/clerk/clerk-nextjs-quickstart-demo-app" my-clerk-app
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          bunx create-next-app --example "https://github.com/clerk/clerk-nextjs-quickstart-demo-app" my-clerk-app
+          ```
+        </CodeBlockTabs>
+
+        ## Create your first user
+
+        1. Run your project with the following command:
+
+        <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+          ```bash {{ filename: 'terminal' }}
+          npm run dev
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          yarn dev
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          pnpm dev
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          bun dev
+          ```
+        </CodeBlockTabs>
+
+        1. Visit your app's homepage at [http://localhost:3050](http://localhost:3050).
+        1. Go to the [Sign up page](http://localhost:3050/sign-up) and sign up as your first user.
+
+        ## It's time to build!
+
+        You've created a Next.js app with Clerk 🎉. From here, you can continue developing your application.
+
+        To make configuration changes to your Clerk development instance, claim the Clerk keys that were generated for you by selecting **Claim your application** in the bottom right of your app. This will associate the application with your Clerk account.
+      </Steps>
+
+      ## Next steps
+
+      <Include src="_partials/nextjs/next-steps" />
+    </Tab>
+
+    <Tab>
+      <Steps>
+        ## Install `@clerk/nextjs`
+
+        Run the following command to install the Next.js SDK:
+
+        <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+          ```bash {{ filename: 'terminal' }}
+          npm install @clerk/nextjs
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          yarn add @clerk/nextjs
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          pnpm add @clerk/nextjs
+          ```
+
+          ```bash {{ filename: 'terminal' }}
+          bun add @clerk/nextjs
+          ```
+        </CodeBlockTabs>
+
+        ## Add `clerkMiddleware()` to your app
+
+        `clerkMiddleware()` grants you access to user authentication state throughout your app.
+
+        1. Create a `middleware.ts` file.
+        1. In your `middleware.ts` file, export the `clerkMiddleware()` helper:
+
+        ```tsx {{ filename: 'middleware.ts' }}
+        import { clerkMiddleware } from '@clerk/nextjs/server'
+
+        export default clerkMiddleware()
+
+        export const config = {
+          matcher: [
+            // Skip Next.js internals and all static files, unless found in search params
+            '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+            // Always run for API routes
+            '/(api|trpc)(.*)',
+          ],
+        }
+        ```
+
+        1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
+
+        ## Add `<ClerkProvider>` and Clerk components to your app
+
+        1. Add the [`<ClerkProvider>`](/docs/components/clerk-provider) component to your app's layout. This component provides Clerk's authentication context to your app.
+        1. Copy and paste the following file into your `layout.tsx` file. This creates a header with Clerk's [prebuilt components](/docs/components/overview) to allow users to sign in and out.
+
+        ```tsx {{ filename: 'app/layout.tsx', mark: [[2, 9], 34, [37, 45], 49] }}
+        import type { Metadata } from 'next'
+        import {
+          ClerkProvider,
+          SignInButton,
+          SignUpButton,
+          SignedIn,
+          SignedOut,
+          UserButton,
+        } from '@clerk/nextjs'
+        import { Geist, Geist_Mono } from 'next/font/google'
+        import './globals.css'
+
+        const geistSans = Geist({
+          variable: '--font-geist-sans',
+          subsets: ['latin'],
+        })
+
+        const geistMono = Geist_Mono({
+          variable: '--font-geist-mono',
+          subsets: ['latin'],
+        })
+
+        export const metadata: Metadata = {
+          title: 'Clerk Next.js Quickstart',
+          description: 'Generated by create next app',
+        }
+
+        export default function RootLayout({
+          children,
+        }: Readonly<{
+          children: React.ReactNode
+        }>) {
+          return (
+            <ClerkProvider>
+              <html lang="en">
+                <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+                  <header className="flex justify-end items-center p-4 gap-4 h-16">
+                    <SignedOut>
+                      <SignInButton />
+                      <SignUpButton>
+                        <button className="bg-[#6c47ff] text-white rounded-full font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 cursor-pointer">
+                          Sign Up
+                        </button>
+                      </SignUpButton>
+                    </SignedOut>
+                    <SignedIn>
+                      <UserButton />
+                    </SignedIn>
+                  </header>
+                  {children}
+                </body>
+              </html>
+            </ClerkProvider>
+          )
+        }
+        ```
+
+        ## Create your first user
+
+        <Include src="_partials/nextjs/create-first-user" />
+
+        ## It's time to build!
+
+        You've added Clerk to your Next.js app 🎉. From here, you can continue developing your application.
+
+        To make configuration changes to your Clerk development instance, claim the Clerk keys that were generated for you by selecting **Claim your application** in the bottom right of your app. This will associate the application with your Clerk account.
+      </Steps>
+
+      ## Next steps
+
+      <Include src="_partials/nextjs/next-steps" />
+    </Tab>
+  </Tabs>
+</If>
+
+<If condition={!experiment.enabled}>
+  <LLMPrompt displayText="Use this pre-built prompt to get started faster." src="prompts/nextjs-quickstart.md" />
+
+  <Steps>
+    ## Create a new Next.js application
+
+    Run the following command to [create a new Next.js application](https://nextjs.org/docs/getting-started/installation). It will create an app with the name `my-clerk-app`, but you can replace it with any name you want.
+
+    <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+      ```bash {{ filename: 'terminal' }}
+      npm create next-app@latest my-clerk-app -- --yes
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      yarn create next-app my-clerk-app --yes
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      pnpm create next-app my-clerk-app --yes
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      bun create next-app my-clerk-app --yes
+      ```
+    </CodeBlockTabs>
+
+    ## Install `@clerk/nextjs`
+
+    Run the following command to install the Next.js SDK:
+
+    <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+      ```bash {{ filename: 'terminal' }}
+      npm install @clerk/nextjs
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      yarn add @clerk/nextjs
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      pnpm add @clerk/nextjs
+      ```
+
+      ```bash {{ filename: 'terminal' }}
+      bun add @clerk/nextjs
+      ```
+    </CodeBlockTabs>
+
+    ## Add `clerkMiddleware()` to your app
+
+    `clerkMiddleware()` grants you access to user authentication state throughout your app.
+
+    1. Create a `middleware.ts` file.
+
+    - If you're using the `/src` directory, create `middleware.ts` in the `/src` directory.
+    - If you're not using the `/src` directory, create `middleware.ts` in the root directory.
+
+    1. In your `middleware.ts` file, export the `clerkMiddleware()` helper:
+
+    ```tsx {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware } from '@clerk/nextjs/server'
+
+    export default clerkMiddleware()
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
     ```
 
-    ```bash {{ filename: 'terminal' }}
-    yarn create next-app my-clerk-app --yes
+    1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
+
+    ## Add `<ClerkProvider>` and Clerk components to your app
+
+    1. Add the [`<ClerkProvider>`](/docs/components/clerk-provider) component to your app's layout. This component provides Clerk's authentication context to your app.
+    1. Copy and paste the following file into your `layout.tsx` file. This creates a header with Clerk's [prebuilt components](/docs/components/overview) to allow users to sign in and out.
+
+    ```tsx {{ filename: 'app/layout.tsx', mark: [[2, 9], 34, [37, 45], 49] }}
+    import type { Metadata } from 'next'
+    import {
+      ClerkProvider,
+      SignInButton,
+      SignUpButton,
+      SignedIn,
+      SignedOut,
+      UserButton,
+    } from '@clerk/nextjs'
+    import { Geist, Geist_Mono } from 'next/font/google'
+    import './globals.css'
+
+    const geistSans = Geist({
+      variable: '--font-geist-sans',
+      subsets: ['latin'],
+    })
+
+    const geistMono = Geist_Mono({
+      variable: '--font-geist-mono',
+      subsets: ['latin'],
+    })
+
+    export const metadata: Metadata = {
+      title: 'Clerk Next.js Quickstart',
+      description: 'Generated by create next app',
+    }
+
+    export default function RootLayout({
+      children,
+    }: Readonly<{
+      children: React.ReactNode
+    }>) {
+      return (
+        <ClerkProvider>
+          <html lang="en">
+            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+              <header className="flex justify-end items-center p-4 gap-4 h-16">
+                <SignedOut>
+                  <SignInButton />
+                  <SignUpButton>
+                    <button className="bg-[#6c47ff] text-white rounded-full font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 cursor-pointer">
+                      Sign Up
+                    </button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn>
+                  <UserButton />
+                </SignedIn>
+              </header>
+              {children}
+            </body>
+          </html>
+        </ClerkProvider>
+      )
+    }
     ```
 
-    ```bash {{ filename: 'terminal' }}
-    pnpm create next-app my-clerk-app --yes
-    ```
+    ## Create your first user
 
-    ```bash {{ filename: 'terminal' }}
-    bun create next-app my-clerk-app --yes
-    ```
-  </CodeBlockTabs>
+    <Include src="_partials/nextjs/create-first-user" />
 
-  ## Install `@clerk/nextjs`
+    ## It's time to build!
 
-  Run the following command to install the Next.js SDK:
+    You've added Clerk to your Next.js app 🎉. From here, you can continue developing your application.
 
-  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
-    ```bash {{ filename: 'terminal' }}
-    npm install @clerk/nextjs
-    ```
+    To make configuration changes to your Clerk development instance, claim the Clerk keys that were generated for you by selecting **Claim your application** in the bottom right of your app. This will associate the application with your Clerk account.
+  </Steps>
 
-    ```bash {{ filename: 'terminal' }}
-    yarn add @clerk/nextjs
-    ```
+  ## Next steps
 
-    ```bash {{ filename: 'terminal' }}
-    pnpm add @clerk/nextjs
-    ```
-
-    ```bash {{ filename: 'terminal' }}
-    bun add @clerk/nextjs
-    ```
-  </CodeBlockTabs>
-
-  ## Add `clerkMiddleware()` to your app
-
-  `clerkMiddleware()` grants you access to user authentication state throughout your app.
-
-  1. Create a `middleware.ts` file.
-     - If you're using the `/src` directory, create `middleware.ts` in the `/src` directory.
-     - If you're not using the `/src` directory, create `middleware.ts` in the root directory.
-  1. In your `middleware.ts` file, export the `clerkMiddleware()` helper:
-
-     ```tsx {{ filename: 'middleware.ts' }}
-     import { clerkMiddleware } from '@clerk/nextjs/server'
-
-     export default clerkMiddleware()
-
-     export const config = {
-       matcher: [
-         // Skip Next.js internals and all static files, unless found in search params
-         '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-         // Always run for API routes
-         '/(api|trpc)(.*)',
-       ],
-     }
-     ```
-  1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/references/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
-
-  ## Add `<ClerkProvider>` and Clerk components to your app
-
-  1. Add the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) component to your app's layout. This component provides Clerk's authentication context to your app.
-  1. Copy and paste the following file into your `layout.tsx` file. This creates a header with Clerk's [prebuilt components](/docs/reference/components/overview) to allow users to sign in and out.
-
-  ```tsx {{ filename: 'app/layout.tsx', mark: [[2, 9], 34, [37, 45], 49] }}
-  import type { Metadata } from 'next'
-  import {
-    ClerkProvider,
-    SignInButton,
-    SignUpButton,
-    SignedIn,
-    SignedOut,
-    UserButton,
-  } from '@clerk/nextjs'
-  import { Geist, Geist_Mono } from 'next/font/google'
-  import './globals.css'
-
-  const geistSans = Geist({
-    variable: '--font-geist-sans',
-    subsets: ['latin'],
-  })
-
-  const geistMono = Geist_Mono({
-    variable: '--font-geist-mono',
-    subsets: ['latin'],
-  })
-
-  export const metadata: Metadata = {
-    title: 'Clerk Next.js Quickstart',
-    description: 'Generated by create next app',
-  }
-
-  export default function RootLayout({
-    children,
-  }: Readonly<{
-    children: React.ReactNode
-  }>) {
-    return (
-      <ClerkProvider>
-        <html lang="en">
-          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-            <header className="flex justify-end items-center p-4 gap-4 h-16">
-              <SignedOut>
-                <SignInButton />
-                <SignUpButton>
-                  <button className="bg-[#6c47ff] text-white rounded-full font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 cursor-pointer">
-                    Sign Up
-                  </button>
-                </SignUpButton>
-              </SignedOut>
-              <SignedIn>
-                <UserButton />
-              </SignedIn>
-            </header>
-            {children}
-          </body>
-        </html>
-      </ClerkProvider>
-    )
-  }
-  ```
-
-  ## Create your first user
-
-  <Include src="_partials/nextjs/create-first-user" />
-
-  ## It's time to build!
-
-  You've added Clerk to your Next.js app 🎉. From here, you can continue developing your application.
-
-  To make configuration changes to your Clerk development instance, claim the Clerk keys that were generated for you by selecting **Claim your application** in the bottom right of your app. This will associate the application with your Clerk account.
-</Steps>
-
-## Next steps
-
-<Include src="_partials/nextjs/next-steps" />
+  <Include src="_partials/nextjs/next-steps" />
+</If>

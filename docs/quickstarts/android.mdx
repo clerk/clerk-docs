@@ -3,7 +3,16 @@ title: Android Quickstart (beta)
 description: Add authentication and user management to your Android app with Clerk.
 ---
 
+> [!WARNING]
+> The Android SDK is currently in beta. **It is not yet recommended for production use**.
+
 <TutorialHero
+  exampleRepo={[
+    {
+      title: "Android quickstart repo",
+      link: "https://github.com/clerk/clerk-android/tree/main/samples/quickstart",
+    },
+  ]}
   beforeYouStart={[
     {
       title: "Set up a Clerk application",
@@ -13,23 +22,30 @@ description: Add authentication and user management to your Android app with Cle
   ]}
 />
 
+<Include src="_partials/native-api-callout" />
+
 <Steps>
   ## Create an Android Project
 
-  Create a new Android project in Android Studio using the "Empty Activity" template. This tutorial names the app `MyClerkApp`. Code examples reference this name and will need to be updated with your app's name in order to work properly.
+  1. Create a new Android project in Android Studio using the **Empty Activity** template. This tutorial uses `MyClerkApp` as the app name. If you choose a different name, be sure to update any code examples accordingly to match your app's name.
 
-  Ensure that your project's minimum SDK version is set to 24 or higher, and that your project's Java version is set to 17 or higher, as these are the minimum requirements for the Clerk Android SDK.
+  1. Open the `app/build.gradle.kts` file and ensure that your project's minimum SDK version is set to 24 or higher, and that your project's Java version is set to 17 or higher, as these are the minimum requirements for the Clerk Android SDK.
 
-  Add the Clerk Android SDK and Android's Lifecycle ViewModel Compose library to your application's dependencies:
+  1. In `app/build.gradle.kts`, add the following libraries to your `dependencies` block:
 
-  ```gradle
-  dependencies {
-     ...
-     implementation("com.clerk:clerk-android:<latest-version>")
-     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
-     ...
-  }
-  ```
+     - The [Clerk Android SDK](/docs/references/android/overview). Check the [GitHub release page](https://github.com/clerk/clerk-android/releases) for the latest version.
+     - [Android's Lifecycle ViewModel Compose library](https://developer.android.com/reference/kotlin/androidx/lifecycle/viewmodel/compose/package-summary).
+
+     ```gradle
+     dependencies {
+         ...
+         implementation("com.clerk:clerk-android:<latest-version>")
+         implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.2")
+         ...
+     }
+     ```
+
+  1. Sync your project to apply the changes after adding the dependencies.
 
   ## Initialize Clerk
 
@@ -50,21 +66,43 @@ description: Add authentication and user management to your Android app with Cle
     1. Copy your Clerk Publishable Key. It's prefixed with `pk_test_` for development instances and `pk_live_` for production instances.
   </SignedOut>
 
-  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MyClerkApp.kt', mark: [[7, 10]] }}
-  import.com.clerk.api.Clerk
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MyClerkApp.kt' }}
+  package com.example.myclerkapp
+
+  import android.app.Application
+  import com.clerk.api.Clerk
 
   class MyClerkApp: Application() {
       override fun onCreate() {
         super.onCreate()
-        ...
         Clerk.initialize(
             this,
             publishableKey = {{pub_key}}
         )
-        ...
       }
   }
   ```
+
+  ## Configure the `AndroidManifest.xml`
+
+  In `app/src/main/AndroidManifest.xml`, add the following configuration:
+
+  1. Inside the root `<manifest>` tag, add the following line to enable internet permission on your Android device.
+
+     ```xml
+     <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+         <uses-permission android:name="android.permission.INTERNET"/>
+         ...
+     </manifest>
+     ```
+
+  1. Inside the `<application>` tag, add the following line to use the `MyClerkApp` class as the entry point for app-level configuration.
+
+     ```xml
+     <application android:name=".MyClerkApp">
+         ...
+     </application>
+     ```
 
   ## Listen for SDK initialization and authentication events
 
@@ -73,20 +111,16 @@ description: Add authentication and user management to your Android app with Cle
   In your `app/src/main/java/com/example/myclerkapp/` directory, create a Kotlin class named `MainViewModel` with the following code. `MainViewModel` is a `ViewModel` that sets the state as `Loading` when the Clerk SDK is initializing, `SignedIn` when the user is signed in, or `SignedOut` when the user is signed out. The Clerk SDK initialization is non-blocking. Therefore, it's recommended to listen for the SDK to emit a success from Clerk's `isInitialized` global object to know when it's ready to use.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', collapsible: true }}
+  package com.example.myclerkapp
+
   import android.util.Log
   import androidx.lifecycle.ViewModel
   import androidx.lifecycle.viewModelScope
   import com.clerk.api.Clerk
-  import com.clerk.api.network.serialization.longErrorMessageOrNull
-  import com.clerk.api.network.serialization.onFailure
-  import com.clerk.api.network.serialization.onSuccess
   import kotlinx.coroutines.flow.MutableStateFlow
   import kotlinx.coroutines.flow.asStateFlow
   import kotlinx.coroutines.flow.combine
   import kotlinx.coroutines.flow.launchIn
-  import kotlinx.coroutines.flow.onEach
-  import kotlinx.coroutines.launch
-
 
   class MainViewModel: ViewModel() {
       private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading)
@@ -120,11 +154,11 @@ description: Add authentication and user management to your Android app with Cle
   import androidx.activity.ComponentActivity
   import androidx.activity.compose.setContent
   import androidx.activity.viewModels
+  import androidx.compose.runtime.getValue
   import androidx.compose.foundation.layout.Box
   import androidx.compose.foundation.layout.fillMaxSize
   import androidx.compose.material3.CircularProgressIndicator
   import androidx.compose.material3.Text
-  import androidx.compose.runtime.getValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.Modifier
   import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -157,7 +191,7 @@ description: Add authentication and user management to your Android app with Cle
 
   ### Sign-up view
 
-  Create a `SignUpViewModel` with the following code. It allows users to sign up using their email address and password, and sends an email verification code to confirm their email address.
+  Create a Kotlin class named `SignUpViewModel` with the following code. It allows users to sign up using their email address and password, and sends an email verification code to confirm their email address.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignUpViewModel.kt', collapsible: true }}
   package com.example.myclerkapp
@@ -165,6 +199,7 @@ description: Add authentication and user management to your Android app with Cle
   import android.util.Log
   import androidx.lifecycle.ViewModel
   import androidx.lifecycle.viewModelScope
+  import com.clerk.api.Clerk
   import com.clerk.api.network.serialization.longErrorMessageOrNull
   import com.clerk.api.network.serialization.onFailure
   import com.clerk.api.network.serialization.onSuccess
@@ -220,7 +255,7 @@ description: Add authentication and user management to your Android app with Cle
   }
   ```
 
-  Then, create a `SignUpView` with the following code to use the `SignUpViewModel`.
+  Then, create a `SignUpView` file with the following code to use the `SignUpViewModel`.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignUpView.kt', collapsible: true }}
   package com.example.myclerkapp
@@ -232,9 +267,9 @@ description: Add authentication and user management to your Android app with Cle
   import androidx.compose.material3.TextField
   import androidx.compose.runtime.Composable
   import androidx.compose.runtime.collectAsState
-  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.mutableStateOf
   import androidx.compose.runtime.remember
+  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.setValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -280,7 +315,7 @@ description: Add authentication and user management to your Android app with Cle
 
   ### Sign-in view
 
-  Create a `SignInViewModel` with the following code. It allows users to sign in using their email address and password.
+  Create a Kotlin class named `SignInViewModel` with the following code. It allows users to sign in using their email address and password.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInViewModel.kt', collapsible: true }}
   package com.example.myclerkapp
@@ -317,7 +352,7 @@ description: Add authentication and user management to your Android app with Cle
   }
   ```
 
-  Then, create a `SignInView` with the following code to use the `SignInViewModel`.
+  Then, create a `SignInView` file with the following code to use the `SignInViewModel`.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInView.kt', collapsible: true }}
   package com.example.myclerkapp
@@ -328,9 +363,9 @@ description: Add authentication and user management to your Android app with Cle
   import androidx.compose.material3.Text
   import androidx.compose.material3.TextField
   import androidx.compose.runtime.Composable
-  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.mutableStateOf
   import androidx.compose.runtime.remember
+  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.setValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -363,7 +398,7 @@ description: Add authentication and user management to your Android app with Cle
 
   ### Combine the views
 
-  Commonly, authentication flows will allow users to switch between sign up and sign in, such as a "Already signed up? Sign in" button. To add this to your app, create a `SignInOrUpView` with the following code. This container view combines the `SignUpView` and `SignInView` views, and allows users to switch between them.
+  Commonly, authentication flows will allow users to switch between sign up and sign in, such as a "Already signed up? Sign in" button. To add this to your app, create a `SignInOrUpView` file with the following code. This container view combines the `SignUpView` and `SignInView`, and allows users to switch between them.
 
   ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/SignInOrUpView.kt', collapsible: true }}
   package com.example.myclerkapp
@@ -374,9 +409,9 @@ description: Add authentication and user management to your Android app with Cle
   import androidx.compose.material3.Button
   import androidx.compose.material3.Text
   import androidx.compose.runtime.Composable
-  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.mutableStateOf
   import androidx.compose.runtime.remember
+  import androidx.compose.runtime.getValue
   import androidx.compose.runtime.setValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.Modifier
@@ -410,18 +445,18 @@ description: Add authentication and user management to your Android app with Cle
 
   Then, in your `MainActivity` file, render your newly created `SignInOrUpView` when the user isn't signed in.
 
-  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt' }}
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt', mark: [31] }}
   package com.example.myclerkapp
 
   import android.os.Bundle
   import androidx.activity.ComponentActivity
   import androidx.activity.compose.setContent
   import androidx.activity.viewModels
+  import androidx.compose.runtime.getValue
   import androidx.compose.foundation.layout.Box
   import androidx.compose.foundation.layout.fillMaxSize
   import androidx.compose.material3.CircularProgressIndicator
   import androidx.compose.material3.Text
-  import androidx.compose.runtime.getValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.Modifier
   import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -456,17 +491,20 @@ description: Add authentication and user management to your Android app with Cle
 
   In your `MainViewModel`, add a `signOut` function that calls `Clerk.signOut()`.
 
-  {/* TODO: add syntax highlighting  */}
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', mark: [14, [7, 9], [31, 41]], collapsible: true }}
+  package com.example.myclerkapp
 
-  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainViewModel.kt', mark: [[7, 11]], collapsible: true }}
+  import android.util.Log
   import androidx.lifecycle.ViewModel
   import androidx.lifecycle.viewModelScope
   import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.longErrorMessageOrNull
+  import com.clerk.api.network.serialization.onFailure
   import com.clerk.api.network.serialization.onSuccess
   import kotlinx.coroutines.flow.MutableStateFlow
   import kotlinx.coroutines.flow.asStateFlow
+  import kotlinx.coroutines.flow.combine
   import kotlinx.coroutines.flow.launchIn
-  import kotlinx.coroutines.flow.onEach
   import kotlinx.coroutines.launch
 
   class MainViewModel: ViewModel() {
@@ -481,7 +519,6 @@ description: Add authentication and user management to your Android app with Cle
               else -> MainUiState.SignedOut
             }
         }
-        .onEach { state -> _uiState.value = state }
         .launchIn(viewModelScope)
     }
 
@@ -507,21 +544,19 @@ description: Add authentication and user management to your Android app with Cle
 
   Then, in your `MainActivity`, add a button that calls the `signOut` function when clicked.
 
-  {/* TODO: Add syntax highlighting */}
-
-  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt', mark: [35], collapsible: true }}
+  ```kotlin {{ filename: 'app/src/main/java/com/example/myclerkapp/MainActivity.kt', mark: [10, 33], collapsible: true }}
   package com.example.myclerkapp
 
   import android.os.Bundle
   import androidx.activity.ComponentActivity
   import androidx.activity.compose.setContent
   import androidx.activity.viewModels
+  import androidx.compose.runtime.getValue
   import androidx.compose.foundation.layout.Box
   import androidx.compose.foundation.layout.fillMaxSize
   import androidx.compose.material3.Button
   import androidx.compose.material3.CircularProgressIndicator
   import androidx.compose.material3.Text
-  import androidx.compose.runtime.getValue
   import androidx.compose.ui.Alignment
   import androidx.compose.ui.Modifier
   import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -552,5 +587,5 @@ description: Add authentication and user management to your Android app with Cle
 
   ## Create your first user
 
-  Run your project. To sign up and create your first user, enter your email and password and select "Sign up".
+  Run your project and sign up to create your first user.
 </Steps>

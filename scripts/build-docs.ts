@@ -94,7 +94,8 @@ import { type Prompt, readPrompts, writePrompts, checkPrompts } from './lib/prom
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { writeLLMs as generateLLMs, writeLLMsFull as generateLLMsFull, listOutputDocsFiles } from './lib/llms'
 import { VFile } from 'vfile'
-import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
+import { checkTooltips } from './lib/plugins/checkTooltips'
+import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -238,7 +239,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
-  const writeTooltipsToDist = writeTooltips(config, store)
 
   abortSignal?.throwIfAborted()
 
@@ -340,7 +340,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const inManifest = docsInManifest.has(file.href)
 
       const markdownFile = await markdownCache(file.filePath, () =>
-        parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+        parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
       )
 
       docsMap.set(file.href, markdownFile)
@@ -351,7 +351,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           const inManifest = docsInManifest.has(file.href)
 
           const markdownFile = await markdownCache(file.filePath, () =>
-            parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+            parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
           )
 
           docsMap.set(file.href, markdownFile)
@@ -721,6 +721,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const foundLinks: Set<string> = new Set()
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
+      const foundTooltips: Set<string> = new Set()
 
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
@@ -741,6 +742,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)
+            }),
+          )
+          .use(
+            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+              foundTooltips.add(tooltip)
             }),
           )
           .use(
@@ -772,7 +778,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .filter((typedoc) => foundTypedocs.has(typedoc.path))
         .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
 
-      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks])
+      const tooltipsLinks = validatedTooltips
+        .filter((tooltip) => foundTooltips.has(tooltip.path))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTooltips)
+
+      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks, ...tooltipsLinks])
 
       allLinks.forEach((link) => {
         markDirty(doc.file.filePath, link)
@@ -830,6 +840,7 @@ ${yaml.stringify({
               .use(remarkMdx)
               .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
@@ -973,13 +984,6 @@ ${yaml.stringify({
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (config.tooltips) {
-    await writeTooltipsToDist(validatedTooltips)
-    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
   }
 
   abortSignal?.throwIfAborted()

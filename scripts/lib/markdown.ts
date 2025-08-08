@@ -26,6 +26,7 @@ import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import { Prompt, checkPrompts } from './prompts'
 import { markDocumentDirty, type Store } from './store'
+import { checkTooltips } from './plugins/checkTooltips'
 
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
 
@@ -34,6 +35,7 @@ export const parseInMarkdownFile =
   async (
     file: DocsFile & { content?: string },
     partials: { path: string; content: string; node: Node }[],
+    tooltips: { path: string; content: string; node: Node }[],
     typedocs: { path: string; content: string; node: Node }[],
     prompts: Prompt[],
     inManifest: boolean,
@@ -76,6 +78,11 @@ export const parseInMarkdownFile =
       .use(
         checkPartials(config, partials, file, { reportWarnings: true, embed: false }, (partial) => {
           markDirty(file.filePath, partial)
+        }),
+      )
+      .use(
+        checkTooltips(config, tooltips, file, { reportWarnings: true, embed: false }, (tooltip) => {
+          markDirty(file.filePath, tooltip)
         }),
       )
       .use(

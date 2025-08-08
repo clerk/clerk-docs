@@ -214,6 +214,14 @@
   - Migrate from Firebase [firebase]
   - Migrate from Cognito [cognito]
 - SDK Development
+  - Overview
+  - Terminology
+  - Philosophy
+  - Conventions
+  - SDK Types [types]
+  - Frontend-only
+  - Backend-only
+  - Fullstack
 - Upgrading Clerk [upgrading]
   - Versioning & LTS [versioning]
   - Upgrade Guides

@@ -179,6 +179,9 @@ async function main() {
 
         // temp migration ignores
         'clerk-react/clerk-provider-props.mdx': ['link-doc-not-found'],
+        'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
+        'backend/organization-sync-options.mdx': ['link-doc-not-found'],
+        'nextjs/clerk-middleware-options.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

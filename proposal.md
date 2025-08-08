@@ -255,23 +255,60 @@
 ### General
 
 - UI Components (box) [components]
+  - Overview
+  - `<ClerkProvider>` [clerk-provider]
+  - Authentication Components [authentication]
+    - `<SignIn />` [sign-in]
+    - `<SignUp />` [sign-up]
+    - `<GoogleOneTap />` [google-one-tap]
+    - `<Waitlist />` [waitlist]
+  - User Components [user]
+    - `<UserButton />` [user-button]
+    - `<UserProfile />` [user-profile]
+  - Organization Components [organization]
+    - `<CreateOrganization />` [create-organization]
+    - `<OrganizationProfile />` [organization-profile]
+    - `<OrganizationSwitcher />` [organization-switcher]
+    - `<OrganizationList />` [organization-list]
+  - Billing Components [billing]
+    - `<PricingTable />` [pricing-table]
+    - `<CheckoutButton />` (Beta) [checkout-button]
+    - `<PlanDetailsButton />` (Beta) [plan-details-button]
+    - `<SubscriptionDetailsButton />` (Beta) [subscription-details-button]
+  - Control Components [control]
+    - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
+    - `<ClerkLoaded>` [clerk-loaded]
+    - `<ClerkLoading>` [clerk-loading]
+    - `<Protect>` [protect]
+    - `<RedirectToSignIn />` [redirect-to-sign-in]
+    - `<RedirectToSignUp />` [redirect-to-sign-up]
+    - `<RedirectToUserProfile />` [redirect-to-user-profile]
+    - `<RedirectToOrganizationProfile />` [redirect-to-organization-profile]
+    - `<RedirectToCreateOrganization />` [redirect-to-create-organization]
+    - `<SignedIn>` [signed-in]
+    - `<SignedOut>` [signed-out]
+  - Unstyled Components [unstyled]
+    - `<SignInButton>` [sign-in-button]
+    - `<SignInWithMetamaskButton>` [sign-in-with-metamask]
+    - `<SignUpButton>` [sign-up-button]
+    - `<SignOutButton>` [sign-out-button]
 - Hooks
   - Overview
-  - useUser()
-  - useClerk()
-  - useAuth()
-  - useSignIn()
-  - useSignUp()
-  - useSession()
-  - useSessionList()
-  - useOrganization()
-  - useOrganizationList()
-  - useReverification()
-  - useCheckout()
-  - usePaymentElement()
-  - usePaymentMethods()
-  - usePlans()
-  - useSubscription()
+  - useUser() [use-user]
+  - useClerk() [use-clerk]
+  - useAuth() [use-auth]
+  - useSignIn() [use-sign-in]
+  - useSignUp() [use-sign-up]
+  - useSession() [use-session]
+  - useSessionList() [use-session-list]
+  - useOrganization() [use-organization]
+  - useOrganizationList() [use-organization-list]
+  - useReverification() [use-reverification]
+  - useCheckout() [use-checkout]
+  - usePaymentElement() [use-payment-element]
+  - usePaymentMethods() [use-payment-methods]
+  - usePlans() [use-plans]
+  - useSubscription() [use-subscription]
 
 ### SDK Reference
 

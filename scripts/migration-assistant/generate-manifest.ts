@@ -252,7 +252,10 @@ function parseMarkdownToManifest(content: string) {
           // Convert the parent item to a group if it's not already one
           if (!parentItem.items) {
             parentItem.items = [[]]
-            parentItem.collapse = true
+            // Only set default collapse if not explicitly set via JSON
+            if (typeof parentItem.collapse === 'undefined') {
+              parentItem.collapse = true
+            }
             delete parentItem.href // Groups don't have hrefs
           }
 

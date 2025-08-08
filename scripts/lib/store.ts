@@ -11,6 +11,7 @@ import type { readPartial } from './partials'
 import type { readTypedoc } from './typedoc'
 import type { SDK } from './schemas'
 import type { readTooltip } from './tooltips'
+import { VALID_SDKS } from './schemas'
 
 type MarkdownFile = Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>
 type CoreDocsFile = VFile
@@ -42,12 +43,25 @@ export type Store = ReturnType<typeof createBlankStore>
 export const invalidateFile =
   (store: ReturnType<typeof createBlankStore>, config: BuildConfig) =>
   (filePath: string, invalidateAdjacentDocs: boolean = true) => {
-    console.log(`invalidating ${filePath}`)
-
     const docsPath = path.join(config.baseDocsLink, path.relative(config.docsPath, filePath))
 
     store.coreDocs.delete(docsPath)
     store.scopedDocs.delete(docsPath)
+
+    // Check if this is an SDK variant file (e.g., api-doc.react.mdx)
+    // If so, we also need to invalidate the main document (e.g., api-doc.mdx)
+    // because the scoped doc cache for the main document depends on the SDK variant content
+    const fileName = path.basename(docsPath)
+    const sdkMatch = VALID_SDKS.find((sdk) => fileName.endsWith(`.${sdk}.mdx`))
+    if (sdkMatch) {
+      // This is an SDK variant file - also invalidate the main document
+      const mainDocPath = docsPath.replace(`.${sdkMatch}.mdx`, '.mdx')
+      store.coreDocs.delete(mainDocPath)
+      store.scopedDocs.delete(mainDocPath)
+      if (store.markdown.has(mainDocPath)) {
+        store.markdown.delete(mainDocPath)
+      }
+    }
 
     if (store.markdown.has(docsPath)) {
       store.markdown.delete(docsPath)

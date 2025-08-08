@@ -183,6 +183,7 @@ async function main() {
         'nextjs/clerk-middleware-options.mdx': ['link-doc-not-found'],
         'shared/use-organization-params.mdx': ['link-doc-not-found'],
         'types/check-authorization-params-from-session-claims.mdx': ['link-doc-not-found'],
+        'types/organization-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

@@ -86,7 +86,7 @@
   - OAuth
     - What are OAuth & OIDC
     - How Clerk implements OAuth
-    - Use OAuth for Single Sign-On {"icon": "SSO"}
+    - Use OAuth for Single Sign-On (SSO)
     - Use OAuth for scoped access
     - Verify OAuth tokens
 - Session Token customization
@@ -121,7 +121,7 @@
 
 ### Customizing Clerk
 
-- UI Customization [appearance-prop] {"icon": "Appearance Prop"}
+- UI Customization (Appearance Prop) [appearance-prop]
   - Overview
   - Layout
   - Themes
@@ -133,10 +133,10 @@
   - User profile
   - User button
 - Email and SMS Templates
-- Localization [localization] {"icon": "i18n"}
+- Localization (i18n) [localization]
 - Clerk Elements [elements] {"tag": "(Beta)"}
 
-### B2B [organizations] {"icon": "Organizations"}
+### B2B (Organizations) [organizations]
 
 - Overview
 - Managing Organizations [managing-orgs]
@@ -155,12 +155,12 @@
 ### Securing your App [secure]
 
 - Restricting Access
-- Multifactor Authentication [mfa] {"icon": "MFA"}
+- Multifactor Authentication (MFA) [mfa]
 - Authorization Checks
 - Bot Protection
 - Banning Users
 - Prevent brute force attacks [user-lockout]
-- Reverification {"icon": "Step-up"}
+- Reverification (Step-up)
 - Legal Compliance
 - Password protection and rules
 - Security Best Practices [best-practices]

@@ -155,7 +155,6 @@
 ### Securing your App [secure]
 
 - Restricting Access
-- Multifactor Authentication (MFA) [mfa]
 - Authorization Checks
 - Bot Protection
 - Banning Users

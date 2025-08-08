@@ -1,9 +1,9 @@
 # Top Level Links
 
-- Getting Started (checkmark-circle)
-- Guides (book)
-- Examples (plus-circle)
-- Reference (globe)
+- Getting Started {"icon": "checkmark-circle"}
+- Guides {"icon": "book"}
+- Examples {"icon": "plus-circle"}
+- Reference {"icon": "globe"}
   - SDK Reference
   - API Reference
   - UI Components
@@ -86,7 +86,7 @@
   - OAuth
     - What are OAuth & OIDC
     - How Clerk implements OAuth
-    - Use OAuth for Single Sign-On (SSO)
+    - Use OAuth for Single Sign-On {"icon": "SSO"}
     - Use OAuth for scoped access
     - Verify OAuth tokens
 - Session Token customization
@@ -121,7 +121,7 @@
 
 ### Customizing Clerk
 
-- UI Customization (Appearance Prop) [appearance-prop]
+- UI Customization [appearance-prop] {"icon": "Appearance Prop"}
   - Overview
   - Layout
   - Themes
@@ -133,10 +133,10 @@
   - User profile
   - User button
 - Email and SMS Templates
-- Localization (i18n) [localization]
-- Clerk Elements (beta) [elements]
+- Localization [localization] {"icon": "i18n"}
+- Clerk Elements [elements] {"tag": "(Beta)"}
 
-### B2B (Organizations) [organizations]
+### B2B [organizations] {"icon": "Organizations"}
 
 - Overview
 - Managing Organizations [managing-orgs]
@@ -155,12 +155,12 @@
 ### Securing your App [secure]
 
 - Restricting Access
-- Multifactor Authentication (MFA) [mfa]
+- Multifactor Authentication [mfa] {"icon": "MFA"}
 - Authorization Checks
 - Bot Protection
 - Banning Users
 - Prevent brute force attacks [user-lockout]
-- Reverification (Step-up)
+- Reverification {"icon": "Step-up"}
 - Legal Compliance
 - Password protection and rules
 - Security Best Practices [best-practices]
@@ -257,40 +257,40 @@
 
 ### General [reference]
 
-- UI Components (box) [components]
+- UI Components [components] {"icon": "box"}
 - Hooks
 
 ### SDK Reference
 
-- Next.js (nextjs)
-- React (react)
-- Expo (expo)
-- JavaScript (javascript)
-- Express (express)
-- React Router (react-router)
-- Astro (astro)
-- iOS (ios)
-- Nuxt (nuxt)
-- Vue (vue)
-- Chrome Extension (chrome)
-- Fastify (fastify)
-- Remix (remix)
-- Tanstack Start (tanstack)
-- JS Backend SDK (clerk)
-- C# (c-sharp)
-- Go (go)
-- Java (java)
-- Python (python)
-- Ruby / Rails (ruby)
+- Next.js {"icon": "nextjs"}
+- React {"icon": "react"}
+- Expo {"icon": "expo"}
+- JavaScript {"icon": "javascript"}
+- Express {"icon": "expressjs"}
+- React Router {"icon": "react-router"}
+- Astro {"icon": "astro"}
+- iOS {"icon": "apple"}
+- Nuxt {"icon": "nuxt"}
+- Vue {"icon": "vue"}
+- Chrome Extension {"icon": "chrome"}
+- Fastify {"icon": "fastify"}
+- Remix {"icon": "remix"}
+- Tanstack Start {"icon": "tanstack"}
+- JS Backend SDK {"icon": "clerk"}
+- C# {"icon": "c-sharp"}
+- Go {"icon": "go"}
+- Java {"icon": "java"}
+- Python {"icon": "python"}
+- Ruby / Rails {"icon": "ruby"}
 - Community SDKs
-  - Angular (angular)
-  - Elysia (elysia)
-  - Hono (hono)
-  - Koa (koa)
-  - SolidJS (solid)
-  - Svelte (svelte)
-  - RedwoodJS (redwood)
-  - Rust (rust)
+  - Angular {"icon": "angular"}
+  - Elysia {"icon": "elysia"}
+  - Hono {"icon": "hono"}
+  - Koa {"icon": "koa"}
+  - SolidJS {"icon": "solid"}
+  - Svelte {"icon": "svelte"}
+  - RedwoodJS {"icon": "redwood"}
+  - Rust {"icon": "rust"}
 
 ### HTTP API Reference
 

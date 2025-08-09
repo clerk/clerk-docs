@@ -230,7 +230,6 @@
 - DNS & Domains
   - Satellite Domains
   - Proxy Clerk Frontend API [proxy-fapi]
-- Plans & Billing
 
 ### How Clerk works
 

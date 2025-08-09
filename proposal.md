@@ -198,6 +198,8 @@
   - Postman or Insomnia
 - Errors
   - Overview
+  - Backend API Errors [backend-api]
+  - Frontend API Errors [frontend-api]
 - Troubleshooting
   - Overview
   - Email deliverability

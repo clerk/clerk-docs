@@ -5,100 +5,62 @@ import { z } from 'zod'
 const PROPOSAL_PATH = path.join(process.cwd(), './proposal.md')
 const OUTPUT_PATH = path.join(process.cwd(), './public/manifest.proposal.json')
 
-// Valid icon names from the schema
-const VALID_ICONS = [
-  'apple',
-  'application-2',
-  'arrow-up-circle',
-  'astro',
-  'angular',
-  'block',
-  'bolt',
-  'book',
-  'box',
-  'c-sharp',
-  'chart',
-  'checkmark-circle',
-  'chrome',
-  'clerk',
-  'code-bracket',
-  'cog-6-teeth',
-  'door',
-  'elysia',
-  'expressjs',
-  'globe',
-  'go',
-  'home',
-  'hono',
-  'javascript',
-  'koa',
-  'link',
-  'linkedin',
-  'lock',
-  'nextjs',
-  'nodejs',
-  'plug',
-  'plus-circle',
-  'python',
-  'react',
-  'redwood',
-  'remix',
-  'react-router',
-  'rocket',
-  'route',
-  'ruby',
-  'rust',
-  'speedometer',
-  'stacked-rectangle',
-  'solid',
-  'svelte',
-  'tanstack',
-  'user-circle',
-  'user-dotted-circle',
-  'vue',
-  'x',
-  'expo',
-  'nuxt',
-  'fastify',
-] as const
-
-type ValidIcon = (typeof VALID_ICONS)[number]
-
 /**
- * Parse title, icon, and custom slug from text
+ * Parse title and custom slug from text
  * Supports formats like:
- * - "Title (icon) [slug]"
- * - "Title (icon)"
  * - "Title [slug]"
  * - "Title"
+ * Parentheses are treated as part of the title.
  */
-function parseTextWithIconAndSlug(text: string): {
+function parseTextWithSlug(text: string): {
   title: string
-  icon: ValidIcon | null
   customSlug: string | null
 } {
-  // Match pattern: Title (icon) [slug] or any combination
-  const match = text.match(/^(.+?)(?:\s*\(([^)]+)\))?(?:\s*\[([^\]]+)\])?$/)
+  // Match pattern: Title [slug]
+  const match = text.match(/^(.+?)(?:\s*\[([^\]]+)\])?$/)
 
   if (!match) {
-    return { title: text.trim(), icon: null, customSlug: null }
+    return { title: text.trim(), customSlug: null }
   }
 
-  const [, titlePart, iconPart, slugPart] = match
+  const [, titlePart, slugPart] = match
   const title = titlePart.trim()
-  const icon = iconPart?.trim()
   const customSlug = slugPart?.trim()
-
-  // Validate icon if provided
-  const validIcon = icon && VALID_ICONS.includes(icon as ValidIcon) ? (icon as ValidIcon) : null
-  if (icon && !validIcon) {
-    console.warn(`Warning: Invalid icon "${icon}" for "${title}". Valid icons: ${VALID_ICONS.join(', ')}`)
-  }
 
   return {
     title,
-    icon: validIcon,
     customSlug: customSlug || null,
+  }
+}
+
+/**
+ * Extract a trailing JSON object from the end of a line of text.
+ * Example: "My Title {\"abc\":\"xyz\"}" -> { baseText: "My Title", extraProps: { abc: "xyz" } }
+ */
+function extractTrailingJson(text: string): { baseText: string; extraProps: Record<string, unknown> | null } {
+  const trimmedText = text.trim()
+  // Quick exit if it doesn't end with a closing brace
+  if (!trimmedText.endsWith('}')) {
+    return { baseText: text, extraProps: null }
+  }
+
+  // Find the last opening brace and try to parse from there
+  const lastOpenIndex = trimmedText.lastIndexOf('{')
+  if (lastOpenIndex === -1) {
+    return { baseText: text, extraProps: null }
+  }
+
+  const possibleJson = trimmedText.slice(lastOpenIndex)
+  try {
+    const parsed = JSON.parse(possibleJson)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const baseText = trimmedText.slice(0, lastOpenIndex).trim()
+      return { baseText, extraProps: parsed as Record<string, unknown> }
+    }
+    return { baseText: text, extraProps: null }
+  } catch {
+    // Not valid JSON – ignore silently and fall back to original text
+    return { baseText: text, extraProps: null }
   }
 }
 
@@ -173,12 +135,22 @@ function parseMarkdownToManifest(content: string) {
 
     // Process Top Level Links items
     if (inTopLevelLinksSection && trimmed.startsWith('- ')) {
-      const titleWithIconAndSlug = trimmed.substring(2)
-      const { title, icon, customSlug } = parseTextWithIconAndSlug(titleWithIconAndSlug)
+      const rawTopLinkText = trimmed.substring(2)
+      const { baseText: titleWithIconAndSlug, extraProps } = extractTrailingJson(rawTopLinkText)
+      const { title, customSlug } = parseTextWithSlug(titleWithIconAndSlug)
+
+      // Determine icon: prefer JSON's icon
+      let finalIcon: string | undefined
+      const jsonIcon = (extraProps && typeof extraProps.icon === 'string' ? (extraProps.icon as string) : undefined) as
+        | string
+        | undefined
+      if (jsonIcon) {
+        finalIcon = jsonIcon
+      }
 
       // Store top-level link info for later merging with sections
       topLevelLinksMap.set(title, {
-        icon: icon || undefined,
+        icon: finalIcon || undefined,
         customSlug: customSlug || undefined,
       })
       continue
@@ -187,13 +159,21 @@ function parseMarkdownToManifest(content: string) {
     // Top level sections (## Header) - these become top-level groups
     if (trimmed.startsWith('## ')) {
       finishCurrentTopLevelGroup()
-      const titleWithIconAndSlug = trimmed.substring(3)
-      const { title, icon, customSlug } = parseTextWithIconAndSlug(titleWithIconAndSlug)
+      const rawHeaderText = trimmed.substring(3)
+      const { baseText: titleWithIconAndSlug, extraProps } = extractTrailingJson(rawHeaderText)
+      const { title, customSlug } = parseTextWithSlug(titleWithIconAndSlug)
 
       currentTopLevelGroup = {
         title,
         items: [],
       }
+
+      // If icon provided via JSON, set it
+      if (extraProps && typeof extraProps.icon === 'string') {
+        const jsonIcon = extraProps.icon as string
+        ;(currentTopLevelGroup as any).icon = jsonIcon
+      }
+
       currentTopLevelCustomSlug = customSlug
       currentSubGroup = null
       currentItemGroup = []
@@ -204,13 +184,21 @@ function parseMarkdownToManifest(content: string) {
     // Subsections (### Header) - these become sub-groups within top-level groups
     if (trimmed.startsWith('### ')) {
       finishCurrentSubGroup()
-      const titleWithIconAndSlug = trimmed.substring(4)
-      const { title, icon, customSlug } = parseTextWithIconAndSlug(titleWithIconAndSlug)
+      const rawHeaderText = trimmed.substring(4)
+      const { baseText: titleWithIconAndSlug, extraProps } = extractTrailingJson(rawHeaderText)
+      const { title, customSlug } = parseTextWithSlug(titleWithIconAndSlug)
 
       currentSubGroup = {
         title,
         items: [],
       }
+
+      // If icon provided via JSON, set it
+      if (extraProps && typeof extraProps.icon === 'string') {
+        const jsonIcon = extraProps.icon as string
+        ;(currentSubGroup as any).icon = jsonIcon
+      }
+
       currentSubGroupCustomSlug = customSlug
       currentItemGroup = []
       pathStack = []
@@ -223,9 +211,11 @@ function parseMarkdownToManifest(content: string) {
       const leadingSpaces = line.length - line.trimStart().length
       const indentLevel = Math.floor(leadingSpaces / 2) // Assuming 2 spaces per indent level
 
-      const titleWithIconAndSlug = trimmed.substring(2)
-      // Parse icon and slug syntax for list items
-      const { title, icon, customSlug } = parseTextWithIconAndSlug(titleWithIconAndSlug)
+      const rawItemText = trimmed.substring(2)
+      // Support optional trailing JSON blob that should be merged into the item
+      const { baseText: titleWithIconAndSlug, extraProps } = extractTrailingJson(rawItemText)
+      // Parse slug syntax for list items
+      const { title, customSlug } = parseTextWithSlug(titleWithIconAndSlug)
 
       // Update pathStack based on indentation level
       // Keep only the path components for levels above the current one
@@ -262,7 +252,10 @@ function parseMarkdownToManifest(content: string) {
           // Convert the parent item to a group if it's not already one
           if (!parentItem.items) {
             parentItem.items = [[]]
-            parentItem.collapse = true
+            // Only set default collapse if not explicitly set via JSON
+            if (typeof parentItem.collapse === 'undefined') {
+              parentItem.collapse = true
+            }
             delete parentItem.href // Groups don't have hrefs
           }
 
@@ -281,7 +274,6 @@ function parseMarkdownToManifest(content: string) {
           title,
           currentTopLevelGroup?.title,
           currentSubGroup?.title,
-          undefined,
           itemSlug,
           currentTopLevelCustomSlug || undefined,
           currentSubGroupCustomSlug || undefined,
@@ -289,9 +281,17 @@ function parseMarkdownToManifest(content: string) {
         ),
       }
 
-      // Add icon if provided
-      if (icon) {
-        newItem.icon = icon
+      // Icon can only come from trailing JSON
+
+      // Merge any extra properties parsed from the trailing JSON
+      if (extraProps) {
+        // If icon provided via JSON, set it
+        if (typeof extraProps.icon === 'string') {
+          const jsonIcon = extraProps.icon as string
+          newItem.icon = jsonIcon
+        }
+
+        Object.assign(newItem, extraProps)
       }
 
       // Find the appropriate container for this indentation level
@@ -312,12 +312,8 @@ function parseMarkdownToManifest(content: string) {
     const group = navGroup[0]
     if (group && group.title) {
       const topLevelInfo = topLevelLinksMap.get(group.title)
-      if (topLevelInfo) {
-        // Add icon from top-level links if available
-        if (topLevelInfo.icon) {
-          group.icon = topLevelInfo.icon
-        }
-        // Note: custom slug from top-level links could override section slug if needed
+      if (topLevelInfo && topLevelInfo.icon) {
+        group.icon = topLevelInfo.icon
       }
     }
     return navGroup
@@ -333,7 +329,6 @@ function parseMarkdownToManifest(content: string) {
  * @param {string} title - The item title
  * @param {string} topLevel - The top-level group title
  * @param {string} subLevel - The sub-level group title
- * @param {string} manifestKey - The manifest key for separate manifests
  * @param {string} customSlug - The custom slug for the item
  * @param {string} topLevelCustomSlug - The custom slug for the top-level group
  * @param {string} subLevelCustomSlug - The custom slug for the sub-level group
@@ -344,7 +339,6 @@ function generateHref(
   title: string,
   _topLevel?: string,
   subLevel?: string,
-  manifestKey?: string,
   customSlug?: string,
   topLevelCustomSlug?: string,
   subLevelCustomSlug?: string,
@@ -356,11 +350,6 @@ function generateHref(
   // Special case for Home section - use root path
   if (topLevel === 'Home') {
     topLevel = ''
-  }
-
-  // If this is a separate manifest, use the manifest key as the base path
-  if (manifestKey) {
-    href += `/${manifestKey}`
   }
 
   // Add the top-level group path
@@ -392,14 +381,16 @@ function generateHref(
 export type ManifestItem = {
   title: string
   href: string
-  icon?: ValidIcon
+  icon?: string
+  tag?: string
 }
 
 export type ManifestGroup = {
   title: string
   items: Manifest
   collapse?: boolean
-  icon?: ValidIcon
+  icon?: string
+  tag?: string
 }
 
 export type Manifest = (ManifestItem | ManifestGroup)[][]
@@ -408,16 +399,18 @@ const manifestItem: z.ZodType<ManifestItem> = z
   .object({
     title: z.string(),
     href: z.string(),
-    icon: z.enum(VALID_ICONS).optional(),
+    icon: z.string().optional(),
+    tag: z.string().optional(),
   })
-  .strict()
+  .passthrough()
 
 const manifestGroup: z.ZodType<ManifestGroup> = z
   .object({
     title: z.string(),
     items: z.lazy(() => manifestSchema),
     collapse: z.boolean().optional(),
-    icon: z.enum(VALID_ICONS).optional(),
+    icon: z.string().optional(),
+    tag: z.string().optional(),
   })
   .strict()
 

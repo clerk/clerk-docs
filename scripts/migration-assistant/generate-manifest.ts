@@ -382,6 +382,7 @@ export type ManifestItem = {
   title: string
   href: string
   icon?: string
+  tag?: string
 }
 
 export type ManifestGroup = {
@@ -389,6 +390,7 @@ export type ManifestGroup = {
   items: Manifest
   collapse?: boolean
   icon?: string
+  tag?: string
 }
 
 export type Manifest = (ManifestItem | ManifestGroup)[][]
@@ -398,6 +400,7 @@ const manifestItem: z.ZodType<ManifestItem> = z
     title: z.string(),
     href: z.string(),
     icon: z.string().optional(),
+    tag: z.string().optional(),
   })
   .passthrough()
 
@@ -407,6 +410,7 @@ const manifestGroup: z.ZodType<ManifestGroup> = z
     items: z.lazy(() => manifestSchema),
     collapse: z.boolean().optional(),
     icon: z.string().optional(),
+    tag: z.string().optional(),
   })
   .strict()
 

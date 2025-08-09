@@ -184,6 +184,44 @@
 - Customize Redirect URLs
 - Override Clerk Types/Interfaces
 - Image Optimization
+- Custom Flows
+  - Overview
+  - Error handling
+  - Authentication {"collapse": false}
+    - Email & password
+    - Email / SMS OTP
+    - Email links
+    - Email & password + MFA
+    - Passkeys
+    - Google One Tap
+    - OAuth connections
+    - Enterprise connections
+    - Sign out
+    - Sign-up with application invitations
+    - Embedded email links
+    - Multi-session applications
+    - Bot sign-up protection
+  - Organizations {"collapse": false}
+    - Accept organization invitation links
+    - Create an organization
+    - Create and manage organization invitations
+    - List and switch between organizations
+    - Manage a user's organization invitations
+    - Manage member roles
+    - Manage membership requests
+    - Update an organization
+  - Billing {"collapse": false}
+    - Checkout with a new payment method
+    - Checkout with an existing payment method
+    - Add a new payment method
+  - Account updates {"collapse": false}
+    - Forgot password
+    - User impersonation
+    - Add email
+    - Add phone
+    - Manage SSO connections
+    - Manage SMS-based MFA
+    - Manage TOTP-based MFA
 - Testing with Clerk [testing]
   - Overview
   - Test emails and phones

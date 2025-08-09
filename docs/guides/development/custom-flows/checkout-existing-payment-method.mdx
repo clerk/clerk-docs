@@ -1,17 +1,13 @@
 ---
-title: Build a custom checkout flow with a new payment method
-description: Learn how to use the Clerk API to build a custom checkout flow that allows users to add a new payment method during checkout.
+title: Build a custom checkout flow with an existing payment method
+description: Learn how to use the Clerk API to build a custom checkout flow that allows users to checkout with an existing payment method.
 ---
 
 <Include src="_partials/custom-flows-callout" />
 
 <Include src="_partials/billing/api-experimental-guide" />
 
-This guide will walk you through how to build a custom user interface for a checkout flow that allows users to **add a new payment method during checkout**.
-
-For the custom flow that allows users to checkout **with an existing payment** method, see the [dedicated guide](/docs/custom-flows/checkout-existing-payment-method).
-
-For the custom flow that allows users to add a new payment method to their account, **outside of a checkout flow**, see the [dedicated guide](/docs/custom-flows/add-new-payment-method).
+This guide will walk you through how to build a custom user interface for a checkout flow that allows users to checkout **with an existing payment method**. For the custom flow that allows users to **add a new payment method** during checkout, see the [dedicated guide](/docs/guides/development/custom-flows/checkout-new-payment-method).
 
 <Steps>
   ## Enable billing features
@@ -20,21 +16,21 @@ For the custom flow that allows users to add a new payment method to their accou
 
   ## Checkout flow
 
-  To create a checkout session with a new payment card, you must:
+  To create a checkout session with an existing payment method, you must:
 
   1. Set up the checkout provider with plan details.
   1. Initialize the checkout session when the user is ready.
-  1. Render the payment form for card collection.
-  1. Confirm the payment with the collected payment method.
+  1. Fetch and display the user's existing payment methods.
+  1. Confirm the payment with the selected payment method.
   1. Complete the checkout process and redirect the user.
 
   <Tabs items={["Next.js"]}>
     <Tab>
       The following example:
 
-      1. Uses the [`useCheckout()`](/docs/hooks/use-checkout) hook to get to initiate and manage the checkout session.
-      1. Uses the [`usePaymentElement()`](/docs/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
-      1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
+      1. Uses the [`useCheckout()`](/docs/hooks/use-checkout) hook to initiate and manage the checkout session.
+      1. Uses the [`usePaymentMethods()`](/docs/hooks/use-payment-methods) hook to fetch the user's existing payment methods.
+      1. Assumes that you have already have a valid `planId`, which you can acquire in many ways:
          - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/last-active?path=billing/plans?tab=user).
          - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans).
          - Use the new [`usePlans()`](/docs/hooks/use-plans) hook to get the plan details.
@@ -45,17 +41,12 @@ For the custom flow that allows users to add a new payment method to their accou
       'use client'
       import * as React from 'react'
       import { SignedIn, ClerkLoaded } from '@clerk/nextjs'
-      import {
-        CheckoutProvider,
-        useCheckout,
-        PaymentElementProvider,
-        PaymentElement,
-        usePaymentElement,
-      } from '@clerk/nextjs/experimental'
+      import { CheckoutProvider, useCheckout, usePaymentMethods } from '@clerk/nextjs/experimental'
+      import { useMemo, useState } from 'react'
 
       export default function CheckoutPage() {
         return (
-          <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+          <CheckoutProvider planId="cplan_xxx" planPeriod="month">
             <ClerkLoaded>
               <SignedIn>
                 <CustomCheckout />
@@ -76,10 +67,7 @@ For the custom flow that allows users to add a new payment method to their accou
         return (
           <div className="checkout-container">
             <CheckoutSummary />
-
-            <PaymentElementProvider checkout={checkout}>
-              <PaymentSection />
-            </PaymentElementProvider>
+            <PaymentSection />
           </div>
         )
       }
@@ -101,25 +89,26 @@ For the custom flow that allows users to add a new payment method to their accou
 
       function PaymentSection() {
         const { checkout } = useCheckout()
+        const { data, isLoading } = usePaymentMethods({
+          for: 'user',
+          pageSize: 20,
+        })
+
         const { isConfirming, confirm, finalize, error } = checkout
 
-        const { isFormReady, submit } = usePaymentElement()
-        const [isProcessing, setIsProcessing] = React.useState(false)
+        const [isProcessing, setIsProcessing] = useState(false)
+        const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
 
-        const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-          e.preventDefault()
-          if (!isFormReady || isProcessing) return
+        const defaultMethod = useMemo(() => data?.find((method) => method.isDefault), [data])
+
+        const submitSelectedMethod = async () => {
+          const paymentSourceId = paymentMethodId || defaultMethod?.id
+          if (isProcessing || !paymentSourceId) return
           setIsProcessing(true)
 
           try {
-            // Submit payment form to get payment method
-            const { data, error } = await submit()
-            // Usually a validation error from stripe that you can ignore
-            if (error) {
-              return
-            }
             // Confirm checkout with payment method
-            await confirm(data)
+            await confirm({ paymentSourceId })
             // Complete checkout and redirect
             finalize({ redirectUrl: '/dashboard' })
           } catch (error) {
@@ -129,16 +118,35 @@ For the custom flow that allows users to add a new payment method to their accou
           }
         }
 
+        if (isLoading) {
+          return <div>Loading...</div>
+        }
+
         return (
-          <form onSubmit={handleSubmit}>
-            <PaymentElement fallback={<div>Loading payment element...</div>} />
+          <>
+            <select
+              defaultValue={defaultMethod?.id}
+              onChange={(e) => {
+                const methodId = e.target.value
+                const method = data?.find((method) => method.id === methodId)
+                if (method) {
+                  setPaymentMethodId(method.id)
+                }
+              }}
+            >
+              {data?.map((method) => (
+                <option key={method.id}>
+                  **** **** **** {method.last4} {method.cardType}
+                </option>
+              ))}
+            </select>
 
             {error && <div>{error.message}</div>}
 
-            <button type="submit" disabled={!isFormReady || isProcessing || isConfirming}>
+            <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
               {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
             </button>
-          </form>
+          </>
         )
       }
 

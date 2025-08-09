@@ -36,34 +36,38 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
+
   - Sign-up and sign-in options [sign-up-sign-in-options]
   - Social Connections
-    - Apple
-    - Atlassian
-    - Bitbucket
-    - Box
-    - Coinbase
-    - Discord
-    - Dropbox
-    - Facebook
-    - GitHub
-    - GitLab
-    - Google
-    - HubSpot
-    - Hugging Face
-    - Line
-    - Linear
-    - LinkedIn [linkedin-oidc]
-    - LinkedIn (deprecated) [linkedin]
-    - Microsoft
-    - Notion
-    - Slack
-    - Spotify
-    - TikTok
-    - Twitch
-    - Twitter v1 (deprecated) [twitter]
-    - X/Twitter v2 [x-twitter]
-    - Xero
+    - Account linking
+    - Custom provider
+    - All providers
+      - Apple
+      - Atlassian
+      - Bitbucket
+      - Box
+      - Coinbase
+      - Discord
+      - Dropbox
+      - Facebook
+      - GitHub
+      - GitLab
+      - Google
+      - HubSpot
+      - Hugging Face
+      - Line
+      - Linear
+      - LinkedIn [linkedin-oidc]
+      - LinkedIn (deprecated) [linkedin]
+      - Microsoft
+      - Notion
+      - Slack
+      - Spotify
+      - TikTok
+      - Twitch
+      - Twitter v1 (deprecated) [twitter]
+      - X/Twitter v2 [x-twitter]
+      - Xero
   - Enterprise Connections
     - Overview
     - Authentication flows
@@ -89,6 +93,7 @@
     - Use OAuth for Single Sign-On (SSO) [single-sign-on]
     - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
+
 - Session token customization [session-token]
 - Webhooks
   - Overview

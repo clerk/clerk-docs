@@ -1,25 +1,38 @@
 /**
- * Relocates an MDX file.
+ * Relocates MDX files (single file or batch using glob patterns).
  *
  * At a high level, the script does the following in the /clerk-docs repo:
- * 1. Moves the mdx file to the new location
- * 2. Updates the manifest.json file to update all links that point to the old location
- * 3. Updates any links in other mdx files that point to the old location
- * 4. Adds the redirect to the redirects/static/docs.json file
- * 5. Updates any existing redirects to point to the new location
+ * 1. Moves the mdx file(s) to the new location(s)
+ * 2. Updates the manifest.json file to update all links that point to the old location(s)
+ * 3. Updates any links in other mdx files that point to the old location(s)
+ * 4. Adds the redirect(s) to the redirects/static/docs.json file
+ * 5. Updates any existing redirects to point to the new location(s)
  *
  * The format to run the script is:
  * node scripts/move-doc.mjs /docs/old-path /docs/new-path
  *
- * @example
+ * @example Single file move:
  * node scripts/move-doc.mjs /docs/references/nextjs/overview /docs/references/nextjs/available-methods
  *
- * Note: The .mdx extension should be omitted from the paths as the script will add it
+ * @example Batch move with glob patterns:
+ * node scripts/move-doc.mjs "/docs/references/**" "/docs/reference/sdk/**"
+ * node scripts/move-doc.mjs "/docs/quickstarts/*" "/docs/getting-started/*"
+ *
+ * Supported glob patterns:
+ * - * matches any characters except /
+ * - ** matches any characters including /
+ * - ? matches any single character except /
+ *
+ * Note:
+ * - The .mdx extension should be omitted from the paths as the script will add it
+ * - When using glob patterns, both source and destination must be glob patterns
+ * - Glob patterns should be quoted to prevent shell expansion
  */
 
 import fs from 'fs/promises'
 import path from 'path'
 import prettier from 'prettier'
+import { glob } from 'glob'
 
 const DOCS_FILE = './redirects/static/docs.json'
 const MANIFEST_FILE = './docs/manifest.json'
@@ -271,6 +284,67 @@ const updateRedirects = async (oldPath, newPath) => {
   return [...new Set(pathsToUpdate.map((p) => splitPathAndHash(p).path))]
 }
 
+// Check if a path contains glob patterns
+const isGlobPattern = (pattern) => {
+  return pattern.includes('*') || pattern.includes('?') || pattern.includes('[') || pattern.includes('{')
+}
+
+// Convert a glob pattern to a regex for extracting variable parts
+const globToRegex = (pattern) => {
+  // Escape special regex characters except glob ones
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '§DOUBLESTAR§') // Temporary placeholder
+    .replace(/\*/g, '([^/]*)') // Single * becomes capture group
+    .replace(/§DOUBLESTAR§/g, '(.*?)') // ** becomes non-greedy capture group
+    .replace(/\?/g, '([^/])') // ? becomes single char capture group
+
+  return new RegExp(`^${escaped}$`)
+}
+
+// Map a source file to its destination using glob patterns
+const mapSourceToDestination = (sourceFile, sourcePattern, destPattern) => {
+  const sourceRegex = globToRegex(sourcePattern)
+  const matches = sourceFile.match(sourceRegex)
+
+  if (!matches) {
+    throw new Error(`Source file ${sourceFile} doesn't match pattern ${sourcePattern}`)
+  }
+
+  // Replace glob patterns in destination with captured groups
+  let result = destPattern
+  let captureIndex = 1
+
+  // Replace ** patterns first (they capture more)
+  result = result.replace(/\*\*/g, () => matches[captureIndex++] || '')
+  // Then replace single * patterns
+  result = result.replace(/\*/g, () => matches[captureIndex++] || '')
+  // Then replace ? patterns
+  result = result.replace(/\?/g, () => matches[captureIndex++] || '')
+
+  return result
+}
+
+// Find all files matching a glob pattern
+const expandGlobPattern = async (pattern) => {
+  // Remove leading slash and add .mdx extension if not present
+  const searchPattern = pattern.replace(/^\//, '')
+  const globPattern = searchPattern.endsWith('.mdx') ? searchPattern : `${searchPattern}.mdx`
+
+  const files = await glob(globPattern, {
+    cwd: process.cwd(),
+    ignore: ['**/node_modules/**', '**/.git/**'],
+  })
+
+  // Return paths with leading slash and .mdx extension removed to match pattern format
+  return files.map((file) => {
+    // Remove .mdx extension but keep the full path structure
+    const withoutExt = file.replace(/\.mdx$/, '')
+    // Add leading slash to match pattern format like /docs/ai-prompts/react
+    return `/${withoutExt}`
+  })
+}
+
 async function fileExists(filePath) {
   try {
     await fs.access(filePath, fs.constants.F_OK)
@@ -332,8 +406,63 @@ const main = async () => {
     throw new Error('Destination path is required')
   }
 
-  await moveDoc(source, destination)
-  console.log('Document move completed successfully')
+  // Check if we're dealing with glob patterns
+  const isSourceGlob = isGlobPattern(source)
+  const isDestGlob = isGlobPattern(destination)
+
+  if (isSourceGlob || isDestGlob) {
+    // Handle glob patterns
+    if (isSourceGlob && !isDestGlob) {
+      throw new Error('If source is a glob pattern, destination must also be a glob pattern')
+    }
+    if (!isSourceGlob && isDestGlob) {
+      throw new Error('If destination is a glob pattern, source must also be a glob pattern')
+    }
+
+    console.log(`🔍 Expanding glob pattern: ${source}`)
+    const sourceFiles = await expandGlobPattern(source)
+
+    if (sourceFiles.length === 0) {
+      console.log('❌ No files found matching the source pattern')
+      return
+    }
+
+    console.log(`📁 Found ${sourceFiles.length} files to move:`)
+
+    // Process each file
+    const results = []
+    for (const sourceFile of sourceFiles) {
+      try {
+        const destFile = mapSourceToDestination(sourceFile, source, destination)
+        console.log(`   ${sourceFile} → ${destFile}`)
+
+        await moveDoc(sourceFile, destFile)
+        results.push({ source: sourceFile, destination: destFile, status: 'success' })
+      } catch (error) {
+        console.error(`❌ Failed to move ${sourceFile}: ${error.message}`)
+        results.push({ source: sourceFile, destination: null, status: 'failed', error: error.message })
+      }
+    }
+
+    // Summary
+    const successful = results.filter((r) => r.status === 'success').length
+    const failed = results.filter((r) => r.status === 'failed').length
+
+    console.log(`\n📊 Batch move completed: ${successful} successful, ${failed} failed`)
+
+    if (failed > 0) {
+      console.log('\n❌ Failed moves:')
+      results
+        .filter((r) => r.status === 'failed')
+        .forEach((r) => {
+          console.log(`   ${r.source}: ${r.error}`)
+        })
+    }
+  } else {
+    // Handle single file move (existing behavior)
+    await moveDoc(source, destination)
+    console.log('Document move completed successfully')
+  }
 }
 
 main().catch((error) => {

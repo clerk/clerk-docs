@@ -1,15 +1,22 @@
 ---
 title: Auth object
 description: The Auth object contains information about the current user's session.
+sdk: js-backend
 ---
 
 The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
+
+> [!NOTE]
+> The structure of the `Auth` object varies depending on the type of request.
+> For machine-authenticated requests (e.g. using an API key or OAuth token), the object reflects machine-level authentication data instead of user session details.
+>
+> If you're working with machine-authenticated requests, refer to the [Machine properties section](#machine-properties) for a detailed breakdown.
 
 ## How to access the `Auth` object
 
 <Include src="_partials/auth-object-table" />
 
-## Properties
+## Session properties
 
 <Properties>
   - `sessionId`
@@ -86,6 +93,13 @@ The `Auth` object contains important information like the current user's session
   - `ServerGetToken`
 
   A function that gets the current user's [session token](/docs/backend-requests/resources/session-tokens) or a [custom JWT template](/docs/backend-requests/jwt-templates).
+
+  ---
+
+  - `tokenType`
+  - `'session_token'`
+
+  The type of request to authenticate.
 
   ---
 
@@ -267,9 +281,9 @@ The `Auth` object is not available in the frontend. To use the `getToken()` meth
     ```ts {{ filename: 'app/routes/api/example.ts' }}
     import { getAuth } from '@clerk/tanstack-react-start/server'
     import { json } from '@tanstack/react-start'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
 
-    export const Route = createAPIFileRoute('/api/example')({
+    export const ServerRoute = createServerFileRoute().methods({
       GET: async ({ req, params }) => {
         const { userId, getToken } = await getAuth(req)
 
@@ -557,3 +571,79 @@ The following is an example of the `Auth` object of a user without an MFA method
     ```
   </Tab>
 </Tabs>
+
+## Machine properties
+
+<Properties>
+  - `id`
+  - `string`
+
+  The ID of the machine.
+
+  ---
+
+  - `subject`
+  - `string`
+
+  The ID of the user or organization that the machine is associated with.
+
+  ---
+
+  - `name`
+  - `string`
+
+  The name of the machine. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `claims`
+  - `Record<string, unknown> | null`
+
+  The machine's claims. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `scopes`
+  - `string[]`
+
+  The scopes of the machine.
+
+  ---
+
+  - [`getToken()`](#get-token)
+  - `() => Promise<string>`
+
+  A function that gets the machine's token.
+
+  ---
+
+  - `tokenType`
+  - `'api_key' | 'oauth_token' | 'machine_token'`
+
+  The type of request to authenticate.
+
+  ---
+
+  - `debug`
+  - `AuthObjectDebug`
+
+  Used to help debug issues when using Clerk in development.
+</Properties>
+
+## `Auth` object example of a machine request
+
+The following is an example of the `Auth` object of an authenticated machine request (i.e. a request authenticated using a machine token like an API key).
+
+Notice the addition of a `tokenType` property with the value of 'api\_key', which distinguishes the request as a machine request rather than a user session. The `scopes` array defines the permissions granted by the token.
+
+```js {{ prettier: false }}
+{
+  id: 'oat_123',
+  tokenType: 'oauth_token',
+  userId: 'user_123',
+  clientId: 'client_123',
+  name: 'GitHub OAuth',
+  scopes: ['read', 'write'],
+  getToken: [AsyncFunction (anonymous)],
+}
+```

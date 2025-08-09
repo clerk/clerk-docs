@@ -131,6 +131,7 @@ Once the `@clerk/localizations` package is installed, you can import the localiz
 
   <Tab>
     ```js {{ filename: 'astro.config.mjs', mark: [2, 3, 8] }}
+    import { defineConfig } from 'astro/config'
     import clerk from '@clerk/astro'
     // fr-FR locale is imported as frFR
     import { frFR } from '@clerk/localizations'
@@ -163,7 +164,7 @@ Once the `@clerk/localizations` package is installed, you can import the localiz
         localization: frFR,
       })
 
-      if (clerk.user) {
+      if (clerk.isSignedIn) {
         document.getElementById('app').innerHTML = `
             <div id="user-button"></div>
           `
@@ -281,11 +282,11 @@ Once the `@clerk/localizations` package is installed, you can import the localiz
 
 ## Adding or updating a localization
 
-Our localizations are customer-sourced and we encourage customers to add or update localizations. To do so, follow these steps:
+Clerk's localizations are customer-sourced and we encourage customers to add or update localizations. To do so, follow these steps:
 
 1. Fork the [https://github.com/clerk/javascript/](https://github.com/clerk/javascript/) repo.
 1. Clone it locally to edit it.
-1. Review our [Contributing](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md) guide.
+1. Review Clerk's [Contributing](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md) guide.
 1. If you are updating an existing localization locate the file in `packages/localizations/src`
 1. If you are adding a new language, copy the `en-US.ts` file and name it according to your language. The naming is the abbreviated language-region. For example, for French in Canada, it would be `fr-CA.ts.`
 1. Go through the file and edit the entries.
@@ -294,93 +295,648 @@ Our localizations are customer-sourced and we encourage customers to add or upda
 
 ## Custom localizations
 
-You can also provide your own localizations for the Clerk components. This is useful if you want to provide limited or quick localization for a language that Clerk doesn't currently support or if you want to change the wording to suit your brand.
+You can also provide your own localizations for the Clerk components. This is useful if you want to provide limited or quick localization for a language Clerk doesn't currently support, adjust the wording to match your brand, or customize default error messages.
 
-### Usage
+First, you need to find the key for the element that you want to customize. To find the key for your translation, open up Clerk's [English localization file](https://github.com/clerk/javascript/blob/main/packages/localizations/src/en-US.ts). Search the file for the term that you want to customize.
 
-```tsx {{ filename: 'app/layout.tsx' }}
-import { ClerkProvider } from '@clerk/nextjs'
-import './globals.css'
+For example, say you want to change the text of the "Continue" button on the `<SignIn />` component to say "LETS GO!". In this case, you'd search for "Continue". The first result that comes up is `formButtonPrimary`, which is the key for the "Continue" button.
 
-const localization = {
-  socialButtonsBlockButton: 'Sign In with {{provider|titleize}}',
-}
+Now that you know the key, you can pass it to the `localization` prop and set the value to the text you want to display. In this case, you'd set the value to "LETS GO!", as shown in the following example.
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider localization={localization}>
+<Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+  <Tab>
+    In Next.js, pass the `localization` prop to the [`<ClerkProvider>`](/docs/components/clerk-provider) component.
+
+    ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 7], 12] }}
+    import { ClerkProvider } from '@clerk/nextjs'
+    import './globals.css'
+
+    // Set your customizations in a `localization` object
+    const localization = {
+      formButtonPrimary: 'LETS GO!',
+    }
+
+    export default function RootLayout({ children }: { children: React.ReactNode }) {
+      return (
+        // Pass the `localization` object to the `localization` prop on the `<ClerkProvider>` component
+        <ClerkProvider localization={localization}>
+          <html lang="en">
+            <body>{children}</body>
+          </html>
+        </ClerkProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    In Astro, pass the `localization` prop to the [`clerk()`](/docs/references/astro/overview) integration.
+
+    ```tsx {{ filename: 'astro.config.mjs', mark: [[6, 10]] }}
+    import { defineConfig } from 'astro/config'
+    import clerk from '@clerk/astro'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          localization: {
+            formButtonPrimary: 'LETS GO!',
+          },
+        }),
+      ],
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In JavaScript, pass the `localization` prop to the [`clerk.load()`](/docs/references/javascript/clerk#load) method.
+
+    Use the following tabs to view the code necessary for each file.
+
+    <CodeBlockTabs options={["main.js", "index.html"]}>
+      ```js {{ filename: 'main.js', mark: [[6, 10]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        localization: {
+          formButtonPrimary: 'LETS GO!',
+        },
+      })
+
+      if (clerk.isSignedIn) {
+        document.getElementById('app').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userButtonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userButtonDiv)
+      } else {
+        document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
+
+        const signInDiv = document.getElementById('sign-in')
+
+        clerk.mountSignIn(signInDiv)
+      }
+      ```
+
+      ```html {{ filename: 'index.html' }}
+      <!doctype html>
       <html lang="en">
-        <body>{children}</body>
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
       </html>
-    </ClerkProvider>
-  )
-}
-```
+      ```
+    </CodeBlockTabs>
+  </Tab>
 
-To find the key for your translation (like the `socialButtonsBlockButton` from the code example below), open up our [English localization file](https://github.com/clerk/javascript/blob/main/packages/localizations/src/en-US.ts). Search the file for the term that you want to customize.
+  <Tab>
+    In Remix, pass the `localization` prop to the [`ClerkApp`](/docs/references/remix/clerk-app) options.
 
-For example, if you want to change the 'to continue to' string from the `<SignIn />` and `<SignUp />` components, you would search for 'to continue to'. You will find several instances of this. Some of those are in the the following `signUp` object:
+    ```tsx {{ filename: 'app/root.tsx', mark: [[37, 41]] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
+    // Import ClerkApp
+    import { ClerkApp } from '@clerk/remix'
 
-```js {{ prettier: false }}
-signUp: {
-  start: {
-    title: 'Create your account',
-    subtitle: 'to continue to {{applicationName}}',
-    actionText: 'Have an account?',
-    actionLink: 'Sign in',
-  },
-  emailLink: {
-    title: 'Verify your email',
-    subtitle: 'to continue to {{applicationName}}',
-    formTitle: 'Verification link',
-    formSubtitle: 'Use the verification link sent to your email address',
-    resendButton: "Didn't receive a link? Resend",
-    verified: {
-      title: 'Successfully signed up',
-    },
-    loading: {
-      title: 'Signing up...',
-    },
-    verifiedSwitchTab: {
-      title: 'Successfully verified email',
-      subtitle: 'Return to the newly opened tab to continue',
-      subtitleNewTab: 'Return to previous tab to continue',
-    },
-  },
-  emailCode: {
-    title: 'Verify your email',
-    subtitle: 'to continue to {{applicationName}}',
-    formTitle: 'Verification code',
-    formSubtitle: 'Enter the verification code sent to your email address',
-    resendButton: "Didn't receive a code? Resend",
-  },
-  phoneCode: {
-    title: 'Verify your phone',
-    subtitle: 'to continue to {{applicationName}}',
-    formTitle: 'Verification code',
-    formSubtitle: 'Enter the verification code sent to your phone number',
-    resendButton: "Didn't receive a code? Resend",
-  },
-  continue: {
-    title: 'Fill in missing fields',
-    subtitle: 'to continue to {{applicationName}}',
-    actionText: 'Have an account?',
-    actionLink: 'Sign in',
-  },
-},
-```
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
 
-If you want to customize multiple entries from the `<SignUp />` component, the procedure would resemble the following:
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
 
-```tsx
-const localization = {
-  signUp: {
-    start: {
-      subtitle: 'to access {{applicationName}}',
-    },
-    emailCode: {
-      subtitle: 'to access {{applicationName}}',
-    },
-  },
-}
-```
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
+
+    export default ClerkApp(App, {
+      localization: {
+        formButtonPrimary: 'LETS GO!',
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In Vue, pass the `localization` prop to the [`clerkPlugin()`](/docs/references/vue/overview) integration.
+
+    ```ts {{ filename: 'src/main.ts', mark: [[6, 10]] }}
+    import { createApp } from 'vue'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      localization: {
+        formButtonPrimary: 'LETS GO!',
+      },
+    })
+    app.mount('#app')
+    ```
+  </Tab>
+
+  <Tab>
+    In Nuxt, pass the `localization` prop to the [`defineNuxtConfig()`](/docs/references/nuxt/clerk-middleware) integration.
+
+    ```ts {{ filename: 'nuxt.config.ts', mark: [[3, 7]] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt'],
+      clerk: {
+        localization: {
+          formButtonPrimary: 'LETS GO!',
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
+
+You can also customize multiple entries by passing multiple keys. The following example updates the "to continue to" subtitles on the `<SignUp />` component to say "to access" instead.
+
+<Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+  <Tab>
+    In Next.js, pass the `localization` prop to the [`<ClerkProvider>`](/docs/components/clerk-provider) component.
+
+    ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 14], 19] }}
+    import { ClerkProvider } from '@clerk/nextjs'
+    import './globals.css'
+
+    // Set your customizations in a `localization` object
+    const localization = {
+      signUp: {
+        start: {
+          subtitle: 'to access {{applicationName}}',
+        },
+        emailCode: {
+          subtitle: 'to access {{applicationName}}',
+        },
+      },
+    }
+
+    export default function RootLayout({ children }: { children: React.ReactNode }) {
+      return (
+        // Pass the `localization` object to the `localization` prop on the `<ClerkProvider>` component
+        <ClerkProvider localization={localization}>
+          <html lang="en">
+            <body>{children}</body>
+          </html>
+        </ClerkProvider>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    In Astro, pass the `localization` prop to the [`clerk()`](/docs/references/astro/overview) integration.
+
+    ```tsx {{ filename: 'astro.config.mjs', mark: [[6, 17]] }}
+    import { defineConfig } from 'astro/config'
+    import clerk from '@clerk/astro'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          localization: {
+            signUp: {
+              start: {
+                subtitle: 'to access {{applicationName}}',
+              },
+              emailCode: {
+                subtitle: 'to access {{applicationName}}',
+              },
+            },
+          },
+        }),
+      ],
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In JavaScript, pass the `localization` prop to the [`clerk.load()`](/docs/references/javascript/clerk#load) method.
+
+    Use the following tabs to view the code necessary for each file.
+
+    <CodeBlockTabs options={["main.js", "index.html"]}>
+      ```js {{ filename: 'main.js', mark: [[6, 17]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        localization: {
+          signUp: {
+            start: {
+              subtitle: 'to access {{applicationName}}',
+            },
+            emailCode: {
+              subtitle: 'to access {{applicationName}}',
+            },
+          },
+        },
+      })
+
+      if (clerk.isSignedIn) {
+        document.getElementById('app').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userButtonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userButtonDiv)
+      } else {
+        document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
+
+        const signInDiv = document.getElementById('sign-in')
+
+        clerk.mountSignIn(signInDiv)
+      }
+      ```
+
+      ```html {{ filename: 'index.html' }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
+      </html>
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    In Remix, pass the `localization` prop to the [`ClerkApp`](/docs/references/remix/clerk-app) options.
+
+    ```tsx {{ filename: 'app/root.tsx', mark: [[37, 48]] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
+    // Import ClerkApp
+    import { ClerkApp } from '@clerk/remix'
+
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
+
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
+
+    export default ClerkApp(App, {
+      localization: {
+        signUp: {
+          start: {
+            subtitle: 'to access {{applicationName}}',
+          },
+          emailCode: {
+            subtitle: 'to access {{applicationName}}',
+          },
+        },
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In Vue, pass the `localization` prop to the [`clerkPlugin()`](/docs/references/vue/overview) integration.
+
+    ```ts {{ filename: 'src/main.ts', mark: [[6, 17]] }}
+    import { createApp } from 'vue'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      localization: {
+        signUp: {
+          start: {
+            subtitle: 'to access {{applicationName}}',
+          },
+          emailCode: {
+            subtitle: 'to access {{applicationName}}',
+          },
+        },
+      },
+    })
+    app.mount('#app')
+    ```
+  </Tab>
+
+  <Tab>
+    In Nuxt, pass the `localization` prop to the [`defineNuxtConfig()`](/docs/references/nuxt/clerk-middleware) integration.
+
+    ```ts {{ filename: 'nuxt.config.ts', mark: [[3, 14]] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt'],
+      clerk: {
+        localization: {
+          signUp: {
+            start: {
+              subtitle: 'to access {{applicationName}}',
+            },
+            emailCode: {
+              subtitle: 'to access {{applicationName}}',
+            },
+          },
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### Example: Customize error messages
+
+You can customize Clerk's default error messages by targeting the `unstable__errors` key. This key lets you define specific error keys for different error types and assign them custom message strings. You can find the full list of error keys in the [English localization file](https://github.com/clerk/javascript/blob/main/packages/localizations/src/en-US.ts). Search for the `unstable__errors` object to find the keys you can customize.
+
+The following example updates the `not_allowed_access` error message. This message appears when a user tries to sign in with an email domain that isn't allowed to access your application.
+
+<Tabs items={["Next.js", "Astro", "JavaScript", "Remix", "Vue", "Nuxt"]}>
+  <Tab>
+    In Next.js, pass the `localization` prop to the [`<ClerkProvider>`](/docs/components/clerk-provider) component.
+
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```tsx {{ filename: 'app/layout.tsx', mark: [[4, 9], 14] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import './globals.css'
+
+      const localization = {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      }
+
+      export default function RootLayout({ children }: { children: React.ReactNode }) {
+        return (
+          // Add the localization prop to the ClerkProvider
+          <ClerkProvider localization={localization}>
+            <html lang="en">
+              <body>{children}</body>
+            </html>
+          </ClerkProvider>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: '_app.tsx', mark: [[4, 9], 14] }}
+      import { ClerkProvider } from '@clerk/nextjs'
+      import type { AppProps } from 'next/app'
+
+      const localization = {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      }
+
+      function MyApp({ Component, pageProps }: AppProps) {
+        return (
+          // Add the localization prop to the ClerkProvider
+          <ClerkProvider localization={localization} {...pageProps}>
+            <Component {...pageProps} />
+          </ClerkProvider>
+        )
+      }
+
+      export default MyApp
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    In Astro, pass the `localization` prop to the [`clerk()`](/docs/references/astro/overview) integration.
+
+    ```tsx {{ filename: 'astro.config.mjs', mark: [[6, 13]] }}
+    import { defineConfig } from 'astro/config'
+    import clerk from '@clerk/astro'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          localization: {
+            unstable__errors: {
+              not_allowed_access:
+                'Send us an email if you want your corporate email domain allowlisted for access',
+            },
+          },
+        }),
+      ],
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In JavaScript, pass the `localization` prop to the [`clerk.load()`](/docs/references/javascript/clerk#load) method.
+
+    Use the following tabs to view the code necessary for each file.
+
+    <CodeBlockTabs options={["main.js", "index.html"]}>
+      ```js {{ filename: 'main.js', mark: [[6, 13]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(clerkPubKey)
+      await clerk.load({
+        localization: {
+          unstable__errors: {
+            not_allowed_access:
+              'Send us an email if you want your corporate email domain allowlisted for access',
+          },
+        },
+      })
+
+      if (clerk.isSignedIn) {
+        document.getElementById('app').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userButtonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userButtonDiv)
+      } else {
+        document.getElementById('app').innerHTML = `
+            <div id="sign-in"></div>
+          `
+
+        const signInDiv = document.getElementById('sign-in')
+
+        clerk.mountSignIn(signInDiv)
+      }
+      ```
+
+      ```html {{ filename: 'index.html' }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="app"></div>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
+      </html>
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    In Remix, pass the `localization` prop to the [`ClerkApp`](/docs/references/remix/clerk-app) options.
+
+    ```tsx {{ filename: 'app/root.tsx', mark: [[37, 44]] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
+    // Import ClerkApp
+    import { ClerkApp } from '@clerk/remix'
+
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
+
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
+
+    export default ClerkApp(App, {
+      localization: {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    In Vue, pass the `localization` prop to the [`clerkPlugin()`](/docs/references/vue/overview) integration.
+
+    ```ts {{ filename: 'src/main.ts', mark: [[6, 13]] }}
+    import { createApp } from 'vue'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      localization: {
+        unstable__errors: {
+          not_allowed_access:
+            'Send us an email if you want your corporate email domain allowlisted for access',
+        },
+      },
+    })
+    app.mount('#app')
+    ```
+  </Tab>
+
+  <Tab>
+    In Nuxt, pass the `localization` prop to the [`defineNuxtConfig()`](/docs/references/nuxt/clerk-middleware) integration.
+
+    ```ts {{ filename: 'nuxt.config.ts', mark: [[3, 10]] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt'],
+      clerk: {
+        localization: {
+          unstable__errors: {
+            not_allowed_access:
+              'Send us an email if you want your corporate email domain allowlisted for access',
+          },
+        },
+      },
+    })
+    ```
+  </Tab>
+</Tabs>

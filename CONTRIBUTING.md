@@ -952,14 +952,14 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 ### `<Typedoc />`
 
-The `<Typedoc />` component can be used to inject the contents of an MDX file of the [`generated-typedoc`](https://github.com/clerk/generated-typedoc) repository. The files inside that repository are not manually created and maintained, but rather automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
+The `<Typedoc />` component is used to inject the contents of an MDX file from the `./clerk-typedoc` folder. The files inside that folder are not manually created and maintained; they are automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
 
-- If you want to edit the contents of a docs page that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment.
-- Once your PR inside `clerk/javascript` has been merged, the `generated-typedoc` repository will be automatically updated. On the next deployment of the docs website, your change will be live.
+- If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
+- Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
+
+For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-{/* Render `generated-typedoc/clerk-react/use-auth.mdx` */}
-
 <Typedoc src="clerk-react/use-auth" />
 ```
 
@@ -985,6 +985,7 @@ Available values for the `sdk` prop:
 | Javascript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
 | Expo                   | "expo"                 |
+| Android                | "android"              |
 | iOS                    | "ios"                  |
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |

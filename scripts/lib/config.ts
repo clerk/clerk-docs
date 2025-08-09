@@ -5,6 +5,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import type { SDK } from './schemas'
+import { existsSync } from 'node:fs'
 
 type BuildConfigOptions = {
   basePath: string
@@ -16,12 +17,15 @@ type BuildConfigOptions = {
   partialsPath: string
   distPath: string
   typedocPath: string
+  localTypedocOverridePath?: string
   publicPath?: string
+  ignorePaths: string[]
   ignoreLinks: string[]
   ignoreWarnings?: {
     docs: Record<string, string[]>
     partials: Record<string, string[]>
     typedoc: Record<string, string[]>
+    tooltips: Record<string, string[]>
   }
   manifestOptions: {
     wrapDefault: boolean
@@ -38,11 +42,26 @@ type BuildConfigOptions = {
       outputPath: string
     }
   }
+  prompts?: {
+    inputPath: string
+    outputPath: string
+  }
+  tooltips?: {
+    inputPath: string
+    outputPath: string
+  }
+  llms?: {
+    overviewPath?: string
+    fullPath?: string
+  }
+  siteFlags?: {
+    inputPath: string
+    outputPath: string
+  }
   flags?: {
     watch?: boolean
     controlled?: boolean
     skipGit?: boolean
-    clean?: boolean
     skipApiErrors?: boolean
   }
 }
@@ -55,69 +74,123 @@ export async function createConfig(config: BuildConfigOptions) {
     return path.isAbsolute(relativePath) ? relativePath : path.join(config.basePath, relativePath)
   }
 
-  const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
+  const find = (...paths: [...(string | undefined | null)[], string]) => {
+    for (const path of paths) {
+      if (path && existsSync(resolve(path))) {
+        return path
+      }
+    }
 
-  return {
-    basePath: config.basePath,
-    baseDocsLink: config.baseDocsLink,
-    validSdks: config.validSdks,
-
-    manifestRelativePath: config.manifestPath,
-    manifestFilePath: resolve(config.manifestPath),
-
-    partialsRelativePath: config.partialsPath,
-    partialsPath: resolve(config.partialsPath),
-
-    dataRelativePath: config.dataPath,
-    dataPath: resolve(config.dataPath),
-
-    docsRelativePath: config.docsPath,
-    docsPath: resolve(config.docsPath),
-
-    distTempRelativePath: tempDist,
-    distTempPath: resolve(tempDist),
-
-    distFinalRelativePath: config.distPath,
-    distFinalPath: resolve(config.distPath),
-
-    typedocRelativePath: config.typedocPath,
-    typedocPath: resolve(config.typedocPath),
-
-    publicRelativePath: config.publicPath,
-    publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
-
-    ignoredLink: (url: string) => config.ignoreLinks.some((ignoreItem) => url.startsWith(ignoreItem)),
-    ignoreWarnings: config.ignoreWarnings ?? {
-      docs: {},
-      partials: {},
-      typedoc: {},
-    },
-
-    manifestOptions: config.manifestOptions ?? {
-      wrapDefault: true,
-      collapseDefault: false,
-      hideTitleDefault: false,
-    },
-
-    redirects: config.redirects
-      ? {
-          static: {
-            inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
-            outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
-          },
-          dynamic: {
-            inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
-            outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
-          },
-        }
-      : null,
-
-    flags: {
-      watch: config.flags?.watch ?? false,
-      controlled: config.flags?.controlled ?? false,
-      skipGit: config.flags?.skipGit ?? false,
-      clean: config.flags?.clean ?? false,
-      skipApiErrors: config.flags?.skipApiErrors ?? false,
-    },
+    const lastItem = paths[paths.length - 1]
+    if (lastItem) {
+      return lastItem
+    }
+    throw new Error('No path found')
   }
+
+  const changeTempDist = async () => {
+    const tempDist = await fs.mkdtemp(path.join(os.tmpdir(), 'clerk-docs-dist-'))
+
+    return {
+      basePath: config.basePath,
+      baseDocsLink: config.baseDocsLink,
+      validSdks: config.validSdks,
+
+      manifestRelativePath: config.manifestPath,
+      manifestFilePath: resolve(config.manifestPath),
+
+      partialsRelativePath: config.partialsPath,
+      partialsPath: resolve(config.partialsPath),
+
+      dataRelativePath: config.dataPath,
+      dataPath: resolve(config.dataPath),
+
+      docsRelativePath: config.docsPath,
+      docsPath: resolve(config.docsPath),
+
+      distTempRelativePath: tempDist,
+      distTempPath: resolve(tempDist),
+      changeTempDist,
+
+      distFinalRelativePath: config.distPath,
+      distFinalPath: resolve(config.distPath),
+
+      typedocRelativePath: find(config.localTypedocOverridePath, config.typedocPath),
+      typedocPath: resolve(find(config.localTypedocOverridePath, config.typedocPath)),
+
+      publicRelativePath: config.publicPath,
+      publicPath: config.publicPath ? resolve(config.publicPath) : undefined,
+
+      ignoredPaths: (url: string) => config.ignorePaths.some((ignoreItem) => url.startsWith(ignoreItem)),
+      ignoredLinks: (url: string) => config.ignoreLinks.some((ignoreItem) => url === ignoreItem),
+      ignoreWarnings: config.ignoreWarnings ?? {
+        docs: {},
+        partials: {},
+        typedoc: {},
+        tooltips: {},
+      },
+
+      manifestOptions: config.manifestOptions ?? {
+        wrapDefault: true,
+        collapseDefault: false,
+        hideTitleDefault: false,
+      },
+
+      redirects: config.redirects
+        ? {
+            static: {
+              inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
+              outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+            },
+            dynamic: {
+              inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),
+              outputPath: resolve(path.join(tempDist, config.redirects.dynamic.outputPath)),
+            },
+          }
+        : null,
+
+      prompts: config.prompts
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.prompts.inputPath)),
+            inputPathRelative: config.prompts.inputPath,
+            outputPath: resolve(path.join(tempDist, config.prompts.outputPath)),
+            outputPathRelative: config.prompts.outputPath,
+          }
+        : null,
+
+      tooltips: config.tooltips
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.tooltips.inputPath)),
+            inputPathRelative: config.tooltips.inputPath,
+            outputPath: resolve(path.join(tempDist, config.tooltips.outputPath)),
+            outputPathRelative: config.tooltips.outputPath,
+          }
+        : null,
+
+      llms: config.llms
+        ? {
+            overviewPath: config.llms.overviewPath,
+            fullPath: config.llms.fullPath,
+          }
+        : null,
+
+      siteFlags: config.siteFlags
+        ? {
+            inputPath: resolve(path.join(config.basePath, config.siteFlags.inputPath)),
+            inputPathRelative: config.siteFlags.inputPath,
+            outputPath: resolve(path.join(tempDist, config.siteFlags.outputPath)),
+            outputPathRelative: config.siteFlags.outputPath,
+          }
+        : null,
+
+      flags: {
+        watch: config.flags?.watch ?? false,
+        controlled: config.flags?.controlled ?? false,
+        skipGit: config.flags?.skipGit ?? false,
+        skipApiErrors: config.flags?.skipApiErrors ?? false,
+      },
+    }
+  }
+
+  return changeTempDist()
 }

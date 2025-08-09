@@ -10,15 +10,23 @@ import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
 import { type BuildConfig } from '../config'
 import { safeMessage, type WarningsSection } from '../error-messages'
-import { DocsMap } from '../store'
+import { type DocsMap } from '../store'
+import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
-import { findComponent } from '../utils/findComponent'
 
 export const validateAndEmbedLinks =
-  (config: BuildConfig, docsMap: DocsMap, filePath: string, section: WarningsSection, doc?: { href: string }) =>
+  (
+    config: BuildConfig,
+    docsMap: DocsMap,
+    filePath: string,
+    section: WarningsSection,
+    foundLink?: (link: string) => void,
+    href?: string,
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
+    const scopeHref = scopeHrefToSDK(config)
     const checkCardsComponentScope = watchComponentScope('Cards')
 
     return mdastMap(tree, (node) => {
@@ -27,7 +35,7 @@ export const validateAndEmbedLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || doc === undefined)) return node
+      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
       if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed
@@ -35,20 +43,30 @@ export const validateAndEmbedLinks =
 
       let [url, hash] = (node.url as string).split('#')
 
-      if (url === '' && doc !== undefined) {
+      if (url === '' && href !== undefined) {
         // If the link is just a hash, then we need to link to the same doc
-        url = doc.href
+        url = href
       }
 
-      const ignore = config.ignoredLink(url)
+      const ignore = config.ignoredPaths(url) || config.ignoredLinks(url)
       if (ignore === true) return node
 
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
-        safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [url], node.position)
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'link-doc-not-found',
+          [node.url as string, `${url}.mdx`],
+          node.position,
+        )
         return node
       }
+
+      foundLink?.(linkedDoc.file.filePath)
 
       if (hash !== undefined) {
         const hasHash = linkedDoc.headingsHashes.has(hash)
@@ -58,36 +76,49 @@ export const validateAndEmbedLinks =
         }
       }
 
-      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
-      if (inCardsComponent === false) {
-        if (linkedDoc.sdk !== undefined) {
-          // we are going to swap it for the sdk link component to give the users a great experience
-
-          const firstChild = node.children?.[0]
-          const childIsCodeBlock = firstChild?.type === 'inlineCode'
-
-          if (childIsCodeBlock) {
-            firstChild.type = 'text'
-
-            return SDKLink({
-              href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
-              sdks: linkedDoc.sdk,
-              code: true,
-            })
-          }
-
-          return SDKLink({
-            href: `${scopeHrefToSDK(config)(url, ':sdk:')}${hash !== undefined ? `#${hash}` : ''}`,
-            sdks: linkedDoc.sdk,
-            code: false,
-            children: node.children,
-          })
-        }
-      } else {
-        node.url = node.url + '?instant-redirect=true'
+      if (linkedDoc.sdk === undefined) {
+        return node
       }
 
-      return node
+      const injectSDK =
+        linkedDoc.frontmatter.sdk !== undefined &&
+        linkedDoc.frontmatter.sdk.length >= 1 &&
+        !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
+        !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`) &&
+        // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
+        !(
+          config.validSdks.length === 1 &&
+          linkedDoc.frontmatter.sdk.length === 1 &&
+          linkedDoc.frontmatter.sdk[0] === config.validSdks[0]
+        )
+
+      // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
+      if (inCardsComponent === true) {
+        return node
+      }
+
+      // we are going to swap it for the sdk link component to give the users a great experience
+      const firstChild = node.children?.[0]
+      const childIsCodeBlock = firstChild?.type === 'inlineCode'
+
+      const scopedHref = `${injectSDK ? scopeHref(url, ':sdk:') : url}${hash !== undefined ? `#${hash}` : ''}`
+
+      if (childIsCodeBlock) {
+        firstChild.type = 'text'
+
+        return SDKLink({
+          href: scopedHref,
+          sdks: linkedDoc.sdk,
+          code: true,
+        })
+      }
+
+      return SDKLink({
+        href: scopedHref,
+        sdks: linkedDoc.sdk,
+        code: false,
+        children: node.children,
+      })
     })
   }
 

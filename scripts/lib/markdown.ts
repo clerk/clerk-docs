@@ -18,27 +18,32 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { type BuildConfig } from './config'
 import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
-import { readMarkdownFile } from './io'
+import { type DocsFile, readMarkdownFile } from './io'
 import { checkPartials } from './plugins/checkPartials'
 import { checkTypedoc } from './plugins/checkTypedoc'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
+import { Prompt, checkPrompts } from './prompts'
+import { markDocumentDirty, type Store } from './store'
+
+const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
 
 export const parseInMarkdownFile =
-  (config: BuildConfig) =>
+  (config: BuildConfig, store: Store) =>
   async (
-    href: string,
+    file: DocsFile & { content?: string },
     partials: { path: string; content: string; node: Node }[],
     typedocs: { path: string; content: string; node: Node }[],
+    prompts: Prompt[],
     inManifest: boolean,
     section: WarningsSection,
   ) => {
-    const readFile = readMarkdownFile(config)
-    const [error, fileContent] = await readFile(`${href}.mdx`.replace(config.baseDocsLink, ''))
+    const markDirty = markDocumentDirty(store)
+    const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.fullFilePath)
 
     if (error !== null) {
-      throw new Error(errorMessages['markdown-read-error'](href), {
+      throw new Error(errorMessages['markdown-read-error'](file.href), {
         cause: error,
       })
     }
@@ -47,7 +52,6 @@ export const parseInMarkdownFile =
 
     const slugify = slugifyWithCounter()
     const headingsHashes = new Set<string>()
-    const filePath = `${href}.mdx`
     let node: Node | undefined = undefined
 
     const vfile = await remark()
@@ -57,22 +61,31 @@ export const parseInMarkdownFile =
         node = tree
 
         if (inManifest === false) {
-          safeMessage(config, vfile, filePath, section, 'doc-not-in-manifest', [])
+          safeMessage(config, vfile, file.filePath, section, 'doc-not-in-manifest', [])
         }
 
-        if (href !== encodeURI(href)) {
-          safeFail(config, vfile, filePath, section, 'invalid-href-encoding', [href])
+        if (file.href !== encodeURI(file.href)) {
+          safeFail(config, vfile, file.filePath, section, 'invalid-href-encoding', [file.href])
         }
       })
       .use(
-        extractFrontmatter(config, href, filePath, section, (fm) => {
+        extractFrontmatter(config, file.href, file.filePath, section, (fm) => {
           frontmatter = fm
         }),
       )
-      .use(checkPartials(config, partials, filePath, { reportWarnings: true, embed: false }))
-      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: true, embed: false }))
+      .use(
+        checkPartials(config, partials, file, { reportWarnings: true, embed: false }, (partial) => {
+          markDirty(file.filePath, partial)
+        }),
+      )
+      .use(
+        checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
+          markDirty(file.filePath, typedoc)
+        }),
+      )
+      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
       .process({
-        path: `${href.substring(1)}.mdx`,
+        path: file.relativeFilePath,
         value: fileContent,
       })
 
@@ -81,11 +94,40 @@ export const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
-      .use(checkPartials(config, partials, filePath, { reportWarnings: false, embed: true }))
-      .use(checkTypedoc(config, typedocs, filePath, { reportWarnings: false, embed: true }))
+      .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
+      .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
       // extract out the headings to check hashes in links
-      .use(() => (tree, vfile) => {
+      .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
+
+        mdastVisit(
+          tree,
+          (node) => {
+            if (node.type !== 'text') return false
+            if (!('value' in node)) return false
+            if (typeof node.value !== 'string') return false
+            const lines = node.value.split('\n')
+            const callout = lines[0]
+            return calloutRegex.test(callout)
+          },
+          (node) => {
+            const callout = calloutRegex.exec((node as any).value.split('\n')[0].trim())
+
+            if (callout === null) {
+              throw new Error(`Invalid callout: ${node}`)
+            }
+
+            const id = callout[2]?.trim()
+
+            if (id !== undefined) {
+              if (documentContainsIfComponent === false && headingsHashes.has(id)) {
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
+              }
+
+              headingsHashes.add(id)
+            }
+          },
+        )
 
         mdastVisit(
           tree,
@@ -95,7 +137,7 @@ export const parseInMarkdownFile =
 
             if (id !== undefined) {
               if (documentContainsIfComponent === false && headingsHashes.has(id)) {
-                safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [href, id])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, id])
               }
 
               headingsHashes.add(id)
@@ -103,7 +145,7 @@ export const parseInMarkdownFile =
               const slug = slugify(toString(node).trim())
 
               if (documentContainsIfComponent === false && headingsHashes.has(slug)) {
-                safeFail(config, vfile, filePath, section, 'duplicate-heading-id', [href, slug])
+                safeMessage(config, vfile, file.filePath, section, 'duplicate-heading-id', [file.href, slug])
               }
 
               headingsHashes.add(slug)
@@ -112,20 +154,20 @@ export const parseInMarkdownFile =
         )
       })
       .process({
-        path: `${href.substring(1)}.mdx`,
+        path: file.relativeFilePath,
         value: fileContent,
       })
 
     if (node === undefined) {
-      throw new Error(errorMessages['doc-parse-failed'](href))
+      throw new Error(errorMessages['doc-parse-failed'](file.href))
     }
 
     if (frontmatter === undefined) {
-      throw new Error(errorMessages['frontmatter-parse-failed'](href))
+      throw new Error(errorMessages['frontmatter-parse-failed'](file.href))
     }
 
     return {
-      href,
+      file,
       sdk: (frontmatter as Frontmatter).sdk,
       vfile,
       headingsHashes,

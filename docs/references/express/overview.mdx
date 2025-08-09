@@ -1,6 +1,7 @@
 ---
 title: Clerk Express SDK
 description: The Clerk Express SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and organization management into your Express application.
+sdk: expressjs
 ---
 
 The Clerk Express SDK provides a powerful set of tools and utilities to seamlessly integrate authentication, user management, and organization management into your Express application. Refer to the [quickstart](/docs/quickstarts/express) to get started.
@@ -51,6 +52,11 @@ app.use(clerkMiddleware(options))
 
 ## `requireAuth()`
 
+> [!WARNING]
+> The `requireAuth()` helper redirects unauthenticated users to the sign-in page so it should only be used for full-stack Express apps. If your client and server run on different origins, see the [cross-origin requests](/docs/backend-requests/making-requests#cross-origin-requests) guide.
+>
+> Do not use `requireAuth()` for API routes. For backend API calls, use [`clerkMiddleware()`](https://clerk.com/docs/references/express/overview#clerk-middleware) along with [`getAuth()`](https://clerk.com/docs/references/express/overview#get-auth) to verify sessions and return standard HTTP status codes.
+
 The `requireAuth()` middleware functions similarly to `clerkMiddleware()`, but also protects your routes by redirecting unauthenticated users to the homepage. It accepts the same [options](/docs/references/express/overview#clerk-middleware-options) as `clerkMiddleware()`.
 
 You can also specify a custom sign-in URL to redirect unauthenticated users to by setting the `CLERK_SIGN_IN_URL` environment variable or by passing a `signInUrl` option to the middleware. It's recommended to set the environment variable.
@@ -93,6 +99,30 @@ app.listen(PORT, () => {
 
 The `getAuth()` helper retrieves authentication state from the `request` object. See the [Next.js reference documentation](https://clerk.com/docs/references/nextjs/get-auth) for more examples on how to use the returned `auth` object.
 
+## `getAuth()` options
+
+<Properties>
+  - `acceptsToken?`
+  - `TokenType`
+
+  The type of authentication token(s) to accept. Valid values are:
+
+  - `'session_token'` - authenticates a user session.
+  - `'oauth_token'` - authenticates a machine request using OAuth.
+  - `'machine_token'` - authenticates a machine request.
+  - `'api_key'` - authenticates a machine request using API keys.
+
+  Can be set to:
+
+  - A single token type.
+  - An array of token types.
+  - `'any'` to accept all available token types.
+
+  Defaults to `'session_token'`.
+</Properties>
+
+### Example: Protecting a route with `requireAuth()` and role-based authorization using `getAuth()`
+
 The following example uses `requireAuth()` to protect the route based on _authentication_ status, and then uses `getAuth()` to protect the route based on _authorization_ status.
 
 ```js
@@ -124,6 +154,33 @@ app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
 // Start the server and listen on the specified port
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`)
+})
+```
+
+### Example: Protecting a route by accepting and verifying multiple token types using `getAuth()`
+
+The following example uses `getAuth()` to protect the route based on token type:
+
+- It accepts any token type `(acceptsToken: 'any')` from the request.
+- If the token is a `session_token`, it logs that the request is from a user session.
+- Otherwise, it logs that the request uses a machine token and specifies its type.
+
+```js
+import express from 'express'
+import { getAuth } from '@clerk/express'
+
+const app = express()
+
+app.get('/path', (req, res) => {
+  // Use `getAuth()` to protect a route based on token type
+  const authObject = getAuth(req, { acceptsToken: 'any' })
+
+  if (authObject.tokenType === 'session_token') {
+    console.log('this is session token from a user')
+  } else {
+    console.log('this is some other type of machine token')
+    console.log('more specifically, a ' + authObject.tokenType)
+  }
 })
 ```
 

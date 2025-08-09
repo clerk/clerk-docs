@@ -8,10 +8,11 @@ import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { parseJSON } from './io'
 import { icon, sdk, tag, type Icon, type SDK, type Tag } from './schemas'
+import { VFile } from 'vfile'
 
-// read in the manifest
+// read in the manifest, create a vfile to write warnings to
 
-export const readManifest = (config: BuildConfig) => async (): Promise<Manifest> => {
+export const readManifest = (config: BuildConfig) => async () => {
   const { manifestSchema } = createManifestSchema(config)
   const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
 
@@ -24,7 +25,10 @@ export const readManifest = (config: BuildConfig) => async (): Promise<Manifest>
   const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
 
   if (manifest.success === true) {
-    return manifest.data.navigation
+    return {
+      manifest: manifest.data.navigation,
+      vfile: new VFile({ path: config.manifestRelativePath }),
+    }
   }
 
   throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))

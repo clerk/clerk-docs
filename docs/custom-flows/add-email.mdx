@@ -34,7 +34,7 @@ Then skip to the [Email link verification](#email-link-verification) section.
 1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
 1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
 
-<Tabs items={["Next.js", "iOS"]}>
+<Tabs items={["Next.js", "iOS", "Android (beta)"]}>
   <Tab>
     ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
     'use client'
@@ -44,7 +44,7 @@ Then skip to the [Email link verification](#email-link-verification) section.
     import { EmailAddressResource } from '@clerk/types'
 
     export default function Page() {
-      const { isLoaded, user } = useUser()
+      const { isLoaded, isSignedIn, user } = useUser()
       const [email, setEmail] = React.useState('')
       const [code, setCode] = React.useState('')
       const [isVerifying, setIsVerifying] = React.useState(false)
@@ -54,9 +54,13 @@ Then skip to the [Email link verification](#email-link-verification) section.
         user?.createEmailAddress({ email }),
       )
 
-      if (!isLoaded) return null
+      if (!isLoaded) {
+        // Handle loading state
+        return null
+      }
 
-      if (isLoaded && !user?.id) {
+      if (!isSignedIn) {
+        // Handle signed out state
         return <p>You must be logged in to access this page</p>
       }
 
@@ -237,6 +241,178 @@ Then skip to the [Email link verification](#email-link-verification) section.
           // for more info on error handling
           dump(error)
         }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.emailaddress.EmailAddress
+    import com.clerk.api.emailaddress.attemptVerification
+    import com.clerk.api.emailaddress.prepareVerification
+    import com.clerk.api.network.serialization.flatMap
+    import com.clerk.api.network.serialization.longErrorMessageOrNull
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import com.clerk.api.user.createEmailAddress
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class AddEmailViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
+      }
+
+      fun createEmailAddress(emailAddress: String) {
+        val user = requireNotNull(Clerk.userFlow.value)
+
+        // Add an unverified email address to the user,
+        // then send the user an email with the verification code
+        viewModelScope.launch {
+          user
+            .createEmailAddress(emailAddress)
+            .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
+            .onSuccess {
+              // Update the state to show that the email address has been created
+              // and that the user needs to verify the email address
+              _uiState.value = UiState.Verifying(it)
+            }
+            .onFailure {
+              Log.e(
+                "AddEmailViewModel",
+                "Failed to create email address and prepare verification: ${it.longErrorMessageOrNull}",
+              )
+            }
+        }
+      }
+
+      fun verifyCode(code: String, newEmailAddress: EmailAddress) {
+        viewModelScope.launch {
+          newEmailAddress
+            .attemptVerification(code)
+            .onSuccess {
+              // Update the state to show that the email addresshas been verified
+              _uiState.value = UiState.Verified
+            }
+            .onFailure {
+              Log.e("AddEmailViewModel", "Failed to verify email address: ${it.longErrorMessageOrNull}")
+            }
+        }
+      }
+
+      sealed interface UiState {
+        data object Loading : UiState
+        data object NeedsVerification : UiState
+        data class Verifying(val emailAddress: EmailAddress) : UiState
+        data object Verified : UiState
+        data object SignedOut : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'AddEmailActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.material3.TextField
+    import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.mutableStateOf
+    import androidx.compose.runtime.remember
+    import androidx.compose.runtime.setValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+    import com.clerk.api.emailaddress.EmailAddress
+
+    class AddEmailActivity : ComponentActivity() {
+      val viewModel: AddEmailViewModel by viewModels()
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+          val state by viewModel.uiState.collectAsStateWithLifecycle()
+          AddEmailView(
+            state = state,
+            onCreateEmailAddress = viewModel::createEmailAddress,
+            onVerifyCode = viewModel::verifyCode,
+          )
+        }
+      }
+    }
+
+    @Composable
+    fun AddEmailView(
+      state: AddEmailViewModel.UiState,
+      onCreateEmailAddress: (String) -> Unit,
+      onVerifyCode: (String, EmailAddress) -> Unit,
+    ) {
+      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when (state) {
+          AddEmailViewModel.UiState.NeedsVerification -> {
+            InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
+              onCreateEmailAddress(it)
+            }
+          }
+
+          AddEmailViewModel.UiState.Verified -> Text("Verified!")
+
+          is AddEmailViewModel.UiState.Verifying -> {
+            InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+              onVerifyCode(it, state.emailAddress)
+            }
+          }
+
+          AddEmailViewModel.UiState.Loading -> CircularProgressIndicator()
+          AddEmailViewModel.UiState.SignedOut -> Text("You must be signed in to add an email address.")
+        }
+      }
+    }
+
+    @Composable
+    fun InputContentView(
+      buttonText: String,
+      placeholder: String,
+      modifier: Modifier = Modifier,
+      onClick: (String) -> Unit,
+    ) {
+      var input by remember { mutableStateOf("") }
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        TextField(
+          modifier = Modifier.padding(bottom = 16.dp),
+          value = input,
+          onValueChange = { input = it },
+          placeholder = { Text(placeholder) },
+        )
+        Button(onClick = { onClick(input) }) { Text(buttonText) }
       }
     }
     ```

@@ -195,23 +195,23 @@
     - OAuth connections
     - Enterprise connections
     - Sign out
-    - Sign-up with application invitations
+    - Sign-up with application invitations [application-invitations]
     - Embedded email links
     - Multi-session applications
     - Bot sign-up protection
   - Organizations {"collapse": false}
-    - Accept organization invitation links
-    - Create an organization
-    - Create and manage organization invitations
-    - List and switch between organizations
-    - Manage a user's organization invitations
-    - Manage member roles
-    - Manage membership requests
-    - Update an organization
+    - Accept organization invitation links [accept-organization-invitations]
+    - Create an organization [create-organizations]
+    - Create and manage organization invitations [create-organization-invitation]
+    - List and switch between organizations [organization-switcher]
+    - Manage a user's organization invitations [manage-user-org-invitations]
+    - Manage member roles [manage-roles]
+    - Manage membership requests [manage-membership-requests]
+    - Update an organization [update-organizations]
   - Billing {"collapse": false}
-    - Checkout with a new payment method
-    - Checkout with an existing payment method
-    - Add a new payment method
+    - Checkout with a new payment method [checkout-new-payment-method]
+    - Checkout with an existing payment method [checkout-existing-payment-method]
+    - Add a new payment method [add-new-payment-method]
   - Account updates {"collapse": false}
     - Forgot password
     - User impersonation

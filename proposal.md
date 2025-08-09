@@ -124,7 +124,7 @@
 
 ### Customizing Clerk
 
-- UI Customization (Appearance Prop) [appearance-prop]
+- Component Customization [appearance-prop]
   - Overview
   - Layout
   - Themes
@@ -135,9 +135,23 @@
   - Organization profile
   - User profile
   - User button
-- Email and SMS Templates
+- Email and SMS Templates [email-sms-templates]
 - Localization (i18n) [localization]
 - Clerk Elements [elements] {"tag": "(Beta)"}
+  - Overview
+  - Guides
+    - Build a sign-in flow [sign-in]
+    - Build a sign-up flow [sign-up]
+    - Styling
+  - Examples
+    - Sign-in
+    - Sign-up
+    - Primitives
+    - shadcn/ui
+  - Component Reference [reference]
+    - Common
+    - Sign-in
+    - Sign-up
 
 ### B2B (Organizations) [organizations]
 

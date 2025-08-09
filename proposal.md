@@ -267,35 +267,30 @@
 
 ### SDK Reference
 
-- Next.js {"icon": "nextjs"}
-- React {"icon": "react"}
-- Expo {"icon": "expo"}
-- JavaScript {"icon": "javascript"}
-- Express {"icon": "expressjs"}
-- React Router {"icon": "react-router"}
-- Astro {"icon": "astro"}
-- iOS {"icon": "apple"}
-- Nuxt {"icon": "nuxt"}
-- Vue {"icon": "vue"}
-- Chrome Extension {"icon": "chrome"}
-- Fastify {"icon": "fastify"}
-- Remix {"icon": "remix"}
-- Tanstack Start {"icon": "tanstack"}
-- JS Backend SDK {"icon": "clerk"}
-- C# {"icon": "c-sharp"}
-- Go {"icon": "go"}
-- Java {"icon": "java"}
-- Python {"icon": "python"}
-- Ruby / Rails {"icon": "ruby"}
-- Community SDKs
-  - Angular {"icon": "angular"}
-  - Elysia {"icon": "elysia"}
-  - Hono {"icon": "hono"}
-  - Koa {"icon": "koa"}
-  - SolidJS {"icon": "solid"}
-  - Svelte {"icon": "svelte"}
-  - RedwoodJS {"icon": "redwood"}
-  - Rust {"icon": "rust"}
+- Overview
+- `clerkMiddleware()`
+- App Router References
+  - `auth()`
+  - `currentUser()`
+  - Route Handlers
+  - Server Actions
+- Pages Router References
+  - `getAuth()`
+  - `buildClerkProps()`
+- Demo Repositories
+  - App Router Demo Repo
+  - Pages Router Demo Repo
+- Read session and user data [read-session-data]
+- Add a custom sign-in-or-up page [custom-sign-in-or-up-page]
+- Add a custom sign-up page [custom-sign-up-page]
+- Add custom onboarding [add-onboarding-flow]
+- Set up a waitlist [waitlist]
+- Role Based Access Control [basic-rbac]
+- Rendering modes
+- Geo blocking
+- Migrate from Auth.js [authjs-migration]
+- tRPC
+- Verifying OAuth access tokens
 
 ### HTTP API Reference
 

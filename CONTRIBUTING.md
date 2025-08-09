@@ -985,6 +985,7 @@ Available values for the `sdk` prop:
 | Javascript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
 | Expo                   | "expo"                 |
+| Android                | "android"              |
 | iOS                    | "ios"                  |
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |

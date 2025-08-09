@@ -1,9 +1,9 @@
 # Top Level Links
 
-- Getting Started (checkmark-circle)
-- Guides (book)
-- Examples (plus-circle)
-- Reference (globe)
+- Getting Started {"icon": "checkmark-circle"}
+- Guides {"icon": "book"}
+- Examples {"icon": "plus-circle"}
+- Reference {"icon": "globe"}
   - SDK Reference
   - API Reference
   - UI Components
@@ -36,47 +36,51 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
+
   - Sign-up and sign-in options [sign-up-sign-in-options]
   - Social Connections
-    - Apple
-    - Atlassian
-    - Bitbucket
-    - Box
-    - Coinbase
-    - Discord
-    - Dropbox
-    - Facebook
-    - GitHub
-    - GitLab
-    - Google
-    - HubSpot
-    - Hugging Face
-    - Line
-    - Linear
-    - LinkedIn
-    - LinkedIn (deprecated)
-    - Microsoft
-    - Notion
-    - Slack
-    - Spotify
-    - TikTok
-    - Twitch
-    - Twitter v1 (deprecated)
-    - X/Twitter v2
-    - Xero
+    - Account linking
+    - Custom provider
+    - All providers
+      - Apple
+      - Atlassian
+      - Bitbucket
+      - Box
+      - Coinbase
+      - Discord
+      - Dropbox
+      - Facebook
+      - GitHub
+      - GitLab
+      - Google
+      - HubSpot
+      - Hugging Face
+      - Line
+      - Linear
+      - LinkedIn [linkedin-oidc]
+      - LinkedIn (deprecated) [linkedin]
+      - Microsoft
+      - Notion
+      - Slack
+      - Spotify
+      - TikTok
+      - Twitch
+      - Twitter v1 (deprecated) [twitter]
+      - X/Twitter v2 [x-twitter]
+      - Xero
   - Enterprise Connections
     - Overview
     - Authentication flows
     - Account linking
-    - Just-in-Time account provisioning
-    - SAML providers
+    - Just-in-Time account provisioning [jit-provisioning]
+    - SAML providers [saml]
       - Azure
       - Google
       - Okta
       - Custom provider
-    - OIDC providers
+    - OIDC providers [oidc]
       - Custom provider
-    - EASIE provider
+    - EASIE provider [easie]
       - Microsoft
       - Google
   - Web3
@@ -84,12 +88,13 @@
     - Metamask
     - OKX Wallet
   - OAuth
-    - What are OAuth & OIDC
+    - What are OAuth & OIDC [overview]
     - How Clerk implements OAuth
-    - Use OAuth for Single Sign-On (SSO)
-    - Use OAuth for scoped access
+    - Use OAuth for Single Sign-On (SSO) [single-sign-on]
+    - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
-- Session Token customization
+
+- Session token customization [session-token]
 - Webhooks
   - Overview
   - Syncing data with webhooks [syncing]
@@ -134,7 +139,7 @@
   - User button
 - Email and SMS Templates
 - Localization (i18n) [localization]
-- Clerk Elements (beta) [elements]
+- Clerk Elements [elements] {"tag": "(Beta)"}
 
 ### B2B (Organizations) [organizations]
 
@@ -266,40 +271,40 @@
 
 ### General [reference]
 
-- UI Components (box) [components]
+- UI Components [components] {"icon": "box"}
 - Hooks
 
 ### SDK Reference
 
-- Next.js (nextjs)
-- React (react)
-- Expo (expo)
-- JavaScript (javascript)
-- Express (express)
-- React Router (react-router)
-- Astro (astro)
-- iOS (ios)
-- Nuxt (nuxt)
-- Vue (vue)
-- Chrome Extension (chrome)
-- Fastify (fastify)
-- Remix (remix)
-- Tanstack Start (tanstack)
-- JS Backend SDK (clerk)
-- C# (c-sharp)
-- Go (go)
-- Java (java)
-- Python (python)
-- Ruby / Rails (ruby)
+- Next.js {"icon": "nextjs"}
+- React {"icon": "react"}
+- Expo {"icon": "expo"}
+- JavaScript {"icon": "javascript"}
+- Express {"icon": "expressjs"}
+- React Router {"icon": "react-router"}
+- Astro {"icon": "astro"}
+- iOS {"icon": "apple"}
+- Nuxt {"icon": "nuxt"}
+- Vue {"icon": "vue"}
+- Chrome Extension {"icon": "chrome"}
+- Fastify {"icon": "fastify"}
+- Remix {"icon": "remix"}
+- Tanstack Start {"icon": "tanstack"}
+- JS Backend SDK {"icon": "clerk"}
+- C# {"icon": "c-sharp"}
+- Go {"icon": "go"}
+- Java {"icon": "java"}
+- Python {"icon": "python"}
+- Ruby / Rails {"icon": "ruby"}
 - Community SDKs
-  - Angular (angular)
-  - Elysia (elysia)
-  - Hono (hono)
-  - Koa (koa)
-  - SolidJS (solid)
-  - Svelte (svelte)
-  - RedwoodJS (redwood)
-  - Rust (rust)
+  - Angular {"icon": "angular"}
+  - Elysia {"icon": "elysia"}
+  - Hono {"icon": "hono"}
+  - Koa {"icon": "koa"}
+  - SolidJS {"icon": "solid"}
+  - Svelte {"icon": "svelte"}
+  - RedwoodJS {"icon": "redwood"}
+  - Rust {"icon": "rust"}
 
 ### HTTP API Reference
 

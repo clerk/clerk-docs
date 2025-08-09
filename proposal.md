@@ -260,25 +260,25 @@
 - UI Components [components] {"icon": "box"}
   - Overview
   - `<ClerkProvider>` [clerk-provider]
-  - Authentication Components [authentication]
+  - Authentication Components [authentication] {"collapse": false}
     - `<SignIn />` [sign-in]
     - `<SignUp />` [sign-up]
     - `<GoogleOneTap />` [google-one-tap]
     - `<Waitlist />` [waitlist]
-  - User Components [user]
+  - User Components [user] {"collapse": false}
     - `<UserButton />` [user-button]
     - `<UserProfile />` [user-profile]
-  - Organization Components [organization]
+  - Organization Components [organization] {"collapse": false}
     - `<CreateOrganization />` [create-organization]
     - `<OrganizationProfile />` [organization-profile]
     - `<OrganizationSwitcher />` [organization-switcher]
     - `<OrganizationList />` [organization-list]
-  - Billing Components [billing]
+  - Billing Components [billing] {"collapse": false}
     - `<PricingTable />` [pricing-table]
     - `<CheckoutButton />` (Beta) [checkout-button]
     - `<PlanDetailsButton />` (Beta) [plan-details-button]
     - `<SubscriptionDetailsButton />` (Beta) [subscription-details-button]
-  - Control Components [control]
+  - Control Components [control] {"collapse": false}
     - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
     - `<ClerkLoaded>` [clerk-loaded]
     - `<ClerkLoading>` [clerk-loading]
@@ -290,7 +290,7 @@
     - `<RedirectToCreateOrganization />` [redirect-to-create-organization]
     - `<SignedIn>` [signed-in]
     - `<SignedOut>` [signed-out]
-  - Unstyled Components [unstyled]
+  - Unstyled Components [unstyled] {"collapse": false}
     - `<SignInButton>` [sign-in-button]
     - `<SignInWithMetamaskButton>` [sign-in-with-metamask]
     - `<SignUpButton>` [sign-up-button]

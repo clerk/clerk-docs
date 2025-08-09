@@ -275,9 +275,9 @@
     - `<OrganizationList />` [organization-list]
   - Billing Components [billing] {"collapse": false}
     - `<PricingTable />` [pricing-table]
-    - `<CheckoutButton />` (Beta) [checkout-button]
-    - `<PlanDetailsButton />` (Beta) [plan-details-button]
-    - `<SubscriptionDetailsButton />` (Beta) [subscription-details-button]
+    - `<CheckoutButton />` [checkout-button] {"tag": "(Beta)"}
+    - `<PlanDetailsButton />` [plan-details-button] {"tag": "(Beta)"}
+    - `<SubscriptionDetailsButton />` [subscription-details-button] {"tag": "(Beta)"}
   - Control Components [control] {"collapse": false}
     - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
     - `<ClerkLoaded>` [clerk-loaded]

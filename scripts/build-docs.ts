@@ -193,6 +193,7 @@ async function main() {
         'backend/email-address.mdx': ['link-doc-not-found'],
         'backend/phone-number.mdx': ['link-doc-not-found'],
         'types/user-resource.mdx': ['link-doc-not-found'],
+        'clerk-react/use-sign-in.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

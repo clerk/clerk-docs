@@ -36,47 +36,51 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
+
   - Sign-up and sign-in options [sign-up-sign-in-options]
   - Social Connections
-    - Apple
-    - Atlassian
-    - Bitbucket
-    - Box
-    - Coinbase
-    - Discord
-    - Dropbox
-    - Facebook
-    - GitHub
-    - GitLab
-    - Google
-    - HubSpot
-    - Hugging Face
-    - Line
-    - Linear
-    - LinkedIn
-    - LinkedIn (deprecated)
-    - Microsoft
-    - Notion
-    - Slack
-    - Spotify
-    - TikTok
-    - Twitch
-    - Twitter v1 (deprecated)
-    - X/Twitter v2
-    - Xero
+    - Account linking
+    - Custom provider
+    - All providers
+      - Apple
+      - Atlassian
+      - Bitbucket
+      - Box
+      - Coinbase
+      - Discord
+      - Dropbox
+      - Facebook
+      - GitHub
+      - GitLab
+      - Google
+      - HubSpot
+      - Hugging Face
+      - Line
+      - Linear
+      - LinkedIn [linkedin-oidc]
+      - LinkedIn (deprecated) [linkedin]
+      - Microsoft
+      - Notion
+      - Slack
+      - Spotify
+      - TikTok
+      - Twitch
+      - Twitter v1 (deprecated) [twitter]
+      - X/Twitter v2 [x-twitter]
+      - Xero
   - Enterprise Connections
     - Overview
     - Authentication flows
     - Account linking
-    - Just-in-Time account provisioning
-    - SAML providers
+    - Just-in-Time account provisioning [jit-provisioning]
+    - SAML providers [saml]
       - Azure
       - Google
       - Okta
       - Custom provider
-    - OIDC providers
+    - OIDC providers [oidc]
       - Custom provider
-    - EASIE provider
+    - EASIE provider [easie]
       - Microsoft
       - Google
   - Web3
@@ -84,12 +88,13 @@
     - Metamask
     - OKX Wallet
   - OAuth
-    - What are OAuth & OIDC
+    - What are OAuth & OIDC [overview]
     - How Clerk implements OAuth
-    - Use OAuth for Single Sign-On (SSO)
-    - Use OAuth for scoped access
+    - Use OAuth for Single Sign-On (SSO) [single-sign-on]
+    - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
-- Session Token customization
+
+- Session token customization [session-token]
 - Webhooks
   - Overview
   - Syncing data with webhooks [syncing]

@@ -139,12 +139,12 @@
 ### B2B (Organizations) [organizations]
 
 - Overview
-- Managing Organizations [managing-orgs]
 - Verified Domains
 - Roles and Permissions
 - Invitations
 - Metadata
-- SSO / Enterprise Connections
+- Manage enterprise SSO connections [sso]
+- Use org slugs in URLs [org-slugs-in-urls]
 
 ### Billing
 
@@ -228,10 +228,8 @@
 
 - Overview
 - DNS & Domains
-  - Overview
   - Satellite Domains
   - Proxy Clerk Frontend API [proxy-fapi]
-- Plans & Billing
 
 ### How Clerk works
 

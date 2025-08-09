@@ -182,6 +182,44 @@
 - Customize Redirect URLs
 - Override Clerk Types/Interfaces
 - Image Optimization
+- Custom Flows
+  - Overview
+  - Error handling
+  - Authentication {"collapse": false}
+    - Email & password
+    - Email / SMS OTP
+    - Email links
+    - Email & password + MFA
+    - Passkeys
+    - Google One Tap
+    - OAuth connections
+    - Enterprise connections
+    - Sign out
+    - Sign-up with application invitations [application-invitations]
+    - Embedded email links
+    - Multi-session applications
+    - Bot sign-up protection
+  - Organizations {"collapse": false}
+    - Accept organization invitation links [accept-organization-invitations]
+    - Create an organization [create-organizations]
+    - Create and manage organization invitations [create-organization-invitation]
+    - List and switch between organizations [organization-switcher]
+    - Manage a user's organization invitations [manage-user-org-invitations]
+    - Manage member roles [manage-roles]
+    - Manage membership requests [manage-membership-requests]
+    - Update an organization [update-organizations]
+  - Billing {"collapse": false}
+    - Checkout with a new payment method [checkout-new-payment-method]
+    - Checkout with an existing payment method [checkout-existing-payment-method]
+    - Add a new payment method [add-new-payment-method]
+  - Account updates {"collapse": false}
+    - Forgot password
+    - User impersonation
+    - Add email
+    - Add phone
+    - Manage SSO connections
+    - Manage SMS-based MFA
+    - Manage TOTP-based MFA
 - Testing with Clerk [testing]
   - Overview
   - Test emails and phones
@@ -195,6 +233,9 @@
     - Test authenticated flows
   - Postman or Insomnia
 - Errors
+  - Overview
+  - Backend API Errors [backend-api]
+  - Frontend API Errors [frontend-api]
 - Troubleshooting
   - Overview
   - Email deliverability
@@ -216,15 +257,23 @@
   - Migrate from Firebase [firebase]
   - Migrate from Cognito [cognito]
 - SDK Development
+  - Overview
+  - Terminology
+  - Philosophy
+  - Conventions
+  - SDK Types [types]
+  - Frontend-only
+  - Backend-only
+  - Fullstack
 - Upgrading Clerk [upgrading]
   - Versioning & LTS [versioning]
   - Upgrade Guides
     - Core 2
     - Node to Express
     - Expo v2 [expo-v2]
-    - @clerk/nextjs v6 [next-v6]
-    - URL based session syncing [url-session-syncing]
-    - Progressive Sign Ups
+    - @clerk/nextjs v6 [nextjs-v6]
+    - URL based session syncing
+    - Progressive Sign Up
 - AI Prompts
 
 ### Clerk Dashboard [dashboard]

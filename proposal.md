@@ -36,12 +36,11 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
-
   - Sign-up and sign-in options [sign-up-sign-in-options]
   - Social Connections
     - Account linking
     - Custom provider
-    - All providers
+    - All providers {"collapse": false}
       - Apple
       - Atlassian
       - Bitbucket
@@ -93,7 +92,6 @@
     - Use OAuth for Single Sign-On (SSO) [single-sign-on]
     - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
-
 - Session token customization [session-token]
 - Webhooks
   - Overview

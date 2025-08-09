@@ -41,7 +41,7 @@
   - Social Connections
     - Account linking
     - Custom provider
-    - All providers
+    - All providers {"collapse": false}
       - Apple
       - Atlassian
       - Bitbucket

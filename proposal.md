@@ -37,37 +37,12 @@
 
 - Authentication Strategies [auth-strategies]
   - Sign-up and sign-in options [sign-up-sign-in-options]
-  - Social Connections
+  - Social Connections {"collapse": false}
+    - Overview
     - Account linking
     - Custom provider
-    - All providers {"collapse": false}
-      - Apple
-      - Atlassian
-      - Bitbucket
-      - Box
-      - Coinbase
-      - Discord
-      - Dropbox
-      - Facebook
-      - GitHub
-      - GitLab
-      - Google
-      - HubSpot
-      - Hugging Face
-      - Line
-      - Linear
-      - LinkedIn [linkedin-oidc]
-      - LinkedIn (deprecated) [linkedin]
-      - Microsoft
-      - Notion
-      - Slack
-      - Spotify
-      - TikTok
-      - Twitch
-      - Twitter v1 (deprecated) [twitter]
-      - X/Twitter v2 [x-twitter]
-      - Xero
-  - Enterprise Connections
+    - All providers
+  - Enterprise Connections {"collapse": false}
     - Overview
     - Authentication flows
     - Account linking
@@ -82,11 +57,11 @@
     - EASIE providers [easie]
       - Microsoft
       - Google
-  - Web3
+  - Web3 {"collapse": false}
     - Coinbase Wallet
     - Metamask
     - OKX Wallet
-  - OAuth
+  - OAuth {"collapse": false}
     - What are OAuth & OIDC [overview]
     - How Clerk implements OAuth
     - Use OAuth for Single Sign-On (SSO) [single-sign-on]

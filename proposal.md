@@ -159,7 +159,7 @@
 - Bot Protection
 - Banning Users
 - Prevent Brute Force Attacks [user-lockout]
-- Reverification (Step-up)
+- Reverification (Step-up) [reverification]
 - Legal Compliance
 - Password Protection and Rules
 - Security Best Practices [best-practices]

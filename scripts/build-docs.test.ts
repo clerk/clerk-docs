@@ -4772,8 +4772,8 @@ describe('API Errors Generation', () => {
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigation: [
-            [{ title: 'Backend API', href: '/docs/errors/backend-api' }],
-            [{ title: 'Frontend API', href: '/docs/errors/frontend-api' }],
+            [{ title: 'Backend API', href: '/docs/guides/development/errors/backend-api' }],
+            [{ title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' }],
           ],
         }),
       },
@@ -4797,8 +4797,8 @@ describe('API Errors Generation', () => {
 
     expect(output).toBe('')
 
-    const bapi = await readFile('./dist/errors/backend-api.mdx')
-    const fapi = await readFile('./dist/errors/frontend-api.mdx')
+    const bapi = await readFile('./dist/guides/development/errors/backend-api.mdx')
+    const fapi = await readFile('./dist/guides/development/errors/frontend-api.mdx')
 
     expect(bapi).toContain('title: Backend API errors')
     expect(fapi).toContain('title: Frontend API errors')

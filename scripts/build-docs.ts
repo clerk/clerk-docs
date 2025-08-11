@@ -178,6 +178,7 @@ async function main() {
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
 
         // temp migration ignores
+        'clerk-react/clerk-provider-props.mdx': ['link-doc-not-found'],
         'backend/allowlist-identifier.mdx': ['link-doc-not-found'],
         'backend/email-address.mdx': ['link-doc-not-found'],
         'backend/organization-membership-public-user-data.mdx': ['link-doc-not-found'],

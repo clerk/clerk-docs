@@ -79,7 +79,7 @@
       - Custom provider
     - OIDC providers [oidc]
       - Custom provider
-    - EASIE provider [easie]
+    - EASIE providers [easie]
       - Microsoft
       - Google
   - Web3

@@ -92,6 +92,7 @@
 
 ### Managing Users [users]
 
+- Inviting Users [inviting]
 - Managing Users [managing]
 - Reading Clerk Data [reading]
 - Extending Clerk Data [extending]

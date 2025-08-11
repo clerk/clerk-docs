@@ -221,12 +221,9 @@ function parseMarkdownToManifest(content: string) {
       // Keep only the path components for levels above the current one
       pathStack = pathStack.slice(0, indentLevel)
 
-      // Only add current item to pathStack if it's not a non-collapsing group
+      // Add current item to pathStack
       const itemSlug = customSlug || slugify(title)
-      const shouldAddToPath = !(extraProps && extraProps.collapse === false)
-      if (shouldAddToPath) {
-        pathStack.push(itemSlug)
-      }
+      pathStack.push(itemSlug)
 
       // Helper function to find or create a parent container at a specific nesting level
       const findOrCreateParentContainer = (targetLevel: number): any[] => {
@@ -281,7 +278,6 @@ function parseMarkdownToManifest(content: string) {
           currentTopLevelCustomSlug || undefined,
           currentSubGroupCustomSlug || undefined,
           pathStack.slice(0, -1), // Pass all parent path segments except the current item
-          shouldAddToPath, // Pass whether this item should be included in the path
         ),
       }
 
@@ -337,7 +333,6 @@ function parseMarkdownToManifest(content: string) {
  * @param {string} topLevelCustomSlug - The custom slug for the top-level group
  * @param {string} subLevelCustomSlug - The custom slug for the sub-level group
  * @param {string[]} parentPathSegments - Array of parent path segments for nested items
- * @param {boolean} shouldAddToPath - Whether this item should be included in the path
  * @returns {string} - The generated href
  */
 function generateHref(
@@ -348,7 +343,6 @@ function generateHref(
   topLevelCustomSlug?: string,
   subLevelCustomSlug?: string,
   parentPathSegments?: string[],
-  shouldAddToPath: boolean = true,
 ) {
   let href = '/docs'
   let topLevel = _topLevel
@@ -377,11 +371,9 @@ function generateHref(
     }
   }
 
-  // Only add the item slug to the path if shouldAddToPath is true
-  if (shouldAddToPath) {
-    const itemSlug = customSlug || slugify(title)
-    href += `/${itemSlug}`
-  }
+  // Use custom slug for the item if provided, otherwise slugify the title
+  const itemSlug = customSlug || slugify(title)
+  href += `/${itemSlug}`
 
   return href
 }

@@ -2982,6 +2982,162 @@ sdk: react
     const page1Content = await readFile('./dist/page-1.mdx')
     expect(page1Content).toContain('<SDKLink href="/docs/page-1#content" sdks={["react"]}>Hash Link</SDKLink>')
   })
+
+  test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+description: Scoped page
+sdk: react, nextjs
+---
+
+## Heading
+`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+This is a [SDK Filtered Page][sdk-ref].
+
+[sdk-ref]: /docs/sdk-filtered-page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Reference-style link with hash to SDK-scoped doc preserves hash in <SDKLink />', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+description: Scoped page
+sdk: react, nextjs
+---
+
+## Custom Heading
+`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+See [SDK Filtered Page][sdk-ref].
+
+[sdk-ref]: /docs/sdk-filtered-page#custom-heading`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page#custom-heading" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Reference-style link to core doc stays as normal link and validates', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Core Target', href: '/docs/core-target' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/core-target.mdx',
+        content: `---
+title: Core Target
+description: Target doc
+---
+
+# Core Target`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+See [Core Target][core-ref].
+
+[core-ref]: /docs/core-target`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain('[Core Target](/docs/core-target)')
+  })
 })
 
 describe('Path and File Handling', () => {

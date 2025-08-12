@@ -171,6 +171,9 @@ async function main() {
         'guides/development/upgrading/upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
+        'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
+        'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
+        'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],

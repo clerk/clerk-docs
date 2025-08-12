@@ -849,13 +849,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="image">
 
-- [What is Clerk authentication?](/docs/authentication/overview)
+- [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---
 
-- [What is the “User” object?](/docs/users/overview)
+- [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
 - ![](/user-object.png)
 

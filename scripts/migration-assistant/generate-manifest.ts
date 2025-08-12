@@ -221,12 +221,9 @@ function parseMarkdownToManifest(content: string) {
       // Keep only the path components for levels above the current one
       pathStack = pathStack.slice(0, indentLevel)
 
-      // Only add current item to pathStack if it's not a non-collapsing group
+      // Add current item to pathStack
       const itemSlug = customSlug || slugify(title)
-      const shouldAddToPath = !(extraProps && extraProps.collapse === false)
-      if (shouldAddToPath) {
-        pathStack.push(itemSlug)
-      }
+      pathStack.push(itemSlug)
 
       // Helper function to find or create a parent container at a specific nesting level
       const findOrCreateParentContainer = (targetLevel: number): any[] => {
@@ -281,7 +278,6 @@ function parseMarkdownToManifest(content: string) {
           currentTopLevelCustomSlug || undefined,
           currentSubGroupCustomSlug || undefined,
           pathStack.slice(0, -1), // Pass all parent path segments except the current item
-          shouldAddToPath, // Pass whether this item should be included in the path
         ),
       }
 
@@ -337,7 +333,6 @@ function parseMarkdownToManifest(content: string) {
  * @param {string} topLevelCustomSlug - The custom slug for the top-level group
  * @param {string} subLevelCustomSlug - The custom slug for the sub-level group
  * @param {string[]} parentPathSegments - Array of parent path segments for nested items
- * @param {boolean} shouldAddToPath - Whether this item should be included in the path
  * @returns {string} - The generated href
  */
 function generateHref(
@@ -348,7 +343,6 @@ function generateHref(
   topLevelCustomSlug?: string,
   subLevelCustomSlug?: string,
   parentPathSegments?: string[],
-  shouldAddToPath: boolean = true,
 ) {
   let href = '/docs'
   let topLevel = _topLevel
@@ -377,68 +371,11 @@ function generateHref(
     }
   }
 
-  // Only add the item slug to the path if shouldAddToPath is true
-  if (shouldAddToPath) {
-    const itemSlug = customSlug || slugify(title)
-    href += `/${itemSlug}`
-  }
+  // Use custom slug for the item if provided, otherwise slugify the title
+  const itemSlug = customSlug || slugify(title)
+  href += `/${itemSlug}`
 
   return href
-}
-
-export type ManifestItem = {
-  title: string
-  href: string
-  icon?: string
-  tag?: string
-}
-
-export type ManifestGroup = {
-  title: string
-  items: Manifest
-  collapse?: boolean
-  icon?: string
-  tag?: string
-}
-
-export type Manifest = (ManifestItem | ManifestGroup)[][]
-
-const manifestItem: z.ZodType<ManifestItem> = z
-  .object({
-    title: z.string(),
-    href: z.string(),
-    icon: z.string().optional(),
-    tag: z.string().optional(),
-  })
-  .passthrough()
-
-const manifestGroup: z.ZodType<ManifestGroup> = z
-  .object({
-    title: z.string(),
-    items: z.lazy(() => manifestSchema),
-    collapse: z.boolean().optional(),
-    icon: z.string().optional(),
-    tag: z.string().optional(),
-  })
-  .strict()
-
-const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup])))
-
-/**
- * Validate the manifest against the schema
- * @param {Object} manifest - The manifest to validate
- * @returns {boolean} - Whether the manifest is valid
- */
-function validateManifest(manifest: object) {
-  const result = z.object({ navigation: manifestSchema }).safeParse(manifest)
-
-  if (!result.success) {
-    console.error('Validation errors:')
-    console.error(result.error.errors)
-    return false
-  }
-
-  return true
 }
 
 /**
@@ -455,15 +392,8 @@ async function generateManifest() {
   const manifest = parseMarkdownToManifest(proposalContent)
   console.log('✅ Parsed markdown structure')
 
-  // Validate manifest against schema
-  if (!validateManifest(manifest)) {
-    console.error('❌ Manifest validation failed')
-    process.exit(1)
-  }
-  console.log('✅ Main manifest validation passed')
-
   // Write the main manifest.new.json file
-  await fs.writeFile(OUTPUT_PATH, JSON.stringify(manifest))
+  await fs.writeFile(OUTPUT_PATH, JSON.stringify(manifest, null, 2))
   console.log('✅ Written manifest.proposal.json')
 }
 

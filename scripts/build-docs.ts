@@ -1,4 +1,3 @@
-import yaml from 'yaml'
 // Things this script does
 
 // Validates
@@ -49,6 +48,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
 import { z } from 'zod'
 import symlinkDir from 'symlink-dir'
+import yaml from 'yaml'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -114,6 +114,7 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
+    localTypedocOverridePath: '../local-clerk-typedoc',
     publicPath: '../public',
     redirects: {
       static: {
@@ -685,7 +686,9 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             doc?.frontmatter?.sdk !== undefined &&
             doc.frontmatter.sdk.length >= 1 &&
             !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
-            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`)
+            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`) &&
+            // Don't inject SDK scoping for documents that only support one SDK
+            doc.frontmatter.sdk.length > 1
 
           return {
             title: item.title,
@@ -793,11 +796,24 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }
 
       if (doc.sdk !== undefined) {
-        // This is a sdk specific doc, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+        // Check if the href already contains an SDK name (e.g., /docs/references/react/guide contains 'react')
+        const hrefSegments = doc.file.href.split('/')
+        const hrefAlreadyContainsSdk = doc.sdk.some((sdk) => hrefSegments.includes(sdk))
 
-        await writeFile(
-          doc.file.filePathInDocsFolder,
-          `---
+        // Check if this document only supports one SDK (regardless of how many SDKs are available overall)
+        // If a document only supports one SDK, there's no choice to be made, so no redirect page needed
+        const isSingleSdkDocument = doc.sdk.length === 1
+
+        // Only create a redirect page if:
+        // 1. The href doesn't already contain the SDK name, AND
+        // 2. It's not a single SDK scenario (where there's no choice to be made)
+        const needsRedirectPage = !hrefAlreadyContainsSdk && !isSingleSdkDocument
+
+        if (needsRedirectPage) {
+          // This is a sdk specific doc with multiple options, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+          await writeFile(
+            doc.file.filePathInDocsFolder,
+            `---
 ${yaml.stringify({
   template: 'wide',
   redirectPage: 'true',
@@ -805,7 +821,9 @@ ${yaml.stringify({
   notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(doc.sdk)}} />`,
-        )
+          )
+        }
+        // All SDK documents (single and multi) will be processed in the SDK-specific loop below
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
       }
@@ -823,6 +841,10 @@ ${yaml.stringify({
           if (doc.sdk === undefined) return null // skip core docs
           if (doc.sdk.includes(targetSdk) === false) return null // skip docs that are not for the target sdk
 
+          const hrefSegments = doc.file.href.split('/')
+          const hrefAlreadyContainsSdk = doc.sdk.some((sdk) => hrefSegments.includes(sdk))
+          const isSingleSdkDocument = doc.sdk.length === 1
+
           const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
             remark()
               .use(remarkFrontmatter)
@@ -836,7 +858,10 @@ ${yaml.stringify({
               .use(
                 insertFrontmatter({
                   sdkScoped: 'true',
-                  canonical: doc.sdk ? scopeHrefToSDK(config)(doc.file.href, ':sdk:') : doc.file.href,
+                  canonical:
+                    hrefAlreadyContainsSdk || isSingleSdkDocument
+                      ? doc.file.href
+                      : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
                   lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
                   availableSdks: doc.sdk?.join(','),
                   notAvailableSdks: config.validSdks.filter((sdk) => !doc.sdk?.includes(sdk)).join(','),
@@ -849,11 +874,16 @@ ${yaml.stringify({
               }),
           )
 
-          await writeSdkFile(
-            targetSdk,
-            doc.file.filePathInDocsFolder,
-            typedocTableSpecialCharacters.decode(vfile.value as string),
-          )
+          // For single SDK documents or documents with SDK already in path, write to root path
+          if (hrefAlreadyContainsSdk || isSingleSdkDocument) {
+            await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(vfile.value as string))
+          } else {
+            await writeSdkFile(
+              targetSdk,
+              doc.file.filePathInDocsFolder,
+              typedocTableSpecialCharacters.decode(vfile.value as string),
+            )
+          }
 
           return vfile
         }),

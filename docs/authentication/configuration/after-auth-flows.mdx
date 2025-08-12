@@ -13,7 +13,7 @@ The following table lists the available after-auth flows and their corresponding
 
 | Name | Key | Description |
 | - | - | - |
-| [Personal accounts disabled (default)](/docs/organizations/overview#allow-personal-accounts) | `choose-organization` | Requires users to select or create an organization after authenticating. |
+| [Personal accounts disabled (default)](/docs/organizations/overview#allow-personal-accounts) | `choose-organization` | Requires users to choose an organization after authenticating. |
 
 ## Flow states
 
@@ -27,9 +27,9 @@ When authenticating, sessions remain `pending` until users complete the required
 
 ## Implementation
 
-### Check for the current session task
+### Displaying tasks
 
-Once enabled in the Clerk Dashboard, after-auth flows are **embedded by default** within the `<SignUp />` and `<SignIn />` components. For more customization, you can opt out of using the `<SignUp />` and `<SignIn />` components and create custom pages for your after-auth flows.
+Once enabled in the Clerk Dashboard, after-auth flows are **embedded by default** within the `<SignUp />` and `<SignIn />` components. For more customization, you can opt out of using the `<SignUp />` and `<SignIn />` components and [create custom pages for your after-auth flows](/docs/custom-flows/overview#after-auth-flow).
 
 The following table lists the available after-auth flows and their corresponding after-auth components. See the linked reference guide for usage instructions.
 
@@ -37,25 +37,27 @@ The following table lists the available after-auth flows and their corresponding
 | - | - |
 | [Personal accounts disabled (default)](/docs/organizations/overview#allow-personal-accounts) | [`<TaskChooseOrganization />`](/docs/components/authentication/task-choose-organization) |
 
-If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property. After calling [`setActive()`](/docs/references/javascript/clerk#set-active), use the `session.currentTask` property to check if the user has pending after-auth tasks that need to be completed before their session becomes fully `active`. Refer to the [custom flows documentation](/docs/custom-flows/overview) for specific implementation guides.
+If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending after-auth tasks. Refer to the [custom flows documentation](/docs/custom-flows/overview) for specific implementation guides.
 
 <CodeBlockTabs options={["React", "JavaScript"]}>
   ```jsx
-  import { useClerk } from '@clerk/clerk-react'
+  import { useSession } from '@clerk/clerk-react'
 
-  const clerk = useClerk()
+  const { session } = useSession()
 
-  if (clerk.session?.currentTask) {
+  if (session?.currentTask) {
     // If there's a pending session task, check why. User may need
-    // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-    console.log(clerk.session.currentTask)
+    // to complete after-auth flow. You can display custom UI to help
+    // users resolve these tasks, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
+    console.log(session?.currentTask)
   }
   ```
 
   ```js
   if (window.Clerk.session.currentTask) {
     // If there's a pending session task, check why. User may need
-    // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
+    // to complete after-auth flow. You can display custom UI to help
+    // users resolve these tasks, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
     console.log(window.Clerk.session.currentTask)
   }
   ```
@@ -63,7 +65,7 @@ If the prebuilt components don't meet your specific needs or if you require more
 
 ### Session handling
 
-By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
+You can check the current authentication state using the `Clerk.isSignedIn` property. By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
 
 - `true` (default): Treats `pending` sessions as signed-out. Users can't access protected content or routes.
 - `false`: Treats `pending` sessions as signed-in. Users can access protected content or routes.
@@ -294,3 +296,144 @@ export default function Dashboard() {
   }
   ```
 </If>
+
+### Redirecting to after-auth tasks
+
+When users have pending after-auth tasks, you can redirect them to specific pages or components to complete these requirements. This is useful for creating custom user experiences or when you want to handle after-auth flows outside of the default `<SignIn />` and `<SignUp />` components.
+
+#### Using the `redirectTo` prop
+
+You can redirect users to a custom page after authentication by using the `redirectTo` prop on the `<SignIn />` and `<SignUp />` components:
+
+```tsx
+import { SignIn, SignUp } from '@clerk/nextjs'
+
+export default function AuthPage() {
+  return (
+    <div>
+      <SignIn redirectUrl="/complete-profile" />
+      <SignUp redirectUrl="/complete-profile" />
+    </div>
+  )
+}
+```
+
+#### Custom redirect logic with `useSession`
+
+For more control, you can use the `useSession` hook to check for pending tasks and redirect users programmatically:
+
+```tsx
+import { useSession } from '@clerk/clerk-react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/router'
+
+export default function Dashboard() {
+  const { session, isLoaded } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isLoaded && session?.currentTask) {
+      // Redirect based on the specific task type
+      switch (session.currentTask.type) {
+        case 'organization_required':
+          router.push('/select-organization')
+          break
+        case 'email_verification_required':
+          router.push('/verify-email')
+          break
+        case 'phone_verification_required':
+          router.push('/verify-phone')
+          break
+        default:
+          router.push('/complete-profile')
+      }
+    }
+  }, [session, isLoaded, router])
+
+  if (!isLoaded) return <div>Loading...</div>
+
+  return <div>Dashboard content</div>
+}
+```
+
+#### Middleware-based redirects
+
+You can also handle redirects at the middleware level by checking for pending sessions:
+
+```tsx
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/profile(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    const { userId, session } = await auth()
+
+    if (!userId) {
+      // User is signed-out, redirect to sign-in
+      return redirect('/sign-in')
+    }
+
+    // Check if user has pending tasks
+    if (session?.currentTask) {
+      // Redirect to appropriate completion page
+      switch (session.currentTask.type) {
+        case 'organization_required':
+          return redirect('/select-organization')
+        case 'email_verification_required':
+          return redirect('/verify-email')
+        default:
+          return redirect('/complete-profile')
+      }
+    }
+  }
+})
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+#### Handling redirects in API routes
+
+For API routes, you can return redirect responses when users have pending tasks:
+
+```tsx
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export async function GET() {
+  const { userId, session } = await auth()
+
+  if (!userId) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (session?.currentTask) {
+    // Return a redirect response
+    return Response.json(
+      {
+        redirect: true,
+        url: '/complete-profile',
+        task: session.currentTask.type,
+      },
+      { status: 200 },
+    )
+  }
+
+  // User is fully authenticated, proceed with API logic
+  return Response.json({ message: 'Success' })
+}
+```
+
+#### Best practices
+
+- **Always check for pending tasks** before allowing access to protected content
+- **Provide clear user feedback** about what needs to be completed
+- **Use consistent redirect URLs** across your application
+- **Handle edge cases** like users navigating back to protected pages
+- **Consider user experience** - don't redirect too aggressively or create redirect loops

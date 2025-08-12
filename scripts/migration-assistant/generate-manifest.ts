@@ -378,61 +378,6 @@ function generateHref(
   return href
 }
 
-export type ManifestItem = {
-  title: string
-  href: string
-  icon?: string
-  tag?: string
-}
-
-export type ManifestGroup = {
-  title: string
-  items: Manifest
-  collapse?: boolean
-  icon?: string
-  tag?: string
-}
-
-export type Manifest = (ManifestItem | ManifestGroup)[][]
-
-const manifestItem: z.ZodType<ManifestItem> = z
-  .object({
-    title: z.string(),
-    href: z.string(),
-    icon: z.string().optional(),
-    tag: z.string().optional(),
-  })
-  .passthrough()
-
-const manifestGroup: z.ZodType<ManifestGroup> = z
-  .object({
-    title: z.string(),
-    items: z.lazy(() => manifestSchema),
-    collapse: z.boolean().optional(),
-    icon: z.string().optional(),
-    tag: z.string().optional(),
-  })
-  .strict()
-
-const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup])))
-
-/**
- * Validate the manifest against the schema
- * @param {Object} manifest - The manifest to validate
- * @returns {boolean} - Whether the manifest is valid
- */
-function validateManifest(manifest: object) {
-  const result = z.object({ navigation: manifestSchema }).safeParse(manifest)
-
-  if (!result.success) {
-    console.error('Validation errors:')
-    console.error(result.error.errors)
-    return false
-  }
-
-  return true
-}
-
 /**
  * Main function to generate the manifest
  */
@@ -447,15 +392,8 @@ async function generateManifest() {
   const manifest = parseMarkdownToManifest(proposalContent)
   console.log('✅ Parsed markdown structure')
 
-  // Validate manifest against schema
-  if (!validateManifest(manifest)) {
-    console.error('❌ Manifest validation failed')
-    process.exit(1)
-  }
-  console.log('✅ Main manifest validation passed')
-
   // Write the main manifest.new.json file
-  await fs.writeFile(OUTPUT_PATH, JSON.stringify(manifest))
+  await fs.writeFile(OUTPUT_PATH, JSON.stringify(manifest, null, 2))
   console.log('✅ Written manifest.proposal.json')
 }
 

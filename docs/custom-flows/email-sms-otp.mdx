@@ -37,11 +37,10 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
       'use client'
 
       import * as React from 'react'
-      import { useClerk } from '@clerk/nextjs'
+      import { useSignUp } from '@clerk/nextjs'
       import { useRouter } from 'next/navigation'
 
       export default function Page() {
-        const clerk = useClerk()
         const { isLoaded, signUp, setActive } = useSignUp()
         const [verifying, setVerifying] = React.useState(false)
         const [phone, setPhone] = React.useState('')
@@ -88,11 +87,12 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
             if (signUpAttempt.status === 'complete') {
               await setActive({
                 session: signUpAttempt.createdSessionId,
-                navigate: async (session) => {
-                  if (clerk.session?.currentTask) {
-                    // If there's a pending session task, check why. User may need
-                    // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-                    console.log(clerk.session.currentTask)
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // If there's a pending session task, navigate the user to your custom task page to complete it
+                    // See https://clerk.com/docs/custom-flows/overview#after-auth-flow
+                    router.push(`/sign-in/tasks/${session.currentTask.key}`)
+                    return
                   }
 
                   router.push('/')
@@ -156,6 +156,8 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
           <body>
             <div id="signed-in"></div>
 
+            <div id="task"></div>
+
             <div id="sign-up">
               <h2>Sign up</h2>
               <form id="sign-up-form">
@@ -194,10 +196,21 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
           const userbuttonDiv = document.getElementById('user-button')
 
           clerk.mountUserButton(userbuttonDiv)
-        } else if (clerk.session.currentTask) {
+        } else if (clerk.session?.currentTask) {
           // If there's a pending session task, check why. User may need
-          // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-          console.log(clerk.session.currentTask)
+          // to complete after-auth flow. You can display custom UI to help
+          // users resolve these tasks, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
+          switch (clerk.session.currentTask.key) {
+            case 'choose-organization': {
+              document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+              const taskDiv = document.getElementById('task')
+
+              clerk.mountTaskChooseOrganization(taskDiv)
+            }
+          }
         } else {
           // Handle the sign-up form
           document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
@@ -562,11 +575,11 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
             if (signInAttempt.status === 'complete') {
               await setActive({
                 session: signInAttempt.createdSessionId,
-                navigate: async (session) => {
-                  if (clerk.session?.currentTask) {
-                    // If there's a pending session task, check why. User may need
-                    // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-                    console.log(clerk.session.currentTask)
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // If there's a pending session task, navigate the user to your custom task page to complete it. See https://clerk.com/docs/custom-flows/overview#after-auth-flow
+                    router.push(`/sign-in/tasks/${session.currentTask.key}`)
+                    return
                   }
 
                   router.push('/')

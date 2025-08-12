@@ -26,7 +26,6 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
     import { isClerkAPIResponseError } from '@clerk/nextjs/errors'
 
     export default function SignInForm() {
-      const clerk = useClerk()
       const { isLoaded, signIn, setActive } = useSignIn()
       const [email, setEmail] = React.useState('')
       const [password, setPassword] = React.useState('')
@@ -57,11 +56,12 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
           if (signInAttempt.status === 'complete') {
             await setActive({
               session: signInAttempt.createdSessionId,
-              navigate: async (session) => {
-                if (clerk.session?.currentTask) {
-                  // If there's a pending session task, check why. User may need
-                  // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-                  console.log(clerk.session.currentTask)
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // If there's a pending session task, navigate the user to your custom task page to complete it
+                  // See https://clerk.com/docs/custom-flows/overview#after-auth-flow
+                  router.push(`/sign-in/tasks/${session.currentTask.key}`)
+                  return
                 }
 
                 router.push('/')
@@ -167,10 +167,21 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
         const userbuttonDiv = document.getElementById('user-button')
 
         clerk.mountUserButton(userbuttonDiv)
-      } else if (session?.currentTask) {
+      } else if (clerk.session?.currentTask) {
         // If there's a pending session task, check why. User may need
-        // to complete after-auth flow, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
-        console.log(session.currentTask)
+        // to complete after-auth flow. You can display custom UI to help
+        // users resolve these tasks, see https://clerk.com/docs/custom-flows/overview#after-auth-flow
+        switch (clerk.session.currentTask.key) {
+          case 'choose-organization': {
+            document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+            const taskDiv = document.getElementById('task')
+
+            clerk.mountTaskChooseOrganization(taskDiv)
+          }
+        }
       } else {
         // Handle the sign-in form
         document.getElementById('sign-in-form').addEventListener('submit', async (e) => {

@@ -191,7 +191,7 @@
   - Organizations {"collapse": false}
     - Accept organization invitation links [accept-organization-invitations]
     - Create an organization [create-organizations]
-    - Create and manage organization invitations [create-organization-invitation]
+    - Create and manage organization invitations [manage-organization-invitations]
     - List and switch between organizations [organization-switcher]
     - Manage a user's organization invitations [manage-user-org-invitations]
     - Manage member roles [manage-roles]

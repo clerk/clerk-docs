@@ -18,14 +18,15 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { type BuildConfig } from './config'
 import { errorMessages, safeFail, safeMessage, type WarningsSection } from './error-messages'
-import { type DocsFile, readMarkdownFile } from './io'
+import { readMarkdownFile, type DocsFile } from './io'
 import { checkPartials } from './plugins/checkPartials'
 import { checkTypedoc } from './plugins/checkTypedoc'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
+import { Prompt, checkPrompts } from './prompts'
+import type { SDK } from './schemas'
+import { markDocumentDirty, type Store } from './store'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
-import { Prompt, checkPrompts } from './prompts'
-import { markDocumentDirty, type Store } from './store'
 import { checkTooltips } from './plugins/checkTooltips'
 
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
@@ -181,5 +182,6 @@ export const parseInMarkdownFile =
       frontmatter: frontmatter as Frontmatter,
       node: node as Node,
       fileContent,
+      distinctSDKVariants: null as SDK[] | null,
     }
   }

@@ -5026,6 +5026,98 @@ notAvailableSdks: ""
     ])
   })
 
+  test('Should pick up and use the sdk specific version of the doc', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test', href: '/docs/test' }]],
+        }),
+      },
+      {
+        path: './docs/test.mdx',
+        content: `---
+title: Documentation
+sdk: react
+---
+
+Documentation specific to React`,
+      },
+      {
+        path: './docs/test.nextjs.mdx',
+        content: `---
+title: Documentation for Next.js
+sdk: nextjs
+---
+
+Documentation specific to Next.js`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            title: 'Test',
+            href: '/docs/:sdk:/test',
+            sdk: ['react', 'nextjs'],
+          },
+        ],
+      ],
+    })
+
+    expect(await readFile('./dist/nextjs/test.mdx')).toBe(`---
+title: Documentation for Next.js
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/test
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+Documentation specific to Next.js
+`)
+
+    expect(await readFile('./dist/react/test.mdx')).toBe(`---
+title: Documentation
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/test
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: react
+---
+
+Documentation specific to React
+`)
+
+    expect(await readFile('./dist/test.mdx')).toBe(`---
+template: wide
+redirectPage: "true"
+availableSdks: react,nextjs
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="Documentation" href="/docs/:sdk:/test" sdks={["react","nextjs"]} />`)
+
+    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
+      'dist/test.mdx',
+      'dist/manifest.json',
+      'dist/directory.json',
+      'dist/react/test.mdx',
+      'dist/nextjs/test.mdx',
+    ])
+  })
+
   test('Should have correct sdks in <SDKLink />', async () => {
     const { tempDir, readFile } = await createTempFiles([
       {

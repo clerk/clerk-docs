@@ -717,13 +717,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         async (item) => {
           const doc = docsMap.get(item.href)
 
+          const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
+
           const injectSDK =
-            doc?.frontmatter?.sdk !== undefined &&
-            doc.frontmatter.sdk.length >= 1 &&
-            !item.href.endsWith(`/${doc.frontmatter.sdk[0]}`) &&
-            !item.href.includes(`/${doc.frontmatter.sdk[0]}/`) &&
+            sdks.length >= 1 &&
+            !item.href.endsWith(`/${sdks[0]}`) &&
+            !item.href.includes(`/${sdks[0]}/`) &&
             // Don't inject SDK scoping for documents that only support one SDK
-            doc.frontmatter.sdk.length > 1
+            sdks.length > 1
 
           if (injectSDK) {
             return {
@@ -733,7 +734,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
               icon: item.icon,
               target: item.target,
-              sdk: [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])],
+              sdk: sdks,
             }
           }
 
@@ -899,6 +900,9 @@ ${yaml.stringify({
           if (doc.sdk.includes(targetSdk) === false && doc.distinctSDKVariants?.includes(targetSdk) === false)
             return null
 
+          // Don't write out files that end in .{sdk}.mdx
+          if (doc.file.filePathInDocsFolder.endsWith(`.${targetSdk}.mdx`)) return null
+
           // if the doc has distinct version, we want to use those instead of the "generic" sdk scoped version
           const fileContent = (() => {
             if (doc.distinctSDKVariants?.includes(targetSdk)) {
@@ -914,8 +918,8 @@ ${yaml.stringify({
           const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
           const hrefSegments = doc.file.href.split('/')
-          const hrefAlreadyContainsSdk = doc.sdk.some((sdk) => hrefSegments.includes(sdk))
-          const isSingleSdkDocument = doc.sdk.length === 1
+          const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
+          const isSingleSdkDocument = sdks.length === 1
 
           const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
             remark()

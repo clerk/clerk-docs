@@ -401,6 +401,8 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
+
 ### Headings
 
 Headings should be nested by their rank. Headings with an equal or higher rank start a new section, headings with a lower rank start new subsections that are part of the higher ranked section. Please see the [Web Accessibility Initiative documentation](https://www.w3.org/WAI/tutorials/page-structure/headings/) for more information.
@@ -952,14 +954,14 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 ### `<Typedoc />`
 
-The `<Typedoc />` component can be used to inject the contents of an MDX file of the [`generated-typedoc`](https://github.com/clerk/generated-typedoc) repository. The files inside that repository are not manually created and maintained, but rather automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
+The `<Typedoc />` component is used to inject the contents of an MDX file from the `./clerk-typedoc` folder. The files inside that folder are not manually created and maintained; they are automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
 
-- If you want to edit the contents of a docs page that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment.
-- Once your PR inside `clerk/javascript` has been merged, the `generated-typedoc` repository will be automatically updated. On the next deployment of the docs website, your change will be live.
+- If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
+- Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
+
+For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
 
 ```mdx
-{/* Render `generated-typedoc/clerk-react/use-auth.mdx` */}
-
 <Typedoc src="clerk-react/use-auth" />
 ```
 
@@ -985,6 +987,7 @@ Available values for the `sdk` prop:
 | Javascript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
 | Expo                   | "expo"                 |
+| Android                | "android"              |
 | iOS                    | "ios"                  |
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |

@@ -36,39 +36,13 @@
 ### Configuring your App [configure]
 
 - Authentication Strategies [auth-strategies]
-
   - Sign-up and sign-in options [sign-up-sign-in-options]
-  - Social Connections
+  - Social Connections {"collapse": false}
+    - Overview
     - Account linking
     - Custom provider
     - All providers
-      - Apple
-      - Atlassian
-      - Bitbucket
-      - Box
-      - Coinbase
-      - Discord
-      - Dropbox
-      - Facebook
-      - GitHub
-      - GitLab
-      - Google
-      - HubSpot
-      - Hugging Face
-      - Line
-      - Linear
-      - LinkedIn [linkedin-oidc]
-      - LinkedIn (deprecated) [linkedin]
-      - Microsoft
-      - Notion
-      - Slack
-      - Spotify
-      - TikTok
-      - Twitch
-      - Twitter v1 (deprecated) [twitter]
-      - X/Twitter v2 [x-twitter]
-      - Xero
-  - Enterprise Connections
+  - Enterprise Connections {"collapse": false}
     - Overview
     - Authentication flows
     - Account linking
@@ -80,20 +54,19 @@
       - Custom provider
     - OIDC providers [oidc]
       - Custom provider
-    - EASIE provider [easie]
+    - EASIE providers [easie]
       - Microsoft
       - Google
-  - Web3
+  - Web3 {"collapse": false}
     - Coinbase Wallet
     - Metamask
     - OKX Wallet
-  - OAuth
+  - OAuth {"collapse": false}
     - What are OAuth & OIDC [overview]
     - How Clerk implements OAuth
     - Use OAuth for Single Sign-On (SSO) [single-sign-on]
     - Use OAuth for scoped access [scoped-access]
     - Verify OAuth tokens
-
 - Session token customization [session-token]
 - Webhooks
   - Overview
@@ -119,6 +92,7 @@
 
 ### Managing Users [users]
 
+- Inviting Users [inviting]
 - Managing Users [managing]
 - Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
@@ -126,7 +100,7 @@
 
 ### Customizing Clerk
 
-- UI Customization (Appearance Prop) [appearance-prop]
+- Component Customization [appearance-prop]
   - Overview
   - Layout
   - Themes
@@ -137,9 +111,23 @@
   - Organization profile
   - User profile
   - User button
-- Email and SMS Templates
+- Email and SMS Templates [email-sms-templates]
 - Localization (i18n) [localization]
 - Clerk Elements [elements] {"tag": "(Beta)"}
+  - Overview
+  - Guides
+    - Build a sign-in flow [sign-in]
+    - Build a sign-up flow [sign-up]
+    - Styling
+  - Examples
+    - Sign-in
+    - Sign-up
+    - Primitives
+    - shadcn/ui
+  - Component Reference [reference]
+    - Common
+    - Sign-in
+    - Sign-up
 
 ### B2B (Organizations) [organizations]
 
@@ -160,21 +148,20 @@
 ### Securing your App [secure]
 
 - Restricting Access
-- Multifactor Authentication (MFA) [mfa]
 - Authorization Checks
 - Bot Protection
 - Banning Users
-- Prevent brute force attacks [user-lockout]
-- Reverification (Step-up)
+- Prevent Brute Force Attacks [user-lockout]
+- Reverification (Step-up) [reverification]
 - Legal Compliance
-- Password protection and rules
+- Password Protection and Rules
 - Security Best Practices [best-practices]
-  - XSS leak protection
-  - CSRF protection
+  - XSS Leak Protection
+  - CSRF Protection
   - CSP Headers
-  - Fixation protection
-  - Protect email link sign-ups and sign-ins [protect-email-links]
-  - Unauthorized sign-in
+  - Fixation Protection
+  - Protect Email Link Sign-ups and Sign-ins [protect-email-links]
+  - Unauthorized Sign-in
 - Session Options
 
 ### Development
@@ -246,7 +233,7 @@
 - System limits
 - Routing
 - Session tokens
-- Tokens & signatures
+- Tokens and signatures
 - Security at Clerk [security]
   - Vulnerability disclosure policy
   - Clerk Telemetry
@@ -260,10 +247,63 @@
 
 ## Reference [reference]
 
-### General [reference]
+### General
 
 - UI Components [components] {"icon": "box"}
+  - Overview
+  - `<ClerkProvider>` [clerk-provider]
+  - Authentication Components [authentication] {"collapse": false}
+    - `<SignIn />` [sign-in]
+    - `<SignUp />` [sign-up]
+    - `<GoogleOneTap />` [google-one-tap]
+    - `<Waitlist />` [waitlist]
+  - User Components [user] {"collapse": false}
+    - `<UserButton />` [user-button]
+    - `<UserProfile />` [user-profile]
+  - Organization Components [organization] {"collapse": false}
+    - `<CreateOrganization />` [create-organization]
+    - `<OrganizationProfile />` [organization-profile]
+    - `<OrganizationSwitcher />` [organization-switcher]
+    - `<OrganizationList />` [organization-list]
+  - Billing Components [billing] {"collapse": false}
+    - `<PricingTable />` [pricing-table]
+    - `<CheckoutButton />` [checkout-button] {"tag": "(Beta)"}
+    - `<PlanDetailsButton />` [plan-details-button] {"tag": "(Beta)"}
+    - `<SubscriptionDetailsButton />` [subscription-details-button] {"tag": "(Beta)"}
+  - Control Components [control] {"collapse": false}
+    - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
+    - `<ClerkLoaded>` [clerk-loaded]
+    - `<ClerkLoading>` [clerk-loading]
+    - `<Protect>` [protect]
+    - `<RedirectToSignIn />` [redirect-to-sign-in]
+    - `<RedirectToSignUp />` [redirect-to-sign-up]
+    - `<RedirectToUserProfile />` [redirect-to-user-profile]
+    - `<RedirectToOrganizationProfile />` [redirect-to-organization-profile]
+    - `<RedirectToCreateOrganization />` [redirect-to-create-organization]
+    - `<SignedIn>` [signed-in]
+    - `<SignedOut>` [signed-out]
+  - Unstyled Components [unstyled] {"collapse": false}
+    - `<SignInButton>` [sign-in-button]
+    - `<SignInWithMetamaskButton>` [sign-in-with-metamask]
+    - `<SignUpButton>` [sign-up-button]
+    - `<SignOutButton>` [sign-out-button]
 - Hooks
+  - Overview
+  - `useUser()` [use-user]
+  - `useClerk()` [use-clerk]
+  - `useAuth()` [use-auth]
+  - `useSignIn()` [use-sign-in]
+  - `useSignUp()` [use-sign-up]
+  - `useSession()` [use-session]
+  - `useSessionList()` [use-session-list]
+  - `useOrganization()` [use-organization]
+  - `useOrganizationList()` [use-organization-list]
+  - `useReverification()` [use-reverification]
+  - `useCheckout()` [use-checkout]
+  - `usePaymentElement()` [use-payment-element]
+  - `usePaymentMethods()` [use-payment-methods]
+  - `usePlans()` [use-plans]
+  - `useSubscription()` [use-subscription]
 
 ### SDK Reference
 

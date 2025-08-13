@@ -109,4 +109,13 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
   if (config.publicPath) {
     watcher.subscribe(config.publicPath, handleParcelWatcherChange)
   }
+
+  if (config.siteFlags?.inputPath) {
+    chokidar
+      .watch(config.siteFlags.inputPath, {
+        ignoreInitial: true,
+        awaitWriteFinish: true,
+      })
+      .on('all', handleChokidarWatcherChange)
+  }
 }

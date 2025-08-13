@@ -9,6 +9,7 @@ export const VALID_SDKS = [
   'js-frontend',
   'chrome-extension',
   'expo',
+  'android',
   'ios',
   'nodejs',
   'expressjs',

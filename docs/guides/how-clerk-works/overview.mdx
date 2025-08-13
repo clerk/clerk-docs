@@ -9,7 +9,7 @@ This guide provides a deep dive into Clerk's architecture and internal workings.
 
 When you create a new application through the [Clerk Dashboard](https://dashboard.clerk.com/), Clerk provisions a dedicated frontend API (FAPI) instance for your application. It is hosted at `https://<slug>.clerk.accounts.dev` in development environments, where `<slug>` is a unique identifier generated for your application. You can find your application's FAPI URL in the [**Domains**](https://dashboard.clerk.com/last-active?path=domains) page of the Clerk Dashboard.
 
-When configuring your Clerk app, you must provide a [Publishable Key](/docs/deployments/clerk-environment-variables#clerk-publishable-and-secret-keys). The Publishable Key tells your app what your FAPI URL is, enabling your app to locate and communicate with your dedicated FAPI instance.
+When configuring your Clerk app, you must provide a [Publishable Key](/docs/guides/development/clerk-environment-variables#clerk-publishable-and-secret-keys). The Publishable Key tells your app what your FAPI URL is, enabling your app to locate and communicate with your dedicated FAPI instance.
 
 The Clerk Publishable Key follows a specific format: it consists of your FAPI instance URL encoded in base64, prefixed with an environment identifier (e.g. `pk_test_` for development environments, `pk_live_` for production environments), and suffixed with a `$` delimiter for future extensibility. The base64-encoded URL enables your application to locate and communicate with your dedicated FAPI instance. You can verify this structure by decoding the key yourself:
 
@@ -49,7 +49,7 @@ The next level of abstraction is [Clerk Elements](/docs/guides/customizing-clerk
 
 ### Custom flows
 
-Finally, if you need complete control over the authentication flow, Clerk provides low-level primitives that directly wrap our API endpoints. These primitives enable you to build fully custom authentication flows from scratch. Clerk refers to these as ["custom flows"](/docs/custom-flows/overview). While this approach offers maximum flexibility, it also requires significant development effort to implement and maintain. Custom flows should only be considered when you have specific requirements that cannot be met using the prebuilt components or Clerk Elements, as you'll need to handle all authentication logic, error states, and edge cases yourself.
+Finally, if you need complete control over the authentication flow, Clerk provides low-level primitives that directly wrap our API endpoints. These primitives enable you to build fully custom authentication flows from scratch. Clerk refers to these as ["custom flows"](/docs/guides/development/custom-flows/overview). While this approach offers maximum flexibility, it also requires significant development effort to implement and maintain. Custom flows should only be considered when you have specific requirements that cannot be met using the prebuilt components or Clerk Elements, as you'll need to handle all authentication logic, error states, and edge cases yourself.
 
 > **Customizability:** You have full control over every part of the authentication flow, including HTML structure, CSS, and the logic/ordering of how the authentication flow works.
 
@@ -254,14 +254,14 @@ The client token is a long-lived token that is stored in the `__client` cookie, 
 
 The client token serves as the source of truth for authentication state. When a user signs in, Clerk either creates a new client token or rotates the existing token's `rotating_token` value. A valid client token enables Clerk to generate short-lived session tokens for the application.
 
-**The client token is only used in production environments**. When [deploying your app to production with Clerk](/docs/deployments/overview), you configure a CNAME record to alias Clerk's Frontend API (FAPI) to a subdomain of your application (e.g., `clerk.example.com`). This ensures the client token cookie remains within the same site context and does not need to be sent cross-domain.
+**The client token is only used in production environments**. When [deploying your app to production with Clerk](/docs/guides/development/deployment/production), you configure a CNAME record to alias Clerk's Frontend API (FAPI) to a subdomain of your application (e.g., `clerk.example.com`). This ensures the client token cookie remains within the same site context and does not need to be sent cross-domain.
 
 In development environments, FAPI requests are cross-domain (from `localhost` to `<slug>.accounts.dev`). Since Clerk does not allow cross-domain cookies for security and privacy reasons (see [tracking cookies and privacy concerns](/docs/guides/how-clerk-works/cookies#tracking-cookies-and-privacy-concerns)), we cannot use cookies to maintain session state in development. So instead of using the client token, development environments use a construct called the "dev browser" with a `__clerk_db_jwt` object to maintain session state across the session lifetime. While this enables smooth local development workflows, it is not secure enough for production use. For this reason:
 
 1. Never deploy a development environment to production.
 1. Do not rely on `__clerk_db_jwt` in your application code, as it will break in production.
 
-For more information on the differences between development and production environments, see the [dedicated guide on Clerk environments](/docs/deployments/environments).
+For more information on the differences between development and production environments, see the [dedicated guide on Clerk environments](/docs/guides/development/managing-environments).
 
 ### Session token
 
@@ -269,12 +269,12 @@ The session token is a short-lived token that is stored in the `__session` cooki
 
 - **Cookie name:** `__session`
 - **Contents:** A Clerk-signed JWT containing [a set of default claims](/docs/guides/how-clerk-works/session-tokens#default-claims). Can be customized in the Clerk Dashboard to include additional claims.
-- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/backend-requests/making-requests).
+- **Domain:** Set on your application's domain directly, scoped strictly so it cannot be shared across subdomains. This is done to prevent a different app on a different subdomain from being able to take over your users' accounts. If you need to send the session token value across subdomain boundaries, such as from `example.com` to `api.example.com`, you can [put the token in a `request` header instead](/docs/guides/development/making-requests).
 - **Expiration:** 60 seconds
 - **HttpOnly:** No - must be able to be accessed by client-side SDKs
 - **SameSite:** Lax
 
-When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/backend-requests/manual-jwt) the session token's signature and extract the user ID and other claims.
+When your app makes a request from the frontend to your backend, if the backend is on the same origin, the `__session` cookie will automatically be sent along with the request. Your backend can then [cryptographically verify](/docs/guides/development/manual-jwt) the session token's signature and extract the user ID and other claims.
 
 > [!QUIZ]
 > Why is the `__session` cookie not `HttpOnly`? Is this a security issue?

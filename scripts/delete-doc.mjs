@@ -36,6 +36,9 @@ const splitPathAndHash = (url) => {
   return { path, hash: hash ? `#${hash}` : '' }
 }
 
+// Escape a string for safe insertion inside a RegExp constructor
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const readJsonFile = async (filePath) => {
   try {
     const content = await fs.readFile(filePath, 'utf-8')
@@ -71,6 +74,11 @@ const checkMdxReferences = async (targetPath) => {
       new RegExp(`link=["']${targetBasePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#[^"']*)?["']`, 'g'),
       // 3. Link prop in arrays
       new RegExp(`link:\\s*["']${targetBasePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#[^"']*)?["']`, 'g'),
+      // 4. Reference-style link definitions (e.g., [ref]: /docs/path or </docs/path#hash> "Title")
+      new RegExp(
+        `(^\\s*\\[[^\\]]+\\]:\\s*)(<?)(${escapeRegExp(targetBasePath)}(?:#[^\\s>\"]*)?)(>?)((?:\\s+.+)?)$`,
+        'gm',
+      ),
     ]
 
     for (const pattern of patterns) {
@@ -146,6 +154,28 @@ const updateMdxLinks = async (deletedPath, newPath) => {
       }
       const finalHash = newHash || linkHash || ''
       return `${prefix}${newBasePath}${finalHash}${suffix}`
+    })
+
+    // 4. Update reference-style link definitions
+    // Examples:
+    // [components-ref]: /docs/components/overview
+    // [components-ref]: </docs/components/overview#hash> "Title"
+    // Preserve angle brackets and optional titles, favoring new hash if provided
+    const refDefRegex = new RegExp(
+      `(^\\s*\\[[^\\]]+\\]:\\s*)(<?)(${escapeRegExp(oldBasePath)}(?:#[^\\s>\"]*)?)(>?)((?:\\s+.+)?)$`,
+      'gm',
+    )
+    updatedContent = updatedContent.replace(refDefRegex, (match, prefix, open, urlPath, close, trailing) => {
+      const { path: defPath, hash: defHash } = splitPathAndHash(urlPath)
+      if (defPath !== oldBasePath) return match
+      if (defHash) {
+        console.log(
+          `⚠️ Hash found in reference definition: ${defHash}. Ensure that the new path has the same hash, or update the hash accordingly.`,
+        )
+      }
+      const finalHash = newHash || defHash || ''
+      const rebuiltUrl = `${newBasePath}${finalHash}`
+      return `${prefix}${open}${rebuiltUrl}${close}${trailing || ''}`
     })
 
     if (content !== updatedContent) {

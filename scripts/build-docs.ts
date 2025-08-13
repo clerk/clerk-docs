@@ -141,7 +141,7 @@ async function main() {
     ignoreLinks: ['/docs/quickstart'],
     ignorePaths: [
       '/docs/core-1',
-      '/docs/references/backend-api',
+      '/docs/reference/backend-api',
       '/docs/references/frontend-api',
       '/pricing',
       '/support',

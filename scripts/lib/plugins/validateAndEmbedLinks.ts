@@ -130,14 +130,14 @@ export const validateAndEmbedLinks =
 
         return SDKLink({
           href: scopedHref,
-          sdks: linkedDoc.sdk,
+          sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
           code: true,
         })
       }
 
       return SDKLink({
         href: scopedHref,
-        sdks: linkedDoc.sdk,
+        sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
         code: false,
         children: node.children,
       })

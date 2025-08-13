@@ -2509,7 +2509,7 @@ title: Core Page
               {
                 title: 'nextjs',
                 sdk: ['nextjs'],
-                items: [[{ title: 'SDK Filtered Page', href: '/docs/reference/nextjs/sdk-filtered-page' }]],
+                items: [[{ title: 'SDK Filtered Page', href: '/docs/references/nextjs/sdk-filtered-page' }]],
               },
               { title: 'Core Page', href: '/docs/core-page' },
             ],
@@ -2517,7 +2517,7 @@ title: Core Page
         }),
       },
       {
-        path: './docs/reference/nextjs/sdk-filtered-page.mdx',
+        path: './docs/references/nextjs/sdk-filtered-page.mdx',
         content: `---
 title: SDK Filtered Page
 ---
@@ -2532,7 +2532,7 @@ title: Core Page
 
 # Core page
 
-[SDK Filtered Page](/docs/reference/nextjs/sdk-filtered-page)
+[SDK Filtered Page](/docs/references/nextjs/sdk-filtered-page)
 `,
       },
     ])
@@ -2546,7 +2546,7 @@ title: Core Page
     )
 
     expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
-      `<SDKLink href="/docs/reference/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
+      `<SDKLink href="/docs/references/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
     )
   })
 

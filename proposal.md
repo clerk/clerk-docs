@@ -245,7 +245,7 @@
 
 - Test Link
 
-## Reference [reference]
+## References [references]
 
 ### General
 

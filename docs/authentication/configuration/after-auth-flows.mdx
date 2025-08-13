@@ -63,6 +63,81 @@ If the prebuilt components don't meet your specific needs or if you require more
   ```
 </CodeBlockTabs>
 
+### Redirecting to tasks
+
+When users have pending after-auth tasks, you can redirect them to specific pages or components to complete these requirements. This is useful for creating custom user experiences or when you want to handle after-auth flows outside of the default `<SignIn />` and `<SignUp />` components.
+
+#### Using the `NavigateToTasks` control component
+
+```tsx {{ filename: 'app/dashboard/layout.tsx' }}
+import { SignedOut, RedirectToTasks } from '@clerk/nextjs'
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {
+        <SignedOut>
+          <RedirectToTasks />
+        </SignedOut>
+      }
+      {children}
+    </>
+  )
+}
+```
+
+#### Middleware-based redirects
+
+For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to an `active` (signed-in) state.
+
+```tsx {{ filename: 'middleware.ts', mark: [[6, 8]] }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  // pending users won't be able to access protected routes
+  // and will be redirected to the sign-in page
+  if (isProtectedRoute(req)) await auth.protect()
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+For `auth().userId`, it would return `null` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements. Once finished, their session will move from `pending` to a `signed-in` state.
+
+```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId, redirectToSignIn } = await auth()
+
+  // pending users will not have a `userId`
+  // and will be redirected to the sign-in page
+  if (!userId && isProtectedRoute(req)) {
+    return redirectToSignIn()
+  }
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
 ### Session handling
 
 You can check the current authentication state using the `Clerk.isSignedIn` property. By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
@@ -169,7 +244,7 @@ The `useAuth()` hook and helpers that access the [`auth` object](/docs/reference
 
 When organizations are enabled, [personal accounts are disabled by default](/docs/organizations/overview#allow-personal-accounts) and your users will be required to select or create an organization after authenticating. Until completed, their session remains `pending`. Pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
 
-For `useAuth()`, `userId` and `isSignedIn` will be `null` if the user has a `pending` session.
+For `useAuth()`, `userId` will be `null` if the user has a `pending` session.
 
 ```tsx
 export default function Dashboard() {
@@ -218,56 +293,6 @@ export default function Dashboard() {
   }
   ```
 
-  For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to an `active` (signed-in) state.
-
-  ```tsx {{ filename: 'middleware.ts', mark: [[6, 8]] }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-  export default clerkMiddleware(async (auth, req) => {
-    // pending users won't be able to access protected routes
-    // and will be redirected to the sign-in page
-    if (isProtectedRoute(req)) await auth.protect()
-  })
-
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-    ],
-  }
-  ```
-
-  For `auth().userId`, it would return `null` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the after-auth requirements. Once finished, their session will move from `pending` to a `signed-in` state.
-
-  ```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
-  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-  export default clerkMiddleware(async (auth, req) => {
-    const { userId, redirectToSignIn } = await auth()
-
-    // pending users will not have a `userId`
-    // and will be redirected to the sign-in page
-    if (!userId && isProtectedRoute(req)) {
-      return redirectToSignIn()
-    }
-  })
-
-  export const config = {
-    matcher: [
-      // Skip Next.js internals and all static files, unless found in search params
-      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-      // Always run for API routes
-      '/(api|trpc)(.*)',
-    ],
-  }
-  ```
-
   By default, users with a `pending` session are treated as signed-out, and their `userId` will not be available. However, in some cases, you may want to access the user's ID even if their session is still `pending`. In these cases, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow you to access the `userId`.
 
   ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
@@ -296,144 +321,3 @@ export default function Dashboard() {
   }
   ```
 </If>
-
-### Redirecting to after-auth tasks
-
-When users have pending after-auth tasks, you can redirect them to specific pages or components to complete these requirements. This is useful for creating custom user experiences or when you want to handle after-auth flows outside of the default `<SignIn />` and `<SignUp />` components.
-
-#### Using the `redirectTo` prop
-
-You can redirect users to a custom page after authentication by using the `redirectTo` prop on the `<SignIn />` and `<SignUp />` components:
-
-```tsx
-import { SignIn, SignUp } from '@clerk/nextjs'
-
-export default function AuthPage() {
-  return (
-    <div>
-      <SignIn redirectUrl="/complete-profile" />
-      <SignUp redirectUrl="/complete-profile" />
-    </div>
-  )
-}
-```
-
-#### Custom redirect logic with `useSession`
-
-For more control, you can use the `useSession` hook to check for pending tasks and redirect users programmatically:
-
-```tsx
-import { useSession } from '@clerk/clerk-react'
-import { useEffect } from 'react'
-import { useRouter } from 'next/router'
-
-export default function Dashboard() {
-  const { session, isLoaded } = useSession()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (isLoaded && session?.currentTask) {
-      // Redirect based on the specific task type
-      switch (session.currentTask.type) {
-        case 'organization_required':
-          router.push('/select-organization')
-          break
-        case 'email_verification_required':
-          router.push('/verify-email')
-          break
-        case 'phone_verification_required':
-          router.push('/verify-phone')
-          break
-        default:
-          router.push('/complete-profile')
-      }
-    }
-  }, [session, isLoaded, router])
-
-  if (!isLoaded) return <div>Loading...</div>
-
-  return <div>Dashboard content</div>
-}
-```
-
-#### Middleware-based redirects
-
-You can also handle redirects at the middleware level by checking for pending sessions:
-
-```tsx
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/profile(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    const { userId, session } = await auth()
-
-    if (!userId) {
-      // User is signed-out, redirect to sign-in
-      return redirect('/sign-in')
-    }
-
-    // Check if user has pending tasks
-    if (session?.currentTask) {
-      // Redirect to appropriate completion page
-      switch (session.currentTask.type) {
-        case 'organization_required':
-          return redirect('/select-organization')
-        case 'email_verification_required':
-          return redirect('/verify-email')
-        default:
-          return redirect('/complete-profile')
-      }
-    }
-  }
-})
-
-export const config = {
-  matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
-  ],
-}
-```
-
-#### Handling redirects in API routes
-
-For API routes, you can return redirect responses when users have pending tasks:
-
-```tsx
-import { auth } from '@clerk/nextjs/server'
-import { redirect } from 'next/navigation'
-
-export async function GET() {
-  const { userId, session } = await auth()
-
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  if (session?.currentTask) {
-    // Return a redirect response
-    return Response.json(
-      {
-        redirect: true,
-        url: '/complete-profile',
-        task: session.currentTask.type,
-      },
-      { status: 200 },
-    )
-  }
-
-  // User is fully authenticated, proceed with API logic
-  return Response.json({ message: 'Success' })
-}
-```
-
-#### Best practices
-
-- **Always check for pending tasks** before allowing access to protected content
-- **Provide clear user feedback** about what needs to be completed
-- **Use consistent redirect URLs** across your application
-- **Handle edge cases** like users navigating back to protected pages
-- **Consider user experience** - don't redirect too aggressively or create redirect loops

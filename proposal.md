@@ -177,6 +177,7 @@
 - Image Optimization
 - Model Context Protocol [mcp]
   - Overview
+  - Build an MCP server [build-mcp-server]
   - Connect an MCP client [connect-mcp-client]
 - Custom Flows
   - Overview

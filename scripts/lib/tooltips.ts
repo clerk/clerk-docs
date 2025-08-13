@@ -85,17 +85,3 @@ export const readTooltipsMarkdown = (config: BuildConfig, store: Store) => async
 
   return Promise.all(paths.map(async (markdownPath) => tooltipsCache(markdownPath, () => read(markdownPath))))
 }
-
-type Tooltips = Awaited<ReturnType<ReturnType<typeof readTooltipsMarkdown>>>
-
-export const writeTooltips = (config: BuildConfig, store: Store) => async (tooltips: Tooltips) => {
-  if (!config.tooltips) {
-    throw new Error('Tooltips are not enabled')
-  }
-
-  const write = writeDistFile(config, store)
-
-  for (const tooltip of tooltips) {
-    await write(tooltip.path, tooltip.vfile.value as string)
-  }
-}

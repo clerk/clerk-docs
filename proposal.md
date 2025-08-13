@@ -247,10 +247,63 @@
 
 ## Reference [reference]
 
-### General [reference]
+### General
 
 - UI Components [components] {"icon": "box"}
+  - Overview
+  - `<ClerkProvider>` [clerk-provider]
+  - Authentication Components [authentication] {"collapse": false}
+    - `<SignIn />` [sign-in]
+    - `<SignUp />` [sign-up]
+    - `<GoogleOneTap />` [google-one-tap]
+    - `<Waitlist />` [waitlist]
+  - User Components [user] {"collapse": false}
+    - `<UserButton />` [user-button]
+    - `<UserProfile />` [user-profile]
+  - Organization Components [organization] {"collapse": false}
+    - `<CreateOrganization />` [create-organization]
+    - `<OrganizationProfile />` [organization-profile]
+    - `<OrganizationSwitcher />` [organization-switcher]
+    - `<OrganizationList />` [organization-list]
+  - Billing Components [billing] {"collapse": false}
+    - `<PricingTable />` [pricing-table]
+    - `<CheckoutButton />` [checkout-button] {"tag": "(Beta)"}
+    - `<PlanDetailsButton />` [plan-details-button] {"tag": "(Beta)"}
+    - `<SubscriptionDetailsButton />` [subscription-details-button] {"tag": "(Beta)"}
+  - Control Components [control] {"collapse": false}
+    - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
+    - `<ClerkLoaded>` [clerk-loaded]
+    - `<ClerkLoading>` [clerk-loading]
+    - `<Protect>` [protect]
+    - `<RedirectToSignIn />` [redirect-to-sign-in]
+    - `<RedirectToSignUp />` [redirect-to-sign-up]
+    - `<RedirectToUserProfile />` [redirect-to-user-profile]
+    - `<RedirectToOrganizationProfile />` [redirect-to-organization-profile]
+    - `<RedirectToCreateOrganization />` [redirect-to-create-organization]
+    - `<SignedIn>` [signed-in]
+    - `<SignedOut>` [signed-out]
+  - Unstyled Components [unstyled] {"collapse": false}
+    - `<SignInButton>` [sign-in-button]
+    - `<SignInWithMetamaskButton>` [sign-in-with-metamask]
+    - `<SignUpButton>` [sign-up-button]
+    - `<SignOutButton>` [sign-out-button]
 - Hooks
+  - Overview
+  - `useUser()` [use-user]
+  - `useClerk()` [use-clerk]
+  - `useAuth()` [use-auth]
+  - `useSignIn()` [use-sign-in]
+  - `useSignUp()` [use-sign-up]
+  - `useSession()` [use-session]
+  - `useSessionList()` [use-session-list]
+  - `useOrganization()` [use-organization]
+  - `useOrganizationList()` [use-organization-list]
+  - `useReverification()` [use-reverification]
+  - `useCheckout()` [use-checkout]
+  - `usePaymentElement()` [use-payment-element]
+  - `usePaymentMethods()` [use-payment-methods]
+  - `usePlans()` [use-plans]
+  - `useSubscription()` [use-subscription]
 
 ### SDK Reference
 

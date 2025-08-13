@@ -168,9 +168,16 @@
 
 - Managing Environments
 - Clerk Environment Variables
+- Making Requests
+- Manual JWT Verification [manual-jwt]
+- JWT Templates
+- Force a token refresh [force-token-refresh]
 - Customize Redirect URLs
 - Override Clerk Types/Interfaces
 - Image Optimization
+- Model Context Protocol [mcp]
+  - Overview
+  - Connect an MCP client [connect-mcp-client]
 - Custom Flows
   - Overview
   - Error handling

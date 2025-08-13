@@ -263,6 +263,7 @@
   - Backend-only
   - Fullstack
 - Upgrading Clerk [upgrading]
+  - Overview
   - Versioning & LTS [versioning]
   - Upgrade Guides
     - Core 2

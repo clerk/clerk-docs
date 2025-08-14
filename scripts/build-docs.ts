@@ -142,7 +142,7 @@ async function main() {
     ignorePaths: [
       '/docs/core-1',
       '/docs/reference/backend-api',
-      '/docs/reference/frontend-api',
+      '/docs/references/frontend-api',
       '/pricing',
       '/support',
       '/discord',
@@ -208,6 +208,8 @@ async function main() {
         'types/user-resource.mdx': ['link-doc-not-found'],
         'clerk-react/use-sign-in.mdx': ['link-doc-not-found'],
         'clerk-react/use-sign-up.mdx': ['link-doc-not-found'],
+        'nextjs/get-auth.mdx': ['link-doc-not-found'],
+        'nextjs/auth.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

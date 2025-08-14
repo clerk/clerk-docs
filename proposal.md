@@ -392,11 +392,13 @@
   - Verifying OAuth access tokens
 - React {"sdk": ["react"], "hideTitle": true, "collapse": false}
   - Overview
+  - Demo Repository
+    - React Demo Repo
 - Expo {"sdk": ["expo"], "hideTitle": true, "collapse": false}
   - Overview
-  - useLocalCredentials() [use-local-credentials]
-  - useOAuth() (deprecated) [use-oauth]
-  - useSSO() [use-sso]
+  - `useLocalCredentials()` [use-local-credentials]
+  - `useOAuth()` (deprecated) [use-oauth]
+  - `useSSO()` [use-sso]
   - Web support
     - Overview
     - Add a custom sign-in-or-up page [custom-sign-in-or-up-page]
@@ -405,70 +407,70 @@
   - Use biometrics with local credentials [local-credentials]
   - Configure passkeys [passkeys]
   - Offline support
-  - Access the Clerk object outside of components [access-clerk-outside-components]
-- Javascript {"sdk": ["javascript"], "hideTitle": true, "collapse": false}
+  - Access the `Clerk` object outside of components [access-clerk-outside-components]
+- Javascript {"sdk": ["js-frontend"], "hideTitle": true, "collapse": false}
   - Overview
-  - Clerk
-  - Client
-  - Session
-  - User
-  - SignIn
-  - SignUp
-  - Organization
+  - `Clerk`
+  - `Client`
+  - `Session`
+  - `User`
+  - `SignIn` [sign-in]
+  - `SignUp` [sign-up]
+  - `Organization`
   - Types
     - Overview
-    - `BackupCodeResource`
-    - `ClerkAPIError`
-    - `ClerkAPIResponseError`
-    - `ClerkPaginatedResponse`
-    - `CommerceCheckoutResource`
-    - `CommerceCheckoutTotals`
-    - `CommerceFeatureResource`
-    - `CommerceMoney`
-    - `CommercePaymentSourceResource`
-    - `CommercePlanResource`
-    - `CommerceSubscriptionItemResource`
-    - `CommerceSubscriptionResource`
-    - `CustomMenuItem`
-    - `CustomPage`
-    - `DeletedObject`
-    - `EmailAddress`
-    - `EmailLinkError`
-    - `EnterpriseAccount`
-    - `EnterpriseAccountConnection`
-    - `ExternalAccount`
-    - Metadata types
-    - `OrganizationCustomRoleKey`
-    - `OrganizationCustomPermissionKey`
-    - `OrganizationDomain`
-    - `OrganizationInvitation`
-    - `OrganizationMembership`
-    - `OrganizationMembershipRequest`
-    - `OrganizationSuggestion`
-    - `PasskeyResource`
-    - `PermissionResource`
-    - `PhoneNumber`
-    - `PublicUserData`
-    - `RedirectOptions`
-    - `RoleResource`
-    - `SamlAccount`
-    - `SamlAccountConnection`
-    - `SessionStatus`
-    - `SessionVerification`
-    - `SessionWithActivities`
-    - `SetActiveParams`
-    - `SignInFirstFactor`
-    - `SignInSecondFactor`
-    - `SignInRedirectOptions`
-    - `SignUpRedirectOptions`
-    - `SignInInitialValues`
-    - `SignUpInitialValues`
-    - SSO types
-    - `TOTPResource`
-    - `UserOrganizationInvitation`
+    - `BackupCodeResource` [backup-code]
+    - `ClerkAPIError` [clerk-api-error]
+    - `ClerkAPIResponseError` [clerk-api-response-error]
+    - `ClerkPaginatedResponse` [clerk-paginated-response]
+    - `CommerceCheckoutResource` [commerce-checkout-resource]
+    - `CommerceCheckoutTotals` [commerce-checkout-totals]
+    - `CommerceFeatureResource` [commerce-feature-resource]
+    - `CommerceMoney` [commerce-money]
+    - `CommercePaymentSourceResource` [commerce-payment-source-resource]
+    - `CommercePlanResource` [commerce-plan-resource]
+    - `CommerceSubscriptionItemResource` [commerce-subscription-item-resource]
+    - `CommerceSubscriptionResource` [commerce-subscription-resource]
+    - `CustomMenuItem` [custom-menu-item]
+    - `CustomPage` [custom-page]
+    - `DeletedObject` [deleted-object]
+    - `EmailAddress` [email-address]
+    - `EmailLinkError` [email-link-error]
+    - `EnterpriseAccount` [enterprise-account]
+    - `EnterpriseAccountConnection` [enterprise-account-connection]
+    - `ExternalAccount` [external-account]
+    -  Metadata types [metadata]
+    - `OrganizationCustomRoleKey` [organization-custom-role-key]
+    - `OrganizationCustomPermissionKey` [organization-custom-permission-key]
+    - `OrganizationDomain` [organization-domain]
+    - `OrganizationInvitation` [organization-invitation]
+    - `OrganizationMembership` [organization-membership]
+    - `OrganizationMembershipRequest` [organization-membership-request]
+    - `OrganizationSuggestion` [organization-suggestion]
+    - `PasskeyResource` [passkey-resource]
+    - `PermissionResource` [permission]
+    - `PhoneNumber` [phone-number]
+    - `PublicUserData` [public-user-data]
+    - `RedirectOptions` [redirect-options]
+    - `RoleResource` [role]
+    - `SamlAccount` [saml-account]
+    - `SamlAccountConnection` [saml-account-connection]
+    - `SessionStatus` [session-status]
+    - `SessionVerification` [session-verification]
+    - `SessionWithActivities` [session-with-activities]
+    - `SetActiveParams` [set-active-params]
+    - `SignInFirstFactor` [sign-in-first-factor]
+    - `SignInSecondFactor` [sign-in-second-factor]
+    - `SignInRedirectOptions` [sign-in-redirect-options]
+    - `SignUpRedirectOptions` [sign-up-redirect-options]
+    - `SignInInitialValues` [sign-in-initial-values]
+    - `SignUpInitialValues` [sign-up-initial-values]
+    -  SSO types [sso]
+    - `TOTPResource` [totp]
+    - `UserOrganizationInvitation` [user-organization-invitation]
     - `Verification`
-    - `Web3Wallet`
-- Express {"sdk": ["express"], "hideTitle": true, "collapse": false}
+    - `Web3Wallet` [web3-wallet]
+- Express {"sdk": ["expressjs"], "hideTitle": true, "collapse": false}
   - Overview
 - React Router {"sdk": ["react-router"], "hideTitle": true, "collapse": false}
   - Overview
@@ -482,7 +484,7 @@
 - Android {"sdk": ["android"], "hideTitle": true, "collapse": false}
   - Overview
   - `getToken()` [get-token]
-  - Configure passkeys
+  - Configure passkeys [passkeys]
   - Sign in with Google
 - Astro {"sdk": ["astro"], "hideTitle": true, "collapse": false}
   - Overview
@@ -507,7 +509,7 @@
   - Overview
   - `getToken()` [get-token]
   - Sign in with Apple
-  - iOS Components (Beta) {"hideTitle": true, "skip": true}
+  - iOS Components {"tag": "(Beta)", "hideTitle": true, "skip": true}
     - `AuthView` [auth-view]
     - `UserButton` [user-button]
     - `UserProfileView` [user-profile-view]
@@ -586,13 +588,13 @@
     - `deleteOrganizationLogo()` [delete-organization-logo]
     - `deleteOrganizationMembership()` [delete-organization-membership]
     - `revokeOrganizationInvitation()` [revoke-organization-invitation]
-  - Allowlist Identifiers
+  - Allowlist Identifiers [allowlist]
     - `getAllowlistIdentifierList()` [get-allowlist-identifier-list]
     - `createAllowlistIdentifier()` [create-allowlist-identifier]
     - `deleteAllowlistIdentifier()` [delete-allowlist-identifier]
-  - Domain
+  - Domains
     - `deleteDomain` [delete-domain]
-  - Session
+  - Sessions
     - `getSession()` [get-session]
     - `getSessionList()` [get-session-list]
     - `getToken()` [get-token]
@@ -637,28 +639,29 @@
   - `verifyWebhook()` [verify-webhook]
   - Types
     - `Auth` object [auth-object]
-    - `BackendAllowlistIdentifier` object [backend-allowlist-identifier-object]
-    - `BackendEmailAddress` object [backend-email-address-object]
-    - `BackendExternalAccount` object [backend-external-account-object]
-    - `BackendClient` object [backend-client-object]
-    - `BackendIdentificationLink` object [backend-identification-link-object]
-    - `BackendInvitation` object [backend-invitation-object]
-    - `BackendOrganization` object [backend-organization-object]
-    - `BackendOrganizationInvitation` object [backend-organization-invitation-object]
-    - `BackendOrganizationMembership` object [backend-organization-membership-object]
-    - `BackendPhoneNumber` object [backend-phone-number-object]
-    - `BackendSamlAccount` object [backend-saml-account-object]
-    - `BackendSamlConnection` object [backend-saml-connection-object]
-    - `BackendSession` object [backend-session-object]
-    - `BackendSessionActivity` object [backend-session-activity-object]
-    - `BackendRedirectURL` object [backend-redirect-url-object]
-    - `BackendUser` object [backend-user-object]
-    - `BackendVerification` object [backend-verification-object]
-    - `BackendWeb3Wallet` object [backend-web3-wallet-object]
+    - Backend `AllowlistIdentifier` object [backend-allowlist-identifier]
+    - Backend `EmailAddress` object [backend-email-address]
+    - Backend `ExternalAccount` object [backend-external-account]
+    - Backend `Client` object [backend-client]
+    - Backend `IdentificationLink` object [backend-identification-link]
+    - Backend `Invitation` object [backend-invitation]
+    - Backend `Organization` object [backend-organization]
+    - Backend `OrganizationInvitation` object [backend-organization-invitation]
+    - Backend `OrganizationMembership` object [backend-organization-membership]
+    - Backend `PhoneNumber` object [backend-phone-number]
+    - Backend `SamlAccount` object [backend-saml-account]
+    - Backend `SamlConnection` object [backend-saml-connection]
+    - Backend `Session` object [backend-session]
+    - Backend `SessionActivity` object [backend-session-activity]
+    - Backend `RedirectURL` object [backend-redirect-url]
+    - Backend `User` object [backend-user]
+    - Backend `Verification` object [backend-verification]
+    - Backend `Web3Wallet` object [backend-web3-wallet]
     - `PaginatedResourceResponse` [paginated-resource-response]
 - Go {"sdk": ["go"], "hideTitle": true, "collapse": false}
   - Overview
   - Verifying sessions
+  - Go SDK repository
 - Ruby/Rails/Sinatra [ruby] {"sdk": ["ruby"], "hideTitle": true, "collapse": false}
   - Overview
   - Upgrade to v4 [v4-upgrade-guide]

@@ -43,6 +43,9 @@ const splitPathAndHash = (url) => {
   return { path, hash: hash ? `#${hash}` : '' }
 }
 
+// Escape a string for safe insertion inside a RegExp constructor
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const readJsonFile = async (filePath) => {
   try {
     const content = await fs.readFile(filePath, 'utf-8')
@@ -168,6 +171,23 @@ const updateMdxLinks = async (oldPaths, newPath) => {
         const { hash: linkHash } = splitPathAndHash(linkPath)
         const finalHash = newHash || linkHash || ''
         return `${prefix}${newBasePath}${finalHash}${suffix}`
+      })
+
+      // 4. Update reference-style link definitions
+      // Examples:
+      // [components-ref]: /docs/components/overview
+      // [components-ref]: </docs/components/overview#hash> "Title"
+      // We preserve angle brackets and optional titles, and prefer new hash if provided
+      const refDefRegex = new RegExp(
+        `(^\\s*\\[[^\\]]+\\]:\\s*)(<?)(${escapeRegExp(oldBasePath)}(?:#[^\\s>\"]*)?)(>?)((?:\\s+.+)?)$`,
+        'gm',
+      )
+      updatedContent = updatedContent.replace(refDefRegex, (match, prefix, open, urlPath, close, trailing) => {
+        const { path: defPath, hash: defHash } = splitPathAndHash(urlPath)
+        if (defPath !== oldBasePath) return match
+        const finalHash = newHash || defHash || ''
+        const rebuiltUrl = `${newBasePath}${finalHash}`
+        return `${prefix}${open}${rebuiltUrl}${close}${trailing || ''}`
       })
     })
 

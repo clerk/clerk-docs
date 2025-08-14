@@ -87,6 +87,8 @@ function parseMarkdownToManifest(content: string) {
   let currentItemGroup: any[] = []
   let pathStack: string[] = [] // Stack to track nested path components
   let inTopLevelLinksSection = false // Track if we're in the Top Level Links section
+  let currentTopLevelSkip = false
+  let currentSubGroupSkip = false
 
   const finishCurrentItemGroup = () => {
     if (currentItemGroup && currentItemGroup.length > 0) {
@@ -104,6 +106,7 @@ function parseMarkdownToManifest(content: string) {
       currentSubGroup = null
     }
     currentSubGroupCustomSlug = null
+    currentSubGroupSkip = false
   }
 
   const finishCurrentTopLevelGroup = () => {
@@ -114,6 +117,7 @@ function parseMarkdownToManifest(content: string) {
     }
     currentTopLevelCustomSlug = null
     pathStack = []
+    currentTopLevelSkip = false
   }
 
   for (const line of lines) {
@@ -175,6 +179,7 @@ function parseMarkdownToManifest(content: string) {
       }
 
       currentTopLevelCustomSlug = customSlug
+      currentTopLevelSkip = extraProps?.skip === true
       currentSubGroup = null
       currentItemGroup = []
       pathStack = []
@@ -200,6 +205,7 @@ function parseMarkdownToManifest(content: string) {
       }
 
       currentSubGroupCustomSlug = customSlug
+      currentSubGroupSkip = extraProps?.skip === true
       currentItemGroup = []
       pathStack = []
       continue
@@ -217,13 +223,29 @@ function parseMarkdownToManifest(content: string) {
       // Parse slug syntax for list items
       const { title, customSlug } = parseTextWithSlug(titleWithIconAndSlug)
 
-      // Update pathStack based on indentation level
-      // Keep only the path components for levels above the current one
+      // Update pathStack based on indentation level so that indices map to levels
+      // Keep only parent levels (0..indentLevel-1)
       pathStack = pathStack.slice(0, indentLevel)
 
-      // Add current item to pathStack
+      // Determine if this list item should be skipped from the href path
+      const skipSegment = extraProps?.skip === true
+
+      // Prepare the slug for the current item
       const itemSlug = customSlug || slugify(title)
-      pathStack.push(itemSlug)
+
+      // Parent segments for href are the stack entries for levels above the current one
+      const parentSegmentsForHref = pathStack.filter(Boolean)
+
+      // Only set current level as parent for potential children if not skipped.
+      // Assign at the index equal to the current indent level so siblings don't treat
+      // previous leaf items as their parent.
+      if (!skipSegment) {
+        // Ensure we can set at the current level index without affecting parent levels
+        pathStack[indentLevel] = itemSlug
+      } else {
+        // Clear any previous value at this level
+        pathStack[indentLevel] = undefined as unknown as string
+      }
 
       // Helper function to find or create a parent container at a specific nesting level
       const findOrCreateParentContainer = (targetLevel: number): any[] => {
@@ -274,10 +296,15 @@ function parseMarkdownToManifest(content: string) {
           title,
           currentTopLevelGroup?.title,
           currentSubGroup?.title,
-          itemSlug,
+          skipSegment ? undefined : itemSlug,
           currentTopLevelCustomSlug || undefined,
           currentSubGroupCustomSlug || undefined,
-          pathStack.slice(0, -1), // Pass all parent path segments except the current item
+          parentSegmentsForHref,
+          {
+            skipTopLevel: currentTopLevelSkip,
+            skipSubLevel: currentSubGroupSkip,
+            skipItem: skipSegment,
+          },
         ),
       }
 
@@ -343,6 +370,7 @@ function generateHref(
   topLevelCustomSlug?: string,
   subLevelCustomSlug?: string,
   parentPathSegments?: string[],
+  options?: { skipTopLevel?: boolean; skipSubLevel?: boolean; skipItem?: boolean },
 ) {
   let href = '/docs'
   let topLevel = _topLevel
@@ -352,14 +380,14 @@ function generateHref(
     topLevel = ''
   }
 
-  // Add the top-level group path
-  if (topLevel) {
+  // Add the top-level group path (unless skipped)
+  if (topLevel && options?.skipTopLevel !== true) {
     const topLevelSlug = topLevelCustomSlug || slugify(topLevel)
     href += `/${topLevelSlug}`
   }
 
-  // Add the sub-level group path
-  if (subLevel) {
+  // Add the sub-level group path (unless skipped)
+  if (subLevel && options?.skipSubLevel !== true) {
     const subLevelSlug = subLevelCustomSlug || slugify(subLevel)
     href += `/${subLevelSlug}`
   }
@@ -371,9 +399,11 @@ function generateHref(
     }
   }
 
-  // Use custom slug for the item if provided, otherwise slugify the title
-  const itemSlug = customSlug || slugify(title)
-  href += `/${itemSlug}`
+  // Add the item segment unless explicitly skipped
+  if (options?.skipItem !== true) {
+    const itemSlug = customSlug || slugify(title)
+    href += `/${itemSlug}`
+  }
 
   return href
 }

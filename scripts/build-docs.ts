@@ -142,7 +142,7 @@ async function main() {
     ignorePaths: [
       '/docs/core-1',
       '/docs/reference/backend-api',
-      '/docs/references/frontend-api',
+      '/docs/reference/frontend-api',
       '/pricing',
       '/support',
       '/discord',

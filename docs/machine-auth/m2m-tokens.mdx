@@ -49,21 +49,9 @@ This example creates two machines, `Machine A` and `Machine B`, and configures t
 1. Select **Add machine** to add a machine.
 
 1. Under **Name**, enter your machine name (`Machine A`).
-
-   ![Create machine modal in Clerk dashboard, showing the creation of "Machine A"](/docs/images/machine-auth/create-machine.jpg)
-
-1. Repeat this process for another machine (`Machine B`), but this time, in the **Scopes** section,select `Machine A` to allow `Machine B` to communicate with `Machine A`.
-
-   ![Create machine modal in Clerk dashboard, showing the creation of "Machine B"](/docs/images/machine-auth/machine-b.jpg)
-
+1. Repeat this process for another machine (`Machine B`), but this time, in the **Scopes** section, select `Machine A` to allow `Machine B` to communicate with `Machine A`.
 1. Select **Edit machine** next to `Machine A` in the list of machines.
-
-   ![Selecting "edit" machine for Machine A from the list of machines in the Clerk dashboard](/docs/images/machine-auth/edit-machine-a.jpg)
-
 1. In the **Scopes** section, select `Machine B` to allow `Machine A` to communicate with `Machine B`.
-
-   ![Adding Machine B as an access scope for Machine A in the Clerk dashboard](/docs/images/machine-auth/add-machine-b.jpg)
-
 1. Select **Update** to save the changes.
 
 Both machines are now configured to enable full bi-directional communication between them, allowing them to create tokens to authenticate requests in either direction.
@@ -74,7 +62,9 @@ Now that we have our machines set up, the next step is to create tokens that wil
 
 ## Creating M2M tokens
 
-Before creating an M2M token, you need to ensure that you have set up your environment variables to include the **machine secret key** that was generated when configuring the machines in the Clerk Dashboard.
+Before creating an M2M token, you need to ensure that you have set up your environment variables to include the **machine secret key** that was generated when configuring the machines in the Clerk Dashboard. This key can be viewed at any time by clicking the **View machine secret** option under the **...** menu by any given machine in the Clerk Dashboard.
+
+Note that each machine has a unique machine secret key, so you will need to set up environment variables for each machine, and ensure that the correct machine secret key is available for each machine.
 
 ```ts {{ filename: '.env' }}
 CLERK_MACHINE_SECRET_KEY = ak_xxx
@@ -83,12 +73,12 @@ CLERK_MACHINE_SECRET_KEY = ak_xxx
 > [!NOTE]
 > You can use a package like [dotenv](https://www.npmjs.com/package/dotenv) to load the environment variables from your `.env` file into your application. Ensure that the correct machine secret key is available on `process.env.CLERK_MACHINE_SECRET_KEY`.
 
-If you need to create an M2M token, you can do so by calling the `create` method on the `m2mTokens` object, using the Clerk SDK:
+If you need to create an M2M token, you can do so by calling the `create` method, using the Clerk SDK:
 
 ```ts
 import { clerkClient } from '@clerk/express'
 
-const m2mToken = await clerkClient.m2mTokens.create()
+const m2mToken = await clerkClient.m2m.createToken()
 console.log(m2mToken)
 ```
 
@@ -97,10 +87,10 @@ While it is strongly recommended to use environment variables for security, if y
 ```ts
 import { clerkClient } from '@clerk/express'
 
-const m2mToken = await clerkClient.m2mTokens.create({
+const m2mTokenObject = await clerkClient.m2m.create({
   machineSecretKey: 'ak_xxx',
 })
-console.log(m2mToken)
+console.log(m2mTokenObject)
 ```
 
 The method will return an object with the following properties:
@@ -117,11 +107,11 @@ The method will return an object with the following properties:
   "expiration": 1754942036732,
   "createdAt": 1754938436732,
   "updatedAt": 1754938436732,
-  "secret": "mt_xxx"
+  "token": "mt_xxx"
 }
 ```
 
-The `secret` property is the token that you will use to authenticate requests between machines. You can transmit this token however you wish, but it is common to use it as a bearer token in the `Authorization` header of your requests, as shown in the following example:
+The `token` property contains the token that you will use to authenticate requests between machines. You can transmit this token however you wish, but it is common to use it as a bearer token in the `Authorization` header of your requests, as shown in the following example:
 
 ```ts
 await fetch('<machine-b-url>', {
@@ -134,22 +124,20 @@ await fetch('<machine-b-url>', {
 })
 ```
 
-There are two additional optional arguments that can be passed to the `create` method:
+There are two additional optional arguments that can be passed to the `createToken` method:
 
 - `secondsUntilExpiration` - The number of seconds until the token will expire. By default, the token will not expire.
 - `claims` - A JavaScript object that can be used to store additional information about the token.
 
 ## Verifying M2M tokens
 
-Imagine a request was made from **Machine A** to **Machine B**, and Machine B received it successfully. The next step is to verify that the token is valid and that the request is coming from a valid machine. To do so, you can use the `verifySecret` method on the `m2mTokens` object:
+Imagine a request was made from **Machine A** to **Machine B**, and Machine B received it successfully. The next step is to verify that the token is valid and that the request is coming from a valid machine. To do so, you can use the `verifyToken` method:
 
 ```ts
 // code for receiving the request and extracting the token from the
 // Authorization header...
 
-const m2mToken = await clerkClient.m2mTokens.verifySecret({
-  secret: token,
-})
+const m2mToken = await clerkClient.m2m.verifyToken({ token })
 ```
 
 Keep in mind that this code would be running on Machine B. On Machine B, set `process.env.CLERK_MACHINE_SECRET_KEY` to the machine secret key for Machine B (or pass it directly with the `machineSecretKey` argument). The `token` parameter would be the token that was received from the request sent from Machine A.
@@ -168,7 +156,7 @@ If the token is valid, the method will return an object with the following prope
   "expiration": 1754943177115,
   "createdAt": 1754939577115,
   "updatedAt": 1754939577568,
-  "secret": undefined
+  "token": undefined
 }
 ```
 
@@ -176,10 +164,10 @@ You can then fulfill the request, or reject it if the token is invalid.
 
 ## Revoking M2M tokens
 
-If you need to revoke an M2M token, you can do so by calling the `revoke` method on the `m2mTokens` object, using the Clerk SDK:
+If you need to revoke an M2M token, you can do so by calling the `revoke` method, using the Clerk SDK:
 
 ```ts
-await clerkClient.m2mTokens.revoke({
+await clerkClient.m2m.revokeToken({
   m2mTokenId: m2mToken.id,
   revocationReason: 'Just because 🤪', // optional, for your records
 })

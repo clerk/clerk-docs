@@ -175,7 +175,6 @@ async function main() {
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

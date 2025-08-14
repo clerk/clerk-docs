@@ -17,7 +17,7 @@ import { visit } from 'unist-util-visit'
 const processFiles = async (file: readdirp.EntryInfo, changedTypedocFiles: string[]) => {
   const contents = await fs.readFile(file.fullPath, 'utf8')
 
-  let effected = false
+  const matchedSources = new Set<string>()
 
   await remark()
     .use(remarkFrontmatter)
@@ -42,8 +42,8 @@ const processFiles = async (file: readdirp.EntryInfo, changedTypedocFiles: strin
             return
           }
 
-          if (changedTypedocFiles.includes(src)) {
-            effected = true
+          if (typeof src === 'string' && changedTypedocFiles.includes(src)) {
+            matchedSources.add(src)
           }
         },
       )
@@ -53,23 +53,38 @@ const processFiles = async (file: readdirp.EntryInfo, changedTypedocFiles: strin
       value: contents,
     })
 
-  return effected
+  return Array.from(matchedSources)
 }
 
 async function main() {
-  const changedTypedocFiles = process.argv.slice(2).map((file) => file.replace('.mdx', ''))
+  const argv = process.argv.slice(2)
+  const withSrc = argv.includes('--with-src')
+
+  const changedTypedocFiles = argv
+    .filter((arg) => arg !== '--with-src')
+    .map((file) => file.replace('clerk-typedoc/', '').replace('.mdx', ''))
 
   const files = readdirp('docs', { fileFilter: '*.mdx', type: 'files' })
 
-  const effectedFiles = new Set<string>()
+  const effectedFiles = new Map<string, string[]>()
 
   for await (const file of files) {
-    if (await processFiles(file, changedTypedocFiles)) {
-      effectedFiles.add(file.path)
+    const matches = await processFiles(file, changedTypedocFiles)
+    if (matches.length > 0) {
+      effectedFiles.set(file.path, matches)
     }
   }
 
-  console.log(Array.from(effectedFiles).join('\n'))
+  if (withSrc) {
+    console.log(
+      Array.from(effectedFiles.entries())
+        .map(([docPath, sources]) => `${docPath}\n  - ${sources.join('\n  - ')}`)
+        .join('\n'),
+    )
+  } else {
+    // Backwards-compatible: print only the effected guide paths
+    console.log(Array.from(effectedFiles.keys()).join('\n'))
+  }
 }
 
 main()

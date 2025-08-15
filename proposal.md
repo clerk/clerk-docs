@@ -368,12 +368,12 @@
 - Next.js [nextjs] {"sdk": ["nextjs"], "hideTitle": true, "collapse": false}
   - Overview
   - `clerkMiddleware()` [clerk-middleware]
-  - App Router References [app-router]
+  - App Router References [app-router] {"collapse": false}
     - `auth()`
     - `currentUser()` [current-user]
     - Route Handlers
     - Server Actions
-  - Pages Router References [pages-router]
+  - Pages Router References [pages-router] {"collapse": false}
     - `getAuth()` [get-auth]
     - `buildClerkProps()` [build-clerk-props]
   - Read session and user data [read-session-data]

@@ -12,7 +12,7 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
 > [!NOTE]
 > The sign-out flow deactivates only the current session. Other valid sessions associated with the same user (e.g., if the user is signed in on another device) will remain active.
 
-<Tabs items={["Next.js", "JavaScript", "Expo", "iOS"]}>
+<Tabs items={["Next.js", "JavaScript", "Expo", "iOS", "Android (beta)"]}>
   <Tab>
     The [`useClerk()`](/docs/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the sign-out button.
 
@@ -112,6 +112,108 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
           dump(error)
         }
       }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'MainViewModel.kt', collapsible: true }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class MainViewModel : ViewModel() {
+
+      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user != null -> UiState.SignedIn
+                else -> UiState.SignedOut
+              }
+          }
+          .launchIn(viewModelScope)
+      }
+
+      fun signOut() {
+        viewModelScope.launch {
+          Clerk.signOut()
+            .onSuccess { _uiState.value = UiState.SignedOut }
+            .onFailure {
+              // See https://clerk.com/docs/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+
+      sealed interface UiState {
+        data object SignedIn : UiState
+
+        data object SignedOut : UiState
+
+        data object Loading : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'MainActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.enableEdgeToEdge
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.runtime.getValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+    class MainActivity : ComponentActivity() {
+        val viewModel: MainViewModel by viewModels()
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            enableEdgeToEdge()
+            setContent {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (state) {
+                        MainViewModel.UiState.Loading -> {
+                            CircularProgressIndicator()
+                        }
+
+                        MainViewModel.UiState.SignedIn -> {
+                            Button(onClick = { viewModel.signOut() }) {
+                                Text("Sign out")
+                            }
+                        }
+
+                        MainViewModel.UiState.SignedOut -> {
+                            // Signed out content
+                        }
+                    }
+                }
+            }
+        }
     }
     ```
   </Tab>

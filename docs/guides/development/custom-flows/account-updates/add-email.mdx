@@ -1,0 +1,429 @@
+---
+title: Build a custom flow for adding an email to a user's account
+description: Learn how to use the Clerk API to build a custom flow for adding an email to a user's account.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+Users are able to add multiple email addresses to their account. Adding an email address requires the user to verify the email address before it can be added to the user's account.
+
+This guide demonstrates how to build a custom user interface that allows users to add and verify an email address for their account.
+
+## Configure email verification
+
+There are two verification methods available for email addresses:
+
+- **Email verification code**: Users receive an email with a **one-time code** to verify their email address.
+- **Email verification link**: Users receive an email with a **link** to verify their email address.
+
+By default, the verification method that is enabled is **email verification code**. To use email code verification, skip to the [Email code verification](#email-code-verification) section.
+
+To use email links, you must configure the following settings in the Clerk Dashboard:
+
+1. On the [**Email, phone, username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) page of the Clerk Dashboard, under **Email address**, enable the **Email verification link** option. By default, **Require the same device and browser** is enabled, which means that email links are required to be verified from the same device and browser on which the sign-up or sign-in was initiated. For this guide, leave this setting enabled.
+1. Disable **Email verification code**.
+1. Save your changes.
+
+Then skip to the [Email link verification](#email-link-verification) section.
+
+## Email code verification
+
+1. Every user has a [`User`](/docs/references/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/reference/general/hooks/use-user) hook is used to get the `User` object.
+1. The [`User.createEmailAddress()`](/docs/references/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/reference/general/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
+1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/references/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
+1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
+1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
+
+<Tabs items={["Next.js", "iOS", "Android (beta)"]}>
+  <Tab>
+    ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
+    'use client'
+
+    import * as React from 'react'
+    import { useUser, useReverification } from '@clerk/nextjs'
+    import { EmailAddressResource } from '@clerk/types'
+
+    export default function Page() {
+      const { isLoaded, isSignedIn, user } = useUser()
+      const [email, setEmail] = React.useState('')
+      const [code, setCode] = React.useState('')
+      const [isVerifying, setIsVerifying] = React.useState(false)
+      const [successful, setSuccessful] = React.useState(false)
+      const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+      const createEmailAddress = useReverification((email: string) =>
+        user?.createEmailAddress({ email }),
+      )
+
+      if (!isLoaded) {
+        // Handle loading state
+        return null
+      }
+
+      if (!isSignedIn) {
+        // Handle signed out state
+        return <p>You must be logged in to access this page</p>
+      }
+
+      // Handle addition of the email address
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        try {
+          // Add an unverified email address to user
+          const res = await createEmailAddress(email)
+          // Reload user to get updated User object
+          await user.reload()
+
+          // Find the email address that was just added
+          const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
+          // Create a reference to the email address that was just added
+          setEmailObj(emailAddress)
+
+          // Send the user an email with the verification code
+          emailAddress?.prepareVerification({ strategy: 'email_code' })
+
+          // Set to true to display second form
+          // and capture the OTP code
+          setIsVerifying(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      // Handle the submission of the verification form
+      const verifyCode = async (e: React.FormEvent) => {
+        e.preventDefault()
+        try {
+          // Verify that the code entered matches the code sent to the user
+          const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
+
+          if (emailVerifyAttempt?.verification.status === 'verified') {
+            setSuccessful(true)
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          }
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      // Display a success message if the email was added successfully
+      if (successful) {
+        return (
+          <>
+            <h1>Email added!</h1>
+          </>
+        )
+      }
+
+      // Display the verification form to capture the OTP code
+      if (isVerifying) {
+        return (
+          <>
+            <h1>Verify email</h1>
+            <div>
+              <form onSubmit={(e) => verifyCode(e)}>
+                <div>
+                  <label htmlFor="code">Enter code</label>
+                  <input
+                    onChange={(e) => setCode(e.target.value)}
+                    id="code"
+                    name="code"
+                    type="text"
+                    value={code}
+                  />
+                </div>
+                <div>
+                  <button type="submit">Verify</button>
+                </div>
+              </form>
+            </div>
+          </>
+        )
+      }
+
+      // Display the initial form to capture the email address
+      return (
+        <>
+          <h1>Add Email</h1>
+          <div>
+            <form onSubmit={(e) => handleSubmit(e)}>
+              <div>
+                <label htmlFor="email">Enter email address</label>
+                <input
+                  onChange={(e) => setEmail(e.target.value)}
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
+                />
+              </div>
+              <div>
+                <button type="submit">Continue</button>
+              </div>
+            </form>
+          </div>
+        </>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```swift {{ filename: 'AddEmailView.swift', collapsible: true }}
+    import SwiftUI
+    import Clerk
+
+    struct AddEmailView: View {
+      @State private var email = ""
+      @State private var code = ""
+      @State private var isVerifying = false
+      // Create a reference to the email address that we'll be creating
+      @State private var newEmailAddress: EmailAddress?
+
+      var body: some View {
+        if newEmailAddress?.verification?.status == .verified {
+          Text("Email added!")
+        }
+
+        if isVerifying {
+          TextField("Enter code", text: $code)
+          Button("Verify") {
+            Task { await verifyCode(code) }
+          }
+        } else {
+          TextField("Enter email address", text: $email)
+          Button("Continue") {
+            Task { await createEmail(email) }
+          }
+        }
+      }
+    }
+
+    extension AddEmailView {
+
+      func createEmail(_ email: String) async {
+        do {
+          guard let user = Clerk.shared.user else { return }
+
+          // Add an unverified email address to user,
+          // then send the user an email with the verification code
+          self.newEmailAddress = try await user
+            .createEmailAddress(email)
+            .prepareVerification(strategy: .emailCode)
+
+          // Set to true to display second form
+          // and capture the OTP code
+          isVerifying = true
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+
+      func verifyCode(_ code: String) async {
+        do {
+          guard let newEmailAddress else { return }
+
+          // Verify that the code entered matches the code sent to the user
+          self.newEmailAddress = try await newEmailAddress.attemptVerification(strategy: .emailCode(code: code))
+
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          dump(self.newEmailAddress?.verification?.status)
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.emailaddress.EmailAddress
+    import com.clerk.api.emailaddress.attemptVerification
+    import com.clerk.api.emailaddress.prepareVerification
+    import com.clerk.api.network.serialization.flatMap
+    import com.clerk.api.network.serialization.longErrorMessageOrNull
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import com.clerk.api.user.createEmailAddress
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class AddEmailViewModel : ViewModel() {
+      private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
+      }
+
+      fun createEmailAddress(emailAddress: String) {
+        val user = requireNotNull(Clerk.userFlow.value)
+
+        // Add an unverified email address to the user,
+        // then send the user an email with the verification code
+        viewModelScope.launch {
+          user
+            .createEmailAddress(emailAddress)
+            .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
+            .onSuccess {
+              // Update the state to show that the email address has been created
+              // and that the user needs to verify the email address
+              _uiState.value = UiState.Verifying(it)
+            }
+            .onFailure {
+              Log.e(
+                "AddEmailViewModel",
+                "Failed to create email address and prepare verification: ${it.longErrorMessageOrNull}",
+              )
+            }
+        }
+      }
+
+      fun verifyCode(code: String, newEmailAddress: EmailAddress) {
+        viewModelScope.launch {
+          newEmailAddress
+            .attemptVerification(code)
+            .onSuccess {
+              // Update the state to show that the email addresshas been verified
+              _uiState.value = UiState.Verified
+            }
+            .onFailure {
+              Log.e("AddEmailViewModel", "Failed to verify email address: ${it.longErrorMessageOrNull}")
+            }
+        }
+      }
+
+      sealed interface UiState {
+        data object Loading : UiState
+        data object NeedsVerification : UiState
+        data class Verifying(val emailAddress: EmailAddress) : UiState
+        data object Verified : UiState
+        data object SignedOut : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'AddEmailActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.material3.TextField
+    import androidx.compose.runtime.Composable
+    import androidx.compose.runtime.getValue
+    import androidx.compose.runtime.mutableStateOf
+    import androidx.compose.runtime.remember
+    import androidx.compose.runtime.setValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+    import com.clerk.api.emailaddress.EmailAddress
+
+    class AddEmailActivity : ComponentActivity() {
+      val viewModel: AddEmailViewModel by viewModels()
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+          val state by viewModel.uiState.collectAsStateWithLifecycle()
+          AddEmailView(
+            state = state,
+            onCreateEmailAddress = viewModel::createEmailAddress,
+            onVerifyCode = viewModel::verifyCode,
+          )
+        }
+      }
+    }
+
+    @Composable
+    fun AddEmailView(
+      state: AddEmailViewModel.UiState,
+      onCreateEmailAddress: (String) -> Unit,
+      onVerifyCode: (String, EmailAddress) -> Unit,
+    ) {
+      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when (state) {
+          AddEmailViewModel.UiState.NeedsVerification -> {
+            InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
+              onCreateEmailAddress(it)
+            }
+          }
+
+          AddEmailViewModel.UiState.Verified -> Text("Verified!")
+
+          is AddEmailViewModel.UiState.Verifying -> {
+            InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+              onVerifyCode(it, state.emailAddress)
+            }
+          }
+
+          AddEmailViewModel.UiState.Loading -> CircularProgressIndicator()
+          AddEmailViewModel.UiState.SignedOut -> Text("You must be signed in to add an email address.")
+        }
+      }
+    }
+
+    @Composable
+    fun InputContentView(
+      buttonText: String,
+      placeholder: String,
+      modifier: Modifier = Modifier,
+      onClick: (String) -> Unit,
+    ) {
+      var input by remember { mutableStateOf("") }
+      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        TextField(
+          modifier = Modifier.padding(bottom = 16.dp),
+          value = input,
+          onValueChange = { input = it },
+          placeholder = { Text(placeholder) },
+        )
+        Button(onClick = { onClick(input) }) { Text(buttonText) }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Email link verification
+
+<If sdk="expo">
+  > [!WARNING]
+  > Expo does not support email links. You can request this feature on [Clerk's roadmap](https://feedback.clerk.com/).
+</If>
+
+<Include src="_partials/custom-flows/email-link-verification" />

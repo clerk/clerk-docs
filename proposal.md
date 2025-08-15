@@ -1,22 +1,12 @@
 # Top Level Links
 
-- Home
-- Getting Started
-- Guides
-- Examples
-- Reference
-
-## Home
-
-### Core Concepts
-
-- How Clerk Works
-- Integrate Clerk
-- Clerk Objects
-- Security at Clerk [security]
-- System Limits
-- AI Prompt Library [ai-prompts]
-- Multi-tenant Architecture
+- Getting Started {"icon": "checkmark-circle"}
+- Guides {"icon": "book"}
+- Examples {"icon": "plus-circle"}
+- Reference {"icon": "globe"}
+  - SDK Reference
+  - API Reference
+  - UI Components
 
 ## Getting Started [getting-started]
 
@@ -37,35 +27,117 @@
 - Read user and session data
 - Add middleware
 
+### More
+
+- View all guides
+
 ## Guides [guides]
 
-### Securing your App [secure]
+### Configuring your App [configure]
 
-- Restricting Access
-- Multifactor Authentication (MFA) [mfa]
-- Bot Detection
-- Banning Users
-- Prevent brute force attacks
-- Re-verification (Step-up)
-- Legal Compliance
-- Security Best Practices [best-practices]
-- Session Options
+- Authentication Strategies [auth-strategies]
+  - Sign-up and sign-in options [sign-up-sign-in-options]
+  - Social Connections {"collapse": false}
+    - Overview
+    - Account linking
+    - Custom provider
+    - All providers
+  - Enterprise Connections {"collapse": false}
+    - Overview
+    - Authentication flows
+    - Account linking
+    - Just-in-Time account provisioning [jit-provisioning]
+    - SAML providers [saml]
+      - Azure
+      - Google
+      - Okta
+      - Custom provider
+    - OIDC providers [oidc]
+      - Custom provider
+    - EASIE providers [easie]
+      - Microsoft
+      - Google
+  - Web3 {"collapse": false}
+    - Coinbase Wallet
+    - Metamask
+    - OKX Wallet
+  - OAuth {"collapse": false}
+    - What are OAuth & OIDC [overview]
+    - How Clerk implements OAuth
+    - Use OAuth for Single Sign-On (SSO) [single-sign-on]
+    - Use OAuth for scoped access [scoped-access]
+    - Verify OAuth tokens
+- Session token customization [session-token]
+- Webhooks
+  - Overview
+  - Syncing data with webhooks [syncing]
+  - Debugging webhooks [debugging]
+- Integrations
+  - Overview
+  - Databases
+    - Convex
+    - Fauna
+    - Firebase
+    - Grafbase
+    - Hasura
+    - InstantDB
+    - Nhost
+    - Supabase
+    - Neon
+  - Platforms
+    - Shopify
+    - Vercel Marketplace
+  - Analytics
+    - Google Analytics
 
 ### Managing Users [users]
 
+- Inviting Users [inviting]
 - Managing Users [managing]
 - Reading Clerk Data [reading]
 - Extending Clerk Data [extending]
-- Syncing Clerk Data [syncing]
 - Impersonation
 
-### B2B
+### Customizing Clerk
+
+- Component Customization [appearance-prop]
+  - Overview
+  - Layout
+  - Themes
+  - Variables
+  - CAPTCHA
+- Account Portal
+- Adding items to UI Components [adding-items]
+  - Organization profile
+  - User profile
+  - User button
+- Email and SMS Templates [email-sms-templates]
+- Localization (i18n) [localization]
+- Clerk Elements [elements] {"tag": "(Beta)"}
+  - Overview
+  - Guides
+    - Build a sign-in flow [sign-in]
+    - Build a sign-up flow [sign-up]
+    - Styling
+  - Examples
+    - Sign-in
+    - Sign-up
+    - Primitives
+    - shadcn/ui
+  - Component Reference [reference]
+    - Common
+    - Sign-in
+    - Sign-up
+
+### B2B (Organizations) [organizations]
 
 - Overview
-- Managing Organizations [managing-orgs]
 - Verified Domains
 - Roles and Permissions
-- SSO / Enterprise Connections
+- Invitations
+- Metadata
+- Manage enterprise SSO connections [sso]
+- Use org slugs in URLs [org-slugs-in-urls]
 
 ### Billing
 
@@ -73,51 +145,156 @@
 - Billing for B2C [for-b2c]
 - Billing for B2B [for-b2b]
 
-### Customizing Clerk
+### Securing your App [secure]
 
-- UI Customization (Appearance Prop) [appearance-prop]
-- Account Portal
-- Adding items to UI Components [adding-items]
-- Email and SMS Templates
-- Localization (i18n) [localization]
-- Clerk Elements (beta) [elements]
-
-### Configuring your App [configure]
-
-- Authentication Strategies [auth-strategies]
-  - Social Connections
-  - Enterprise Connections
-  - Web3
-- Session Token customization
-- Syncing data with webhooks
-- Backend Requests
-- Integrations
-
-### Clerk Dashboard
-
-- Overview
-- Account Portal
-- DNS & Domains
-- Plans & Billing
+- Restricting Access
+- Authorization Checks
+- Bot Protection
+- Banning Users
+- Prevent Brute Force Attacks [user-lockout]
+- Reverification (Step-up) [reverification]
+- Force MFA for all users [force-mfa]
+- Legal Compliance
+- Password Protection and Rules
+- Security Best Practices [best-practices]
+  - XSS Leak Protection
+  - CSRF Protection
+  - CSP Headers
+  - Fixation Protection
+  - Protect Email Link Sign-ups and Sign-ins [protect-email-links]
+  - Unauthorized Sign-in
+- Session Options
 
 ### Development
 
-- Deployment
-- Testing with Clerk
 - Managing Environments
-- Migrating your Data
-- Clerk environment variables
+- Clerk Environment Variables
+- Making Requests
+- Manual JWT Verification [manual-jwt]
+- JWT Templates
+- Force a token refresh [force-token-refresh]
+- Customize Redirect URLs
+- Override Clerk Types/Interfaces
+- Image Optimization
+- Model Context Protocol [mcp]
+  - Overview
+  - Build an MCP server [build-mcp-server]
+  - Connect an MCP client [connect-mcp-client]
+- Custom Flows
+  - Overview
+  - Error handling
+  - Authentication {"collapse": false}
+    - Email & password
+    - Email / SMS OTP
+    - Email links
+    - Email & password + MFA
+    - Passkeys
+    - Google One Tap
+    - OAuth connections
+    - Enterprise connections
+    - Sign out
+    - Sign-up with application invitations [application-invitations]
+    - Embedded email links
+    - Multi-session applications
+    - Bot sign-up protection
+  - Organizations {"collapse": false}
+    - Accept organization invitation links [accept-organization-invitations]
+    - Create an organization [create-organizations]
+    - Create and manage organization invitations [manage-organization-invitations]
+    - List and switch between organizations [organization-switcher]
+    - Manage a user's organization invitations [manage-user-org-invitations]
+    - Manage member roles [manage-roles]
+    - Manage membership requests [manage-membership-requests]
+    - Update an organization [update-organizations]
+  - Billing {"collapse": false}
+    - Checkout with a new payment method [checkout-new-payment-method]
+    - Checkout with an existing payment method [checkout-existing-payment-method]
+    - Add a new payment method [add-new-payment-method]
+  - Account updates {"collapse": false}
+    - Forgot password
+    - User impersonation
+    - Add email
+    - Add phone
+    - Manage SSO connections
+    - Manage SMS-based MFA
+    - Manage TOTP-based MFA
+- Testing with Clerk [testing]
+  - Overview
+  - Test emails and phones
+  - Cypress
+    - Overview
+    - Custom commands
+    - Test Account Portal
+  - Playwright
+    - Overview
+    - Test helpers
+    - Test authenticated flows
+  - Postman or Insomnia
+- Errors
+  - Overview
+  - Backend API Errors [backend-api]
+  - Frontend API Errors [frontend-api]
+- Troubleshooting
+  - Overview
+  - Email deliverability
+  - Script loading
+  - Help & Support
+    - Create a minimal reproduction
+    - Community Discord
+    - Contact Support
+- Deployment
+  - Changing domains
+  - Deploy to production [production]
+  - Deploy to Vercel [vercel]
+  - Deploy behind a proxy [behind-a-proxy]
+  - Deploy an Astro app to production [astro]
+  - Deploy a Chrome Extension to production [chrome-extension]
+  - Deploy an Expo app to production [expo]
+- Migrating your Data [migrating]
+  - Overview
+  - Migrate from Firebase [firebase]
+  - Migrate from Cognito [cognito]
 - SDK Development
+  - Overview
+  - Terminology
+  - Philosophy
+  - Conventions
+  - SDK Types [types]
+  - Frontend-only
+  - Backend-only
+  - Fullstack
 - Upgrading Clerk [upgrading]
+  - Overview
   - Versioning & LTS [versioning]
   - Upgrade Guides
     - Core 2
     - Node to Express
     - Expo v2 [expo-v2]
-    - @clerk/nextjs v6 [next-v6]
-    - URL based session syncing [url-session-syncing]
-    - Progressive Sign Ups
-- Troubleshooting
+    - @clerk/nextjs v6 [nextjs-v6]
+    - URL based session syncing
+    - Progressive Sign Up
+- AI Prompts
+
+### Clerk Dashboard [dashboard]
+
+- Overview
+- DNS & Domains
+  - Satellite Domains
+  - Proxy Clerk Frontend API [proxy-fapi]
+
+### How Clerk works
+
+- Overview
+- Integrating Clerk
+- Cookies
+- System limits
+- Routing
+- Session tokens
+- Tokens and signatures
+- Security at Clerk [security]
+  - Vulnerability disclosure policy
+  - Clerk Telemetry
+- Multi-tenant architecture
 
 ## Examples [examples]
 
@@ -127,8 +304,98 @@
 
 ## Reference [reference]
 
-### API Reference [reference]
+### General
 
-- SDK Reference [sdk]
-- UI Components [components]
-- API Reference
+- UI Components [components] {"icon": "box"}
+  - Overview
+  - `<ClerkProvider>` [clerk-provider]
+  - Authentication Components [authentication] {"collapse": false}
+    - `<SignIn />` [sign-in]
+    - `<SignUp />` [sign-up]
+    - `<GoogleOneTap />` [google-one-tap]
+    - `<Waitlist />` [waitlist]
+  - User Components [user] {"collapse": false}
+    - `<UserButton />` [user-button]
+    - `<UserProfile />` [user-profile]
+  - Organization Components [organization] {"collapse": false}
+    - `<CreateOrganization />` [create-organization]
+    - `<OrganizationProfile />` [organization-profile]
+    - `<OrganizationSwitcher />` [organization-switcher]
+    - `<OrganizationList />` [organization-list]
+  - Billing Components [billing] {"collapse": false}
+    - `<PricingTable />` [pricing-table]
+    - `<CheckoutButton />` [checkout-button] {"tag": "(Beta)"}
+    - `<PlanDetailsButton />` [plan-details-button] {"tag": "(Beta)"}
+    - `<SubscriptionDetailsButton />` [subscription-details-button] {"tag": "(Beta)"}
+  - Control Components [control] {"collapse": false}
+    - `<AuthenticateWithRedirectCallback />` [authenticate-with-redirect-callback]
+    - `<ClerkLoaded>` [clerk-loaded]
+    - `<ClerkLoading>` [clerk-loading]
+    - `<Protect>` [protect]
+    - `<RedirectToSignIn />` [redirect-to-sign-in]
+    - `<RedirectToSignUp />` [redirect-to-sign-up]
+    - `<RedirectToUserProfile />` [redirect-to-user-profile]
+    - `<RedirectToOrganizationProfile />` [redirect-to-organization-profile]
+    - `<RedirectToCreateOrganization />` [redirect-to-create-organization]
+    - `<SignedIn>` [signed-in]
+    - `<SignedOut>` [signed-out]
+  - Unstyled Components [unstyled] {"collapse": false}
+    - `<SignInButton>` [sign-in-button]
+    - `<SignInWithMetamaskButton>` [sign-in-with-metamask]
+    - `<SignUpButton>` [sign-up-button]
+    - `<SignOutButton>` [sign-out-button]
+- Hooks
+  - Overview
+  - `useUser()` [use-user]
+  - `useClerk()` [use-clerk]
+  - `useAuth()` [use-auth]
+  - `useSignIn()` [use-sign-in]
+  - `useSignUp()` [use-sign-up]
+  - `useSession()` [use-session]
+  - `useSessionList()` [use-session-list]
+  - `useOrganization()` [use-organization]
+  - `useOrganizationList()` [use-organization-list]
+  - `useReverification()` [use-reverification]
+  - `useCheckout()` [use-checkout]
+  - `usePaymentElement()` [use-payment-element]
+  - `usePaymentMethods()` [use-payment-methods]
+  - `usePlans()` [use-plans]
+  - `useSubscription()` [use-subscription]
+
+### SDK Reference
+
+- Next.js {"icon": "nextjs"}
+- React {"icon": "react"}
+- Expo {"icon": "expo"}
+- JavaScript {"icon": "javascript"}
+- Express {"icon": "expressjs"}
+- React Router {"icon": "react-router"}
+- Astro {"icon": "astro"}
+- iOS {"icon": "apple"}
+- Nuxt {"icon": "nuxt"}
+- Vue {"icon": "vue"}
+- Chrome Extension {"icon": "chrome"}
+- Fastify {"icon": "fastify"}
+- Remix {"icon": "remix"}
+- Tanstack Start {"icon": "tanstack"}
+- JS Backend SDK {"icon": "clerk"}
+- C# {"icon": "c-sharp"}
+- Go {"icon": "go"}
+- Java {"icon": "java"}
+- Python {"icon": "python"}
+- Ruby / Rails {"icon": "ruby"}
+- Community SDKs
+  - Angular {"icon": "angular"}
+  - Elysia {"icon": "elysia"}
+  - Hono {"icon": "hono"}
+  - Koa {"icon": "koa"}
+  - SolidJS {"icon": "solid"}
+  - Svelte {"icon": "svelte"}
+  - RedwoodJS {"icon": "redwood"}
+  - Rust {"icon": "rust"}
+
+### HTTP API Reference
+
+- Frontend API [fapi]
+- Backend API [bapi]
+- Management API [mapi]

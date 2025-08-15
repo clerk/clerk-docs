@@ -376,9 +376,6 @@
   - Pages Router References [pages-router]
     - `getAuth()` [get-auth]
     - `buildClerkProps()` [build-clerk-props]
-  - Demo Repositories
-    - App Router Demo Repo
-    - Pages Router Demo Repo
   - Read session and user data [read-session-data]
   - Add a custom sign-in-or-up page [custom-sign-in-or-up-page]
   - Add a custom sign-up page [custom-sign-up-page]
@@ -392,8 +389,6 @@
   - Verifying OAuth access tokens
 - React {"sdk": ["react"], "hideTitle": true, "collapse": false}
   - Overview
-  - Demo Repository
-    - React Demo Repo
 - Expo {"sdk": ["expo"], "hideTitle": true, "collapse": false}
   - Overview
   - `useLocalCredentials()` [use-local-credentials]
@@ -439,7 +434,7 @@
     - `EnterpriseAccount` [enterprise-account]
     - `EnterpriseAccountConnection` [enterprise-account-connection]
     - `ExternalAccount` [external-account]
-    -  Metadata types [metadata]
+    - Metadata types [metadata]
     - `OrganizationCustomRoleKey` [organization-custom-role-key]
     - `OrganizationCustomPermissionKey` [organization-custom-permission-key]
     - `OrganizationDomain` [organization-domain]
@@ -465,7 +460,7 @@
     - `SignUpRedirectOptions` [sign-up-redirect-options]
     - `SignInInitialValues` [sign-in-initial-values]
     - `SignUpInitialValues` [sign-up-initial-values]
-    -  SSO types [sso]
+    - SSO types [sso]
     - `TOTPResource` [totp]
     - `UserOrganizationInvitation` [user-organization-invitation]
     - `Verification`
@@ -661,7 +656,6 @@
 - Go {"sdk": ["go"], "hideTitle": true, "collapse": false}
   - Overview
   - Verifying sessions
-  - Go SDK repository
 - Ruby/Rails/Sinatra [ruby] {"sdk": ["ruby"], "hideTitle": true, "collapse": false}
   - Overview
   - Upgrade to v4 [v4-upgrade-guide]

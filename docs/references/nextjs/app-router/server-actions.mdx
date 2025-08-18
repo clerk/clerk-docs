@@ -1,0 +1,211 @@
+---
+title: Server Actions
+description: Learn how to use Clerk with Server Actions.
+sdk: nextjs
+---
+
+Clerk provides helpers to allow you to protect your Server Actions, fetch the current user, and interact with the Clerk API.
+
+The following guide provides examples for using Server Actions in Server Components and in Client Components.
+
+## With Server Components
+
+### Protect your Server Actions
+
+You can use the [`auth()`](/docs/references/nextjs/app-router/auth) helper to protect your server actions. This helper will return the current user's ID if they are signed in, or `null` if they are not.
+
+```tsx {{ filename: 'actions.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default function AddToCart() {
+  async function addItem(formData: FormData) {
+    'use server'
+
+    const { userId } = await auth()
+
+    if (!userId) {
+      throw new Error('You must be signed in to add an item to your cart')
+    }
+
+    console.log('add item server action', formData)
+  }
+
+  return (
+    <form action={addItem}>
+      <input value={'test'} type="text" name="name" />
+      <button type="submit">Add to Cart</button>
+    </form>
+  )
+}
+```
+
+When performing organization-related operations, you can use `auth().orgId` to check a user's organization ID before performing an action.
+
+```tsx {{ filename: 'actions.ts' }}
+import { auth } from '@clerk/nextjs/server'
+
+export default function AddVerifiedDomain() {
+  async function addVerifiedDomain(formData: FormData) {
+    'use server'
+
+    const { userId, orgId } = await auth()
+
+    if (!userId) {
+      throw new Error('You must be signed in to add a verified domain')
+    }
+
+    if (!orgId) {
+      throw new Error('No active organization found. Set one as active or create/join one')
+    }
+
+    const domain = formData.get('domain')?.toString()
+    if (!domain) {
+      throw new Error('Domain is required')
+    }
+
+    await clerkClient().organizations.createOrganizationDomain({
+      organizationId: orgId,
+      name: domain,
+      enrollmentMode: 'automatic_invitation',
+    })
+
+    console.log(`Added domain ${domain} to organization ${orgId}`)
+  }
+
+  return (
+    <form action={addVerifiedDomain}>
+      <input placeholder="example.com" type="text" name="domain" />
+      <button type="submit">Add Domain</button>
+    </form>
+  )
+}
+```
+
+### Read user data
+
+To retrieve information about the current user in your Server Actions, you can use the [`currentUser()`](/docs/references/nextjs/app-router/current-user) helper, which returns the [`Backend User`](/docs/references/backend/types/backend-user) object of the currently active user. **It does count towards the [Backend API request rate limit](/docs/guides/how-clerk-works/system-limits)** so it's recommended to use the [`useUser()`](/docs/references/general/hooks/use-user) hook on the client side when possible and only use `currentUser()` when you specifically need user data in a server context. For more information on this helper, see the [`currentUser()`](/docs/references/nextjs/app-router/current-user) reference.
+
+```tsx {{ filename: 'app/page.tsx' }}
+import { currentUser } from '@clerk/nextjs/server'
+
+export default function AddHobby() {
+  async function addHobby(formData: FormData) {
+    'use server'
+
+    const user = await currentUser()
+
+    if (!user) {
+      throw new Error('You must be signed in to use this feature')
+    }
+
+    const serverData = {
+      usersHobby: formData.get('hobby'),
+      userId: user.id,
+      profileImage: user.imageUrl,
+    }
+
+    console.log('add item server action completed with user details ', serverData)
+  }
+
+  return (
+    <form action={addHobby}>
+      <input value={'soccer'} type="text" name="hobby" />
+      <button type="submit">Submit your hobby</button>
+    </form>
+  )
+}
+```
+
+## With Client Components
+
+When using Server Actions in Client Components, you need to make sure you use prop drilling to ensure that headers are available.
+
+### Protect your Server Actions
+
+Use the following tabs to see an example of how to protect a Server Action that is used in a Client Component.
+
+<CodeBlockTabs options={["Server Action", "Client Component", "Page"]}>
+  ```tsx {{ filename: 'app/actions.ts' }}
+  'use server'
+  import { auth } from '@clerk/nextjs/server'
+
+  export async function addItem(formData: FormData) {
+    const { userId } = await auth()
+
+    if (!userId) {
+      throw new Error('You must be signed in to add an item to your cart')
+    }
+
+    console.log('add item server action', formData)
+  }
+  ```
+
+  ```tsx {{ filename: 'app/components/AddItem.tsx' }}
+  'use client'
+
+  export default function AddItem({ addItem }) {
+    return (
+      <form action={addItem}>
+        <input value={'test'} type="text" name="name" />
+        <button type="submit">Add to Cart</button>
+      </form>
+    )
+  }
+  ```
+
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import AddItem from './components/AddItem'
+  import { addItem } from './actions'
+  export default function Hobby() {
+    return <AddItem addItem={addItem} />
+  }
+  ```
+</CodeBlockTabs>
+
+### Read user data
+
+The following example demonstrates how to read user data in a Server Action that is used in a Client Component. Use the tabs to view the example code for each file.
+
+<CodeBlockTabs options={["Server Action", "Client Component", "Page"]}>
+  ```tsx {{ filename: 'app/actions.ts' }}
+  'use server'
+  import { currentUser } from '@clerk/nextjs/server'
+
+  export async function addHobby(formData: FormData) {
+    const user = await currentUser()
+
+    if (!user) {
+      throw new Error('You must be signed in to use this feature')
+    }
+
+    const serverData = {
+      usersHobby: formData.get('hobby'),
+      userId: user.id,
+      profileImage: user.imageUrl,
+    }
+
+    console.log('add Hobby completed with user details ', serverData)
+  }
+  ```
+
+  ```tsx {{ filename: 'app/components/AddHobby.tsx' }}
+  'use client'
+
+  export default function UI({ addHobby }) {
+    return (
+      <form action={addHobby}>
+        <input value={'soccer'} type="text" name="hobby" />
+        <button type="submit">Submit your hobby</button>
+      </form>
+    )
+  }
+  ```
+
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import AddHobby from './components/AddHobby'
+  import { addHobby } from './actions'
+  export default function Hobby() {
+    return <AddHobby addHobby={addHobby} />
+  }
+  ```
+</CodeBlockTabs>

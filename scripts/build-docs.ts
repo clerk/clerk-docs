@@ -211,6 +211,8 @@ async function main() {
         'types/user-resource.mdx': ['link-doc-not-found'],
         'clerk-react/use-sign-in.mdx': ['link-doc-not-found'],
         'clerk-react/use-sign-up.mdx': ['link-doc-not-found'],
+        'nextjs/get-auth.mdx': ['link-doc-not-found'],
+        'nextjs/auth.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

@@ -8,7 +8,7 @@
   - API Reference
   - UI Components
 
-## Getting Started [getting-started]
+## Getting Started
 
 ### Quickstart
 
@@ -31,7 +31,7 @@
 
 - View all guides
 
-## Guides [guides]
+## Guides
 
 ### Configuring your App [configure]
 
@@ -296,13 +296,13 @@
   - Clerk Telemetry
 - Multi-tenant architecture
 
-## Examples [examples]
+## Examples
 
 ### Testing
 
 - Test Link
 
-## Reference [reference]
+## References
 
 ### General
 
@@ -362,37 +362,306 @@
   - `usePlans()` [use-plans]
   - `useSubscription()` [use-subscription]
 
-### SDK Reference
+### SDK Reference {"skip": true}
 
-- Next.js {"icon": "nextjs"}
-- React {"icon": "react"}
-- Expo {"icon": "expo"}
-- JavaScript {"icon": "javascript"}
-- Express {"icon": "expressjs"}
-- React Router {"icon": "react-router"}
-- Astro {"icon": "astro"}
-- iOS {"icon": "apple"}
-- Nuxt {"icon": "nuxt"}
-- Vue {"icon": "vue"}
-- Chrome Extension {"icon": "chrome"}
-- Fastify {"icon": "fastify"}
-- Remix {"icon": "remix"}
-- Tanstack Start {"icon": "tanstack"}
-- JS Backend SDK {"icon": "clerk"}
-- C# {"icon": "c-sharp"}
-- Go {"icon": "go"}
-- Java {"icon": "java"}
-- Python {"icon": "python"}
-- Ruby / Rails {"icon": "ruby"}
-- Community SDKs
-  - Angular {"icon": "angular"}
-  - Elysia {"icon": "elysia"}
-  - Hono {"icon": "hono"}
-  - Koa {"icon": "koa"}
-  - SolidJS {"icon": "solid"}
-  - Svelte {"icon": "svelte"}
-  - RedwoodJS {"icon": "redwood"}
-  - Rust {"icon": "rust"}
+- Next.js [nextjs] {"sdk": ["nextjs"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `clerkMiddleware()` [clerk-middleware]
+  - App Router References [app-router] {"collapse": false}
+    - `auth()`
+    - `currentUser()` [current-user]
+    - Route Handlers
+    - Server Actions
+  - Pages Router References [pages-router] {"collapse": false}
+    - `getAuth()` [get-auth]
+    - `buildClerkProps()` [build-clerk-props]
+  - Read session and user data [read-session-data]
+  - Add a custom sign-in-or-up page [custom-sign-in-or-up-page]
+  - Add a custom sign-up page [custom-sign-up-page]
+  - Add custom onboarding [add-onboarding-flow]
+  - Set up a waitlist [waitlist]
+  - Role Based Access Control [basic-rbac]
+  - Rendering modes
+  - Geo blocking
+  - Migrate from Auth.js [authjs-migration]
+  - tRPC
+  - Verifying OAuth access tokens
+  - shadcn/ui CLI [shadcn]
+- React {"sdk": ["react"], "hideTitle": true, "collapse": false}
+  - Overview
+- Expo {"sdk": ["expo"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `useLocalCredentials()` [use-local-credentials]
+  - `useOAuth()` (deprecated) [use-oauth]
+  - `useSSO()` [use-sso]
+  - Web support
+    - Overview
+    - Add a custom sign-in-or-up page [custom-sign-in-or-up-page]
+    - Add a custom sign-up page [custom-sign-up-page]
+  - Read session and user data [read-session-user-data]
+  - Use biometrics with local credentials [local-credentials]
+  - Configure passkeys [passkeys]
+  - Offline support
+  - Access the `Clerk` object outside of components [access-clerk-outside-components]
+- Javascript {"sdk": ["js-frontend"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `Clerk`
+  - `Client`
+  - `Session`
+  - `User`
+  - `SignIn` [sign-in]
+  - `SignUp` [sign-up]
+  - `Organization`
+  - Types
+    - Overview
+    - `BackupCodeResource` [backup-code]
+    - `ClerkAPIError` [clerk-api-error]
+    - `ClerkAPIResponseError` [clerk-api-response-error]
+    - `ClerkPaginatedResponse` [clerk-paginated-response]
+    - `CommerceCheckoutResource` [commerce-checkout-resource]
+    - `CommerceCheckoutTotals` [commerce-checkout-totals]
+    - `CommerceFeatureResource` [commerce-feature-resource]
+    - `CommerceMoney` [commerce-money]
+    - `CommercePaymentSourceResource` [commerce-payment-source-resource]
+    - `CommercePlanResource` [commerce-plan-resource]
+    - `CommerceSubscriptionItemResource` [commerce-subscription-item-resource]
+    - `CommerceSubscriptionResource` [commerce-subscription-resource]
+    - `CustomMenuItem` [custom-menu-item]
+    - `CustomPage` [custom-page]
+    - `DeletedObject` [deleted-object]
+    - `EmailAddress` [email-address]
+    - `EmailLinkError` [email-link-error]
+    - `EnterpriseAccount` [enterprise-account]
+    - `EnterpriseAccountConnection` [enterprise-account-connection]
+    - `ExternalAccount` [external-account]
+    - Metadata types [metadata]
+    - `OrganizationCustomRoleKey` [organization-custom-role-key]
+    - `OrganizationCustomPermissionKey` [organization-custom-permission-key]
+    - `OrganizationDomain` [organization-domain]
+    - `OrganizationInvitation` [organization-invitation]
+    - `OrganizationMembership` [organization-membership]
+    - `OrganizationMembershipRequest` [organization-membership-request]
+    - `OrganizationSuggestion` [organization-suggestion]
+    - `PasskeyResource` [passkey-resource]
+    - `PermissionResource` [permission]
+    - `PhoneNumber` [phone-number]
+    - `PublicUserData` [public-user-data]
+    - `RedirectOptions` [redirect-options]
+    - `RoleResource` [role]
+    - `SamlAccount` [saml-account]
+    - `SamlAccountConnection` [saml-account-connection]
+    - `SessionStatus` [session-status]
+    - `SessionVerification` [session-verification]
+    - `SessionWithActivities` [session-with-activities]
+    - `SetActiveParams` [set-active-params]
+    - `SignInFirstFactor` [sign-in-first-factor]
+    - `SignInSecondFactor` [sign-in-second-factor]
+    - `SignInRedirectOptions` [sign-in-redirect-options]
+    - `SignUpRedirectOptions` [sign-up-redirect-options]
+    - `SignInInitialValues` [sign-in-initial-values]
+    - `SignUpInitialValues` [sign-up-initial-values]
+    - SSO types [sso]
+    - `TOTPResource` [totp]
+    - `UserOrganizationInvitation` [user-organization-invitation]
+    - `Verification`
+    - `Web3Wallet` [web3-wallet]
+- Express {"sdk": ["expressjs"], "hideTitle": true, "collapse": false}
+  - Overview
+- React Router {"sdk": ["react-router"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `rootAuthLoader()` [root-auth-loader]
+  - `getAuth()` [get-auth]
+  - Read session and user data [read-session-data]
+  - Add custom sign-in-or-up page [custom-sign-in-or-up-page]
+  - Add custom sign-up page [custom-sign-up-page]
+  - Library mode
+  - Verifying OAuth access tokens
+- Android {"sdk": ["android"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `getToken()` [get-token]
+  - Configure passkeys [passkeys]
+  - Sign in with Google
+- Astro {"sdk": ["astro"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `clerkMiddleware()` [clerk-middleware]
+  - `updateClerkOptions()` [update-clerk-options]
+  - Integration
+  - Locals
+  - Client-side helpers
+    - `$authStore` [auth-store]
+    - `$clerkStore` [clerk-store]
+    - `$userStore` [user-store]
+    - `$signInStore` [sign-in-store]
+    - `$signUpStore` [sign-up-store]
+    - `$sessionStore` [session-store]
+    - `$sessionListStore` [session-list-store]
+    - `$organizationStore` [organization-store]
+  - Endpoints
+  - Read session and user data [read-session-data]
+  - Hybrid rendering
+  - Migrating from community SDK [migrating-from-astro-community-sdk]
+- iOS {"sdk": ["ios"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `getToken()` [get-token]
+  - Sign in with Apple
+  - iOS Components {"tag": "(Beta)", "hideTitle": true, "skip": true}
+    - `AuthView` [auth-view]
+    - `UserButton` [user-button]
+    - `UserProfileView` [user-profile-view]
+    - `ClerkTheme` [clerk-theme]
+- Nuxt {"sdk": ["nuxt"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `clerkMiddleware()` [clerk-middleware]
+  - Integration
+  - Read session and user data [read-session-data]
+  - Protect pages
+- Vue {"sdk": ["vue"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `clerkPlugin` [clerk-plugin]
+  - `updateClerkOptions()` [update-clerk-options]
+  - Migrating from community SDK [migrating-from-vue-community-sdk]
+- Chrome Extension {"sdk": ["chrome-extension"], "hideTitle": true, "collapse": false}
+  - Overview
+  - Add React Router
+  - Sync auth status between your Chrome Extension and web app [sync-host]
+  - `createClerkClient()` [create-clerk-client]
+  - Configure a consistent CRX ID [configure-consistent-crx-id]
+- Fastify {"sdk": ["fastify"], "hideTitle": true, "collapse": false}
+  - Overview
+- Remix {"sdk": ["remix"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `ClerkApp` [clerk-app]
+  - `rootAuthLoader()` [root-auth-loader]
+  - SPA Mode
+  - Add custom sign-in-or-up page [custom-sign-in-or-up-page]
+  - Add custom sign-up page [custom-sign-up-page]
+  - Read session and user data [read-session-data]
+- Tanstack React Start {"sdk": ["tanstack-react-start"], "hideTitle": true, "collapse": false}
+  - Overview
+  - `getAuth()` [get-auth]
+  - `createClerkHandler()` [create-clerk-handler]
+  - Add custom sign-in-or-up page [custom-sign-in-or-up-page]
+  - Add custom sign-up page [custom-sign-up-page]
+  - Read session and user data [read-session-data]
+  - Verifying OAuth access tokens
+- JS Backend SDK [backend] {"sdk": ["js-backend"], "hideTitle": true, "collapse": false}
+  - User
+    - `getUserList()` [get-user-list]
+    - `getUser()` [get-user]
+    - `getCount()` [get-count]
+    - `getOrganizationMembershipList()` [get-organization-membership-list]
+    - `getUserOAuthAccessToken()` [get-user-oauth-access-token]
+    - `createUser()` [create-user]
+    - `verifyPassword()` [verify-password]
+    - `banUser()` [ban-user]
+    - `unbanUser()` [unban-user]
+    - `lockUser()` [lock-user]
+    - `unlockUser()` [unlock-user]
+    - `updateUser()` [update-user]
+    - `updateUserProfileImage()` [update-user-profile-image]
+    - `updateUserMetadata()` [update-user-metadata]
+    - `deleteUser()` [delete-user]
+    - `disableUserMFA()` [disable-user-mfa]
+    - `verifyTOTP()` [verify-totp]
+    - `deleteUserProfileImage()` [delete-user-profile-image]
+  - Organization
+    - `getOrganization()` [get-organization]
+    - `getOrganizationList()` [get-organization-list]
+    - `getOrganizationInvitation()` [get-organization-invitation]
+    - `getOrganizationMembershipList()` [get-organization-membership-list]
+    - `getOrganizationInvitationList()` [get-organization-invitation-list]
+    - `createOrganization()` [create-organization]
+    - `createOrganizationMembership()` [create-organization-membership]
+    - `createOrganizationInvitation()` [create-organization-invitation]
+    - `createOrganizationInvitationBulk()` [create-organization-invitation-bulk]
+    - `updateOrganization()` [update-organization]
+    - `updateOrganizationLogo()` [update-organization-logo]
+    - `updateOrganizationMembership()` [update-organization-membership]
+    - `updateOrganizationMetadata()` [update-organization-metadata]
+    - `updateOrganizationMembershipMetadata()` [update-organization-membership-metadata]
+    - `deleteOrganization()` [delete-organization]
+    - `deleteOrganizationLogo()` [delete-organization-logo]
+    - `deleteOrganizationMembership()` [delete-organization-membership]
+    - `revokeOrganizationInvitation()` [revoke-organization-invitation]
+  - Allowlist Identifiers [allowlist]
+    - `getAllowlistIdentifierList()` [get-allowlist-identifier-list]
+    - `createAllowlistIdentifier()` [create-allowlist-identifier]
+    - `deleteAllowlistIdentifier()` [delete-allowlist-identifier]
+  - Domains
+    - `deleteDomain` [delete-domain]
+  - Sessions
+    - `getSession()` [get-session]
+    - `getSessionList()` [get-session-list]
+    - `getToken()` [get-token]
+    - `verifySession()` [verify-session]
+    - `revokeSession()` [revoke-session]
+  - Client
+    - `getClient()` [get-client]
+    - `getClientList()` [get-client-list]
+    - `verifyClient()` [verify-client]
+  - Invitations
+    - `getInvitationList()` [get-invitation-list]
+    - `createInvitation()` [create-invitation]
+    - `revokeInvitation()` [revoke-invitation]
+  - Redirect Urls
+    - `getRedirectUrl()` [get-redirect-url]
+    - `getRedirectUrlList()` [get-redirect-url-list]
+    - `createRedirectUrl()` [create-redirect-url]
+    - `deleteRedirectUrl()` [delete-redirect-url]
+  - Email addresses
+    - `getEmailAddress()` [get-email-address]
+    - `createEmailAddress()` [create-email-address]
+    - `updateEmailAddress()` [update-email-address]
+    - `deleteEmailAddress()` [delete-email-address]
+  - Phone numbers
+    - `getPhoneNumber()` [get-phone-number]
+    - `createPhoneNumber()` [create-phone-number]
+    - `updatePhoneNumber()` [update-phone-number]
+    - `deletePhoneNumber()` [delete-phone-number]
+  - SAML connections
+    - `getSamlConnectionList()` [get-saml-connection-list]
+    - `getSamlConnection()` [get-saml-connection]
+    - `createSamlConnection()` [create-saml-connection]
+    - `updateSamlConnection()` [update-saml-connection]
+    - `deleteSamlConnection()` [delete-saml-connection]
+  - Sign-in tokens
+    - `createSignInToken()` [create-sign-in-token]
+    - `revokeSignInToken()` [revoke-sign-in-token]
+  - Testing Tokens
+    - `createTestingToken()` [create-testing-token]
+  - `authenticateRequest()` [authenticate-request]
+  - `verifyToken()` [verify-token]
+  - `verifyWebhook()` [verify-webhook]
+  - Types
+    - `Auth` object [auth-object]
+    - Backend `AllowlistIdentifier` object [backend-allowlist-identifier]
+    - Backend `EmailAddress` object [backend-email-address]
+    - Backend `ExternalAccount` object [backend-external-account]
+    - Backend `Client` object [backend-client]
+    - Backend `IdentificationLink` object [backend-identification-link]
+    - Backend `Invitation` object [backend-invitation]
+    - Backend `Organization` object [backend-organization]
+    - Backend `OrganizationInvitation` object [backend-organization-invitation]
+    - Backend `OrganizationMembership` object [backend-organization-membership]
+    - Backend `PhoneNumber` object [backend-phone-number]
+    - Backend `SamlAccount` object [backend-saml-account]
+    - Backend `SamlConnection` object [backend-saml-connection]
+    - Backend `Session` object [backend-session]
+    - Backend `SessionActivity` object [backend-session-activity]
+    - Backend `RedirectURL` object [backend-redirect-url]
+    - Backend `User` object [backend-user]
+    - Backend `Verification` object [backend-verification]
+    - Backend `Web3Wallet` object [backend-web3-wallet]
+    - `PaginatedResourceResponse` [paginated-resource-response]
+- Go {"sdk": ["go"], "hideTitle": true, "collapse": false}
+  - Overview
+  - Verifying sessions
+- Ruby/Rails/Sinatra [ruby] {"sdk": ["ruby"], "hideTitle": true, "collapse": false}
+  - Overview
+  - Upgrade to v4 [v4-upgrade-guide]
+  - Rails integration [rails]
+  - Sinatra integration [sinatra]
+  - Rack integration [rack]
 
 ### HTTP API Reference
 

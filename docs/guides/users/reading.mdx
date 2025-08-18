@@ -1,92 +1,123 @@
 ---
 title: Protect content and access user data
-description: Learn how to use Clerk's hooks to protect content and access user data in your Expo application.
-sdk: expo
+description: Learn how to use Clerk's hooks and helpers to protect content and access user data in your React Router application.
+sdk: react-router
 ---
 
-<Include src="_partials/hooks/hooks-explanation" />
+Clerk provides a set of [hooks and helpers](/docs/references/react-router/overview#client-side-helpers) that you can use to access the active session and user data in your React Router application. This guide demonstrates how to use these helpers in both the client and server-side to get you started.
 
-This guide demonstrates how to use the `useAuth()` and `useUser()` hooks to protect content and access user data in your Expo application.
+## Server-side
 
-## Session data example
+To access active session and user data on the server-side, use the [`getAuth()`](/docs/references/react-router/get-auth) helper.
 
-{/* TODO: Keep in sync with _partials/hooks/use-auth */}
+### Server data loading
 
-The [`useAuth()`](/docs/references/general/hooks/use-auth){{ target: '_blank' }} hook provides information about the current auth state, as well as helper methods to manage the current active session.
+The [`getAuth()`](/docs/references/tanstack-react-start/get-auth) helper returns the [`Auth`](/docs/references/backend/types/auth-object) object of the currently active user, which contains important information like the current user's session ID, user ID, and organization ID. The `userId` can be used to protect your API routes.
 
-The following example demonstrates how to use the available properties of the `useAuth()` hook.
+In some cases, you may need the full [`Backend User`](/docs/references/backend/types/backend-user) object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server. The `clerkClient()` helper returns an instance of the [JavaScript Backend SDK](/docs/references/backend/overview), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
 
-```tsx {{ filename: 'components/UseAuthExample.tsx' }}
-import { useAuth } from '@clerk/clerk-expo'
-import { Text, View, TouchableOpacity } from 'react-native'
+In the following example, the `userId` is passed to the Backend SDK's `getUser()` method to get the user's full `Backend User` object.
 
-export default function UseAuthExample() {
-  const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth()
+```tsx {{ filename: 'app/routes/profile.tsx' }}
+import { redirect } from 'react-router'
+import { getAuth } from '@clerk/react-router/ssr.server'
+import { createClerkClient } from '@clerk/react-router/api.server'
+import type { Route } from './+types/profile'
 
-  const fetchExternalData = async () => {
-    // Use `getToken()` to get the current user's session token
-    const token = await getToken()
+export async function loader(args: Route.LoaderArgs) {
+  // Use `getAuth()` to get the user's ID
+  const { userId } = await getAuth(args)
 
-    // Use `token` to fetch data from an external API
-    const response = await fetch('https://api.example.com/data', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-
-    return response.json()
+  // Protect the route by checking if the user is signed in
+  if (!userId) {
+    return redirect('/sign-in?redirect_url=' + args.request.url)
   }
 
-  // Use `isLoaded` to check if Clerk is loaded
-  if (!isLoaded) {
-    return <Text>Loading...</Text>
-  }
+  // Instantiate the Backend SDK and get the user's full `Backend User` object
+  const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
+    userId,
+  )
 
-  // Use `isSignedIn` to check if the user is signed in
-  if (!isSignedIn) {
-    // You could also add a redirect to the sign-in page here
-    return <Text>Sign in to view this page</Text>
+  return {
+    user: JSON.stringify(user),
   }
+}
 
+export default function Profile({ loaderData }: Route.ComponentProps) {
   return (
-    <View>
-      <Text>
-        Hello, {userId}! Your current active session is {sessionId}.
-      </Text>
-      <TouchableOpacity onPress={fetchExternalData}>
-        <Text>Fetch Data</Text>
-      </TouchableOpacity>
-    </View>
+    <div>
+      <h1>Profile Data</h1>
+      <pre>
+        <code>{JSON.stringify(loaderData, null, 2)}</code>
+      </pre>
+    </div>
   )
 }
 ```
 
-## User data example
+### Server action
 
-{/* TODO: Keep in sync with _partials/hooks/use-user */}
+Unlike the previous example that loads data when the page loads, the following example uses `getAuth()` to only fetch user data after submitting the form. The helper runs on form submission, authenticates the user, and processes the form data.
 
-The [`useUser()`](/docs/references/general/hooks/use-user){{ target: '_blank' }} hook enables you to access the [`User`](/docs/references/javascript/user) object, which contains the current user's data such as their full name.
+```tsx {{ filename: 'app/routes/profile-form.tsx' }}
+import { redirect, Form } from 'react-router'
+import { getAuth } from '@clerk/react-router/ssr.server'
+import { createClerkClient } from '@clerk/react-router/api.server'
+import type { Route } from './+types/profile-form'
 
-The following example demonstrates how to use `useUser()` to check if the user is signed in and display their first name.
+export async function action(args: Route.ActionArgs) {
+  // Use `getAuth()` to get the user's ID
+  const { userId } = await getAuth(args)
 
-```tsx {{ filename: 'src/Example.tsx' }}
-import { useUser } from '@clerk/clerk-expo'
-import { Text } from 'react-native'
-
-export default function Example() {
-  const { isSignedIn, user, isLoaded } = useUser()
-
-  // Use `isLoaded` to check if Clerk is loaded
-  if (!isLoaded) {
-    return <Text>Loading...</Text>
+  // Protect the route by checking if the user is signed in
+  if (!userId) {
+    return redirect('/sign-in?redirect_url=' + args.request.url)
   }
 
-  // Use `isSignedIn` to protect the content
-  if (!isSignedIn) {
-    return <Text>Sign in to view this page</Text>
-  }
+  // Get the form data
+  const formData = await args.request.formData()
+  const name = formData.get('name')?.toString()
 
-  // Use `user` to access the current user's data
-  return <Text>Hello {user.firstName}!</Text>
+  // Instantiate the Backend SDK and get the user's full `Backend User` object
+  const user = await createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }).users.getUser(userId)
+
+  return {
+    name,
+    user: JSON.stringify(user),
+  }
+}
+
+export default function ProfileForm({ actionData }: Route.ComponentProps) {
+  return (
+    <div>
+      <h1>Profile Data</h1>
+
+      <Form method="post">
+        <label htmlFor="name">Name</label>
+        <input type="text" name="name" id="name" />
+        <button type="submit">Submit</button>
+      </Form>
+
+      {actionData ? (
+        <pre>
+          <code>{JSON.stringify(actionData, null, 2)}</code>
+        </pre>
+      ) : null}
+    </div>
+  )
 }
 ```
+
+## Client-side
+
+To access active session and user data on the client-side, you can use the `useAuth()` and `useUser()` hooks.
+
+### `useAuth()`
+
+<Include src="_partials/hooks/use-auth" />
+
+### `useUser()`
+
+<Include src="_partials/hooks/use-user" />

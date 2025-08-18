@@ -55,6 +55,7 @@ export type ManifestGroup = {
   icon?: Icon
   hideTitle?: boolean
   sdk?: SDK[]
+  skip?: boolean
 }
 
 type Manifest = (ManifestItem | ManifestGroup)[][]
@@ -83,6 +84,7 @@ const createManifestSchema = (config: BuildConfig) => {
       icon: icon.optional(),
       hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
       sdk: z.array(sdk).optional(),
+      skip: z.boolean().optional(),
     })
     .strict()
 

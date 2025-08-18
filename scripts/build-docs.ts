@@ -110,7 +110,7 @@ async function main() {
     dataPath: '../data',
     docsPath: '../docs',
     baseDocsLink: '/docs/',
-    manifestPath: '../docs/manifest.json',
+    manifestPath: '../public/manifest.proposal.json',
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',

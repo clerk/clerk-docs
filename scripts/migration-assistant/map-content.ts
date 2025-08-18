@@ -2,7 +2,7 @@ import 'dotenv/config'
 import { readFile, access } from 'fs/promises'
 import { glob } from 'glob'
 import { join, relative } from 'path'
-import type { Manifest } from './generate-manifest'
+import type { Manifest } from '../lib/manifest'
 
 /**
  * Migration Assistant - Map Content Script
@@ -20,7 +20,6 @@ import type { Manifest } from './generate-manifest'
 
 // Path to the docs directory and mapping file
 const MAPPING_PATH = join(process.cwd(), './proposal-mapping.json')
-const MANIFEST_PROPOSAL_PATH = join(process.cwd(), './public/manifest.proposal.json')
 const MANIFEST_PATH = join(process.cwd(), './docs/manifest.json')
 const DOCS_PATH = join(process.cwd(), './docs')
 
@@ -63,16 +62,6 @@ type Mapping = Awaited<ReturnType<typeof readMapping>>
  */
 function hrefToDocsPath(href: string): string {
   return href.replace(/^\/docs\//, '')
-}
-
-/**
- * Read all manifest files and extract destination paths
- * @returns {Promise<string[]>} Array of all destination paths from manifests
- */
-async function readProposalManifestPaths() {
-  const content = await readFile(MANIFEST_PROPOSAL_PATH, 'utf-8')
-  const manifest = JSON.parse(content) as { navigation: Manifest }
-  return { manifest, paths: parseManifestPaths(manifest) }
 }
 
 async function readManifestPaths() {
@@ -825,7 +814,7 @@ async function main() {
   const [mdxFiles, mapping, { paths: proposalManifestPaths }] = await Promise.all([
     findMdxFiles(DOCS_PATH),
     readMapping(),
-    readProposalManifestPaths(),
+    readManifestPaths(),
   ])
 
   // Expand glob patterns in mapping to actual file matches

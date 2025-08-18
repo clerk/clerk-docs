@@ -386,6 +386,7 @@
   - Migrate from Auth.js [authjs-migration]
   - tRPC
   - Verifying OAuth access tokens
+  - shadcn/ui CLI [shadcn]
 - React {"sdk": ["react"], "hideTitle": true, "collapse": false}
   - Overview
 - Expo {"sdk": ["expo"], "hideTitle": true, "collapse": false}

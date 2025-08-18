@@ -82,7 +82,8 @@ export const validateAndEmbedLinks =
 
       const injectSDK =
         linkedDoc.frontmatter.sdk !== undefined &&
-        linkedDoc.frontmatter.sdk.length >= 1 &&
+        // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
+        linkedDoc.frontmatter.sdk.length > 1 &&
         !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
         !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
 
@@ -102,14 +103,14 @@ export const validateAndEmbedLinks =
 
         return SDKLink({
           href: scopedHref,
-          sdks: linkedDoc.sdk,
+          sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
           code: true,
         })
       }
 
       return SDKLink({
         href: scopedHref,
-        sdks: linkedDoc.sdk,
+        sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
         code: false,
         children: node.children,
       })

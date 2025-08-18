@@ -1,93 +1,92 @@
 ---
-title: Read session and user data
-description: Learn how to use Clerk's hooks and helpers to access the active session and user data in your Astro application.
-sdk: astro
+title: Protect content and access user data
+description: Learn how to use Clerk's hooks to protect content and access user data in your Expo application.
+sdk: expo
 ---
 
-Clerk provides helpers that you can use to access the active session and user data in your Astro application.
+<Include src="_partials/hooks/hooks-explanation" />
 
-## Server-side
+This guide demonstrates how to use the `useAuth()` and `useUser()` hooks to protect content and access user data in your Expo application.
 
-The [`auth()`](/docs/references/astro/locals) and [`currentUser()`](/docs/references/astro/locals) locals are Astro-specific helpers that you can use inside of your Astro components and [endpoints](https://docs.astro.build/en/guides/endpoints/#server-endpoints-api-routes).
+## Session data example
 
-- The `auth()` local returns the [`Auth`](/docs/references/backend/types/auth-object) object of the currently active user.
-- The `currentUser()` local returns the [`Backend User`](/docs/references/backend/types/backend-user) object of the currently active user. This is helpful if you want to render user information, like their first and last name, directly from the server. Under the hood, `currentUser()` uses the [`clerkClient`](/docs/references/backend/overview) wrapper to make a call to the Backend API. **This does count towards the [Backend API request rate limit](/docs/guides/how-clerk-works/system-limits)**. This also uses `fetch()` so it is automatically deduped per request.
+{/* TODO: Keep in sync with _partials/hooks/use-auth */}
 
-The following example demonstrates how to protect a page from unauthenticated users and access the current user's information.
+The [`useAuth()`](/docs/references/general/hooks/use-auth){{ target: '_blank' }} hook provides information about the current auth state, as well as helper methods to manage the current active session.
 
-<CodeBlockTabs options={[".astro component", "API Route"]}>
-  ```astro {{ filename: 'src/pages/me.astro' }}
-  ---
-  // Get the userId from auth() -- if null, the user is not signed in
-  const { userId } = Astro.locals.auth()
+The following example demonstrates how to use the available properties of the `useAuth()` hook.
 
-  // Protect the route by checking if the user is signed in
-  if (!userId) {
-    return Astro.redirect('/login')
+```tsx {{ filename: 'components/UseAuthExample.tsx' }}
+import { useAuth } from '@clerk/clerk-expo'
+import { Text, View, TouchableOpacity } from 'react-native'
+
+export default function UseAuthExample() {
+  const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth()
+
+  const fetchExternalData = async () => {
+    // Use `getToken()` to get the current user's session token
+    const token = await getToken()
+
+    // Use `token` to fetch data from an external API
+    const response = await fetch('https://api.example.com/data', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    return response.json()
   }
 
-  // Get the Backend User object when you need access to the user's information
-  const user = await Astro.locals.currentUser()
-  ---
-
-  <!-- Use `user` to render user details or create UI elements -->
-  <div>Welcome, {user.firstName}!</div>
-  ```
-
-  ```tsx {{ filename: 'src/api/me.ts' }}
-  export async function GET({ locals }) {
-    // Get the userId from auth() -- if null, the user is not signed in
-    const { userId } = locals.auth()
-
-    // Protect the route by checking if the user is signed in
-    if (!userId) {
-      return new Response('Unauthorized', { status: 401 })
-    }
-
-    // Get the Backend User object when you need access to the user's information
-    const user = await locals.currentUser()
-
-    // Add your Route Handler's logic with the returned `user` object
-
-    return new Response(JSON.stringify(user))
-  }
-  ```
-</CodeBlockTabs>
-
-### Retrieve data from external sources
-
-Clerk provides integrations with a number of popular databases.
-
-To retrieve a token from a [JWT template](/docs/guides/development/jwt-templates) and fetch data from an external source, use the [`getToken()`](/docs/references/backend/types/auth-object#get-token){{ target: '_blank' }} method from the `auth()` local.
-
-```ts {{ filename: 'src/pages/api/route.ts' }}
-export async function GET({ locals }) {
-  // Get the userId and getToken() from auth()
-  const { userId, getToken } = locals.auth()
-
-  // Protect the route by checking if the user is signed in
-  if (!userId) {
-    return new Response('Unauthorized', { status: 401 })
+  // Use `isLoaded` to check if Clerk is loaded
+  if (!isLoaded) {
+    return <Text>Loading...</Text>
   }
 
-  // Use `getToken()` to get a token from the JWT template
-  const token = await getToken({ template: 'supabase' })
+  // Use `isSignedIn` to check if the user is signed in
+  if (!isSignedIn) {
+    // You could also add a redirect to the sign-in page here
+    return <Text>Sign in to view this page</Text>
+  }
 
-  // Fetch data from Supabase and return it
-  const data = { supabaseData: 'Hello World' }
-
-  return new Response(JSON.stringify(data))
+  return (
+    <View>
+      <Text>
+        Hello, {userId}! Your current active session is {sessionId}.
+      </Text>
+      <TouchableOpacity onPress={fetchExternalData}>
+        <Text>Fetch Data</Text>
+      </TouchableOpacity>
+    </View>
+  )
 }
 ```
 
-## Client-side
+## User data example
 
-Clerk Astro provides a set of useful [stores](/docs/references/astro/overview#client-side-helpers) that give you access to many important objects, such as the `Clerk`, `User`, and `Session` object.
+{/* TODO: Keep in sync with _partials/hooks/use-user */}
 
-### `$authStore`
+The [`useUser()`](/docs/references/general/hooks/use-user){{ target: '_blank' }} hook enables you to access the [`User`](/docs/references/javascript/user) object, which contains the current user's data such as their full name.
 
-<Include src="_partials/astro/auth-store" />
+The following example demonstrates how to use `useUser()` to check if the user is signed in and display their first name.
 
-### `$userStore`
+```tsx {{ filename: 'src/Example.tsx' }}
+import { useUser } from '@clerk/clerk-expo'
+import { Text } from 'react-native'
 
-<Include src="_partials/astro/user-store" />
+export default function Example() {
+  const { isSignedIn, user, isLoaded } = useUser()
+
+  // Use `isLoaded` to check if Clerk is loaded
+  if (!isLoaded) {
+    return <Text>Loading...</Text>
+  }
+
+  // Use `isSignedIn` to protect the content
+  if (!isSignedIn) {
+    return <Text>Sign in to view this page</Text>
+  }
+
+  // Use `user` to access the current user's data
+  return <Text>Hello {user.firstName}!</Text>
+}
+```

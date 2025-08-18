@@ -180,6 +180,9 @@
   - Overview
   - Build an MCP server [build-mcp-server]
   - Connect an MCP client [connect-mcp-client]
+- Machine Authentication [machine-auth]
+  - Overview
+  - Using M2M tokens [m2m-tokens]
 - Custom Flows
   - Overview
   - Error handling

@@ -1,13 +1,13 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import os from 'node:os'
 import { glob } from 'glob'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import simpleGit from 'simple-git'
 
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { build } from './build-docs'
-import { createBlankStore, invalidateFile } from './lib/store'
 import { createConfig } from './lib/config'
+import { createBlankStore, invalidateFile } from './lib/store'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -112,6 +112,11 @@ async function createTempFiles(
     // Read file contents
     readFile: async (filePath: string): Promise<string> => {
       return fs.readFile(path.join(tempDir, filePath), 'utf-8')
+    },
+
+    // Write file contents
+    writeFile: async (filePath: string, content: string) => {
+      return fs.writeFile(path.join(tempDir, filePath), content)
     },
 
     // Pass through the git instance incase we need to use it for something
@@ -1546,7 +1551,7 @@ sdk: react, nextjs
 
 <If sdk={["nextjs", "react"]}>
   This content is for React users.
-  
+
   <If sdk="nextjs">
     This is nested content specifically for Next.js users who are also using React.
   </If>
@@ -2387,7 +2392,7 @@ title: Core Page
 title: Simple Test
 ---
 
-[Simple Test](/docs/simple-test#non-existent-hash)  
+[Simple Test](/docs/simple-test#non-existent-hash)
 
 # Simple Test Page`,
       },
@@ -4904,6 +4909,369 @@ description: Generated API docs
 ---
 
 # API Documentation
+`)
+  })
+})
+
+describe('Multiple document variants for pages', () => {
+  test('Should pick up and use the react specific version of the doc', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, remix
+---
+
+Documentation specific to Next.js and Remix`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            title: 'API Doc',
+            href: '/docs/:sdk:/api-doc',
+            sdk: ['nextjs', 'remix', 'react'],
+          },
+        ],
+      ],
+    })
+
+    expect(await readFile('./dist/nextjs/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdk: nextjs, remix, react
+sdkScoped: "true"
+canonical: /docs/:sdk:/api-doc
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+Documentation specific to Next.js and Remix
+`)
+
+    expect(await readFile('./dist/remix/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdk: nextjs, remix, react
+sdkScoped: "true"
+canonical: /docs/:sdk:/api-doc
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: remix
+---
+
+Documentation specific to Next.js and Remix
+`)
+
+    expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
+title: API Documentation for React
+description: x
+sdkScoped: "true"
+canonical: /docs/:sdk:/api-doc
+sdk: nextjs, remix, react
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: react
+---
+
+Documentation specific to React.js
+`)
+
+    expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+template: wide
+redirectPage: "true"
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
+
+    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
+      'dist/manifest.json',
+      'dist/directory.json',
+      'dist/api-doc.mdx',
+      'dist/remix/api-doc.mdx',
+      'dist/react/api-doc.mdx',
+      'dist/nextjs/api-doc.mdx',
+    ])
+  })
+
+  test('Should pick up and use the sdk specific version of the doc', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test', href: '/docs/test' }]],
+        }),
+      },
+      {
+        path: './docs/test.mdx',
+        content: `---
+title: Documentation
+sdk: react
+---
+
+Documentation specific to React`,
+      },
+      {
+        path: './docs/test.nextjs.mdx',
+        content: `---
+title: Documentation for Next.js
+sdk: nextjs
+---
+
+Documentation specific to Next.js`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            title: 'Test',
+            href: '/docs/:sdk:/test',
+            sdk: ['react', 'nextjs'],
+          },
+        ],
+      ],
+    })
+
+    expect(await readFile('./dist/nextjs/test.mdx')).toBe(`---
+title: Documentation for Next.js
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/test
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+Documentation specific to Next.js
+`)
+
+    expect(await readFile('./dist/react/test.mdx')).toBe(`---
+title: Documentation
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/test
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: react
+---
+
+Documentation specific to React
+`)
+
+    expect(await readFile('./dist/test.mdx')).toBe(`---
+template: wide
+redirectPage: "true"
+availableSdks: react,nextjs
+notAvailableSdks: ""
+---
+<SDKDocRedirectPage title="Documentation" href="/docs/:sdk:/test" sdks={["react","nextjs"]} />`)
+
+    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
+      'dist/test.mdx',
+      'dist/manifest.json',
+      'dist/directory.json',
+      'dist/react/test.mdx',
+      'dist/nextjs/test.mdx',
+    ])
+  })
+
+  test('Should have correct sdks in <SDKLink />', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Overview', href: '/docs/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, remix
+---
+
+Documentation specific to Next.js and Remix`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+description: x
+---
+
+[API Doc](/docs/api-doc)`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix'],
+      }),
+    )
+
+    expect(await readFile('./dist/overview.mdx')).toBe(`---
+title: Overview
+description: x
+---
+
+<SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
+`)
+  })
+
+  test('Should work with dev mode', async () => {
+    const { tempDir, readFile, writeFile, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Overview', href: '/docs/overview' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs, remix
+---
+
+Documentation specific to Next.js and Remix`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+---
+
+Documentation specific to React.js`,
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+description: x
+---
+
+[API Doc](/docs/api-doc)`,
+      },
+    ])
+
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs', 'remix'],
+    })
+    const store = createBlankStore()
+    const invalidate = invalidateFile(store, config)
+
+    await build(config, store)
+
+    expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
+title: API Documentation for React
+description: x
+sdkScoped: "true"
+canonical: /docs/:sdk:/api-doc
+sdk: nextjs, remix, react
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: react
+---
+
+Documentation specific to React.js
+`)
+
+    await writeFile(
+      './docs/api-doc.react.mdx',
+      `---
+title: API Documentation for React
+description: x
+---
+
+Updated Documentation specific to React.js
+`,
+    )
+
+    invalidate(pathJoin('./docs/api-doc.react.mdx'))
+
+    await build(config, store)
+
+    expect(await readFile('./dist/react/api-doc.mdx')).toBe(`---
+title: API Documentation for React
+description: x
+sdkScoped: "true"
+canonical: /docs/:sdk:/api-doc
+sdk: nextjs, remix, react
+availableSdks: nextjs,remix,react
+notAvailableSdks: ""
+activeSdk: react
+---
+
+Updated Documentation specific to React.js
 `)
   })
 })

@@ -58,7 +58,7 @@ export type ManifestGroup = {
   skip?: boolean
 }
 
-type Manifest = (ManifestItem | ManifestGroup)[][]
+export type Manifest = (ManifestItem | ManifestGroup)[][]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {

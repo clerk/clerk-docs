@@ -1889,6 +1889,98 @@ activeSdk: nextjs
 # Next.js Quickstart (Pages Router)
 `)
   })
+
+  test('SDK scoping of the manifest in the manifest takes precedence over the sdk in the file', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Quickstart',
+                sdk: ['nextjs'],
+                items: [
+                  [
+                    {
+                      title: 'Next.js Quickstart',
+                      href: '/docs/quickstart',
+                    },
+                  ],
+                ],
+              },
+              {
+                title: 'Quickstart',
+                sdk: ['react', 'ios'],
+                href: '/docs/quickstart',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+sdk: nextjs
+---
+
+Next.js Quickstart`,
+      },
+      {
+        path: './docs/quickstart.react.mdx',
+        content: `---
+title: React Quickstart
+sdk: react
+---
+
+React Quickstart`,
+      },
+      {
+        path: './docs/quickstart.ios.mdx',
+        content: `---
+title: iOS Quickstart
+sdk: ios
+---
+
+iOS Quickstart`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'ios'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            items: [
+              [
+                {
+                  href: '/docs/:sdk:/quickstart',
+                  sdk: ['nextjs', 'react', 'ios'],
+                  title: 'Next.js Quickstart',
+                },
+              ],
+            ],
+            sdk: ['nextjs'],
+            title: 'Quickstart',
+          },
+          {
+            href: '/docs/:sdk:/quickstart',
+            sdk: ['react', 'ios'],
+            title: 'Quickstart',
+          },
+        ],
+      ],
+    })
+  })
 })
 
 describe('Heading Validation', () => {

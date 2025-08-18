@@ -478,6 +478,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       return {
         ...item,
         sdk,
+        itemSDK: item.sdk,
       }
     },
     async ({ items, ...details }, tree) => {
@@ -771,7 +772,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
               icon: item.icon,
               target: item.target,
-              sdk: sdks,
+              // @ts-expect-error - It exists, up on line 481
+              sdk: item.itemSDK ?? sdks,
             }
           }
 

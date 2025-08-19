@@ -1,62 +1,75 @@
 ---
-title: Verify OAuth access tokens in your TanStack React Start application with Clerk
-description: Learn how to use Clerk's helpers to verify OAuth access tokens in your TanStack React Start application.
-sdk: tanstack-react-start
+title: Verify OAuth access tokens in your Next.js application with Clerk
+description: Learn how to use Clerk's helpers to verify OAuth access tokens in your Next.js application.
+sdk: nextjs
 ---
 
 When building a resource server that needs to accept and verify OAuth access tokens issued by Clerk, it's crucial to verify these tokens on your backend to ensure the request is coming from an authenticated client.
 
 <Include src="_partials/machine-token-pricing-callout" />
 
-Clerk provides a built-in [`getAuth()`](/docs/references/tanstack-react-start/get-auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept in your TanStack React Start application.
+Clerk's Next.js SDK provides a built-in [`auth()`](/docs/references/nextjs/app-router/auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept. You can also use the [`auth.protect()`](/docs/references/nextjs/app-router/auth#auth-protect) method to check if a request includes a valid machine token (e.g. API key or OAuth token) and enforce access rules accordingly.
 
-By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`getAuth()` parameters documentation](/docs/references/tanstack-react-start/get-auth#parameters).
+By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`auth()` parameters documentation](/docs/references/nextjs/app-router/auth#parameters).
+
+Below are two examples of verifying OAuth access tokens in a Next.js API route using Clerk's SDK:
 
 ## Example 1: Accepting a single token type
 
 In the following example, the `acceptsToken` parameter is set to only accept `oauth_token`s.
 
-- If the token is invalid or missing, `getAuth()` will return `null` for `subject` and other properties, and the request will be rejected with a `401` response.
-- If the token is valid, it returns the authenticated user's subject and their associated scopes for use in the application logic.
+- If the token is invalid or missing, `auth()` will return `null` for `userId` and other properties, and the request will be rejected with a `401` response.
+- If the token is valid, `userId` is returned and the token claims are available for use in the application logic.
 
-```tsx
-export async function clerkAuth({ request }: { request: Request }) {
-  const { subject, scopes } = await getAuth(request, {
-    acceptsToken: 'oauth_token',
-  })
+```tsx {{ filename: 'app/api/example/route.ts' }}
+import { auth } from '@clerk/nextjs/server'
 
-  // If getAuth() returns null, the token is invalid
-  if (!subject) {
-    throw new Error('OAuth access token is invalid')
+export async function GET() {
+  const { claims, userId } = await auth({ acceptsToken: 'oauth_token' })
+
+  // If auth() returns null, the token is invalid
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return { subject, scopes }
+  return NextResponse.json({ userId, claims })
 }
 ```
 
-## Example 2: Accepting any token type
+## Example 2: Accepting multiple token types
 
-In the following example, the `acceptsToken` parameter is set to accept any token type.
+In the following example, the `acceptsToken` option allows both `session_token`s and `oauth_token`s.
 
-- If the token is a `session_token`, it logs that the request is from a user session.
-- Otherwise, it logs that the request uses a machine token and specifies its type.
+- If the token is invalid or missing, `auth()` will return `null` for `userId` and other properties, and the request will be rejected with a `401` response.
+- If the token is an `oauth_token`, the code checks that it includes the required `'profile'` scope. If not, an error is thrown.
+- If the token is valid and the required scope is present, `userId` is returned and available for use in the application logic. This example includes pseudo-code that uses the `userId` to get data from a database.
 
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-import { getAuth } from '@clerk/tanstack-react-start/server'
-import { getWebRequest } from '@tanstack/react-start/server'
+```tsx {{ filename: 'app/api/example/route.ts' }}
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 
-const authStateFn = createServerFn({ method: 'GET' }).handler(async () => {
-  const request = getWebRequest()
-  const { tokenType } = await getAuth(request, { acceptsToken: 'any' })
+export async function POST(req: NextRequest) {
+  // Accept both session_token and oauth_token types
+  const { tokenType, userId, scopes } = await auth({
+    acceptsToken: ['session_token', 'oauth_token'],
+  })
 
-  if (tokenType === 'session_token') {
-    console.log('this is session token from a user')
-  } else {
-    console.log('this is some other type of machine token')
-    console.log('more specifically, a ' + tokenType)
+  // If auth() returns null, the token is invalid
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return {}
-})
+  // Check if the token is an oauth_token and if it doesn't have the required scope
+  if (tokenType === 'oauth_token' && !scopes?.includes('profile')) {
+    return NextResponse.json({ error: 'OAuth token missing the "profile" scope' }, { status: 401 })
+  }
+
+  // If the token includes the required scope, move forward with the application logic
+  // This example includes pseudo-code for getting data from a database using the userId
+  const data = db.select().from(user).where(eq(user.id, userId))
+
+  return NextResponse.json({ data })
+}
 ```
+
+You can also protect entire route groups using [`clerkMiddleware()`](/docs/references/nextjs/clerk-middleware). See how to implement this in [the middleware docs](/docs/references/nextjs/clerk-middleware#protect-routes-based-on-token-types).

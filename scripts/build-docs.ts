@@ -175,6 +175,35 @@ async function main() {
         'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
         'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
         'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/apple.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/atlassian.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/bitbucket.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/box.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/coinbase.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/discord.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/dropbox.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/facebook.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/github.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/gitlab.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/google.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/hubspot.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/hugging-face.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/line.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linear.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linkedin-oidc.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linkedin.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/microsoft.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/notion.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/slack.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/spotify.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/tiktok.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/twitch.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
+        'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
+        'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -478,6 +507,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       return {
         ...item,
         sdk,
+        itemSDK: item.sdk,
       }
     },
     async ({ items, ...details }, tree) => {
@@ -771,7 +801,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
               icon: item.icon,
               target: item.target,
-              sdk: sdks,
+              // @ts-expect-error - It exists, up on line 481
+              sdk: item.itemSDK ?? sdks,
             }
           }
 

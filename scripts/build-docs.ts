@@ -204,6 +204,19 @@ async function main() {
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
+
+        // temp migration ignores
+        'guides/configure/webhooks/inngest.mdx': ['doc-not-in-manifest'],
+        'guides/configure/webhooks/loops.mdx': ['doc-not-in-manifest'],
+        'getting-started/quickstart.mdx': ['link-hash-not-found'],
+        'guides/development/sdk-development/backend-only.mdx': ['link-hash-not-found'],
+        'references/astro/integration.mdx': ['link-hash-not-found'],
+        'references/astro/overview.mdx': ['link-hash-not-found'],
+        'references/express/overview.mdx': ['link-hash-not-found'],
+        'references/vue/overview.mdx': ['link-hash-not-found'],
+        'getting-started/quickstart.js-backend.mdx': ['link-hash-not-found'],
+        'guides/configure/session-token.mdx': ['link-hash-not-found'],
+        'guides/development/upgrading/upgrade-guides/node-to-express.mdx': ['link-hash-not-found'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -243,7 +256,11 @@ async function main() {
         'nextjs/get-auth.mdx': ['link-doc-not-found'],
         'nextjs/auth.mdx': ['link-doc-not-found'],
       },
-      partials: {},
+      partials: {
+        // temp migration ignores
+        'auth-object-table.mdx': ['link-hash-not-found'],
+        'backend/usage.mdx': ['link-hash-not-found'],
+      },
       tooltips: {},
     },
     validSdks: VALID_SDKS,

@@ -47,6 +47,7 @@ export const icon = z.enum([
   'clerk',
   'code-bracket',
   'cog-6-teeth',
+  'cpu',
   'door',
   'document',
   'elysia',

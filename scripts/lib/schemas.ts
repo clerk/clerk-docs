@@ -11,7 +11,6 @@ export const VALID_SDKS = [
   'expo',
   'android',
   'ios',
-  'nodejs',
   'expressjs',
   'fastify',
   'react-router',

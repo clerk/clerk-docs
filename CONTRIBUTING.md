@@ -1123,8 +1123,11 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 <details>
 <summary>Example</summary>
 
-```mdx
-<Gallery>![Light Mode](./ios-user-profile-view.png) ![Dark Mode](./ios-user-profile-view-dark.png)</Gallery>
+```
+<Gallery>
+  ![Light Mode](./ios-user-profile-view.png)
+  ![Dark Mode](./ios-user-profile-view-dark.png)
+</Gallery>
 ```
 
 | Desktop                                                                            | Mobile                                                                           |

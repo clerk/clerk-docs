@@ -3235,6 +3235,144 @@ See [Core Target][core-ref].
     const content = await readFile(pathJoin('./dist/core-page.mdx'))
     expect(content).toContain('[Core Target](/docs/core-target)')
   })
+
+  test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Doc 1', href: '/docs/doc-1' },
+              { title: 'Doc 2', href: '/docs/doc-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/doc-1.mdx',
+        content: `---
+title: Doc 1
+description: x
+sdk: nextjs, react, expo
+---
+
+# Doc 1
+
+Documentation specific to Next.js`,
+      },
+
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+description: x
+---
+
+[Link to specific variant of doc 1](/docs/react/doc-1)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/doc-2.mdx')).toContain(
+      `<SDKLink href="/docs/react/doc-1" sdks={["react"]}>Link to specific variant of doc 1</SDKLink>`,
+    )
+  })
+
+  test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc from within a Cards component', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Doc 1', href: '/docs/quickstart' },
+              { title: 'Doc 2', href: '/docs/doc-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Doc 1
+description: x
+sdk: nextjs
+---
+
+# Doc 1
+
+Documentation specific to Next.js`,
+      },
+      {
+        path: './docs/quickstart.react.mdx',
+        content: `---
+title: Doc 1 for React
+description: x
+sdk: react
+---
+
+# Doc 1 for React
+`,
+      },
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+description: x
+---
+
+<Cards>
+  - [Next.js](/docs/nextjs/quickstart)
+  - Easily add secure, beautiful, and fast authentication to Next.js with Clerk.
+
+  ---
+
+  - [React](/docs/react/quickstart)
+  - Get started installing and initializing Clerk in a new React + Vite app.
+</Cards>
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/doc-2.mdx')).toBe(
+      `---
+title: Doc 2
+description: x
+---
+
+<Cards>
+  * [Next.js](/docs/nextjs/quickstart)
+  * Easily add secure, beautiful, and fast authentication to Next.js with Clerk.
+
+  ***
+
+  * [React](/docs/react/quickstart)
+  * Get started installing and initializing Clerk in a new React + Vite app.
+</Cards>
+`,
+    )
+  })
 })
 
 describe('Path and File Handling', () => {

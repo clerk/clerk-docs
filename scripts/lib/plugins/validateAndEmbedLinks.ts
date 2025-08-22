@@ -111,8 +111,7 @@ export const validateAndEmbedLinks =
         linkedDoc.frontmatter.sdk !== undefined &&
         // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
         linkedDoc.frontmatter.sdk.length > 1 &&
-        !url.endsWith(`/${linkedDoc.frontmatter.sdk[0]}`) &&
-        !url.includes(`/${linkedDoc.frontmatter.sdk[0]}/`)
+        !linkedDoc.frontmatter.sdk.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {

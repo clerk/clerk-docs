@@ -576,8 +576,22 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     async (item, tree) => {
       const doc = docsMap.get(item.href)
 
+      // If the doc does not already have an sdk assigned, but the manifest item does, assign the sdk from the manifest to the doc in the docsMap.
       if (doc && doc.sdk === undefined && item.sdk !== undefined) {
         docsMap.set(item.href, { ...doc, sdk: item.sdk })
+      }
+
+      const updatedDoc = docsMap.get(item.href)
+
+      if (updatedDoc?.sdk) {
+        for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+          // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
+          // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
+          docsMap.set(item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdk}/`), {
+            ...updatedDoc,
+            sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
+          })
+        }
       }
 
       return item

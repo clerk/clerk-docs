@@ -1,0 +1,393 @@
+---
+title: Integrate InstantDB with Clerk
+description: Learn how to integrate Clerk into your InstantDB application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Create an InstantDB account",
+      link: "https://instantdb.com",
+      icon: "cog-6-teeth",
+    },
+    {
+      title: "Integrate the appropriate Clerk SDK in your local project",
+      link: "/docs/quickstarts/overview",
+      icon: "code-bracket",
+    },
+  ]}
+  exampleRepo={[
+    {
+      title: "Clerk + InstantDB + Next.js Demo",
+      link: "https://github.com/clerk/clerk-instantdb-nextjs",
+      icon: "code-bracket",
+    },
+  ]}
+/>
+
+Integrating [InstantDB](https://www.instantdb.com/) with Clerk gives you the benefits of using an InstantDB database while leveraging Clerk's authentication features.
+
+This tutorial will walk you through the steps to integrate InstantDB with Clerk in your Next.js app. If you're using a different framework, the steps are the same and the code can be adapted for any React-based framework.
+
+<Steps>
+  ## Configure your Clerk session token
+
+  InstantDB uses Clerk's [session token](/docs/guides/how-clerk-works/session-tokens) to authenticate users. To use InstantDB with Clerk, you need to include the `email` claim in your Clerk session token.
+
+  1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions) page.
+  1. Under **Customize session token**, in the **Claims** editor, enter the following JSON and select **Save**. If you have already customized your session token, you may need to merge this with what you currently have.
+
+     ```json
+     {
+       "email": "{{user.primary_email_address}}"
+     }
+     ```
+
+  You can have additional claims as long as the `email` claim is set to `{{user.primary_email_address}}`.
+
+  ## Get your Clerk Publishable Key
+
+  1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+  1. In the **Quick Copy** section, copy your Clerk Publishable Key.
+
+  ## Configure InstantDB
+
+  1. In the InstantDB dashboard, navigate to the [**Auth**](https://www.instantdb.com/dash?t=auth) tab.
+  1. At the top of the page, save the **Public App ID** somewhere as you'll need this later.
+  1. Select **Setup Clerk**.
+  1. Add the Clerk Publishable Key you copied in the previous step.
+  1. Confirm the **The session token has the "email" claim.** message.
+  1. Select **Add Clerk app**. Save the **Client Name** somewhere as you'll need this later.
+
+  ## Install the InstantDB library
+
+  If you haven't already added InstantDB to your app, run the following command to install it:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @instantdb/react
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @instantdb/react
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @instantdb/react
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bun add @instantdb/react
+    ```
+  </CodeBlockTabs>
+
+  ## Set your InstantDB credentials
+
+  In your `.env` file, set the following environment variables to your InstantDB App ID and Clerk Client Name that you saved earlier:
+
+  ```env {{ filename: '.env' }}
+  NEXT_PUBLIC_INSTANTDB_APP_ID=
+  NEXT_PUBLIC_CLERK_CLIENT_NAME=
+  ```
+
+  ## Initialize InstantDB in your app
+
+  To [initialize InstantDB](https://www.instantdb.com/docs/init) in your app:
+
+  1. Create a `db` directory.
+  1. In the `db` directory, create a `instant.ts` file with the following code. It initializes InstantDB with your App ID and schema. The schema used below is necessary for this tutorial, but you can customize it as needed. Read more about InstantDB schemas in the [InstantDB docs](https://www.instantdb.com/docs/modeling-data).
+
+  ```tsx {{ filename: 'db/instant.ts' }}
+  import { i, init } from '@instantdb/react'
+
+  const APP_ID = process.env.NEXT_PUBLIC_INSTANTDB_APP_ID
+
+  if (!APP_ID) {
+    throw new Error('Missing NEXT_PUBLIC_INSTANTDB_APP_ID in your .env file')
+  }
+
+  // Optional: Declare your schema
+  export const schema = i.schema({
+    entities: {
+      todos: i.entity({
+        text: i.string(),
+        done: i.boolean(),
+        createdAt: i.number(),
+      }),
+    },
+  })
+
+  export const db = init({ appId: APP_ID, schema })
+  ```
+
+  ## Manage the Clerk and InstantDB auth sessions
+
+  Integrating InstantDB with Clerk means that your users will sign in to your app using Clerk, and then Clerk's session token will be used to sign the user in to InstantDB. This means that your user will have two sessions: one with Clerk and one with InstantDB. In order to handle both sessions, the following component uses Clerk to check if the user is signed in, and if they are, it uses Clerk's session token to sign the user in to InstantDB. If the user is not signed in to Clerk, it signs them out of InstantDB, ensuring that if the Clerk session ends, the InstantDB session will end as well.
+
+  ```tsx {{ filename: 'components/InstantDBAuthSync.tsx', collapsible: true }}
+  'use client'
+
+  import { db } from '@/db/instant'
+  import { useAuth, useUser } from '@clerk/nextjs'
+  import { useEffect } from 'react'
+
+  // If a user is signed in with Clerk, sign them in with InstantDB
+  export default function InstantDBAuthSync() {
+    const { isSignedIn } = useUser()
+    const { getToken } = useAuth()
+
+    useEffect(() => {
+      if (isSignedIn) {
+        getToken()
+          .then((token) => {
+            // Create a long-lived session with Instant for your Clerk user
+            // It will look up the user by email or create a new user with
+            // the email address in the session token.
+            db.auth.signInWithIdToken({
+              clientName: process.env.NEXT_PUBLIC_CLERK_CLIENT_NAME as string,
+              idToken: token as string,
+            })
+          })
+          .catch((error) => {
+            console.error('Error signing in with Instant', error)
+          })
+      } else {
+        db.auth.signOut()
+      }
+    }, [isSignedIn])
+
+    return null
+  }
+  ```
+
+  It's important to use this component in your **root** `layout.tsx` file because the `useEffect()` hook that syncs the Clerk and InstantDB sessions needs to run on every page load in order to manage the sessions properly.
+
+  ```tsx {{ filename: 'app/layout.tsx', collapsible: true }}
+  import type { Metadata } from 'next'
+  import {
+    ClerkProvider,
+    SignInButton,
+    SignUpButton,
+    SignedIn,
+    SignedOut,
+    UserButton,
+  } from '@clerk/nextjs'
+  import { Geist, Geist_Mono } from 'next/font/google'
+  import './globals.css'
+  import InstantDBAuthSync from '@/component/InstantDBAuthSync'
+
+  const geistSans = Geist({
+    variable: '--font-geist-sans',
+    subsets: ['latin'],
+  })
+
+  const geistMono = Geist_Mono({
+    variable: '--font-geist-mono',
+    subsets: ['latin'],
+  })
+
+  export const metadata: Metadata = {
+    title: 'Clerk Next.js Quickstart',
+    description: 'Generated by create next app',
+  }
+
+  export default async function RootLayout({
+    children,
+  }: Readonly<{
+    children: React.ReactNode
+  }>) {
+    return (
+      <ClerkProvider>
+        <InstantDBAuthSync />
+        <html lang="en">
+          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+            <header className="flex justify-end items-center p-4 gap-4 h-16">
+              <SignedOut>
+                <SignInButton />
+                <SignUpButton />
+              </SignedOut>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+            </header>
+            {children}
+          </body>
+        </html>
+      </ClerkProvider>
+    )
+  }
+  ```
+
+  ## Update your homepage
+
+  Update your `page.tsx` file with the following code to see InstantDB in action. This code was copied from the [InstantDB quickstart](https://www.instantdb.com/docs#quick-start). The only difference is that the initialization code was moved to `/db/instant.ts` so that the InstantDB connection could be reused across the app.
+
+  ```tsx {{ filename: 'app/page.tsx', collapsible: true }}
+  'use client'
+
+  import { id, InstaQLEntity } from '@instantdb/react'
+  import { db, schema } from '@/db/instant'
+
+  type Todo = InstaQLEntity<typeof schema, 'todos'>
+
+  function App() {
+    // Use Instant's `useQuery()` hook to get the todos
+    const { isLoading, error, data } = db.useQuery({ todos: {} })
+
+    if (isLoading) {
+      return (
+        <div className="-mt-16 font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
+          Loading...
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="text-red-500 p-4 -mt-16 font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
+          Error: {error.message}
+        </div>
+      )
+    }
+
+    const { todos } = data
+
+    return (
+      <div className="-mt-16 font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
+        <h2 className="tracking-wide text-5xl text-gray-300">todos</h2>
+        <div className="border border-gray-300 max-w-xs w-full">
+          <TodoForm todos={todos} />
+          <TodoList todos={todos} />
+          <ActionBar todos={todos} />
+        </div>
+        <div className="text-xs text-center">Open another tab to see todos update in realtime!</div>
+      </div>
+    )
+  }
+
+  // Write Data
+  // ---------
+  function addTodo(text: string) {
+    db.transact(
+      db.tx.todos[id()].update({
+        text,
+        done: false,
+        createdAt: Date.now(),
+      }),
+    )
+  }
+
+  function deleteTodo(todo: Todo) {
+    db.transact(db.tx.todos[todo.id].delete())
+  }
+
+  function toggleDone(todo: Todo) {
+    db.transact(db.tx.todos[todo.id].update({ done: !todo.done }))
+  }
+
+  function deleteCompleted(todos: Todo[]) {
+    const completed = todos.filter((todo) => todo.done)
+    const txs = completed.map((todo) => db.tx.todos[todo.id].delete())
+    db.transact(txs)
+  }
+
+  function toggleAll(todos: Todo[]) {
+    const newVal = !todos.every((todo) => todo.done)
+    db.transact(todos.map((todo) => db.tx.todos[todo.id].update({ done: newVal })))
+  }
+
+  // Components
+  // ----------
+  function ChevronDownIcon() {
+    return (
+      <svg viewBox="0 0 20 20">
+        <path d="M5 8 L10 13 L15 8" stroke="currentColor" fill="none" strokeWidth="2" />
+      </svg>
+    )
+  }
+
+  function TodoForm({ todos }: { todos: Todo[] }) {
+    return (
+      <div className="flex items-center h-10 border-b border-gray-300">
+        <button
+          className="h-full px-2 border-r border-gray-300 flex items-center justify-center"
+          onClick={() => toggleAll(todos)}
+        >
+          <div className="w-5 h-5">
+            <ChevronDownIcon />
+          </div>
+        </button>
+        <form
+          className="flex-1 h-full"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const input = e.currentTarget.input as HTMLInputElement
+            addTodo(input.value)
+            input.value = ''
+          }}
+        >
+          <input
+            className="w-full h-full px-2 outline-none bg-transparent"
+            autoFocus
+            placeholder="What needs to be done?"
+            type="text"
+            name="input"
+          />
+        </form>
+      </div>
+    )
+  }
+
+  function TodoList({ todos }: { todos: Todo[] }) {
+    return (
+      <div className="divide-y divide-gray-300">
+        {todos.map((todo) => (
+          <div key={todo.id} className="flex items-center h-10">
+            <div className="h-full px-2 flex items-center justify-center">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="cursor-pointer"
+                  checked={todo.done}
+                  onChange={() => toggleDone(todo)}
+                />
+              </div>
+            </div>
+            <div className="flex-1 px-2 overflow-hidden flex items-center">
+              {todo.done ? (
+                <span className="line-through">{todo.text}</span>
+              ) : (
+                <span>{todo.text}</span>
+              )}
+            </div>
+            <button
+              className="h-full px-2 flex items-center justify-center text-gray-300 hover:text-gray-500"
+              onClick={() => deleteTodo(todo)}
+            >
+              X
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  function ActionBar({ todos }: { todos: Todo[] }) {
+    return (
+      <div className="flex justify-between items-center h-10 px-2 text-xs border-t border-gray-300">
+        <div>Remaining todos: {todos.filter((todo) => !todo.done).length}</div>
+        <button className=" text-gray-300 hover:text-gray-500" onClick={() => deleteCompleted(todos)}>
+          Delete Completed
+        </button>
+      </div>
+    )
+  }
+
+  export default App
+  ```
+</Steps>

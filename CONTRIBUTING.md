@@ -1042,19 +1042,99 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.
 
+When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+
+Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![](/docs/images/sign-in.png 'Clerk SignIn component.')`
+
+#### Image props
+
+<details>
+<summary><code>dark</code></summary>
 Use the `dark` prop to specify a different image to use in dark mode:
 
 ```mdx
 ![Logo](/docs/images/logo.png){{ dark: '/docs/images/logo-dark.png' }}
 ```
 
-You may also optionally provide the following [`next/image`](https://nextjs.org/docs/pages/api-reference/components/image) props: [`quality`](https://nextjs.org/docs/pages/api-reference/components/image#quality), [`priority`](https://nextjs.org/docs/pages/api-reference/components/image#priority)
+</details>
+
+<details>
+<summary><code>priority</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#priority
 
 ```mdx
-![Image](/docs/images/my-image.png){{ quality: 90, priority: true }}
+![Image](/docs/images/my-image.png){{ priority: true }}
 ```
 
-When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+</details>
+
+<details>
+<summary><code>quality</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#quality
+
+```mdx
+![Image](/docs/images/my-image.png){{ quality: 90 }}
+```
+
+</details>
+
+<details>
+<summary><code>width</code> and <code>height</code></summary>
+The `width` and `height` props can now be used to specify the (max) display size of an image in pixels.
+
+```mdx
+![](/docs/images/my-image.png){{ width: 345 }}
+```
+
+| Without `width`                                                                        | With `width`                                                                        |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| <img width="1320" height="2736" alt="" src="/.github/media/image-width-without.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-width-with.png" /> |
+
+</details>
+
+<details>
+<summary><code>align</code></summary>
+
+`align` can be set to `left`, `center`, or `right` to align an image horizontally. The default is `left`.
+
+| `left`                                                                              | `center`                                                                              | `right`                                                                              |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| <img width="1320" height="1834" alt="" src="/.github/media/image-align-left.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-center.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-right.png" /> |
+
+</details>
+
+<details>
+<summary><code>variant</code></summary>
+
+The `variant` prop can be used to display an image in a different style. Possible values are `default` and `browser`.
+
+| `default`                                                                                | `browser`                                                                                |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| <img width="1706" height="1328" alt="" src="/.github/media/image-variant-default.png" /> | <img width="1706" height="1328" alt="" src="/.github/media/image-variant-browser.png" /> |
+
+When using the `browser` variant the caption is displayed in the menu bar.
+
+</details>
+
+#### `<Gallery>`
+
+The `Gallery` component displays multiple images in a grid layout. On mobile the images are laid out horizontally in a scrollable container.
+
+<details>
+<summary>Example</summary>
+
+```
+<Gallery>
+  ![Light Mode](./ios-user-profile-view.png)
+  ![Dark Mode](./ios-user-profile-view-dark.png)
+</Gallery>
+```
+
+| Desktop                                                                            | Mobile                                                                           |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
+
+</details>
 
 ## Help wanted!
 

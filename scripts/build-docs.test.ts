@@ -5275,3 +5275,63 @@ Updated Documentation specific to React.js
 `)
   })
 })
+
+test.only('Links in typedoc pointing to sdk scoped doc, used in an sdk scoped doc, should be replaced with <SDKLink />', async () => {
+  const { tempDir, readFile } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            { title: 'Doc 1', href: '/docs/reference/react/doc-1' },
+            { title: 'Doc 2', href: '/docs/doc-2' },
+          ],
+        ],
+      }),
+    },
+    {
+      path: './docs/reference/react/doc-1.mdx',
+      content: `---
+title: Doc 1
+sdk: react
+---
+
+Doc Content`,
+    },
+    {
+      path: './_typedoc/doc.mdx',
+      content: `[Doc 1](/docs/reference/react/doc-1)`,
+    },
+    {
+      path: './docs/doc-2.mdx',
+      content: `---
+title: Doc 2
+sdk: expo, nextjs
+---
+
+<Typedoc src="doc" />`,
+    },
+  ])
+
+  await build(
+    await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      typedocPath: '../_typedoc',
+      validSdks: ['react', 'expo', 'nextjs'],
+    }),
+  )
+
+  expect(await readFile('./dist/expo/doc-2.mdx')).toBe(`---
+title: Doc 2
+sdk: expo, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/doc-2
+availableSdks: expo,nextjs
+notAvailableSdks: react
+activeSdk: expo
+---
+
+<SDKLink href="/docs/reference/react/doc-1" sdks={["react"]}>Doc 1</SDKLink>
+`)
+})

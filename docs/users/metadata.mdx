@@ -3,7 +3,7 @@ title: User metadata
 description: Metadata allows for custom data to be saved on the User object.
 ---
 
-Metadata allows for custom data to be saved on the [`User` object](/docs/users/overview#user-object). There are three types of metadata: "unsafe", "public", and "private".
+Metadata allows for custom data to be saved on the [`User` object](/docs/users/overview). There are three types of metadata: "unsafe", "public", and "private".
 
 | Metadata | Frontend API | Backend API |
 | - | - | - |
@@ -11,8 +11,7 @@ Metadata allows for custom data to be saved on the [`User` object](/docs/users/o
 | Public | Read access | Read & write access |
 | Unsafe | Read & write access | Read & write access |
 
-> [!WARNING]
-> Metadata is limited to **8kb** maximum.
+<Include src="_partials/metadata-callout" />
 
 ## Private metadata
 
@@ -20,8 +19,10 @@ Private metadata is only accessible by the backend, which makes this useful for 
 
 ### Set private metadata
 
-<Tabs items={["Fullstack SDKs", "Express", "Go", "Ruby", "cURL"]}>
+<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
   <Tab>
+    <Include src="_partials/backend/usage" />
+
     ```ts {{ filename: 'route.ts' }}
     export async function POST(req) {
       const { stripeId, userId } = await req.json()
@@ -67,19 +68,36 @@ Private metadata is only accessible by the backend, which makes this useful for 
 
   <Tab>
     ```go {{ filename: 'private.go' }}
-    var client clerk.Client
+     import 	(
+    	 "context"
+    	 "encoding/json"
+    	
+       "github.com/clerk/clerk-sdk-go/v2/user"
+    	 "github.com/clerk/clerk-sdk-go/v2"
+     )
 
-    func addStripeCustomerID(user *clerk.User, stripeCustomerID string) error {
-        stripeID := map[string]interface{}{
-            "stripeID": stripeCustomerID,
+    func addStripeCustomerID(userId string, stripeCustomerId string) (*clerk.User, error) {
+      ctx := context.Background()
+
+      metadata := map[string]any{"stripe_id": stripeCustomerId}
+
+      metadataJSON, err := json.Marshal(metadata)
+
+      if err != nil {
+    	  return nil, err
         }
-    	user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-    		PrivateMetadata: stripeID,
-    	})
 
-    	if err != nil {
-    		panic(err)
-    	}
+      rawMessage := json.RawMessage(metadataJSON)
+
+      updatedUser, err := user.UpdateMetadata(ctx, userId, &user.UpdateMetadataParams{
+    	  PrivateMetadata: &rawMessage,
+      })
+
+      if err != nil {
+    	  return nil, err
+      }
+
+      return updatedUser, nil
     }
     ```
   </Tab>
@@ -115,8 +133,10 @@ Private metadata is only accessible by the backend, which makes this useful for 
 
 You can retrieve the private metadata for a user by using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. This method will return the `User` object which contains the private metadata.
 
-<Tabs items={["Fullstack SDKs", "Express", "Go", "Ruby", "cURL"]}>
+<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
   <Tab>
+    <Include src="_partials/backend/usage" />
+
     ```ts {{ filename: 'route.ts' }}
     export async function GET(req) {
       const { userId } = await req.json()
@@ -154,14 +174,36 @@ You can retrieve the private metadata for a user by using the JavaScript Backend
 
   <Tab>
     ```go {{ filename: 'private.go' }}
-    var client clerk.Client
+    import 	(
+    	 "context"
+    	 "encoding/json"
+    	
+       "github.com/clerk/clerk-sdk-go/v2/user"
+    	 "github.com/clerk/clerk-sdk-go/v2"
+     )
 
-    func GetUserMetadata(user *clerk.User, stripeCustomerID string) error {
-      user, err := s.clerkClient.Users().Read(sess.UserID)
+    type PrivateMetadata struct {
+      StripeID string `json:"stripe_id"`
+    }
+
+    func getPrivateMetadata(userId string) (*PrivateMetadata, error) {
+      ctx := context.Background()
+
+      clerkUser, err := user.Get(ctx, userId)
 
       if err != nil {
-        panic(err)
+    	  return nil, err
       }
+
+      privateMetadata := &PrivateMetadata{}
+
+      err = json.Unmarshal(clerkUser.PrivateMetadata, privateMetadata)
+
+      if err != nil {
+    	  return nil, err
+      }
+
+      return privateMetadata, nil
     }
     ```
   </Tab>
@@ -188,8 +230,10 @@ Public metadata is accessible by both the frontend and the backend, but can only
 
 ### Set public metadata
 
-<Tabs items={["Fullstack SDKs", "Express", "Go", "Ruby", "cURL"]}>
+<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
   <Tab>
+    <Include src="_partials/backend/usage" />
+
     ```ts {{ filename: 'route.ts' }}
     export async function POST(req) {
       const { role, userId } = await req.json()
@@ -234,19 +278,36 @@ Public metadata is accessible by both the frontend and the backend, but can only
 
   <Tab>
     ```go {{ filename: 'public.go' }}
-    var client clerk.Client
+    import 	(
+    	 "context"
+    	 "encoding/json"
+    	
+       "github.com/clerk/clerk-sdk-go/v2/user"
+    	 "github.com/clerk/clerk-sdk-go/v2"
+     )
 
-    func addStripeCustomerID(user *clerk.User, role string) error {
-        Role := map[string]interface{}{
-            "role": role,
-        }
-      user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-        PublicMetadata: role,
+    func addRoleToUser(userId string, role string) (*clerk.User, error) {
+      ctx := context.Background()
+
+      metadata := map[string]any{"role": role}
+
+      metadataJSON, err := json.Marshal(metadata)
+
+      if err != nil {
+    	  return nil, err
+      }
+
+      rawMessage := json.RawMessage(metadataJSON)
+
+      updatedUser, err := user.UpdateMetadata(ctx, userId, &user.UpdateMetadataParams{
+    	  PublicMetadata: &rawMessage,
       })
 
       if err != nil {
-        panic(err)
+    	  return nil, err
       }
+
+      return updatedUser, nil
     }
     ```
   </Tab>
@@ -283,7 +344,7 @@ There are multiple ways to retrieve public metadata.
 
 On the frontend, it's available on the [`User`](/docs/references/javascript/user) object which can be accessed using the [`useUser()`](/docs/hooks/use-user) hook.
 
-On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. It can also be attached to a session token, and the `sessionClaims` of the session token can be retrieved on the [`Auth`](/docs/references/backend/types/auth-object) object. If you need to retrieve public metadata frequently in the backend, the best option is to attach it to the session token and retrieve it from the session token. See the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
+On the backend, it's available on the [Backend `User`](/docs/references/backend/types/backend-user) object which can be accessed using the JavaScript Backend SDK's [`getUser()`](/docs/references/backend/user/get-user) method. However, this makes an API request, which is subject to [rate limits](/docs/backend-requests/resources/rate-limits). To avoid an API request, you can attach the metadata as a claim in the user's session token. Then, the metadata can be retrieved from the `sessionClaims` on the [`Auth`](/docs/references/backend/types/auth-object) object. See the [guide on customizing your session token](/docs/backend-requests/custom-session-token).
 
 ## Unsafe metadata
 
@@ -299,8 +360,10 @@ The following examples demonstrate how to update `unsafeMetadata` using [the Bac
 
 #### Using the Backend API
 
-<Tabs items={["Fullstack SDKs", "Express", "Go", "Ruby", "cURL"]}>
+<Tabs items={["Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
   <Tab>
+    <Include src="_partials/backend/usage" />
+
     ```ts {{ filename: 'route.ts' }}
     export async function POST(req) {
       const { userId } = await req.json()
@@ -346,19 +409,36 @@ The following examples demonstrate how to update `unsafeMetadata` using [the Bac
 
   <Tab>
     ```go {{ filename: 'private.go' }}
-    var client clerk.Client
+    import 	(
+    	 "context"
+    	 "encoding/json"
+    	
+       "github.com/clerk/clerk-sdk-go/v2/user"
+    	 "github.com/clerk/clerk-sdk-go/v2"
+     )
 
-    func addStripeCustomerID(user *clerk.User, stripeCustomerID string) error {
-        birthday := map[string]interface{}{
-            "birthday": "04-20-1969",
-        }
-      user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-        UnsafeMetadata: birthday,
+    func addBirthdayToUser(userId string, birthday string) (*clerk.User, error) {
+      ctx := context.Background()
+
+      metadata := map[string]any{"birthday": birthday}
+
+      metadataJSON, err := json.Marshal(metadata)
+
+      if err != nil {
+    	  return nil, err
+      }
+
+      rawMessage := json.RawMessage(metadataJSON)
+
+      updatedUser, err := user.UpdateMetadata(ctx, userId, &user.UpdateMetadataParams{
+    	  UnsafeMetadata: &rawMessage,
       })
 
       if err != nil {
-        panic(err)
+    	  return nil, err
       }
+
+      return updatedUser, nil
     }
     ```
   </Tab>
@@ -426,7 +506,7 @@ The following examples demonstrate how to update `unsafeMetadata` using [the Bac
     const clerk = new Clerk(pubKey)
     await clerk.load()
 
-    if (clerk.user) {
+    if (clerk.isSignedIn) {
       await clerk.user
         .update({
           unsafeMetadata: {

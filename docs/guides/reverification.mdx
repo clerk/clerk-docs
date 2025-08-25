@@ -3,9 +3,7 @@ title: Add reverification for sensitive actions
 description: Learn how to implement Clerk's reverification feature to protect sensitive actions in your application.
 ---
 
-> [!WARNING]
->
-> Depending on the SDK you're using, this feature requires `@clerk/nextjs@6.12.7` or later, `@clerk/clerk-sdk-ruby@3.3.0` or later, and `@clerk/clerk-js@5.57.1` or later.
+<Include src="_partials/reverification-callout" />
 
 Reverification allows you to prompt a user to verify their credentials before performing sensitive actions, even if they're already authenticated. For example, in a banking application, transferring money is considered a "sensitive action." Reverification can be used to confirm the user's identity.
 
@@ -78,7 +76,26 @@ If the user hasn't verified their credentials within that time period, return ei
   </Tab>
 
   <Tab>
-    <Include src="_partials/nextjs/reverification-route-handler" />
+    The following example uses the [`has()`](/docs/references/backend/types/auth-object#has) helper to check if the user has verified their credentials within a specific time period. The `strict` configuration sets the time period to 10 minutes. If the user hasn't verified their credentials within 10 minutes, the `reverificationErrorResponse` utility is used to return an error.
+
+    ```tsx {{ filename: 'app/api/reverification-example/route.ts' }}
+    import { auth, reverificationErrorResponse } from '@clerk/nextjs/server'
+
+    export const POST = async (req: Request) => {
+      const { has } = await auth()
+
+      // Check if the user has *not* verified their credentials within the past 10 minutes.
+      const shouldUserRevalidate = !has({ reverification: 'strict' })
+
+      // If the user hasn't reverified, return an error with the matching configuration (e.g., `strict`)
+      if (shouldUserRevalidate) {
+        return reverificationErrorResponse('strict')
+      }
+
+      // If the user has verified credentials, return a successful response
+      return new Response({ success: true })
+    }
+    ```
   </Tab>
 
   <Tab>

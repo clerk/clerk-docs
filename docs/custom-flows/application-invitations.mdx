@@ -29,7 +29,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
     import { useSearchParams, useRouter } from 'next/navigation'
 
     export default function Page() {
-      const { user } = useUser()
+      const { isSignedIn, user } = useUser()
       const router = useRouter()
       const { isLoaded, signUp, setActive } = useSignUp()
       const [firstName, setFirstName] = React.useState('')
@@ -39,10 +39,10 @@ To create a sign-up flow using the invitation token, you need to extract the tok
       // Handle signed-in users visiting this page
       // This will also redirect the user once they finish the sign-up process
       React.useEffect(() => {
-        if (user?.id) {
+        if (isSignedIn) {
           router.push('/')
         }
-      }, [user])
+      }, [isSignedIn])
 
       // Get the token from the query params
       const token = useSearchParams().get('__clerk_ticket')
@@ -77,7 +77,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
           if (signUpAttempt.status === 'complete') {
             await setActive({ session: signUpAttempt.createdSessionId })
           } else {
-            // If the status is not complete, check why. User may need to
+            // If the sign-up status is not complete, check why. User may need to
             // complete further steps.
             console.error(JSON.stringify(signUpAttempt, null, 2))
           }
@@ -120,6 +120,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            <div id="clerk-captcha" />
             <div>
               <button type="submit">Next</button>
             </div>
@@ -142,6 +143,8 @@ To create a sign-up flow using the invitation token, you need to extract the tok
         </head>
         <body>
           <div id="signed-in"></div>
+
+          <div id="task"></div>
 
           <div id="sign-up">
             <h2>Sign up</h2>
@@ -169,7 +172,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
       const clerk = new Clerk(pubKey)
       await clerk.load()
 
-      if (clerk.user) {
+      if (clerk.isSignedIn) {
         // Mount user button component
         document.getElementById('signed-in').innerHTML = `
           <div id="user-button"></div>
@@ -178,6 +181,20 @@ To create a sign-up flow using the invitation token, you need to extract the tok
         const userbuttonDiv = document.getElementById('user-button')
 
         clerk.mountUserButton(userbuttonDiv)
+      } else if (clerk.session.currentTask) {
+        // Check for pending tasks and display custom UI to help users resolve them
+        // See https://clerk.com/docs/custom-flows/overview#session-tasks
+        switch (clerk.session.currentTask.key) {
+          case 'choose-organization': {
+            document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+            const taskDiv = document.getElementById('task')
+
+            clerk.mountTaskChooseOrganization(taskDiv)
+          }
+        }
       } else {
         // Get the token from the query parameter
         const param = '__clerk_ticket'
@@ -204,7 +221,19 @@ To create a sign-up flow using the invitation token, you need to extract the tok
 
             // If sign-up was successful, set the session to active
             if (signUpAttempt.status === 'complete') {
-              await clerk.setActive({ session: signUpAttempt.createdSessionId })
+              await clerk.setActive({
+                session: signUpAttempt.createdSessionId,
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // Check for tasks and navigate to custom UI to help users resolve them
+                    // See https://clerk.com/docs/custom-flows/overview#session-tasks
+                    console.log(session?.currentTask)
+                    return
+                  }
+
+                  await router.push('/')
+                },
+              })
             } else {
               // If the status is not complete, check why. User may need to
               // complete further steps.

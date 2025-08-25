@@ -4,7 +4,7 @@ description: Learn how to proxy the Clerk Frontend API through your domain.
 ---
 
 > [!WARNING]
-> This guide is for users who need to proxy the Frontend API for deployment. If your application already uses a CNAME subdomain that is required for deploying with Clerk, then you must proxy the Frontend API using a different subdomain. Refer to the [deployment guide](/docs/deployments/overview#dns-records) on how to configure DNS records for deployment.
+> This guide is for users who need to proxy the Frontend API for **production** (proxying does not work for Clerk development instances). If your application already uses a CNAME subdomain that is required for deploying with Clerk, then you must proxy the Frontend API using a different subdomain. Refer to the [deployment guide](/docs/deployments/overview#dns-records) on how to configure DNS records for deployment.
 
 Clerk supports two configuration methods for connecting to the Clerk Frontend API: CNAME and Proxy.
 
@@ -109,7 +109,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
       import { NextResponse } from 'next/server'
       import { clerkMiddleware } from '@clerk/nextjs/server'
 
-      export default clerkMiddleware((auth, req) => {
+      function proxyMiddleware(req) {
         if (req.nextUrl.pathname.match('__clerk')) {
           const proxyHeaders = new Headers(req.headers)
           proxyHeaders.set('Clerk-Proxy-Url', process.env.NEXT_PUBLIC_CLERK_PROXY_URL || '')
@@ -132,7 +132,22 @@ When using a proxy, all requests to the Frontend API will be made through your d
             },
           })
         }
-      })
+
+        return null
+      }
+
+      const clerkHandler = clerkMiddleware()
+
+      export default function middleware(req) {
+        // First check if it's a proxy request
+        const proxyResponse = proxyMiddleware(req)
+        if (proxyResponse) {
+          return proxyResponse
+        }
+
+        // Otherwise, use Clerk's middleware
+        return clerkHandler(req)
+      }
 
       export const config = {
         matcher: [
@@ -193,7 +208,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
       CLERK_SECRET_KEY={{secret}}
 
-      NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk
+      NEXT_PUBLIC_CLERK_PROXY_URL=https://app.dev/__clerk/
       ```
     </Tab>
 
@@ -229,7 +244,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
       export default function RootLayout({ children }: { children: React.ReactNode }) {
         return (
-          <ClerkProvider proxyUrl="https://app.dev/__clerk">
+          <ClerkProvider proxyUrl="https://app.dev/__clerk/">
             <html lang="en">
               <body>{children}</body>
             </html>
@@ -275,11 +290,11 @@ When using a proxy, all requests to the Frontend API will be made through your d
       // Initialize Clerk with your Clerk Publishable Key
       const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-      const clerk = new Clerk(clerkPubKey)
-
-      await clerk.load({
+      const clerk = new Clerk(clerkPubKey, {
         proxyUrl: 'https://app.dev/__clerk',
       })
+
+      await clerk.load()
       ```
     </Tab>
   </Tabs>

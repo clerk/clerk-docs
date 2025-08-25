@@ -1,6 +1,7 @@
 ---
 title: Session
 description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+sdk: js-frontend
 ---
 
 The `Session` object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
@@ -107,6 +108,13 @@ All sessions that are **expired**, **removed**, **replaced**, **ended** or **aba
   - `ActJWTClaim | null`
 
   The JWT actor for the session. Holds identifier for the user that is impersonating the current user. Read more about [impersonation](/docs/users/user-impersonation).
+
+  ---
+
+  - `currentTask`
+  - <code>[SessionTask](/docs/references/javascript/types/session-task) | null</code>
+
+  The current pending task for the session. Read more about [session tasks](/docs/authentication/configuration/session-tasks).
 </Properties>
 
 ## Methods
@@ -193,7 +201,7 @@ await clerk.session.attemptSecondFactorVerification({
 
 ### `checkAuthorization()`
 
-Checks if the user is authorized for the specified role or permission.
+Checks if the user is [authorized for the specified role or permission](/docs/guides/authorization-checks) or requires the user to [reverify their credentials](/docs/guides/reverification) if their last verification is older than allowed.
 
 ```ts
 function checkAuthorization(param: CheckAuthorizationParams): boolean
@@ -211,34 +219,53 @@ type CheckAuthorizationParams =
       role?: never
       permission: ClerkDefaultPermission | CustomPermission
     }
+  | {
+      role?: never
+      permission?: never
+      reverification: ReverficationConfig
+    }
 ```
 
 <Properties>
   - `role`
   - `string`
 
-  Accepts [role](/docs/organizations/roles-permissions#roles) key
+  Accepts [role](/docs/organizations/roles-permissions#roles) key.
 
   ---
 
   - `permission`
   - `string`
 
-  Accepts [permission](/docs/organizations/roles-permissions#permissions) key
+  Accepts [permission](/docs/organizations/roles-permissions#permissions) key.
 
   ---
 
   - `reverification?`
   - <code>[ReverificationConfig](/docs/references/backend/types/auth-object#reverification-config)</code>
 
-  The reverification configuration to check for.
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
 </Properties>
 
-#### Example
+#### Example: Authorization
+
+For more information, see the [guide on authorization checks](/docs/guides/authorization-checks).
 
 ```js
+// Check if the current user has the 'admin' role
 await clerk.session.checkAuthorization({
   role: 'admin',
+})
+```
+
+#### Example: Reverification
+
+For more information, see the [guide on reverification](/docs/guides/reverification).
+
+```js
+// Require the user to reverify their first factor after 2 minutes
+await clerk.session.checkAuthorization({
+  reverification: { afterMinutes: 2, level: 'first_factor' },
 })
 ```
 
@@ -404,7 +431,7 @@ function startVerification(params: SessionVerifyCreateParams): Promise<SessionVe
 
 ```typescript
 type SessionVerifyCreateParams = {
-  status: 'pending' | 'verified' | 'failed'
+  level: 'first_factor' | 'second_factor' | 'multi_factor'
 }
 ```
 
@@ -412,7 +439,7 @@ type SessionVerifyCreateParams = {
 
 ```js
 await clerk.session.startVerification({
-  status: 'pending',
+  level: 'first_factor',
 })
 ```
 

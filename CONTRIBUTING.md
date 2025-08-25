@@ -94,7 +94,13 @@ For example, the file at `/docs/quickstarts/setup-clerk.mdx` can be found at htt
 
 ### Sidenav
 
-The side navigation element rendered on https://clerk.com/docs is powered by the manifest file at [`/docs/manifest.json`](./docs/manifest.json). Making changes to this data structure will update the rendered sidenav.
+The side navigation is powered by two things: the SDK selector and the manifest file at [`/docs/manifest.json`](./docs/manifest.json).
+
+The SDK selector allows a user to choose the SDK of their choice, and depending on the option they select, the sidenav will update to show docs specific to that SDK. For example, if you were to choose "Next.js", you would see the sidenav update to show docs that are scoped to Next.js.
+
+- The logic for the SDK selector lives in `clerk/clerk`, which is a private repository that is only available to Clerk employees. Therefore, to update the SDK selector, such as adding new items, you must be a Clerk employee. For instructions on how to do so, see [this section](#update-the-sdk-selector). If you aren't a Clerk employee but have suggestions or concerns, please [submit an issue](https://github.com/clerk/clerk-docs/issues).
+
+The `manifest.json` is responsible for the structure of the sidenav, including setting the title and link for each sidenav item. Below is some helpful information on the typing and structure of the file.
 
 [Manifest JSON schema →](./docs/manifest.schema.json)
 
@@ -156,6 +162,13 @@ type LinkItem = {
    * Set to "_blank" to open link in a new tab
    */
   target?: '_blank'
+
+  /**
+   * Limit this page to only show when the user has one of the specified sdks active
+   *
+   * @example ['nextjs', 'react']
+   */
+  sdk?: string[]
 }
 type SubNavItem = {
   /**
@@ -195,6 +208,13 @@ type SubNavItem = {
    * @default false
    */
   collapse?: boolean
+
+  /**
+   * Limit this group to only show when the user has one of the specified sdks active
+   *
+   * @example ['nextjs', 'react']
+   */
+  sdk?: string[]
 }
 ```
 
@@ -206,6 +226,85 @@ type SubNavItem = {
 ![](/public/images/styleguide/manifest.png)
 
 </details>
+
+### Update the SDK selector
+
+> For Clerk employees only. [_(Why?)_](#sidenav)
+
+To update the SDK selector, the files you need are in `clerk/clerk`:
+
+- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDKSelector.tsx
+  - This is the logic behind how the SDK selector works and sets an SDK as active for the Docs. It's unlikely you'll touch this file, unless you are changing the logic behind how the SDK selector works.
+- https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/SDK.tsx
+  - This is the source of truth for the SDK selector. The `sdks` object includes the list of available SDKs and renders in the order it's formatted as; we like to have the most used SDKs at the top (Next.js, React, JavaScript), and then the rest are alphabetized.
+
+#### Add a new SDK
+
+If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
+
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
+
+In this repo (`clerk/clerk-docs`):
+
+1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. Add the color SVG to the partials icon folder `_partials/icons/`.
+1. Add the SDK to `index.mdx`, `references/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
+1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
+
+Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
+
+In the `clerk/clerk` repo:
+
+1. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `route`, `category`.
+
+#### Add an external SDK
+
+If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
+
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview).
+
+In this repo (`clerk/clerk-docs`):
+
+1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
+1. Add the color SVG to the partials icon folder `_partials/icons/`.
+1. Add the SDK to `index.mdx` and `references/overview.mdx`.
+
+Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
+
+In the `clerk/clerk` repo:
+
+1. In the `app/(website)/docs/icons.tsx` file, add the SVGs. The grayscale version goes in the `icons` object while the color version goes in the `iconsLarge` object. Use the same key for both.
+1. In the `app/(website)/docs/SDK.tsx` file, update the `sdks` object to include your new SDK. You should pass at least the following keys: `title`, `icon`, `external`, `category`.
+
+#### Update the 'key' of an SDK
+
+If you need to update the key of an SDK, because the logic is shared in `clerk-docs` and `clerk/clerk` repo's, both the old and the new keys must be kept as available. This is similar to deprecating an old key, and releasing a new key - you must still support the old key.
+
+In the `clerk/clerk` repo:
+
+1. In `clerk/src/app/(website)/docs/SDK.tsx`, change the necessary key in the `sdks` object.
+1. In that same file, update the `sdkKeyMigrations` object by adding the old key as the key and the new key as the value. For example, if you were changing the `sdk` key to be `js` instead of `javascript`, you would do the following updates:
+
+   ```diff
+   const sdks = {
+   -  'javascript': {
+   +  'js': {
+       ...
+     }
+   }
+
+
+   const sdkKeyMigrations = {
+   +  'javascript': 'js',
+   }
+   ```
+
+Then, in this repo (`clerk-docs`):
+
+1. In the `manifest.schema.json`, update the `sdk` enum to use the new key.
+1. In the `manifest.json`, update the `sdk` arrays to use the new key.
+1. Find all uses of the `<If />` component that uses the old key and update them to use the new key.
 
 ## Editing content
 
@@ -279,6 +378,30 @@ You may also set `search` to a boolean value, which acts as an `exclude` value. 
 ```
 
 </details>
+
+#### SDK
+
+The `sdk` frontmatter field defines what SDKs a page supports and makes the page visible in the sidenav only when one of those SDKs is selected by the [SDK selector](#sidenav).
+
+For example, if `nextjs` and `react` were passed to the `sdk` frontmatter field, like so:
+
+```diff
+  ---
+  title: `'<ClerkProvider>'`
+  description: Lorem ipsum...
++ sdk: nextjs, react
+  ---
+```
+
+This does a couple things:
+
+- URL's are generated for this page per specified SDK. In this case, for the `/docs/clerk-provider.mdx` file, `/docs/nextjs/clerk-provider` and `/docs/react/clerk-provider` will be generated. One for `nextjs` and one for `react`.
+  - The base url `/docs/clerk-provider` will still exist, but will show a grid of the available variants.
+- The page will only show up in the sidenav if the user has one of the specified SDKs "active", which means selected in the [SDK selector](#sidenav).
+- Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
+- On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
+
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
 
 ### Headings
 
@@ -587,11 +710,11 @@ https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
 
-| Property                      | Type                                                                                                                           | Description                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                     |
-| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                         |
-| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'`. |
+| Property                      | Type                                                                                                                           | Description                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `beforeYouStart`              | { title: string; link: string; icon: [string](<https://github.com/clerk/clerk/blob/main/src/app/(website)/docs/icons.tsx>) }[] | Links to things that learners should complete before the tutorial.                                                                               |
+| `exampleRepo` (optional)      | { title: string; link: string }[]                                                                                              | Links to example repositories.                                                                                                                   |
+| `exampleRepoTitle` (optional) | string                                                                                                                         | The title for the example repository/repositories. Defaults to `'Example repository'` or `'Example repositories'`, but can be passed any string. |
 
 ```mdx
 <TutorialHero
@@ -605,23 +728,15 @@ The `<TutorialHero />` component is used at the beginning of a tutorial-type con
       title: 'Create a Next.js application',
       link: 'https://nextjs.org/docs/getting-started/installation',
       icon: 'nextjs',
-    }
+    },
   ]}
   exampleRepo={[
     {
-      title: 'App router',
+      title: 'Clerk + Next.js App Router Quickstart',
       link: 'https://github.com/clerk/clerk-nextjs-app-quickstart',
-    }
+    },
   ]}
->
-
-- Install `@clerk/nextjs`
-- Set up your environment keys to test your app locally
-- Add `<ClerkProvider>` to your application
-- Use Clerk middleware to implement route-specific authentication
-- Create a header with Clerk components for users to sign in and out
-
-</TutorialHero>
+/>
 ```
 
 ### `<Cards>`
@@ -837,6 +952,19 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 <Include src="_partials/code-example" />
 ```
 
+### `<Typedoc />`
+
+The `<Typedoc />` component is used to inject the contents of an MDX file from the `./clerk-typedoc` folder. The files inside that folder are not manually created and maintained; they are automatically created from the [`clerk/javascript`](https://github.com/clerk/javascript) repository. This has a couple of implications:
+
+- If you want to edit the contents of a file that contains a `<Typedoc />` component, you'll have to open a pull request in `clerk/javascript` and change the source file's JSDoc comment. For information on how to author Typedoc comments, see [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
+- Once your PR in `clerk/javascript` has been merged and a release is published, a PR will be opened in `clerk-docs` to merge in the Typedoc changes.
+
+For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-typedoc/clerk-react/use-auth.mdx`, you would embed the `<Typedoc />` component like this:
+
+```mdx
+<Typedoc src="clerk-react/use-auth" />
+```
+
 ### `<If />`
 
 The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
@@ -859,6 +987,7 @@ Available values for the `sdk` prop:
 | Javascript             | "js-frontend"          |
 | Chrome Extension       | "chrome-extension"     |
 | Expo                   | "expo"                 |
+| Android                | "android"              |
 | iOS                    | "ios"                  |
 | Express                | "expressjs"            |
 | Fastify                | "fastify"              |
@@ -874,6 +1003,8 @@ Available values for the `sdk` prop:
 | JS Backend SDK         | "js-backend"           |
 | SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
+
+To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
 
 #### Examples
 
@@ -911,19 +1042,99 @@ Available values for the `sdk` prop:
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.
 
+When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+
+Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![](/docs/images/sign-in.png 'Clerk SignIn component.')`
+
+#### Image props
+
+<details>
+<summary><code>dark</code></summary>
 Use the `dark` prop to specify a different image to use in dark mode:
 
 ```mdx
 ![Logo](/docs/images/logo.png){{ dark: '/docs/images/logo-dark.png' }}
 ```
 
-You may also optionally provide the following [`next/image`](https://nextjs.org/docs/pages/api-reference/components/image) props: [`quality`](https://nextjs.org/docs/pages/api-reference/components/image#quality), [`priority`](https://nextjs.org/docs/pages/api-reference/components/image#priority)
+</details>
+
+<details>
+<summary><code>priority</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#priority
 
 ```mdx
-![Image](/docs/images/my-image.png){{ quality: 90, priority: true }}
+![Image](/docs/images/my-image.png){{ priority: true }}
 ```
 
-When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+</details>
+
+<details>
+<summary><code>quality</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#quality
+
+```mdx
+![Image](/docs/images/my-image.png){{ quality: 90 }}
+```
+
+</details>
+
+<details>
+<summary><code>width</code> and <code>height</code></summary>
+The `width` and `height` props can now be used to specify the (max) display size of an image in pixels.
+
+```mdx
+![](/docs/images/my-image.png){{ width: 345 }}
+```
+
+| Without `width`                                                                        | With `width`                                                                        |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| <img width="1320" height="2736" alt="" src="/.github/media/image-width-without.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-width-with.png" /> |
+
+</details>
+
+<details>
+<summary><code>align</code></summary>
+
+`align` can be set to `left`, `center`, or `right` to align an image horizontally. The default is `left`.
+
+| `left`                                                                              | `center`                                                                              | `right`                                                                              |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| <img width="1320" height="1834" alt="" src="/.github/media/image-align-left.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-center.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-right.png" /> |
+
+</details>
+
+<details>
+<summary><code>variant</code></summary>
+
+The `variant` prop can be used to display an image in a different style. Possible values are `default` and `browser`.
+
+| `default`                                                                                | `browser`                                                                                |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| <img width="1706" height="1328" alt="" src="/.github/media/image-variant-default.png" /> | <img width="1706" height="1328" alt="" src="/.github/media/image-variant-browser.png" /> |
+
+When using the `browser` variant the caption is displayed in the menu bar.
+
+</details>
+
+#### `<Gallery>`
+
+The `Gallery` component displays multiple images in a grid layout. On mobile the images are laid out horizontally in a scrollable container.
+
+<details>
+<summary>Example</summary>
+
+```
+<Gallery>
+  ![Light Mode](./ios-user-profile-view.png)
+  ![Dark Mode](./ios-user-profile-view-dark.png)
+</Gallery>
+```
+
+| Desktop                                                                            | Mobile                                                                           |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
+
+</details>
 
 ## Help wanted!
 

@@ -15,50 +15,269 @@ This guide will show you how to customize a session token to include additional 
   ## Add custom claims to your session token
 
   1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions) page.
-  1. In the **Customize your session token** section, select **Edit**.
-  1. In the modal that opens, you can add any claim to your session token that you need.
+  1. Under **Customize session token**, in the **Claims** editor, you can add any claim to your session token that you need and select **Save**.
 
   The following example adds the `fullName` and `primaryEmail` claims to the session token.
 
-  ![Clerk Dashboard showing the custom claim modal](/docs/images/advance/session-tokens/custom-session-example.png)
+  ![Clerk Dashboard showing the custom claim modal](/docs/images/custom-session-token/example.png)
 
   ## Use the custom claims in your application
 
-  The [`Auth`](/docs/references/backend/types/auth-object) object includes a `sessionClaims` property that contains the custom claims you added to your session token. It's returned by the [`auth()`](/docs/references/nextjs/auth) and `getAuth()` helpers, and the `request` object in server contexts.
+  The [`Auth`](/docs/references/backend/types/auth-object) object includes a `sessionClaims` property that contains the custom claims you added to your session token. Accessing the `Auth` object differs depending on the framework you are using. See the [reference doc](/docs/references/backend/types/auth-object) for more information.
 
-  The following example demonstrates how to access the `fullName` and `primaryEmail` claims that were added to the session token in the last step. This examples are written for Next.js, but they can be adapted to other frameworks by using the appropriate method for accessing the `Auth` object.
+  The following example demonstrates how to access the `fullName` and `primaryEmail` claims that were added to the session token in the last step.
 
-  <CodeBlockTabs options={["App Router", "Pages Router"]}>
-    ```tsx {{ filename: 'app/api/example/route.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
-    import { NextResponse } from 'next/server'
+  <Tabs items={["Next.js", "Astro", "Express", "Go", "React Router", "Remix", "Tanstack React Start"]}>
+    <Tab>
+      For Next.js, the `Auth` object is accessed using the `auth()` helper in App Router apps and the `getAuth()` function in Pages Router apps. [Learn more about using these helpers](/docs/references/nextjs/read-session-data#server-side).
 
-    export async function GET() {
-      const { sessionClaims } = await auth()
+      <CodeBlockTabs options={["App Router", "Pages Router"]}>
+        ```tsx {{ filename: 'app/api/example/route.tsx' }}
+        import { auth } from '@clerk/nextjs/server'
+        import { NextResponse } from 'next/server'
 
-      const fullName = sessionClaims?.fullName
+        export async function GET() {
+          const { sessionClaims } = await auth()
 
-      const primaryEmail = sessionClaims?.primaryEmail
+          const fullName = sessionClaims.fullName
 
-      return NextResponse.json({ fullName, primaryEmail })
-    }
-    ```
+          const primaryEmail = sessionClaims.primaryEmail
 
-    ```tsx {{ filename: 'pages/api/example.ts' }}
-    import { getAuth } from '@clerk/nextjs/server'
-    import type { NextApiRequest, NextApiResponse } from 'next'
+          return NextResponse.json({ fullName, primaryEmail })
+        }
+        ```
 
-    export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-      const { sessionClaims } = getAuth(req)
+        ```tsx {{ filename: 'pages/api/example.ts' }}
+        import { getAuth } from '@clerk/nextjs/server'
+        import type { NextApiRequest, NextApiResponse } from 'next'
 
-      const fullName = sessionClaims.fullName
+        export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+          // Use `getAuth()` to get the user's ID and session claims
+          const { sessionClaims } = getAuth(req)
 
-      const primaryEmail = sessionClaims.primaryEmail
+          const fullName = sessionClaims.fullName
 
-      return res.status(200).json({ fullName, primaryEmail })
-    }
-    ```
-  </CodeBlockTabs>
+          const primaryEmail = sessionClaims.primaryEmail
+
+          return res.status(200).json({ fullName, primaryEmail })
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
+
+    <Tab>
+      For Astro, the `Auth` object is accessed using the `locals.auth()` function. [Learn more about using `locals.auth()`](/docs/references/astro/read-session-data#server-side).
+
+      ```tsx {{ filename: 'src/api/example.ts' }}
+      import type { APIRoute } from 'astro'
+
+      export const GET: APIRoute = async ({ locals }) => {
+        // Use `locals.auth()` to get the user's ID and session claims
+        const { userId, sessionClaims } = await locals.auth()
+
+        // Protect the route by checking if the user is signed in
+        if (!userId) {
+          return new Response('Unauthorized', { status: 401 })
+        }
+
+        const fullName = sessionClaims.fullName
+
+        const primaryEmail = sessionClaims.primaryEmail
+
+        return new Response(JSON.stringify({ fullName, primaryEmail }))
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      For Express, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/references/express/overview#get-auth).
+
+      ```js
+      import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+      import express from 'express'
+
+      const app = express()
+      const PORT = 3000
+
+      // Apply `clerkMiddleware()` to all routes
+      app.use(clerkMiddleware())
+
+      // Use `getAuth()` to get the session claims
+      const getSessionClaims = (req, res, next) => {
+        const { sessionClaims } = getAuth(req)
+
+        const fullName = sessionClaims.fullName
+
+        const primaryEmail = sessionClaims.primaryEmail
+
+        return res.status(200).json({ fullName, primaryEmail })
+      }
+
+      app.get('/profile', requireAuth(), getSessionClaims)
+
+      // Start the server and listen on the specified port
+      app.listen(PORT, () => {
+        console.log(`Server is running on http://localhost:${PORT}`)
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      For Go, the session claims are accessed using the [`SessionClaimsFromContext()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) function.
+
+      ```go {{ filename: 'main.go' }}
+      package main
+
+      import (
+        "context"
+        "fmt"
+        "net/http"
+
+        "github.com/clerk/clerk-sdk-go/v2"
+        clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+        "github.com/clerk/clerk-sdk-go/v2/user"
+      )
+
+      type CustomSessionClaims struct {
+         FullName string  `json:"fullName"`
+         PrimaryEmail string `json:"primaryEmail"`
+      }
+
+      func customClaimsConstructor(ctx context.Context) any {
+         return &CustomSessionClaims{}
+      }
+
+      func WithCustomClaimsConstructor(params *clerkHttp.AuthorizationParams) error {
+         params.VerifyParams.CustomClaimsConstructor = customClaimsConstructor
+         return nil
+      }
+
+      func main() {
+        clerk.SetKey("{{secret}}")
+
+        mux := http.NewServeMux()
+        protectedHandler := http.HandlerFunc(protectedRoute)
+        mux.Handle(
+          "/protected",
+          clerkhttp.WithHeaderAuthorization(WithCustomClaimsConstructor)(protectedHandler),
+        )
+
+        http.ListenAndServe(":3000", mux)
+      }
+
+      func protectedRoute(w http.ResponseWriter, r *http.Request) {
+        // Protect the route by checking if the session claims are present
+        claims, ok := clerk.SessionClaimsFromContext(r.Context())
+        if !ok {
+          w.WriteHeader(http.StatusUnauthorized)
+          w.Write([]byte(`{"access": "unauthorized"}`))
+          return
+        }
+
+        // Access the custom claims
+       customClaims, ok := claims.Custom.(*CustomSessionClaims)
+        if !ok {
+          // Handle the error how you see fit
+        } else {
+          fmt.Fprintf(w, `{"full_name": "%s", "primary_email": "%s"}`, customClaims.FullName, customClaims.PrimaryEmail)
+        }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      For React Router, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/references/react-router/read-session-data#server-side).
+
+      ```tsx {{ filename: 'src/routes/profile.tsx' }}
+      import { redirect } from 'react-router'
+      import { getAuth } from '@clerk/react-router/ssr.server'
+      import { createClerkClient } from '@clerk/react-router/api.server'
+      import type { Route } from './+types/profile'
+
+      export async function loader(args: Route.LoaderArgs) {
+        // Use `getAuth()` to get the user's ID and session claims
+        const { userId, sessionClaims } = await getAuth(args)
+
+        // Protect the route by checking if the user is signed in
+        if (!userId) {
+          return redirect('/sign-in?redirect_url=' + args.request.url)
+        }
+
+        const fullName = sessionClaims.fullName
+
+        const primaryEmail = sessionClaims.primaryEmail
+
+        return {
+          fullName: JSON.stringify(fullName),
+          primaryEmail: JSON.stringify(primaryEmail),
+        }
+      }
+
+      export default function Profile({ loaderData }: Route.ComponentProps) {
+        return (
+          <div>
+            <p>Welcome {loaderData.fullName}</p>
+            <p>Your email is {loaderData.primaryEmail}</p>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      For Remix, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/references/remix/read-session-data#get-auth).
+
+      ```tsx {{ filename: 'routes/profile.tsx' }}
+      import { LoaderFunction, redirect } from '@remix-run/node'
+      import { getAuth } from '@clerk/remix/ssr.server'
+      import { createClerkClient } from '@clerk/remix/api.server'
+
+      export const loader: LoaderFunction = async (args) => {
+        // Use `getAuth()` to retrieve the user's ID and session claims
+        const { userId, sessionClaims } = await getAuth(args)
+
+        // If there is no userId, then redirect to sign-in route
+        if (!userId) {
+          return redirect('/sign-in?redirect_url=' + args.request.url)
+        }
+
+        const fullName = sessionClaims.fullName
+
+        const primaryEmail = sessionClaims.primaryEmail
+
+        return { fullName, primaryEmail }
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      For Tanstack React Start, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/references/tanstack-react-start/read-session-data#server-side).
+
+      ```ts {{ filename: 'src/routes/api/example.ts' }}
+      import { getAuth } from '@clerk/tanstack-react-start/server'
+      import { json } from '@tanstack/react-start'
+      import { createServerFileRoute } from '@tanstack/react-start/server'
+
+      export const ServerRoute = createServerFileRoute().methods({
+        GET: async ({ request, params }) => {
+          // Use `getAuth()` to retrieve the user's ID and session claims
+          const { userId, sessionClaims } = await getAuth(request)
+
+          // Protect the API route by checking if the user is signed in
+          if (!userId) {
+            return json({ error: 'Unauthorized' }, { status: 401 })
+          }
+
+          const fullName = sessionClaims.fullName
+
+          const primaryEmail = sessionClaims.primaryEmail
+
+          return json({ fullName, primaryEmail })
+        },
+      })
+      ```
+    </Tab>
+  </Tabs>
 
   ## Add global TypeScript type for custom session claims
 

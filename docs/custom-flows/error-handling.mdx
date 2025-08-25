@@ -54,8 +54,19 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
           // If sign-in process is complete, set the created session as active
           // and redirect the user
           if (signInAttempt.status === 'complete') {
-            await setActive({ session: signInAttempt.createdSessionId })
-            router.push('/')
+            await setActive({
+              session: signInAttempt.createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
           } else {
             // If the status is not complete, check why. User may need to
             // complete further steps.
@@ -156,6 +167,20 @@ The following example uses the [email & password sign-in custom flow](/docs/cust
         const userbuttonDiv = document.getElementById('user-button')
 
         clerk.mountUserButton(userbuttonDiv)
+      } else if (clerk.session?.currentTask) {
+        // Check for pending tasks and display custom UI to help users resolve them
+        // See https://clerk.com/docs/custom-flows/overview#session-tasks
+        switch (clerk.session.currentTask.key) {
+          case 'choose-organization': {
+            document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+            const taskDiv = document.getElementById('task')
+
+            clerk.mountTaskChooseOrganization(taskDiv)
+          }
+        }
       } else {
         // Handle the sign-in form
         document.getElementById('sign-in-form').addEventListener('submit', async (e) => {

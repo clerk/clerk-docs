@@ -3297,7 +3297,7 @@ See [Core Target][core-ref].
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
-        validSdks: ['react'],
+        validSdks: ['react', 'nextjs'],
       }),
     )
 

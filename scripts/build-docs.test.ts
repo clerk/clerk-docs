@@ -3002,6 +3002,61 @@ description: This is a test page
       '<SDKLink href="/docs/:sdk:/page-1#content" sdks={["react","nextjs"]}>Hash Link</SDKLink>',
     )
   })
+
+  test('Should not inject sdk scoping for links to the same sdk', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Doc 1', href: '/docs/doc-1' },
+              { title: 'Doc 2', href: '/docs/doc-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/doc-1.mdx',
+        content: `---
+title: Doc 1
+sdk: react
+---
+
+Doc 1`,
+      },
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+sdk: react
+---
+
+[Link to doc 1](/docs/doc-1)`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile('./dist/doc-2.mdx')).toBe(`---
+title: Doc 2
+sdk: react
+sdkScoped: "true"
+canonical: /docs/doc-2
+availableSdks: react
+notAvailableSdks: ""
+activeSdk: react
+---
+
+[Link to doc 1](/docs/doc-1)
+`)
+  })
 })
 
 describe('Path and File Handling', () => {
@@ -5349,59 +5404,4 @@ activeSdk: react
 Updated Documentation specific to React.js
 `)
   })
-})
-
-test('Should not inject sdk scoping for links to the same sdk', async () => {
-  const { tempDir, readFile } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'Doc 1', href: '/docs/doc-1' },
-            { title: 'Doc 2', href: '/docs/doc-2' },
-          ],
-        ],
-      }),
-    },
-    {
-      path: './docs/doc-1.mdx',
-      content: `---
-title: Doc 1
-sdk: react
----
-
-Doc 1`,
-    },
-    {
-      path: './docs/doc-2.mdx',
-      content: `---
-title: Doc 2
-sdk: react
----
-
-[Link to doc 1](/docs/doc-1)`,
-    },
-  ])
-
-  await build(
-    await createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react'],
-    }),
-  )
-
-  expect(await readFile('./dist/doc-2.mdx')).toBe(`---
-title: Doc 2
-sdk: react
-sdkScoped: "true"
-canonical: /docs/doc-2
-availableSdks: react
-notAvailableSdks: ""
-activeSdk: react
----
-
-[Link to doc 1](/docs/doc-1)
-`)
 })

@@ -8,6 +8,7 @@ import type { DocsMap } from '../store'
 import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
+import { SDK } from '../schemas'
 
 /**
  * Remark plugin to transform Markdown links to SDK-aware links.
@@ -17,7 +18,7 @@ import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
  * - Skips links to ignored paths or links.
  */
 export const embedLinks =
-  (config: BuildConfig, docsMap: DocsMap, foundLink?: (link: string) => void, href?: string) =>
+  (config: BuildConfig, docsMap: DocsMap, docSDKs: SDK[], foundLink?: (link: string) => void, href?: string) =>
   () =>
   (tree: Node, vfile: VFile) => {
     const scopeHref = scopeHrefToSDK(config)
@@ -54,6 +55,16 @@ export const embedLinks =
       foundLink?.(linkedDoc.file.filePath)
 
       if (linkedDoc.sdk === undefined) {
+        return node
+      }
+
+      const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
+
+      // Check if all SDKs for the current document are also present in the linked document.
+      // If true, the link does not need to be SDK-scoped, as the SDK context is already compatible.
+      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+
+      if (usesTheSameSDKs) {
         return node
       }
 

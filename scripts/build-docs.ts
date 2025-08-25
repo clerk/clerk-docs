@@ -778,6 +778,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
 
+      const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
           .use(remarkFrontmatter)
@@ -815,6 +817,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             embedLinks(
               config,
               docsMap,
+              sdks,
               (link) => {
                 foundLinks.add(link)
               },
@@ -944,7 +947,7 @@ ${yaml.stringify({
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, undefined, doc.file.href))
+              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

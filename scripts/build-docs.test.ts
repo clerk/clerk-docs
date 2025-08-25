@@ -5276,7 +5276,7 @@ Updated Documentation specific to React.js
   })
 })
 
-test.only('Links in typedoc pointing to sdk scoped doc, used in an sdk scoped doc, should be replaced with <SDKLink />', async () => {
+test('Links in typedoc pointing to sdk scoped doc, used in an sdk scoped doc, should be replaced with <SDKLink />', async () => {
   const { tempDir, readFile } = await createTempFiles([
     {
       path: './docs/manifest.json',

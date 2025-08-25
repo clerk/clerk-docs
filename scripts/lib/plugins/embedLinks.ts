@@ -1,29 +1,24 @@
-// Validates
-// - remove the mdx suffix from the url
-// - check if the link is a valid link
-// - check if the link is a link to a sdk scoped page
-// - replace the link with the sdk link component if it is a link to a sdk scoped page
-
 import { Node } from 'unist'
 import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
-import { type BuildConfig } from '../config'
-import { safeMessage, type WarningsSection } from '../error-messages'
-import { type DocsMap } from '../store'
+import type { BuildConfig } from '../config'
+import type { WarningsSection } from '../error-messages'
+import type { DocsMap } from '../store'
 import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { scopeHrefToSDK } from '../utils/scopeHrefToSDK'
+import { SDK } from '../schemas'
 
-export const validateAndEmbedLinks =
-  (
-    config: BuildConfig,
-    docsMap: DocsMap,
-    filePath: string,
-    section: WarningsSection,
-    foundLink?: (link: string) => void,
-    href?: string,
-  ) =>
+/**
+ * Remark plugin to transform Markdown links to SDK-aware links.
+ * - Rewrites internal doc links to use <SDKLink> when appropriate.
+ * - Injects SDK scoping into links for multi-SDK docs.
+ * - Optionally tracks found links via callback.
+ * - Skips links to ignored paths or links.
+ */
+export const embedLinks =
+  (config: BuildConfig, docsMap: DocsMap, docSDKs: SDK[], foundLink?: (link: string) => void, href?: string) =>
   () =>
   (tree: Node, vfile: VFile) => {
     const scopeHref = scopeHrefToSDK(config)
@@ -54,29 +49,22 @@ export const validateAndEmbedLinks =
       const linkedDoc = docsMap.get(url)
 
       if (linkedDoc === undefined) {
-        safeMessage(
-          config,
-          vfile,
-          filePath,
-          section,
-          'link-doc-not-found',
-          [node.url as string, `${url}.mdx`],
-          node.position,
-        )
         return node
       }
 
       foundLink?.(linkedDoc.file.filePath)
 
-      if (hash !== undefined) {
-        const hasHash = linkedDoc.headingsHashes.has(hash)
-
-        if (hasHash === false) {
-          safeMessage(config, vfile, filePath, section, 'link-hash-not-found', [hash, url], node.position)
-        }
+      if (linkedDoc.sdk === undefined) {
+        return node
       }
 
-      if (linkedDoc.sdk === undefined) {
+      const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
+
+      // Check if all SDKs for the current document are also present in the linked document.
+      // If true, the link does not need to be SDK-scoped, as the SDK context is already compatible.
+      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+
+      if (usesTheSameSDKs) {
         return node
       }
 
@@ -117,7 +105,12 @@ export const validateAndEmbedLinks =
     })
   }
 
-function watchComponentScope(componentName: string) {
+/**
+ * Tracks whether the current node is within the scope of a specified component in the AST.
+ * Returns a function that, when called with a node, returns true if the node is inside the component,
+ * and false otherwise. Useful for context-aware processing (e.g., skipping link replacements inside certain components).
+ */
+export function watchComponentScope(componentName: string) {
   let inComponent = false
   let offset: number | null = null
 

@@ -267,7 +267,6 @@ async function main() {
     validSdks: VALID_SDKS,
     manifestOptions: {
       wrapDefault: true,
-      collapseDefault: false,
       hideTitleDefault: false,
     },
     llms: {
@@ -852,7 +851,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
-          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+          collapse: group.collapse,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,

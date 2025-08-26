@@ -169,7 +169,6 @@ const baseConfig = {
   },
   manifestOptions: {
     wrapDefault: true,
-    collapseDefault: false,
     hideTitleDefault: false,
   },
   flags: {
@@ -411,7 +410,7 @@ title: Simple Test
     await expect(promise).rejects.toThrow('Failed to parse manifest:')
   })
 
-  test('should apply manifest options (wrapDefault, collapseDefault, hideTitleDefault) correctly', async () => {
+  test('should apply manifest options (wrapDefault, hideTitleDefault) correctly', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -422,28 +421,24 @@ title: Simple Test
                 title: 'Group One',
                 items: [[{ title: 'Item One', href: '/docs/item-one' }]],
                 wrap: true,
-                collapse: true,
                 hideTitle: false,
               },
               {
                 title: 'Group Two',
                 items: [[{ title: 'Item Two', href: '/docs/item-two' }]],
                 wrap: true,
-                collapse: false,
                 hideTitle: true,
               },
               {
                 title: 'Group Three',
                 items: [[{ title: 'Item Three', href: '/docs/item-three' }]],
                 wrap: false,
-                collapse: true,
                 hideTitle: false,
               },
               {
                 title: 'Group Four',
                 items: [[{ title: 'Item Four', href: '/docs/item-four' }]],
                 wrap: false,
-                collapse: false,
                 hideTitle: true,
               },
             ],
@@ -463,7 +458,6 @@ title: Simple Test
         validSdks: ['nextjs'],
         manifestOptions: {
           wrapDefault: false,
-          collapseDefault: false,
           hideTitleDefault: false,
         },
       }),
@@ -473,19 +467,15 @@ title: Simple Test
     const groups = manifest.navigation[0]
 
     expect(groups[0].wrap).toBe(true)
-    expect(groups[0].collapse).toBe(true)
     expect(groups[0].hideTitle).toBe(undefined)
 
     expect(groups[1].wrap).toBe(true)
-    expect(groups[1].collapse).toBe(undefined)
     expect(groups[1].hideTitle).toBe(true)
 
     expect(groups[2].wrap).toBe(undefined)
-    expect(groups[2].collapse).toBe(true)
     expect(groups[2].hideTitle).toBe(undefined)
 
     expect(groups[3].wrap).toBe(undefined)
-    expect(groups[3].collapse).toBe(undefined)
     expect(groups[3].hideTitle).toBe(true)
   })
 

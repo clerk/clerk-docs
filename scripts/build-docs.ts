@@ -47,8 +47,8 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
-import { z } from 'zod'
 import yaml from 'yaml'
+import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -82,7 +82,8 @@ import { checkPartials } from './lib/plugins/checkPartials'
 import { checkTypedoc } from './lib/plugins/checkTypedoc'
 import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
 import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
-import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
+import { embedLinks } from './lib/plugins/embedLinks'
+import { validateLinks } from './lib/plugins/validateLinks'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
@@ -93,9 +94,9 @@ import {
   writeRedirects,
   type Redirect,
 } from './lib/redirects'
+import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
-import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -176,6 +177,10 @@ async function main() {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+        'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
+        'backend/email-address.mdx': ['link-hash-not-found'],
+        'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
+        'types/user-resource.mdx': ['link-hash-not-found'],
       },
       partials: {},
       tooltips: {},
@@ -568,7 +573,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
+            validateLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
@@ -612,7 +617,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
             }),
           )
@@ -652,7 +657,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
               links.add(linkInTypedoc)
             }),
           )
@@ -678,7 +683,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
               }),
             )
@@ -773,12 +778,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
 
+      const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(
+            validateLinks(
               config,
               docsMap,
               doc.file.filePath,
@@ -806,6 +813,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(
+            embedLinks(
+              config,
+              docsMap,
+              sdks,
+              (link) => {
+                foundLinks.add(link)
+              },
+              doc.file.href,
+            ),
+          )
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
           .use(
             insertFrontmatter({
@@ -925,10 +943,11 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

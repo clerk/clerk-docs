@@ -160,29 +160,108 @@ async function main() {
         'quickstarts/overview.mdx': ['doc-not-in-manifest'],
         'references/overview.mdx': ['doc-not-in-manifest'],
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
-        'deployments/staging-alternatives.mdx': ['doc-not-in-manifest'],
+        'guides/development/deployment/staging-alternatives.mdx': ['doc-not-in-manifest'],
         'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
         'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/node.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/expo.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/fastify.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/chrome-extension.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
-        'upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
+        'guides/dashboard/overview.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/node.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/expo.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/fastify.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/chrome-extension.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
+        'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
+        'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
+        'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/apple.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/atlassian.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/bitbucket.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/box.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/coinbase.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/discord.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/dropbox.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/facebook.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/github.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/gitlab.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/google.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/hubspot.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/hugging-face.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/line.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linear.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linkedin-oidc.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/linkedin.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/microsoft.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/notion.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/slack.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/spotify.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/tiktok.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/twitch.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
+        'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
+        'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
+        'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
+
+        // temp migration ignores
+        'guides/configure/webhooks/inngest.mdx': ['doc-not-in-manifest'],
+        'guides/configure/webhooks/loops.mdx': ['doc-not-in-manifest'],
+        'getting-started/quickstart.mdx': ['link-hash-not-found'],
+        'guides/development/sdk-development/backend-only.mdx': ['link-hash-not-found'],
+        'references/astro/integration.mdx': ['link-hash-not-found'],
+        'references/astro/overview.mdx': ['link-hash-not-found'],
+        'references/express/overview.mdx': ['link-hash-not-found'],
+        'references/vue/overview.mdx': ['link-hash-not-found'],
+        'getting-started/quickstart.js-backend.mdx': ['link-hash-not-found'],
+        'guides/configure/session-token.mdx': ['link-hash-not-found'],
+        'guides/development/upgrading/upgrade-guides/node-to-express.mdx': ['link-hash-not-found'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
-        'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
-        'backend/email-address.mdx': ['link-hash-not-found'],
-        'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
-        'types/user-resource.mdx': ['link-hash-not-found'],
+
+        // temp migration ignores
+        'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
+        'backend/organization-sync-options.mdx': ['link-doc-not-found'],
+        'nextjs/clerk-middleware-options.mdx': ['link-doc-not-found'],
+        'shared/use-organization-params.mdx': ['link-doc-not-found'],
+        'types/check-authorization-params-from-session-claims.mdx': ['link-doc-not-found'],
+        'types/organization-resource.mdx': ['link-doc-not-found'],
+        'clerk-react/clerk-provider-props.mdx': ['link-doc-not-found'],
+        'backend/session.mdx': ['link-doc-not-found'],
+        'clerk-react/use-auth.mdx': ['link-doc-not-found'],
+        'types/use-auth-return.mdx': ['link-doc-not-found'],
+        'backend/auth-object.mdx': ['link-doc-not-found'],
+        'backend/organization-membership-public-user-data.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'backend/organization.mdx': ['link-doc-not-found'],
+        'backend/public-organization-data-json.mdx': ['link-doc-not-found'],
+        'backend/verify-token-options.mdx': ['link-doc-not-found'],
+        'backend/verify-token.mdx': ['link-doc-not-found'],
+        'backend/verify-webhook-options.mdx': ['link-doc-not-found'],
+        'backend/verify-webhook.mdx': ['link-doc-not-found'],
+        'backend/user.mdx': ['link-doc-not-found'],
+        'clerk-react/use-reverification.mdx': ['link-doc-not-found'],
+        'nextjs/current-user.mdx': ['link-doc-not-found'],
+        'shared/use-reverification.mdx': ['link-doc-not-found'],
+        'types/session-resource.mdx': ['link-doc-not-found'],
+        'backend/allowlist-identifier.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'backend/email-address.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'backend/phone-number.mdx': ['link-doc-not-found'],
+        'types/user-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'clerk-react/use-sign-in.mdx': ['link-doc-not-found'],
+        'clerk-react/use-sign-up.mdx': ['link-doc-not-found'],
+        'nextjs/get-auth.mdx': ['link-doc-not-found'],
+        'nextjs/auth.mdx': ['link-doc-not-found'],
       },
-      partials: {},
+      partials: {
+        // temp migration ignores
+        'auth-object-table.mdx': ['link-hash-not-found'],
+        'backend/usage.mdx': ['link-hash-not-found'],
+      },
       tooltips: {},
     },
     validSdks: VALID_SDKS,
@@ -446,6 +525,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       return {
         ...item,
         sdk,
+        itemSDK: item.sdk,
       }
     },
     async ({ items, ...details }, tree) => {
@@ -497,8 +577,22 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     async (item, tree) => {
       const doc = docsMap.get(item.href)
 
+      // If the doc does not already have an sdk assigned, but the manifest item does, assign the sdk from the manifest to the doc in the docsMap.
       if (doc && doc.sdk === undefined && item.sdk !== undefined) {
         docsMap.set(item.href, { ...doc, sdk: item.sdk })
+      }
+
+      const updatedDoc = docsMap.get(item.href)
+
+      if (updatedDoc?.sdk) {
+        for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+          // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
+          // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
+          docsMap.set(item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdk}/`), {
+            ...updatedDoc,
+            sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
+          })
+        }
       }
 
       return item
@@ -739,7 +833,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
               icon: item.icon,
               target: item.target,
-              sdk: sdks,
+              // @ts-expect-error - It exists, up on line 481
+              sdk: item.itemSDK ?? sdks,
             }
           }
 

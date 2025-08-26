@@ -9,7 +9,6 @@ type SDK =
   | 'chrome-extension'
   | 'expo'
   | 'ios'
-  | 'nodejs'
   | 'expressjs'
   | 'fastify'
   | 'react-router'

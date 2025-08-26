@@ -1,0 +1,471 @@
+---
+title: Expo Quickstart
+description: Add authentication and user management to your Expo app with Clerk.
+sdk: expo
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "Expo quickstart repo",
+      link: "https://github.com/clerk/clerk-expo-quickstart",
+    },
+  ]}
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/quickstarts/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Create an Expo app",
+      link: "https://docs.expo.dev/get-started/create-a-project/",
+      icon: "expo",
+    },
+  ]}
+/>
+
+<Include src="_partials/native-api-callout" />
+
+<Steps>
+  ## Install `@clerk/clerk-expo`
+
+  The [Clerk Expo SDK](/docs/references/expo/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
+
+  Run the following command to install the SDK:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm install @clerk/clerk-expo
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/clerk-expo
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/clerk-expo
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bun add @clerk/clerk-expo
+    ```
+  </CodeBlockTabs>
+
+  ## Set your Clerk API keys
+
+  <If condition={experiment.enabled}>
+    <ExperimentCreateAccountFromDocsQuickstart params={experiment} />
+  </If>
+
+  <If condition={!experiment.enabled}>
+    <SignedIn>
+      Add your Clerk Publishable Key to your `.env` file. It can always be retrieved from the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+    </SignedIn>
+
+    <SignedOut>
+      1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page.
+      1. In the **Quick Copy** section, copy your Clerk Publishable Key.
+      1. Paste your key into your `.env` file.
+
+      The final result should resemble the following:
+    </SignedOut>
+  </If>
+
+  ```env {{ filename: '.env' }}
+  EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
+  ```
+
+  ## Add `<ClerkProvider>` to your root layout
+
+  <Include src="_partials/clerk-provider/explanation" />
+
+  Add the component to your root layout as shown in the following example:
+
+  ```tsx {{ filename: 'app/_layout.tsx' }}
+  import { ClerkProvider } from '@clerk/clerk-expo'
+  import { Slot } from 'expo-router'
+
+  export default function RootLayout() {
+    return (
+      <ClerkProvider>
+        <Slot />
+      </ClerkProvider>
+    )
+  }
+  ```
+
+  ## Configure the token cache
+
+  Clerk stores the active user's session token in memory by default. In Expo apps, the recommended way to store sensitive data, such as tokens, is by using `expo-secure-store` which encrypts the data before storing it.
+
+  To use `expo-secure-store` as your token cache:
+
+  1. Run the following command to install the library:
+
+     <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun"]}>
+       ```bash {{ filename: 'terminal' }}
+       npm install expo-secure-store
+       ```
+
+       ```bash {{ filename: 'terminal' }}
+       yarn add expo-secure-store
+       ```
+
+       ```bash {{ filename: 'terminal' }}
+       pnpm add expo-secure-store
+       ```
+
+       ```bash {{ filename: 'terminal' }}
+       bun add expo-secure-store
+       ```
+     </CodeBlockTabs>
+  1. Update your root layout to use the secure token cache:
+     ```tsx {{ filename: 'app/_layout.tsx', mark: [2, 7] }}
+     import { ClerkProvider } from '@clerk/clerk-expo'
+     import { tokenCache } from '@clerk/clerk-expo/token-cache'
+     import { Slot } from 'expo-router'
+
+     export default function RootLayout() {
+       return (
+         <ClerkProvider tokenCache={tokenCache}>
+           <Slot />
+         </ClerkProvider>
+       )
+     }
+     ```
+
+  > [!TIP]
+  > When you sign a user out with [`signOut()`](/docs/references/general/hooks/use-auth#returns), Clerk will remove the user's session JWT from the token cache.
+
+  ## Add sign-up and sign-in pages
+
+  Clerk currently only supports [control components](/docs/references/general/components/overview#control-components) for Expo native. UI components are only available for Expo web. Instead, you must build [custom flows](/docs/guides/development/custom-flows/overview) using Clerk's API. The following sections demonstrate how to build [custom email/password sign-up and sign-in flows](/docs/guides/development/custom-flows/authentication/email-password). If you want to use different authentication methods, such as passwordless or OAuth, see the dedicated custom flow guides.
+
+  ### Layout page
+
+  First, protect your sign-up and sign-in pages.
+
+  1. Create an `(auth)` [route group](https://docs.expo.dev/router/advanced/shared-routes/). This will group your sign-up and sign-in pages.
+  1. In the `(auth)` group, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/references/general/hooks/use-auth) hook is used to access the user's authentication state. If the user is already signed in, they will be redirected to the home page.
+
+  ```tsx {{ filename: 'app/(auth)/_layout.tsx' }}
+  import { Redirect, Stack } from 'expo-router'
+  import { useAuth } from '@clerk/clerk-expo'
+
+  export default function AuthRoutesLayout() {
+    const { isSignedIn } = useAuth()
+
+    if (isSignedIn) {
+      return <Redirect href={'/'} />
+    }
+
+    return <Stack />
+  }
+  ```
+
+  ### Sign-up page
+
+  In the `(auth)` group, create a `sign-up.tsx` file with the following code. The [`useSignUp()`](/docs/references/general/hooks/use-sign-up) hook is used to create a sign-up flow. The user can sign up using their email and password and will receive an email verification code to confirm their email.
+
+  ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
+  import * as React from 'react'
+  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+  import { useSignUp } from '@clerk/clerk-expo'
+  import { Link, useRouter } from 'expo-router'
+
+  export default function SignUpScreen() {
+    const { isLoaded, signUp, setActive } = useSignUp()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [pendingVerification, setPendingVerification] = React.useState(false)
+    const [code, setCode] = React.useState('')
+
+    // Handle submission of sign-up form
+    const onSignUpPress = async () => {
+      if (!isLoaded) return
+
+      console.log(emailAddress, password)
+
+      // Start sign-up process using email and password provided
+      try {
+        await signUp.create({
+          emailAddress,
+          password,
+        })
+
+        // Send user an email with verification code
+        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+
+        // Set 'pendingVerification' to true to display second form
+        // and capture OTP code
+        setPendingVerification(true)
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    // Handle submission of verification form
+    const onVerifyPress = async () => {
+      if (!isLoaded) return
+
+      try {
+        // Use the code the user provided to attempt verification
+        const signUpAttempt = await signUp.attemptEmailAddressVerification({
+          code,
+        })
+
+        // If verification was completed, set the session to active
+        // and redirect the user
+        if (signUpAttempt.status === 'complete') {
+          await setActive({ session: signUpAttempt.createdSessionId })
+          router.replace('/')
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signUpAttempt, null, 2))
+        }
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    if (pendingVerification) {
+      return (
+        <>
+          <Text>Verify your email</Text>
+          <TextInput
+            value={code}
+            placeholder="Enter your verification code"
+            onChangeText={(code) => setCode(code)}
+          />
+          <TouchableOpacity onPress={onVerifyPress}>
+            <Text>Verify</Text>
+          </TouchableOpacity>
+        </>
+      )
+    }
+
+    return (
+      <View>
+        <>
+          <Text>Sign up</Text>
+          <TextInput
+            autoCapitalize="none"
+            value={emailAddress}
+            placeholder="Enter email"
+            onChangeText={(email) => setEmailAddress(email)}
+          />
+          <TextInput
+            value={password}
+            placeholder="Enter password"
+            secureTextEntry={true}
+            onChangeText={(password) => setPassword(password)}
+          />
+          <TouchableOpacity onPress={onSignUpPress}>
+            <Text>Continue</Text>
+          </TouchableOpacity>
+          <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
+            <Text>Already have an account?</Text>
+            <Link href="/sign-in">
+              <Text>Sign in</Text>
+            </Link>
+          </View>
+        </>
+      </View>
+    )
+  }
+  ```
+
+  ### Sign-in page
+
+  In the `(auth)` group, create a `sign-in.tsx` file with the following code. The [`useSignIn()`](/docs/references/general/hooks/use-sign-in) hook is used to create a sign-in flow. The user can sign in using email address and password, or navigate to the sign-up page.
+
+  ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+  import { useSignIn } from '@clerk/clerk-expo'
+  import { Link, useRouter } from 'expo-router'
+  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
+  import React from 'react'
+
+  export default function Page() {
+    const { signIn, setActive, isLoaded } = useSignIn()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+
+    // Handle the submission of the sign-in form
+    const onSignInPress = async () => {
+      if (!isLoaded) return
+
+      // Start the sign-in process using the email and password provided
+      try {
+        const signInAttempt = await signIn.create({
+          identifier: emailAddress,
+          password,
+        })
+
+        // If sign-in process is complete, set the created session as active
+        // and redirect the user
+        if (signInAttempt.status === 'complete') {
+          await setActive({ session: signInAttempt.createdSessionId })
+          router.replace('/')
+        } else {
+          // If the status isn't complete, check why. User might need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    return (
+      <View>
+        <Text>Sign in</Text>
+        <TextInput
+          autoCapitalize="none"
+          value={emailAddress}
+          placeholder="Enter email"
+          onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+        />
+        <TextInput
+          value={password}
+          placeholder="Enter password"
+          secureTextEntry={true}
+          onChangeText={(password) => setPassword(password)}
+        />
+        <TouchableOpacity onPress={onSignInPress}>
+          <Text>Continue</Text>
+        </TouchableOpacity>
+        <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
+          <Text>Don't have an account?</Text>
+          <Link href="/sign-up">
+            <Text>Sign up</Text>
+          </Link>
+        </View>
+      </View>
+    )
+  }
+  ```
+
+  For more information about building these custom flows, including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/guides/development/custom-flows/authentication/email-password) guide.
+
+  ## Add a sign-out button
+
+  At this point, your users can sign up or in, but they need a way to sign out.
+
+  In the `components/` folder, create a `SignOutButton.tsx` file with the following code. The [`useClerk()`](/docs/references/general/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the "Sign out" button.
+
+  <Include src="_partials/expo/sign-out-custom-flow" />
+
+  ## Conditionally render content
+
+  You can control which content signed-in and signed-out users can see with Clerk's [prebuilt control components](/docs/references/general/components/overview#control-components). For this quickstart, you'll use:
+
+  - [`<SignedIn>`](/docs/references/general/components/control/signed-in): Children of this component can only be seen while **signed in**.
+  - [`<SignedOut>`](/docs/references/general/components/control/signed-out): Children of this component can only be seen while **signed out**.
+
+  To get started:
+
+  1. Create a `(home)` route group.
+  1. In the `(home)` group, create a `_layout.tsx` file with the following code.
+
+  ```tsx {{ filename: 'app/(home)/_layout.tsx' }}
+  import { Stack } from 'expo-router/stack'
+
+  export default function Layout() {
+    return <Stack />
+  }
+  ```
+
+  Then, in the same folder, create an `index.tsx` file with the following code. If the user is signed in, it displays their email and a sign-out button. If they're not signed in, it displays sign-in and sign-up links.
+
+  ```tsx {{ filename: 'app/(home)/index.tsx' }}
+  import { SignedIn, SignedOut, useUser } from '@clerk/clerk-expo'
+  import { Link } from 'expo-router'
+  import { Text, View } from 'react-native'
+  import { SignOutButton } from '@/app/components/SignOutButton'
+
+  export default function Page() {
+    const { user } = useUser()
+
+    return (
+      <View>
+        <SignedIn>
+          <Text>Hello {user?.emailAddresses[0].emailAddress}</Text>
+          <SignOutButton />
+        </SignedIn>
+        <SignedOut>
+          <Link href="/(auth)/sign-in">
+            <Text>Sign in</Text>
+          </Link>
+          <Link href="/(auth)/sign-up">
+            <Text>Sign up</Text>
+          </Link>
+        </SignedOut>
+      </View>
+    )
+  }
+  ```
+
+  ## Create your first user
+
+  Run your project with the following command:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm", "bun" ]}>
+    ```bash {{ filename: 'terminal' }}
+    npm start
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn start
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm start
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bun start
+    ```
+  </CodeBlockTabs>
+
+  Now visit your app's homepage at [`http://localhost:8081`](http://localhost:8081). Sign up to create your first user.
+</Steps>
+
+## Enable OTA updates
+
+Though not required, it is recommended to implement over-the-air (OTA) updates in your Expo app. This enables you to easily roll out Clerk's feature updates and security patches as they're released without having to resubmit your app to mobile marketplaces.
+
+See the [`expo-updates`](https://docs.expo.dev/versions/latest/sdk/updates) library to learn how to get started.
+
+## Next steps
+
+<Cards>
+  - [OAuth with Expo](/docs/guides/development/custom-flows/authentication/oauth-connections)
+  - Learn more how to build a custom OAuth flow with Expo.
+
+  ---
+
+  - [MFA with Expo](/docs/guides/development/custom-flows/authentication/email-password-mfa)
+  - Learn more how to build a custom multi-factor authentication flow with Expo.
+
+  ---
+
+  - [Read session and user data](/docs/guides/users/reading)
+  - Learn how to read session and user data with Expo.
+
+  ---
+
+  - [Sign-up and sign-in flow](/docs/guides/development/custom-flows/authentication/email-password)
+  - Learn how to build a custom sign-up and sign-in authentication flow.
+</Cards>

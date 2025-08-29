@@ -78,7 +78,7 @@ const createManifestSchema = (config: BuildConfig) => {
     .object({
       title: z.string(),
       items: z.lazy(() => manifestSchema),
-      collapse: z.boolean().default(config.manifestOptions.collapseDefault),
+      collapse: z.boolean().optional(),
       tag: tag.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),

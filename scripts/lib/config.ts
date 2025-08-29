@@ -29,7 +29,6 @@ type BuildConfigOptions = {
   }
   manifestOptions: {
     wrapDefault: boolean
-    collapseDefault: boolean
     hideTitleDefault: boolean
   }
   redirects?: {

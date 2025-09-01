@@ -29,10 +29,11 @@ VITE_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 
 ```typescript
 // 4. Wrap with <ClerkProvider> in main.tsx or main.jsx
-import React from "react";
-import ReactDOM from "react-dom/client";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.tsx";
 import { ClerkProvider } from "@clerk/clerk-react";
-import App from "./App";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!PUBLISHABLE_KEY) {
@@ -41,12 +42,12 @@ if (!PUBLISHABLE_KEY) {
 
 // Ensure your index.html contains a <div id="root"></div> element for React to mount the app.
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
     <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
       <App />
     </ClerkProvider>
-  </React.StrictMode>
+  </StrictMode>
 );
 
 // 5. Example usage of Clerk's prebuilt components in App.tsx

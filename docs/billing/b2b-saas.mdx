@@ -1,7 +1,10 @@
 ---
 title: Clerk billing for B2B SaaS
 description: Clerk billing is a feature that allows you to create and manage plans and features for your application.
+sdk: nextjs, react, expo, react-router, astro, tanstack-react-start, remix, nuxt, vue, js-frontend, expressjs, fastify, js-backend
 ---
+
+<Include src="_partials/billing/billing-experimental" />
 
 Clerk billing for B2B SaaS allows you to create plans and manage subscriptions **for companies or organizations** in your application. If you'd like to charge individual users, see [Billing for B2C SaaS](/docs/billing/b2c-saas). You can also combine both B2C and B2B billing in the same application.
 
@@ -39,23 +42,13 @@ You can add a feature to a plan when you are creating a plan. To add it after a 
 
 ## Create a pricing page
 
-You can create a pricing page by using the [`<PricingTable />`](/docs/components/pricing-table) component. This component displays a table of plans and features that customers can subscribe to. **It's recommended to create a dedicated page**, as shown in the following example.
+You can create a pricing page by using the [`<PricingTable />`](/docs/components/billing/pricing-table) component. This component displays a table of plans and features that customers can subscribe to. **It's recommended to create a dedicated page**, as shown in the following example.
 
-```tsx {{ filename: 'app/pricing/page.tsx' }}
-import { PricingTable } from '@clerk/nextjs'
-
-export default function Page() {
-  return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 1rem' }}>
-      <PricingTable />
-    </div>
-  )
-}
-```
+<Include src="_partials/billing/create-an-organization-pricing-table" />
 
 ## Control access with features, plans, and permissions
 
-You can use Clerk's features, plans, and permissions to gate access to content using [**authorization checks**](/docs/guides/authorization-checks). There are a few ways to do this, but the recommended and simplest way is either using the [`has()`](/docs/references/backend/types/auth-object#has) method or the [`<Protect>`](/docs/components/protect) component.
+You can use Clerk's features, plans, and permissions to gate access to content using [**authorization checks**](/docs/guides/authorization-checks). There are a few ways to do this, but the recommended approach is to either use the [`has()`](/docs/references/backend/types/auth-object#has) method or the [`<Protect>`](/docs/components/protect) component.
 
 Permission-based authorization checks link with feature-based authorization checks. This means that if you are checking a custom permission, it will only work if the feature part of the permission key (`org:<feature>:<permission>`) **is a feature included in the organization's active plan**. For example, say you want to check if an organization member has the custom permission `org:teams:manage`, where `teams` is the feature. Before performing the authorization check, you need to ensure that the user's organization is subscribed to a plan that has the `teams` feature. If the user's organization is not subscribed to a plan that has the `teams` feature, the authorization check will always return `false`, even if the user has the custom permission.
 
@@ -66,14 +59,12 @@ The `has()` method is available for any JavaScript framework, while `<Protect>` 
 Use the `has()` method to test if the organization has access to a **plan**:
 
 ```jsx
-const { has } = await auth()
 const hasPremiumAccess = has({ plan: 'gold' })
 ```
 
 Or a **feature**:
 
 ```jsx
-const { has } = await auth()
 const hasPremiumAccess = has({ feature: 'widgets' })
 ```
 
@@ -88,71 +79,23 @@ The [`has()`](/docs/references/backend/types/auth-object#has) method checks if t
 >
 > For example, say you want to check if an organization member has the custom permission `org:teams:manage`, where `teams` is the feature. The user's organization must be subscribed to a plan that has the `teams` feature for authorization checks to work. If the user's organization is not subscribed to a plan that has the `teams` feature, the authorization check will always return `false`, even if the user has the custom permission.
 
-The following example accesses the `auth` object and the `has()` method using the [Next.js-specific `auth()` helper](/docs/references/nextjs/auth).
-
 <Tabs items={[ "Plan", "Feature", "Permission"]}>
   <Tab>
     The following example demonstrates how to use `has()` to check if an organization has a plan.
 
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
-
-    export default async function Page() {
-      // Use `auth()` helper to access the `has()` method
-      const { has } = await auth()
-
-      // Use `has()` method to check if an organization has a Plan
-      const hasBronzePlan = has({ plan: 'bronze' })
-
-      if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
-
-      return <h1>For Bronze subscribers only</h1>
-    }
-    ```
+    <Include src="_partials/billing/checking-plan-using-has-function" />
   </Tab>
 
   <Tab>
     The following example demonstrates how to use `has()` to check if an organization has a feature.
 
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
-
-    export default async function Page() {
-      // Use `auth()` helper to access the `has()` method
-      const { has } = await auth()
-
-      // Use `has()` method to check if an organization has a Feature
-      const hasPremiumAccess = has({ feature: 'premium_access' })
-
-      if (!hasPremiumAccess)
-        return <h1>Only subscribers with the Premium Access feature can access this content.</h1>
-
-      return <h1>Our Exclusive Content</h1>
-    }
-    ```
+    <Include src="_partials/billing/checking-feature-using-has-function" />
   </Tab>
 
   <Tab>
     The following example demonstrates how to use `has()` to check if an organization has a permission.
 
-    ```tsx {{ filename: 'app/page.tsx' }}
-    import { auth } from '@clerk/nextjs/server'
-
-    export default async function Page() {
-      // Use `auth()` helper to access the `has()` method
-      const { has } = await auth()
-
-      // Use `has()` method to check if organization has a Permission
-      const hasPremiumAccessManage = has({ permission: 'premium_access:manage' })
-
-      if (!hasPremiumAccessManage)
-        return (
-          <h1>Only subscribers with the Premium Access Manage permission can access this content.</h1>
-        )
-
-      return <h1>Our Exclusive Content</h1>
-    }
-    ```
+    <Include src="_partials/billing/checking-permission-using-has-function" />
   </Tab>
 </Tabs>
 
@@ -164,53 +107,18 @@ The [`<Protect>`](/docs/components/protect) component protects content or even e
   <Tab>
     The following example demonstrates how to use `<Protect>` to protect a page by checking if the organization has a plan.
 
-    ```tsx
-    export default function ProtectPage() {
-      return (
-        <Protect
-          plan="bronze"
-          fallback={<p>Only subscribers to the Bronze plan can access this content.</p>}
-        >
-          {children}
-        </Protect>
-      )
-    }
-    ```
+    <Include src="_partials/billing/checking-plan-using-protect" />
   </Tab>
 
   <Tab>
     The following example demonstrates how to use `<Protect>` to protect a page by checking if the organization has a feature.
 
-    ```tsx
-    export default function ProtectPage() {
-      return (
-        <Protect
-          feature="premium_access"
-          fallback={<p>Only subscribers with the Premium Access feature can access this content.</p>}
-        >
-          {children}
-        </Protect>
-      )
-    }
-    ```
+    <Include src="_partials/billing/checking-feature-using-protect" />
   </Tab>
 
   <Tab>
     The following example demonstrates how to use `<Protect>` to protect a page by checking if the organization has a permission.
 
-    ```tsx
-    export default function ProtectPage() {
-      return (
-        <Protect
-          permission="premium_access:manage"
-          fallback={
-            <p>Only subscribers with the Premium Access Manage permission can access this content.</p>
-          }
-        >
-          {children}
-        </Protect>
-      )
-    }
-    ```
+    <Include src="_partials/billing/checking-permission-using-protect" />
   </Tab>
 </Tabs>

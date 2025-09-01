@@ -13,8 +13,8 @@ This guide demonstrates how to use the Clerk API to build a custom user interfac
 
 To use passkeys, you must first enable it for your application.
 
-1. In the Clerk Dashboard, navigate to the [**Email, phone, username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) page.
-1. Select the **Sign-in options** tab and ensure **Passkeys** is enabled.
+1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/last-active?path=user-authentication/user-and-authentication) page.
+1. Select the **Passkeys** tab and enable **Sign-in with passkey**.
 
 ### Domain restrictions for passkeys
 
@@ -26,10 +26,13 @@ To create a passkey for a user, you must call [`User.createPasskey()`](/docs/ref
 
 ```tsx {{ filename: 'app/components/CustomCreatePasskeysButton.tsx' }}
 export function CreatePasskeyButton() {
-  const { user } = useUser()
+  const { isSignedIn, user } = useUser()
 
   const createClerkPasskey = async () => {
-    if (!user) return
+    if (!isSignedIn) {
+      // Handle signed out state
+      return
+    }
 
     try {
       await user?.createPasskey()
@@ -62,8 +65,20 @@ export function SignInWithPasskeyButton() {
       })
 
       if (signInAttempt?.status === 'complete') {
-        await setActive({ session: signInAttempt.createdSessionId })
-        router.push('/')
+        await setActive({
+          session: signInAttempt.createdSessionId,
+          redirectUrl: '/',
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              // Check for tasks and navigate to custom UI to help users resolve them
+              // See https://clerk.com/docs/custom-flows/overview#session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            router.push('/')
+          },
+        })
       } else {
         // If the status is not complete, check why. User may need to
         // complete further steps.

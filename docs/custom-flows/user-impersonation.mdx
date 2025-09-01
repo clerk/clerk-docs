@@ -21,7 +21,7 @@ This guide will walk you through how to build a custom flow that handles user im
 
     - The main page that gets the list of the application's users using the [JavaScript Backend SDK](/docs/references/backend/user/get-user-list)
     - The Client Component that has the UI for displaying the users and the ability to impersonate them
-    - The Server Action that generates the actor token using the [Backend API](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken){{ target: '_blank' }}
+    - The Server Action that generates the actor token using the [Backend API](/docs/reference/backend-api/tag/actor-tokens/post/actor_tokens){{ target: '_blank' }}
 
     <CodeBlockTabs options={["Main page", "Client Component", "Server Action"]}>
       ```tsx {{ filename: 'app/dashboard/page.tsx' }}
@@ -95,9 +95,12 @@ This guide will walk you through how to build a custom flow that handles user im
       export default function ImpersonateUsers({ users }: { users: ParsedUser[] }) {
         const { isLoaded, signIn, setActive } = useSignIn()
         const router = useRouter()
-        const { user } = useUser()
+        const { isSignedIn, user } = useUser()
 
-        if (!user?.id) return null
+        if (!isSignedIn) {
+          // Handle signed out state
+          return null
+        }
 
         // Handle "Impersonate" button click
         async function impersonateUser(actorId: string, userId: string) {
@@ -227,7 +230,7 @@ This guide will walk you through how to build a custom flow that handles user im
 
       To sign in as a different user, you must supply an actor token when creating a session.
 
-      Create the `generateActorToken+api.tsx` file with the following code. This creates an API route that will call Clerk's Backend API [`/actor_tokens`](/docs/reference/backend-api/tag/Actor-Tokens#operation/CreateActorToken) endpoint to create an actor token.
+      Create the `generateActorToken+api.tsx` file with the following code. This creates an API route that will call Clerk's Backend API [`/actor_tokens`](/docs/reference/backend-api/tag/actor-tokens/post/actor_tokens) endpoint to create an actor token.
 
       ```tsx {{ filename: 'app/generateActorToken+api.tsx', collapsible: true }}
       export async function POST(req: Request) {
@@ -335,11 +338,14 @@ This guide will walk you through how to build a custom flow that handles user im
         const [error, setError] = useState<string | null>(null)
 
         const { isLoaded, signIn, setActive } = useSignIn()
-        const { user } = useUser()
+        const { isSignedIn, user } = useUser()
         const router = useRouter()
         const { users, isLoading } = useUsers()
 
-        if (!user?.id) return null
+        if (!isSignedIn) {
+          // Handle signed out state
+          return null
+        }
 
         // Create an actor token for the impersonation
         async function createActorToken(actorId: string, userId: string) {

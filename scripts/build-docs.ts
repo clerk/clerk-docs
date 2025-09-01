@@ -599,7 +599,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
+        const sdks = items?.flatMap((item) =>
+          item.flatMap((item) => {
+            // For manifest items with hrefs, include distinctSDKVariants from the document
+            if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
+              const doc = docsMap.get(item.href)
+              if (doc) {
+                const sdks = [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+                return sdks.length > 0 ? sdks : undefined
+              }
+            }
+            return item.sdk
+          }),
+        )
 
         // If the child sdks is undefined then its core so it supports all sdks
         const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
@@ -618,17 +630,18 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
       }
 
-      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
-      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
-        return { ...details, sdk: undefined, items } as ManifestGroup
-      }
-
+      // If the group has explicit SDK scoping in the manifest, that takes precedence
       if (groupSDK !== undefined && groupSDK.length > 0) {
         return {
           ...details,
           sdk: groupSDK,
           items,
         } as ManifestGroup
+      }
+
+      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
+        return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
       const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []

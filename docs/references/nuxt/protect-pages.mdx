@@ -26,21 +26,72 @@ The `createRouteMatcher()` helper returns a function that, when called with the 
 
 In your `middleware/` directory, create a file named `auth.global.ts` with the following code. This middleware:
 
-- Uses the `userId` returned by the [`useAuth()`](/docs/references/vue/use-auth){{ target: '_blank' }} composable to check if the user is signed in
+- Uses the `userId` returned by the [`useAuth()`](/docs/references/vue/use-auth){{ target: '_blank' }} composable to check if the user is signed in.
 - Uses the `createRouteMatcher()` helper to check if the user is trying to access a protected route.
 
 If they aren't signed in and are trying to access a protected route, they are redirected to the sign-in page.
 
-```ts {{ filename: 'app/middleware/auth.global.ts' }}
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+The following example demonstrates how to protect pages in your Nuxt application using `createRouteMatcher()` and `useAuth()`. Depending on whether your app runs in SSR or CSR mode, the approach differs slightly:
 
-export default defineNuxtRouteMiddleware((to) => {
-  const { userId } = useAuth()
+- In **SSR** mode, you can rely on middleware checks alone, since `userId` is available during server-side rendering.
+- In **CSR** mode, the middleware runs before Clerk has finished loading the user's authentication status. This means `userId` may not be immediately available. To handle this correctly, combine middleware with [Clerk's control components](/docs/components/overview#control-components) inside your pages to manage loading and signed-in states.
 
-  // If the user is not signed in, they aren't allowed to access
-  // the protected route and are redirected to the sign-in page
-  if (!userId.value && isProtectedRoute(to)) {
-    return navigateTo('/sign-in')
-  }
-})
-```
+<Tabs items={['SSR mode', 'CSR mode']}>
+  <Tab>
+    ```ts {{ filename: 'app/middleware/auth.global.ts' }}
+    const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+    export default defineNuxtRouteMiddleware((to) => {
+      const { userId } = useAuth()
+
+      // If the user is not signed in, they aren't allowed to access
+      // the protected route and are redirected to the sign-in page
+      if (!userId.value && isProtectedRoute(to)) {
+        return navigateTo('/sign-in')
+      }
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["Middleware page", "Protected page"]}>
+      ```ts {{ filename: 'app/middleware/auth.global.ts' }}
+      const isProtectedPage = createRouteMatcher(['/dashboard'])
+      const isGuestPage = createRouteMatcher(['/sign-(in|up)'])
+
+      export default defineNuxtRouteMiddleware((to) => {
+        const { userId } = useAuth()
+
+        // If a signed-in user tries to visit a guest page, redirect them to the dashboard
+        if (userId.value && isGuestPage(to)) {
+          return navigateTo('/dashboard')
+        }
+
+        // If the user is not signed in, they aren't allowed to access
+        // the protected route and are redirected to the sign-in page
+        if (!userId.value && isProtectedPage(to)) {
+          return navigateTo('/sign-in')
+        }
+      })
+      ```
+
+      ```html {{ filename: 'app/pages/dashboard.vue' }}
+      <template>
+        <ClerkLoading>
+          <div>Loading...</div>
+        </ClerkLoading>
+
+        <ClerkLoaded>
+          <SignedIn>
+            <YourProtectedContent />
+          </SignedIn>
+          <SignedOut>
+            <div>Redirecting to sign in...</div>
+            <!-- Safe to redirect here since Clerk is fully loaded -->
+          </SignedOut>
+        </ClerkLoaded>
+      </template>
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

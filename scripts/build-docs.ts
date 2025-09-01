@@ -55,7 +55,7 @@ import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
-import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
+import { DocsFile, ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
@@ -97,19 +97,24 @@ import {
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { getArg } from './lib/getArg'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
   main()
 }
 
-async function main() {
-  const args = process.argv.slice(2)
+export async function main(
+  specificFile?: string,
+  options?: { basePath?: string; flags?: { skipGit?: boolean; skipApiErrors?: boolean; skipWarnings?: boolean } },
+) {
+  const selectedFile = specificFile ?? getArg('file', true)
 
   const config = await createConfig({
-    basePath: __dirname,
+    basePath: options?.basePath ?? __dirname,
     dataPath: '../data',
     docsPath: '../docs',
+    renderSpecificFile: selectedFile,
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',
@@ -196,10 +201,11 @@ async function main() {
       fullPath: '_llms/llms-full.txt',
     },
     flags: {
-      watch: args.includes('--watch'),
-      controlled: args.includes('--controlled'),
-      skipApiErrors: args.includes('--skip-api-errors'),
-      skipGit: args.includes('--skip-git'),
+      watch: getArg('watch', false),
+      controlled: getArg('controlled', false),
+      skipApiErrors: options?.flags?.skipApiErrors ?? getArg('skip-api-errors', false),
+      skipGit: options?.flags?.skipGit ?? getArg('skip-git', false),
+      skipWarnings: options?.flags?.skipWarnings ?? getArg('skip-warnings', false),
     },
   })
 
@@ -218,7 +224,7 @@ async function main() {
   if (config.flags.watch) {
     console.info(`Watching for changes...`)
 
-    watchAndRebuild(store, config, build)
+    await watchAndRebuild(store, config, build)
   } else if (output !== '') {
     process.exit(1)
   }
@@ -251,6 +257,54 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  const specificFileData = {
+    file: null as null | DocsFile,
+    foundPartials: null as null | string[],
+    foundTypedocs: null as null | string[],
+    foundPrompts: null as null | string[],
+  }
+
+  if (config.singleFileMode) {
+    const relativeFilePath = path.relative(path.join(config.basePath, '..'), config.renderSpecificFile as string)
+
+    specificFileData.file = {
+      filePath: `/${relativeFilePath}` as `/docs/${string}.mdx`,
+      relativeFilePath: relativeFilePath as `docs/${string}.mdx`,
+      fullFilePath: config.renderSpecificFile as `${string}.mdx`,
+      filePathInDocsFolder: `/${relativeFilePath}`.replace(config.baseDocsLink, '') as `${string}.mdx`,
+      href: `/${removeMdxSuffix(relativeFilePath)}` as `/docs/${string}`,
+      relativeHref: removeMdxSuffix(relativeFilePath) as `docs/${string}`,
+    }
+
+    const foundPartials = new Set<string>()
+    const foundTypedocs = new Set<string>()
+    const foundPrompts = new Set<string>()
+
+    await parseMarkdownFile(
+      specificFileData.file,
+      (partialSrc) => {
+        foundPartials.add(partialSrc.replace('_partials/', ''))
+        return undefined
+      },
+      (typedocSrc) => {
+        foundTypedocs.add(typedocSrc)
+        return undefined
+      },
+      (promptSrc) => {
+        foundPrompts.add(promptSrc.replace('prompts/', ''))
+        return undefined
+      },
+      true,
+      'docs',
+    )
+
+    specificFileData.foundPartials = Array.from(foundPartials)
+    specificFileData.foundTypedocs = Array.from(foundTypedocs)
+    specificFileData.foundPrompts = Array.from(foundPrompts)
+  }
+
+  abortSignal?.throwIfAborted()
+
   let staticRedirects: Record<string, Redirect> | null = null
   let dynamicRedirects: Redirect[] | null = null
 
@@ -271,7 +325,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   let prompts: Prompt[] = []
 
   if (config.prompts) {
-    prompts = await readPrompts(config)
+    prompts = await readPrompts(config, specificFileData.foundPrompts ?? undefined)
     console.info(`✓ Read ${prompts.length} prompts`)
   }
 
@@ -298,13 +352,18 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  // const docsFiles = specificFileData.file ? [specificFileData.file] : await getDocsFolder()
   const docsFiles = await getDocsFolder()
-  console.info('✓ Read Docs Folder')
+  console.info(`✓ Read Docs Folder (found ${docsFiles.length} files)`)
 
   abortSignal?.throwIfAborted()
 
   const cachedPartialsSize = store.partials.size
-  const partials = await getPartialsMarkdown((await getPartialsFolder()).map((item) => item.path))
+  const partials = await getPartialsMarkdown(
+    specificFileData.foundPartials
+      ? specificFileData.foundPartials
+      : (await getPartialsFolder()).map((item) => item.path),
+  )
   console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
 
   const cachedTooltipsSize = store.tooltips.size
@@ -314,7 +373,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   abortSignal?.throwIfAborted()
 
   const cachedTypedocsSize = store.typedocs.size
-  const typedocs = await getTypedocsMarkdown((await getTypedocsFolder()).map((item) => item.path))
+  const typedocs = await getTypedocsMarkdown(
+    specificFileData.foundTypedocs
+      ? specificFileData.foundTypedocs
+      : (await getTypedocsFolder()).map((item) => item.path),
+  )
   console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
 
   abortSignal?.throwIfAborted()
@@ -356,7 +419,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
 
         const markdownFile = await markdownCache(file.filePath, () =>
-          parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+          parseMarkdownFile(
+            file,
+            (partialSrc) => partials.find((partial) => `_partials/${partial.path}` === partialSrc),
+            (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+            (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
+            inManifest,
+            'docs',
+          ),
         )
 
         if (sdkMatch) {
@@ -375,7 +445,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             const inManifest = docsInManifest.has(file.href)
 
             const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+              parseMarkdownFile(
+                file,
+                (partialSrc) => partials.find((partial) => `_partials/${partial.path}` === partialSrc),
+                (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+                (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
+                inManifest,
+                'docs',
+              ),
             )
 
             docsMap.set(file.href, markdownFile)
@@ -774,6 +851,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const cachedCoreDocsSize = store.coreDocs.size
   const coreDocs = await Promise.all(
     docsArray.map(async (doc) => {
+      if (doc.type === 'ghost-file') {
+        return null
+      }
+
       const foundLinks: Set<string> = new Set()
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
@@ -797,14 +878,20 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(
-            checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
-              foundPartials.add(partial)
-            }),
+            checkPartials(
+              config,
+              (partialSrc) => validatedPartials.find((partial) => `_partials/${partial.path}` === partialSrc),
+              doc.file,
+              { reportWarnings: false, embed: true },
+              (partial) => {
+                foundPartials.add(partial)
+              },
+            ),
           )
           .use(
             checkTypedoc(
               config,
-              validatedTypedocs,
+              (typedocSrc) => validatedTypedocs.find((typedoc) => typedoc.path === typedocSrc),
               doc.file.filePath,
               { reportWarnings: false, embed: true },
               (typedoc) => {
@@ -812,7 +899,12 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               },
             ),
           )
-          .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(
+            checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
+              reportWarnings: false,
+              update: true,
+            }),
+          )
           .use(
             embedLinks(
               config,
@@ -856,6 +948,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   await Promise.all(
     coreDocs.map(async (doc) => {
+      if (doc === null) return
+
       // Skip SDK variant files (e.g., file.react.mdx, file.nextjs.mdx) - they should not be written as standalone files
       if (VALID_SDKS.some((sdk) => doc.file.filePathInDocsFolder.endsWith(`.${sdk}.mdx`))) {
         return
@@ -904,7 +998,7 @@ ${yaml.stringify({
     }),
   )
 
-  console.info(`✓ Wrote out all core docs (${coreDocs.length} total)`)
+  console.info(`✓ Wrote out all core docs (${coreDocs.filter((doc) => doc !== null).length} total)`)
 
   abortSignal?.throwIfAborted()
 
@@ -913,6 +1007,7 @@ ${yaml.stringify({
       const vFiles = await Promise.all(
         docsArray.map(async (doc) => {
           if (doc.sdk === undefined) return null // skip core docs
+          if (config.singleFileMode && doc.type === 'ghost-file') return null // skip ghost files in single file mode
 
           // skip docs that are not for the target sdk
           if (doc.sdk.includes(targetSdk) === false && doc.distinctSDKVariants?.includes(targetSdk) === false)
@@ -944,9 +1039,28 @@ ${yaml.stringify({
               .use(remarkFrontmatter)
               .use(remarkMdx)
               .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
-              .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(
+                checkPartials(
+                  config,
+                  (partialSrc) => partials.find((partial) => `_partials/${partial.path}` === partialSrc),
+                  doc.file,
+                  { reportWarnings: true, embed: true },
+                ),
+              )
+              .use(
+                checkTypedoc(
+                  config,
+                  (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+                  doc.file.filePath,
+                  { reportWarnings: true, embed: true },
+                ),
+              )
+              .use(
+                checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
+                  reportWarnings: true,
+                  update: true,
+                }),
+              )
               .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
@@ -997,70 +1111,82 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  const docsWithOnlyIfComponents = docsArray.filter((doc) => doc.sdk === undefined && documentHasIfComponents(doc.node))
-  const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
-
   const headingValidationVFiles: VFile[] = []
 
-  for (const doc of docsWithOnlyIfComponents) {
-    // Extract all SDK values from <If /> all components
-    const availableSDKs = new Set<SDK>()
+  if (!config.singleFileMode) {
+    const docsWithOnlyIfComponents = docsArray.filter((doc) => {
+      if (doc.type === 'ghost-file') {
+        throw new Error('When build script is in multi file mode, the markdown node cannot be null')
+      }
 
-    mdastVisit(doc.node, (node) => {
-      const sdkProp = extractComponentPropValueFromNode(
-        config,
-        node,
-        undefined,
-        'If',
-        'sdk',
-        true,
-        'docs',
-        doc.file.filePath,
-        z.string(),
-      )
-
-      if (sdkProp === undefined) return
-
-      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
-
-      if (sdks === undefined) return
-
-      sdks.forEach((sdk) => availableSDKs.add(sdk))
+      return doc.sdk === undefined && documentHasIfComponents(doc.node)
     })
+    const extractSDKsFromIfComponent = extractSDKsFromIfProp(config)
 
-    for (const sdk of availableSDKs) {
-      const vfile = await remark()
-        .use(remarkFrontmatter)
-        .use(remarkMdx)
-        .use(() => (inputTree) => {
-          return mdastFilter(inputTree, (node) => {
-            const sdkProp = extractComponentPropValueFromNode(
-              config,
-              node,
-              undefined,
-              'If',
-              'sdk',
-              false,
-              'docs',
-              doc.file.filePath,
-              z.string(),
-            )
-            if (!sdkProp) return true
+    for (const doc of docsWithOnlyIfComponents) {
+      if (doc.type === 'ghost-file') {
+        throw new Error('When build script is in multi file mode, the markdown vfile cannot be null')
+      }
 
-            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
+      // Extract all SDK values from <If /> all components
+      const availableSDKs = new Set<SDK>()
 
-            if (!ifSdks) return true
+      mdastVisit(doc.node, (node) => {
+        const sdkProp = extractComponentPropValueFromNode(
+          config,
+          node,
+          undefined,
+          'If',
+          'sdk',
+          true,
+          'docs',
+          doc.file.filePath,
+          z.string(),
+        )
 
-            return ifSdks.includes(sdk)
+        if (sdkProp === undefined) return
+
+        const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
+
+        if (sdks === undefined) return
+
+        sdks.forEach((sdk) => availableSDKs.add(sdk))
+      })
+
+      for (const sdk of availableSDKs) {
+        const vfile = await remark()
+          .use(remarkFrontmatter)
+          .use(remarkMdx)
+          .use(() => (inputTree) => {
+            return mdastFilter(inputTree, (node) => {
+              const sdkProp = extractComponentPropValueFromNode(
+                config,
+                node,
+                undefined,
+                'If',
+                'sdk',
+                false,
+                'docs',
+                doc.file.filePath,
+                z.string(),
+              )
+              if (!sdkProp) return true
+
+              const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
+
+              if (!ifSdks) return true
+
+              return ifSdks.includes(sdk)
+            })
           })
-        })
-        .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-        .process({
-          path: doc.file.filePath,
-          value: String(doc.vfile),
-        })
+          .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+          .process({
+            path: doc.file.filePath,
+            value: String(doc.vfile),
+          })
 
-      headingValidationVFiles.push(vfile)
+        headingValidationVFiles.push(vfile)
+      }
     }
   }
 
@@ -1136,7 +1262,7 @@ ${yaml.stringify({
     .flatMap(({ vFiles }) => vFiles)
     .filter((item): item is NonNullable<typeof item> => item !== null)
 
-  const coreVFiles = coreDocs.map((doc) => doc.vfile)
+  const coreVFiles = coreDocs.filter((doc) => doc !== null).map((doc) => doc.vfile)
   const partialsVFiles = validatedPartials.map((partial) => partial.vfile)
   const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
@@ -1181,6 +1307,10 @@ ${yaml.stringify({
   }
 
   abortSignal?.throwIfAborted()
+
+  if (config.flags.skipWarnings) {
+    return ''
+  }
 
   return warnings
 }

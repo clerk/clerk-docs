@@ -9,13 +9,13 @@ export interface Prompt {
   content: string
 }
 
-export async function readPrompts(config: BuildConfig) {
+export async function readPrompts(config: BuildConfig, overrideFiles?: string[]) {
   const { inputPath, outputPath } = config.prompts ?? {}
   if (!inputPath || !outputPath) {
     throw new Error('Prompts paths not configured')
   }
 
-  const files = await fs.readdir(inputPath)
+  const files = overrideFiles ?? (await fs.readdir(inputPath))
 
   return await Promise.all(
     files.map(async (file) => {
@@ -48,7 +48,12 @@ import { extractComponentPropValueFromNode } from './utils/extractComponentPropV
 import { z } from 'zod'
 
 export const checkPrompts =
-  (config: BuildConfig, prompts: Prompt[], file: DocsFile, options: { reportWarnings: boolean; update: boolean }) =>
+  (
+    config: BuildConfig,
+    getPrompt: (prompt: string) => Prompt | undefined,
+    file: DocsFile,
+    options: { reportWarnings: boolean; update: boolean },
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     if (config.prompts === null) return
@@ -76,7 +81,7 @@ export const checkPrompts =
         return node
       }
 
-      const prompt = prompts.find((prompt) => prompt.filePath === promptSrc)
+      const prompt = getPrompt(promptSrc)
 
       if (prompt === undefined) {
         if (options.reportWarnings === true) {

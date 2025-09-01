@@ -12,6 +12,7 @@ type BuildConfigOptions = {
   validSdks: readonly SDK[]
   dataPath: string
   docsPath: string
+  renderSpecificFile: string | null
   baseDocsLink: string
   manifestPath: string
   partialsPath: string
@@ -63,6 +64,7 @@ type BuildConfigOptions = {
     controlled?: boolean
     skipGit?: boolean
     skipApiErrors?: boolean
+    skipWarnings?: boolean
   }
 }
 
@@ -95,6 +97,9 @@ export async function createConfig(config: BuildConfigOptions) {
       basePath: config.basePath,
       baseDocsLink: config.baseDocsLink,
       validSdks: config.validSdks,
+
+      renderSpecificFile: config.renderSpecificFile ? resolve(path.join('..', config.renderSpecificFile)) : null,
+      singleFileMode: !!config.renderSpecificFile,
 
       manifestRelativePath: config.manifestPath,
       manifestFilePath: resolve(config.manifestPath),
@@ -188,6 +193,7 @@ export async function createConfig(config: BuildConfigOptions) {
         controlled: config.flags?.controlled ?? false,
         skipGit: config.flags?.skipGit ?? false,
         skipApiErrors: config.flags?.skipApiErrors ?? false,
+        skipWarnings: config.flags?.skipWarnings ?? false,
       },
     }
   }

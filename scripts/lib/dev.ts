@@ -1,14 +1,14 @@
 // for development mode, this function watches the markdown,
 // invalidates the cache and kicks off a rebuild of the docs
 
-import watcher from '@parcel/watcher'
+import type watcher from '@parcel/watcher'
 import path from 'path'
 import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
 import chokidar from 'chokidar'
 
-export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: typeof build) => {
+export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)
 
   let abortController: AbortController | null = null
@@ -79,6 +79,8 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
       return
     }
   }
+
+  const watcher = await import('@parcel/watcher')
 
   watcher.subscribe(config.dataPath, (err, events) => {
     handleFilesChanged(['/docs/errors/backend-api.mdx', '/docs/errors/frontend-api.mdx'])

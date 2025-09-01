@@ -27,6 +27,7 @@ import type { SDK } from './schemas'
 import { markDocumentDirty, type Store } from './store'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
+import yaml from 'yaml'
 
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
 
@@ -34,9 +35,9 @@ export const parseInMarkdownFile =
   (config: BuildConfig, store: Store) =>
   async (
     file: DocsFile & { content?: string },
-    partials: { path: string; content: string; node: Node }[],
-    typedocs: { path: string; content: string; node: Node }[],
-    prompts: Prompt[],
+    getPartial: (partial: string) => { path: string; content: string; node: Node } | undefined,
+    getTypedoc: (typedoc: string) => { path: string; content: string; node: Node } | undefined,
+    getPrompt: (prompt: string) => Prompt | undefined,
     inManifest: boolean,
     section: WarningsSection,
   ) => {
@@ -50,10 +51,43 @@ export const parseInMarkdownFile =
     }
 
     let frontmatter: Frontmatter | undefined = undefined
+    let node: Node | undefined = undefined
+
+    if (config.singleFileMode && config.renderSpecificFile !== file.fullFilePath) {
+      // all we care about is the frontmatter
+
+      // Regex to extract frontmatter (YAML block at the top of the file)
+      // Matches '---' at the start of a line, then any content (including newlines), until the next '---' at the start of a line
+      const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/
+
+      const match = fileContent.match(frontmatterRegex)
+      if (match) {
+        const fm = yaml.parse(match[1])
+        frontmatter = {
+          ...fm,
+          sdk: fm.sdk ? (fm.sdk.includes(', ') ? fm.sdk.split(', ') : [fm.sdk]) : undefined,
+        }
+      }
+
+      if (frontmatter === undefined) {
+        throw new Error(errorMessages['frontmatter-parse-failed'](file.href))
+      }
+
+      return {
+        type: 'ghost-file',
+        file,
+        sdk: (frontmatter as Frontmatter).sdk,
+        vfile: null,
+        headingsHashes: new Set(),
+        frontmatter: frontmatter as Frontmatter,
+        node: null,
+        fileContent,
+        distinctSDKVariants: null as SDK[] | null,
+      } as const
+    }
 
     const slugify = slugifyWithCounter()
     const headingsHashes = new Set<string>()
-    let node: Node | undefined = undefined
 
     const vfile = await remark()
       .use(remarkFrontmatter)
@@ -75,16 +109,21 @@ export const parseInMarkdownFile =
         }),
       )
       .use(
-        checkPartials(config, partials, file, { reportWarnings: true, embed: false }, (partial) => {
+        checkPartials(config, getPartial, file, { reportWarnings: true, embed: false }, (partial) => {
           markDirty(file.filePath, partial)
         }),
       )
       .use(
-        checkTypedoc(config, typedocs, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
+        checkTypedoc(config, getTypedoc, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
           markDirty(file.filePath, typedoc)
         }),
       )
-      .use(checkPrompts(config, prompts, file, { reportWarnings: true, update: false }))
+      .use(
+        checkPrompts(config, getPrompt, file, {
+          reportWarnings: true,
+          update: false,
+        }),
+      )
       .process({
         path: file.relativeFilePath,
         value: fileContent,
@@ -95,8 +134,13 @@ export const parseInMarkdownFile =
     await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
-      .use(checkPartials(config, partials, file, { reportWarnings: false, embed: true }))
-      .use(checkTypedoc(config, typedocs, file.filePath, { reportWarnings: false, embed: true }))
+      .use(checkPartials(config, getPartial, file, { reportWarnings: false, embed: true }))
+      .use(
+        checkTypedoc(config, getTypedoc, file.filePath, {
+          reportWarnings: false,
+          embed: true,
+        }),
+      )
       // extract out the headings to check hashes in links
       .use(() => (tree) => {
         const documentContainsIfComponent = documentHasIfComponents(tree)
@@ -168,6 +212,7 @@ export const parseInMarkdownFile =
     }
 
     return {
+      type: 'markdown-file',
       file,
       sdk: (frontmatter as Frontmatter).sdk,
       vfile,
@@ -176,5 +221,5 @@ export const parseInMarkdownFile =
       node: node as Node,
       fileContent,
       distinctSDKVariants: null as SDK[] | null,
-    }
+    } as const
   }

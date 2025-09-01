@@ -17,10 +17,12 @@ import { z } from 'zod'
 export const checkPartials =
   (
     config: BuildConfig,
-    partials: {
-      node: Node
-      path: string
-    }[],
+    getPartial: (partial: string) =>
+      | {
+          node: Node
+          path: string
+        }
+      | undefined,
     file: DocsFile,
     options: {
       reportWarnings: boolean
@@ -52,7 +54,7 @@ export const checkPartials =
         return node
       }
 
-      const partial = partials.find((partial) => `_partials/${partial.path}` === `${removeMdxSuffix(partialSrc)}.mdx`)
+      const partial = getPartial(`${removeMdxSuffix(partialSrc)}.mdx`)
 
       if (partial === undefined) {
         if (options.reportWarnings === true) {

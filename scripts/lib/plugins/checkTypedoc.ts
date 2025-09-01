@@ -18,7 +18,12 @@ import { z } from 'zod'
 export const checkTypedoc =
   (
     config: BuildConfig,
-    typedocs: { path: string; node: Node }[],
+    getTypedoc: (typedoc: string) =>
+      | {
+          node: Node
+          path: string
+        }
+      | undefined,
     filePath: string,
     options: { reportWarnings: boolean; embed: boolean },
     foundTypedoc?: (typedoc: string) => void,
@@ -46,7 +51,7 @@ export const checkTypedoc =
         throw new Error(errorMessages['typedoc-folder-not-found'](config.typedocPath))
       }
 
-      const typedoc = typedocs.find(({ path }) => path === `${removeMdxSuffix(typedocSrc)}.mdx`)
+      const typedoc = getTypedoc(`${removeMdxSuffix(typedocSrc)}.mdx`)
 
       if (typedoc === undefined) {
         if (options.reportWarnings === true) {

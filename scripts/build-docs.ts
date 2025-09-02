@@ -1265,7 +1265,16 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  await fs.rm(config.distFinalPath, { recursive: true })
+  try {
+    await fs.rm(config.distFinalPath, { recursive: true })
+  } catch (error) {
+    console.error(`Failed to clear ${config.distFinalPath}, trying again...`, error)
+    try {
+      await fs.rm(config.distFinalPath, { recursive: true })
+    } catch (error) {
+      console.error(`Failed to clear ${config.distFinalPath}, giving up...`, error)
+    }
+  }
 
   abortSignal?.throwIfAborted()
 

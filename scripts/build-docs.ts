@@ -176,7 +176,6 @@ async function main() {
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
         'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
         'backend/email-address.mdx': ['link-hash-not-found'],
         'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],

@@ -141,7 +141,7 @@ export async function generateApiErrorDocs(config: BuildConfig) {
       },
     )
 
-    const outputPath = path.join(config.distTempPath, 'errors')
+    const outputPath = path.join(config.distTempPath, 'guides/development/errors')
     await fs.mkdir(outputPath, { recursive: true })
 
     // Write the output file
@@ -150,24 +150,32 @@ export async function generateApiErrorDocs(config: BuildConfig) {
 
     return [
       {
-        filePath: '/docs/errors/backend-api.mdx',
-        relativeFilePath: 'docs/errors/backend-api.mdx',
-        fullFilePath: path.join(config.basePath, '..', '/docs/errors/backend-api.mdx') as `${string}.mdx`,
-        filePathInDocsFolder: 'errors/backend-api.mdx',
+        filePath: '/docs/guides/development/errors/backend-api.mdx',
+        relativeFilePath: 'docs/guides/development/errors/backend-api.mdx',
+        fullFilePath: path.join(
+          config.basePath,
+          '..',
+          '/docs/guides/development/errors/backend-api.mdx',
+        ) as `${string}.mdx`,
+        filePathInDocsFolder: 'guides/development/errors/backend-api.mdx',
 
-        href: '/docs/errors/backend-api',
-        relativeHref: 'docs/errors/backend-api',
+        href: '/docs/guides/development/errors/backend-api',
+        relativeHref: 'docs/guides/development/errors/backend-api',
 
         content: docsBAPI,
       },
       {
-        filePath: '/docs/errors/frontend-api.mdx',
-        relativeFilePath: 'docs/errors/frontend-api.mdx',
-        fullFilePath: path.join(config.basePath, '..', '/docs/errors/frontend-api.mdx') as `${string}.mdx`,
-        filePathInDocsFolder: 'errors/frontend-api.mdx',
+        filePath: '/docs/guides/development/errors/frontend-api.mdx',
+        relativeFilePath: 'docs/guides/development/errors/frontend-api.mdx',
+        fullFilePath: path.join(
+          config.basePath,
+          '..',
+          '/docs/guides/development/errors/frontend-api.mdx',
+        ) as `${string}.mdx`,
+        filePathInDocsFolder: 'guides/development/errors/frontend-api.mdx',
 
-        href: '/docs/errors/frontend-api',
-        relativeHref: 'docs/errors/frontend-api',
+        href: '/docs/guides/development/errors/frontend-api',
+        relativeHref: 'docs/guides/development/errors/frontend-api',
 
         content: docsFAPI,
       },

@@ -1,0 +1,33 @@
+---
+title: XSS leak protection
+description: Learn how Clerk prevents and mitigates XSS attacks.
+---
+
+Cross-Site Scripting (XSS) attacks are a type of injection, in which malicious scripts are injected into otherwise benign and trusted websites. XSS vulnerabilities are incredibly serious and we recommend you reference the [OWASP® Foundation's Cross Site Scripting (XSS) Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html) to learn how you can prevent an attack.
+
+Prevention is just one aspect of an effective security model. To prepare for the worst case scenario where an attack is successful, you should ensure your application is configured to minimize the attack's surface area.
+
+Clerk works to minimize the surface area by using `HttpOnly` cookies for authenticated requests to our [Frontend API](/docs/reference/frontend-api){{ target: '_blank' }}, so that credentials cannot be leaked during XSS attacks.
+
+## What is a `HttpOnly` cookie?
+
+`HttpOnly` is a flag on the [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header that is issued by a server to set a cookie in the browser.
+
+By default, cookies can be accessed via `document.cookie` in JavaScript. When the `HttpOnly` flag is set on a cookie, the cookie is only accessible server-side through HTTP requests. The cookie cannot be accessed by client-side JavaScript code, including attempts to read it via `document.cookie`. This provides an important security boundary between client and server-side cookie access.
+
+## How do `HttpOnly` cookies minimize XSS attacks?
+
+During an XSS attack, malicious JavaScript can execute in users' browsers. If session tokens are stored in JavaScript-accessible locations like `localStorage` or non-HttpOnly cookies, the attacker can steal these tokens and impersonate users even after the XSS vulnerability is fixed. If this happens, it is recommended you invalidate existing tokens and force users to sign in again.
+
+By using `HttpOnly` cookies, Clerk ensures session tokens cannot be accessed by JavaScript, protecting them from XSS attacks.
+
+For maximum security, avoid storing session tokens in JavaScript-accessible locations like:
+
+- Cookies without the `HttpOnly` flag
+- [Window.localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage)
+- [Window.sessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage)
+- [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
+
+## Why is the `__session` cookie on my application domain not `HttpOnly`?
+
+The `__session` cookie contains the session token and it is dropped by Clerk to your application's root domain (e.g. `example.com`). It is not `HttpOnly` because it needs to be accessible by Clerk's client-side SDKs. However, for this reason, the token contained in this cookie is short-lived (1 minute lifetime), so as to mitigate any potential XSS attacks. Read more about the `__session` and `__client` cookies in the [guide on how Clerk works](/docs/guides/how-clerk-works/overview#clerks-cookies-and-tokens-in-detail).

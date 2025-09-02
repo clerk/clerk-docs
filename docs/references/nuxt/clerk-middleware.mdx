@@ -6,8 +6,8 @@ sdk: nuxt
 
 The `clerkMiddleware()` helper allows you to protect your Nuxt application **on the server-side**. It can be used to validate a user's authentication status or authorization status.
 
-> [!NOTE]
-> To learn how to protect pages, see the [dedicated guide](/docs/references/nuxt/protect-pages).
+> [!WARNING]
+> `clerkMiddleware()` should be used to protect API routes only. It's not recommended to use `clerkMiddleware()` to protect pages as it will **only work on initial page reload**. On subsequent navigations, it won't be triggered because client-side navigation will bypass the middleware. To protect pages, see the [dedicated guide](/docs/references/nuxt/protect-pages).
 
 ## Configure `clerkMiddleware()`
 
@@ -34,14 +34,16 @@ To **manually** configure the middleware:
 
 ## Protect API routes
 
-You can protect routes using either or both of the following:
+You can protect API routes using either or both of the following:
 
 - [Authentication-based protection](#authentication-based-protection): Verify if the user is signed in.
-- [Authorization-based protection](#authorization-based-protection): Verify if the user has the required organization roles or custom permissions.
+- [Authorization-based protection](#authorization-based-protection): Verify if the user has the required privileges, such as a role, permission, feature, or plan. Learn more about [authorization checks](/docs/guides/authorization-checks).
+
+Also, see how to [protect multiple routes](#protect-multiple-routes) using the `createRouteMatcher()` helper.
 
 ### Authentication-based protection
 
-To protect routes based on user authentication status, you can check if the user is signed in by checking the `userId` on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
+To protect routes based on user authentication status, you can check if the user is signed in by checking the `isAuthenticated` property on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
 In the following example, the `clerkMiddleware()` helper checks if the user is signed in and accessing a protected route. If they aren't signed in, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
@@ -49,10 +51,10 @@ In the following example, the `clerkMiddleware()` helper checks if the user is s
 import { clerkMiddleware } from '@clerk/nuxt/server'
 
 export default clerkMiddleware((event) => {
-  const { userId } = event.context.auth()
+  const { isAuthenticated } = event.context.auth()
   const isAdminRoute = event.path.startsWith('/api/admin')
 
-  if (!userId && isAdminRoute) {
+  if (!isAuthenticated && isAdminRoute) {
     throw createError({
       statusCode: 401,
       statusMessage: 'Unauthorized: User not signed in',
@@ -63,9 +65,9 @@ export default clerkMiddleware((event) => {
 
 ### Authorization-based protection
 
-To protect routes based on user authorization status, you can use the `has()` helper to check if the user has the required [organization roles or custom permissions](/docs/organizations/roles-permissions). It is available on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
+To protect routes based on user authorization status, you can use the `has()` helper to check if the user has the required [privileges, such as a role, permission, feature, or plan](/docs/guides/authorization-checks). The `has()` helper is available on the [`auth`](/docs/references/nuxt/overview#auth-object) object.
 
-#### Protecting routes using custom permissions
+#### Example: Protect routes based on custom permissions
 
 In the following example, the `clerkMiddleware()` helper checks if the user is accessing a protected route. If so, it checks if the user has the required custom permission. If they don't, an error is thrown using Nuxt's [`createError()`](https://nuxt.com/docs/api/utils/create-error) utility.
 
@@ -79,9 +81,9 @@ export default clerkMiddleware((event) => {
     permission: 'org:invoices:create',
   })
 
-  // Check if user is accessing sensitive customer data
+  // Check if the user is accessing a protected route
   if (isInvoicesRoute) {
-    // Check if user has the required permission
+    // Check if the user has the required permission
     if (!canCreateInvoices) {
       throw createError({
         statusCode: 403,
@@ -92,7 +94,7 @@ export default clerkMiddleware((event) => {
 })
 ```
 
-#### Protecting routes using default roles
+#### Example: Protect routes based on default roles
 
 > [!WARNING]
 > It's best practice to use permission-based authorization over role-based authorization, as it reduces complexity and increases security. Usually, complex role checks can be refactored with a single permission check.
@@ -109,9 +111,9 @@ export default clerkMiddleware((event) => {
     role: 'org:admin',
   })
 
-  // Check if the user is trying to access a protected route
+  // Check if the user is accessing a protected route
   if (isAdminRoute) {
-    // Check if the user has the required admin role
+    // Check if the user has the required role
     if (!isAdmin) {
       throw createError({
         statusCode: 403,
@@ -120,4 +122,61 @@ export default clerkMiddleware((event) => {
     }
   }
 })
+```
+
+### Protect multiple routes
+
+You can protect multiple routes at once by using Clerk's `createRouteMatcher()` helper function. The `createRouteMatcher()` helper accepts an array of route patterns and checks if the route the user is trying to visit matches one of the patterns passed to it.
+
+Let's take the [first example](#authentication-based-protection) from this guide and add the `createRouteMatcher()` helper. Instead of only checking `/api/admin/**` routes, the following example checks both `/api/invoices/**` _and_ `/api/admin/**` routes.
+
+```ts {{ filename: 'server/middleware/clerk.ts' }}
++ import { clerkMiddleware, createRouteMatcher } from '@clerk/nuxt/server'
+
+  export default clerkMiddleware((event) => {
+    const { isAuthenticated } = event.context.auth()
+-   const isAdminRoute = event.path.startsWith('/api/admin')
++   const isProtectedRoute = createRouteMatcher(['/api/invoices(.*)', '/api/admin(.*)'])
+
+    // Check if the user is not signed in
+    // and is trying to access a protected route. If so, throw a 401 error.
+    if (!isAuthenticated && isProtectedRoute(event)) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized: User not signed in',
+      })
+    }
+  })
+```
+
+Now, let's add authorization-based protection to the example so that you can see how to combine everything you've learned so far.
+
+```ts {{ filename: 'server/middleware/clerk.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nuxt/server'
+
+  export default clerkMiddleware((event) => {
+    const { isAuthenticated } = event.context.auth()
+    const isProtectedRoute = createRouteMatcher(['/api/invoices(.*)', '/api/admin(.*)'])
++   const canCreateInvoices = has({
++     permission: 'org:invoices:create',
++   })
+
+    // Check if the user is not signed in
+    // and is trying to access a protected route. If so, throw a 401 error.
+    if (!isAuthenticated && isProtectedRoute(event)) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized: User not signed in',
+      })
+    }
+
++   // Check if the user doesn't have the required permission
++   // and is accessing a protected route. If so, throw a 403 error.
++   if (!canCreateInvoices && isProtectedRoute(event)) {
++     throw createError({
++       statusCode: 403,
++       statusMessage: 'Unauthorized: Missing permission to create invoices',
++     })
++   }
+  })
 ```

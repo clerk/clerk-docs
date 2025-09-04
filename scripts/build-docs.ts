@@ -216,7 +216,7 @@ async function main() {
         'references/express/overview.mdx': ['link-hash-not-found'],
         'references/vue/overview.mdx': ['link-hash-not-found'],
         'getting-started/quickstart.js-backend.mdx': ['link-hash-not-found'],
-        'guides/sessions/session-token.mdx': ['link-hash-not-found'],
+        'guides/sessions/session-tokens.mdx': ['link-hash-not-found'],
         'guides/development/upgrading/upgrade-guides/node-to-express.mdx': ['link-hash-not-found'],
         'guides/sessions/customize-session-tokens.mdx': ['link-hash-not-found'],
       },

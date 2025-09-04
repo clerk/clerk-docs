@@ -513,14 +513,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       // either use the defined sdk of the doc, or the parent group
       const sdk = docSDK ?? parentSDK
 
-      if (docSDK !== undefined && parentSDK !== undefined) {
-        if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-sdk-filtered-by-parent')) {
-            throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
-          }
-        }
-      }
-
       return {
         ...item,
         sdk,
@@ -528,25 +520,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }
     },
     async ({ items, ...details }, tree) => {
-      // This takes all the children items, grabs the sdks out of them, and combines that in to a list
-      const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
-
-        if (sdks === undefined) return []
-
-        return Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
-      })()
-
       // This is the sdk of the group
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
       const parentSDK = tree.sdk
-
-      // If there are no children items, then the we either use the group we are looking at sdks if its defined, or its parent group
-      if (groupsItemsCombinedSDKs.length === 0) {
-        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
-      }
 
       if (groupSDK !== undefined && groupSDK.length > 0) {
         return {
@@ -556,10 +534,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         } as ManifestGroup
       }
 
+      const sdk = Array.from(new Set([...(groupSDK ?? []), ...(parentSDK ?? [])])) ?? []
+
       return {
         ...details,
-        // If there are children items, then we combine the sdks of the group and the children items sdks
-        sdk: Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? [],
+        sdk: sdk.length > 0 ? sdk : undefined,
         items,
       } as ManifestGroup
     },

@@ -1213,56 +1213,6 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  test('should fail when child SDK is not in parent SDK list', async () => {
-    const { tempDir } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              {
-                title: 'Authentication',
-                sdk: ['react'],
-                items: [
-                  [
-                    {
-                      title: 'Login',
-                      href: '/docs/auth/login',
-                      sdk: ['react', 'remix'], // remix not in parent
-                    },
-                  ],
-                ],
-              },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/auth/login.mdx',
-        content: `---
-title: Login
-sdk: react, remix
----
-
-# Login Page
-
-Authentication login documentation.`,
-      },
-    ])
-
-    const promise = build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'remix', 'nextjs'],
-      }),
-    )
-
-    await expect(promise).rejects.toThrow(
-      'Doc "Login" is attempting to use ["react","remix"] But its being filtered down to ["react"] in the manifest.json',
-    )
-  })
-
   test('should generate appropriate landing pages for SDK-specific docs', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -5779,5 +5729,154 @@ activeSdk: react
 
 Updated Documentation specific to React.js
 `)
+  })
+
+  test('processes navigation with nested collapsible items and SDK-specific variants', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Docs',
+                items: [
+                  [
+                    { title: 'Doc 1', sdk: ['nextjs'], items: [[{ title: 'Doc 1', href: '/docs/doc-1' }]] },
+                    { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
+                    { title: 'Doc 2', href: '/docs/doc-2' },
+                    {
+                      title: 'Doc 3 & 4',
+                      items: [
+                        [
+                          { title: 'Doc 3', href: '/docs/doc-3' },
+                          { title: 'Doc 4', href: '/docs/doc-4' },
+                        ],
+                      ],
+                    },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/doc-1.mdx',
+        content: `---
+title: Doc 1
+sdk: nextjs
+---
+
+# Doc 1`,
+      },
+      {
+        path: './docs/doc-1.react.mdx',
+        content: `---
+title: Doc 1 for React
+sdk: react
+---
+
+# Doc 1 for React`,
+      },
+      {
+        path: './docs/doc-1.remix.mdx',
+        content: `---
+title: Doc 1 for Remix
+sdk: remix
+---
+
+# Doc 1 for Remix`,
+      },
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+---
+
+# Doc 2`,
+      },
+      {
+        path: './docs/doc-3.mdx',
+        content: `---
+title: Doc 3
+sdk: vue
+---
+
+# Doc 3`,
+      },
+      {
+        path: './docs/doc-4.mdx',
+        content: `---
+title: Doc 4
+sdk: react
+---
+
+# Doc 4`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix', 'vue'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            title: 'Docs',
+            items: [
+              [
+                {
+                  title: 'Doc 1',
+                  sdk: ['nextjs'],
+                  items: [
+                    [
+                      {
+                        href: '/docs/:sdk:/doc-1',
+                        title: 'Doc 1',
+                        sdk: ['nextjs', 'react', 'remix'],
+                      },
+                    ],
+                  ],
+                },
+                {
+                  href: '/docs/:sdk:/doc-1',
+                  title: 'Doc 1',
+                  sdk: ['react', 'remix'],
+                },
+                {
+                  href: '/docs/doc-2',
+                  title: 'Doc 2',
+                },
+                {
+                  title: 'Doc 3 & 4',
+                  sdk: ['vue', 'react'],
+                  items: [
+                    [
+                      {
+                        href: '/docs/doc-3',
+                        sdk: ['vue'],
+                        title: 'Doc 3',
+                      },
+                      {
+                        href: '/docs/doc-4',
+                        sdk: ['react'],
+                        title: 'Doc 4',
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
   })
 })

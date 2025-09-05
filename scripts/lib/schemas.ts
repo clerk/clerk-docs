@@ -85,6 +85,7 @@ export const icon = z.enum([
   'expo',
   'nuxt',
   'fastify',
+  'api',
 ])
 
 export type Icon = z.infer<typeof icon>

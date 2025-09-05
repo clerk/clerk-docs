@@ -268,7 +268,6 @@ async function main() {
     validSdks: VALID_SDKS,
     manifestOptions: {
       wrapDefault: true,
-      collapseDefault: false,
       hideTitleDefault: false,
     },
     llms: {
@@ -515,14 +514,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       // either use the defined sdk of the doc, or the parent group
       const sdk = docSDK ?? parentSDK
 
-      if (docSDK !== undefined && parentSDK !== undefined) {
-        if (docSDK.every((sdk) => parentSDK?.includes(sdk)) === false) {
-          if (!shouldIgnoreWarning(config, `${item.href}.mdx`, 'docs', 'doc-sdk-filtered-by-parent')) {
-            throw new Error(errorMessages['doc-sdk-filtered-by-parent'](item.title, docSDK, parentSDK))
-          }
-        }
-      }
-
       return {
         ...item,
         sdk,
@@ -530,25 +521,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }
     },
     async ({ items, ...details }, tree) => {
-      // This takes all the children items, grabs the sdks out of them, and combines that in to a list
-      const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
-
-        if (sdks === undefined) return []
-
-        return Array.from(new Set(sdks)).filter((sdk): sdk is SDK => sdk !== undefined)
-      })()
-
       // This is the sdk of the group
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
       const parentSDK = tree.sdk
-
-      // If there are no children items, then the we either use the group we are looking at sdks if its defined, or its parent group
-      if (groupsItemsCombinedSDKs.length === 0) {
-        return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
-      }
 
       if (groupSDK !== undefined && groupSDK.length > 0) {
         return {
@@ -558,10 +535,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         } as ManifestGroup
       }
 
+      const sdk = Array.from(new Set([...(groupSDK ?? []), ...(parentSDK ?? [])])) ?? []
+
       return {
         ...details,
-        // If there are children items, then we combine the sdks of the group and the children items sdks
-        sdk: Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? [],
+        sdk: sdk.length > 0 ? sdk : undefined,
         items,
       } as ManifestGroup
     },
@@ -601,7 +579,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) => item.flatMap((item) => item.sdk))
+        const sdks = items?.flatMap((item) =>
+          item.flatMap((item) => {
+            // For manifest items with hrefs, include distinctSDKVariants from the document
+            if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
+              const doc = docsMap.get(item.href)
+              if (doc) {
+                const sdks = [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+                return sdks.length > 0 ? sdks : undefined
+              }
+            }
+            return item.sdk
+          }),
+        )
 
         // If the child sdks is undefined then its core so it supports all sdks
         const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
@@ -620,17 +610,18 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
       }
 
-      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
-      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
-        return { ...details, sdk: undefined, items } as ManifestGroup
-      }
-
+      // If the group has explicit SDK scoping in the manifest, that takes precedence
       if (groupSDK !== undefined && groupSDK.length > 0) {
         return {
           ...details,
           sdk: groupSDK,
           items,
         } as ManifestGroup
+      }
+
+      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
+        return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
       const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []
@@ -853,7 +844,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
-          collapse: group.collapse === config.manifestOptions.collapseDefault ? undefined : group.collapse,
+          collapse: group.collapse,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
@@ -1254,7 +1245,16 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  await fs.rm(config.distFinalPath, { recursive: true })
+  try {
+    await fs.rm(config.distFinalPath, { recursive: true })
+  } catch (error) {
+    console.error(`Failed to clear ${config.distFinalPath}, trying again...`, error)
+    try {
+      await fs.rm(config.distFinalPath, { recursive: true })
+    } catch (error) {
+      console.error(`Failed to clear ${config.distFinalPath}, giving up...`, error)
+    }
+  }
 
   abortSignal?.throwIfAborted()
 

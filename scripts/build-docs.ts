@@ -262,6 +262,10 @@ async function main() {
         // temp migration ignores
         'auth-object-table.mdx': ['link-hash-not-found'],
         'backend/usage.mdx': ['link-hash-not-found'],
+        'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
+        'backend/email-address.mdx': ['link-hash-not-found'],
+        'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
+        'types/user-resource.mdx': ['link-hash-not-found'],
       },
       tooltips: {},
     },

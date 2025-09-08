@@ -500,23 +500,6 @@ export function Layout() {
 
 </details>
 
-<details>
-<summary>TypeScript type for code block props</summary>
-
-```tsx
-type LineNumber = number
-type Mark = LineNumber | [start: LineNumber, end: LineNumber]
-
-interface CodeBlockProps {
-  filename?: string
-  mark?: Array<Mark>
-  ins?: Array<Mark>
-  del?: Array<Mark>
-}
-```
-
-</details>
-
 You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
 
 | Type     | Character |
@@ -533,6 +516,62 @@ You can also specify **deleted**, **inserted**, or **marked** lines by prependin
   }
 ```
 ````
+
+#### Collapsing sections of code
+
+You can collapse sections of a code block by using the `fold` prop. The type for the `fold` prop is `Array<[start: number, end: number, label?: string]>`, where `start` and `end` define the inclusive range of lines to collapse, and `label` is a custom label for the expand button. By default the label will be `{n} lines collapsed`.
+
+````mdx
+```ts {{ fold: [[2, 4]] }}
+export function Example() {
+  useEffect(() => {
+    // some long unimportant code here
+  }, [])
+
+  return null
+}
+```
+````
+
+<details>
+<summary>Fold example</summary>
+
+| Default                                                                                   | Expanded                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| <img width="1204" height="416" alt="" src="/.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="/.github/media/code-block-fold-expanded.png" /> |
+
+</details>
+
+You can also truncate a code block by using the `collapsible` prop. This will reduce the height of the code block by default and display an "expand" button to reveal the full code block.
+
+````mdx
+```ts {{ collapsible: true }}
+// ...
+```
+````
+
+<details>
+<summary>Collapsible example</summary>
+
+![](/.github/media/code-block-collapsible.png)
+
+</details>
+
+#### TypeScript type for code block props
+
+```tsx
+type LineNumber = number
+type Mark = LineNumber | [start: LineNumber, end: LineNumber]
+
+interface CodeBlockProps {
+  filename?: string
+  mark?: Array<Mark>
+  ins?: Array<Mark>
+  del?: Array<Mark>
+  collapsible?: boolean
+  fold?: Array<[start: LineNumber, end: LineNumber, label?: string]>
+}
+```
 
 #### Code block shortcodes
 

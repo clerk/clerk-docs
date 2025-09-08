@@ -25,11 +25,9 @@ export const readPartialsFolder = (config: BuildConfig) => async () => {
 }
 
 export const readPartial = (config: BuildConfig) => async (filePath: string) => {
-  const readFile = readMarkdownFile(config)
+  const fullPath = path.join(config.partialsPath, filePath)
 
-  const fullPath = path.join(config.docsRelativePath, config.partialsRelativePath, filePath)
-
-  const [error, content] = await readFile(fullPath)
+  const [error, content] = await readMarkdownFile(fullPath)
 
   if (error) {
     throw new Error(errorMessages['partial-read-error'](fullPath), { cause: error })

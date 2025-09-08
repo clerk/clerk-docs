@@ -13,6 +13,8 @@ const EXCLUDE_LIST = [
   '/pricing',
   '/docs/reference/backend-api',
   '/docs/reference/frontend-api',
+  '/docs/errors/backend-api',
+  '/docs/errors/frontend-api',
   '/support',
   '/discord',
   '/contact',

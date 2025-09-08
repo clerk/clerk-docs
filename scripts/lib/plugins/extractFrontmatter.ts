@@ -35,6 +35,20 @@ export const extractFrontmatter =
 
         const frontmatterYaml: Record<'title' | 'description' | 'sdk', string | undefined> = yaml.parse(node.value)
 
+        if (frontmatterYaml === null) {
+          safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
+          return
+        }
+
+        if (frontmatterYaml.title === undefined) {
+          safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
+          return
+        }
+
+        if (frontmatterYaml.description === undefined) {
+          safeMessage(config, vfile, filePath, section, 'frontmatter-missing-description', [], node.position)
+        }
+
         const frontmatterSDKs = frontmatterYaml.sdk?.split(', ')
 
         if (frontmatterSDKs !== undefined && validateSDKs(frontmatterSDKs) === false) {
@@ -49,15 +63,6 @@ export const extractFrontmatter =
             node.position,
           )
           return
-        }
-
-        if (frontmatterYaml.title === undefined) {
-          safeFail(config, vfile, filePath, section, 'frontmatter-missing-title', [], node.position)
-          return
-        }
-
-        if (frontmatterYaml.description === undefined) {
-          safeMessage(config, vfile, filePath, section, 'frontmatter-missing-description', [], node.position)
         }
 
         frontmatter = {

@@ -13,6 +13,7 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { errorMessages, safeMessage } from '../error-messages'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
 import { existsSync } from 'node:fs'
+import { z } from 'zod'
 
 export const checkTypedoc =
   (
@@ -20,6 +21,7 @@ export const checkTypedoc =
     typedocs: { path: string; node: Node }[],
     filePath: string,
     options: { reportWarnings: boolean; embed: boolean },
+    foundTypedoc?: (typedoc: string) => void,
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
@@ -33,6 +35,7 @@ export const checkTypedoc =
         true,
         'docs',
         filePath,
+        z.string(),
       )
 
       if (typedocSrc === undefined) return node
@@ -59,6 +62,8 @@ export const checkTypedoc =
         }
         return node
       }
+
+      foundTypedoc?.(`${removeMdxSuffix(typedocSrc)}.mdx`)
 
       if (options.embed === true) {
         return Object.assign(node, typedoc.node)

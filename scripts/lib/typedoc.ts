@@ -24,11 +24,9 @@ export const readTypedocsFolder = (config: BuildConfig) => async () => {
 }
 
 export const readTypedoc = (config: BuildConfig) => async (filePath: string) => {
-  const readFile = readMarkdownFile(config)
+  const typedocPath = path.join(config.typedocPath, filePath)
 
-  const typedocPath = path.join(config.typedocRelativePath, filePath)
-
-  const [error, content] = await readFile(typedocPath)
+  const [error, content] = await readMarkdownFile(typedocPath)
 
   if (error) {
     throw new Error(errorMessages['typedoc-read-error'](typedocPath), { cause: error })

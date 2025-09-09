@@ -1321,6 +1321,8 @@ template: wide
 redirectPage: "true"
 availableSdks: react,nextjs
 notAvailableSdks: ""
+search:
+  exclude: true
 ---
 <SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
@@ -5137,6 +5139,8 @@ template: wide
 redirectPage: "true"
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
+search:
+  exclude: true
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
 
@@ -5230,6 +5234,8 @@ template: wide
 redirectPage: "true"
 availableSdks: react,nextjs
 notAvailableSdks: ""
+search:
+  exclude: true
 ---
 <SDKDocRedirectPage title="Documentation" href="/docs/:sdk:/test" sdks={["react","nextjs"]} />`)
 

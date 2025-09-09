@@ -893,6 +893,7 @@ ${yaml.stringify({
   redirectPage: 'true',
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+  search: { exclude: true },
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )

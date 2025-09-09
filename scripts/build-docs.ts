@@ -827,6 +827,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+              sdkScoped: 'false',
+              canonical: doc.file.href,
             }),
           )
           .process(doc.vfile),

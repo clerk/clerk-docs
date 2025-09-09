@@ -225,6 +225,8 @@ Testing with a simple page.`,
 title: Simple Test
 description: This is a simple test page
 lastUpdated: ${initialCommitDate.toISOString()}
+sdkScoped: "false"
+canonical: /docs/simple-test
 ---
 
 # Simple Test Page
@@ -5026,6 +5028,8 @@ description: Generated API docs
     expect(await readFile('./dist/llms-full.txt')).toEqual(`---
 title: API Documentation
 description: Generated API docs
+sdkScoped: "false"
+canonical: /docs/api-doc
 ---
 
 # API Documentation
@@ -5292,6 +5296,8 @@ description: x
     expect(await readFile('./dist/overview.mdx')).toBe(`---
 title: Overview
 description: x
+sdkScoped: "false"
+canonical: /docs/overview
 ---
 
 <SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
@@ -5394,4 +5400,43 @@ activeSdk: react
 Updated Documentation specific to React.js
 `)
   })
+})
+
+test('x', async () => {
+  const { tempDir, readFile, writeFile, pathJoin } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+      }),
+    },
+    {
+      path: './docs/api-doc.mdx',
+      content: `---
+title: API Documentation
+description: x
+---
+
+# API Documentation
+`,
+    },
+  ])
+
+  await build(
+    await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    }),
+  )
+
+  expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdkScoped: "false"
+canonical: /docs/api-doc
+---
+
+# API Documentation
+`)
 })

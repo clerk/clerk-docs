@@ -94,7 +94,7 @@ async function main() {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch OpenAPI spec from Github')
+      throw new Error('Failed to fetch OpenAPI spec from GitHub')
     }
 
     return await response.text()

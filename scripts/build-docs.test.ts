@@ -1323,6 +1323,7 @@ availableSdks: react,nextjs
 notAvailableSdks: ""
 search:
   exclude: true
+canonical: /docs/:sdk:/sdk-document
 ---
 <SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
@@ -5141,6 +5142,7 @@ availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 search:
   exclude: true
+canonical: /docs/:sdk:/api-doc
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
 
@@ -5236,6 +5238,7 @@ availableSdks: react,nextjs
 notAvailableSdks: ""
 search:
   exclude: true
+canonical: /docs/:sdk:/test
 ---
 <SDKDocRedirectPage title="Documentation" href="/docs/:sdk:/test" sdks={["react","nextjs"]} />`)
 

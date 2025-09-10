@@ -5870,3 +5870,58 @@ sdk: react
     })
   })
 })
+
+test('x', async () => {
+  const { tempDir } = await createTempFiles([
+    {
+      path: './docs/manifest.json',
+      content: JSON.stringify({
+        navigation: [
+          [
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Page 2', href: '/docs/page-2' },
+          ],
+        ],
+      }),
+    },
+    {
+      path: './docs/api-doc.mdx',
+      content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+# API Documentation`,
+    },
+    {
+      path: './docs/api-doc.react.mdx',
+      content: `---
+title: API Documentation for React
+description: x
+sdk: react
+---
+
+# React`,
+    },
+    {
+      path: './docs/page-2.mdx',
+      content: `---
+title: Page 2
+description: x
+---
+
+[API Doc](/docs/api-doc#react)`,
+    },
+  ])
+
+  const output = await build(
+    await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react', 'nextjs'],
+    }),
+  )
+
+  expect(output).toBe('')
+})

@@ -66,7 +66,11 @@ export const validateLinks =
 
         if (linkedDoc.distinctSDKVariants) {
           linkedDoc.distinctSDKVariants.forEach((sdk) => {
-            docsMap.get(`${url}.${sdk}`)?.headingsHashes.forEach((headingHash) => {
+            const distinctSDKVariant = docsMap.get(`${url}.${sdk}`)
+
+            if (distinctSDKVariant === undefined) return
+
+            distinctSDKVariant.headingsHashes.forEach((headingHash) => {
               combinedHeadingHashes.add(headingHash)
             })
           })

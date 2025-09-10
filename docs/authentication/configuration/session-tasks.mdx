@@ -153,7 +153,7 @@ export const config = {
 }
 ```
 
-For `auth().userId`, it would return `null` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to a `signed-in` state.
+For `auth().isAuthenticated`, it would return `false` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to a `signed-in` state.
 
 ```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
@@ -161,11 +161,11 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth()
+  const { isAuthenticated, redirectToSignIn } = await auth()
 
-  // pending users will not have a `userId`
-  // and will be redirected to the sign-in page
-  if (!userId && isProtectedRoute(req)) {
+  // `isAuthenticated` will be `false` for pending users
+  // and they will be redirected to the sign-in page
+  if (!isAuthenticated && isProtectedRoute(req)) {
     return redirectToSignIn()
   }
 })
@@ -182,7 +182,7 @@ export const config = {
 
 ### Session handling
 
-You can check the current authentication state using the `Clerk.isSignedIn` property. By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
+By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
 
 - `true` (default): Treats `pending` sessions as signed-out. Users can't access protected content or routes.
 - `false`: Treats `pending` sessions as signed-in. Users can access protected content or routes.
@@ -286,16 +286,16 @@ The `useAuth()` hook and helpers that access the [`auth` object](/docs/reference
 
 When organizations are enabled, [personal accounts are disabled by default](/docs/organizations/overview#allow-personal-accounts) and your users will be required to select or create an organization after authenticating. Until completed, their session remains `pending`. Pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
 
-For `useAuth()`, `userId` will be `null` if the user has a `pending` session.
+For `useAuth()`, `isSignedIn` will be `false` and `userId` and `orgId` will be `null` if the user has a `pending` session.
 
 ```tsx
 export default function Dashboard() {
-  const { isSignedIn, userId } = useAuth()
+  const { isSignedIn, userId, orgId } = useAuth()
 
-  if (!userId) {
+  if (!isSignedIn) {
     return (
       <p>
-        User has no session or a pending session. They either need to sign in, or they need to
+        User has no session, or has a pending session. They either need to sign in, or they need to
         complete tasks by selecting or creating an organization.
       </p>
     )
@@ -303,25 +303,25 @@ export default function Dashboard() {
 
   return (
     <p>
-      <p>User has a valid session and {orgId} is defined</p>
+      User {userId} has a valid session and {orgId} is defined
     </p>
   )
 }
 ```
 
 <If sdk="nextjs">
-  For `auth().userId`, it would return `null` if the user has a `pending` session.
+  For `auth()`, `isAuthenticated` would return `false` and `userId` and `orgId` would return `null` if the user has a `pending` session.
 
   ```tsx {{ filename: 'app/page.tsx' }}
   import { auth } from '@clerk/nextjs/server'
 
   export default async function Page() {
-    const { userId, orgId } = await auth()
+    const { isAuthenticated, userId, orgId } = await auth()
 
-    if (!userId) {
+    if (!isAuthenticated) {
       return (
         <p>
-          User has no session or a pending session. They either need to sign in, or they need to
+          User has no session, or has a pending session. They either need to sign in, or they need to
           complete pending session tasks by selecting or creating an organization.
         </p>
       )
@@ -329,7 +329,7 @@ export default function Dashboard() {
 
     return (
       <p>
-        <p>User has a valid session and {orgId} is defined</p>
+        User {userId} has a valid session and {orgId} is defined
       </p>
     )
   }

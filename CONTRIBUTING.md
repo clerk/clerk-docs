@@ -828,7 +828,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/references/general/components/overview)
+- [UI Components](/docs/references/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
@@ -850,7 +850,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/references/general/components/overview)
+- [UI Components](/docs/references/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -873,7 +873,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/references/general/components/overview)
+- [UI Components](/docs/references/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 

@@ -1817,6 +1817,45 @@ activeSdk: react
     ])
   })
 
+  test('should add sdkScoped false and canonical URL to non-SDK-scoped documents', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdkScoped: "false"
+canonical: /docs/api-doc
+---
+
+# API Documentation
+`)
+  })
+
   test('should not inject :sdk: for single SDK documents when multiple SDKs are available', async () => {
     const { tempDir, readFile, listFiles } = await createTempFiles([
       {
@@ -5409,43 +5448,4 @@ activeSdk: react
 Updated Documentation specific to React.js
 `)
   })
-})
-
-test('x', async () => {
-  const { tempDir, readFile, writeFile, pathJoin } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
-      }),
-    },
-    {
-      path: './docs/api-doc.mdx',
-      content: `---
-title: API Documentation
-description: x
----
-
-# API Documentation
-`,
-    },
-  ])
-
-  await build(
-    await createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react'],
-    }),
-  )
-
-  expect(await readFile('./dist/api-doc.mdx')).toBe(`---
-title: API Documentation
-description: x
-sdkScoped: "false"
-canonical: /docs/api-doc
----
-
-# API Documentation
-`)
 })

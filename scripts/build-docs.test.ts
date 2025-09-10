@@ -2473,6 +2473,116 @@ title: Simple Test
     expect(output).not.toContain(`warning Hash "my-heading" not found in /docs/headings`)
   })
 
+  test('should validate hashes in links to distinct variant sdk scoped guides', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+# API Documentation`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+sdk: react
+---
+
+# React`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+description: x
+---
+
+[API Doc](/docs/api-doc#react)`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('should validate hashes in sdk specific links to distinct variant sdk scoped guides', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+# API Documentation`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+sdk: react
+---
+
+# React`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+description: x
+---
+
+[API Doc](/docs/react/api-doc#react)`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
   test('Swap out links for <SDKLink /> when a link points to an sdk generated guide', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -5869,114 +5979,4 @@ sdk: react
       ],
     })
   })
-})
-
-test.only('x', async () => {
-  const { tempDir } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'API Doc', href: '/docs/api-doc' },
-            { title: 'Page 2', href: '/docs/page-2' },
-          ],
-        ],
-      }),
-    },
-    {
-      path: './docs/api-doc.mdx',
-      content: `---
-title: API Documentation
-description: x
-sdk: nextjs
----
-
-# API Documentation`,
-    },
-    {
-      path: './docs/api-doc.react.mdx',
-      content: `---
-title: API Documentation for React
-description: x
-sdk: react
----
-
-# React`,
-    },
-    {
-      path: './docs/page-2.mdx',
-      content: `---
-title: Page 2
-description: x
----
-
-[API Doc](/docs/api-doc#react)`,
-    },
-  ])
-
-  const output = await build(
-    await createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react', 'nextjs'],
-    }),
-  )
-
-  expect(output).toBe('')
-})
-
-test.only('x', async () => {
-  const { tempDir } = await createTempFiles([
-    {
-      path: './docs/manifest.json',
-      content: JSON.stringify({
-        navigation: [
-          [
-            { title: 'API Doc', href: '/docs/api-doc' },
-            { title: 'Page 2', href: '/docs/page-2' },
-          ],
-        ],
-      }),
-    },
-    {
-      path: './docs/api-doc.mdx',
-      content: `---
-title: API Documentation
-description: x
-sdk: nextjs
----
-
-# API Documentation`,
-    },
-    {
-      path: './docs/api-doc.react.mdx',
-      content: `---
-title: API Documentation for React
-description: x
-sdk: react
----
-
-# React`,
-    },
-    {
-      path: './docs/page-2.mdx',
-      content: `---
-title: Page 2
-description: x
----
-
-[API Doc](/docs/react/api-doc#react)`,
-    },
-  ])
-
-  const output = await build(
-    await createConfig({
-      ...baseConfig,
-      basePath: tempDir,
-      validSdks: ['react', 'nextjs'],
-    }),
-  )
-
-  expect(output).toBe('')
 })

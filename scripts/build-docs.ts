@@ -181,7 +181,6 @@ export async function main(
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
         'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
         'backend/email-address.mdx': ['link-hash-not-found'],
         'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
@@ -920,6 +919,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+              sdkScoped: 'false',
+              canonical: doc.file.href,
             }),
           )
           .process(doc.vfile),
@@ -978,6 +979,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         if (needsRedirectPage) {
           // This is a sdk specific doc with multiple options, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+
+          // get the same canonical value as the doc
+          const hrefSegments = doc.file.href.split('/')
+          const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
+          const isSingleSdkDocument = sdks.length === 1
+
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
+
           await writeFile(
             doc.file.filePathInDocsFolder,
             `---
@@ -986,6 +998,8 @@ ${yaml.stringify({
   redirectPage: 'true',
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+  search: { exclude: true },
+  canonical: canonical,
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )

@@ -102,11 +102,13 @@ async function createTempFiles(
     pathJoin: (...paths: string[]) => path.join(tempDir, ...paths),
 
     // Get a list of all files in the temp directory
-    listFiles: async () => {
-      return glob('**/*', {
-        cwd: tempDir,
-        nodir: true,
-      })
+    listFiles: async (folderPath?: string) => {
+      return (
+        await glob('**/*', {
+          cwd: folderPath ? path.join(tempDir, folderPath) : tempDir,
+          nodir: true,
+        })
+      ).sort() // ensure a consistent order for tests
     },
 
     // Read file contents
@@ -223,6 +225,8 @@ Testing with a simple page.`,
 title: Simple Test
 description: This is a simple test page
 lastUpdated: ${initialCommitDate.toISOString()}
+sdkScoped: "false"
+canonical: /docs/simple-test
 ---
 
 # Simple Test Page
@@ -1317,6 +1321,9 @@ template: wide
 redirectPage: "true"
 availableSdks: react,nextjs
 notAvailableSdks: ""
+search:
+  exclude: true
+canonical: /docs/:sdk:/sdk-document
 ---
 <SDKDocRedirectPage title="SDK Document" description="This document is available for React and Next.js." href="/docs/:sdk:/sdk-document" sdks={["react","nextjs"]} />`,
     )
@@ -1721,11 +1728,7 @@ activeSdk: react
 # React Guide
 `)
 
-    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
-      'dist/manifest.json',
-      'dist/directory.json',
-      'dist/references/react/guide.mdx',
-    ])
+    expect(await listFiles('dist/')).toEqual(['directory.json', 'manifest.json', 'references/react/guide.mdx'])
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
@@ -1791,11 +1794,7 @@ activeSdk: react
 # React Guide
 `)
 
-    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
-      'dist/manifest.json',
-      'dist/guide.mdx',
-      'dist/directory.json',
-    ])
+    expect(await listFiles('dist/')).toEqual(['directory.json', 'guide.mdx', 'manifest.json'])
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
@@ -1816,6 +1815,45 @@ activeSdk: react
         url: '/docs/guide',
       },
     ])
+  })
+
+  test('should add sdkScoped false and canonical URL to non-SDK-scoped documents', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+# API Documentation
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+sdkScoped: "false"
+canonical: /docs/api-doc
+---
+
+# API Documentation
+`)
   })
 
   test('should not inject :sdk: for single SDK documents when multiple SDKs are available', async () => {
@@ -1869,11 +1907,7 @@ sdk: nextjs
     })
 
     // Should process document without redirect page
-    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
-      'dist/manifest.json',
-      'dist/directory.json',
-      'dist/quickstarts/nextjs-pages-router.mdx',
-    ])
+    expect(await listFiles('dist/')).toEqual(['directory.json', 'manifest.json', 'quickstarts/nextjs-pages-router.mdx'])
 
     expect(await readFile('./dist/quickstarts/nextjs-pages-router.mdx')).toBe(`---
 title: Next.js Quickstart (Pages Router)
@@ -5036,6 +5070,8 @@ description: Generated API docs
     expect(await readFile('./dist/llms-full.txt')).toEqual(`---
 title: API Documentation
 description: Generated API docs
+sdkScoped: "false"
+canonical: /docs/api-doc
 ---
 
 # API Documentation
@@ -5143,16 +5179,19 @@ template: wide
 redirectPage: "true"
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
+search:
+  exclude: true
+canonical: /docs/:sdk:/api-doc
 ---
 <SDKDocRedirectPage title="API Documentation" description="x" href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]} />`)
 
-    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
-      'dist/manifest.json',
-      'dist/directory.json',
-      'dist/api-doc.mdx',
-      'dist/remix/api-doc.mdx',
-      'dist/react/api-doc.mdx',
-      'dist/nextjs/api-doc.mdx',
+    expect(await listFiles('dist/')).toEqual([
+      'api-doc.mdx',
+      'directory.json',
+      'manifest.json',
+      'nextjs/api-doc.mdx',
+      'react/api-doc.mdx',
+      'remix/api-doc.mdx',
     ])
   })
 
@@ -5236,15 +5275,18 @@ template: wide
 redirectPage: "true"
 availableSdks: react,nextjs
 notAvailableSdks: ""
+search:
+  exclude: true
+canonical: /docs/:sdk:/test
 ---
 <SDKDocRedirectPage title="Documentation" href="/docs/:sdk:/test" sdks={["react","nextjs"]} />`)
 
-    expect((await listFiles()).filter((f) => f.startsWith('dist/'))).toEqual([
-      'dist/test.mdx',
-      'dist/manifest.json',
-      'dist/directory.json',
-      'dist/react/test.mdx',
-      'dist/nextjs/test.mdx',
+    expect(await listFiles('dist/')).toEqual([
+      'directory.json',
+      'manifest.json',
+      'nextjs/test.mdx',
+      'react/test.mdx',
+      'test.mdx',
     ])
   })
 
@@ -5302,6 +5344,8 @@ description: x
     expect(await readFile('./dist/overview.mdx')).toBe(`---
 title: Overview
 description: x
+sdkScoped: "false"
+canonical: /docs/overview
 ---
 
 <SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>

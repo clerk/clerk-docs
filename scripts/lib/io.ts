@@ -75,7 +75,7 @@ export const writeSDKFile = (config: BuildConfig, store: Store) => {
   }
 }
 
-// not exactly io, but used to parse the json using a result patten
+// not exactly io, but used to parse the json using a result pattern
 export const parseJSON = (json: string) => {
   try {
     const output = JSON.parse(json)

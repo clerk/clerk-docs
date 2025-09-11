@@ -16,9 +16,8 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
 
   To use SMS OTP, you first need to enable it for your application.
 
-  1. In the Clerk Dashboard, navigate to the [**Email, phone, username**](https://dashboard.clerk.com/last-active?path=user-authentication/email-phone-username) page.
-  1. Ensure that _only_ **Phone number** is required. If other identifiers are enabled, ensure they are **not required**. If you would like to require any of these, you'll need to combine their custom flows with this custom flow. For example, if you want to require **Username**, you must collect the username and pass the data to the `create()` method in your custom flow. For this guide, if you would like to use email OTP instead, require the **Email address** option instead of the **Phone number** option.
-  1. Select the **Sign-in options** tab and ensure **Phone number** is enabled. Ensure **Password** is toggled off, as you are prioritizing passwordless, SMS OTP-only authentication in this guide. If you would like to use email OTP instead, enable **Email verification code** instead of the **Phone number**.
+  1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/last-active?path=user-authentication/user-and-authentication) page.
+  1. Select the **Phone** tab and enable **Sign-up with phone** and **Sign-in with phone** and keep the default settings.
 
   ## Sign-up flow
 
@@ -85,9 +84,19 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
             // If verification was completed, set the session to active
             // and redirect the user
             if (signUpAttempt.status === 'complete') {
-              await setActive({ session: signUpAttempt.createdSessionId })
+              await setActive({
+                session: signUpAttempt.createdSessionId,
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // Check for tasks and navigate to custom UI to help users resolve them
+                    // See https://clerk.com/docs/custom-flows/overview#session-tasks
+                    console.log(session?.currentTask)
+                    return
+                  }
 
-              router.push('/')
+                  await router.push('/')
+                },
+              })
             } else {
               // If the status is not complete, check why. User may need to
               // complete further steps.
@@ -146,6 +155,8 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
           <body>
             <div id="signed-in"></div>
 
+            <div id="task"></div>
+
             <div id="sign-up">
               <h2>Sign up</h2>
               <form id="sign-up-form">
@@ -184,6 +195,20 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
           const userbuttonDiv = document.getElementById('user-button')
 
           clerk.mountUserButton(userbuttonDiv)
+        } else if (clerk.session?.currentTask) {
+          // Check for pending tasks and display custom UI to help users resolve them
+          // See https://clerk.com/docs/custom-flows/overview#session-tasks
+          switch (clerk.session.currentTask.key) {
+            case 'choose-organization': {
+              document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+              const taskDiv = document.getElementById('task')
+
+              clerk.mountTaskChooseOrganization(taskDiv)
+            }
+          }
         } else {
           // Handle the sign-up form
           document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
@@ -546,9 +571,19 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
             // If verification was completed, set the session to active
             // and redirect the user
             if (signInAttempt.status === 'complete') {
-              await setActive({ session: signInAttempt.createdSessionId })
+              await setActive({
+                session: signInAttempt.createdSessionId,
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // Check for tasks and navigate to custom UI to help users resolve them
+                    // See https://clerk.com/docs/custom-flows/overview#session-tasks
+                    console.log(session?.currentTask)
+                    return
+                  }
 
-              router.push('/')
+                  router.push('/')
+                },
+              })
             } else {
               // If the status is not complete, check why. User may need to
               // complete further steps.

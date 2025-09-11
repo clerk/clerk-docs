@@ -3513,6 +3513,8 @@ description: x
       `---
 title: Doc 2
 description: x
+sdkScoped: "false"
+canonical: /docs/doc-2
 ---
 
 <Cards>

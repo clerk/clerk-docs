@@ -209,16 +209,6 @@ async function main() {
         // temp migration ignores
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
-        'getting-started/quickstart.mdx': ['link-hash-not-found'],
-        'guides/development/sdk-development/backend-only.mdx': ['link-hash-not-found'],
-        'references/astro/integration.mdx': ['link-hash-not-found'],
-        'references/astro/overview.mdx': ['link-hash-not-found'],
-        'references/express/overview.mdx': ['link-hash-not-found'],
-        'references/vue/overview.mdx': ['link-hash-not-found'],
-        'getting-started/quickstart.js-backend.mdx': ['link-hash-not-found'],
-        'guides/sessions/session-tokens.mdx': ['link-hash-not-found'],
-        'guides/development/upgrading/upgrade-guides/node-to-express.mdx': ['link-hash-not-found'],
-        'guides/sessions/customize-session-tokens.mdx': ['link-hash-not-found'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
@@ -258,15 +248,7 @@ async function main() {
         'nextjs/get-auth.mdx': ['link-doc-not-found'],
         'nextjs/auth.mdx': ['link-doc-not-found'],
       },
-      partials: {
-        // temp migration ignores
-        'auth-object-table.mdx': ['link-hash-not-found'],
-        'backend/usage.mdx': ['link-hash-not-found'],
-        'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
-        'backend/email-address.mdx': ['link-hash-not-found'],
-        'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
-        'types/user-resource.mdx': ['link-hash-not-found'],
-      },
+      partials: {},
       tooltips: {},
     },
     validSdks: VALID_SDKS,
@@ -571,8 +553,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
           // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
           // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
+
+          const existingDoc = docsMap.get(
+            updatedDoc.distinctSDKVariants?.includes(sdk) ? `${item.href}.${sdk}` : item.href,
+          )
+
+          if (existingDoc === undefined) {
+            throw new Error(`Existing doc not found for ${item.href}.${sdk}`)
+          }
+
           docsMap.set(item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdk}/`), {
-            ...updatedDoc,
+            ...existingDoc,
             sdk: [sdk], // override this fake copy of the doc so links to it believe this is the correct sdk
           })
         }
@@ -919,6 +910,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+              sdkScoped: 'false',
+              canonical: doc.file.href,
             }),
           )
           .process(doc.vfile),
@@ -975,6 +968,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         if (needsRedirectPage) {
           // This is a sdk specific doc with multiple options, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+
+          // get the same canonical value as the doc
+          const hrefSegments = doc.file.href.split('/')
+          const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
+          const isSingleSdkDocument = sdks.length === 1
+
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
+
           await writeFile(
             doc.file.filePathInDocsFolder,
             `---
@@ -983,6 +987,8 @@ ${yaml.stringify({
   redirectPage: 'true',
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+  search: { exclude: true },
+  canonical: canonical,
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )

@@ -12,7 +12,7 @@ type BuildConfigOptions = {
   validSdks: readonly SDK[]
   dataPath: string
   docsPath: string
-  renderSpecificFile: string | null
+  renderSpecificFile?: string
   baseDocsLink: string
   manifestPath: string
   partialsPath: string

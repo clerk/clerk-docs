@@ -114,7 +114,7 @@ export async function main(
     basePath: options?.basePath ?? __dirname,
     dataPath: '../data',
     docsPath: '../docs',
-    renderSpecificFile: selectedFile,
+    renderSpecificFile: selectedFile ?? undefined,
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
     partialsPath: '../docs/_partials',

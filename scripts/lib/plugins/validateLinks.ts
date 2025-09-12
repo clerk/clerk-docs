@@ -62,7 +62,21 @@ export const validateLinks =
       foundLink?.(linkedDoc.file.filePath)
 
       if (hash !== undefined) {
-        const hasHash = linkedDoc.headingsHashes.has(hash)
+        const combinedHeadingHashes = new Set(linkedDoc.headingsHashes)
+
+        if (linkedDoc.distinctSDKVariants) {
+          linkedDoc.distinctSDKVariants.forEach((sdk) => {
+            const distinctSDKVariant = docsMap.get(`${url}.${sdk}`)
+
+            if (distinctSDKVariant === undefined) return
+
+            distinctSDKVariant.headingsHashes.forEach((headingHash) => {
+              combinedHeadingHashes.add(headingHash)
+            })
+          })
+        }
+
+        const hasHash = combinedHeadingHashes.has(hash)
 
         if (hasHash === false) {
           safeMessage(config, vfile, filePath, section, 'link-hash-not-found', [hash, url], node.position)

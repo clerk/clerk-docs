@@ -40,12 +40,10 @@ The following table lists the available tasks and their corresponding components
 > [!IMPORTANT]
 > Personal accounts being disabled by default was released on 08-22-2025. Applications created before this date will not be able to see the **Allow personal accounts** setting, because personal accounts were enabled by default.
 
-If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending session tasks. Refer to the [custom flows documentation](/docs/guides/development/custom-flows/overview) for specific implementation guides.
+If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending session tasks. To access the `Session.currentTask` property, you can use either the `useSession()` hook for React-based applications or `window.Clerk` for other frameworks.
 
-<CodeBlockTabs options={["React", "JavaScript"]}>
+<CodeBlockTabs options={["Hook", "JavaScript"]}>
   ```jsx
-  import { useSession } from '@clerk/clerk-react'
-
   const { session } = useSession()
 
   if (session?.currentTask) {
@@ -72,40 +70,25 @@ When users have pending session tasks, you can redirect them to specific pages o
 
 The `taskUrls` option allows you to specify custom URL paths where users are redirected after sign-up or sign-in when specific session tasks need to be completed. This allows you to still use `<SignIn />` and `<SignUp />` but have tasks with custom pages.
 
-<Tabs items={['layout.tsx', 'choose-organization/page.tsx']}>
-  <Tab>
-    Configure the `taskUrls` option in your root layout to specify where users should be redirected for different session tasks.
+The `taskUrls` option is available wherever you initialize the Clerk integration. For most SDKs, it's `<ClerkProvider>`.
 
-    ```tsx {{ filename: 'app/layout.tsx' }}
-    import { ClerkProvider } from '@clerk/nextjs'
+```tsx
+<ClerkProvider
+  taskUrls={{
+    'choose-organization': '/onboarding/choose-organization',
+  }}
+>
+  {children}
+</ClerkProvider>
+```
 
-    export default function RootLayout({ children }: { children: React.ReactNode }) {
-      return (
-        <ClerkProvider
-          publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-          taskUrls={{
-            'choose-organization': '/onboarding/choose-organization',
-          }}
-        >
-          {children}
-        </ClerkProvider>
-      )
-    }
-    ```
-  </Tab>
+Then, create a page at that URL path that imports the [`<TaskChooseOrganization />`](/docs/references/components/authentication/task-choose-organization) component to handle the task.
 
-  <Tab>
-    Create a custom page that imports the `TaskChooseOrganization` component to handle the task.
-
-    ```tsx {{ filename: 'app/onboarding/choose-organization/page.tsx' }}
-    import { TaskChooseOrganization } from '@clerk/nextjs'
-
-    export default function ChooseOrganizationPage() {
-      return <TaskChooseOrganization redirectUrlComplete="/dashboard" />
-    }
-    ```
-  </Tab>
-</Tabs>
+```tsx {{ filename: 'app/onboarding/choose-organization/page.tsx' }}
+export default function Page() {
+  return <TaskChooseOrganization redirectUrlComplete="/dashboard" />
+}
+```
 
 #### Using the `RedirectToTasks` control component
 
@@ -130,34 +113,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
 #### Middleware-based redirects
 
-For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to an `active` (signed-in) state.
-
-```tsx {{ filename: 'middleware.ts', mark: [[6, 8]] }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  // pending users won't be able to access protected routes
-  // and will be redirected to the sign-in page
-  if (isProtectedRoute(req)) await auth.protect()
-})
-
-export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
-}
-```
-
 For `auth().isAuthenticated`, it would return `false` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to a `signed-in` state.
 
-```tsx {{ filename: 'app/middleware.ts', mark: [[6, 12]] }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
+```tsx
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -169,16 +127,32 @@ export default clerkMiddleware(async (auth, req) => {
     return redirectToSignIn()
   }
 })
-
-export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
-}
 ```
+
+<If sdk="nextjs">
+  For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to an `active` (signed-in) state.
+
+  ```tsx {{ filename: 'middleware.ts', mark: [[6, 8]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    // pending users won't be able to access protected routes
+    // and will be redirected to the sign-in page
+    if (isProtectedRoute(req)) await auth.protect()
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+</If>
 
 ### Session handling
 

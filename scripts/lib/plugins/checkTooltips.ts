@@ -10,9 +10,7 @@ import type { VFile } from 'vfile'
 import type { BuildConfig } from '../config'
 import { safeMessage } from '../error-messages'
 import type { DocsFile } from '../io'
-import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
-import { z } from 'zod'
 import { u as mdastBuilder } from 'unist-builder'
 
 export const checkTooltips =
@@ -32,26 +30,29 @@ export const checkTooltips =
   () =>
   (tree: Node, vfile: VFile) => {
     return mdastMap(tree, (node) => {
-      const tooltipSrc = extractComponentPropValueFromNode(
-        config,
-        node,
-        vfile,
-        'Tooltip',
-        'src',
-        true,
-        'docs',
-        file.filePath,
-        z.string(),
-      )
+      // Tooltips are written as links with the format [trigger](!content)
+      // We need to check if the node is a link
+      if (node.type !== 'link') return node
+      if (!('url' in node)) return node
+      if (!('children' in node)) return node
+      if (typeof node.url !== 'string') return node
 
-      if (tooltipSrc === undefined) return node
+      // Then, check if the link is a tooltip (starts with !)
+      // [trigger text](!content)
+      if (!node.url.startsWith('!')) return node
 
-      if (tooltipSrc.startsWith('_tooltips/') === false) {
-        if (options.reportWarnings === true) {
-          safeMessage(config, vfile, file.filePath, 'docs', 'tooltip-src-not-tooltip', [], node.position)
-        }
-        return node
-      }
+      // Access the link properties
+      // url of the link = <TooltipContent> e.g. '!content'
+      // children (the text content of the link) = <TooltipTrigger> e.g. 'trigger text'
+      const url = node.url
+      const children = node.children
+
+      // The tooltip content exists in a MDX file e.g. '_tooltips/content.mdx'
+      // We need to remove the ! to get the file path e.g. 'content'
+      const tooltipSrc = url.substring(1)
+
+      console.log('Trigger:', children)
+      console.log('Content/src:', tooltipSrc)
 
       const tooltip = tooltips.find((tooltip) => tooltip.path === `${removeMdxSuffix(tooltipSrc)}.mdx`)
 
@@ -81,7 +82,7 @@ export const checkTooltips =
             children: [
               mdastBuilder('mdxJsxTextElement', {
                 name: 'TooltipTrigger',
-                children: (node as any).children,
+                children: children,
               }),
               mdastBuilder('mdxJsxTextElement', {
                 name: 'TooltipContent',

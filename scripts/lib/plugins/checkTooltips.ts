@@ -51,9 +51,6 @@ export const checkTooltips =
       // We need to remove the ! to get the file path e.g. 'content'
       const tooltipSrc = url.substring(1)
 
-      console.log('Trigger:', children)
-      console.log('Content/src:', tooltipSrc)
-
       const tooltip = tooltips.find((tooltip) => tooltip.path === `_tooltips/${removeMdxSuffix(tooltipSrc)}.mdx`)
 
       if (tooltip === undefined) {

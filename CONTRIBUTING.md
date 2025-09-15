@@ -708,7 +708,7 @@ https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2
 
 ### Tooltips
 
-A tooltip is content that appears when the user hovers over a word or phrase. Tooltips are used to provide additional information about a word or phrase.
+A tooltip is content that appears when the user hovers over a word or phrase in order to provide additional information. It's most useful for definitions.
 
 Tooltips are defined in the `_tooltips` folder and written in MDX, but they do not support custom MDX components, like callouts or `<Tabs />` components. Try to keep the tooltip content as text.
 

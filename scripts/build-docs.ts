@@ -55,7 +55,7 @@ import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
-import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
+import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
@@ -97,6 +97,7 @@ import {
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { existsSync } from 'node:fs'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -309,10 +310,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
   const writeTooltipsToDist = writeTooltips(config, store)
-
-  abortSignal?.throwIfAborted()
-
-  await ensureDirectory(config.distFinalPath)
 
   abortSignal?.throwIfAborted()
 
@@ -1255,33 +1252,30 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  try {
-    await fs.rm(config.distFinalPath, { recursive: true })
-  } catch (error) {
-    console.error(`Failed to clear ${config.distFinalPath}, trying again...`, error)
-    try {
-      await fs.rm(config.distFinalPath, { recursive: true })
-    } catch (error) {
-      console.error(`Failed to clear ${config.distFinalPath}, giving up...`, error)
-    }
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (process.env.VERCEL === '1') {
+  if (config.flags.watch) {
+    // While in dev, we just want to symlink the new dist to the dist folder
+    // This removes the issue that fs.cp can't replace a folder
+    // We don't need to worry about the public folder because in dev clerk/clerk just looks in the original public folder
+    await symlinkDir(config.distTempPath, config.distFinalPath)
+  } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
-    await fs.rm(config.distTempPath, { recursive: true })
+    if (config.publicPath) {
+      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
+    }
+    // We don't need to worry about temp folders as the ci runner will be destroyed after this anyways
   } else {
-    await fs.rename(config.distTempPath, config.distFinalPath)
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (config.publicPath) {
-    if (config.flags.watch) {
-      await symlinkDir(config.publicPath, path.join(config.distFinalPath, '_public'))
-    } else {
+    // During a standard build
+    // If the dist folder already exists, remove it
+    if (existsSync(config.distFinalPath)) {
+      await fs.rm(config.distFinalPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+    // Copy over our new dist folder from temp
+    await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
+    // Remove the temp dist folder
+    await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    // Copy over the public folder
+    if (config.publicPath) {
       await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
     }
   }

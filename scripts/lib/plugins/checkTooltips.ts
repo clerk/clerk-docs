@@ -54,7 +54,7 @@ export const checkTooltips =
       console.log('Trigger:', children)
       console.log('Content/src:', tooltipSrc)
 
-      const tooltip = tooltips.find((tooltip) => tooltip.path === `${removeMdxSuffix(tooltipSrc)}.mdx`)
+      const tooltip = tooltips.find((tooltip) => tooltip.path === `_tooltips/${removeMdxSuffix(tooltipSrc)}.mdx`)
 
       if (tooltip === undefined) {
         if (options.reportWarnings === true) {

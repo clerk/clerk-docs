@@ -172,6 +172,7 @@ async function main() {
         'upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
         'upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
         'upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
+        'pinning.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],

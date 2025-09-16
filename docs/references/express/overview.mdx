@@ -11,11 +11,11 @@ The Clerk Express SDK provides a powerful set of tools and utilities to seamless
 
 ## `clerkMiddleware()`
 
-The `clerkMiddleware()` middleware is required, and must be set before any other middleware. It checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/references/backend/types/auth-object) object to the `request` object under the `auth` key. See the [reference doc](/docs/references/express/clerk-middleware) for more information.
+The `clerkMiddleware()` middleware checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/references/backend/types/auth-object) object to the `request` object under the `auth` key. See the [reference doc](/docs/references/express/clerk-middleware) for more information.
 
 ## `requireAuth()`
 
-The `requireAuth()` middleware protects your routes by redirecting unauthenticated users to the homepage. See the [reference doc](/docs/references/express/require-auth) for more information.
+The `requireAuth()` middleware acts similarly to [`clerkMiddleware()`](#clerk-middleware), but also protects your routes by redirecting unauthenticated users to the homepage. See the [reference doc](/docs/references/express/require-auth) for more information.
 
 ## `getAuth()`
 
@@ -32,19 +32,22 @@ All resource operations are mounted as sub-APIs on the `clerkClient` object. See
 The following example uses `clerkClient` to get information about the currently signed-in user. If the user is authenticated, their `userId` is passed to [`clerkClient.users.getUser()`](/docs/references/backend/user/get-user){{ target: '_blank' }} to get the current user's [`User`](/docs/references/javascript/user){{ target: '_blank' }} object. If not authenticated, the request is rejected with a `401` status code.
 
 ```js
-import { clerkClient, requireAuth } from '@clerk/express'
+import { clerkClient, clerkMiddleware, getAuth } from '@clerk/express'
 import express from 'express'
 
 const app = express()
 const PORT = 3000
 
+// Apply `clerkMiddleware()` to all routes
+app.use(clerkMiddleware())
+
 app.get('/user', async (req, res) => {
-  // Use `req.auth` to access `isAuthenticated` and the user's ID
-  const { isAuthenticated, userId } = req.auth
+  // Use `getAuth()` to access `isAuthenticated` and the user's ID
+  const { isAuthenticated, userId } = getAuth(req)
 
   // If user isn't authenticated, return a 401 error
   if (!isAuthenticated) {
-    res.status(401).json({ error: 'User not authenticated' })
+    return res.status(401).json({ error: 'User not authenticated' })
   }
 
   // Use `clerkClient` to access Clerk's JS Backend SDK methods

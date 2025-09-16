@@ -18,17 +18,20 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
 <Steps>
   ## Create a new Next.js project
 
-  1. Create a new Next.js project using the following command:
-     ```sh {{ filename: 'terminal' }}
-     npx create-next-app clerk-prisma-example --typescript --eslint --tailwind --use-npm --no-src-dir --app --import-alias "@/*"
-     ```
-  1. Navigate to the project directory and install the required dependencies:
-     ```sh {{ filename: 'terminal' }}
-     cd clerk-prisma-example
-     npm install prisma --save-dev
-     npm install tsx --save-dev
-     npm install @prisma/extension-accelerate
-     ```
+  Create a new Next.js project using the following command:
+
+  ```sh {{ filename: 'terminal' }}
+  npx create-next-app clerk-prisma-example --typescript --eslint --tailwind --use-npm --no-src-dir --app --import-alias "@/*"
+  ```
+
+  Navigate to the project directory and install the required dependencies:
+
+  ```sh {{ filename: 'terminal' }}
+  cd clerk-prisma-example
+  npm install prisma --save-dev
+  npm install tsx --save-dev
+  npm install @prisma/extension-accelerate
+  ```
 
   ## Integrate the Next.js Clerk SDK
 
@@ -59,10 +62,17 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
 
   Next, you'll need to initialize Prisma and set up a Prisma Postgres database.
 
-  1. Initialize Prisma in your project:
-     ```sh {{ filename: 'terminal' }}
-     npx prisma init --output ../app/generated/prisma
-     ```
+  Run the following command to start a local Prisma Postgres database:
+
+  ```sh {{ filename: 'terminal' }}
+  npx prisma dev
+  ```
+
+  Initialize Prisma in your project:
+
+  ```sh {{ filename: 'terminal' }}
+  npx prisma init --output ../app/generated/prisma
+  ```
 
   After initializing Prisma, your environment variable file should have the following values:
 
@@ -72,41 +82,26 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
   CLERK_SECRET_KEY={{secret}}
   ```
 
-  1. Create a `schema.prisma` file in the `prisma/` directory that defines the database schema. The schema will include a table called `user_messages` with the columns `user_id`, `create_ts`, and `message`. The `user_id` column will be used to store the user's Clerk ID.
+  You will find the file `schema.prisma` in the `prisma/` directory, this defines the database schema. Add to the schema a new table called `UserMessage` with the columns `user_id`, `create_ts`, and `message`. The `user_id` column will be used to store the user's Clerk ID. You will need to change the provider from "prisma-client-js" to "prisma-client".
 
-     ```prisma {{ filename: 'prisma/schema.prisma' }}
-     generator client {
-       provider = "prisma-client-js"
-       output   = "../app/generated/prisma"
-     }
+  ```prisma {{ filename: 'prisma/schema.prisma' }}
+  generator client {
+    // Change the provider from "prisma-client-js" to "prisma-client"
+    provider = "prisma-client"
+    output   = "../app/generated/prisma"
+  }
 
-     datasource db {
-       provider = "postgresql"
-       url      = env("DATABASE_URL")
-     }
+  datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+  }
 
-     model UserMessage {
-       user_id   String   @id
-       create_ts DateTime @default(now())
-       message   String
-     }
-     ```
-
-  1. Create a reusable Prisma Client instance in `lib/prisma.ts`:
-
-     ```typescript {{ filename: 'lib/prisma.ts' }}
-     import { PrismaClient } from '../app/generated/prisma'
-
-     const globalForPrisma = globalThis as unknown as {
-       prisma: PrismaClient | undefined
-     }
-
-     export const prisma = globalForPrisma.prisma ?? new PrismaClient()
-
-     if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
-
-     export default prisma
-     ```
+  model UserMessage {
+    user_id   String   @id
+    create_ts DateTime @default(now())
+    message   String
+  }
+  ```
 
   ## Push the schema to the database
 
@@ -114,6 +109,24 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
 
   ```sh {{ filename: 'terminal' }}
   npx prisma db push
+  ```
+
+  ## Create a reusable Prisma Client instance
+
+  To be able to use the Prisma Client instance globally in your code, create a reusable Prisma Client instance in `lib/prisma.ts`:
+
+  ```typescript {{ filename: 'lib/prisma.ts' }}
+  import { PrismaClient } from '../app/generated/prisma/client'
+
+  const globalForPrisma = globalThis as unknown as {
+    prisma: PrismaClient | undefined
+  }
+
+  export const prisma = globalForPrisma.prisma ?? new PrismaClient()
+
+  if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+  export default prisma
   ```
 
   ## Create Server Actions to handle user interactions
@@ -125,11 +138,11 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
 
   import { auth } from '@clerk/nextjs/server'
   import prisma from '@/lib/prisma'
+  import { revalidatePath } from 'next/cache'
 
   export async function createUserMessage(formData: FormData) {
     const { userId } = await auth()
     if (!userId) throw new Error('User not found')
-
     const message = formData.get('message') as string
     await prisma.userMessage.create({
       data: {
@@ -137,15 +150,17 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
         message,
       },
     })
-  }
 
+    revalidatePath('/')
+  }
   export async function deleteUserMessage() {
     const { userId } = await auth()
     if (!userId) throw new Error('User not found')
-
     await prisma.userMessage.deleteMany({
       where: { user_id: userId },
     })
+
+    revalidatePath('/')
   }
   ```
 
@@ -170,21 +185,33 @@ This tutorial shows you how to build a Next.js application with Clerk authentica
     })
 
     return (
-      <main>
-        <h1>Prisma + Clerk Example</h1>
-        {existingMessage ? (
-          <div>
-            <p>{existingMessage.message}</p>
-            <form action={deleteUserMessage}>
-              <button>Delete Message</button>
+      <main className="grid justify-center p-4">
+        <div className="w-full max-w-md space-y-6">
+          <h1 className="text-3xl font-bold text-center">Prisma + Clerk Example</h1>
+          {existingMessage ? (
+            <div className="space-y-4 text-center">
+              <p className="bg-neutral-800 text-white p-3 rounded">{existingMessage.message}</p>
+              <form action={deleteUserMessage}>
+                <button className="bg-red-500 text-white px-4 py-2 rounded w-full">
+                  Delete Message
+                </button>
+              </form>
+            </div>
+          ) : (
+            <form action={createUserMessage} className="space-y-4">
+              <input
+                type="text"
+                name="message"
+                placeholder="Enter a message"
+                className="w-full p-2 border rounded"
+                required
+              />
+              <button className="bg-blue-500 text-white px-4 py-2 rounded w-full">
+                Save Message
+              </button>
             </form>
-          </div>
-        ) : (
-          <form action={createUserMessage}>
-            <input type="text" name="message" placeholder="Enter a message" />
-            <button>Save Message</button>
-          </form>
-        )}
+          )}
+        </div>
       </main>
     )
   }

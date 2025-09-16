@@ -5275,3 +5275,50 @@ Updated Documentation specific to React.js
 `)
   })
 })
+
+describe('Test tooltips', () => {
+  test('Should embed tooltips into a doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+[Tooltip](!ABC)
+`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `React.js is a framework or a library idk`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+title: API Documentation
+description: x
+---
+
+<Tooltip><TooltipTrigger>Tooltip</TooltipTrigger><TooltipContent>React.js is a framework or a library idk</TooltipContent></Tooltip>
+`)
+  })
+})

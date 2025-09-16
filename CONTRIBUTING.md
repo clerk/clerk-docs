@@ -706,6 +706,20 @@ The video below shows what this example looks like once rendered.
 
 https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2d047ab6
 
+### Tooltips
+
+A tooltip is content that appears when the user hovers over a word or phrase in order to provide additional information. A common use case is for definitions.
+
+Tooltips are defined in the `_tooltips` folder and written in MDX, but they do not support custom MDX components, like callouts or `<Tabs />` components. Try to keep the tooltip content as text.
+
+The tooltip syntax is similar to a link, but with a `!` prefix, as shown in the following example:
+
+```mdx
+The ID of the [active organization](!active-organization) that the user belongs to.
+```
+
+Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
+
 ### `<TutorialHero />`
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:

@@ -206,6 +206,7 @@ async function main() {
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
+        'pinning.mdx': ['doc-not-in-manifest'],
 
         // temp migration ignores
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],

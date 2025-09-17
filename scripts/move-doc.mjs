@@ -349,7 +349,11 @@ const mapSourceToDestination = (sourceFile, sourcePattern, destPattern) => {
 const expandGlobPattern = async (pattern) => {
   // Remove leading slash and add .mdx extension if not present
   const searchPattern = pattern.replace(/^\//, '')
-  const globPattern = searchPattern.endsWith('.mdx') ? searchPattern : `${searchPattern}.mdx`
+  const globPattern = searchPattern.endsWith('**')
+    ? `${searchPattern}/*.mdx`
+    : searchPattern.endsWith('.mdx')
+      ? searchPattern
+      : `${searchPattern}.mdx`
 
   const files = await glob(globPattern, {
     cwd: process.cwd(),

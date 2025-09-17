@@ -5497,4 +5497,45 @@ canonical: /docs/api-doc
 <Tooltip><TooltipTrigger>Tooltip</TooltipTrigger><TooltipContent>React.js is a framework or a library idk</TooltipContent></Tooltip>
 `)
   })
+
+  test('Should validate links in tooltips', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+---
+
+[Tooltip](!ABC)
+`,
+      },
+      {
+        path: './docs/_tooltips/ABC.mdx',
+        content: `This is an invalid link [Invalid Link](/docs/invalid-link)`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+        tooltips: {
+          inputPath: '../docs/_tooltips',
+          outputPath: './_tooltips',
+        },
+      }),
+    )
+
+    expect(output).toContain(
+      'warning Matching file not found for path: /docs/invalid-link. Expected file to exist at /docs/invalid-link.mdx',
+    )
+  })
 })

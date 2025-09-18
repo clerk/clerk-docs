@@ -1296,6 +1296,12 @@ ${yaml.stringify({
     // This removes the issue that fs.cp can't replace a folder
     // We don't need to worry about the public folder because in dev clerk/clerk just looks in the original public folder
     await symlinkDir(config.distTempPath, config.distFinalPath, { overwrite: true })
+
+    // Sometimes this symlink will move the current dist folder to .ignored_dist
+    if (existsSync(`.ignored_dist`)) {
+      console.info('✓ Removing .ignored_dist folder')
+      await fs.rm(`.ignored_dist`, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
   } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })

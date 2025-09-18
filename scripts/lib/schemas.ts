@@ -11,7 +11,6 @@ export const VALID_SDKS = [
   'expo',
   'android',
   'ios',
-  'nodejs',
   'expressjs',
   'fastify',
   'react-router',
@@ -47,7 +46,9 @@ export const icon = z.enum([
   'clerk',
   'code-bracket',
   'cog-6-teeth',
+  'cpu',
   'door',
+  'document',
   'elysia',
   'expressjs',
   'globe',
@@ -84,6 +85,7 @@ export const icon = z.enum([
   'expo',
   'nuxt',
   'fastify',
+  'api',
 ])
 
 export type Icon = z.infer<typeof icon>

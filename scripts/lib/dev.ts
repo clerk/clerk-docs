@@ -7,6 +7,7 @@ import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
 import chokidar from 'chokidar'
+import fs from 'node:fs/promises'
 
 export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)
@@ -40,6 +41,8 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
     }
   }
 
+  let lastTempDistPath: string = config.distTempPath
+
   const handleFilesChanged = async (paths: string[]) => {
     if (abortController !== null) {
       console.log('aborting current build')
@@ -60,6 +63,9 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
 
       const output = await buildFunc(newConfig, store, abortController.signal)
 
+      await fs.rm(lastTempDistPath, { recursive: true }) // clean up the old temp dist folder
+
+      lastTempDistPath = newConfig.distTempPath
       abortController = null
 
       if (config.flags.controlled) {
@@ -108,5 +114,14 @@ export const watchAndRebuild = (store: Store, config: BuildConfig, buildFunc: ty
 
   if (config.publicPath) {
     watcher.subscribe(config.publicPath, handleParcelWatcherChange)
+  }
+
+  if (config.siteFlags?.inputPath) {
+    chokidar
+      .watch(config.siteFlags.inputPath, {
+        ignoreInitial: true,
+        awaitWriteFinish: true,
+      })
+      .on('all', handleChokidarWatcherChange)
   }
 }

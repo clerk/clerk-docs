@@ -1,0 +1,649 @@
+---
+title: Auth object
+description: The Auth object contains information about the current user's session.
+sdk: js-backend
+---
+
+The `Auth` object contains important information like the current user's session ID, user ID, and organization ID. It also contains methods to check for permissions and retrieve the current user's session token.
+
+> [!NOTE]
+> The structure of the `Auth` object varies depending on the type of request.
+> For machine-authenticated requests (e.g. using an API key or OAuth token), the object reflects machine-level authentication data instead of user session details.
+>
+> If you're working with machine-authenticated requests, refer to the [Machine properties section](#machine-properties) for a detailed breakdown.
+
+## How to access the `Auth` object
+
+<Include src="_partials/auth-object-table" />
+
+## Session properties
+
+<Properties>
+  - `sessionId`
+  - `string`
+
+  The ID of the current session.
+
+  ---
+
+  - `userId`
+  - `string`
+
+  The ID of the current user.
+
+  ---
+
+  - `orgId`
+  - `string | undefined`
+
+  The ID of the user's [active organization](!active-organization).
+
+  ---
+
+  - `orgRole`
+  - <code>[OrganizationCustomRoleKey](/docs/reference/javascript/types/organization-custom-role-key) | undefined</code>
+
+  The current user's role in their [active organization](!active-organization).
+
+  ---
+
+  - `orgSlug`
+  - `string | undefined`
+
+  The URL-friendly identifier of the user's [active organization](!active-organization).
+
+  ---
+
+  - `orgPermissions`
+  - <code>[OrganizationCustomPermissionKey](/docs/reference/javascript/types/organization-custom-permission-key)\[] | undefined</code>
+
+  The current user's [active organization](!active-organization) permissions.
+
+  ---
+
+  - `sessionClaims`
+  - `JwtPayload`
+
+  The current user's [session claims](/docs/guides/sessions/session-tokens).
+
+  ---
+
+  - `actor`
+  - `ActClaim | undefined`
+
+  Holds identifier for the user that is impersonating the current user. Read more about [impersonation](/docs/guides/users/impersonation).
+
+  ---
+
+  - [`has()`](#has)
+  - <code>(isAuthorizedParams: [CheckAuthorizationParamsWithCustomPermissions](#check-authorization-params-with-custom-permissions)) => boolean</code>
+
+  A function that checks if the user has an organization role or custom permission.
+
+  ---
+
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
+
+  ---
+
+  - [`getToken()`](#get-token)
+  - `ServerGetToken`
+
+  A function that gets the current user's [session token](/docs/guides/sessions/session-tokens) or a [custom JWT template](/docs/guides/sessions/jwt-templates).
+
+  ---
+
+  - `tokenType`
+  - `'session_token'`
+
+  The type of request to authenticate.
+
+  ---
+
+  - `debug`
+  - `AuthObjectDebug`
+
+  Used to help debug issues when using Clerk in development.
+</Properties>
+
+### `has()`
+
+The `has()` helper can be used to do two types of checks:
+
+- **Authorization:** Check if the user has been granted a specific type of access control (role, permission, feature, or plan) and returns a boolean value. For examples, see the [guide on verifying if a user is authorized](/docs/guides/secure/authorization-checks).
+- **Reverification:** Check if the user has verified their credentials within a certain time frame and returns a boolean value. For examples, see the [guide on reverification](/docs/guides/secure/reverification).
+
+```ts
+function has(isAuthorizedParams: CheckAuthorizationParamsWithCustomPermissions): boolean
+```
+
+#### `CheckAuthorizationParamsWithCustomPermissions`
+
+`CheckAuthorizationParamsWithCustomPermissions` has the following properties:
+
+<Properties>
+  - `role`
+  - `string`
+
+  The [role](/docs/guides/organizations/roles-and-permissions) to check for.
+
+  ---
+
+  - `permission`
+  - `string`
+
+  The [permission](/docs/guides/organizations/roles-and-permissions) to check for.
+
+  ---
+
+  - `feature`
+  - `string`
+
+  The [feature](/docs/guides/billing/overview) to check for.
+
+  ---
+
+  - `plan`
+  - `string`
+
+  The [plan](/docs/guides/billing/overview) to check for.
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](#reverification-config)</code>
+
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
+</Properties>
+
+##### `ReverificationConfig`
+
+```ts
+type ReverificationConfig =
+  | SessionVerificationTypes
+  | {
+      level: SessionVerificationLevel
+      afterMinutes: SessionVerificationAfterMinutes
+    }
+
+type SessionVerificationTypes = 'strict_mfa' | 'strict' | 'moderate' | 'lax'
+```
+
+The `ReverificationConfig` type has the following properties:
+
+<Properties>
+  - `strict_mfa`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for both the first and second factors.
+
+  ---
+
+  - `strict`
+
+  Requires the user to verify their credentials within the past 10 minutes. If not verified, prompt for the second factor.
+
+  ---
+
+  - `moderate`
+
+  Requires the user to verify their credentials within the past hour. If not verified, prompt for the second factor.
+
+  ---
+
+  - `lax`
+
+  Requires the user to verify their credentials within the past day. If not verified, prompt for the second factor.
+
+  ---
+
+  - `level`
+  - `"first_factor" | "second_factor" | "multi_factor"`
+
+  The reverification level of credentials to check for.
+
+  ---
+
+  - `afterMinutes`
+  - `number`
+
+  The age of the factor level to check for. Value should be greater than or equal to 1 and less than 99,999.
+</Properties>
+
+### `getToken()`
+
+`getToken()` retrieves the current user's [session token](/docs/guides/sessions/session-tokens) or a [custom JWT template](/docs/guides/sessions/jwt-templates).
+
+> [!NOTE]
+> Providing a `template` will perform a network request and will count towards [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests).
+
+```typescript
+const getToken: ServerGetToken
+
+type ServerGetToken = (options?: ServerGetTokenOptions) => Promise<string | null>
+
+type ServerGetTokenOptions = {
+  template?: string // The name of the custom JWT template to retrieve.
+}
+```
+
+#### Example: Use `getToken()` in the frontend
+
+The `Auth` object is not available in the frontend. To use the `getToken()` method in the frontend:
+
+- For React-based applications, you can use the `useAuth()` hook. See the [reference documentation](/docs/reference/hooks/use-auth) for example usage.
+- For JavaScript applications, see the [reference documentation](/docs/reference/javascript/session#get-token) for example usage.
+
+#### Example: Use `getToken()` in the backend
+
+<Tabs items={["Next.js", "Tanstack React Start", "Express", "Remix"]}>
+  <Tab>
+    To use the `getToken()` method in the backend:
+
+    - In App Router applications, use the [`auth()`](/docs/reference/nextjs/app-router/auth) helper.
+    - In Pages Router applications, use the [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) helper.
+
+    <CodeBlockTabs options={["App Router", "Pages Router"]}>
+      ```js {{ filename: 'app/api/get-token-example/route.ts' }}
+      import { auth } from '@clerk/nextjs/server'
+
+      export async function GET() {
+        const { getToken } = await auth()
+
+        const template = 'supabase'
+
+        const token = await getToken({ template })
+
+        return Response.json({ token })
+      }
+      ```
+
+      ```ts {{ filename: 'pages/api/getToken.ts' }}
+      import { getAuth } from '@clerk/nextjs/server'
+      import type { NextApiRequest, NextApiResponse } from 'next'
+
+      export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+        const { getToken } = getAuth(req)
+
+        const template = 'test'
+
+        const token = await getToken({ template })
+
+        return res.json({ token })
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    ```ts {{ filename: 'app/routes/api/example.ts' }}
+    import { getAuth } from '@clerk/tanstack-react-start/server'
+    import { json } from '@tanstack/react-start'
+    import { createServerFileRoute } from '@tanstack/react-start/server'
+
+    export const ServerRoute = createServerFileRoute().methods({
+      GET: async ({ req, params }) => {
+        const { isAuthenticated, userId, getToken } = await getAuth(req)
+
+        if (!isAuthenticated) {
+          return json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const token = await getToken({ template: 'supabase' })
+
+        // Add logic that retrieves the data
+        // from your database using the token
+
+        return json({
+          // ...
+        })
+      },
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    To use the `getToken()` method in the backend, you can access it using the `Auth` object returned by the `request` object.
+
+    ```js {{ filename: 'getToken.ts' }}
+    app.get('/api/get-token', async (req, res) => {
+      const getToken = req.auth.getToken
+
+      const template = 'test'
+
+      const token = await getToken({ template })
+
+      res.json({ token })
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    To use the `getToken()` method in the backend, you can access it using the [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) function.
+
+    ```ts {{ filename: 'app/routes/get-token.ts' }}
+    import { getAuth } from '@clerk/remix/ssr.server'
+    import { ActionFunction, json } from '@remix-run/node'
+
+    export const action: ActionFunction = async (req) => {
+      const { getToken } = await getAuth(req)
+
+      const template = 'test'
+
+      const token = await getToken({ template })
+
+      return json({ token })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `Auth` object example without active organization
+
+The following is an example of the `Auth` object without an [active organization](!active-organization). Notice that there is no `o` claim. Read more about token claims in the [guide on session tokens](/docs/guides/sessions/session-tokens).
+
+<Tabs items={["Version 2", "Version 1"]}>
+  <Tab>
+    > [!IMPORTANT]
+    > This example is for version 2 of Clerk's session token. To see an example of version 1, select the respective tab above.
+
+    ```js {{ prettier: false }}
+    {
+      azp: 'http://localhost:3000',
+      email: 'email@example.com',
+      exp: 1744735488,
+      fva: [ 9, -1 ],
+      iat: 1744735428,
+      iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+      jti: 'aee4d4a5071bdd66e21b',
+      nbf: 1744735418,
+      pla: 'u:example-plan',
+      role: 'authenticated',
+      sid: 'sess_123',
+      sub: 'user_123',
+      v: 2
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    > [!IMPORTANT]
+    > Version 1 of Clerk's session token was deprecated on April 14, 2025. To upgrade to version 2, go to the [**Updates**](https://dashboard.clerk.com/last-active?path=updates) page in the Clerk Dashboard.
+
+    ```js {{ prettier: false }}
+    {
+      sessionId: 'sess_123',
+      userId: 'user_123',
+      orgId: null,
+      orgRole: null,
+      orgSlug: null,
+      orgPermissions: null,
+      has: [Function (anonymous)],
+      getToken: [AsyncFunction (anonymous)],
+      claims: {
+        azp: 'http://localhost:3000',
+        exp: 1666622607,
+        iat: 1666622547,
+        iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+        nbf: 1666622537,
+        sid: 'sess_123',
+        sub: 'user_123',
+      },
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `Auth` object example with active organization
+
+The following is an example of the `Auth` object with an [active organization](!active-organization). Notice the addition of the `o` claim. Read more about token claims in the [guide on session tokens](/docs/guides/sessions/session-tokens).
+
+<Tabs items={["Version 2", "Version 1"]}>
+  <Tab>
+    > [!IMPORTANT]
+    > This example is for version 2 of Clerk's session token. To see an example of version 1, select the respective tab above.
+
+    ```js {{ prettier: false }}
+    {
+      azp: 'http://localhost:3000',
+      email: 'email@example.com',
+      exp: 1744734948,
+      fea: 'o:example-feature',
+      fva: [ 0, -1 ],
+      iat: 1744734888,
+      iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+      jti: '004f0096e5cd44911924',
+      nbf: 1744734878,
+      o: {
+        fpm: '1',
+        id: 'org_123',
+        per: 'example-perm',
+        rol: 'admin',
+        slg: 'example-org'
+      },
+      pla: 'o:free_org',
+      role: 'authenticated',
+      sid: 'sess_123',
+      sub: 'user_123',
+      v: 2
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    > [!IMPORTANT]
+    > Version 1 of Clerk's session token was deprecated on April 14, 2025. To upgrade to version 2, go to the [**Updates**](https://dashboard.clerk.com/last-active?path=updates) page in the Clerk Dashboard.
+
+    ```js {{ prettier: false }}
+    {
+      sessionId: 'sess_123',
+      userId: 'user_123',
+      orgId: 'org_123',
+      orgRole: 'org:admin',
+      orgSlug: undefined,
+      orgPermissions: ['org:example-feature:example-perm'], // Custom permissions
+      has: [Function (anonymous)],
+      getToken: [AsyncFunction (anonymous)],
+      claims: {
+        azp: 'http://localhost:3000',
+        exp: 1666622607,
+        iat: 1666622547,
+        iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+        nbf: 1666622537,
+        sid: 'sess_123',
+        sub: 'user_123',
+      },
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `Auth` object example with valid factor age
+
+The following is an example of the `Auth` object with a valid factor age. Notice the addition of the `fva` claim with a value of `[0, 0]`, indicating that the first and second factors have been verified within the past minute. Read more about token claims in the [guide on session tokens](/docs/guides/sessions/session-tokens).
+
+<Tabs items={["Version 2", "Version 1"]}>
+  <Tab>
+    > [!IMPORTANT]
+    > This example is for version 2 of Clerk's session token. To see an example of version 1, select the respective tab above.
+
+    ```js {{ mark: [5], prettier: false }}
+    {
+      azp: 'http://localhost:3000',
+      email: 'email@example.com',
+      exp: 1744735488,
+      fva: [ 0,0 ],
+      iat: 1744735428,
+      iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+      jti: 'aee4d4a5071bdd66e21b',
+      nbf: 1744735418,
+      role: 'authenticated',
+      sid: 'sess_123',
+      sub: 'user_123',
+      v: 2
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    > [!IMPORTANT]
+    > Version 1 of Clerk's session token was deprecated on April 14, 2025. To upgrade to version 2, go to the [**Updates**](https://dashboard.clerk.com/last-active?path=updates) page in the Clerk Dashboard.
+
+    ```js {{ mark: [8], prettier: false }}
+    {
+      sessionId: 'sess_123',
+      userId: 'user_123',
+      orgId: null,
+      orgRole: null,
+      orgSlug: null,
+      orgPermissions: null,
+      factorVerificationAge: [0,0],
+      has: [Function (anonymous)],
+      getToken: [AsyncFunction (anonymous)],
+      claims: {
+        azp: 'http://localhost:3000',
+        exp: 1666622607,
+        iat: 1666622547,
+        iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+        nbf: 1666622537,
+        sid: 'sess_123',
+        sub: 'user_123',
+      },
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `Auth` object example of a user without an MFA method registered
+
+The following is an example of the `Auth` object of a user without an MFA method registered. Notice the addition of the `fva` claim, but the value is `[0, -1]`. `0` indicates that the first factor has been verified within the past minute, and `-1` indicates that there is no second factor registered for the user. Read more about token claims in the [guide on session tokens](/docs/guides/sessions/session-tokens).
+
+<Tabs items={["Version 2", "Version 1"]}>
+  <Tab>
+    > [!IMPORTANT]
+    > This example is for version 2 of Clerk's session token. To see an example of version 1, select the respective tab above.
+
+    ```js {{ mark: [5], prettier: false }}
+    {
+      azp: 'http://localhost:3000',
+      email: 'email@example.com',
+      exp: 1744735488,
+      fva: [ 0,-1 ],
+      iat: 1744735428,
+      iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+      jti: 'aee4d4a5071bdd66e21b',
+      nbf: 1744735418,
+      role: 'authenticated',
+      sid: 'sess_123',
+      sub: 'user_123',
+      v: 2
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    > [!IMPORTANT]
+    > Version 1 of Clerk's session token was deprecated on April 14, 2025. To upgrade to version 2, go to the [**Updates**](https://dashboard.clerk.com/last-active?path=updates) page in the Clerk Dashboard.
+
+    ```js {{ mark: [8], prettier: false }}
+    {
+      sessionId: 'sess_123',
+      userId: 'user_123',
+      orgId: null,
+      orgRole: null,
+      orgSlug: null,
+      orgPermissions: null,
+      factorVerificationAge: [0, -1],
+      has: [Function (anonymous)],
+      getToken: [AsyncFunction (anonymous)],
+      claims: {
+        azp: 'http://localhost:3000',
+        exp: 1666622607,
+        iat: 1666622547,
+        iss: 'https://renewing-bobcat-00.clerk.accounts.dev',
+        nbf: 1666622537,
+        sid: 'sess_123',
+        sub: 'user_123',
+        },
+      }
+    ```
+  </Tab>
+</Tabs>
+
+## Machine properties
+
+<Properties>
+  - `id`
+  - `string`
+
+  The ID of the machine.
+
+  ---
+
+  - `subject`
+  - `string`
+
+  The ID of the user or organization that the machine is associated with.
+
+  ---
+
+  - `name`
+  - `string`
+
+  The name of the machine. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `claims`
+  - `Record<string, unknown> | null`
+
+  The machine's claims. For 'api\_key' and 'machine\_token' types.
+
+  ---
+
+  - `scopes`
+  - `string[]`
+
+  The scopes of the machine.
+
+  ---
+
+  - [`getToken()`](#get-token)
+  - `() => Promise<string>`
+
+  A function that gets the machine's token.
+
+  ---
+
+  - `tokenType`
+  - `'api_key' | 'oauth_token' | 'm2m_token'`
+
+  The type of request to authenticate.
+
+  ---
+
+  - `debug`
+  - `AuthObjectDebug`
+
+  Used to help debug issues when using Clerk in development.
+</Properties>
+
+## `Auth` object example of a machine request
+
+The following is an example of the `Auth` object of an authenticated machine request (i.e. a request authenticated using a machine token like an API key).
+
+Notice the addition of a `tokenType` property with the value of 'api\_key', which distinguishes the request as a machine request rather than a user session. The `scopes` array defines the permissions granted by the token.
+
+```js {{ prettier: false }}
+{
+  id: 'oat_123',
+  tokenType: 'oauth_token',
+  userId: 'user_123',
+  clientId: 'client_123',
+  name: 'GitHub OAuth',
+  scopes: ['read', 'write'],
+  getToken: [AsyncFunction (anonymous)],
+}
+```

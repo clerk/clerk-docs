@@ -1,0 +1,70 @@
+---
+title: Access the Clerk object outside of components
+description: Learn how to access and use the Clerk instance outside of React components in Expo applications.
+sdk: expo
+---
+
+The [`Clerk`](/docs/reference/javascript/clerk) object is accessible using the [`useClerk()`](/docs/reference/hooks/use-clerk) hook. However, if you need to access the [`Clerk`](/docs/reference/javascript/clerk) object outside of React components, such as in utility functions or background tasks, you can use the `getClerkInstance()` function.
+
+<Tabs items={["Fetch", "Axios"]}>
+  <Tab>
+    ```ts
+    import { getClerkInstance } from '@clerk/clerk-expo'
+
+    export async function fetchFoo() {
+      const clerkInstance = getClerkInstance()
+      // Use `getToken()` to get the current session token
+      const token = await clerkInstance.session?.getToken()
+
+      const response = await fetch('/api/foo', {
+        headers: {
+          // Include the session token as a Bearer token in the Authorization header
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        // Include status code and status text in error message
+        throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      }
+
+      return response.json()
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```ts
+    import axios from 'axios'
+    import { getClerkInstance } from '@clerk/clerk-expo'
+
+    export async function fetchFoo() {
+      try {
+        const data = await axios.get('/api/foo')
+        return data
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+          throw new Error(`API Error: ${error.response.status} ${error.response.statusText}`)
+        }
+
+        throw new Error('Unknown error')
+      }
+    }
+
+    // Intercept requests and modify them to include the current session token
+    axios.interceptors.request.use(async (config) => {
+      const clerkInstance = getClerkInstance()
+      // Use `getToken()` to get the current session token
+      const token = await clerkInstance.session?.getToken()
+
+      if (token) {
+        // Include the session token as a Bearer token in the Authorization header
+        config.headers.Authorization = `Bearer ${token}`
+      }
+
+      return config
+    })
+    ```
+  </Tab>
+</Tabs>

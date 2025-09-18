@@ -1,0 +1,220 @@
+---
+title: Build a custom sign-out flow
+description: Learn how to use the Clerk API to build a custom sign-out flow using Clerk's signOut() function.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+Clerk's [`<UserButton />`](/docs/reference/components/user/user-button) and [`<SignOutButton />`](/docs/reference/components/unstyled/sign-out-button) components provide an out-of-the-box solution for signing out users. However, if you're building a custom solution, you can use the [`signOut()`](/docs/reference/javascript/clerk#sign-out) function to handle the sign-out process.
+
+The `signOut()` function signs a user out of all sessions in a [multi-session application](/docs/guides/secure/session-options#multi-session-applications), or only the current session in a single-session context. You can also specify a specific session to sign out by passing the `sessionId` parameter.
+
+> [!NOTE]
+> The sign-out flow deactivates only the current session. Other valid sessions associated with the same user (e.g., if the user is signed in on another device) will remain active.
+
+<Tabs items={["Next.js", "JavaScript", "Expo", "iOS", "Android"]}>
+  <Tab>
+    The [`useClerk()`](/docs/reference/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the sign-out button.
+
+    This example is written for Next.js App Router but can be adapted for any React-based framework.
+
+    ```jsx {{ filename: 'app/components/SignOutButton.tsx' }}
+    'use client'
+
+    import { useClerk } from '@clerk/nextjs'
+
+    export const SignOutButton = () => {
+      const { signOut } = useClerk()
+
+      return (
+        // Clicking this button signs out a user
+        // and redirects them to the home page "/".
+        <button onClick={() => signOut({ redirectUrl: '/' })}>Sign out</button>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+      ```html {{ filename: 'index.html', collapsible: true }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="icon" type="image/svg+xml" href="/clerk.svg" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+
+        <body>
+          <div id="app"></div>
+          <button id="sign-out">Sign out</button>
+          <script type="module" src="main.js" async crossorigin="anonymous"></script>
+        </body>
+      </html>
+      ```
+
+      ```js {{ filename: 'main.js', collapsible: true }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(pubKey)
+      await clerk.load()
+
+      if (clerk.isSignedIn) {
+        // Attach signOut function to the sign-out button
+        document.getElementById('sign-out').addEventListener('click', async () => {
+          await clerk.signOut()
+          // Optional: refresh page after sign-out
+          window.location.reload()
+        })
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The [`useClerk()`](/docs/reference/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the "Sign out" button.
+
+    <Include src="_partials/expo/sign-out-custom-flow" />
+  </Tab>
+
+  <Tab>
+    ```swift {{ filename: 'SignOutView.swift', collapsible: true }}
+    import SwiftUI
+    import Clerk
+
+    struct SignOutView: View {
+      @Environment(Clerk.self) private var clerk
+
+      var body: some View {
+        if let session = clerk.session {
+          Text("Active Session: \(session.id)")
+          Button("Sign out") {
+            Task { await signOut() }
+          }
+        } else {
+          Text("You are signed out")
+        }
+      }
+    }
+
+    extension SignOutView {
+
+      func signOut() async {
+        do {
+          try await clerk.signOut()
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'MainViewModel.kt', collapsible: true }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class MainViewModel : ViewModel() {
+
+      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+      val uiState = _uiState.asStateFlow()
+
+      init {
+        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user != null -> UiState.SignedIn
+                else -> UiState.SignedOut
+              }
+          }
+          .launchIn(viewModelScope)
+      }
+
+      fun signOut() {
+        viewModelScope.launch {
+          Clerk.signOut()
+            .onSuccess { _uiState.value = UiState.SignedOut }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+
+      sealed interface UiState {
+        data object SignedIn : UiState
+
+        data object SignedOut : UiState
+
+        data object Loading : UiState
+      }
+    }
+    ```
+
+    ```kotlin {{ filename: 'MainActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.enableEdgeToEdge
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.runtime.getValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+    class MainActivity : ComponentActivity() {
+        val viewModel: MainViewModel by viewModels()
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            enableEdgeToEdge()
+            setContent {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (state) {
+                        MainViewModel.UiState.Loading -> {
+                            CircularProgressIndicator()
+                        }
+
+                        MainViewModel.UiState.SignedIn -> {
+                            Button(onClick = { viewModel.signOut() }) {
+                                Text("Sign out")
+                            }
+                        }
+
+                        MainViewModel.UiState.SignedOut -> {
+                            // Signed out content
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>

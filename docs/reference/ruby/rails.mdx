@@ -1,0 +1,75 @@
+---
+title: Ruby on Rails integration
+description: The Clerk Ruby SDK provides a Rack middleware and a gem to integrate Clerk into your Rails app.
+sdk: ruby
+---
+
+The Clerk Ruby SDK provides a seamless integration with Ruby on Rails through a Rack middleware and dedicated Rails helpers. When you add the Clerk gem to your Rails application, the middleware is automatically included in your application's middleware stack.
+
+<Steps>
+  ## Install `clerk-sdk-ruby`
+
+  <Include src="_partials/ruby/installation" />
+
+  ## Configuration
+
+  <Include src="_partials/ruby/configuration" />
+</Steps>
+
+## Example: Access the `clerk` object
+
+To access Clerk's authentication functionality in your controllers, include the `Clerk::Authenticatable` concern. This gives your controller and views access to the `clerk` helper, which provides access to the current session claims such as `clerk.user` and `clerk.organization`.
+
+```ruby {{ filename: 'app/controllers/application_controller.rb' }}
+class ApplicationController < ActionController::Base
+  include Clerk::Authenticatable
+
+  private
+
+  # If the user is not authenticated, redirect to the sign-in page
+  def require_clerk_session!
+    # The `CLERK_SIGN_IN_URL` env var must be set or the `sign_in_url` method will fail
+    redirect_to clerk.sign_in_url unless clerk.session
+  end
+end
+```
+
+## Example: Protect routes
+
+To protect specific controllers or actions, you can add a `before_action` callback that uses the `require_clerk_session!` method to check for an authenticated Clerk session. This is particularly useful for securing admin sections or sensitive operations.
+
+```ruby
+class AdminController < ApplicationController
+  # Protect routes with the `require_clerk_session!` method
+  before_action :require_clerk_session!
+
+  def index
+    # ...
+  end
+end
+```
+
+## Example: Reverification
+
+For actions requiring additional security, Clerk provides a `:require_reverification!` filter that prompts users to re-authenticate. This filter accepts an optional [preset](/docs/reference/ruby/overview#reverification) parameter to customize the reverification requirements.
+
+In the following example, all actions in the `AdminController` will be protected from unauthenticated users. If the user is authenticated, they will be required to reverify their session before accessing the `destroy` action.
+
+```ruby
+class AdminController < ApplicationController
+  # Protect routes with the `require_clerk_session!` method
+  before_action :require_clerk_session!
+  # Protect `destroy` with the `require_reverification!` method
+  # Reverification preset is set to `LAX`
+  before_action :require_reverification!, only: :destroy, preset: Clerk::StepUp::Preset::LAX
+
+
+  def index
+    # ...
+  end
+
+  def destroy
+    # ...
+  end
+end
+```

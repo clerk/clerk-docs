@@ -47,8 +47,8 @@ import { Node } from 'unist'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { visit as mdastVisit } from 'unist-util-visit'
 import reporter from 'vfile-reporter'
-import { z } from 'zod'
 import yaml from 'yaml'
+import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
@@ -82,7 +82,8 @@ import { checkPartials } from './lib/plugins/checkPartials'
 import { checkTypedoc } from './lib/plugins/checkTypedoc'
 import { filterOtherSDKsContentOut } from './lib/plugins/filterOtherSDKsContentOut'
 import { insertFrontmatter } from './lib/plugins/insertFrontmatter'
-import { validateAndEmbedLinks } from './lib/plugins/validateAndEmbedLinks'
+import { embedLinks } from './lib/plugins/embedLinks'
+import { validateLinks } from './lib/plugins/validateLinks'
 import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
@@ -93,9 +94,10 @@ import {
   writeRedirects,
   type Redirect,
 } from './lib/redirects'
-import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
-import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { checkTooltips } from './lib/plugins/checkTooltips'
+import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
+import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -171,11 +173,11 @@ async function main() {
         'upgrade-guides/core-2/react.mdx': ['doc-not-in-manifest'],
         'upgrade-guides/core-2/remix.mdx': ['doc-not-in-manifest'],
         'upgrade-guides/core-2/javascript.mdx': ['doc-not-in-manifest'],
+        'pinning.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
         'types/active-session-resource.mdx': ['link-hash-not-found'],
         'types/pending-session-resource.mdx': ['link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
         'backend/allowlist-identifier.mdx': ['link-hash-not-found'],
         'backend/email-address.mdx': ['link-hash-not-found'],
         'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
@@ -242,7 +244,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
-  const writeTooltipsToDist = writeTooltips(config, store)
 
   abortSignal?.throwIfAborted()
 
@@ -355,7 +356,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
 
         const markdownFile = await markdownCache(file.filePath, () =>
-          parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+          parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
         )
 
         if (sdkMatch) {
@@ -374,7 +375,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             const inManifest = docsInManifest.has(file.href)
 
             const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+              parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
             )
 
             docsMap.set(file.href, markdownFile)
@@ -572,7 +573,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
+            validateLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
@@ -616,7 +617,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
+            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
               links.add(linkInTooltip)
             }),
           )
@@ -656,7 +657,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
               links.add(linkInTypedoc)
             }),
           )
@@ -682,7 +683,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateAndEmbedLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
+              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
                 links.add(linkInTypedoc)
               }),
             )
@@ -776,13 +777,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const foundLinks: Set<string> = new Set()
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
+      const foundTooltips: Set<string> = new Set()
+
+      const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateAndEmbedLinks(
+            validateLinks(
               config,
               docsMap,
               doc.file.filePath,
@@ -799,6 +803,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             }),
           )
           .use(
+            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+              foundTooltips.add(tooltip)
+            }),
+          )
+          .use(
             checkTypedoc(
               config,
               validatedTypedocs,
@@ -810,10 +819,23 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             ),
           )
           .use(checkPrompts(config, prompts, doc.file, { reportWarnings: false, update: true }))
+          .use(
+            embedLinks(
+              config,
+              docsMap,
+              sdks,
+              (link) => {
+                foundLinks.add(link)
+              },
+              doc.file.href,
+            ),
+          )
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
           .use(
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+              sdkScoped: 'false',
+              canonical: doc.file.href,
             }),
           )
           .process(doc.vfile),
@@ -827,7 +849,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .filter((typedoc) => foundTypedocs.has(typedoc.path))
         .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
 
-      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks])
+      const tooltipsLinks = validatedTooltips
+        .filter((tooltip) => foundTooltips.has(tooltip.path))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTooltips)
+
+      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks, ...tooltipsLinks])
 
       allLinks.forEach((link) => {
         markDirty(doc.file.filePath, link)
@@ -870,6 +896,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         if (needsRedirectPage) {
           // This is a sdk specific doc with multiple options, so we want to put a landing page here to redirect the user to a doc customized to their sdk.
+
+          // get the same canonical value as the doc
+          const hrefSegments = doc.file.href.split('/')
+          const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
+          const isSingleSdkDocument = sdks.length === 1
+
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
+
           await writeFile(
             doc.file.filePathInDocsFolder,
             `---
@@ -878,6 +915,8 @@ ${yaml.stringify({
   redirectPage: 'true',
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+  search: { exclude: true },
+  canonical: canonical,
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
@@ -929,10 +968,12 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateAndEmbedLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
+              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(
@@ -1083,13 +1124,6 @@ ${yaml.stringify({
   if (prompts.length > 0) {
     await writePrompts(config, prompts)
     console.info(`✓ Wrote ${prompts.length} prompts to disk`)
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (config.tooltips) {
-    await writeTooltipsToDist(validatedTooltips)
-    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
   }
 
   abortSignal?.throwIfAborted()

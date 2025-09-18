@@ -74,25 +74,25 @@ const isOnboardingRoute = createRouteMatcher(['/onboarding'])
 const isPublicRoute = createRouteMatcher(['/public-route-example'])
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
-  const { userId, sessionClaims, redirectToSignIn } = await auth()
+  const { isAuthenticated, sessionClaims, redirectToSignIn } = await auth()
 
   // For users visiting /onboarding, don't try to redirect
-  if (userId && isOnboardingRoute(req)) {
+  if (isAuthenticated && isOnboardingRoute(req)) {
     return NextResponse.next()
   }
 
   // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!userId && !isPublicRoute(req)) return redirectToSignIn({ returnBackUrl: req.url })
+  if (!isAuthenticated && !isPublicRoute(req)) return redirectToSignIn({ returnBackUrl: req.url })
 
   // Catch users who do not have `onboardingComplete: true` in their publicMetadata
   // Redirect them to the /onboarding route to complete onboarding
-  if (userId && !sessionClaims?.metadata?.onboardingComplete) {
+  if (isAuthenticated && !sessionClaims?.metadata?.onboardingComplete) {
     const onboardingUrl = new URL('/onboarding', req.url)
     return NextResponse.redirect(onboardingUrl)
   }
 
   // If the user is logged in and the route is protected, let them view.
-  if (userId && !isPublicRoute(req)) return NextResponse.next()
+  if (isAuthenticated && !isPublicRoute(req)) return NextResponse.next()
 })
 
 export const config = {
@@ -210,9 +210,9 @@ Now that there is a form to collect the user's onboarding information, you need 
 import { auth, clerkClient } from '@clerk/nextjs/server'
 
 export const completeOnboarding = async (formData: FormData) => {
-  const { userId } = await auth()
+  const { isAuthenticated, userId } = await auth()
 
-  if (!userId) {
+  if (!isAuthenticated) {
     return { message: 'No Logged In User' }
   }
 

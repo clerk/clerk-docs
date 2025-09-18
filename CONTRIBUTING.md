@@ -500,23 +500,6 @@ export function Layout() {
 
 </details>
 
-<details>
-<summary>TypeScript type for code block props</summary>
-
-```tsx
-type LineNumber = number
-type Mark = LineNumber | [start: LineNumber, end: LineNumber]
-
-interface CodeBlockProps {
-  filename?: string
-  mark?: Array<Mark>
-  ins?: Array<Mark>
-  del?: Array<Mark>
-}
-```
-
-</details>
-
 You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
 
 | Type     | Character |
@@ -533,6 +516,62 @@ You can also specify **deleted**, **inserted**, or **marked** lines by prependin
   }
 ```
 ````
+
+#### Collapsing sections of code
+
+You can collapse sections of a code block by using the `fold` prop. The type for the `fold` prop is `Array<[start: number, end: number, label?: string]>`, where `start` and `end` define the inclusive range of lines to collapse, and `label` is a custom label for the expand button. By default the label will be `{n} lines collapsed`.
+
+````mdx
+```ts {{ fold: [[2, 4]] }}
+export function Example() {
+  useEffect(() => {
+    // some long unimportant code here
+  }, [])
+
+  return null
+}
+```
+````
+
+<details>
+<summary>Fold example</summary>
+
+| Default                                                                                   | Expanded                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| <img width="1204" height="416" alt="" src="/.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="/.github/media/code-block-fold-expanded.png" /> |
+
+</details>
+
+You can also truncate a code block by using the `collapsible` prop. This will reduce the height of the code block by default and display an "expand" button to reveal the full code block.
+
+````mdx
+```ts {{ collapsible: true }}
+// ...
+```
+````
+
+<details>
+<summary>Collapsible example</summary>
+
+![](/.github/media/code-block-collapsible.png)
+
+</details>
+
+#### TypeScript type for code block props
+
+```tsx
+type LineNumber = number
+type Mark = LineNumber | [start: LineNumber, end: LineNumber]
+
+interface CodeBlockProps {
+  filename?: string
+  mark?: Array<Mark>
+  ins?: Array<Mark>
+  del?: Array<Mark>
+  collapsible?: boolean
+  fold?: Array<[start: LineNumber, end: LineNumber, label?: string]>
+}
+```
 
 #### Code block shortcodes
 
@@ -705,6 +744,20 @@ The `<Tabs />` component structures content in a tabular format. It accepts an `
 The video below shows what this example looks like once rendered.
 
 https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2d047ab6
+
+### Tooltips
+
+A tooltip is content that appears when the user hovers over a word or phrase in order to provide additional information. A common use case is for definitions.
+
+Tooltips are defined in the `_tooltips` folder and written in MDX, but they do not support custom MDX components, like callouts or `<Tabs />` components. Try to keep the tooltip content as text.
+
+The tooltip syntax is similar to a link, but with a `!` prefix, as shown in the following example:
+
+```mdx
+The ID of the [active organization](!active-organization) that the user belongs to.
+```
+
+Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
 
 ### `<TutorialHero />`
 

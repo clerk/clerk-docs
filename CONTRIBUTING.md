@@ -618,9 +618,9 @@ console.log('ignored')
 > [!NOTE]
 > "prettier-ignore" comments are removed when a code block is rendered on the docs site.
 
-### npm commands
+#### npm commands
 
-npm commands will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
+npm codeblocks will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
 
 ````mdx
 ```npm

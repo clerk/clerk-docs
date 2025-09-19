@@ -618,6 +618,39 @@ console.log('ignored')
 > [!NOTE]
 > "prettier-ignore" comments are removed when a code block is rendered on the docs site.
 
+### npm commands
+
+npm commands will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
+
+````mdx
+```npm
+npm i @clerk/nextjs
+```
+````
+
+Example output:
+
+````mdx
+<CodeBlockTabs options={["npm", "pnpm", "yarn", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bunx add @clerk/nextjs
+    ```
+
+</CodeBlockTabs>
+````
+
 ### `<Steps />`
 
 The `<Steps />` component is used to number a set of instructions with an outcome. It uses the highest heading available in the component to denote each step. Can be used with `h2` and `h3` headings.

@@ -14,8 +14,6 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
     > [!IMPORTANT]
     > You are reading about version 2 of Clerk's session token claims. To read about version 1, select the respective tab above.
 
-    ### Default claims
-
     Every generated token has default claims that cannot be overridden by templates. Clerk's default claims include:
 
     | Claim | Abbreviation expanded | Description | Example |
@@ -30,27 +28,27 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
     | `sid` | session ID | The ID of the current session. | `sess_123` |
     | `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
     | `v` | version | The version number of the session token. | `2` |
-    | `pla` | plan | A comma-separated list of the plans that are active. Each entry is in the format `scope:planslug`, where `scope` can be `u` or `o` representing user or org-level plans, respectively. Will always have only one entry, which will have `u:` prefix if no org is active or `o:` prefix if an org is active. | `u:free`,`o:pro` |
-    | `fea` | features | A list of enabled features and their scope. The scope can either be `o` for org-level features or `u` for user-level features. Same as the `pla` claim, the scopes for all features with start with `o:` if there is an active org, or `u:` if there is not. | `o:dashboard,o:impersonation` |
+    | `pla` | plan | The plan that is active. The value is in the format `scope:planslug`, where `scope` can be `u` or `o` representing user or org-level plans, respectively. The `u:` prefix is used if no org is active, and the `o:` prefix appears if an org is active. | `u:free`,`o:pro` |
+    | `fea` | features | A list of enabled features and their scope. The scope can either be `o` for org-level features if there is an [active org](!active-organization), or `u` for user-level features or if there is no active org. | `o:dashboard,o:impersonation` |
     | `sts` | session status | The status of the current session | `pending` |
 
     ### Organization claim
 
-    The **`o` claim**, or organization claim, is only included if the user is part of an [organization](/docs/organizations/overview) and that organization is [active](/docs/organizations/overview#active-organization). Its value is an object that contains the following properties:
+    The **`o` claim**, or organization claim, is only included if the user is part of an [organization](/docs/organizations/overview) and that organization is [active](!active-organization). Its value is an object that contains the following properties:
 
-    | Claim | Abbreviation expanded | Description | Example |
-    | - | - | - | - |
-    | `id` | ID | The ID of the organization. | `org_123` |
-    | `slg` | slug | The slug of the organization. | `org-slug` |
-    | `rol` | role | The role of the user in the organization, without the `org:` prefix. | `admin` |
-    | `per` | permissions | The names of the permissions the user has in the organization. | `read,manage` |
-    | `fpm` | feature-permission map | The mapping of features with permissions. See below for details for how this claim value is constructed. | `3,2` |
+    | Claim | Abbreviation expanded | Description | Example | |
+    | - | - | - | - | - |
+    | `id` | ID | The ID of the organization. | `org_123` | |
+    | `slg` | slug | The slug of the organization. | `org-slug` | |
+    | `rol` | role | The role of the user in the organization, without the `org:` prefix. | `admin` | |
+    | `per` | permissions | The names of the permissions the user has in the organization. | `read,manage` | |
+    | `fpm` | feature-permission map | feature-permission map | The mapping of features with permissions. [Learn how this value is constructed](#decode-o-fpm-manually). | `3,2` |
 
     > [!WARNING]
     > The organization claims above are intentionally designed to be as compact as possible to keep JWT tokens small.
     > As a result, they can be difficult to decode manually. We strongly recommend using one of our SDKs that support API version [2025-04-10](/docs/versioning/available-versions#2025-04-10) to handle decoding reliably.
 
-    #### How to decode
+    #### Decode `o.fpm` manually
 
     For those that need to decode the `o.fpm` claim manually, here is how the claim value is computed.
     The value is a list of comma-separated integers where the position of the integer corresponds to a feature in the same position in the `fea` claim.
@@ -58,12 +56,17 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
 
     #### Example
 
-    Consider a user with an active organization has role `admin`. This role has the following feature permissions: `dashboard:read`, `dashboard:manage`, `teams:read`.
-    The `fea` claim has value `o:dashboard,o:teams`, and the `o.per` claim has value `manage,read`.
+    Consider a user with an active organization has role `admin`. This role has the following feature permissions: `dashboard:read`, `dashboard:manage`, `teams:read`. Therefore, the user's claims are as follows:
 
-    The `o.fpm` claim has value `3,2`.
-    The first integer `3` repesents the feature-permission mapping for the `dashboard` feature. Since `3` is `11` in binary, both permissions are allowed (`dashboard:read` and `dashboard:manage`).
-    The second integer `2` represents the feature-permission mapping for the `teams` feature. Since `2` is `10` in binary, the _second_ permission is allowed (`teams:read`).
+    - `fea` claim has value `o:dashboard,o:teams`
+    - `o.per` claim has value `manage,read`
+    - `o.fpm` claim has value `3,2`
+
+    Now, let's manually decode the `o.fpm` claim.
+
+    The first integer `3` represents the feature-permission mapping for the `dashboard` feature. Since `3` is `11` in binary, both permissions are allowed (`dashboard:read` and `dashboard:manage`).
+
+    The second integer `2` represents the feature-permission mapping for the `teams` feature. Since `2` is `10` in binary, the _second_ permission is allowed (`teams:read`) because the second bit from the right is `1`.
 
     ### Actor claim
 

@@ -182,6 +182,9 @@ async function main() {
         'backend/email-address.mdx': ['link-hash-not-found'],
         'backend/organization-membership-public-user-data.mdx': ['link-hash-not-found'],
         'types/user-resource.mdx': ['link-hash-not-found'],
+
+        // temp
+        '/backend/billing-plan.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

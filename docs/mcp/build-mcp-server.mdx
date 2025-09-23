@@ -286,6 +286,23 @@ sdk: nextjs, expressjs
     1. Inside the `oauth-protected-resource` directory, create a `mcp` subdirectory.
     1. In the `mcp` subdirectory, create a `route.ts` file with the following code for that specific route.
     1. In the `oauth-authorization-server` directory, create a `route.ts` file with the following code for that specific route.
+    1. **Important**: Ensure that your `.well-known` endpoints are not protected by Clerk middleware. These endpoints must be publicly accessible for MCP clients to discover OAuth metadata. If you're using `clerkMiddleware()` globally, you'll need to exclude these paths.
+
+    If you have a global `middleware.ts` file, make sure to exclude the `.well-known` paths using `createRouteMatcher()`:
+
+    ```ts {{ filename: 'middleware.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+    const isPublicRoute = createRouteMatcher([
+      '/.well-known/oauth-authorization-server(.*)',
+      '/.well-known/oauth-protected-resource(.*)',
+    ])
+
+    export default clerkMiddleware(async (auth, req) => {
+      if (isPublicRoute(req)) return // Allow public access to .well-known endpoints
+      await auth.protect() // Protect all other routes
+    })
+    ```
 
     <CodeBlockTabs options={["oauth-authorization-server", "oauth-protected-resource"]}>
       ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
@@ -331,7 +348,10 @@ sdk: nextjs, expressjs
 
     > [!NOTE]
     > For a more in-depth explanation of these helpers, see the [MCP Express reference](https://github.com/clerk/mcp-tools/tree/main/express).
-    > To secure your endpoints and expose your MCP server to a client, add the following code to your file:
+
+    **Important**: Ensure that your `.well-known` endpoints are not protected by Clerk middleware. These endpoints must be publicly accessible for MCP clients to discover OAuth metadata.
+
+    To secure your endpoints and expose your MCP server to a client, add the following code to your file:
 
     ```ts {{ filename: 'index.ts', mark: [[3, 4]] }}
     // The rest of your code...

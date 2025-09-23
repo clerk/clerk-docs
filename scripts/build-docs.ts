@@ -184,7 +184,7 @@ async function main() {
         'types/user-resource.mdx': ['link-hash-not-found'],
 
         // temp
-        '/backend/billing-plan.mdx': ['link-doc-not-found'],
+        'backend/billing-plan.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

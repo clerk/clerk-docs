@@ -96,10 +96,10 @@ export const embedLinks =
       }
 
       const injectSDK =
-        linkedDoc.frontmatter.sdk !== undefined &&
+        linkedDocSDKs !== undefined &&
         // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
-        linkedDoc.frontmatter.sdk.length > 1 &&
-        !linkedDoc.frontmatter.sdk.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
+        linkedDocSDKs.length > 1 &&
+        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {
@@ -117,14 +117,14 @@ export const embedLinks =
 
         return SDKLink({
           href: scopedHref,
-          sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
+          sdks: linkedDocSDKs,
           code: true,
         })
       }
 
       return SDKLink({
         href: scopedHref,
-        sdks: [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])],
+        sdks: linkedDocSDKs,
         code: false,
         children: node.children,
       })

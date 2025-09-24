@@ -55,7 +55,7 @@ import { createConfig, type BuildConfig } from './lib/config'
 import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
-import { ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
+import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
 import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
@@ -94,9 +94,11 @@ import {
   writeRedirects,
   type Redirect,
 } from './lib/redirects'
+import { checkTooltips } from './lib/plugins/checkTooltips'
+import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
-import { readTooltipsFolder, readTooltipsMarkdown, writeTooltips } from './lib/tooltips'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
+import { existsSync } from 'node:fs'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -158,11 +160,11 @@ async function main() {
         'index.mdx': ['doc-not-in-manifest'],
         'guides/overview.mdx': ['doc-not-in-manifest'],
         'quickstarts/overview.mdx': ['doc-not-in-manifest'],
-        'references/overview.mdx': ['doc-not-in-manifest'],
+        'reference/overview.mdx': ['doc-not-in-manifest'],
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'guides/development/deployment/staging-alternatives.mdx': ['doc-not-in-manifest'],
-        'references/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
-        'references/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
+        'reference/nextjs/usage-with-older-versions.mdx': ['doc-not-in-manifest'],
+        'reference/nextjs/errors/auth-was-called.mdx': ['doc-not-in-manifest'],
         'guides/dashboard/overview.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/nextjs.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrade-guides/core-2/backend.mdx': ['doc-not-in-manifest'],
@@ -205,16 +207,13 @@ async function main() {
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
+        'pinning.mdx': ['doc-not-in-manifest'],
 
         // temp migration ignores
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
-        'types/active-session-resource.mdx': ['link-hash-not-found'],
-        'types/pending-session-resource.mdx': ['link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
-
         // temp migration ignores
         'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
         'backend/organization-sync-options.mdx': ['link-doc-not-found'],
@@ -247,6 +246,52 @@ async function main() {
         'clerk-react/use-sign-up.mdx': ['link-doc-not-found'],
         'nextjs/get-auth.mdx': ['link-doc-not-found'],
         'nextjs/auth.mdx': ['link-doc-not-found'],
+        'backend/client.mdx': ['link-doc-not-found'],
+        'backend/external-account.mdx': ['link-doc-not-found'],
+        'backend/invitation.mdx': ['link-doc-not-found'],
+        'backend/organization-invitation.mdx': ['link-doc-not-found'],
+        'backend/organization-membership.mdx': ['link-doc-not-found'],
+        'backend/paginated-resource-response.mdx': ['link-doc-not-found'],
+        'backend/saml-account.mdx': ['link-doc-not-found'],
+        'backend/saml-connection.mdx': ['link-doc-not-found'],
+        'backend/web3-wallet.mdx': ['link-doc-not-found'],
+        'clerk-react/redirect-to-create-organization.mdx': ['link-doc-not-found'],
+        'clerk-react/redirect-to-organization-profile.mdx': ['link-doc-not-found'],
+        'clerk-react/redirect-to-user-profile.mdx': ['link-doc-not-found'],
+        'clerk-react/use-clerk.mdx': ['link-doc-not-found'],
+        'clerk-react/use-session-list.mdx': ['link-doc-not-found'],
+        'clerk-react/use-session.mdx': ['link-doc-not-found'],
+        'clerk-react/use-user.mdx': ['link-doc-not-found'],
+        'shared/derive-state.mdx': ['link-doc-not-found'],
+        'shared/paginated-resources.mdx': ['link-doc-not-found'],
+        'shared/use-clerk.mdx': ['link-doc-not-found'],
+        'shared/use-organization-list-return.mdx': ['link-doc-not-found'],
+        'shared/use-organization-return.mdx': ['link-doc-not-found'],
+        'shared/use-session-list.mdx': ['link-doc-not-found'],
+        'shared/use-session.mdx': ['link-doc-not-found'],
+        'shared/use-user.mdx': ['link-doc-not-found'],
+        'types/clerk.mdx': ['link-doc-not-found'],
+        'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
+        'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
+        'types/set-active-params.mdx': ['link-doc-not-found'],
+        'types/use-session-list-return.mdx': ['link-doc-not-found'],
+        'types/use-session-return.mdx': ['link-doc-not-found'],
+        'types/use-sign-up-return.mdx': ['link-doc-not-found'],
+        'types/use-user-return.mdx': ['link-doc-not-found'],
+        'backend/commerce-subscription-item.mdx': ['link-doc-not-found'],
+        'backend/commerce-subscription.mdx': ['link-doc-not-found'],
+        'types/billing-namespace.mdx': ['link-doc-not-found'],
+        'types/billing-payment-source-methods.mdx': ['link-doc-not-found'],
+        'types/use-sign-in-return.mdx': ['link-doc-not-found'],
+        'backend/commerce-plan.mdx': ['link-doc-not-found'],
+        'backend/billing-plan.mdx': ['link-doc-not-found'],
+        'backend/billing-subscription-item.mdx': ['link-doc-not-found'],
+        'backend/billing-subscription.mdx': ['link-doc-not-found'],
+        'types/active-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+        'types/pending-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
       },
       partials: {},
       tooltips: {},
@@ -308,11 +353,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   const getCommitDate = getLastCommitDate(config)
   const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
-  const writeTooltipsToDist = writeTooltips(config, store)
-
-  abortSignal?.throwIfAborted()
-
-  await ensureDirectory(config.distFinalPath)
 
   abortSignal?.throwIfAborted()
 
@@ -421,7 +461,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         }
 
         const markdownFile = await markdownCache(file.filePath, () =>
-          parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+          parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
         )
 
         if (sdkMatch) {
@@ -440,7 +480,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             const inManifest = docsInManifest.has(file.href)
 
             const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, typedocs, prompts, inManifest, 'docs'),
+              parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
             )
 
             docsMap.set(file.href, markdownFile)
@@ -859,6 +899,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const foundLinks: Set<string> = new Set()
       const foundPartials: Set<string> = new Set()
       const foundTypedocs: Set<string> = new Set()
+      const foundTooltips: Set<string> = new Set()
 
       const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
@@ -881,6 +922,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(
             checkPartials(config, validatedPartials, doc.file, { reportWarnings: false, embed: true }, (partial) => {
               foundPartials.add(partial)
+            }),
+          )
+          .use(
+            checkTooltips(config, validatedTooltips, doc.file, { reportWarnings: false, embed: true }, (tooltip) => {
+              foundTooltips.add(tooltip)
             }),
           )
           .use(
@@ -925,7 +971,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         .filter((typedoc) => foundTypedocs.has(typedoc.path))
         .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
 
-      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks])
+      const tooltipsLinks = validatedTooltips
+        .filter((tooltip) => foundTooltips.has(tooltip.path))
+        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTooltips)
+
+      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks, ...tooltipsLinks])
 
       allLinks.forEach((link) => {
         markDirty(doc.file.filePath, link)
@@ -1042,6 +1092,7 @@ ${yaml.stringify({
               .use(remarkMdx)
               .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
+              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
@@ -1199,13 +1250,6 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  if (config.tooltips) {
-    await writeTooltipsToDist(validatedTooltips)
-    console.info(`✓ Wrote ${validatedTooltips.length} tooltips to disk`)
-  }
-
-  abortSignal?.throwIfAborted()
-
   if (config.llms?.fullPath || config.llms?.overviewPath) {
     const outputtedDocsFiles = listOutputDocsFiles(config, store.writtenFiles, mdxFilePaths)
 
@@ -1255,33 +1299,36 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  try {
-    await fs.rm(config.distFinalPath, { recursive: true })
-  } catch (error) {
-    console.error(`Failed to clear ${config.distFinalPath}, trying again...`, error)
-    try {
-      await fs.rm(config.distFinalPath, { recursive: true })
-    } catch (error) {
-      console.error(`Failed to clear ${config.distFinalPath}, giving up...`, error)
+  if (config.flags.watch) {
+    // While in dev, we just want to symlink the new dist to the dist folder
+    // This removes the issue that fs.cp can't replace a folder
+    // We don't need to worry about the public folder because in dev clerk/clerk just looks in the original public folder
+    await symlinkDir(config.distTempPath, config.distFinalPath, { overwrite: true })
+
+    // Sometimes this symlink will move the current dist folder to .ignored_dist
+    if (existsSync(`.ignored_dist`)) {
+      console.info('✓ Removing .ignored_dist folder')
+      await fs.rm(`.ignored_dist`, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (process.env.VERCEL === '1') {
+  } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
-    await fs.rm(config.distTempPath, { recursive: true })
+    if (config.publicPath) {
+      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
+    }
+    // We don't need to worry about temp folders as the ci runner will be destroyed after this anyways
   } else {
-    await fs.rename(config.distTempPath, config.distFinalPath)
-  }
-
-  abortSignal?.throwIfAborted()
-
-  if (config.publicPath) {
-    if (config.flags.watch) {
-      await symlinkDir(config.publicPath, path.join(config.distFinalPath, '_public'))
-    } else {
+    // During a standard build
+    // If the dist folder already exists, remove it
+    if (existsSync(config.distFinalPath)) {
+      await fs.rm(config.distFinalPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+    // Copy over our new dist folder from temp
+    await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
+    // Remove the temp dist folder
+    await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    // Copy over the public folder
+    if (config.publicPath) {
       await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
     }
   }

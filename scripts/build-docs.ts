@@ -214,9 +214,8 @@ async function main() {
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
       typedoc: {
-        'types/active-session-resource.mdx': ['link-hash-not-found', 'link-doc-not-found'],
-        'types/pending-session-resource.mdx': ['link-hash-not-found', 'link-doc-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
+        'types/active-session-resource.mdx': ['link-hash-not-found'],
+        'types/pending-session-resource.mdx': ['link-hash-not-found'],
 
         // temp migration ignores
         'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
@@ -290,6 +289,7 @@ async function main() {
         'types/billing-payment-source-methods.mdx': ['link-doc-not-found'],
         'types/use-sign-in-return.mdx': ['link-doc-not-found'],
         'backend/commerce-plan.mdx': ['link-doc-not-found'],
+        'backend/billing-plan.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

@@ -287,34 +287,48 @@ sdk: nextjs, expressjs
     1. In the `mcp` subdirectory, create a `route.ts` file with the following code for that specific route.
     1. In the `oauth-authorization-server` directory, create a `route.ts` file with the following code for that specific route.
 
-    <CodeBlockTabs options={["oauth-authorization-server", "oauth-protected-resource"]}>
-      ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
-      import {
-        authServerMetadataHandlerClerk,
-        metadataCorsOptionsRequestHandler,
-      } from '@clerk/mcp-tools/next'
+       <CodeBlockTabs options={["oauth-authorization-server", "oauth-protected-resource"]}>
+         ```ts {{ filename: 'app/.well-known/oauth-authorization-server/route.ts' }}
+         import {
+           authServerMetadataHandlerClerk,
+           metadataCorsOptionsRequestHandler,
+         } from '@clerk/mcp-tools/next'
 
-      const handler = authServerMetadataHandlerClerk()
-      const corsHandler = metadataCorsOptionsRequestHandler()
+         const handler = authServerMetadataHandlerClerk()
+         const corsHandler = metadataCorsOptionsRequestHandler()
 
-      export { handler as GET, corsHandler as OPTIONS }
-      ```
+         export { handler as GET, corsHandler as OPTIONS }
+         ```
 
-      ```ts {{ filename: 'app/.well-known/oauth-protected-resource/mcp/route.ts' }}
-      import {
-        metadataCorsOptionsRequestHandler,
-        protectedResourceHandlerClerk,
-      } from '@clerk/mcp-tools/next'
+         ```ts {{ filename: 'app/.well-known/oauth-protected-resource/mcp/route.ts' }}
+         import {
+           metadataCorsOptionsRequestHandler,
+           protectedResourceHandlerClerk,
+         } from '@clerk/mcp-tools/next'
 
-      const handler = protectedResourceHandlerClerk({
-        // Specify which OAuth scopes this protected resource supports
-        scopes_supported: ['profile', 'email'],
-      })
-      const corsHandler = metadataCorsOptionsRequestHandler()
+         const handler = protectedResourceHandlerClerk({
+           // Specify which OAuth scopes this protected resource supports
+           scopes_supported: ['profile', 'email'],
+         })
+         const corsHandler = metadataCorsOptionsRequestHandler()
 
-      export { handler as GET, corsHandler as OPTIONS }
-      ```
-    </CodeBlockTabs>
+         export { handler as GET, corsHandler as OPTIONS }
+         ```
+       </CodeBlockTabs>
+    1. Your `.well-known` endpoints must be **publicly accessible** for MCP clients to discover OAuth metadata. When protecting routes, consider these paths and ensure they are not protected. For example, if you're using [`clerkMiddleware()` to protect all routes](/docs/reference/nextjs/clerk-middleware#protect-all-routes), you can exclude the `.well-known` endpoints like this:
+       ```ts {{ filename: 'middleware.ts' }}
+       import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+       const isPublicRoute = createRouteMatcher([
+         '/.well-known/oauth-authorization-server(.*)',
+         '/.well-known/oauth-protected-resource(.*)',
+       ])
+
+       export default clerkMiddleware(async (auth, req) => {
+         if (isPublicRoute(req)) return // Allow public access to .well-known endpoints
+         await auth.protect() // Protect all other routes
+       })
+       ```
   </If>
 
   <If sdk="expressjs">
@@ -331,7 +345,8 @@ sdk: nextjs, expressjs
 
     > [!NOTE]
     > For a more in-depth explanation of these helpers, see the [MCP Express reference](https://github.com/clerk/mcp-tools/tree/main/express).
-    > To secure your endpoints and expose your MCP server to a client, add the following code to your file:
+
+    To secure your endpoints and expose your MCP server to a client, add the following code to your file:
 
     ```ts {{ filename: 'index.ts', mark: [[3, 4]] }}
     // The rest of your code...
@@ -347,6 +362,9 @@ sdk: nextjs, expressjs
 
     app.listen(3000)
     ```
+
+    > [!WARNING]
+    > Your `.well-known` endpoints must be **publicly accessible** for MCP clients to discover OAuth metadata. When protecting routes, consider these paths and ensure they are not protected.
   </If>
 
   ## Finished 🎉

@@ -1,0 +1,145 @@
+---
+title: Build a custom flow for managing SSO connections
+description: Learn how to use the Clerk API to build a custom flow for adding and managing SSO connections
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+This guide demonstrates how to build a custom user interface that allows users to add, delete, and reverify their SSO connections.
+
+## Before you start
+
+You must configure your application instance through the Clerk Dashboard for the SSO connections that you want to use.
+
+- For social (OAuth) connection(s), see [the appropriate guide for your platform](/docs/guides/configure/auth-strategies/social-connections/overview).
+- For enterprise connection(s), see [the appropriate guide for your platform](/docs/guides/configure/auth-strategies/enterprise-connections/overview).
+
+This guide uses Discord, Google, and GitHub as examples.
+
+## Build the custom flow
+
+1. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the current user's [`User`](/docs/reference/javascript/user) object. The `isLoaded` boolean is used to ensure that Clerk is loaded.
+1. The `options` array is used to create a list of supported SSO connections. This example uses [OAuth strategies](/docs/guides/configure/auth-strategies/social-connections/all-providers). You can edit this array to include all of the SSO connections that you've enabled for your app in the Clerk Dashboard. You can also add [custom SSO connections](/docs/guides/configure/auth-strategies/social-connections/custom-provider) by using the `oauth_custom_<name>` strategy.
+1. The `addSSO()` function is used to add a new external account using the `strategy` that is passed in.
+   - It uses the `user` object to access the [`createExternalAccount()`](/docs/reference/javascript/user#create-external-account) method.
+   - The `createExternalAccount()` method is used to create a new external account using the `strategy` that is passed in. It's passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an external account to their account.
+1. The `unconnectedOptions` array is used to filter out any existing external accounts from the `options` array.
+1. The `normalizeProvider()` function is used to strip the `oauth` prefix from each strategy so it can be matched with the provider field in the user's existing external accounts.
+1. In the UI, the `unconnectedOptions` array is used to create a list of buttons for the user to add new external accounts.
+1. In the UI, the `User` object is used to access the `externalAccounts` property, which is mapped through to create a list of the user's existing external accounts. If there is an error, it is displayed to the user in the 'Status' column. If the account didn't verify when the user added it, a 'Reverify' button is displayed, which will redirect the user to the provider in order to verify their account.
+
+```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
+'use client'
+
+import { useUser, useReverification } from '@clerk/nextjs'
+import { CreateExternalAccountParams, ExternalAccountResource, OAuthStrategy } from '@clerk/types'
+import { useRouter } from 'next/navigation'
+
+// Capitalize the first letter of the provider name
+// E.g. 'discord' -> 'Discord'
+const capitalize = (provider: string) => {
+  return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
+}
+
+// Remove the 'oauth' prefix from the strategy string
+// E.g. 'oauth_discord' -> 'discord'
+// Used to match the strategy with the 'provider' field in externalAccounts
+const normalizeProvider = (provider: string) => {
+  return provider.split('_')[1]
+}
+
+export default function AddAccount() {
+  const router = useRouter()
+  // Use Clerk's `useUser()` hook to get the current user's `User` object
+  const { isLoaded, user } = useUser()
+  const createExternalAccount = useReverification((params: CreateExternalAccountParams) =>
+    user?.createExternalAccount(params),
+  )
+  const accountDestroy = useReverification((account: ExternalAccountResource) => account.destroy())
+
+  // List the options the user can select when adding a new external account
+  // Edit this array to include all of your enabled SSO connections
+  const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
+
+  // Handle adding the new external account
+  const addSSO = async (strategy: OAuthStrategy) => {
+    await createExternalAccount({
+      strategy,
+      redirectUrl: '/account/manage-external-accounts',
+    })
+      .then((res) => {
+        if (res?.verification?.externalVerificationRedirectURL) {
+          router.push(res.verification.externalVerificationRedirectURL.href)
+        }
+      })
+      .catch((err) => {
+        console.log('ERROR', err)
+      })
+      .finally(() => {
+        console.log('Redirected user to oauth provider')
+      })
+  }
+
+  // Show a loading message until Clerk loads
+  if (!isLoaded) return <p>Loading...</p>
+
+  // Find the external accounts from the options array that the user has not yet added to their account
+  // This prevents showing an 'add' button for existing external account types
+  const unconnectedOptions = options.filter(
+    (option) =>
+      !user?.externalAccounts.some((account) => account.provider === normalizeProvider(option)),
+  )
+
+  return (
+    <>
+      <div>
+        <p>Connected accounts</p>
+        {user?.externalAccounts.map((account) => {
+          return (
+            <ul key={account.id}>
+              <li>Provider: {capitalize(account.provider)}</li>
+              <li>Scopes: {account.approvedScopes}</li>
+              <li>
+                Status:{' '}
+                {/* This example uses the `longMessage` returned by the API. You can use account.verification.error.code to determine the error and then provide your own message to the user. */}
+                {account.verification?.status === 'verified'
+                  ? capitalize(account.verification?.status)
+                  : account.verification?.error?.longMessage}
+              </li>
+              {account.verification?.status !== 'verified' &&
+                account.verification?.externalVerificationRedirectURL && (
+                  <li>
+                    <a href={account.verification?.externalVerificationRedirectURL?.href}>
+                      Reverify {capitalize(account.provider)}
+                    </a>
+                  </li>
+                )}
+              <li>
+                <button onClick={() => accountDestroy(account)}>
+                  Remove {capitalize(account.provider)}
+                </button>
+              </li>
+            </ul>
+          )
+        })}
+      </div>
+      {unconnectedOptions.length > 0 && (
+        <div>
+          <p>Add a new external account</p>
+          <ul>
+            {unconnectedOptions.map((strategy) => {
+              return (
+                <li key={strategy}>
+                  <button onClick={() => addSSO(strategy)}>
+                    Add {capitalize(normalizeProvider(strategy))}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </>
+  )
+}
+```

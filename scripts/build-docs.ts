@@ -950,6 +950,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundLinks.add(link)
               },
               doc.file.href,
+              undefined, // No target SDK for core documents
             ),
           )
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
@@ -1095,7 +1096,7 @@ ${yaml.stringify({
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
+              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

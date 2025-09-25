@@ -242,13 +242,13 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 
 If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx`, `references/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
+1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
@@ -262,13 +262,13 @@ In the `clerk/clerk` repo:
 
 If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx` and `references/overview.mdx`.
+1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 
@@ -500,23 +500,6 @@ export function Layout() {
 
 </details>
 
-<details>
-<summary>TypeScript type for code block props</summary>
-
-```tsx
-type LineNumber = number
-type Mark = LineNumber | [start: LineNumber, end: LineNumber]
-
-interface CodeBlockProps {
-  filename?: string
-  mark?: Array<Mark>
-  ins?: Array<Mark>
-  del?: Array<Mark>
-}
-```
-
-</details>
-
 You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
 
 | Type     | Character |
@@ -533,6 +516,62 @@ You can also specify **deleted**, **inserted**, or **marked** lines by prependin
   }
 ```
 ````
+
+#### Collapsing sections of code
+
+You can collapse sections of a code block by using the `fold` prop. The type for the `fold` prop is `Array<[start: number, end: number, label?: string]>`, where `start` and `end` define the inclusive range of lines to collapse, and `label` is a custom label for the expand button. By default the label will be `{n} lines collapsed`.
+
+````mdx
+```ts {{ fold: [[2, 4]] }}
+export function Example() {
+  useEffect(() => {
+    // some long unimportant code here
+  }, [])
+
+  return null
+}
+```
+````
+
+<details>
+<summary>Fold example</summary>
+
+| Default                                                                                   | Expanded                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| <img width="1204" height="416" alt="" src="/.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="/.github/media/code-block-fold-expanded.png" /> |
+
+</details>
+
+You can also truncate a code block by using the `collapsible` prop. This will reduce the height of the code block by default and display an "expand" button to reveal the full code block.
+
+````mdx
+```ts {{ collapsible: true }}
+// ...
+```
+````
+
+<details>
+<summary>Collapsible example</summary>
+
+![](/.github/media/code-block-collapsible.png)
+
+</details>
+
+#### TypeScript type for code block props
+
+```tsx
+type LineNumber = number
+type Mark = LineNumber | [start: LineNumber, end: LineNumber]
+
+interface CodeBlockProps {
+  filename?: string
+  mark?: Array<Mark>
+  ins?: Array<Mark>
+  del?: Array<Mark>
+  collapsible?: boolean
+  fold?: Array<[start: LineNumber, end: LineNumber, label?: string]>
+}
+```
 
 #### Code block shortcodes
 
@@ -706,6 +745,20 @@ The video below shows what this example looks like once rendered.
 
 https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2d047ab6
 
+### Tooltips
+
+A tooltip is content that appears when the user hovers over a word or phrase in order to provide additional information. A common use case is for definitions.
+
+Tooltips are defined in the `_tooltips` folder and written in MDX, but they do not support custom MDX components, like callouts or `<Tabs />` components. Try to keep the tooltip content as text.
+
+The tooltip syntax is similar to a link, but with a `!` prefix, as shown in the following example:
+
+```mdx
+The ID of the [active organization](!active-organization) that the user belongs to.
+```
+
+Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
+
 ### `<TutorialHero />`
 
 The `<TutorialHero />` component is used at the beginning of a tutorial-type content page. It accepts the following properties:
@@ -789,7 +842,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
@@ -811,7 +864,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -834,7 +887,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -851,13 +904,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="image">
 
-- [What is Clerk authentication?](/docs/authentication/overview)
+- [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---
 
-- [What is the “User” object?](/docs/users/overview)
+- [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
 - ![](/user-object.png)
 

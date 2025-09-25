@@ -1,0 +1,273 @@
+---
+title: Error handling
+description: Provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+---
+
+Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/reference/javascript/types/clerk-api-error) objects. These errors contain a `code`, `message`, `longMessage` and `meta` property. These properties can be used to provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+
+> [!TIP]
+> To see a list of all possible errors, refer to the [Errors](/docs/guides/development/errors/overview) documentation.
+
+## Example
+
+The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process.
+
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+
+    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', mark: [[6, 7], 13, [21, 22], [45, 48], [79, 85]] }}
+    'use client'
+
+    import * as React from 'react'
+    import { useSignIn } from '@clerk/nextjs'
+    import { useRouter } from 'next/navigation'
+    import { ClerkAPIError } from '@clerk/types'
+    import { isClerkAPIResponseError } from '@clerk/nextjs/errors'
+
+    export default function SignInForm() {
+      const { isLoaded, signIn, setActive } = useSignIn()
+      const [email, setEmail] = React.useState('')
+      const [password, setPassword] = React.useState('')
+      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
+
+      const router = useRouter()
+
+      // Handle the submission of the sign-in form
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        // Clear any errors that may have occurred during previous form submission
+        setErrors(undefined)
+
+        if (!isLoaded) {
+          return
+        }
+
+        // Start the sign-in process using the email and password provided
+        try {
+          const signInAttempt = await signIn.create({
+            identifier: email,
+            password,
+          })
+
+          // If sign-in process is complete, set the created session as active
+          // and redirect the user
+          if (signInAttempt.status === 'complete') {
+            await setActive({
+              session: signInAttempt.createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(signInAttempt, null, 2))
+          }
+        } catch (err) {
+          if (isClerkAPIResponseError(err)) setErrors(err.errors)
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      // Display a form to capture the user's email and password
+      return (
+        <>
+          <h1>Sign in</h1>
+          <form onSubmit={(e) => handleSubmit(e)}>
+            <div>
+              <label htmlFor="email">Enter email address</label>
+              <input
+                onChange={(e) => setEmail(e.target.value)}
+                id="email"
+                name="email"
+                type="email"
+                value={email}
+              />
+            </div>
+            <div>
+              <label htmlFor="password">Enter password</label>
+              <input
+                onChange={(e) => setPassword(e.target.value)}
+                id="password"
+                name="password"
+                type="password"
+                value={password}
+              />
+            </div>
+            <button type="submit">Sign in</button>
+          </form>
+
+          {errors && (
+            <ul>
+              {errors.map((el, index) => (
+                <li key={index}>{el.longMessage}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    <CodeBlockTabs options={["index.html", "main.js"]}>
+      ```html {{ filename: 'index.html', mark: [22] }}
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Clerk + JavaScript App</title>
+        </head>
+        <body>
+          <div id="signed-in"></div>
+
+          <div id="sign-in">
+            <h2>Sign in</h2>
+            <form id="sign-in-form">
+              <label for="email">Enter email address</label>
+              <input name="email" id="sign-in-email" />
+              <label for="password">Enter password</label>
+              <input name="password" id="sign-in-password" />
+              <button type="submit">Continue</button>
+            </form>
+          </div>
+
+          <p id="error"></p>
+
+          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+        </body>
+      </html>
+      ```
+
+      ```js {{ filename: 'main.js', mark: [[43, 49]] }}
+      import { Clerk } from '@clerk/clerk-js'
+
+      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      const clerk = new Clerk(pubKey)
+      await clerk.load()
+
+      if (clerk.isSignedIn) {
+        // Mount user button component
+        document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+        const userbuttonDiv = document.getElementById('user-button')
+
+        clerk.mountUserButton(userbuttonDiv)
+      } else if (clerk.session?.currentTask) {
+        // Check for pending tasks and display custom UI to help users resolve them
+        // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+        switch (clerk.session.currentTask.key) {
+          case 'choose-organization': {
+            document.getElementById('app').innerHTML = `
+                    <div id="task"></div>
+                  `
+
+            const taskDiv = document.getElementById('task')
+
+            clerk.mountTaskChooseOrganization(taskDiv)
+          }
+        }
+      } else {
+        // Handle the sign-in form
+        document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
+          e.preventDefault()
+
+          const formData = new FormData(e.target)
+          const emailAddress = formData.get('email')
+          const password = formData.get('password')
+
+          try {
+            // Start the sign-in process
+            const signInAttempt = await clerk.client.signIn.create({
+              identifier: emailAddress,
+              password,
+            })
+
+            // If the sign-in is complete, set the user as active
+            if (signInAttempt.status === 'complete') {
+              await clerk.setActive({ session: signInAttempt.createdSessionId })
+
+              location.reload()
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(signInAttempt, null, 2))
+            }
+          } catch (error) {
+            if (isClerkAPIResponseError(err)) {
+              const errors = err.errors
+              document.getElementById('error').textContent = errors[0].longMessage
+            }
+            console.error(JSON.stringify(err, null, 2))
+          }
+        })
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>
+
+## Special error cases
+
+### User locked
+
+If you have [account lockout](/docs/guides/secure/user-lockout) enabled on your instance and the user reaches the maximum allowed attempts ([see list of relevant actions here](/docs/guides/secure/user-lockout)), you will receive an HTTP status of `403 (Forbidden)` and the following error payload:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Account locked",
+      "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, contact support.",
+      "code": "user_locked",
+      "meta": {
+        "lockout_expires_in_seconds": 1800
+      }
+    }
+  ]
+}
+```
+
+`lockout_expires_in_seconds` represents the time remaining until the user is able to attempt authentication again.
+In the above example, 1800 seconds (or 30 minutes) are left until they are able to retry, as of the current moment.
+
+The admin might have [configured](/docs/guides/secure/user-lockout#customize-max-sign-in-attempts-and-lockout-duration) e.g. a 45-minute lockout duration.
+Thus, 15 minutes after one has been locked, 30 minutes will still remain until the lockout lapses.
+
+You can opt to render the error message returned as-is or format the supplied `lockout_expires_in_seconds` value as per your liking in your own custom error message.
+
+For instance, if you wish to inform a user at which absolute time they will be able to try again, you could add the remaining seconds to the current time and format the resulting timestamp.
+
+<Tabs items={["Next.js"]}>
+  <Tab>
+    ```js {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+    if (errors[0].code === 'user_locked') {
+      // Get the current date and time
+      let currentDate = new Date()
+
+      // Add the remaining seconds until lockout expires
+      currentDate.setSeconds(currentDate.getSeconds() + errors[0].meta.lockout_expires_in_seconds)
+
+      // Format the resulting date and time into a human-readable string
+      const lockoutExpiresAt = currentDate.toLocaleString()
+
+      // Do something with lockoutExpiresAt
+      console.log('Your account is locked, you will be able to try again at ' + lockoutExpiresAt)
+    }
+    ```
+  </Tab>
+</Tabs>

@@ -1,0 +1,460 @@
+---
+title: Session
+description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+sdk: js-frontend
+---
+
+The `Session` object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+
+The `Session` object includes methods for recording session activity and ending the session client-side. For security reasons, sessions can also expire server-side.
+
+As soon as a [`User`](/docs/reference/javascript/user) signs in, Clerk creates a `Session` for the current [`Client`][client-ref]. Clients can have more than one sessions at any point in time, but only one of those sessions will be **active**.
+
+In certain scenarios, a session might be replaced by another one. This is often the case with [multi-session applications](/docs/guides/secure/session-options#multi-session-applications).
+
+All sessions that are **expired**, **removed**, **replaced**, **ended** or **abandoned** are not considered valid.
+
+> [!NOTE]
+> For more information regarding the different session states, see the [guide on session management](/docs/guides/secure/session-options).
+
+## Properties
+
+<Properties>
+  - `id`
+  - `string`
+
+  The unique identifier for the session.
+
+  ---
+
+  - `user`
+  - [`User`](/docs/reference/javascript/user)
+
+  The user associated with the session.
+
+  ---
+
+  - `publicUserData`
+  - [`PublicUserData`](/docs/reference/javascript/types/public-user-data)
+
+  Public information about the user that this session belongs to.
+
+  ---
+
+  - `status`
+  - [`SessionStatus`](/docs/reference/javascript/types/session-status)
+
+  The current state of the session.
+
+  ---
+
+  - `lastActiveAt`
+  - `Date`
+
+  The time the session was last active on the [`Client`][client-ref].
+
+  ---
+
+  - `abandonAt`
+  - `Date`
+
+  The time when the session was abandoned by the user.
+
+  ---
+
+  - `expireAt`
+  - `Date`
+
+  The time the session expires and will cease to be active.
+
+  ---
+
+  - `updatedAt`
+  - `Date`
+
+  The last time the session recorded activity of any kind.
+
+  ---
+
+  - `createdAt`
+  - `Date`
+
+  The date when the session was created.
+
+  ---
+
+  - `lastActiveToken`
+  - `TokenResource | null`
+
+  The last active token for the session
+
+  ---
+
+  - `lastActiveOrganizationId`
+  - `string | null`
+
+  The ID of the last [active organization](!active-organization).
+
+  ---
+
+  - `factorVerificationAge`
+  - `[number, number] | null`
+
+  An array where each item represents the number of minutes since the last verification of a first or second factor: `[firstFactorAge, secondFactorAge]`.
+
+  ---
+
+  - `actor`
+  - `ActJWTClaim | null`
+
+  The JWT actor for the session. Holds identifier for the user that is impersonating the current user. Read more about [impersonation](/docs/guides/users/impersonation).
+
+  ---
+
+  - `currentTask`
+  - <code>[SessionTask](/docs/reference/javascript/types/session-task) | null</code>
+
+  The current pending task for the session. Read more about [session tasks](/docs/guides/secure/session-tasks).
+</Properties>
+
+## Methods
+
+### `attemptFirstFactorVerification()`
+
+Attempts to complete the first factor verification process. Returns a [`SessionVerification`](/docs/reference/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptFirstFactorVerification(
+  params: SessionVerifyAttemptFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptFirstFactorParams`
+
+```ts
+type SessionVerifyAttemptFirstFactorParams = EmailCodeAttempt | PhoneCodeAttempt | PasswordAttempt
+
+type EmailCodeAttempt = {
+  strategy: 'email_code'
+  code: string
+}
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type PasswordAttempt = {
+  strategy: 'password'
+  password: string
+}
+```
+
+#### Example
+
+```js
+await clerk.session.attemptFirstFactorVerification({
+  strategy: 'email_code',
+  code: '123456',
+})
+```
+
+### `attemptSecondFactorVerification()`
+
+Attempts to complete the second factor verification process. Returns a [`SessionVerification`](/docs/reference/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function attemptSecondFactorVerification(
+  params: SessionVerifyAttemptSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyAttemptSecondFactorParams`
+
+```ts
+type SessionVerifyAttemptSecondFactorParams = PhoneCodeAttempt | TOTPAttempt | BackupCodeAttempt
+
+type PhoneCodeAttempt = {
+  strategy: 'phone_code'
+  code: string
+}
+
+type TOTPAttempt = {
+  strategy: 'totp'
+  code: string
+}
+
+type BackupCodeAttempt = {
+  strategy: 'backup_code'
+  code: string
+}
+```
+
+#### Example
+
+```js
+await clerk.session.attemptSecondFactorVerification({
+  strategy: 'phone_code',
+  code: '123456',
+})
+```
+
+### `checkAuthorization()`
+
+Checks if the user is [authorized for the specified role or permission](/docs/guides/secure/authorization-checks) or requires the user to [reverify their credentials](/docs/guides/secure/reverification) if their last verification is older than allowed.
+
+```ts
+function checkAuthorization(param: CheckAuthorizationParams): boolean
+```
+
+#### `CheckAuthorizationParams`
+
+```typescript
+type CheckAuthorizationParams =
+  | {
+      role: ClerkDefaultRole | CustomRole
+      permission?: never
+    }
+  | {
+      role?: never
+      permission: ClerkDefaultPermission | CustomPermission
+    }
+  | {
+      role?: never
+      permission?: never
+      reverification: ReverficationConfig
+    }
+```
+
+<Properties>
+  - `role`
+  - `string`
+
+  Accepts [role](/docs/guides/organizations/roles-and-permissions#roles) key.
+
+  ---
+
+  - `permission`
+  - `string`
+
+  Accepts [permission](/docs/guides/organizations/roles-and-permissions#permissions) key.
+
+  ---
+
+  - `reverification?`
+  - <code>[ReverificationConfig](/docs/reference/backend/types/auth-object#reverification-config)</code>
+
+  The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use**.
+</Properties>
+
+#### Example: Authorization
+
+For more information, see the [guide on authorization checks](/docs/guides/secure/authorization-checks).
+
+```js
+// Check if the current user has the 'admin' role
+await clerk.session.checkAuthorization({
+  role: 'admin',
+})
+```
+
+#### Example: Reverification
+
+For more information, see the [guide on reverification](/docs/guides/secure/reverification).
+
+```js
+// Require the user to reverify their first factor after 2 minutes
+await clerk.session.checkAuthorization({
+  reverification: { afterMinutes: 2, level: 'first_factor' },
+})
+```
+
+### `end()`
+
+Terminates the current session, invalidating it for this `Client` instance. Upon completion, the session's status transitions to **ended** and all associated authentication tokens are revoked. This operation cannot be undone and requires re-authentication to establish a new session.
+
+```typescript
+function end(): Promise<Session>
+```
+
+#### Example
+
+```js
+await clerk.session.end()
+```
+
+### `getToken()`
+
+Retrieves the current user's [session token](/docs/guides/sessions/session-tokens) or a [custom JWT template](/docs/guides/sessions/jwt-templates).
+
+This method uses a cache so a network request will only be made if the token in memory has expired. The TTL for a Clerk token is one minute.
+
+Tokens can only be generated if the user is signed in.
+
+```typescript
+function getToken(options?: GetTokenOptions): Promise<string | null>
+```
+
+#### `GetTokenOptions`
+
+<Properties>
+  - `leewayInSeconds`
+  - `number`
+
+  The number of seconds to allow the token to be cached for.
+
+  ---
+
+  - `template?`
+  - `string`
+
+  The name of the JWT template from the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates) to generate a new token from. E.g. 'firebase', 'grafbase', or your custom template's name.
+
+  ---
+
+  - `throwOnError?`
+  - `boolean`
+
+  Whether to throw an error or return an empty string, if an error occurs.
+
+  ---
+
+  - `skipCache?`
+  - `boolean`
+
+  Whether to skip the cache lookup and force a call to the server instead, even within the TTL. Useful if the token claims are time-sensitive or depend on data that can be updated (e.g. user fields). Defaults to `false`.
+
+  ---
+
+  - `organizationId?`
+  - `string`
+
+  The organization associated with the generated session token. _Does not modify the session's currently [active organization](!active-organization)._
+</Properties>
+
+#### Example
+
+```js
+await clerk.session.getToken({ template: 'Test' })
+```
+
+### `prepareFirstFactorVerification()`
+
+Initiates the first factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/reference/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareFirstFactorVerification(
+  params: SessionVerifyPrepareFirstFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareFirstFactorParams`
+
+```ts
+type SessionVerifyPrepareFirstFactorParams = EmailCodeConfig | PhoneCodeConfig
+
+type EmailCodeConfig = {
+  strategy: 'email_code'
+  primary?: boolean | undefined
+  emailAddressId: string
+}
+
+type PhoneCodeConfig = {
+  strategy: 'phone_code'
+  phoneNumberId: string
+  primary?: boolean
+  default?: boolean
+}
+```
+
+#### Example
+
+```js
+await clerk.session.prepareFirstFactorVerification({
+  strategy: 'email_code',
+  emailAddressId: 'email_address_123',
+})
+```
+
+### `prepareSecondFactorVerification()`
+
+Initiates the second factor verification process. This is a required step to complete a reverification flow when using a preparable factor. Returns a [`SessionVerification`](/docs/reference/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function prepareSecondFactorVerification(
+  params: SessionVerifyPrepareSecondFactorParams,
+): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyPrepareSecondFactorParams`
+
+```ts
+type SessionVerifyPrepareSecondFactorParams = PhoneCodeSecondFactorConfig
+
+type PhoneCodeSecondFactorConfig = {
+  strategy: 'phone_code'
+  phoneNumberId?: string
+}
+```
+
+#### Example
+
+```js
+await clerk.session.prepareSecondFactorVerification({
+  strategy: 'phone_code',
+})
+```
+
+### `remove()`
+
+Invalidates the current session by marking it as removed. Once removed, the session will be deactivated for the current Client instance and its `status` will be set to `removed`. This operation cannot be undone.
+
+```typescript
+function remove(): Promise<Session>
+```
+
+#### Example
+
+```js
+await clerk.session.remove()
+```
+
+### `startVerification()`
+
+Initiates the reverification flow. Returns a [`SessionVerification`](/docs/reference/javascript/types/session-verification) instance with its status and supported factors.
+
+```typescript
+function startVerification(params: SessionVerifyCreateParams): Promise<SessionVerificationResource>
+```
+
+#### `SessionVerifyCreateParams`
+
+```typescript
+type SessionVerifyCreateParams = {
+  level: 'first_factor' | 'second_factor' | 'multi_factor'
+}
+```
+
+#### Example
+
+```js
+await clerk.session.startVerification({
+  level: 'first_factor',
+})
+```
+
+### `touch()`
+
+Updates the session's last active timestamp to the current time. This method should be called periodically to indicate ongoing user activity and prevent the session from becoming stale. The updated timestamp is used for session management and analytics purposes.
+
+```typescript
+function touch(): Promise<Session>
+```
+
+#### Example
+
+```js
+await clerk.session.touch()
+```
+
+[client-ref]: /docs/reference/javascript/client

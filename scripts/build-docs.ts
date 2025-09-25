@@ -292,6 +292,7 @@ async function main() {
         'types/active-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
         'types/pending-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'types/billing-checkout-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

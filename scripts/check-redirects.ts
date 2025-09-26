@@ -97,41 +97,20 @@ async function loadRedirects(): Promise<{
     const dynamicContent = await fs.readFile(dynamicPath, 'utf-8')
     const dynamicRedirectsRaw = parseJSONC(dynamicContent) as Redirect[]
 
-    // Process dynamic redirects with path-to-regexp v6 syntax
+    // Process dynamic redirects with native path-to-regexp support
     const dynamicRedirects: DynamicRedirect[] = dynamicRedirectsRaw.map((redirect) => {
       try {
-        // Convert Next.js style patterns to path-to-regexp v6 syntax
-        let normalizedSource = redirect.source
-        let normalizedDestination = redirect.destination
-
-        // Convert :path* to named parameter syntax for v6
-        normalizedSource = normalizedSource.replace(/:path\*/g, ':pathParam(.*)')
-        normalizedDestination = normalizedDestination.replace(/:path\*/g, ':pathParam')
-
-        const matcher = match(normalizedSource, { decode: decodeURIComponent })
-        const compiler = compile(normalizedDestination, { encode: encodeURIComponent })
+        // Use native path-to-regexp support for :path* patterns
+        const matcher = match(redirect.source, { decode: decodeURIComponent })
+        const compiler = compile(redirect.destination, { encode: (str) => str, validate: false })
 
         return {
           ...redirect,
           matchesSource: (url: string) => {
-            const result = matcher(url)
-            if (result) {
-              // Convert pathParam to path for compatibility
-              const params: Record<string, string> = { ...result.params }
-              if (params.pathParam !== undefined) {
-                params.path = params.pathParam
-              }
-              return { ...result, params }
-            }
-            return result
+            return matcher(url)
           },
-          getDestination: (params: Record<string, string> | undefined) => {
-            // Convert path to pathParam for compilation
-            const compilationParams: Record<string, string> = { ...(params || {}) }
-            if (compilationParams.path !== undefined) {
-              compilationParams.pathParam = compilationParams.path
-            }
-            return compiler(compilationParams)
+          getDestination: (params: Record<string, any> | undefined) => {
+            return compiler(params || {})
           },
         }
       } catch (error) {
@@ -301,8 +280,9 @@ async function checkRedirects(): Promise<void> {
       continue
     }
 
-    // Check if destination exists in directory
-    const exists = validUrls.has(destination)
+    // Check if destination exists in directory (check both encoded and decoded versions)
+    const decodedDestination = decodeURIComponent(destination)
+    const exists = validUrls.has(destination) || validUrls.has(decodedDestination)
     results.push({
       redirect,
       exists,

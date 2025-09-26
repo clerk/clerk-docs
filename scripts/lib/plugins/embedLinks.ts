@@ -19,7 +19,14 @@ import { SDK } from '../schemas'
  * - Skips links to ignored paths or links.
  */
 export const embedLinks =
-  (config: BuildConfig, docsMap: DocsMap, docSDKs: SDK[], foundLink?: (link: string) => void, href?: string) =>
+  (
+    config: BuildConfig,
+    docsMap: DocsMap,
+    docSDKs: SDK[],
+    foundLink?: (link: string) => void,
+    href?: string,
+    targetSdk?: SDK,
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     const scopeHref = scopeHrefToSDK(config)
@@ -87,11 +94,24 @@ export const embedLinks =
 
       const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
 
-      // Check if all SDKs for the current document are also present in the linked document.
-      // If true, the link does not need to be SDK-scoped, as the SDK context is already compatible.
-      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+      // Determine if we should convert this link to SDKLink:
+      // 1. If target SDK is not supported by the linked document (incompatibility)
+      // 2. If linked document supports multiple SDKs (to show SDK options to users)
+      // 3. If no target SDK is provided (core document), use original compatibility logic
 
-      if (usesTheSameSDKs) {
+      const targetSdkSupported = targetSdk ? linkedDocSDKs.includes(targetSdk) : true
+      const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
+      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK
+
+      // For core documents (no target SDK), fall back to original compatibility check
+      if (!targetSdk) {
+        const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+        if (usesTheSameSDKs) {
+          return node
+        }
+      } else if (!shouldConvertToSDKLink) {
+        // For SDK-scoped documents, only skip conversion if target SDK is supported
+        // AND linked document is single-SDK (no need to show SDK options)
         return node
       }
 
@@ -99,7 +119,11 @@ export const embedLinks =
         linkedDocSDKs !== undefined &&
         // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
         linkedDocSDKs.length > 1 &&
-        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
+        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`)) &&
+        // Inject SDK scoping when:
+        // 1. No target SDK (core document linking to multi-SDK doc), OR
+        // 2. Target SDK exists and linked document is multi-SDK (to enable SDK navigation)
+        (!targetSdk || linkedDocSDKs.length > 1)
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {

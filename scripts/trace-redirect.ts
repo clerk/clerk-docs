@@ -25,7 +25,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
-import { compile, match } from 'path-to-regexp'
+import { compile, match, MatchFunction, PathFunction } from 'path-to-regexp'
 
 interface Redirect {
   source: string
@@ -34,12 +34,8 @@ interface Redirect {
 }
 
 interface DynamicRedirect extends Redirect {
-  matchesSource: ReturnType<typeof match>
-  getDestination: ReturnType<typeof compile>
-}
-
-interface StaticRedirect extends Redirect {
-  // Static redirects are just the base interface
+  matchesSource: MatchFunction<Record<string, string>>
+  getDestination: PathFunction<Record<string, string>>
 }
 
 interface DirectoryEntry {
@@ -65,7 +61,7 @@ interface TraceResult {
   totalHops: number
 }
 
-async function loadDirectory(): Promise<Set<string>> {
+async function loadDirectory() {
   try {
     const directoryPath = path.join(process.cwd(), 'dist', 'directory.json')
     const content = await fs.readFile(directoryPath, 'utf-8')
@@ -92,111 +88,76 @@ async function loadDirectory(): Promise<Set<string>> {
   }
 }
 
-async function loadRedirects(): Promise<{
-  staticRedirects: Record<string, StaticRedirect>
-  dynamicRedirects: DynamicRedirect[]
-}> {
+async function loadRedirects() {
   try {
     const redirectsPath = path.join(process.cwd(), 'dist', '_redirects')
 
     // Load static redirects
     const staticPath = path.join(redirectsPath, 'static.json')
     const staticContent = await fs.readFile(staticPath, 'utf-8')
-    const staticRedirectsObj = JSON.parse(staticContent) as Record<string, StaticRedirect>
+    const staticRedirectsObj = JSON.parse(staticContent) as Record<
+      string,
+      {
+        source: string
+        destination: string
+        permanent: boolean
+      }
+    >
 
     // Load dynamic redirects
     const dynamicPath = path.join(redirectsPath, 'dynamic.jsonc')
     const dynamicContent = await fs.readFile(dynamicPath, 'utf-8')
-    const dynamicRedirectsRaw = parseJSONC(dynamicContent) as Redirect[]
+    const dynamicRedirectsRaw = parseJSONC(dynamicContent) as {
+      source: string
+      destination: string
+      permanent: boolean
+    }[]
 
-    // Process dynamic redirects - use custom matching for patterns with :path* and :sdk
-    const dynamicRedirects: DynamicRedirect[] = dynamicRedirectsRaw.map((redirect) => {
-      // Use custom matching for patterns that don't work well with path-to-regexp
-      if (redirect.source.includes(':path*') || redirect.source.includes(':sdk')) {
+    // Process dynamic redirects with path-to-regexp v6 syntax
+    const dynamicRedirects = dynamicRedirectsRaw.map((redirect) => {
+      try {
+        // Convert Next.js style patterns to path-to-regexp v6 syntax
+        let normalizedSource = redirect.source
+        let normalizedDestination = redirect.destination
+
+        // Convert :path* to named parameter syntax for v6
+        normalizedSource = normalizedSource.replace(/:path\*/g, ':pathParam(.*)')
+        normalizedDestination = normalizedDestination.replace(/:path\*/g, ':pathParam')
+
+        const matcher = match(normalizedSource, { decode: decodeURIComponent })
+        const compiler = compile(normalizedDestination, { encode: encodeURIComponent })
+
         return {
           ...redirect,
           matchesSource: (url: string) => {
-            // Handle :path* patterns
-            if (redirect.source.includes(':path*')) {
-              const basePattern = redirect.source.replace(':path*', '')
-              if (url.startsWith(basePattern)) {
-                const capturedPath = url.substring(basePattern.length)
-                return {
-                  params: { path: capturedPath },
-                  pathname: url,
-                  pathnameBase: basePattern,
-                  pattern: { pathname: redirect.source, caseSensitive: false, end: false },
-                }
+            const result = matcher(url)
+            if (result) {
+              // Convert pathParam to path for compatibility
+              const params: Record<string, string> = { ...result.params }
+              if (params.pathParam !== undefined) {
+                params.path = params.pathParam
               }
+              return { ...result, params }
             }
-
-            // Handle :sdk patterns
-            if (redirect.source.includes(':sdk')) {
-              const parts = redirect.source.split('/')
-              const urlParts = url.split('/')
-
-              if (parts.length <= urlParts.length) {
-                let matches = true
-                const params: Record<string, string> = {}
-
-                for (let i = 0; i < parts.length; i++) {
-                  if (parts[i].startsWith(':')) {
-                    const paramName = parts[i].substring(1)
-                    if (paramName.endsWith('*')) {
-                      // Handle wildcard parameters like :path*
-                      const cleanParamName = paramName.replace('*', '')
-                      params[cleanParamName] = urlParts.slice(i).join('/')
-                      break
-                    } else {
-                      params[paramName] = urlParts[i]
-                    }
-                  } else if (parts[i] !== urlParts[i]) {
-                    matches = false
-                    break
-                  }
-                }
-
-                if (matches) {
-                  return {
-                    params,
-                    pathname: url,
-                    pathnameBase: redirect.source.replace(/:[\w*]+/g, ''),
-                    pattern: { pathname: redirect.source, caseSensitive: false, end: false },
-                  }
-                }
-              }
+            return result
+          },
+          getDestination: (params: Record<string, string> | undefined) => {
+            // Convert path to pathParam for compilation
+            const compilationParams: Record<string, string> = { ...(params || {}) }
+            if (compilationParams.path !== undefined) {
+              compilationParams.pathParam = compilationParams.path
             }
-
-            return false
+            return compiler(compilationParams)
           },
-          getDestination: (params: any) => {
-            let destination = redirect.destination
-
-            // Replace parameters in destination
-            Object.keys(params || {}).forEach((key) => {
-              destination = destination.replace(`:${key}*`, params[key])
-              destination = destination.replace(`:${key}`, params[key])
-            })
-
-            return destination
-          },
-        }
-      }
-
-      // For simpler patterns, try using path-to-regexp
-      try {
-        return {
-          ...redirect,
-          matchesSource: match(redirect.source, { decode: decodeURIComponent }),
-          getDestination: compile(redirect.destination, { encode: encodeURIComponent }),
         }
       } catch (error) {
-        // Final fallback
+        // Fallback for patterns that don't work with path-to-regexp
+        console.warn(`Warning: Could not compile pattern ${redirect.source}: ${error}`)
         return {
           ...redirect,
           matchesSource: () => false,
           getDestination: () => redirect.destination,
-        }
+        } as DynamicRedirect
       }
     })
 
@@ -209,16 +170,20 @@ async function loadRedirects(): Promise<{
   }
 }
 
+function isExternalUrl(url: string) {
+  return url.startsWith('http://') || url.startsWith('https://')
+}
+
 function findRedirect(
   url: string,
-  staticRedirects: Record<string, StaticRedirect>,
+  staticRedirects: Record<string, Redirect>,
   dynamicRedirects: DynamicRedirect[],
 ): { redirect: Redirect; destination: string; matchedRule: string } | null {
   // Check dynamic redirects first (like production)
   for (const dynamicRedirect of dynamicRedirects) {
     const matchResult = dynamicRedirect.matchesSource(url)
     if (matchResult) {
-      const destination = dynamicRedirect.getDestination(matchResult.params)
+      const destination = dynamicRedirect.getDestination(matchResult.params || {})
       return {
         redirect: dynamicRedirect,
         destination,
@@ -240,16 +205,12 @@ function findRedirect(
   return null
 }
 
-function isExternalUrl(url: string): boolean {
-  return url.startsWith('http://') || url.startsWith('https://')
-}
-
-function normalizeUrl(url: string): string {
+function normalizeUrl(url: string) {
   // Remove hash fragments for validation
   return url.split('#')[0]
 }
 
-async function traceRedirect(inputUrl: string): Promise<TraceResult> {
+async function traceRedirect(inputUrl: string) {
   const [validUrls, { staticRedirects, dynamicRedirects }] = await Promise.all([loadDirectory(), loadRedirects()])
 
   const steps: RedirectStep[] = []

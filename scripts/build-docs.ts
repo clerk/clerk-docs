@@ -217,6 +217,10 @@ async function main() {
         // temp migration ignores
         'backend/billing-plan.mdx': ['link-doc-not-found'],
         'types/billing-checkout-resource.mdx': ['link-doc-not-found'],
+        'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
+        'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

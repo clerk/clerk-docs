@@ -159,7 +159,7 @@ async function main() {
       docs: {
         'index.mdx': ['doc-not-in-manifest'],
         'guides/overview.mdx': ['doc-not-in-manifest'],
-        'quickstarts/overview.mdx': ['doc-not-in-manifest'],
+        'getting-started/quickstart/overview.mdx': ['doc-not-in-manifest'],
         'reference/overview.mdx': ['doc-not-in-manifest'],
         'maintenance-mode.mdx': ['doc-not-in-manifest'],
         'guides/development/deployment/staging-alternatives.mdx': ['doc-not-in-manifest'],
@@ -206,7 +206,7 @@ async function main() {
         'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
-        'quickstarts/setup-clerk.mdx': ['doc-not-in-manifest'],
+        'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],
         'pinning.mdx': ['doc-not-in-manifest'],
 
         // temp migration ignores
@@ -292,6 +292,7 @@ async function main() {
         'types/active-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
         'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
         'types/pending-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
+        'types/billing-checkout-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

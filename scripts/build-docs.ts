@@ -117,7 +117,6 @@ async function main() {
     partialsPath: '../docs/_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
-    localTypedocOverridePath: '../local-clerk-typedoc',
     publicPath: '../public',
     redirects: {
       static: {
@@ -215,12 +214,10 @@ async function main() {
       },
       typedoc: {
         // temp migration ignores
-        // 'backend/billing-plan.mdx': ['link-doc-not-found'],
-        // 'types/billing-checkout-resource.mdx': ['link-doc-not-found'],
-        // 'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
-        // 'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
-        // 'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
-        // 'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
+        'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
+        'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
+        'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
       },
       partials: {},
       tooltips: {},

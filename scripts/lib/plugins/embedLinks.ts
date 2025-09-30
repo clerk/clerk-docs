@@ -4,7 +4,6 @@ import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
 import type { BuildConfig } from '../config'
-import type { WarningsSection } from '../error-messages'
 import type { DocsMap } from '../store'
 import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
@@ -25,7 +24,7 @@ export const embedLinks =
     docSDKs: SDK[],
     foundLink?: (link: string) => void,
     href?: string,
-    targetSdk?: SDK,
+    currentPageSDK?: SDK,
   ) =>
   () =>
   (tree: Node, vfile: VFile) => {
@@ -94,36 +93,26 @@ export const embedLinks =
 
       const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
 
-      // Determine if we should convert this link to SDKLink:
-      // 1. If target SDK is not supported by the linked document (incompatibility)
-      // 2. If linked document supports multiple SDKs (to show SDK options to users)
-      // 3. If no target SDK is provided (core document), use original compatibility logic
+      // Is the page we are currently rendering, compatible with the linked page?
+      // If no current page sdk is provided, we assume it is compatible
+      const targetSdkSupported = currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true
 
-      const targetSdkSupported = targetSdk ? linkedDocSDKs.includes(targetSdk) : true
+      // Does the linked page support more than one sdk?
       const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
-      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK
 
-      // For core documents (no target SDK), fall back to original compatibility check
-      if (!targetSdk) {
-        const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
-        if (usesTheSameSDKs) {
-          return node
-        }
-      } else if (!shouldConvertToSDKLink) {
-        // For SDK-scoped documents, only skip conversion if target SDK is supported
-        // AND linked document is single-SDK (no need to show SDK options)
-        return node
-      }
+      // Do the linked page and the current page use exactly the same sdk?
+      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
+
+      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK || !usesTheSameSDKs
+
+      // In these cases, we don't need to convert to a SDKLink
+      if (!shouldConvertToSDKLink) return node
 
       const injectSDK =
         linkedDocSDKs !== undefined &&
         // Don't inject SDK scoping for single SDK scenarios (only one valid SDK + document supports that SDK)
         linkedDocSDKs.length > 1 &&
-        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`)) &&
-        // Inject SDK scoping when:
-        // 1. No target SDK (core document linking to multi-SDK doc), OR
-        // 2. Target SDK exists and linked document is multi-SDK (to enable SDK navigation)
-        (!targetSdk || linkedDocSDKs.length > 1)
+        !linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
 
       // we are specifically skipping over replacing links inside Cards until we can figure out a way to have the cards display what sdks they support
       if (inCardsComponent === true) {

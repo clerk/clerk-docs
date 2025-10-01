@@ -108,11 +108,43 @@ The `<TaskChooseOrganization />` component renders a UI for resolving the `choos
   </If>
 
   <If sdk="remix">
-    > [!NOTE]
-    > To see the full `root.tsx` setup you need for Clerk with Remix, see the [Remix quickstart](/docs/remix/getting-started/quickstart).
+    ```tsx {{ filename: 'app/root.tsx', fold: [[1, 37]], mark: [39] }}
+    import type { MetaFunction, LoaderFunction } from '@remix-run/node'
 
-    ```tsx {{ filename: 'app/root.tsx', mark: [4] }}
+    import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react'
+
+    import { rootAuthLoader } from '@clerk/remix/ssr.server'
     import { ClerkApp } from '@clerk/remix'
+
+    export const meta: MetaFunction = () => [
+      {
+        charset: 'utf-8',
+        title: 'New Remix App',
+        viewport: 'width=device-width,initial-scale=1',
+      },
+    ]
+
+    export const loader: LoaderFunction = (args) => rootAuthLoader(args)
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    function App() {
+      return <Outlet />
+    }
 
     export default ClerkApp(App, {
       taskUrls: { 'choose-organization': '/onboarding/choose-organization' },
@@ -260,6 +292,44 @@ The `<TaskChooseOrganization />` component renders a UI for resolving the `choos
 
     The container `<div>` element with a rendered `<SignUp />` component instance
   </Properties>
+
+  #### `unmountTaskChooseOrganization()` usage
+
+  ```typescript {{ filename: 'main.ts', mark: [30] }}
+  import { Clerk } from '@clerk/clerk-js'
+
+  const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  const clerk = new Clerk(pubKey)
+  await clerk.load()
+
+  if (clerk.isSignedIn) {
+    // Mount user button component
+    document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+    const userbuttonDiv = document.getElementById('user-button')
+
+    clerk.mountUserButton(userbuttonDiv)
+  } else if (clerk.session?.currentTask) {
+    switch (clerk.session.currentTask.key) {
+      case 'choose-organization': {
+        document.getElementById('app').innerHTML = `
+                <div id="task-choose-organization"></div>
+              `
+
+        const taskChooseOrganizationDiv = document.getElementById('task-choose-organization')
+
+        clerk.mountTaskChooseOrganization(taskChooseOrganizationDiv)
+
+        // ...
+
+        clerk.unmountTaskChooseOrganization(taskChooseOrganizationDiv)
+      }
+    }
+  }
+  ```
 </If>
 
 ## Properties

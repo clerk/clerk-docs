@@ -213,13 +213,7 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {
-        // temp migration ignores
-        'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
-        'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
-        'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
-        'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
-      },
+      typedoc: {},
       partials: {},
       tooltips: {},
     },

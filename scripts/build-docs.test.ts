@@ -3529,6 +3529,148 @@ canonical: /docs/doc-2
 `,
     )
   })
+
+  test('Should embed links in sdk scoped docs', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1
+description: x
+sdk: react
+---
+
+# Guide 1`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: react
+---
+
+# Guide 2`,
+      },
+      {
+        path: './docs/guide-2.nextjs.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: nextjs
+---
+
+[Link](/docs/guide-1)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/nextjs/guide-2.mdx')).toBe(`---
+title: Guide 2
+description: x
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/guide-2
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+<SDKLink href="/docs/guide-1" sdks={["react"]}>Link</SDKLink>
+`)
+  })
+
+  test('Should convert links to multi-SDK documents even when target SDK is supported', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1 for React
+description: x
+sdk: react
+---
+
+# Guide 1 for React
+
+[\`<Guide 2>\`](/docs/guide-2)
+`,
+      },
+      {
+        path: './docs/guide-1.nextjs.mdx',
+        content: `---
+title: Guide 1 for Nextjs
+description: x
+sdk: nextjs
+---
+# Guide 1 for Nextjs
+`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: '<Guide 2>'
+description: x
+sdk: react, nextjs
+---
+
+# Guide 2 Component
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // When viewing the React version of the guide-1
+    const reactGuide1 = await readFile('./dist/react/guide-1.mdx')
+
+    // This should fail because the current logic doesn't convert the link
+    // since all SDKs of the component (react, nextjs, astro, vue, nuxt)
+    // are supported by the guide-1 document (which has all those SDK variants)
+    // But it SHOULD be converted to show users which SDKs the component supports
+    expect(reactGuide1).toContain(
+      `<SDKLink href="/docs/:sdk:/guide-2" sdks={["react","nextjs"]} code={true}>\\<Guide 2></SDKLink>`,
+    )
+  })
 })
 
 describe('Path and File Handling', () => {

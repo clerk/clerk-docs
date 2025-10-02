@@ -20,7 +20,6 @@ type SDK =
   | 'vue'
   | 'ruby'
   | 'js-backend'
-  | 'sdk-development'
 
 interface ManifestItem {
   title: string

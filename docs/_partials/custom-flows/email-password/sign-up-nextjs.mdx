@@ -1,0 +1,65 @@
+This example is written for Next.js App Router but it can be adapted for any React-based framework.
+
+```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+'use client'
+
+import * as React from 'react'
+import { useAuth, useSignUp } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+
+export default function SignUpPage() {
+  const { signUp, errors, fetchStatus } = useSignUp()
+  const { isSignedIn } = useAuth()
+
+  const handleSubmit = async (formData: FormData) => {
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    await signUp.password({
+      email,
+      password,
+    })
+
+    await signUp.verifications.sendEmailCode()
+  }
+
+  const handleVerify = async (formData: FormData) => {
+    const code = formData.get('code') as string
+
+    await signUp.verifications.verifyEmailCode({
+      code,
+    })
+    if (signUp.status === 'complete') {
+      await signUp.finalize({
+        navigate: () => {
+          router.push('/dashboard')
+        },
+      })
+    }
+  }
+
+  if (signUp.status === 'complete' || isSignedIn) {
+    return null
+  }
+
+  if (
+    signUp.status === 'missing_requirements' &&
+    signUp.unverifiedFields.includes('email_address')
+  ) {
+    return (
+      <form action={handleVerify}>
+        <input type="text" name="code" placeholder="Enter your verification code" />
+        <button type="submit">Verify</button>
+      </form>
+    )
+  }
+
+  return (
+    <form action={handleSubmit}>
+      <input type="email" name="email" placeholder="Email" />
+      <input type="password" name="password" placeholder="Password" />
+      <button type="submit">Sign up</button>
+    </form>
+  )
+}
+```

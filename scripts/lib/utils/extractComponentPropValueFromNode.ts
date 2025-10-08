@@ -7,8 +7,9 @@ import type { BuildConfig } from '../config'
 import type { Node } from 'unist'
 import { safeMessage, type WarningsSection } from '../error-messages'
 import { findComponent } from './findComponent'
+import { z } from 'zod'
 
-export const extractComponentPropValueFromNode = (
+export const extractComponentPropValueFromNode = <Schema extends z.ZodType>(
   config: BuildConfig,
   node: Node,
   vfile: VFile | undefined,
@@ -17,7 +18,8 @@ export const extractComponentPropValueFromNode = (
   required = true,
   section: WarningsSection,
   filePath: string,
-): string | undefined => {
+  schema: Schema,
+): z.infer<Schema> | undefined => {
   const component = findComponent(node, componentName)
 
   if (component === undefined) return undefined
@@ -82,9 +84,12 @@ export const extractComponentPropValueFromNode = (
 
   // Handle both string values and object values (like JSX expressions)
   if (typeof value === 'string') {
-    return value
+    return schema.parse(value)
+  } else if (typeof value === 'object' && value === null) {
+    // this is when a component is like <Select single />
+    return schema.parse(true)
   } else if (typeof value === 'object' && 'value' in value) {
-    return value.value
+    return schema.parse(value.value)
   }
 
   if (vfile) {

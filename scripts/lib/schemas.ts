@@ -9,8 +9,8 @@ export const VALID_SDKS = [
   'js-frontend',
   'chrome-extension',
   'expo',
+  'android',
   'ios',
-  'nodejs',
   'expressjs',
   'fastify',
   'react-router',
@@ -21,10 +21,7 @@ export const VALID_SDKS = [
   'nuxt',
   'vue',
   'ruby',
-  'python',
   'js-backend',
-  'sdk-development',
-  'community-sdk',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]
@@ -48,7 +45,9 @@ export const icon = z.enum([
   'clerk',
   'code-bracket',
   'cog-6-teeth',
+  'cpu',
   'door',
+  'document',
   'elysia',
   'expressjs',
   'globe',
@@ -85,6 +84,7 @@ export const icon = z.enum([
   'expo',
   'nuxt',
   'fastify',
+  'api',
 ])
 
 export type Icon = z.infer<typeof icon>

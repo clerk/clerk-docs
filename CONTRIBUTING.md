@@ -1092,7 +1092,7 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 
 ### `<Accordion />`
 
-The `<Accordion />` components create is a vertically stacked set of interactive headings that each reveal a section of content. It has no props and accepts `<AccordionPanel />` children.
+The `<Accordion />` component creates a vertically stacked set of interactive headings that each reveals a section of content. It has no props and accepts `<AccordionPanel />` children.
 
 The `<AccordionPanel />` accepts a `title` and `children`.
 

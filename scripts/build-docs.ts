@@ -213,87 +213,7 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {
-        // temp migration ignores
-        'backend/authenticate-request-options.mdx': ['link-doc-not-found'],
-        'backend/organization-sync-options.mdx': ['link-doc-not-found'],
-        'nextjs/clerk-middleware-options.mdx': ['link-doc-not-found'],
-        'shared/use-organization-params.mdx': ['link-doc-not-found'],
-        'types/check-authorization-params-from-session-claims.mdx': ['link-doc-not-found'],
-        'types/organization-resource.mdx': ['link-doc-not-found'],
-        'clerk-react/clerk-provider-props.mdx': ['link-doc-not-found'],
-        'backend/session.mdx': ['link-doc-not-found'],
-        'clerk-react/use-auth.mdx': ['link-doc-not-found'],
-        'types/use-auth-return.mdx': ['link-doc-not-found'],
-        'backend/auth-object.mdx': ['link-doc-not-found'],
-        'backend/organization-membership-public-user-data.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'backend/organization.mdx': ['link-doc-not-found'],
-        'backend/public-organization-data-json.mdx': ['link-doc-not-found'],
-        'backend/verify-token-options.mdx': ['link-doc-not-found'],
-        'backend/verify-token.mdx': ['link-doc-not-found'],
-        'backend/verify-webhook-options.mdx': ['link-doc-not-found'],
-        'backend/verify-webhook.mdx': ['link-doc-not-found'],
-        'backend/user.mdx': ['link-doc-not-found'],
-        'clerk-react/use-reverification.mdx': ['link-doc-not-found'],
-        'nextjs/current-user.mdx': ['link-doc-not-found'],
-        'shared/use-reverification.mdx': ['link-doc-not-found'],
-        'types/session-resource.mdx': ['link-doc-not-found'],
-        'backend/allowlist-identifier.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'backend/email-address.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'backend/phone-number.mdx': ['link-doc-not-found'],
-        'types/user-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'clerk-react/use-sign-in.mdx': ['link-doc-not-found'],
-        'clerk-react/use-sign-up.mdx': ['link-doc-not-found'],
-        'nextjs/get-auth.mdx': ['link-doc-not-found'],
-        'nextjs/auth.mdx': ['link-doc-not-found'],
-        'backend/client.mdx': ['link-doc-not-found'],
-        'backend/external-account.mdx': ['link-doc-not-found'],
-        'backend/invitation.mdx': ['link-doc-not-found'],
-        'backend/organization-invitation.mdx': ['link-doc-not-found'],
-        'backend/organization-membership.mdx': ['link-doc-not-found'],
-        'backend/paginated-resource-response.mdx': ['link-doc-not-found'],
-        'backend/saml-account.mdx': ['link-doc-not-found'],
-        'backend/saml-connection.mdx': ['link-doc-not-found'],
-        'backend/web3-wallet.mdx': ['link-doc-not-found'],
-        'clerk-react/redirect-to-create-organization.mdx': ['link-doc-not-found'],
-        'clerk-react/redirect-to-organization-profile.mdx': ['link-doc-not-found'],
-        'clerk-react/redirect-to-user-profile.mdx': ['link-doc-not-found'],
-        'clerk-react/use-clerk.mdx': ['link-doc-not-found'],
-        'clerk-react/use-session-list.mdx': ['link-doc-not-found'],
-        'clerk-react/use-session.mdx': ['link-doc-not-found'],
-        'clerk-react/use-user.mdx': ['link-doc-not-found'],
-        'shared/derive-state.mdx': ['link-doc-not-found'],
-        'shared/paginated-resources.mdx': ['link-doc-not-found'],
-        'shared/use-clerk.mdx': ['link-doc-not-found'],
-        'shared/use-organization-list-return.mdx': ['link-doc-not-found'],
-        'shared/use-organization-return.mdx': ['link-doc-not-found'],
-        'shared/use-session-list.mdx': ['link-doc-not-found'],
-        'shared/use-session.mdx': ['link-doc-not-found'],
-        'shared/use-user.mdx': ['link-doc-not-found'],
-        'types/clerk.mdx': ['link-doc-not-found'],
-        'types/commerce-billing-namespace.mdx': ['link-doc-not-found'],
-        'types/commerce-payment-resource.mdx': ['link-doc-not-found'],
-        'types/commerce-payment-source-methods.mdx': ['link-doc-not-found'],
-        'types/commerce-subscription-resource.mdx': ['link-doc-not-found'],
-        'types/set-active-params.mdx': ['link-doc-not-found'],
-        'types/use-session-list-return.mdx': ['link-doc-not-found'],
-        'types/use-session-return.mdx': ['link-doc-not-found'],
-        'types/use-sign-up-return.mdx': ['link-doc-not-found'],
-        'types/use-user-return.mdx': ['link-doc-not-found'],
-        'backend/commerce-subscription-item.mdx': ['link-doc-not-found'],
-        'backend/commerce-subscription.mdx': ['link-doc-not-found'],
-        'types/billing-namespace.mdx': ['link-doc-not-found'],
-        'types/billing-payment-source-methods.mdx': ['link-doc-not-found'],
-        'types/use-sign-in-return.mdx': ['link-doc-not-found'],
-        'backend/commerce-plan.mdx': ['link-doc-not-found'],
-        'backend/billing-plan.mdx': ['link-doc-not-found'],
-        'backend/billing-subscription-item.mdx': ['link-doc-not-found'],
-        'backend/billing-subscription.mdx': ['link-doc-not-found'],
-        'types/active-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'types/organization-custom-role-key.mdx': ['link-doc-not-found'],
-        'types/pending-session-resource.mdx': ['link-doc-not-found', 'link-hash-not-found'],
-        'types/billing-checkout-resource.mdx': ['link-doc-not-found'],
-      },
+      typedoc: {},
       partials: {},
       tooltips: {},
     },
@@ -863,6 +783,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               target: item.target,
               // @ts-expect-error - It exists, up on line 481
               sdk: item.itemSDK ?? sdks,
+              shortcut: item.shortcut,
             }
           }
 
@@ -875,6 +796,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             icon: item.icon,
             target: item.target,
             sdk: item.sdk,
+            shortcut: item.shortcut,
           }
         },
         // @ts-expect-error - This traverseTree function might just be the death of me
@@ -951,6 +873,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundLinks.add(link)
               },
               doc.file.href,
+              undefined, // No target SDK for core documents
             ),
           )
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
@@ -1096,7 +1019,7 @@ ${yaml.stringify({
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href))
+              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

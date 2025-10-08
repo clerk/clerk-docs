@@ -22,7 +22,6 @@ export const VALID_SDKS = [
   'vue',
   'ruby',
   'js-backend',
-  'sdk-development',
 ] as const
 
 export type SDK = (typeof VALID_SDKS)[number]

@@ -1054,7 +1054,6 @@ Available values for the `sdk` prop:
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
 | JS Backend SDK         | "js-backend"           |
-| SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
@@ -1090,6 +1089,28 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 ```
 
 </details>
+
+### `<Accordion />`
+
+The `<Accordion />` component creates a vertically stacked set of interactive headings that each reveals a section of content. It has no props and accepts `<AccordionPanel />` children.
+
+The `<AccordionPanel />` accepts a `title` and `children`.
+
+| Prop       | Type              | Comment                                                   |
+| ---------- | ----------------- | --------------------------------------------------------- |
+| `children` | `React.ReactNode` | The content that will be rendered in the accordion panel. |
+| `title`    | `string`          | The title of the accordion panel.                         |
+
+```mdx
+<Accordion>
+  <AccordionPanel title="Can I use this?">It's available in v1.2.3 and above.</AccordionPanel>
+  <AccordionPanel title="What if I still have questions?">Send and email to help@example.com.</AccordionPanel>
+</Accordion>
+```
+
+The image below shows what this example looks like once rendered.
+
+![An example of an <Accordion /> component](/.github/media/accordion.png)
 
 ### Images and static assets
 

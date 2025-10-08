@@ -1090,6 +1090,28 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 
 </details>
 
+### `<Accordion />`
+
+The `<Accordion />` component creates a vertically stacked set of interactive headings that each reveals a section of content. It has no props and accepts `<AccordionPanel />` children.
+
+The `<AccordionPanel />` accepts a `title` and `children`.
+
+| Prop       | Type              | Comment                                                   |
+| ---------- | ----------------- | --------------------------------------------------------- |
+| `children` | `React.ReactNode` | The content that will be rendered in the accordion panel. |
+| `title`    | `string`          | The title of the accordion panel.                         |
+
+```mdx
+<Accordion>
+  <AccordionPanel title="Can I use this?">It's available in v1.2.3 and above.</AccordionPanel>
+  <AccordionPanel title="What if I still have questions?">Send and email to help@example.com.</AccordionPanel>
+</Accordion>
+```
+
+The image below shows what this example looks like once rendered.
+
+![An example of an <Accordion /> component](/.github/media/accordion.png)
+
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.

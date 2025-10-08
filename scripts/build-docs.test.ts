@@ -171,7 +171,6 @@ const baseConfig = {
   },
   manifestOptions: {
     wrapDefault: true,
-    collapseDefault: false,
     hideTitleDefault: false,
   },
   flags: {
@@ -415,7 +414,7 @@ title: Simple Test
     await expect(promise).rejects.toThrow('Failed to parse manifest:')
   })
 
-  test('should apply manifest options (wrapDefault, collapseDefault, hideTitleDefault) correctly', async () => {
+  test('should apply manifest options (wrapDefault, hideTitleDefault) correctly', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -426,28 +425,24 @@ title: Simple Test
                 title: 'Group One',
                 items: [[{ title: 'Item One', href: '/docs/item-one' }]],
                 wrap: true,
-                collapse: true,
                 hideTitle: false,
               },
               {
                 title: 'Group Two',
                 items: [[{ title: 'Item Two', href: '/docs/item-two' }]],
                 wrap: true,
-                collapse: false,
                 hideTitle: true,
               },
               {
                 title: 'Group Three',
                 items: [[{ title: 'Item Three', href: '/docs/item-three' }]],
                 wrap: false,
-                collapse: true,
                 hideTitle: false,
               },
               {
                 title: 'Group Four',
                 items: [[{ title: 'Item Four', href: '/docs/item-four' }]],
                 wrap: false,
-                collapse: false,
                 hideTitle: true,
               },
             ],
@@ -467,7 +462,6 @@ title: Simple Test
         validSdks: ['nextjs'],
         manifestOptions: {
           wrapDefault: false,
-          collapseDefault: false,
           hideTitleDefault: false,
         },
       }),
@@ -477,19 +471,15 @@ title: Simple Test
     const groups = manifest.navigation[0]
 
     expect(groups[0].wrap).toBe(true)
-    expect(groups[0].collapse).toBe(true)
     expect(groups[0].hideTitle).toBe(undefined)
 
     expect(groups[1].wrap).toBe(true)
-    expect(groups[1].collapse).toBe(undefined)
     expect(groups[1].hideTitle).toBe(true)
 
     expect(groups[2].wrap).toBe(undefined)
-    expect(groups[2].collapse).toBe(true)
     expect(groups[2].hideTitle).toBe(undefined)
 
     expect(groups[3].wrap).toBe(undefined)
-    expect(groups[3].collapse).toBe(undefined)
     expect(groups[3].hideTitle).toBe(true)
   })
 
@@ -1227,56 +1217,6 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  test('should fail when child SDK is not in parent SDK list', async () => {
-    const { tempDir } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              {
-                title: 'Authentication',
-                sdk: ['react'],
-                items: [
-                  [
-                    {
-                      title: 'Login',
-                      href: '/docs/auth/login',
-                      sdk: ['react', 'remix'], // remix not in parent
-                    },
-                  ],
-                ],
-              },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/auth/login.mdx',
-        content: `---
-title: Login
-sdk: react, remix
----
-
-# Login Page
-
-Authentication login documentation.`,
-      },
-    ])
-
-    const promise = build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'remix', 'nextjs'],
-      }),
-    )
-
-    await expect(promise).rejects.toThrow(
-      'Doc "Login" is attempting to use ["react","remix"] But its being filtered down to ["react"] in the manifest.json',
-    )
-  })
-
   test('should generate appropriate landing pages for SDK-specific docs', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -1923,6 +1863,98 @@ activeSdk: nextjs
 # Next.js Quickstart (Pages Router)
 `)
   })
+
+  test('SDK scoping of the manifest in the manifest takes precedence over the sdk in the file', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Quickstart',
+                sdk: ['nextjs'],
+                items: [
+                  [
+                    {
+                      title: 'Next.js Quickstart',
+                      href: '/docs/quickstart',
+                    },
+                  ],
+                ],
+              },
+              {
+                title: 'Quickstart',
+                sdk: ['react', 'ios'],
+                href: '/docs/quickstart',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Quickstart
+sdk: nextjs
+---
+
+Next.js Quickstart`,
+      },
+      {
+        path: './docs/quickstart.react.mdx',
+        content: `---
+title: React Quickstart
+sdk: react
+---
+
+React Quickstart`,
+      },
+      {
+        path: './docs/quickstart.ios.mdx',
+        content: `---
+title: iOS Quickstart
+sdk: ios
+---
+
+iOS Quickstart`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'ios'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            items: [
+              [
+                {
+                  href: '/docs/:sdk:/quickstart',
+                  sdk: ['nextjs', 'react', 'ios'],
+                  title: 'Next.js Quickstart',
+                },
+              ],
+            ],
+            sdk: ['nextjs'],
+            title: 'Quickstart',
+          },
+          {
+            href: '/docs/:sdk:/quickstart',
+            sdk: ['react', 'ios'],
+            title: 'Quickstart',
+          },
+        ],
+      ],
+    })
+  })
 })
 
 describe('Heading Validation', () => {
@@ -2485,6 +2517,116 @@ title: Simple Test
     expect(output).not.toContain(`warning Hash "my-heading" not found in /docs/headings`)
   })
 
+  test('should validate hashes in links to distinct variant sdk scoped guides', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+# API Documentation`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+sdk: react
+---
+
+# React`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+description: x
+---
+
+[API Doc](/docs/api-doc#react)`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('should validate hashes in sdk specific links to distinct variant sdk scoped guides', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'API Doc', href: '/docs/api-doc' },
+              { title: 'Page 2', href: '/docs/page-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/api-doc.mdx',
+        content: `---
+title: API Documentation
+description: x
+sdk: nextjs
+---
+
+# API Documentation`,
+      },
+      {
+        path: './docs/api-doc.react.mdx',
+        content: `---
+title: API Documentation for React
+description: x
+sdk: react
+---
+
+# React`,
+      },
+      {
+        path: './docs/page-2.mdx',
+        content: `---
+title: Page 2
+description: x
+---
+
+[API Doc](/docs/react/api-doc#react)`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
   test('Swap out links for <SDKLink /> when a link points to an sdk generated guide', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -2543,7 +2685,7 @@ title: Core Page
               {
                 title: 'nextjs',
                 sdk: ['nextjs'],
-                items: [[{ title: 'SDK Filtered Page', href: '/docs/reference/nextjs/sdk-filtered-page' }]],
+                items: [[{ title: 'SDK Filtered Page', href: '/docs/references/nextjs/sdk-filtered-page' }]],
               },
               { title: 'Core Page', href: '/docs/core-page' },
             ],
@@ -2551,7 +2693,7 @@ title: Core Page
         }),
       },
       {
-        path: './docs/reference/nextjs/sdk-filtered-page.mdx',
+        path: './docs/references/nextjs/sdk-filtered-page.mdx',
         content: `---
 title: SDK Filtered Page
 ---
@@ -2566,7 +2708,7 @@ title: Core Page
 
 # Core page
 
-[SDK Filtered Page](/docs/reference/nextjs/sdk-filtered-page)
+[SDK Filtered Page](/docs/references/nextjs/sdk-filtered-page)
 `,
       },
     ])
@@ -2580,7 +2722,7 @@ title: Core Page
     )
 
     expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
-      `<SDKLink href="/docs/reference/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
+      `<SDKLink href="/docs/references/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
     )
   })
 
@@ -3090,6 +3232,444 @@ activeSdk: react
 
 [Link to doc 1](/docs/doc-1)
 `)
+  })
+
+  test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+description: Scoped page
+sdk: react, nextjs
+---
+
+## Heading
+`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+This is a [SDK Filtered Page][sdk-ref].
+
+[sdk-ref]: /docs/sdk-filtered-page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Reference-style link with hash to SDK-scoped doc preserves hash in <SDKLink />', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-filtered-page.mdx',
+        content: `---
+title: SDK Filtered Page
+description: Scoped page
+sdk: react, nextjs
+---
+
+## Custom Heading
+`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+See [SDK Filtered Page][sdk-ref].
+
+[sdk-ref]: /docs/sdk-filtered-page#custom-heading`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain(
+      `<SDKLink href="/docs/:sdk:/sdk-filtered-page#custom-heading" sdks={["react","nextjs"]}>SDK Filtered Page</SDKLink>`,
+    )
+  })
+
+  test('Reference-style link to core doc stays as normal link and validates', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Core Target', href: '/docs/core-target' },
+              { title: 'Core Page', href: '/docs/core-page' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/core-target.mdx',
+        content: `---
+title: Core Target
+description: Target doc
+---
+
+# Core Target`,
+      },
+      {
+        path: './docs/core-page.mdx',
+        content: `---
+title: Core Page
+description: Core page
+---
+
+# Core page
+
+See [Core Target][core-ref].
+
+[core-ref]: /docs/core-target`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+    const content = await readFile(pathJoin('./dist/core-page.mdx'))
+    expect(content).toContain('[Core Target](/docs/core-target)')
+  })
+
+  test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Doc 1', href: '/docs/doc-1' },
+              { title: 'Doc 2', href: '/docs/doc-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/doc-1.mdx',
+        content: `---
+title: Doc 1
+description: x
+sdk: nextjs, react, expo
+---
+
+# Doc 1
+
+Documentation specific to Next.js`,
+      },
+
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+description: x
+---
+
+[Link to specific variant of doc 1](/docs/react/doc-1)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/doc-2.mdx')).toContain(
+      `<SDKLink href="/docs/react/doc-1" sdks={["react"]}>Link to specific variant of doc 1</SDKLink>`,
+    )
+  })
+
+  test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc from within a Cards component', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Doc 1', href: '/docs/quickstart' },
+              { title: 'Doc 2', href: '/docs/doc-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/quickstart.mdx',
+        content: `---
+title: Doc 1
+description: x
+sdk: nextjs
+---
+
+# Doc 1
+
+Documentation specific to Next.js`,
+      },
+      {
+        path: './docs/quickstart.react.mdx',
+        content: `---
+title: Doc 1 for React
+description: x
+sdk: react
+---
+
+# Doc 1 for React
+`,
+      },
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+description: x
+---
+
+<Cards>
+  - [Next.js](/docs/nextjs/quickstart)
+  - Easily add secure, beautiful, and fast authentication to Next.js with Clerk.
+
+  ---
+
+  - [React](/docs/react/quickstart)
+  - Get started installing and initializing Clerk in a new React + Vite app.
+</Cards>
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react', 'expo'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/doc-2.mdx')).toBe(
+      `---
+title: Doc 2
+description: x
+sdkScoped: "false"
+canonical: /docs/doc-2
+---
+
+<Cards>
+  * [Next.js](/docs/nextjs/quickstart)
+  * Easily add secure, beautiful, and fast authentication to Next.js with Clerk.
+
+  ***
+
+  * [React](/docs/react/quickstart)
+  * Get started installing and initializing Clerk in a new React + Vite app.
+</Cards>
+`,
+    )
+  })
+
+  test('Should embed links in sdk scoped docs', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1
+description: x
+sdk: react
+---
+
+# Guide 1`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: react
+---
+
+# Guide 2`,
+      },
+      {
+        path: './docs/guide-2.nextjs.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: nextjs
+---
+
+[Link](/docs/guide-1)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/nextjs/guide-2.mdx')).toBe(`---
+title: Guide 2
+description: x
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/guide-2
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+<SDKLink href="/docs/guide-1" sdks={["react"]}>Link</SDKLink>
+`)
+  })
+
+  test('Should convert links to multi-SDK documents even when target SDK is supported', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1 for React
+description: x
+sdk: react
+---
+
+# Guide 1 for React
+
+[\`<Guide 2>\`](/docs/guide-2)
+`,
+      },
+      {
+        path: './docs/guide-1.nextjs.mdx',
+        content: `---
+title: Guide 1 for Nextjs
+description: x
+sdk: nextjs
+---
+# Guide 1 for Nextjs
+`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: '<Guide 2>'
+description: x
+sdk: react, nextjs
+---
+
+# Guide 2 Component
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // When viewing the React version of the guide-1
+    const reactGuide1 = await readFile('./dist/react/guide-1.mdx')
+
+    // This should fail because the current logic doesn't convert the link
+    // since all SDKs of the component (react, nextjs, astro, vue, nuxt)
+    // are supported by the guide-1 document (which has all those SDK variants)
+    // But it SHOULD be converted to show users which SDKs the component supports
+    expect(reactGuide1).toContain(
+      `<SDKLink href="/docs/:sdk:/guide-2" sdks={["react","nextjs"]} code={true}>\\<Guide 2></SDKLink>`,
+    )
   })
 })
 
@@ -4320,7 +4900,7 @@ description: The page being linked to
                       {
                         title: 'SDK Doc',
                         href: '/docs/sdk-doc',
-                        sdk: ['react', 'nodejs'], // nodejs not in parent
+                        sdk: ['react', 'js-backend'], // js-backend not in parent
                       },
                     ],
                   ],
@@ -4333,7 +4913,7 @@ description: The page being linked to
           path: './docs/sdk-doc.mdx',
           content: `---
 title: SDK Doc
-sdk: react, nodejs
+sdk: react, js-backend
 description: This page has a description
 ---
 
@@ -4346,7 +4926,7 @@ description: This page has a description
         await createConfig({
           ...baseConfig,
           basePath: tempDir,
-          validSdks: ['react', 'nodejs'],
+          validSdks: ['react', 'js-backend'],
           ignoreWarnings: {
             docs: {
               'sdk-doc.mdx': ['doc-sdk-filtered-by-parent'],
@@ -4941,8 +5521,8 @@ describe('API Errors Generation', () => {
         path: './docs/manifest.json',
         content: JSON.stringify({
           navigation: [
-            [{ title: 'Backend API', href: '/docs/errors/backend-api' }],
-            [{ title: 'Frontend API', href: '/docs/errors/frontend-api' }],
+            [{ title: 'Backend API', href: '/docs/guides/development/errors/backend-api' }],
+            [{ title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' }],
           ],
         }),
       },
@@ -4966,8 +5546,8 @@ describe('API Errors Generation', () => {
 
     expect(output).toBe('')
 
-    const bapi = await readFile('./dist/errors/backend-api.mdx')
-    const fapi = await readFile('./dist/errors/frontend-api.mdx')
+    const bapi = await readFile('./dist/guides/development/errors/backend-api.mdx')
+    const fapi = await readFile('./dist/guides/development/errors/frontend-api.mdx')
 
     expect(bapi).toContain('title: Backend API errors')
     expect(fapi).toContain('title: Frontend API errors')
@@ -5447,6 +6027,155 @@ activeSdk: react
 
 Updated Documentation specific to React.js
 `)
+  })
+
+  test('processes navigation with nested collapsible items and SDK-specific variants', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Docs',
+                items: [
+                  [
+                    { title: 'Doc 1', sdk: ['nextjs'], items: [[{ title: 'Doc 1', href: '/docs/doc-1' }]] },
+                    { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
+                    { title: 'Doc 2', href: '/docs/doc-2' },
+                    {
+                      title: 'Doc 3 & 4',
+                      items: [
+                        [
+                          { title: 'Doc 3', href: '/docs/doc-3' },
+                          { title: 'Doc 4', href: '/docs/doc-4' },
+                        ],
+                      ],
+                    },
+                  ],
+                ],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/doc-1.mdx',
+        content: `---
+title: Doc 1
+sdk: nextjs
+---
+
+# Doc 1`,
+      },
+      {
+        path: './docs/doc-1.react.mdx',
+        content: `---
+title: Doc 1 for React
+sdk: react
+---
+
+# Doc 1 for React`,
+      },
+      {
+        path: './docs/doc-1.remix.mdx',
+        content: `---
+title: Doc 1 for Remix
+sdk: remix
+---
+
+# Doc 1 for Remix`,
+      },
+      {
+        path: './docs/doc-2.mdx',
+        content: `---
+title: Doc 2
+---
+
+# Doc 2`,
+      },
+      {
+        path: './docs/doc-3.mdx',
+        content: `---
+title: Doc 3
+sdk: vue
+---
+
+# Doc 3`,
+      },
+      {
+        path: './docs/doc-4.mdx',
+        content: `---
+title: Doc 4
+sdk: react
+---
+
+# Doc 4`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'remix', 'vue'],
+      }),
+    )
+
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: [
+        [
+          {
+            title: 'Docs',
+            items: [
+              [
+                {
+                  title: 'Doc 1',
+                  sdk: ['nextjs'],
+                  items: [
+                    [
+                      {
+                        href: '/docs/:sdk:/doc-1',
+                        title: 'Doc 1',
+                        sdk: ['nextjs', 'react', 'remix'],
+                      },
+                    ],
+                  ],
+                },
+                {
+                  href: '/docs/:sdk:/doc-1',
+                  title: 'Doc 1',
+                  sdk: ['react', 'remix'],
+                },
+                {
+                  href: '/docs/doc-2',
+                  title: 'Doc 2',
+                },
+                {
+                  title: 'Doc 3 & 4',
+                  sdk: ['vue', 'react'],
+                  items: [
+                    [
+                      {
+                        href: '/docs/doc-3',
+                        sdk: ['vue'],
+                        title: 'Doc 3',
+                      },
+                      {
+                        href: '/docs/doc-4',
+                        sdk: ['react'],
+                        title: 'Doc 4',
+                      },
+                    ],
+                  ],
+                },
+              ],
+            ],
+          },
+        ],
+      ],
+    })
   })
 })
 

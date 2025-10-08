@@ -242,13 +242,13 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 
 If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx`, `references/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
+1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
@@ -262,13 +262,13 @@ In the `clerk/clerk` repo:
 
 If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx` and `references/overview.mdx`.
+1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 
@@ -875,7 +875,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
@@ -897,7 +897,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -920,7 +920,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -937,13 +937,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="image">
 
-- [What is Clerk authentication?](/docs/authentication/overview)
+- [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---
 
-- [What is the “User” object?](/docs/users/overview)
+- [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
 - ![](/user-object.png)
 
@@ -1087,7 +1087,6 @@ Available values for the `sdk` prop:
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
 | JS Backend SDK         | "js-backend"           |
-| SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).

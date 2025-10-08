@@ -783,6 +783,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               target: item.target,
               // @ts-expect-error - It exists, up on line 481
               sdk: item.itemSDK ?? sdks,
+              shortcut: item.shortcut,
             }
           }
 
@@ -795,6 +796,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             icon: item.icon,
             target: item.target,
             sdk: item.sdk,
+            shortcut: item.shortcut,
           }
         },
         // @ts-expect-error - This traverseTree function might just be the death of me

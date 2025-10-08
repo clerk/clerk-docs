@@ -717,6 +717,39 @@ pnpm add @clerk/nextjs
 </CodeBlockTabs>
 ````
 
+#### npm commands
+
+npm codeblocks will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
+
+````mdx
+```npm
+npm i @clerk/nextjs
+```
+````
+
+Example output:
+
+````mdx
+<CodeBlockTabs options={["npm", "pnpm", "yarn", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bunx add @clerk/nextjs
+    ```
+
+</CodeBlockTabs>
+````
+
 The image below shows what this example looks like once rendered.
 
 ![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)

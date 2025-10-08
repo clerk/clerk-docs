@@ -1,0 +1,63 @@
+This example is written for Next.js App Router but it can be adapted to any React-based framework.
+
+```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+'use client'
+
+import * as React from 'react'
+import { useSignIn } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+
+export default function Page() {
+  const { signIn, errors, fetchStatus } = useSignIn()
+  const router = useRouter()
+
+  async function handleSubmit(formData: FormData) {
+    const phoneNumber = formData.get('phoneNumber') as string
+
+    await signIn.phoneCode.sendCode({ phoneNumber })
+  }
+
+  async function handleVerification(formData: FormData) {
+    const code = formData.get('code') as string
+
+    await signIn.phoneCode.verifyCode({ code })
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: () => {
+          router.push('/')
+        },
+      })
+    }
+  }
+
+  if (signIn.status === 'needs_second_factor') {
+    return (
+      <>
+        <h1>Verify your phone number</h1>
+        <form action={handleVerification}>
+          <label htmlFor="code">Enter your verification code</label>
+          <input id="code" name="code" type="text" />
+          {errors.fields.code && <p>{errors.fields.code.message}</p>}
+          <button type="submit" disabled={fetchStatus === 'fetching'}>
+            Verify
+          </button>
+        </form>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <h1>Sign in</h1>
+      <form action={handleSubmit}>
+        <label htmlFor="phoneNumber">Enter phone number</label>
+        <input id="phoneNumber" name="phoneNumber" type="tel" />
+        {errors.fields.phoneNumber && <p>{errors.fields.phoneNumber.message}</p>}
+        <button type="submit" disabled={fetchStatus === 'fetching'}>
+          Continue
+        </button>
+      </form>
+    </>
+  )
+}
+```

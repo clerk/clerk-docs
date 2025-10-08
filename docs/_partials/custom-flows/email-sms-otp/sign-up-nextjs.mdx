@@ -1,0 +1,60 @@
+This example is written for Next.js App Router but it can be adapted for any React-based framework.
+
+```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+'use client'
+
+import * as React from 'react'
+import { useAuth, useSignUp } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+
+export default function SignUpPage() {
+  const { signUp, errors, fetchStatus } = useSignUp()
+  const { isSignedIn } = useAuth()
+
+  const handleSubmit = async (formData: FormData) => {
+    const phoneNumber = formData.get('phoneNumber') as string
+
+    await signUp.create({ phoneNumber })
+
+    await signUp.verifications.sendPhoneCode()
+  }
+
+  const handleVerify = async (formData: FormData) => {
+    const code = formData.get('code') as string
+
+    await signUp.verifications.verifyPhoneCode({ code })
+    if (signUp.status === 'complete') {
+      await signUp.finalize({
+        navigate: () => {
+          router.push('/dashboard')
+        },
+      })
+    }
+  }
+
+  if (signUp.status === 'complete' || isSignedIn) {
+    return null
+  }
+
+  if (
+    signUp.status === 'missing_requirements' &&
+    signUp.unverifiedFields.includes('phone_number')
+  ) {
+    return (
+      <form action={handleVerify}>
+        <input type="text" name="code" placeholder="Enter your verification code" />
+        <button type="submit">Verify</button>
+      </form>
+    )
+  }
+
+  return (
+    <form action={handleSubmit}>
+      <input type="tel" name="phoneNumber" placeholder="Phone number" />
+      <button type="submit" disabled={fetchStatus === 'fetching'}>
+        Sign up
+      </button>
+    </form>
+  )
+}
+```

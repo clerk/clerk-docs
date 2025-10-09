@@ -14,7 +14,7 @@ type BuildConfigOptions = {
   docsPath: string
   baseDocsLink: string
   manifestPath: string
-  partialsPath: string
+  partialsFolderName: string
   distPath: string
   typedocPath: string
   localTypedocOverridePath?: string
@@ -98,8 +98,7 @@ export async function createConfig(config: BuildConfigOptions) {
       manifestRelativePath: config.manifestPath,
       manifestFilePath: resolve(config.manifestPath),
 
-      partialsRelativePath: config.partialsPath,
-      partialsPath: resolve(config.partialsPath),
+      partialsFolderName: config.partialsFolderName,
 
       dataRelativePath: config.dataPath,
       dataPath: resolve(config.dataPath),

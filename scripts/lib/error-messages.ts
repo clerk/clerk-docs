@@ -54,7 +54,8 @@ export const errorMessages = {
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
 
   // Include component errors
-  'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
+  'include-src-not-partials': (): string =>
+    `<Include /> prop "src" must start with "_partials/" (global) or "./_partials/" or "../_partials/" (relative)`,
   'partial-not-found': (src: string): string => `Partial /docs/${src}.mdx not found`,
   'partials-inside-partials': (): string =>
     'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
@@ -97,13 +98,18 @@ export const shouldIgnoreWarning = (
   section: WarningsSection,
   warningCode: WarningCode,
 ): boolean => {
-  const replacements = {
-    docs: config.baseDocsLink,
-    partials: config.partialsRelativePath + '/',
-    typedoc: config.typedocRelativePath + '/',
-  }
+  let relativeFilePath: string
 
-  const relativeFilePath = filePath.replace(replacements[section], '')
+  if (section === 'partials') {
+    relativeFilePath = filePath
+  } else {
+    const replacements = {
+      docs: config.baseDocsLink,
+      typedoc: config.typedocRelativePath + '/',
+    }
+
+    relativeFilePath = filePath.replace(replacements[section], '')
+  }
 
   const ignoreList = config.ignoreWarnings[section][relativeFilePath]
 

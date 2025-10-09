@@ -76,17 +76,24 @@ export const invalidateFile =
       }
     }
 
-    const relativePartialPath = path.relative(config.partialsPath, filePath)
+    // Handle both global and relative partials
+    // All partials are now relative to config.docsPath
+    // Global partials start with _partials/ (e.g., "_partials/test.mdx")
+    // Relative partials have /_partials/ in their path (e.g., "guides/_partials/test.mdx")
+    const relativePartialPath = path.relative(config.docsPath, filePath)
 
     if (store.partials.has(relativePartialPath)) {
       store.partials.delete(relativePartialPath)
 
-      const adjacent = store.dirtyDocMap.get(`_partials/${relativePartialPath}`)
+      const adjacent = store.dirtyDocMap.get(relativePartialPath)
 
       if (adjacent && invalidateAdjacentDocs) {
         const invalidate = invalidateFile(store, config)
         adjacent.forEach((docPath) => {
-          invalidate(docPath, false)
+          // Pass true to continue the invalidation chain (e.g., nested partial -> parent partial -> doc)
+          // Infinite loops are prevented by the cache checks - once a file is removed from cache,
+          // subsequent invalidate calls will be no-ops
+          invalidate(docPath, true)
         })
       }
     }

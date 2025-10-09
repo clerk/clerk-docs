@@ -2253,7 +2253,7 @@ title: Simple Test
     expect(output).toContain(`warning Partial /docs/_partials/test-partial.mdx not found`)
   })
 
-  test('Fail if partial is within a partial', async () => {
+  test('Circular partial dependencies should throw an error', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -2263,11 +2263,7 @@ title: Simple Test
       },
       {
         path: './docs/_partials/test-partial-1.mdx',
-        content: `<Include src="_partials/test-partial-2" />`,
-      },
-      {
-        path: './docs/_partials/test-partial-2.mdx',
-        content: `Test Partial Content`,
+        content: `<Include src="_partials/test-partial-1" />`,
       },
       {
         path: './docs/simple-test.mdx',
@@ -2289,7 +2285,289 @@ title: Simple Test
       }),
     )
 
-    await expect(promise).rejects.toThrow(`Partials inside of partials is not yet supported`)
+    await expect(promise).rejects.toThrow(`Circular dependency detected`)
+  })
+
+  test('Nested partials should work (partial inside a partial)', async () => {
+    const { tempDir, pathJoin, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/level-2-partial.mdx',
+        content: `## Level 2 Content
+
+This is content from the nested partial.`,
+      },
+      {
+        path: './docs/_partials/level-1-partial.mdx',
+        content: `## Level 1 Content
+
+<Include src="_partials/level-2-partial" />
+
+More content after nested partial.`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing nested partials
+---
+
+# Test Page
+
+<Include src="_partials/level-1-partial" />
+
+End of page.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // Verify the content was properly embedded
+    const testPageContent = await readFile('./dist/test-page.mdx')
+
+    // Should contain content from level 1 partial
+    expect(testPageContent).toContain('## Level 1 Content')
+    expect(testPageContent).toContain('More content after nested partial')
+
+    // Should contain content from level 2 partial (nested)
+    expect(testPageContent).toContain('## Level 2 Content')
+    expect(testPageContent).toContain('This is content from the nested partial')
+
+    // Should contain the page's own content
+    expect(testPageContent).toContain('# Test Page')
+    expect(testPageContent).toContain('End of page')
+
+    // Should NOT contain any Include tags (they should all be resolved)
+    expect(testPageContent).not.toContain('<Include')
+  })
+
+  test('Nested partials should validate links correctly', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Test Page', href: '/docs/test-page' }],
+            [{ title: 'Target Page', href: '/docs/target-page' }],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-link.mdx',
+        content: `Check out [Target Page](/docs/target-page) for more info.`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `## Parent Content
+
+<Include src="_partials/nested-with-link" />
+
+Also see [Target Page](/docs/target-page#heading).`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing nested partial link validation
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
+title: Target Page
+description: Target
+---
+
+## Heading
+
+Content here.`,
+      },
+    ])
+
+    // This should pass - all links are valid
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('Nested partials should detect invalid links', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-bad-link.mdx',
+        content: `Check out [Non-existent Page](/docs/does-not-exist) for more info.`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `<Include src="_partials/nested-with-bad-link" />`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should detect the invalid link in the nested partial
+    expect(output).toContain('does-not-exist')
+  })
+
+  test('Nested partials should detect invalid hash links', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Test Page', href: '/docs/test-page' }],
+            [{ title: 'Target Page', href: '/docs/target-page' }],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-bad-hash.mdx',
+        content: `See [Target Section](/docs/target-page#non-existent-heading).`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `<Include src="_partials/nested-with-bad-hash" />`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
+title: Target Page
+---
+
+## Actual Heading
+
+Content here.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should detect the invalid hash in the nested partial
+    expect(output).toContain('non-existent-heading')
+  })
+
+  test('Deeply nested partials (3 levels) should work', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/level-3-partial.mdx',
+        content: `### Level 3 Content
+
+This is the deepest level.`,
+      },
+      {
+        path: './docs/_partials/level-2-partial.mdx',
+        content: `## Level 2 Content
+
+<Include src="_partials/level-3-partial" />
+
+Back to level 2.`,
+      },
+      {
+        path: './docs/_partials/level-1-partial.mdx',
+        content: `## Level 1 Content
+
+<Include src="_partials/level-2-partial" />
+
+Back to level 1.`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing deeply nested partials
+---
+
+# Test Page
+
+<Include src="_partials/level-1-partial" />
+
+End of page.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // Verify the content was properly embedded from all levels
+    const testPageContent = await readFile('./dist/test-page.mdx')
+
+    // Should contain content from all three levels
+    expect(testPageContent).toContain('## Level 1 Content')
+    expect(testPageContent).toContain('Back to level 1')
+    expect(testPageContent).toContain('## Level 2 Content')
+    expect(testPageContent).toContain('Back to level 2')
+    expect(testPageContent).toContain('### Level 3 Content')
+    expect(testPageContent).toContain('This is the deepest level')
+
+    // Should NOT contain any Include tags
+    expect(testPageContent).not.toContain('<Include')
   })
 
   test(`Warning if <Include /> src doesn't start with "_partials/"`, async () => {

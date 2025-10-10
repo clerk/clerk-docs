@@ -10,8 +10,6 @@ import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
 import type { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
-import { map as mdastMap } from 'unist-util-map'
-import reporter from 'vfile-reporter'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
@@ -38,6 +36,8 @@ export const readPartialsFolder = (config: BuildConfig) => async () => {
 }
 
 export const readPartial = (config: BuildConfig, store: Store) => async (filePath: string) => {
+  const setDirty = markDocumentDirty(store)
+
   // filePath can be:
   // 1. Global partial: "_partials/billing/enable-billing.mdx" -> /docs/_partials/billing/enable-billing.mdx
   // 2. Relative partial: "billing/_partials/local.mdx" -> /docs/billing/_partials/local.mdx
@@ -58,14 +58,8 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
   let partialNode: Node | null = null
 
-  // Determine the correct vfile path based on whether it's a global or relative partial
-  // Both types use the filePath as-is with the docs/ prefix
-  // Global partials: "docs/_partials/billing/enable-billing.mdx"
-  // Relative partials: "docs/guides/_partials/local.mdx"
-  const vfilePath = `docs/${filePath}`
-
   try {
-    const partialContentVFile = await remark()
+    const vfile = await remark()
       .use(remarkFrontmatter)
       .use(remarkMdx)
       .use(() => (tree) => {
@@ -73,16 +67,9 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
       })
       .use(removeMdxSuffixPlugin(config))
       .process({
-        path: vfilePath,
+        path: `docs/${filePath}`,
         value: content,
       })
-
-    const partialContentReport = reporter([partialContentVFile], { quiet: true })
-
-    if (partialContentReport !== '') {
-      console.error(partialContentReport)
-      process.exit(1)
-    }
 
     if (partialNode === null) {
       throw new Error(errorMessages['partial-parse-error'](filePath))
@@ -149,26 +136,28 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
       // Load all nested partials
       const uniquePaths = Array.from(new Set(includesToReplace.map((i) => i.path)))
-      const loadedPartials = await Promise.all(
-        uniquePaths.map(async (nestedPath) => {
-          try {
-            const nestedPartial = await readPartial(config, store)(nestedPath)
-            // Track the dependency: when nestedPath changes, the parent partial should be invalidated
-            // dirtyDocMap convention for partials:
-            //   - Keys: relative paths (e.g., "guides/_partials/child.mdx")
-            //   - Values: absolute system paths (e.g., "/var/.../docs/guides/_partials/parent.mdx")
-            // nestedPath is already relative: "guides/_partials/child.mdx"
-            // fullPath is the absolute system path of the parent
-            markDocumentDirty(store)(fullPath, nestedPath)
-            return { path: nestedPath, node: nestedPartial.node }
-          } catch (error) {
-            console.error(`Failed to load nested partial ${nestedPath}:`, error)
-            return null
-          }
-        }),
+      const partialsMap = new Map(
+        (
+          await Promise.all(
+            uniquePaths.map(async (nestedPath) => {
+              try {
+                const nestedPartial = await readPartial(config, store)(nestedPath)
+                // Track the dependency: when nestedPath changes, the parent partial should be invalidated
+                // dirtyDocMap convention for partials:
+                //   - Keys: relative paths (e.g., "guides/_partials/child.mdx")
+                //   - Values: absolute system paths (e.g., "/var/.../docs/guides/_partials/parent.mdx")
+                // nestedPath is already relative: "guides/_partials/child.mdx"
+                // fullPath is the absolute system path of the parent
+                setDirty(fullPath, nestedPath)
+                return [nestedPath, nestedPartial.node] as const
+              } catch (error) {
+                console.error(`Failed to load nested partial ${nestedPath}:`, error)
+                return null
+              }
+            }),
+          )
+        ).filter((p) => p !== null),
       )
-
-      const partialsMap = new Map(loadedPartials.filter((p) => p !== null).map((p) => [p!.path, p!.node]))
 
       // Now replace Include nodes with their content
       // We need to traverse the tree and replace nodes in the children arrays
@@ -224,7 +213,7 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
     return {
       path: filePath,
       content,
-      vfile: partialContentVFile,
+      vfile,
       node: partialNode as Node,
     }
   } catch (error) {

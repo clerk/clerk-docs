@@ -98,19 +98,15 @@ export const shouldIgnoreWarning = (
   section: WarningsSection,
   warningCode: WarningCode,
 ): boolean => {
-  let relativeFilePath: string
-
-  if (section === 'partials') {
-    relativeFilePath = filePath
-  } else {
-    const replacements = {
-      docs: config.baseDocsLink,
-      typedoc: config.typedocRelativePath + '/',
-    }
-
-    relativeFilePath = filePath.replace(replacements[section], '')
+  const replacements = {
+    docs: (filePath: string) => filePath.replace(config.baseDocsLink, ''),
+    typedoc: (filePath: string) => filePath.replace(config.typedocRelativePath + '/', ''),
+    partials: (filePath: string) => filePath,
+    tooltips: (filePath: string) =>
+      config.tooltips ? filePath.replace(config.tooltips.inputPathRelative + '/', '') : filePath,
   }
 
+  const relativeFilePath = replacements[section](filePath)
   const ignoreList = config.ignoreWarnings[section][relativeFilePath]
 
   if (!ignoreList) {

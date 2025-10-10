@@ -2808,6 +2808,80 @@ title: Test Page
     expect(content).not.toContain('<Include')
   })
 
+  test('Relative partial - going up many levels ../../../../_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deep Page', href: '/docs/guides/features/advanced/deep/page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-content.mdx',
+        content: `Top-level shared content from root partials folder`,
+      },
+      {
+        path: './docs/guides/features/advanced/deep/page.mdx',
+        content: `---
+title: Deep Nested Page
+---
+
+<Include src="../../../../_partials/shared-content" />
+
+# Deep Nested Content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/guides/features/advanced/deep/page.mdx'))
+    expect(content).toContain('Top-level shared content from root partials folder')
+    expect(content).not.toContain('<Include src="../../../../_partials/shared-content" />')
+  })
+
+  test('Relative partial - going into another folder ../../xyz/abc/_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/billing/plans/page' }]],
+        }),
+      },
+      {
+        path: './docs/authentication/strategies/_partials/oauth-config.mdx',
+        content: `OAuth configuration details from authentication folder`,
+      },
+      {
+        path: './docs/billing/plans/page.mdx',
+        content: `---
+title: Billing Plans
+---
+
+<Include src="../../authentication/strategies/_partials/oauth-config" />
+
+# Plan Configuration`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/billing/plans/page.mdx'))
+    expect(content).toContain('OAuth configuration details from authentication folder')
+    expect(content).not.toContain('<Include src="../../authentication/strategies/_partials/oauth-config" />')
+  })
+
   test('Error case - relative partial not found', async () => {
     const { tempDir } = await createTempFiles([
       {

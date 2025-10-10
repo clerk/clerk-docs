@@ -99,6 +99,10 @@ import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
 import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { existsSync } from 'node:fs'
+import { extractDocumentMetadata } from './lib/metadata'
+import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { toString } from 'mdast-util-to-string'
+import { extractHeadingFromHeadingNode } from './lib/utils/extractHeadingFromHeadingNode'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -826,6 +830,13 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
+      const lastUpdated = await getCommitDate(doc.file.fullFilePath)
+
+      // Track cache status and processing time
+      const cacheKey = doc.file.filePath
+      const wasCached = store.coreDocs.has(cacheKey)
+      const startTime = performance.now()
+
       const vfile = await coreDocCache(doc.file.filePath, async () =>
         remark()
           .use(remarkFrontmatter)
@@ -879,7 +890,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
           .use(
             insertFrontmatter({
-              lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+              lastUpdated: lastUpdated?.toISOString() ?? undefined,
               sdkScoped: 'false',
               canonical: doc.file.href,
             }),
@@ -905,10 +916,51 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         markDirty(doc.file.filePath, link)
       })
 
-      return { ...doc, vfile }
+      const processingTimeMs = performance.now() - startTime
+
+      return {
+        ...doc,
+        vfile,
+        metadata: {
+          foundLinks: allLinks,
+          foundPartials,
+          foundTooltips,
+          foundTypedocs,
+          lastUpdated,
+          cacheKey,
+          wasCached,
+          processingTimeMs,
+          warnings: vfile.messages.map((msg) => msg.message),
+        },
+      }
     }),
   )
   console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
+
+  abortSignal?.throwIfAborted()
+
+  // Build backlinks map: for each page, track which other pages link to it
+  const backlinksMap = new Map<string, Set<string>>()
+
+  for (const doc of coreDocs) {
+    // Initialize backlinks for this doc
+    if (!backlinksMap.has(doc.file.href)) {
+      backlinksMap.set(doc.file.href, new Set())
+    }
+
+    // For each link this doc has, add this doc as a backlink to the target
+    for (const link of doc.metadata.foundLinks) {
+      // Normalize link to href format (remove .mdx extension if present)
+      const normalizedLink = link.replace(/\.mdx$/, '')
+
+      if (!backlinksMap.has(normalizedLink)) {
+        backlinksMap.set(normalizedLink, new Set())
+      }
+      backlinksMap.get(normalizedLink)!.add(doc.file.href)
+    }
+  }
+
+  console.info(`✓ Built backlinks map for ${backlinksMap.size} pages`)
 
   abortSignal?.throwIfAborted()
 
@@ -966,11 +1018,36 @@ ${yaml.stringify({
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
+          // Don't write JSON metadata for redirect pages
         } else {
           // All SDK documents (single and multi) will be processed in the SDK-specific loop below
         }
       } else {
         await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(doc.vfile.value as string))
+
+        // Write JSON metadata for core docs (non-SDK-scoped)
+        const metadata = extractDocumentMetadata({
+          frontmatter: doc.frontmatter,
+          file: doc.file,
+          lastUpdated: doc.metadata.lastUpdated ?? undefined,
+          distinctSDKVariants: doc.distinctSDKVariants,
+          foundPartials: doc.metadata.foundPartials,
+          foundTooltips: doc.metadata.foundTooltips,
+          foundTypedocs: doc.metadata.foundTypedocs,
+          foundLinks: doc.metadata.foundLinks,
+          backlinks: Array.from(backlinksMap.get(doc.file.href) ?? []),
+          headingsHashes: doc.headingsHashes,
+          inManifest: docsInManifest.has(doc.file.href),
+          sdkScoped: false,
+          canonical: doc.file.href,
+          buildTimestamp: new Date().toISOString(),
+          processingTimeMs: doc.metadata.processingTimeMs,
+          wasCached: doc.metadata.wasCached,
+          cacheKey: doc.metadata.cacheKey,
+          warnings: doc.metadata.warnings,
+        })
+
+        await writeFile(doc.file.filePathInDocsFolder.replace(/\.mdx$/, '.json'), JSON.stringify(metadata, null, 2))
       }
     }),
   )
@@ -1010,18 +1087,83 @@ ${yaml.stringify({
           const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
           const isSingleSdkDocument = sdks.length === 1
 
+          // Track metadata for SDK-specific docs
+          const foundLinks: Set<string> = new Set()
+          const foundPartials: Set<string> = new Set()
+          const foundTypedocs: Set<string> = new Set()
+          const foundTooltips: Set<string> = new Set()
+          const headingsHashes: Set<string> = new Set()
+
+          const lastUpdated = await getCommitDate(doc.file.fullFilePath)
+
+          // Track cache status and processing time for SDK docs
+          const cacheKey = doc.file.filePath
+          const wasCached = store.scopedDocs.get(cacheKey)?.has(targetSdk) ?? false
+          const startTime = performance.now()
+
           const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-              .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
-              .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
+              .use(
+                validateLinks(
+                  config,
+                  docsMap,
+                  doc.file.filePath,
+                  'docs',
+                  (link) => {
+                    foundLinks.add(link)
+                  },
+                  doc.file.href,
+                ),
+              )
+              .use(
+                checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }, (partial) => {
+                  foundPartials.add(partial)
+                }),
+              )
+              .use(
+                checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }, (tooltip) => {
+                  foundTooltips.add(tooltip)
+                }),
+              )
+              .use(
+                checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }, (typedoc) => {
+                  foundTypedocs.add(typedoc)
+                }),
+              )
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
+              .use(
+                embedLinks(
+                  config,
+                  docsMap,
+                  sdks,
+                  (link) => {
+                    foundLinks.add(link)
+                  },
+                  doc.file.href,
+                  targetSdk,
+                ),
+              )
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+              .use(() => (tree) => {
+                // Extract headings after filtering SDK-specific content
+                mdastVisit(
+                  tree,
+                  (node) => node.type === 'heading',
+                  (node) => {
+                    const id = extractHeadingFromHeadingNode(node)
+                    if (id !== undefined) {
+                      headingsHashes.add(id)
+                    } else {
+                      const slugify = slugifyWithCounter()
+                      const slug = slugify(toString(node).trim())
+                      headingsHashes.add(slug)
+                    }
+                  },
+                )
+              })
               .use(
                 insertFrontmatter({
                   sdkScoped: 'true',
@@ -1029,7 +1171,7 @@ ${yaml.stringify({
                     hrefAlreadyContainsSdk || isSingleSdkDocument
                       ? doc.file.href
                       : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
-                  lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                  lastUpdated: lastUpdated?.toISOString() ?? undefined,
                   sdk: sdks.join(', '),
                   availableSdks: sdks?.join(','),
                   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
@@ -1042,14 +1184,52 @@ ${yaml.stringify({
               }),
           )
 
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
+
+          const processingTimeMs = performance.now() - startTime
+
+          // Write JSON metadata for SDK-specific docs
+          const metadata = extractDocumentMetadata({
+            frontmatter: doc.frontmatter,
+            file: doc.file,
+            lastUpdated: lastUpdated ?? undefined,
+            distinctSDKVariants: doc.distinctSDKVariants,
+            foundPartials,
+            foundTooltips,
+            foundTypedocs,
+            foundLinks,
+            backlinks: Array.from(backlinksMap.get(doc.file.href) ?? []),
+            headingsHashes,
+            inManifest: docsInManifest.has(doc.file.href),
+            sdkScoped: true,
+            canonical,
+            availableSdks: sdks,
+            notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)),
+            activeSdk: targetSdk,
+            buildTimestamp: new Date().toISOString(),
+            processingTimeMs,
+            wasCached,
+            cacheKey,
+            warnings: vfile.messages.map((msg) => msg.message),
+          })
+
           // For single SDK documents or documents with SDK already in path, write to root path
           if (hrefAlreadyContainsSdk || isSingleSdkDocument) {
             await writeFile(doc.file.filePathInDocsFolder, typedocTableSpecialCharacters.decode(vfile.value as string))
+            await writeFile(doc.file.filePathInDocsFolder.replace(/\.mdx$/, '.json'), JSON.stringify(metadata, null, 2))
           } else {
             await writeSdkFile(
               targetSdk,
               doc.file.filePathInDocsFolder,
               typedocTableSpecialCharacters.decode(vfile.value as string),
+            )
+            await writeSdkFile(
+              targetSdk,
+              doc.file.filePathInDocsFolder.replace(/\.mdx$/, '.json'),
+              JSON.stringify(metadata, null, 2),
             )
           }
 

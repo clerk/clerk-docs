@@ -23,7 +23,9 @@ export const readDocsFolder = (config: BuildConfig) => async () => {
     type: 'files',
     fileFilter: (entry) =>
       // Partials are inside the docs folder, so we need to exclude them
-      `${config.docsRelativePath}/${entry.path}`.startsWith(config.partialsRelativePath) === false &&
+      // Exclude global _partials folder and any relative _partials folders
+      !entry.path.startsWith(`${config.partialsFolderName}/`) &&
+      !entry.path.includes(`/${config.partialsFolderName}/`) &&
       // Tooltips are inside the docs folder too, also ignore them as they are not full pages
       (config.tooltips?.inputPathRelative
         ? `${config.docsRelativePath}/${entry.path}`.startsWith(config.tooltips.inputPathRelative) === false

@@ -136,12 +136,13 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 
       // Load all nested partials
       const uniquePaths = Array.from(new Set(includesToReplace.map((i) => i.path)))
+      const partialsCache = getPartialsCache(store)
       const partialsMap = new Map(
         (
           await Promise.all(
             uniquePaths.map(async (nestedPath) => {
               try {
-                const nestedPartial = await readPartial(config, store)(nestedPath)
+                const nestedPartial = await partialsCache(nestedPath, () => readPartial(config, store)(nestedPath))
                 // Track the dependency: when nestedPath changes, the parent partial should be invalidated
                 // dirtyDocMap convention for partials:
                 //   - Keys: relative paths (e.g., "guides/_partials/child.mdx")

@@ -36,6 +36,9 @@ export const createBlankStore = () => ({
   tooltips: new Map() as TooltipsMap,
   dirtyDocMap: new Map() as Map<string, Set<string>>,
   writtenFiles: new Map() as Map<string, string>,
+  // Track in-flight promises to deduplicate concurrent requests
+  // Using any to avoid circular type reference with PartialsFile
+  inFlightPartials: new Map() as Map<string, Promise<any>>,
 })
 
 export type Store = ReturnType<typeof createBlankStore>
@@ -84,6 +87,8 @@ export const invalidateFile =
 
     if (store.partials.has(relativePartialPath)) {
       store.partials.delete(relativePartialPath)
+      // Also clear any in-flight promises for this partial
+      store.inFlightPartials.delete(relativePartialPath)
 
       const adjacent = store.dirtyDocMap.get(relativePartialPath)
 
@@ -193,12 +198,37 @@ export const getScopedDocCache = (store: Store) => {
 
 export const getPartialsCache = (store: Store) => {
   return async (key: string, cacheMiss: (key: string) => Promise<PartialsFile>) => {
+    // Check if already cached
     const cached = store.partials.get(key)
     if (cached) return structuredClone(cached)
 
-    const result = await cacheMiss(key)
-    store.partials.set(key, structuredClone(result))
-    return result
+    // Check if there's already an in-flight request for this partial
+    const inFlight = store.inFlightPartials.get(key)
+    if (inFlight) {
+      // Wait for the in-flight request to complete and return its result
+      // This deduplicates concurrent requests to the same partial
+      const result = await inFlight
+      return structuredClone(result)
+    }
+
+    // Create a new promise for this request
+    const promise = cacheMiss(key)
+      .then((result) => {
+        // Store in cache and remove from in-flight
+        store.partials.set(key, structuredClone(result))
+        store.inFlightPartials.delete(key)
+        return result
+      })
+      .catch((error) => {
+        // On error, remove from in-flight to allow retries
+        store.inFlightPartials.delete(key)
+        throw error
+      })
+
+    // Track this in-flight request
+    store.inFlightPartials.set(key, promise)
+
+    return promise
   }
 }
 

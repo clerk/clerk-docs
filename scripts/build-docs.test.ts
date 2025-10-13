@@ -4,10 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import simpleGit from 'simple-git'
 
-import { describe, expect, onTestFinished, test } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
 import { createBlankStore, invalidateFile } from './lib/store'
+import * as ioModule from './lib/io'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -5231,6 +5232,196 @@ sdk: react
     expect(updatedContent).toContain('## Updated Nested Child Content')
     expect(updatedContent).toContain('End of parent partial')
     expect(updatedContent).not.toContain('Original Nested Child Content')
+  })
+
+  test('should cache shared nested partial when included by multiple parent partials', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              { title: 'Page B', href: '/docs/page-b' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-nested.mdx',
+        content: `## Original Shared Content
+
+This content is shared across multiple parent partials.`,
+      },
+      {
+        path: './docs/_partials/parent-a.mdx',
+        content: `## Parent A
+
+<Include src="_partials/shared-nested" />
+
+End of parent A.`,
+      },
+      {
+        path: './docs/_partials/parent-b.mdx',
+        content: `## Parent B
+
+<Include src="_partials/shared-nested" />
+
+End of parent B.`,
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+---
+
+# Page A
+
+<Include src="_partials/parent-a" />`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+---
+
+# Page B
+
+<Include src="_partials/parent-b" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Verify both pages have the shared nested content
+    const pageAContent = await readFile(pathJoin('./dist/page-a.mdx'))
+    expect(pageAContent).toContain('Original Shared Content')
+
+    const pageBContent = await readFile(pathJoin('./dist/page-b.mdx'))
+    expect(pageBContent).toContain('Original Shared Content')
+
+    // Now update the shared nested partial
+    await fs.writeFile(
+      pathJoin('./docs/_partials/shared-nested.mdx'),
+      `## Updated Shared Content
+
+This content has been updated and should propagate to all parent partials.`,
+    )
+
+    // Invalidate the shared nested partial
+    invalidate(pathJoin('./docs/_partials/shared-nested.mdx'))
+
+    // Second build with same store (should pick up changes)
+    await build(config, store)
+
+    // Verify both pages now have the updated content
+    const updatedPageAContent = await readFile(pathJoin('./dist/page-a.mdx'))
+    expect(updatedPageAContent).toContain('This content has been updated and should propagate to all parent partials')
+    expect(updatedPageAContent).not.toContain('Original Shared Content')
+
+    const updatedPageBContent = await readFile(pathJoin('./dist/page-b.mdx'))
+    expect(updatedPageBContent).toContain('This content has been updated and should propagate to all parent partials')
+    expect(updatedPageBContent).not.toContain('Original Shared Content')
+  })
+
+  test('should only read shared nested partial from filesystem once (caching proof)', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              { title: 'Page B', href: '/docs/page-b' },
+              { title: 'Page C', href: '/docs/page-c' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-nested.mdx',
+        content: `## Shared Nested Partial
+
+This partial should only be read from disk once.`,
+      },
+      {
+        path: './docs/_partials/parent-a.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/_partials/parent-b.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/_partials/parent-c.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+---
+
+<Include src="_partials/parent-a" />`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+---
+
+<Include src="_partials/parent-b" />`,
+      },
+      {
+        path: './docs/page-c.mdx',
+        content: `---
+title: Page C
+---
+
+<Include src="_partials/parent-c" />`,
+      },
+    ])
+
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+
+    // Spy on the readMarkdownFile function to count file reads
+    const readMarkdownFileSpy = vi.spyOn(ioModule, 'readMarkdownFile')
+
+    // Build once
+    await build(config, store)
+
+    // Count how many times the shared nested partial was read from disk
+    const sharedNestedPath = pathJoin('./docs/_partials/shared-nested.mdx')
+    const sharedNestedReads = readMarkdownFileSpy.mock.calls.filter((call) => call[0] === sharedNestedPath).length
+
+    // The shared nested partial should only be read from disk ONCE
+    // Even though it's included by 3 different parent partials
+    expect(sharedNestedReads).toBe(1)
+
+    // Verify all three pages have the content (functionality check)
+    for (const page of ['page-a', 'page-b', 'page-c']) {
+      const content = await readFile(pathJoin(`./dist/${page}.mdx`))
+      expect(content).toContain('## Shared Nested Partial')
+      expect(content).toContain('This partial should only be read from disk once')
+    }
+
+    // Cleanup
+    readMarkdownFileSpy.mockRestore()
   })
 
   test('should update doc content when the typedoc changes in a sdk scoped doc', async () => {

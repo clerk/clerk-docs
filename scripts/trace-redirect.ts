@@ -26,6 +26,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
 import { compile, match, MatchFunction, PathFunction } from 'path-to-regexp'
+import { VALID_SDKS } from './lib/schemas'
 
 interface Redirect {
   source: string
@@ -53,6 +54,8 @@ interface RedirectStep {
 
 interface TraceResult {
   inputUrl: string
+  urlAfterSDKStripping: string
+  sdkStripped: string | null
   steps: RedirectStep[]
   finalDestination: string
   isLoop: boolean
@@ -117,7 +120,7 @@ async function loadRedirects() {
     const dynamicRedirects = dynamicRedirectsRaw.map((redirect) => {
       try {
         // Use native path-to-regexp support for :path* patterns
-        const matcher = match(redirect.source, { decode: decodeURIComponent })
+        const matcher = match<Record<string, string>>(redirect.source, { decode: decodeURIComponent })
         const compiler = compile(redirect.destination, { encode: (str) => str, validate: false })
 
         return {
@@ -151,6 +154,31 @@ async function loadRedirects() {
 
 function isExternalUrl(url: string) {
   return url.startsWith('http://') || url.startsWith('https://')
+}
+
+function stripSDKFromUrl(url: string): { strippedUrl: string; sdkStripped: string | null } {
+  // Parse URL segments: /docs/[segment]/[rest]
+  const segments = url.split('/')
+
+  // Must start with /docs and have at least one more segment
+  if (segments.length < 3 || segments[1] !== 'docs') {
+    return { strippedUrl: url, sdkStripped: null }
+  }
+
+  const potentialSDK = segments[2]
+
+  // Check if this segment is a known SDK
+  if (VALID_SDKS.includes(potentialSDK as any)) {
+    // Remove the SDK segment and rejoin
+    // segments = ['', 'docs', 'nextjs', 'middleware'] -> ['', 'docs', 'middleware']
+    const strippedSegments = [segments[0], segments[1], ...segments.slice(3)]
+    return {
+      strippedUrl: strippedSegments.join('/'),
+      sdkStripped: potentialSDK,
+    }
+  }
+
+  return { strippedUrl: url, sdkStripped: null }
 }
 
 function findRedirect(
@@ -192,9 +220,12 @@ function normalizeUrl(url: string) {
 async function traceRedirect(inputUrl: string) {
   const [validUrls, { staticRedirects, dynamicRedirects }] = await Promise.all([loadDirectory(), loadRedirects()])
 
+  // Strip SDK from URL before redirect matching (mirrors production behavior)
+  const { strippedUrl, sdkStripped } = stripSDKFromUrl(inputUrl)
+
   const steps: RedirectStep[] = []
   const visitedUrls = new Set<string>()
-  let currentUrl = inputUrl
+  let currentUrl = strippedUrl // Start with the stripped URL, not the original
   let stepNumber = 1
   let isLoop = false
   let loopDetectedAt: number | undefined
@@ -261,6 +292,8 @@ async function traceRedirect(inputUrl: string) {
 
   return {
     inputUrl,
+    urlAfterSDKStripping: strippedUrl,
+    sdkStripped,
     steps,
     finalDestination,
     isLoop,
@@ -272,6 +305,13 @@ async function traceRedirect(inputUrl: string) {
 
 function formatTraceResult(result: TraceResult): void {
   console.log(`🔍 Tracing redirect for: ${result.inputUrl}`)
+
+  // Show SDK stripping if it occurred
+  if (result.sdkStripped) {
+    console.log(`   SDK detected and stripped: "${result.sdkStripped}"`)
+    console.log(`   URL after SDK stripping: ${result.urlAfterSDKStripping}`)
+  }
+
   console.log()
 
   if (result.totalHops === 0) {

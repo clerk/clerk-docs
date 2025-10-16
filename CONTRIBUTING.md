@@ -328,21 +328,142 @@ These fields should be present on every documentation page.
 
 #### Metadata
 
-The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or browser title overrides. 
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews.
 
 | Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
 | ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `title`  | `string`       | `-` | Overrides the browser title and `<title>` meta tag.                                                                                                                                                                                                                                           |
 | `description`     | `string`        | `-`     | Overrides the meta description shown in search results and link previews. |
 | `authors` | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.   
-| `alternates` | `Alternates` | `{}`    | Defines canonical and alternate URLs for the page.   
-| `openGraph` | `OpenGraph` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc.).   
-| `twitter` | `Twitter` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter).   
-| `robots` | `Robots` | `{}`    | Controls how crawlers index and follow the page.   
+| `alternates` | `object` | `{}`    | Defines canonical and alternate URLs for the page.   
+| `openGraph` | `object` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc.).   
+| `twitter` | `object` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter).   
+| `robots` | `object` | `{}`    | Controls how crawlers index and follow the page.   
 
-**Alternates**
+##### Examples
 
-Defines canonical or alternate URLs for your documentation page.
+<details>
+<summary>Set a custom browser title</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
+  ---
+```
+
+</details>
+
+<details>
+<summary>Set SEO title and description</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
++   description: Example
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define canonical or alternate URLs for your documentation page</summary>
+<br /> 
+<p><strong>Available properties</strong></p>
+  
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `canonical`  | `string`       | `-` | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   alternates:
++     canonical: https://docs.example.com/
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Configure Open Graph metadata for social media previews</summary>
+<br /> 
+<p><strong>Available properties</strong></p>
+
+| Name            | Type            | Default | Description                                                |
+| --------------- | --------------- | ------- | ---------------------------------------------------------- |
+| `title`         | `string`        | —       | Title displayed in social previews.                        |
+| `description`   | `string`        | —       | Description displayed in social previews.                  |
+| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards.                  |
+| `publishedTime` | `string`        | —       | Publication timestamp. |
+| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.             |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   openGraph:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define Twitter Card metadata for the page</summary>
+<br /> 
+<p><strong>Available properties</strong></p>
+
+| Name          | Type            | Default | Description                                  |
+| ------------- | --------------- | ------- | -------------------------------------------- |
+| `title`       | `string`        | —       | Title displayed in the Twitter card.         |
+| `description` | `string`        | —       | Description displayed in the Twitter card.   |
+| `images`      | `Array<string>` | `[]`    | Image URLs used in the Twitter card preview. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   twitter:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Control search engine indexing and crawler behavior.</summary>
+<br /> 
+<p><strong>Available properties</strong></p>
+
+| Name     | Type      | Default | Description                                          |
+| -------- | --------- | ------- | ---------------------------------------------------- |
+| `index`  | `boolean` | `true`  | Whether the page should appear in search results.    |
+| `follow` | `boolean` | `true`  | Whether crawlers should follow links from this page. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++  robots:
++    index: false
++    follow: true
+  ---
+```
+
+</details>
 
 #### Search
 

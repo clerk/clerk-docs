@@ -328,17 +328,17 @@ These fields should be present on every documentation page.
 
 #### Metadata
 
-The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews.
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews. It has the following subfields:
 
 | Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
 | ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `title`  | `string`       | `-` | Overrides the browser title and `<title>` meta tag.                                                                                                                                                                                                                                           |
 | `description`     | `string`        | `-`     | Overrides the meta description shown in search results and link previews. |
 | `authors` | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.   
-| `alternates` | `object` | `{}`    | Defines canonical and alternate URLs for the page.   
-| `openGraph` | `object` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc.).   
-| `twitter` | `object` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter).   
-| `robots` | `object` | `{}`    | Controls how crawlers index and follow the page.   
+| `alternates` | `object` | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.   
+| `openGraph` | `object` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.   
+| `twitter` | `object` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below.    
+| `robots` | `object` | `{}`    | Controls how crawlers index and follow the page. See its properties below.    
 
 ##### Examples
 
@@ -369,10 +369,27 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 </details>
 
+
+</details>
+
+<details>
+<summary>Add page authors</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   authors:
++     - name: Jane Doe
+  ---
+```
+
+</details>
+
 <details>
 <summary>Define canonical or alternate URLs for your documentation page</summary>
 <br /> 
-<p><strong>Available properties</strong></p>
+<p><strong>This is set via the <code>alternates</code> field. It has the following subfields:</strong></p>
   
 | Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
 | ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -394,7 +411,7 @@ The `metadata` frontmatter field can be used to define additional information ab
 <details>
 <summary>Configure Open Graph metadata for social media previews</summary>
 <br /> 
-<p><strong>Available properties</strong></p>
+<p><strong>This is set via the <code>openGraph</code> field. It has the following subfields:</strong></p>
 
 | Name            | Type            | Default | Description                                                |
 | --------------- | --------------- | ------- | ---------------------------------------------------------- |
@@ -421,7 +438,7 @@ The `metadata` frontmatter field can be used to define additional information ab
 <details>
 <summary>Define Twitter Card metadata for the page</summary>
 <br /> 
-<p><strong>Available properties</strong></p>
+<p><strong>This is set via the <code>twitter</code> field. It has the following subfields:</strong></p>
 
 | Name          | Type            | Default | Description                                  |
 | ------------- | --------------- | ------- | -------------------------------------------- |
@@ -446,7 +463,7 @@ The `metadata` frontmatter field can be used to define additional information ab
 <details>
 <summary>Control search engine indexing and crawler behavior.</summary>
 <br /> 
-<p><strong>Available properties</strong></p>
+<p><strong>This is set via the <code>robots</code> field. It has the following subfields:</strong></p>
 
 | Name     | Type      | Default | Description                                          |
 | -------- | --------- | ------- | ---------------------------------------------------- |

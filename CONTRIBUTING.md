@@ -330,15 +330,15 @@ These fields should be present on every documentation page.
 
 The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews. It has the following subfields:
 
-| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
-| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `title`  | `string`       | `-` | Overrides the browser title and `<title>` meta tag.                                                                                                                                                                                                                                           |
-| `description`     | `string`        | `-`     | Overrides the meta description shown in search results and link previews. |
-| `authors` | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.   
-| `alternates` | `object` | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.   
-| `openGraph` | `object` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.   
-| `twitter` | `object` | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below.    
-| `robots` | `object` | `{}`    | Controls how crawlers index and follow the page. See its properties below.    
+| Name          | Type                      | Default | Description                                                                                                                                                  |
+| ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`       | `string`                  | `-`     | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | `-`     | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
+| `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
+| `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |
+| `twitter`     | `object`                  | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below. |
+| `robots`      | `object`                  | `{}`    | Controls how crawlers index and follow the page. See its properties below.                                                                                   |
 
 ##### Examples
 
@@ -368,7 +368,6 @@ The `metadata` frontmatter field can be used to define additional information ab
 ```
 
 </details>
-
 
 </details>
 
@@ -413,13 +412,13 @@ The `metadata` frontmatter field can be used to define additional information ab
 <br /> 
 <p><strong>This is set via the <code>openGraph</code> field. It has the following subfields:</strong></p>
 
-| Name            | Type            | Default | Description                                                |
-| --------------- | --------------- | ------- | ---------------------------------------------------------- |
-| `title`         | `string`        | —       | Title displayed in social previews.                        |
-| `description`   | `string`        | —       | Description displayed in social previews.                  |
-| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards.                  |
-| `publishedTime` | `string`        | —       | Publication timestamp. |
-| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.             |
+| Name            | Type            | Default | Description                               |
+| --------------- | --------------- | ------- | ----------------------------------------- |
+| `title`         | `string`        | —       | Title displayed in social previews.       |
+| `description`   | `string`        | —       | Description displayed in social previews. |
+| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards. |
+| `publishedTime` | `string`        | —       | Publication timestamp.                    |
+| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.    |
 
 ```diff
   ---

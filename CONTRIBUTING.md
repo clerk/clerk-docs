@@ -326,6 +326,24 @@ description: Some brief, but effective description of the page's content.
 
 These fields should be present on every documentation page.
 
+#### Metadata
+
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or browser title overrides. 
+
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`  | `string`       | `-` | Overrides the browser title and `<title>` meta tag.                                                                                                                                                                                                                                           |
+| `description`     | `string`        | `-`     | Overrides the meta description shown in search results and link previews. |
+| `authors` | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.   
+| `alternates` | `Alternates` | `{}`    | Defines canonical and alternate URLs for the page.   
+| `openGraph` | `OpenGraph` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc.).   
+| `twitter` | `Twitter` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter).   
+| `robots` | `Robots` | `{}`    | Controls how crawlers index and follow the page.   
+
+**Alternates**
+
+Defines canonical or alternate URLs for your documentation page.
+
 #### Search
 
 The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:

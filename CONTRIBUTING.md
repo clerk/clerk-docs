@@ -337,7 +337,7 @@ The `metadata` frontmatter field can be used to define additional information ab
 | `authors` | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.   
 | `alternates` | `object` | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.   
 | `openGraph` | `object` | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.   
-| `twitter` | `object` | `{}`    | Configures [Twitter Card](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below.    
+| `twitter` | `object` | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below.    
 | `robots` | `object` | `{}`    | Controls how crawlers index and follow the page. See its properties below.    
 
 ##### Examples
@@ -436,7 +436,7 @@ The `metadata` frontmatter field can be used to define additional information ab
 </details>
 
 <details>
-<summary>Define Twitter Card metadata for the page</summary>
+<summary>Define X Cards metadata for the page</summary>
 <br /> 
 <p><strong>This is set via the <code>twitter</code> field. It has the following subfields:</strong></p>
 

@@ -245,7 +245,7 @@ export async function main(
   const { warnings, markdown } = await build(config, store)
 
   if (config.singleFileMode) {
-    return markdown
+    return { warnings, markdown }
   }
 
   if (config.flags.controlled) {

@@ -1,0 +1,343 @@
+---
+title: Verify a Clerk session in Go
+description: Learn how to verify a session with Clerk in your Go application.
+sdk: go
+---
+
+There are two ways to verify a session with Clerk in your Go application:
+
+- [Using Clerk middleware](#use-clerk-middleware-to-verify-a-session)
+  <br />If you want to verify a session in an HTTP context, it is recommended to use Clerk middleware. Clerk middleware guarantees better performance and efficiency by making the minimum necessary requests to the Clerk Backend API.
+
+- [Manually verifying the session token](#manually-verify-a-session-token)
+  <br />If you want to verify a session in a non-HTTP context, or if you would like total control over the verification process, you can verify the session token manually.
+
+## Use Clerk middleware to verify a session
+
+Go enables you to create a simple HTTP server, and Clerk enables you to authenticate any request. Together, you can create a secure server that only allows authenticated users to access certain routes.
+
+Clerk Go SDK provides two functions for adding authentication to HTTP handlers:
+
+- [`WithHeaderAuthorization()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#WithHeaderAuthorization)
+- [`RequireHeaderAuthorization()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2/http#RequireHeaderAuthorization), which calls `WithHeaderAuthorization()` under the hood, but responds with `HTTP 403 Forbidden` if it fails to detect valid session claims.
+
+Both middleware functions support header based authentication with a bearer token. The token will be parsed, verified, and its claims will be extracted as [`SessionClaims`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaims).
+
+The claims will then be made available in the `http.Request.Context` for the next handler in the chain. Clerk Go SDK provides the [`SessionClaimsFromContext()`](https://pkg.go.dev/github.com/clerk/clerk-sdk-go/v2#SessionClaimsFromContext) helper for accessing the claims from the context.
+
+The following example demonstrates how to use the `WithHeaderAuthorization()` middleware to protect a route. If the user tries accessing the route and their session token is valid, the user's ID and banned status will be returned in the response.
+
+> [!NOTE]
+> Your Clerk Secret Key is required. If you are signed into the Clerk Dashboard, your Secret Key should become visible by selecting the eye icon. Otherwise, you can retrieve your Clerk Secret Key on the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
+
+```go {{ filename: 'main.go' }}
+package main
+
+import (
+  "fmt"
+  "net/http"
+
+  "github.com/clerk/clerk-sdk-go/v2"
+  clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+  "github.com/clerk/clerk-sdk-go/v2/user"
+)
+
+func main() {
+  clerk.SetKey("{{secret}}")
+
+  mux := http.NewServeMux()
+  mux.HandleFunc("/", publicRoute)
+  protectedHandler := http.HandlerFunc(protectedRoute)
+  mux.Handle(
+    "/protected",
+    clerkhttp.WithHeaderAuthorization()(protectedHandler),
+  )
+
+  http.ListenAndServe(":3000", mux)
+}
+
+func publicRoute(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte(`{"access": "public"}`))
+}
+
+func protectedRoute(w http.ResponseWriter, r *http.Request) {
+  claims, ok := clerk.SessionClaimsFromContext(r.Context())
+  if !ok {
+    w.WriteHeader(http.StatusUnauthorized)
+    w.Write([]byte(`{"access": "unauthorized"}`))
+    return
+  }
+
+  usr, err := user.Get(r.Context(), claims.Subject)
+  if err != nil {
+    // handle the error
+  }
+  fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
+}
+```
+
+## Manually verify a session token
+
+Manually verifying a Clerk session is useful when you want to verify a session in a non-HTTP context, or when you want full control over the verification process. Verifying a session token requires providing a **JSON Web Key**. With the solution above, Clerk middleware fetches the JSON Web Key **once** and automatically caches it for you, so it makes the minimum necessary requests to the Clerk Backend API.
+
+However, when manually verifying a session, you're responsible for fetching and caching the JSON Web Key yourself, as there is no caching layer for the key. For that reason, you must be mindful of API rate limits and unnecessary requests.
+
+Clerk Go SDK provides a set of functions for decoding and verifying JWTs, as well as fetching JSON Web Keys. It is recommended to cache your JSON Web Key and invalidate the cache only when a replacement key is generated.
+
+Before verifying a session token, you need to retrieve it from the request. Session tokens can be found in two places depending on your architecture:
+
+- **Authorization header** - For cross-origin requests, the token is typically sent as a Bearer token in the `Authorization` header.
+- **`__session` cookie** - For same-origin requests, the token is stored in a cookie named `__session`.
+
+The following example demonstrates how to manually verify a session token. If the user tries accessing the route and their session token is valid, the user's ID and banned status will be returned in the response.
+
+```go {{ filename: 'main.go' }}
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/user"
+)
+
+func main() {
+	clerk.SetKey("{{secret}}")
+
+	config := &clerk.ClientConfig{}
+	config.Key = clerk.String("{{secret}}")
+	jwksClient := jwks.NewClient(config)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", publicRoute)
+	mux.HandleFunc("/protected", protectedRoute(jwksClient))
+
+	http.ListenAndServe(":3000", mux)
+}
+
+func publicRoute(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(`{"access": "public"}`))
+}
+
+func protectedRoute(jwksClient *jwks.Client) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get the session JWT from the Authorization header or __session cookie
+		sessionToken := getSessionToken(r)
+		if sessionToken == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		// Decode the session JWT to find the key ID
+		unsafeClaims, err := jwt.Decode(r.Context(), &jwt.DecodeParams{
+			Token: sessionToken,
+		})
+		if err != nil {
+			// handle the error
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		// Fetch the JSON Web Key
+		jwk, err := jwt.GetJSONWebKey(r.Context(), &jwt.GetJSONWebKeyParams{
+			KeyID:      unsafeClaims.KeyID,
+			JWKSClient: jwksClient,
+		})
+		if err != nil {
+			// handle the error
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		// Verify the session
+		claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
+			Token: sessionToken,
+			JWK:   jwk,
+		})
+		if err != nil {
+			// handle the error
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		usr, err := user.Get(r.Context(), claims.Subject)
+		if err != nil {
+			// handle the error
+		}
+		fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
+	}
+}
+
+// getSessionToken retrieves the session token from either the Authorization header
+// or the __session cookie, depending on the request type
+func getSessionToken(r *http.Request) string {
+	// First try to get the token from the Authorization header (cross-origin)
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// If not found in header, try to get from __session cookie (same-origin)
+	cookie, err := r.Cookie("__session")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+```
+
+If you need to verify session tokens frequently, it's recommended to cache the JSON Web Key for your instance in order to avoid making too many requests to the Clerk Backend API.
+
+The following example uses the same manual verification flow as above, with the addition of demonstrating a possible way to cache and store your JSON Web Key to avoid repeated requests to Clerk. The example is meant to serve as a guide; implementation may vary depending on your needs.
+
+```go {{ filename: 'main.go', mark: [[17, 23], [50, 51], [76, 78], [117, 141]] }}
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwks"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/user"
+)
+
+func main() {
+	clerk.SetKey("{{secret}}")
+
+	// Initialize storage for JSON Web Keys. You can cache/store
+	// the key for as long as it's valid, and pass it to jwt.Verify.
+	// This way jwt.Verify won't make requests to the Clerk
+	// Backend API to refetch the JSON Web Key.
+	// Make sure you refetch the JSON Web Key whenever your
+	// Clerk Secret Key changes.
+	jwkStore := NewJWKStore()
+
+	config := &clerk.ClientConfig{}
+	config.Key = clerk.String("{{secret}}")
+	jwksClient := jwks.NewClient(config)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", publicRoute)
+	mux.HandleFunc("/protected", protectedRoute(jwksClient, jwkStore))
+
+	http.ListenAndServe(":3000", mux)
+}
+
+func publicRoute(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(`{"access": "public"}`))
+}
+
+func protectedRoute(jwksClient *jwks.Client, store JWKStore) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get the session JWT from the Authorization header or __session cookie
+		sessionToken := getSessionToken(r)
+		if sessionToken == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		// Attempt to get the JSON Web Key from your store.
+		jwk := store.GetJWK()
+		if jwk == nil {
+			// Decode the session JWT to find the key ID.
+			unsafeClaims, err := jwt.Decode(r.Context(), &jwt.DecodeParams{
+				Token: sessionToken,
+			})
+			if err != nil {
+				// handle the error
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"access": "unauthorized"}`))
+				return
+			}
+
+			// Fetch the JSON Web Key
+			jwk, err = jwt.GetJSONWebKey(r.Context(), &jwt.GetJSONWebKeyParams{
+				KeyID:      unsafeClaims.KeyID,
+				JWKSClient: jwksClient,
+			})
+			if err != nil {
+				// handle the error
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(`{"access": "unauthorized"}`))
+				return
+			}
+		}
+		// Write the JSON Web Key to your store, so that next time
+		// you can use the cached value.
+		store.SetJWK(jwk)
+
+		// Verify the session
+		claims, err := jwt.Verify(r.Context(), &jwt.VerifyParams{
+			Token: sessionToken,
+			JWK:   jwk,
+		})
+		if err != nil {
+			// handle the error
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"access": "unauthorized"}`))
+			return
+		}
+
+		usr, err := user.Get(r.Context(), claims.Subject)
+		if err != nil {
+			// handle the error
+		}
+		fmt.Fprintf(w, `{"user_id": "%s", "user_banned": "%t"}`, usr.ID, usr.Banned)
+	}
+}
+
+// getSessionToken retrieves the session token from either the Authorization header
+// or the __session cookie, depending on the request type
+func getSessionToken(r *http.Request) string {
+	// First try to get the token from the Authorization header (cross-origin)
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	// If not found in header, try to get from __session cookie (same-origin)
+	cookie, err := r.Cookie("__session")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// Sample interface for JSON Web Key storage.
+// Implementation may vary.
+type JWKStore interface {
+	GetJWK() *clerk.JSONWebKey
+	SetJWK(*clerk.JSONWebKey)
+}
+
+// Implementation may vary. This can be an
+// in-memory store, database, caching layer, etc.
+// This example uses an in-memory store.
+type InMemoryJWKStore struct {
+	jwk *clerk.JSONWebKey
+}
+
+func (s *InMemoryJWKStore) GetJWK() *clerk.JSONWebKey {
+	return s.jwk
+}
+
+func (s *InMemoryJWKStore) SetJWK(j *clerk.JSONWebKey) {
+	s.jwk = j
+}
+
+func NewJWKStore() JWKStore {
+	return &InMemoryJWKStore{}
+}
+```

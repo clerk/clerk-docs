@@ -54,7 +54,8 @@ export const errorMessages = {
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
 
   // Include component errors
-  'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
+  'include-src-not-partials': (): string =>
+    `<Include /> prop "src" must start with "_partials/" (global) or "./_partials/" or "../_partials/" (relative)`,
   'partial-not-found': (src: string): string => `Partial /docs/${src}.mdx not found`,
   'partials-inside-partials': (): string =>
     'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
@@ -77,6 +78,7 @@ export const errorMessages = {
   // Tooltip errors
   'tooltip-read-error': (path: string): string => `Failed to read in ${path} from tooltips file`,
   'tooltip-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+  'tooltip-not-found': (src: string): string => `Tooltip ${src} not found`,
 
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>
@@ -97,13 +99,14 @@ export const shouldIgnoreWarning = (
   warningCode: WarningCode,
 ): boolean => {
   const replacements = {
-    docs: config.baseDocsLink,
-    partials: config.partialsRelativePath + '/',
-    typedoc: config.typedocRelativePath + '/',
+    docs: (filePath: string) => filePath.replace(config.baseDocsLink, ''),
+    typedoc: (filePath: string) => filePath.replace(config.typedocRelativePath + '/', ''),
+    partials: (filePath: string) => filePath,
+    tooltips: (filePath: string) =>
+      config.tooltips ? filePath.replace(config.tooltips.inputPathRelative + '/', '') : filePath,
   }
 
-  const relativeFilePath = filePath.replace(replacements[section], '')
-
+  const relativeFilePath = replacements[section](filePath)
   const ignoreList = config.ignoreWarnings[section][relativeFilePath]
 
   if (!ignoreList) {

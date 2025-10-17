@@ -8,7 +8,7 @@ These are the guidelines we use to write our docs.
 
 Try to keep things in alphabetic order, except Next.js, React, and JavaScript are prioritized as these are our core SDKs. For example, our SDK selector prioritizes Next.js, React, and Javascript, and then alphabetizes the rest of the SDK's. Another example is that whenever there is a `<Tabs items={[]}>` component, the `items` should follow this same rule.
 
-### De-dupe reference links
+### De-dupe reference links and tooltips
 
 When mentioning a documented component, function, etc, multiple times on a page, link to the reference documentation on the **first mention** of that item. The exception to this rule is when the reference is mentioned under a different heading. In that case, link to the reference documentation again.
 
@@ -17,6 +17,8 @@ When mentioning a documented component, function, etc, multiple times on a page,
 
 > ✅
 > The [`currentUser()`](https://clerk.com/docs/references/nextjs/current-user) helper will return the [`User`](https://clerk.com/docs/references/javascript/user) object of the currently active user. The following example uses the `currentUser()` helper to access the `User` object for the authenticated user.
+
+This same rule applies to tooltips.
 
 ### Use sentence-case for titles
 
@@ -309,19 +311,19 @@ Be sure to use the correct term with components vs functions.
 
 ### Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
-When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/~/PAGE`**
 
 > ❌
 > Go to **User & Authentication** in your dashboard.
 
 > ✅
-> In the Clerk Dashboard, navigate to the [**User & Authentication**](https://dashboard.clerk.com/last-active?path=user-authentication) page.
+> In the Clerk Dashboard, navigate to the [**User & Authentication**](https://dashboard.clerk.com/~/user-authentication) page.
 
 > ❌
 > Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.
 
 > ✅
-> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
+> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/~/account-portal)** page and open the **Redirects** tab.
 
 ### Avoid using "appears"
 
@@ -334,7 +336,7 @@ When instructing learners to perform an operation in the Clerk Dashboard, begin 
 ### Address the top of the Clerk Dashboard
 
 > ❌
-> In the top navigation bar of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/last-active?path=users).
+> In the top navigation bar of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/~/users).
 
 > ✅
-> At the top of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/last-active?path=users).
+> At the top of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/~/users).

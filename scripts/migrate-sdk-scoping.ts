@@ -9,7 +9,6 @@ type SDK =
   | 'chrome-extension'
   | 'expo'
   | 'ios'
-  | 'nodejs'
   | 'expressjs'
   | 'fastify'
   | 'react-router'
@@ -21,7 +20,6 @@ type SDK =
   | 'vue'
   | 'ruby'
   | 'js-backend'
-  | 'sdk-development'
 
 interface ManifestItem {
   title: string

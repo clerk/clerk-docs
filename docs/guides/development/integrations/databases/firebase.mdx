@@ -1,0 +1,224 @@
+---
+title: Integrate Firebase with Clerk
+description: Learn how to integrate Clerk into your Firebase application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Set up a Firebase project with an app",
+      link: "https://support.google.com/firebase/answer/9326094?hl=en",
+      icon: "cog-6-teeth",
+    },
+    {
+      title: "Integrate the appropriate Clerk SDK in your local project",
+      link: "/docs/getting-started/quickstart/overview",
+      icon: "code-bracket",
+    },
+  ]}
+  exampleRepo={[
+    {
+      title: "Clerk, Firebase, and Next.js Demo Repo",
+      link: "https://github.com/clerk/clerk-firebase-nextjs",
+      icon: "code-bracket",
+    },
+  ]}
+/>
+
+> [!WARNING]
+> The Firebase integration is no longer supported and maintained. For new applications, you **cannot** enable the integration. However, existing applications with the integration previously enabled will continue to function and can still be configured, but once disabled, **it cannot be re-enabled**.
+
+Integrating Firebase with Clerk gives you the benefits of using Firebase's features while leveraging Clerk's authentication, prebuilt components, and webhooks.
+
+<Steps>
+  ## Configure the integration
+
+  The Firebase integration enables you to use Clerk to generate a valid authentication token to send to Firebase Auth. This enables you to leverage Clerk's prebuilt components, auth provider options, and more, while accessing Firebase products like Firestore with a session validated by Firebase Auth.
+
+  To get started, enable the integration:
+
+  1. In the Clerk Dashboard, navigate to the [**Integrations**](https://dashboard.clerk.com/~/integrations) page.
+  1. Toggle the **Firebase** integration on. The configuration modal will appear. Keep this open while you configure your Firebase project.
+
+  Next, configure your integration.
+
+  <Tabs items={["Configure automatically (Recommended)", "Configure manually"]}>
+    <Tab>
+      The recommended way to configure your integration is to use a service account key provided by Firebase in order to configure the integration _automatically_. To do so:
+
+      1. In your Firebase project, visit [the Service Accounts settings](https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk).
+      1. Near the bottom of the page, select the **Generate new private key** button.
+      1. In the modal that pops up, select the **Generate key** button to download the JSON file that contains your service account key.
+      1. In the Clerk Dashboard, the Firebase configuration modal should still be open. Select the **Upload service account key** button and upload the JSON file you downloaded.
+      1. The appropriate fields in the configuration modal will be filled in automatically. Select **Apply changes** to save your configuration.
+
+      Select the **Configure manually** tab above these instructions if you do not want to use a service account key.
+    </Tab>
+
+    <Tab>
+      If you want to manually configure your Firebase integration, you must provide Clerk with the following information about your Firebase project:
+
+      - **Service account email** – Find this in your Firebase project's [Google Cloud Console](https://console.cloud.google.com/projectselector2/iam-admin/serviceaccounts?consoleUI=FIREBASE\&hl=fi\&supportedpurview=project), or in the `client_email` field of your service account key JSON file.
+      - **Firestore project ID** – Find this under **Project Settings** in the Firebase dashboard, or in the `project_id` field of your service account key JSON file.
+      - **Private Key** – You can [generate this manually](https://firebase.google.com/docs/cloud-messaging/auth-server#:~:text=In%20the%20Firebase%20console%2C%20open,confirm%20by%20clicking%20Generate%20Key.), or find it in the `private_key` field of your service account key JSON file.
+      - **Firebase database URL** _(Optional)_ – To find this:
+        - In the Firebase dashboard, select **Realtime Database**
+        - Select the **Data** tab, and select the copy button to add the database URL to your clipboard.
+    </Tab>
+  </Tabs>
+
+  ## Enable authentication in Firebase
+
+  To use Firebase auth, ensure authentication is enabled in your Firebase dashboard. To do so:
+
+  1. Navigate to your Firebase dashboard.
+  1. In the navigation sidenav, select the **Build** dropdown and select [**Authentication**](https://console.firebase.google.com/u/0/project/_/authentication).
+  1. Select **Get started**.
+  1. Enable any sign-in method you want, such as **Email/Password**.
+
+  ## Add a Security Rule to your Firestore database (optional)
+
+  Adding the [Cloud Firestore](https://firebase.google.com/docs/firestore/quickstart) feature in your Firebase application is optional.
+
+  To use Firestore with Clerk, ensure that you have defined [Security Rules](https://firebase.google.com/docs/firestore/security/get-started) that allow authenticated requests to access your database. For example:
+
+  ```bash
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /{document=**} {
+        allow read, write: if request.auth != null;
+      }
+    }
+  }
+  ```
+
+  ## Get your Firebase config object
+
+  To connect to your Firebase app in your code, you need a config object from your Firebase project. To find it:
+
+  1. Visit [your Firebase project settings](https://console.firebase.google.com/project/_/settings/general/).
+  1. In the **Your apps** section, there should be a code snippet that includes the `firebaseConfig` object. Copy this object. It should look similar to the following:
+     ```ts
+     const firebaseConfig = {
+       apiKey: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+       authDomain: 'clerk-example-xxxxx.firebaseapp.com',
+       databaseURL: 'https://clerk-example-xxxxx-default-xxxx.firebaseio.com',
+       projectId: 'clerk-test-xxxx',
+       storageBucket: 'clerk-test-xxxx.appspot.com',
+       messagingSenderId: '012345678910',
+       appId: '1:012345678:web:abcdef123456hijklm',
+       measurementId: 'G-ABC123DEF',
+     }
+     ```
+  1. Save this information somewhere secure. You'll need it to connect to your Firebase app.
+
+  See [Google's Firebase documentation](https://support.google.com/firebase/answer/7015592) for more information on the config object.
+
+  ## Use Firebase with Clerk in your code
+
+  Now that you have configured the integration, and you have retrieved your Firebase config object, it's time to use Firebase with Clerk in your code.
+
+  The following example:
+
+  - Expects the user to be signed into the app with Clerk.
+  - Creates a button for signing into your Firebase app, which uses Clerk to generate an authentication token for Firebase's API.
+  - Creates a button for fetching example data from your Firestore database.
+
+  This example is written for Next.js App Router, but it can be adapted to any React-based framework.
+
+  ```tsx {{ filename: 'app/firebase/page.tsx' }}
+  'use client'
+  import { useAuth } from '@clerk/nextjs'
+  import { initializeApp } from 'firebase/app'
+  import { getAuth, signInWithCustomToken } from 'firebase/auth'
+  import { getFirestore } from 'firebase/firestore'
+  import { doc, getDoc } from 'firebase/firestore'
+
+  // Add your Firebase config object
+  const firebaseConfig = {
+    apiKey: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    authDomain: 'clerk-example-xxxxx.firebaseapp.com',
+    databaseURL: 'https://clerk-example-xxxxx-default-xxxx.firebaseio.com',
+    projectId: 'clerk-test-xxxx',
+    storageBucket: 'clerk-test-xxxx.appspot.com',
+    messagingSenderId: '012345678910',
+    appId: '1:012345678:web:abcdef123456hijklm',
+    measurementId: 'G-ABC123DEF',
+  }
+
+  // Connect to your Firebase app
+  const app = initializeApp(firebaseConfig)
+  // Connect to your Firestore database
+  const db = getFirestore(app)
+  // Connect to Firebase auth
+  const auth = getAuth(app)
+
+  // Remove this if you do not have Firestore set up
+  // for your Firebase app
+  const getFirestoreData = async () => {
+    const docRef = doc(db, 'example', 'example-document')
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      console.log('Document data:', docSnap.data())
+    } else {
+      // docSnap.data() will be undefined in this case
+      console.log('No such document!')
+    }
+  }
+
+  export default function FirebaseUI() {
+    const { getToken, isSignedIn } = useAuth()
+
+    // Handle if the user is not signed in
+    // You could display content, or redirect them to a sign-in page
+    if (!isSignedIn) {
+      return <p>You need to sign in with Clerk to access this page.</p>
+    }
+
+    const signIntoFirebaseWithClerk = async () => {
+      const token = await getToken({ template: 'integration_firebase' })
+
+      const userCredentials = await signInWithCustomToken(auth, token || '')
+      // The userCredentials.user object can call the methods of
+      // the Firebase platform as an authenticated user.
+      console.log('User:', userCredentials.user)
+    }
+
+    return (
+      <main style={{ display: 'flex', flexDirection: 'column', rowGap: '1rem' }}>
+        <button onClick={signIntoFirebaseWithClerk}>Sign in</button>
+
+        {/* Remove this button if you do not have Firestore set up */}
+        <button onClick={getFirestoreData}>Get document</button>
+      </main>
+    )
+  }
+  ```
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Use webhooks to sync Firebase data with Clerk](/docs/guides/development/webhooks/syncing)
+  - Learn how to sync Firebase auth or Firestore data with Clerk data using webhooks.
+
+  ---
+
+  - [Create  a custom sign-in-or-up page in your Next.js app](/docs/nextjs/guides/development/custom-sign-in-or-up-page)
+  - Learn how add custom sign-up and sign-in pages with Clerk components in your Next.js application.
+
+  ---
+
+  - [Deploy to production](/docs/guides/development/deployment/production)
+  - Learn how to deploy your Clerk app to production.
+
+  ---
+
+  - [Deploy to Vercel](/docs/guides/development/deployment/vercel)
+  - Learn how to deploy your Clerk app to production on Vercel.
+</Cards>

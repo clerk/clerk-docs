@@ -44,6 +44,7 @@ export type ManifestItem = {
   icon?: Icon
   target?: '_blank'
   sdk?: SDK[]
+  shortcut?: boolean
 }
 
 export type ManifestGroup = {
@@ -55,9 +56,10 @@ export type ManifestGroup = {
   icon?: Icon
   hideTitle?: boolean
   sdk?: SDK[]
+  skip?: boolean
 }
 
-type Manifest = (ManifestItem | ManifestGroup)[][]
+export type Manifest = (ManifestItem | ManifestGroup)[][]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -70,6 +72,7 @@ const createManifestSchema = (config: BuildConfig) => {
       icon: icon.optional(),
       target: z.enum(['_blank']).optional(),
       sdk: z.array(sdk).optional(),
+      shortcut: z.boolean().optional(),
     })
     .strict()
 
@@ -77,12 +80,13 @@ const createManifestSchema = (config: BuildConfig) => {
     .object({
       title: z.string(),
       items: z.lazy(() => manifestSchema),
-      collapse: z.boolean().default(config.manifestOptions.collapseDefault),
+      collapse: z.boolean().optional(),
       tag: tag.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
       hideTitle: z.boolean().default(config.manifestOptions.hideTitleDefault),
       sdk: z.array(sdk).optional(),
+      skip: z.boolean().optional(),
     })
     .strict()
 

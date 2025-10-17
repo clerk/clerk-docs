@@ -28,6 +28,7 @@ import { markDocumentDirty, type Store } from './store'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import yaml from 'yaml'
+import { checkTooltips } from './plugins/checkTooltips'
 
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
 
@@ -37,6 +38,7 @@ export const parseInMarkdownFile =
     file: DocsFile & { content?: string },
     getPartial: (partial: string) => { path: string; content: string; node: Node } | undefined,
     getTypedoc: (typedoc: string) => { path: string; content: string; node: Node } | undefined,
+    getTooltip: (tooltip: string) => { path: string; content: string; node: Node } | undefined,
     getPrompt: (prompt: string) => Prompt | undefined,
     inManifest: boolean,
     section: WarningsSection,
@@ -116,6 +118,11 @@ export const parseInMarkdownFile =
       .use(
         checkTypedoc(config, getTypedoc, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
           markDirty(file.filePath, typedoc)
+        }),
+      )
+      .use(
+        checkTooltips(config, getTooltip, file, { reportWarnings: true, embed: false }, (tooltip) => {
+          markDirty(file.filePath, tooltip)
         }),
       )
       .use(

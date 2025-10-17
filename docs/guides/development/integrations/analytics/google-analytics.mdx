@@ -1,0 +1,120 @@
+---
+title: Enable Google Analytics for Clerk
+description: Enable Clerk with Google Analytics to authenticate requests to your application.
+---
+
+> [!WARNING]
+> The Google Analytics (GA) integration is no longer supported. For new applications, you **cannot** enable the integration. However, existing applications with the integration previously enabled will continue to function and can still be configured, but once disabled, it cannot be re-enabled.
+>
+> As a workaround, you can implement your own analytics tracking by observing user state changes via Clerk's [`useUser()`](/docs/reference/hooks/use-user) hook and firing events to your analytics provider. See the [FAQ section](#frequently-asked-questions-faq) below for an example.
+
+This integration enables Clerk to send user authentication events to the configured Google Analytics property which corresponds to your application.
+
+> [!NOTE]
+> The Google Analytics integration can be enabled only for Production Instances.
+
+To enable the integration, you will need to provide Clerk with the required Google Analytics configuration attributes depending on the type of Google Analytics property. **We support both Universal Analytics and Google Analytics 4 properties.**
+
+To get started, navigate to the [**Integrations**](https://dashboard.clerk.com/~/integrations) page in the Clerk Dashboard. Turn on the Google Analytics integration.
+
+![The Integrations page in the Clerk Dashboard. A red arrow points to the toggle next to 'Google Analytics'.](/docs/images/integrations/google/integrations.webp)
+
+Once enabled, you will be presented with a form to enter the required Google Analytics configuration attributes.
+
+![The Google Analytics configuration form in the Clerk Dashboard.](/docs/images/integrations/google/configuration-settings.webp)
+
+## Configuration
+
+To allow Clerk to report selected events on your Google Analytics property and improve your user analytics quality, you will need to set some configuration attributes on the integration page.
+
+### Integration type
+
+To send events to Google Analytics servers, Clerk uses the [Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol) specification. Depending on your property type, you would need to provide the keys as described below:
+
+#### Google Analytics 4
+
+> [!NOTE]
+> The Clerk + Google Analytics integration does not automatically inject any GA tags into your application pages. Any necessary GA tags will need to be set up in your application manually.
+
+- **API Secret**: An API secret generated in the Google Analytics UI. To create a new secret, navigate to **Admin → Data Streams → choose your stream → Measurement Protocol → Create**.
+
+![A gif showing how to access the API secret in the Google Analytics UI.](/docs/images/integrations/google/api-secret.gif)
+
+- **Measurement ID**: The measurement ID associated with the data stream sending data to your Google Analytics 4 property. The format is **G-XXXXXXX** and can be found in the Google Analytics UI under **Admin → Data Streams → choose your stream → Measurement ID**.
+
+![A gif showing how to access the measurement ID in the Google Analytics UI](/docs/images/integrations/google/measurement-id.gif)
+
+#### Universal Analytics
+
+- **Tracking ID**: The tracking ID is a string composed of your account number and the property index and is used to send data to the correct Google Analytics property. The format is **UA-YYYYYY-Z** and can be found in the Google Analytics UI under **Admin → Tracking Info → Tracking Code**.
+
+![A gif showing how to access the measurement ID in the Google Analytics UI](/docs/images/integrations/google/tracking-id.webp)
+
+### Include Clerk user ID
+
+Since Clerk is used for the user management and authentication in your application, we provide the capability to associate the user identifier (UID) generated from Clerk with the User ID feature in Google Analytics. Enabling this feature will allow enhanced user analysis capabilities on Google Analytics like cross-device user tracking, session unification and more.Read more about the User ID feature:
+
+[Google Analytics 4 User-ID](https://support.google.com/analytics/answer/9213390)
+
+[Universal Analytics User-ID](https://support.google.com/analytics/answer/3123662?hl=en)
+
+### Events to track
+
+Select during which user authentication events, such as user sign-in or user sign-up, a Google Analytics event should be recorded.
+
+#### Sign-up
+
+Sent every time a user signs up for your application through Clerk.
+
+For **Universal Analytics** properties, this is sent as a custom event. The custom event is composed as:
+
+- Category: `Clerk`
+- Action: `sign_up`
+- Label: `{{signup method}}`
+
+For **Google Analytics 4** properties, this matches the standard [sign\_up event](https://developers.google.com/analytics/devguides/collection/ga4/reference/events#sign_up).
+
+#### Sign-in
+
+Sent every time a user signs in to his account through Clerk.
+
+For **Universal Analytics** properties, this is sent as a custom event.
+
+- Category: `Clerk`
+- Action: `login`
+- Label: `{{login method}}`
+
+For **Google Analytics 4** properties, this matches the standard [login event](https://developers.google.com/analytics/devguides/collection/ga4/reference/events#login).
+
+## Frequently asked questions (FAQ)
+
+**Will Clerk events disrupt session attribution, user count or other metrics?**
+
+No, Clerk's production architecture allows us to configure the measurement protocol events sent to your property in such a way that session attribution, user count and identification attributes are kept intact.
+
+**I have a new application. Is there a workaround to track authentication events with Google Analytics?**
+
+Yes. You can implement your own analytics tracking by observing user state changes via Clerk's [`useUser()`](/docs/reference/hooks/use-user) hook and firing events to your analytics provider.
+
+The following example demonstrates how you can do this in React by using a `useEffect` hook that reacts to changes in the `User` object. When the value is `null`, the user has signed out; when it's not `null`, the user is signed in.
+
+```tsx {{ filename: 'src/analytics-tracker.tsx' }}
+import { useEffect } from 'react'
+import { useUser } from '@clerk/clerk-react'
+
+const AnalyticsTracker = ({ analytics }) => {
+  const { user } = useUser()
+
+  useEffect(() => {
+    if (user) {
+      analytics.track('login', { userId: user.id })
+    } else {
+      analytics.track('logout')
+    }
+  }, [user, analytics])
+
+  return null
+}
+
+export default AnalyticsTracker
+```

@@ -7,6 +7,7 @@ import type { build } from '../build-docs'
 import type { BuildConfig } from './config'
 import { invalidateFile, type Store } from './store'
 import chokidar from 'chokidar'
+import fs from 'node:fs/promises'
 
 export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFunc: typeof build) => {
   const invalidate = invalidateFile(store, config)
@@ -40,6 +41,8 @@ export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFu
     }
   }
 
+  let lastTempDistPath: string = config.distTempPath
+
   const handleFilesChanged = async (paths: string[]) => {
     if (abortController !== null) {
       console.log('aborting current build')
@@ -58,8 +61,11 @@ export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFu
       // This duplicates the config, re-creating the temp dist folder used so the new run doesn't collide with the old one
       const newConfig = await config.changeTempDist()
 
-      const output = await buildFunc(newConfig, store, abortController.signal)
+      const { warnings } = await buildFunc(newConfig, store, abortController.signal)
 
+      await fs.rm(lastTempDistPath, { recursive: true }) // clean up the old temp dist folder
+
+      lastTempDistPath = newConfig.distTempPath
       abortController = null
 
       if (config.flags.controlled) {
@@ -70,8 +76,8 @@ export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFu
 
       console.info(`Rebuilt docs in ${after - now} milliseconds`)
 
-      if (output !== '') {
-        console.info(output)
+      if (warnings !== '') {
+        console.info(warnings)
       }
     } catch (error) {
       console.error(error)
@@ -110,5 +116,14 @@ export const watchAndRebuild = async (store: Store, config: BuildConfig, buildFu
 
   if (config.publicPath) {
     watcher.subscribe(config.publicPath, handleParcelWatcherChange)
+  }
+
+  if (config.siteFlags?.inputPath) {
+    chokidar
+      .watch(config.siteFlags.inputPath, {
+        ignoreInitial: true,
+        awaitWriteFinish: true,
+      })
+      .on('all', handleChokidarWatcherChange)
   }
 }

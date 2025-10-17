@@ -12,9 +12,8 @@ import type { Node } from 'unist'
 import reporter from 'vfile-reporter'
 import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
-import { readMarkdownFile, writeDistFile } from './io'
+import { readMarkdownFile } from './io'
 import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
-import { getTooltipsCache, type Store } from './store'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 
 export const readTooltipsFolder = (config: BuildConfig) => async () => {
@@ -80,9 +79,7 @@ export const readTooltip = (config: BuildConfig) => async (filePath: string) => 
   }
 }
 
-export const readTooltipsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
+export const readTooltipsMarkdown = (config: BuildConfig) => async (paths: string[]) => {
   const read = readTooltip(config)
-  const tooltipsCache = getTooltipsCache(store)
-
-  return Promise.all(paths.map(async (markdownPath) => tooltipsCache(markdownPath, () => read(markdownPath))))
+  return Promise.all(paths.map(async (markdownPath) => read(markdownPath)))
 }

@@ -59,15 +59,6 @@ import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeIte
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
-import {
-  createBlankStore,
-  DocsMap,
-  getCoreDocCache,
-  getMarkdownCache,
-  getScopedDocCache,
-  markDocumentDirty,
-  Store,
-} from './lib/store'
 import { readTypedocsFolder, readTypedocsMarkdown, typedocTableSpecialCharacters } from './lib/typedoc'
 
 import { documentHasIfComponents } from './lib/utils/documentHasIfComponents'
@@ -99,6 +90,7 @@ import { Flags, readSiteFlags, writeSiteFlags } from './lib/siteFlags'
 import { removeMdxSuffix } from './lib/utils/removeMdxSuffix'
 import { getArg } from './lib/getArg'
 import { existsSync } from 'node:fs'
+import { createBlankStore } from './lib/store'
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
 if (require.main === module) {
@@ -237,9 +229,7 @@ export async function main(
     },
   })
 
-  const store = createBlankStore()
-
-  const { warnings, markdown } = await build(config, store)
+  const { warnings, markdown } = await build(config)
 
   if (config.singleFileMode) {
     return { warnings, markdown }
@@ -251,24 +241,24 @@ export async function main(
   }
 }
 
-export async function build(config: BuildConfig, store: Store = createBlankStore(), abortSignal?: AbortSignal) {
+type MarkdownFile = Awaited<ReturnType<ReturnType<typeof parseInMarkdownFile>>>
+export type DocsMap = Map<string, MarkdownFile>
+
+export async function build(config: BuildConfig, abortSignal?: AbortSignal) {
+  const store = createBlankStore()
   // Apply currying to create functions pre-configured with config
   const getManifest = readManifest(config)
   const getDocsFolder = readDocsFolder(config)
   const getPartialsFolder = readPartialsFolder(config)
   const getPartialsMarkdown = readPartialsMarkdown(config, store)
   const getTooltipsFolder = readTooltipsFolder(config)
-  const getTooltipsMarkdown = readTooltipsMarkdown(config, store)
+  const getTooltipsMarkdown = readTooltipsMarkdown(config)
   const getTypedocsFolder = readTypedocsFolder(config)
-  const getTypedocsMarkdown = readTypedocsMarkdown(config, store)
-  const parseMarkdownFile = parseInMarkdownFile(config, store)
+  const getTypedocsMarkdown = readTypedocsMarkdown(config)
+  const parseMarkdownFile = parseInMarkdownFile(config)
   const writeFile = writeDistFile(config, store)
   const writeSdkFile = writeSDKFile(config, store)
-  const markdownCache = getMarkdownCache(store)
-  const coreDocCache = getCoreDocCache(store)
-  const scopedDocCache = getScopedDocCache(store)
   const getCommitDate = getLastCommitDate(config)
-  const markDirty = markDocumentDirty(store)
   const scopeHref = scopeHrefToSDK(config)
 
   abortSignal?.throwIfAborted()
@@ -379,27 +369,24 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const cachedPartialsSize = store.partials.size
   const partials = await getPartialsMarkdown(
     specificFileData.foundPartials
       ? specificFileData.foundPartials
       : (await getPartialsFolder()).map((item) => item.path),
   )
-  console.info(`✓ Loaded in ${partials.length} partials (${cachedPartialsSize} cached)`)
+  console.info(`✓ Loaded in ${partials.length} partials`)
 
-  const cachedTooltipsSize = store.tooltips.size
   const tooltips = await getTooltipsMarkdown((await getTooltipsFolder()).map((item) => item.path))
-  console.info(`✓ Loaded in ${tooltips.length} tooltips (${cachedTooltipsSize} cached)`)
+  console.info(`✓ Loaded in ${tooltips.length} tooltips`)
 
   abortSignal?.throwIfAborted()
 
-  const cachedTypedocsSize = store.typedocs.size
   const typedocs = await getTypedocsMarkdown(
     specificFileData.foundTypedocs
       ? specificFileData.foundTypedocs
       : (await getTypedocsFolder()).map((item) => item.path),
   )
-  console.info(`✓ Read ${typedocs.length} Typedocs (${cachedTypedocsSize} cached)`)
+  console.info(`✓ Read ${typedocs.length} Typedocs`)
 
   abortSignal?.throwIfAborted()
 
@@ -422,7 +409,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const cachedDocsSize = store.markdown.size
   // Read in all the docs
   const docsArray = (
     await Promise.all([
@@ -439,16 +425,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           inManifest = docsInManifest.has(file.href)
         }
 
-        const markdownFile = await markdownCache(file.filePath, () =>
-          parseMarkdownFile(
-            file,
-            (partialSrc) => partials.find((partial) => partial.path === partialSrc),
-            (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
-            (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc),
-            (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
-            inManifest,
-            'docs',
-          ),
+        const markdownFile = await parseMarkdownFile(
+          file,
+          (partialSrc) => partials.find((partial) => partial.path === partialSrc),
+          (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+          (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc),
+          (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
+          inManifest,
+          'docs',
         )
 
         if (sdkMatch) {
@@ -466,16 +450,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         ? apiErrorsFiles.map(async (file) => {
             const inManifest = docsInManifest.has(file.href)
 
-            const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(
-                file,
-                (partialSrc) => partials.find((partial) => partial.path === partialSrc),
-                (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
-                (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc),
-                (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
-                inManifest,
-                'docs',
-              ),
+            const markdownFile = await parseMarkdownFile(
+              file,
+              (partialSrc) => partials.find((partial) => partial.path === partialSrc),
+              (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+              (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc),
+              (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc),
+              inManifest,
+              'docs',
             )
 
             docsMap.set(file.href, markdownFile)
@@ -500,7 +482,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
     return updatedMarkdownDocument
   })
-  console.info(`✓ Loaded in ${docsArray.length} docs (${cachedDocsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
@@ -888,7 +869,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const cachedCoreDocsSize = store.coreDocs.size
   const coreDocs = await Promise.all(
     docsArray.map(async (doc) => {
       if (doc.type === 'ghost-file') {
@@ -902,109 +882,88 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
-      const vfile = await coreDocCache(doc.file.filePath, async () =>
-        remark()
-          .use(remarkFrontmatter)
-          .use(remarkMdx)
-          .use(
-            validateLinks(
-              config,
-              docsMap,
-              doc.file.filePath,
-              'docs',
-              (link) => {
-                foundLinks.add(link)
-              },
-              doc.file.href,
-            ),
-          )
-          .use(
-            checkPartials(
-              config,
-              (partialSrc) => validatedPartials.find((partial) => partial.path === partialSrc),
-              doc.file,
-              { reportWarnings: false, embed: true },
-              (partial) => {
-                foundPartials.add(partial)
-              },
-            ),
-          )
-          .use(
-            checkTooltips(
-              config,
-              (tooltipSrc) => validatedTooltips.find((tooltip) => tooltip.path === tooltipSrc),
-              doc.file,
-              {
-                reportWarnings: false,
-                embed: true,
-              },
-              (tooltip) => {
-                foundTooltips.add(tooltip)
-              },
-            ),
-          )
-          .use(
-            checkTypedoc(
-              config,
-              (typedocSrc) => validatedTypedocs.find((typedoc) => typedoc.path === typedocSrc),
-              doc.file.filePath,
-              { reportWarnings: false, embed: true },
-              (typedoc) => {
-                foundTypedocs.add(typedoc)
-              },
-            ),
-          )
-          .use(
-            checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
+      const vfile = await remark()
+        .use(remarkFrontmatter)
+        .use(remarkMdx)
+        .use(
+          validateLinks(
+            config,
+            docsMap,
+            doc.file.filePath,
+            'docs',
+            (link) => {
+              foundLinks.add(link)
+            },
+            doc.file.href,
+          ),
+        )
+        .use(
+          checkPartials(
+            config,
+            (partialSrc) => validatedPartials.find((partial) => partial.path === partialSrc),
+            doc.file,
+            { reportWarnings: false, embed: true },
+            (partial) => {
+              foundPartials.add(partial)
+            },
+          ),
+        )
+        .use(
+          checkTooltips(
+            config,
+            (tooltipSrc) => validatedTooltips.find((tooltip) => tooltip.path === tooltipSrc),
+            doc.file,
+            {
               reportWarnings: false,
-              update: true,
-            }),
-          )
-          .use(
-            embedLinks(
-              config,
-              docsMap,
-              sdks,
-              (link) => {
-                foundLinks.add(link)
-              },
-              doc.file.href,
-              undefined, // No target SDK for core documents
-            ),
-          )
-          .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
-          .use(
-            insertFrontmatter({
-              lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
-              sdkScoped: 'false',
-              canonical: doc.file.href,
-            }),
-          )
-          .process(doc.vfile),
-      )
-
-      const partialsLinks = validatedPartials
-        .filter((partial) => foundPartials.has(`_partials/${partial.path}`))
-        .reduce((acc, { links }) => new Set([...acc, ...links]), foundPartials)
-
-      const typedocsLinks = validatedTypedocs
-        .filter((typedoc) => foundTypedocs.has(typedoc.path))
-        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTypedocs)
-
-      const tooltipsLinks = validatedTooltips
-        .filter((tooltip) => foundTooltips.has(tooltip.path))
-        .reduce((acc, { links }) => new Set([...acc, ...links]), foundTooltips)
-
-      const allLinks = new Set([...foundLinks, ...partialsLinks, ...typedocsLinks, ...tooltipsLinks])
-
-      allLinks.forEach((link) => {
-        markDirty(doc.file.filePath, link)
-      })
+              embed: true,
+            },
+            (tooltip) => {
+              foundTooltips.add(tooltip)
+            },
+          ),
+        )
+        .use(
+          checkTypedoc(
+            config,
+            (typedocSrc) => validatedTypedocs.find((typedoc) => typedoc.path === typedocSrc),
+            doc.file.filePath,
+            { reportWarnings: false, embed: true },
+            (typedoc) => {
+              foundTypedocs.add(typedoc)
+            },
+          ),
+        )
+        .use(
+          checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
+            reportWarnings: false,
+            update: true,
+          }),
+        )
+        .use(
+          embedLinks(
+            config,
+            docsMap,
+            sdks,
+            (link) => {
+              foundLinks.add(link)
+            },
+            doc.file.href,
+            undefined, // No target SDK for core documents
+          ),
+        )
+        .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
+        .use(
+          insertFrontmatter({
+            lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+            sdkScoped: 'false',
+            canonical: doc.file.href,
+          }),
+        )
+        .process(doc.vfile)
 
       return { ...doc, vfile }
     }),
   )
-  console.info(`✓ Validated all core docs (${cachedCoreDocsSize} cached)`)
 
   abortSignal?.throwIfAborted()
 
@@ -1109,66 +1068,57 @@ ${yaml.stringify({
           const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
           const isSingleSdkDocument = sdks.length === 1
 
-          const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
-            remark()
-              .use(remarkFrontmatter)
-              .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
-              .use(
-                checkPartials(
-                  config,
-                  (partialSrc) => partials.find((partial) => partial.path === partialSrc),
-                  doc.file,
-                  { reportWarnings: true, embed: true },
-                ),
-              )
-              .use(
-                checkTypedoc(
-                  config,
-                  (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
-                  doc.file.filePath,
-                  { reportWarnings: true, embed: true },
-                ),
-              )
-              .use(
-                checkTooltips(
-                  config,
-                  (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc),
-                  doc.file,
-                  {
-                    reportWarnings: true,
-                    embed: true,
-                  },
-                ),
-              )
-              .use(
-                checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
-                  reportWarnings: true,
-                  update: true,
-                }),
-              )
-              .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
-              .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
-              .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
-              .use(
-                insertFrontmatter({
-                  sdkScoped: 'true',
-                  canonical:
-                    hrefAlreadyContainsSdk || isSingleSdkDocument
-                      ? doc.file.href
-                      : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
-                  lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
-                  sdk: sdks.join(', '),
-                  availableSdks: sdks?.join(','),
-                  notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
-                  activeSdk: targetSdk,
-                }),
-              )
-              .process({
-                path: doc.file.filePath,
-                value: fileContent,
+          const vfile = await remark()
+            .use(remarkFrontmatter)
+            .use(remarkMdx)
+            .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+            .use(
+              checkPartials(config, (partialSrc) => partials.find((partial) => partial.path === partialSrc), doc.file, {
+                reportWarnings: true,
+                embed: true,
               }),
-          )
+            )
+            .use(
+              checkTypedoc(
+                config,
+                (typedocSrc) => typedocs.find((typedoc) => typedoc.path === typedocSrc),
+                doc.file.filePath,
+                { reportWarnings: true, embed: true },
+              ),
+            )
+            .use(
+              checkTooltips(config, (tooltipSrc) => tooltips.find((tooltip) => tooltip.path === tooltipSrc), doc.file, {
+                reportWarnings: true,
+                embed: true,
+              }),
+            )
+            .use(
+              checkPrompts(config, (promptSrc) => prompts.find((prompt) => prompt.filePath === promptSrc), doc.file, {
+                reportWarnings: true,
+                update: true,
+              }),
+            )
+            .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
+            .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
+            .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
+            .use(
+              insertFrontmatter({
+                sdkScoped: 'true',
+                canonical:
+                  hrefAlreadyContainsSdk || isSingleSdkDocument
+                    ? doc.file.href
+                    : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
+                lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
+                sdk: sdks.join(', '),
+                availableSdks: sdks?.join(','),
+                notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+                activeSdk: targetSdk,
+              }),
+            )
+            .process({
+              path: doc.file.filePath,
+              value: fileContent,
+            })
 
           // For single SDK documents or documents with SDK already in path, write to root path
           if (hrefAlreadyContainsSdk || isSingleSdkDocument) {

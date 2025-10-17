@@ -24,7 +24,6 @@ import { checkTypedoc } from './plugins/checkTypedoc'
 import { extractFrontmatter, type Frontmatter } from './plugins/extractFrontmatter'
 import { Prompt, checkPrompts } from './prompts'
 import type { SDK } from './schemas'
-import { markDocumentDirty, type Store } from './store'
 import { documentHasIfComponents } from './utils/documentHasIfComponents'
 import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 import yaml from 'yaml'
@@ -33,7 +32,7 @@ import { checkTooltips } from './plugins/checkTooltips'
 const calloutRegex = new RegExp(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|QUIZ)(\s+[0-9a-z-]+)?\]$/)
 
 export const parseInMarkdownFile =
-  (config: BuildConfig, store: Store) =>
+  (config: BuildConfig) =>
   async (
     file: DocsFile & { content?: string },
     getPartial: (partial: string) => { path: string; content: string; node: Node } | undefined,
@@ -43,7 +42,6 @@ export const parseInMarkdownFile =
     inManifest: boolean,
     section: WarningsSection,
   ) => {
-    const markDirty = markDocumentDirty(store)
     const [error, fileContent] = file.content ? [null, file.content] : await readMarkdownFile(file.fullFilePath)
 
     if (error !== null) {
@@ -110,21 +108,9 @@ export const parseInMarkdownFile =
           frontmatter = fm
         }),
       )
-      .use(
-        checkPartials(config, getPartial, file, { reportWarnings: true, embed: false }, (partial) => {
-          markDirty(file.filePath, partial)
-        }),
-      )
-      .use(
-        checkTypedoc(config, getTypedoc, file.filePath, { reportWarnings: true, embed: false }, (typedoc) => {
-          markDirty(file.filePath, typedoc)
-        }),
-      )
-      .use(
-        checkTooltips(config, getTooltip, file, { reportWarnings: true, embed: false }, (tooltip) => {
-          markDirty(file.filePath, tooltip)
-        }),
-      )
+      .use(checkPartials(config, getPartial, file, { reportWarnings: true, embed: false }))
+      .use(checkTypedoc(config, getTypedoc, file.filePath, { reportWarnings: true, embed: false }))
+      .use(checkTooltips(config, getTooltip, file, { reportWarnings: true, embed: false }))
       .use(
         checkPrompts(config, getPrompt, file, {
           reportWarnings: true,

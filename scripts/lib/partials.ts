@@ -14,10 +14,10 @@ import type { BuildConfig } from './config'
 import { errorMessages } from './error-messages'
 import { readMarkdownFile } from './io'
 import { removeMdxSuffixPlugin } from './plugins/removeMdxSuffixPlugin'
-import { getPartialsCache, markDocumentDirty, type Store } from './store'
 import { extractComponentPropValueFromNode } from './utils/extractComponentPropValueFromNode'
 import { removeMdxSuffix } from './utils/removeMdxSuffix'
 import { z } from 'zod'
+import { getPartialsCache, type Store } from './store'
 
 export const readPartialsFolder = (config: BuildConfig) => async () => {
   // Read all partials from the docs directory, including:
@@ -36,8 +36,6 @@ export const readPartialsFolder = (config: BuildConfig) => async () => {
 }
 
 export const readPartial = (config: BuildConfig, store: Store) => async (filePath: string) => {
-  const setDirty = markDocumentDirty(store)
-
   // filePath can be:
   // 1. Global partial: "_partials/billing/enable-billing.mdx" -> /docs/_partials/billing/enable-billing.mdx
   // 2. Relative partial: "billing/_partials/local.mdx" -> /docs/billing/_partials/local.mdx
@@ -143,13 +141,6 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
             uniquePaths.map(async (nestedPath) => {
               try {
                 const nestedPartial = await partialsCache(nestedPath, () => readPartial(config, store)(nestedPath))
-                // Track the dependency: when nestedPath changes, the parent partial should be invalidated
-                // dirtyDocMap convention for partials:
-                //   - Keys: relative paths (e.g., "guides/_partials/child.mdx")
-                //   - Values: absolute system paths (e.g., "/var/.../docs/guides/_partials/parent.mdx")
-                // nestedPath is already relative: "guides/_partials/child.mdx"
-                // fullPath is the absolute system path of the parent
-                setDirty(fullPath, nestedPath)
                 return [nestedPath, nestedPartial.node] as const
               } catch (error) {
                 console.error(`Failed to load nested partial ${nestedPath}:`, error)
@@ -226,6 +217,5 @@ export const readPartial = (config: BuildConfig, store: Store) => async (filePat
 export const readPartialsMarkdown = (config: BuildConfig, store: Store) => async (paths: string[]) => {
   const read = readPartial(config, store)
   const partialsCache = getPartialsCache(store)
-
   return Promise.all(paths.map(async (markdownPath) => partialsCache(markdownPath, () => read(markdownPath))))
 }

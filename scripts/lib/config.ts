@@ -187,7 +187,6 @@ export async function createConfig(config: BuildConfigOptions) {
         : null,
 
       flags: {
-        watch: config.flags?.watch ?? false,
         controlled: config.flags?.controlled ?? false,
         skipGit: config.flags?.skipGit ?? false,
         skipApiErrors: config.flags?.skipApiErrors ?? false,

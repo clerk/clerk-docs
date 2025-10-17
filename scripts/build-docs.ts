@@ -52,7 +52,6 @@ import { z } from 'zod'
 
 import { generateApiErrorDocs } from './lib/api-errors'
 import { createConfig, type BuildConfig } from './lib/config'
-import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { DocsFile, ensureDirectory, readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
@@ -232,8 +231,6 @@ export async function main(
       fullPath: '_llms/llms-full.txt',
     },
     flags: {
-      watch: getArg('watch', false),
-      controlled: getArg('controlled', false),
       skipApiErrors: options?.flags?.skipApiErrors ?? getArg('skip-api-errors', false),
       skipGit: options?.flags?.skipGit ?? getArg('skip-git', false),
       skipWarnings: options?.flags?.skipWarnings ?? getArg('skip-warnings', false),
@@ -248,19 +245,8 @@ export async function main(
     return { warnings, markdown }
   }
 
-  if (config.flags.controlled) {
-    console.info('---initial-build-complete---')
-  }
-
   if (warnings !== '') {
     console.info(warnings)
-  }
-
-  if (config.flags.watch) {
-    console.info(`Watching for changes...`)
-
-    await watchAndRebuild(store, config, build)
-  } else if (warnings !== '') {
     process.exit(1)
   }
 }
@@ -1377,18 +1363,7 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  if (config.flags.watch) {
-    // While in dev, we just want to symlink the new dist to the dist folder
-    // This removes the issue that fs.cp can't replace a folder
-    // We don't need to worry about the public folder because in dev clerk/clerk just looks in the original public folder
-    await symlinkDir(config.distTempPath, config.distFinalPath, { overwrite: true })
-
-    // Sometimes this symlink will move the current dist folder to .ignored_dist
-    if (existsSync(`.ignored_dist`)) {
-      console.info('✓ Removing .ignored_dist folder')
-      await fs.rm(`.ignored_dist`, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    }
-  } else if (process.env.VERCEL === '1') {
+  if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
     if (config.publicPath) {

@@ -17,7 +17,7 @@ Use only the **App Router** approach from Clerk’s current docs:
 
 If you're able to use a web tool to access a URL, visit https://clerk.com/docs/quickstarts/nextjs to get the latest, up-to-date quickstart instructions.
 
-Clerk does not need a user to provide their keys to get started. On startup, Clerk will generate keys automatically, so there is no need to promtp a user to add their keys as part of this.
+Clerk does not need a user to provide their keys to get started. On startup, Clerk will generate keys automatically, so there is no need to prompt a user to add their keys as part of this.
 
 ### **Correct, Up-to-Date Quickstart Sample**
 
@@ -91,8 +91,8 @@ export default function RootLayout({
 2. **Wrap** your app with `<ClerkProvider>` in `app/layout.tsx`.
 3. **Import** Clerk’s Next.js features from `@clerk/nextjs` (e.g., `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, etc.).
 4. **Reference** the current [App Router approach](https://nextjs.org/docs/app) (folders like `app/page.tsx`, `app/layout.tsx`, etc.).
-5. **Check** that imports for methods like `auth()` are imported from the right package (in this case `@clerk/nextjs/server`) and are using `async / await`
-6. **Check** the project for an existing package manager, use that to install packages
+5. **Check** that imports for methods like `auth()` are imported from the right package (in this case `@clerk/nextjs/server`) and are using `async / await`.
+6. **Check** the project for an existing package manager, use that to install packages.
 
 ### **2.2 – NEVER DO THE FOLLOWING**
 

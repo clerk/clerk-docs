@@ -996,15 +996,11 @@ ${yaml.stringify({
             if (doc.distinctSDKVariants?.includes(targetSdk)) {
               const distinctSDKVariant = docsMap.get(`${doc.file.href}.${targetSdk}`)
 
-              if (distinctSDKVariant === undefined)
+              if (distinctSDKVariant !== undefined) {
                 return {
-                  fileContent: doc.fileContent,
-                  sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+                  fileContent: distinctSDKVariant.fileContent,
+                  sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
                 }
-
-              return {
-                fileContent: distinctSDKVariant.fileContent,
-                sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
               }
             }
             return {
@@ -1012,7 +1008,6 @@ ${yaml.stringify({
               sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
             }
           })()
-
           const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
           const hrefSegments = doc.file.href.split('/')

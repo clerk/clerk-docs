@@ -1,0 +1,474 @@
+---
+title: Sign in with Apple
+description: Learn how to add native Sign in with Apple to your Expo app using Clerk.
+sdk: expo
+---
+
+This guide will teach you how to add native Sign in with Apple to your Clerk Expo app. Unlike web-based OAuth flows, this implementation uses the native iOS "Sign in with Apple" UI for a seamless, platform-native experience.
+
+<Callout type="info">
+  **Prerequisites**
+
+  - An [Apple Developer Account](https://developer.apple.com/programs/)
+  - A native build (via EAS Build or local prebuild - cannot use Expo Go)
+  - Physical iOS device recommended (simulators have limited support)
+</Callout>
+
+<Steps>
+  ## Install dependencies
+
+  Install the required package for Apple Authentication:
+
+  <CodeBlockTabs options={["npm", "yarn", "pnpm"]}>
+    ```bash {{ filename: 'terminal' }}
+    npx expo install expo-apple-authentication
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add expo-apple-authentication
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add expo-apple-authentication
+    ```
+  </CodeBlockTabs>
+
+  ## Add your Native Application
+
+  Add your iOS application to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page in the Clerk Dashboard. You will need your iOS app's **App ID Prefix** (Team ID) and **Bundle ID**.
+
+  1. Navigate to [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications)
+  1. Click **Add iOS application**
+  1. Enter:
+     - **App ID Prefix (Team ID)**: Your Apple Team ID (e.g., `ABC123DEF4`)
+     - **Bundle ID**: Your app's Bundle ID from `app.json` (e.g., `com.yourcompany.yourapp`)
+  1. Save
+
+  ## Enable Apple as a social connection
+
+  1. In the Clerk Dashboard, navigate to the [**SSO Connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For all users**.
+  1. In the **Choose provider** dropdown, select **Apple**.
+  1. Ensure that **Enable for sign-up and sign-in** is toggled on.
+
+  > [!NOTE]
+  > Apple provides a privacy feature called [Hide My Email](https://support.apple.com/en-us/HT210425#hideemail), allowing users to sign in to your app with Apple without disclosing their actual email addresses. Instead, your instance receives an app-specific email address that forwards any emails to the user's real address. To be able to send emails properly to users with hidden addresses, you must configure an additional setting in the Apple Developer portal. See [Configure Email Source for Apple Private Relay](/docs/guides/configure/auth-strategies/social-connections/apple#configure-email-source-for-apple-private-relay){{ target: '_blank' }} for more information.
+
+  ## Configure Apple Developer Console
+
+  ### Create App ID with Sign in with Apple capability
+
+  1. Go to [Apple Developer Console](https://developer.apple.com/account/)
+  1. Navigate to **Certificates, Identifiers & Profiles** → **Identifiers**
+  1. Click the **+** button to create a new App ID (or edit your existing one)
+  1. Configure:
+     - **Bundle ID**: Must match `ios.bundleIdentifier` in your `app.json`
+     - **App Name**: Your app name
+     - **Capabilities**: Enable **Sign in with Apple**
+  1. Click **Continue** and **Register**
+
+  ### Create Services ID (for Clerk Backend)
+
+  1. In the same **Identifiers** section, click **+** again
+  1. Select **Services IDs** and click **Continue**
+  1. Configure:
+     - **Description**: "Clerk Backend Service"
+     - **Identifier**: `com.yourcompany.yourapp.service` (must be different from App ID)
+  1. Check **Sign in with Apple** and click **Configure**
+  1. Add your Clerk domains:
+     - **Primary App ID**: Select your app's Bundle ID
+     - **Domains and Subdomains**: Add your Clerk frontend API domain
+     - **Return URLs**: Add your Clerk redirect URL (from Clerk Dashboard)
+  1. Click **Save**, then **Continue**, then **Register**
+
+  ### Generate Apple Private Key
+
+  1. In Apple Developer Console, go to **Keys**
+  1. Click **+** to create a new key
+  1. Configure:
+     - **Key Name**: "Clerk Apple Sign In"
+     - Enable **Sign in with Apple**
+     - Click **Configure** and select your primary App ID
+  1. Click **Continue**, then **Register**
+  1. **Download the .p8 file** (you can only download it once!)
+  1. Note the **Key ID** displayed
+
+  ### Add credentials to Clerk Dashboard
+
+  1. Return to the Apple SSO connection in your [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections)
+  1. Configure OAuth settings:
+     - **Services ID**: Enter your Services ID (e.g., `com.yourcompany.yourapp.service`)
+     - **Key ID**: From Apple Developer Console → Keys
+     - **Team ID**: Your Apple Team ID (found in Apple Developer Console)
+     - **Private Key**: Upload the .p8 file from Apple Developer Console
+  1. **Save** your changes
+
+  ## Add the plugin to your app config
+
+  Add the `expo-apple-authentication` plugin to your `app.json` or `app.config.js`:
+
+  <CodeBlockTabs type="framework" options={["app.json", "app.config.js"]}>
+    ```json {{ filename: 'app.json' }}
+    {
+      "expo": {
+        "plugins": ["expo-apple-authentication"]
+      }
+    }
+    ```
+
+    ```js {{ filename: 'app.config.js' }}
+    export default {
+      expo: {
+        plugins: ['expo-apple-authentication'],
+      },
+    }
+    ```
+  </CodeBlockTabs>
+
+  ## Build your sign-in flow
+
+  Use the `useAppleSignIn()` hook from `@clerk/clerk-expo` to handle the authentication flow. This hook automatically manages the ID token exchange with Clerk's backend and handles the transfer flow between sign-in and sign-up.
+
+  <Tabs items={["Sign-in page", "Sign-up page", "Reusable component"]}>
+    <Tab>
+      The following example demonstrates how to add Apple Sign-In to your sign-in page:
+
+      ```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+      import { useSignIn, useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignInPage() {
+        const { signIn, setActive, isLoaded } = useSignIn()
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        const onAppleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            // User canceled the sign-in flow
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        // Only show on iOS
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={onAppleSignInPress}>
+              <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-in form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      The same `useAppleSignIn()` hook works for both sign-in and sign-up. Clerk automatically handles the transfer flow:
+
+      - If the Apple ID exists → completes sign-in
+      - If the Apple ID is new → creates a new sign-up
+
+      ```tsx {{ filename: 'app/(auth)/sign-up.tsx' }}
+      import { useSignUp, useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignUpPage() {
+        const { signUp, setActive, isLoaded } = useSignUp()
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        const onAppleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={onAppleSignInPress}>
+              <Text style={styles.appleButtonText}>Sign up with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-up form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      For a reusable component that works on both sign-in and sign-up pages:
+
+      ```tsx {{ filename: 'components/AppleSignInButton.tsx' }}
+      import { useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+
+      interface AppleSignInButtonProps {
+        onSignInComplete?: () => void
+        showDivider?: boolean
+      }
+
+      export function AppleSignInButton({
+        onSignInComplete,
+        showDivider = true,
+      }: AppleSignInButtonProps) {
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        // Only render on iOS
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        const handleAppleSignIn = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+
+              if (onSignInComplete) {
+                onSignInComplete()
+              } else {
+                router.replace('/')
+              }
+            }
+          } catch (err: any) {
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignIn}>
+              <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+            </TouchableOpacity>
+
+            {showDivider && (
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            )}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+        divider: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginVertical: 20,
+        },
+        dividerLine: {
+          flex: 1,
+          height: 1,
+          backgroundColor: '#ccc',
+        },
+        dividerText: {
+          marginHorizontal: 10,
+          color: '#666',
+        },
+      })
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Build your app
+
+  You must create a native build to use Apple Authentication. It does not work with Expo Go.
+
+  ### Using EAS Build (Recommended)
+
+  EAS Build is the easiest way to build native apps with automatic code signing.
+
+  ```bash {{ filename: 'terminal' }}
+  # Install EAS CLI
+  npm install -g eas-cli
+
+  # Login to Expo
+  eas login
+
+  # Configure your project
+  eas build:configure
+
+  # Build for iOS
+  eas build --platform ios --profile development-device
+  ```
+
+  ### Using local prebuild
+
+  If you prefer to build locally:
+
+  ```bash {{ filename: 'terminal' }}
+  # Generate native projects
+  npx expo prebuild
+
+  # Build for iOS (requires macOS and Xcode)
+  npx expo run:ios --device
+  ```
+
+  <Callout type="info">
+    For complete EAS Build setup instructions, see the [EAS Build documentation](https://docs.expo.dev/build/introduction/).
+  </Callout>
+
+  ## Testing
+
+  ### On iOS Simulator
+
+  - Limited support: Some authentication methods may behave differently
+  - Good for UI/UX development and quick iteration
+  - Always test on a real device before releasing to production
+
+  ### On Physical Device
+
+  - Full native functionality including biometric authentication (Face ID/Touch ID)
+  - Production-equivalent experience
+  - Required for final testing before App Store submission
+
+  <Callout type="info">
+    Make sure you're signed into an Apple ID on your test device (Settings → \[Your Name]).
+  </Callout>
+</Steps>
+
+## How it works
+
+When a user taps the "Sign in with Apple" button:
+
+1. **Native UI appears**: iOS displays the native Apple Sign-In sheet
+1. **User authenticates**: User authenticates with Face ID, Touch ID, or password
+1. **Get ID token**: Your app receives an identity token from Apple
+1. **Send to Clerk**: The `useAppleSignIn()` hook sends the token to Clerk's backend using the `oauth_token_apple` strategy
+1. **Create or sign in**: Clerk checks if the Apple ID exists:
+   - **Exists**: Completes sign-in and returns a session
+   - **New**: Automatically creates a sign-up with transfer flow
+1. **Set session**: Your app sets the session as active and redirects the user
+
+## Troubleshooting
+
+### "Apple Authentication is not available on this device"
+
+- **Cause**: Running in Expo Go
+- **Solution**: Build with EAS (`eas build`) or local prebuild (`npx expo prebuild`)
+
+### "expo-apple-authentication is not installed"
+
+- **Cause**: Package not installed
+- **Solution**: Run `npx expo install expo-apple-authentication`
+
+### "Invalid Bundle ID" or "Sign in with Apple failed"
+
+- **Cause**: Mismatch between app.json, Apple Developer Console, and Clerk Dashboard
+- **Solution**: Verify all three places use the same Bundle ID
+
+### "No identity token received"
+
+- **Cause**: Apple didn't return an identity token
+- **Solution**:
+  1. Verify Sign in with Apple is enabled in Apple Developer Console
+  1. Check your device has an active Apple ID signed in (Settings → \[Your Name])
+  1. On simulator: Ensure you're signed into an Apple ID
+
+### EAS Build: "No valid code signing identity"
+
+- **Cause**: Missing credentials or team not configured
+- **Solution**: Run `eas build` again and follow prompts to configure Apple Developer account
+
+### EAS Build: "Provisioning profile doesn't support Sign in with Apple"
+
+- **Cause**: Profile was generated before capability was enabled
+- **Solution**:
+  1. Delete credentials in EAS: `eas credentials`
+  1. Rebuild: `eas build --platform ios --profile development --clear-cache`
+
+## Next steps
+
+<Cards>
+  <Card title="Customize session token" href="/docs/backend-requests/making/custom-session-token" />
+
+  <Card title="Read session and user data" href="/docs/references/react/use-user" />
+</Cards>

@@ -392,7 +392,7 @@ The `metadata` frontmatter field can be used to define additional information ab
   
 | Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
 | ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `canonical`  | `string`       | `-` | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+| `canonical`  | `string`       | — | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
 
 ```diff
   ---

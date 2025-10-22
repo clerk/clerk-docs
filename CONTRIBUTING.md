@@ -332,8 +332,8 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 | Name          | Type                      | Default | Description                                                                                                                                                  |
 | ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `title`       | `string`                  | -     | Overrides the browser title and `<title>` meta tag.                                                                                                          |
-| `description` | `string`                  | -     | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `title`       | `string`                  | -       | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | -       | Overrides the meta description shown in search results and link previews.                                                                                    |
 | `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
 | `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
 | `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |
@@ -392,7 +392,7 @@ The `metadata` frontmatter field can be used to define additional information ab
   
 | Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
 | ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `canonical`  | `string`       | — | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+| `canonical`  | `string`       | - | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
 
 ```diff
   ---
@@ -414,10 +414,10 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 | Name            | Type            | Default | Description                               |
 | --------------- | --------------- | ------- | ----------------------------------------- |
-| `title`         | `string`        | —       | Title displayed in social previews.       |
-| `description`   | `string`        | —       | Description displayed in social previews. |
+| `title`         | `string`        | -       | Title displayed in social previews.       |
+| `description`   | `string`        | -       | Description displayed in social previews. |
 | `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards. |
-| `publishedTime` | `string`        | —       | Publication timestamp.                    |
+| `publishedTime` | `string`        | -       | Publication timestamp.                    |
 | `authors`       | `Array<string>` | `[]`    | Author names associated with the page.    |
 
 ```diff
@@ -441,8 +441,8 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 | Name          | Type            | Default | Description                                  |
 | ------------- | --------------- | ------- | -------------------------------------------- |
-| `title`       | `string`        | —       | Title displayed in the Twitter card.         |
-| `description` | `string`        | —       | Description displayed in the Twitter card.   |
+| `title`       | `string`        | -       | Title displayed in the Twitter card.         |
+| `description` | `string`        | -       | Description displayed in the Twitter card.   |
 | `images`      | `Array<string>` | `[]`    | Image URLs used in the Twitter card preview. |
 
 ```diff

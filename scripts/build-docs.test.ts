@@ -227,6 +227,7 @@ description: This is a simple test page
 lastUpdated: ${initialCommitDate.toISOString()}
 sdkScoped: "false"
 canonical: /docs/simple-test
+sourceFile: /docs/simple-test.mdx
 ---
 
 # Simple Test Page
@@ -1664,6 +1665,7 @@ canonical: /docs/references/react/guide
 availableSdks: react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/references/react/guide.mdx
 ---
 
 # React Guide
@@ -1730,6 +1732,7 @@ canonical: /docs/guide
 availableSdks: react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/guide.mdx
 ---
 
 # React Guide
@@ -1791,6 +1794,7 @@ title: API Documentation
 description: x
 sdkScoped: "false"
 canonical: /docs/api-doc
+sourceFile: /docs/api-doc.mdx
 ---
 
 # API Documentation
@@ -1859,6 +1863,7 @@ canonical: /docs/quickstarts/nextjs-pages-router
 availableSdks: nextjs
 notAvailableSdks: react
 activeSdk: nextjs
+sourceFile: /docs/quickstarts/nextjs-pages-router.mdx
 ---
 
 # Next.js Quickstart (Pages Router)
@@ -3862,6 +3867,7 @@ canonical: /docs/doc-2
 availableSdks: react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/doc-2.mdx
 ---
 
 [Link to doc 1](/docs/doc-1)
@@ -4149,6 +4155,7 @@ title: Doc 2
 description: x
 sdkScoped: "false"
 canonical: /docs/doc-2
+sourceFile: /docs/doc-2.mdx
 ---
 
 <Cards>
@@ -4229,6 +4236,7 @@ canonical: /docs/:sdk:/guide-2
 availableSdks: react,nextjs
 notAvailableSdks: ""
 activeSdk: nextjs
+sourceFile: /docs/guide-2.nextjs.mdx
 ---
 
 <SDKLink href="/docs/guide-1" sdks={["react"]}>Link</SDKLink>
@@ -6445,6 +6453,7 @@ canonical: /docs/:sdk:/doc-2
 availableSdks: expo,nextjs
 notAvailableSdks: react
 activeSdk: expo
+sourceFile: /docs/doc-2.mdx
 ---
 
 <SDKLink href="/docs/reference/react/doc-1" sdks={["react"]}>Doc 1</SDKLink>
@@ -6590,6 +6599,7 @@ title: API Documentation
 description: Generated API docs
 sdkScoped: "false"
 canonical: /docs/api-doc
+sourceFile: /docs/api-doc.mdx
 ---
 
 # API Documentation
@@ -6659,6 +6669,7 @@ canonical: /docs/:sdk:/api-doc
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 activeSdk: nextjs
+sourceFile: /docs/api-doc.mdx
 ---
 
 Documentation specific to Next.js and Remix
@@ -6673,6 +6684,7 @@ canonical: /docs/:sdk:/api-doc
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 activeSdk: remix
+sourceFile: /docs/api-doc.mdx
 ---
 
 Documentation specific to Next.js and Remix
@@ -6687,6 +6699,7 @@ sdk: nextjs, remix, react
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/api-doc.react.mdx
 ---
 
 Documentation specific to React.js
@@ -6770,6 +6783,7 @@ canonical: /docs/:sdk:/test
 availableSdks: react,nextjs
 notAvailableSdks: ""
 activeSdk: nextjs
+sourceFile: /docs/test.nextjs.mdx
 ---
 
 Documentation specific to Next.js
@@ -6783,6 +6797,7 @@ canonical: /docs/:sdk:/test
 availableSdks: react,nextjs
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/test.mdx
 ---
 
 Documentation specific to React
@@ -6864,6 +6879,7 @@ title: Overview
 description: x
 sdkScoped: "false"
 canonical: /docs/overview
+sourceFile: /docs/overview.mdx
 ---
 
 <SDKLink href="/docs/:sdk:/api-doc" sdks={["nextjs","remix","react"]}>API Doc</SDKLink>
@@ -6932,6 +6948,7 @@ sdk: nextjs, remix, react
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/api-doc.react.mdx
 ---
 
 Documentation specific to React.js
@@ -6961,6 +6978,7 @@ sdk: nextjs, remix, react
 availableSdks: nextjs,remix,react
 notAvailableSdks: ""
 activeSdk: react
+sourceFile: /docs/api-doc.react.mdx
 ---
 
 Updated Documentation specific to React.js
@@ -7159,6 +7177,7 @@ title: API Documentation
 description: x
 sdkScoped: "false"
 canonical: /docs/api-doc
+sourceFile: /docs/api-doc.mdx
 ---
 
 <Tooltip><TooltipTrigger>Tooltip</TooltipTrigger><TooltipContent>React.js is a framework or a library idk</TooltipContent></Tooltip>
@@ -7166,7 +7185,7 @@ canonical: /docs/api-doc
   })
 
   test('Should validate links in tooltips', async () => {
-    const { tempDir, readFile } = await createTempFiles([
+    const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({

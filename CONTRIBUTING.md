@@ -332,8 +332,8 @@ The `metadata` frontmatter field can be used to define additional information ab
 
 | Name          | Type                      | Default | Description                                                                                                                                                  |
 | ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `title`       | `string`                  | `-`     | Overrides the browser title and `<title>` meta tag.                                                                                                          |
-| `description` | `string`                  | `-`     | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `title`       | `string`                  | -     | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | -     | Overrides the meta description shown in search results and link previews.                                                                                    |
 | `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
 | `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
 | `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |

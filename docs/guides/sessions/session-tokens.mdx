@@ -368,33 +368,35 @@ Then, when you need to access the other metadata fields, you can fetch them usin
 
   <Tab>
     ```tsx {{ filename: 'app/routes/api/example.tsx' }}
-    import { createClerkClient } from '@clerk/backend'
     import { json } from '@tanstack/react-start'
-    import { createAPIFileRoute } from '@tanstack/react-start/api'
-    import { getAuth } from '@clerk/tanstack-react-start/server'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 
-    export const Route = createAPIFileRoute('/api/example')({
-      GET: async ({ request, params }) => {
-        // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
-        // Accessing the `Auth` object differs depending on the SDK you're using
-        // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-        const { isAuthenticated, userId } = await getAuth(req)
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          GET: async () => {
+            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+            // Accessing the `Auth` object differs depending on the SDK you're using
+            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+            const { isAuthenticated, userId } = await auth()
 
-        // Protect the route by checking if the user is signed in
-        if (!isAuthenticated) {
-          return json({ error: 'Unauthorized' }, { status: 401 })
-        }
+            if (!isAuthenticated) {
+              return new Response('User not authenticated', {
+                status: 404,
+              })
+            }
 
-        // Initialize the JS Backend SDK
-        // This varies depending on the SDK you're using
-        // https://clerk.com/docs/js-backend/getting-started/quickstart
-        const clerkClient = createClerkClient({ secretKey: import.meta.env.CLERK_SECRET_KEY })
+            // Initialize the JS Backend SDK
+            // This varies depending on the SDK you're using
+            // https://clerk.com/docs/js-backend/getting-started/quickstart
+            // Use the `getUser()` method to get the Backend User object
+            const user = await clerkClient().users.getUser(userId)
 
-        // Use the `getUser()` method to get the Backend User object
-        const user = await clerkClient.users.getUser(userId)
-
-        // Return the Backend User object
-        return json({ user })
+            // Return the Backend User object
+            return json({ user })
+          },
+        },
       },
     })
     ```

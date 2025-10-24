@@ -86,7 +86,7 @@ The following example demonstrates how to retrieve the OAuth access token for a 
 
 **If your SDK isn't listed, you can use the comments in the example to help you adapt it to your SDK.**
 
-<Tabs items={["Next.js", "Express", "JS Backend SDK"]}>
+<Tabs items={["Next.js", "Express", "JS Backend SDK", "React Router", "Tanstack React Start"]}>
   <Tab>
     ```tsx {{ filename: 'app/api/notion/route.tsx' }}
     import { auth, clerkClient } from '@clerk/nextjs/server'
@@ -103,7 +103,6 @@ The following example demonstrates how to retrieve the OAuth access token for a 
         return NextResponse.json({ message: 'User not found' })
       }
 
-      // Use the JS Backend SDK to get the OAuth access token for the user
       const provider = 'notion'
 
       // Initialize the JS Backend SDK
@@ -160,11 +159,14 @@ The following example demonstrates how to retrieve the OAuth access token for a 
         res.status(401).json({ error: 'User not authenticated' })
       }
 
-      // Use the JS Backend SDK to get the user's OAuth access token
       const provider = 'notion'
+
+      // Initialize the JS Backend SDK
+      // This varies depending on the SDK you're using
+      // https://clerk.com/docs/js-backend/getting-started/quickstart
+      // Use the JS Backend SDK to get the user's OAuth access token
       const clerkResponse = await clerkClient.users.getUserOauthAccessToken(userId, provider)
       const accessToken = clerkResponse.data[0].token || ''
-
       if (!accessToken) {
         res.status(401).json({ error: 'Access token not found' })
       }
@@ -184,6 +186,7 @@ The following example demonstrates how to retrieve the OAuth access token for a 
       // Handle the response from the Notion API
       const notionData = await notionResponse.json()
 
+      // Return the Notion data
       res.json(notionData)
     })
     ```
@@ -235,6 +238,120 @@ The following example demonstrates how to retrieve the OAuth access token for a 
       // Return the Notion data
       return notionData
     }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/routes/notion.tsx' }}
+    import { redirect } from 'react-router'
+    import { getAuth } from '@clerk/react-router/ssr.server'
+    import { createClerkClient } from '@clerk/react-router/api.server'
+    import type { Route } from './+types/notion'
+
+    export async function loader(args: Route.LoaderArgs) {
+      // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+      // Accessing the `Auth` object differs depending on the SDK you're using
+      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+      const { isAuthenticated, userId } = await getAuth(args)
+
+      // Protect the route from unauthenticated users
+      if (!isAuthenticated) {
+        return redirect('/sign-in?redirect_url=' + args.request.url)
+      }
+
+      const provider = 'notion'
+
+      // Initialize the JS Backend SDK
+      // This varies depending on the SDK you're using
+      // https://clerk.com/docs/js-backend/getting-started/quickstart
+      // Use the JS Backend SDK to get the user's OAuth access token
+      const clerkResponse = await createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY,
+      }).users.getUserOauthAccessToken(userId, provider)
+      const accessToken = clerkResponse.data[0].token || ''
+      if (!accessToken) {
+        return redirect('/sign-in?redirect_url=' + args.request.url)
+      }
+
+      // Fetch the user data from the Notion API
+      // This endpoint fetches a list of users
+      // https://developers.notion.com/reference/get-users
+      const notionUrl = 'https://api.notion.com/v1/users'
+
+      const notionResponse = await fetch(notionUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Notion-Version': '2022-06-28',
+        },
+      })
+
+      // Handle the response from the Notion API
+      const notionData = await notionResponse.json()
+
+      // Return the Notion data
+      return {
+        notionData: JSON.stringify(notionData),
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/routes/api/notion.tsx' }}
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+    import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
+
+    export const ServerRoute = createFileRoute('/api/notion')({
+      server: {
+        handlers: {
+          GET: async () => {
+            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+            // Accessing the `Auth` object differs depending on the SDK you're using
+            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+            const { isAuthenticated, userId } = await auth()
+
+            // Protect the route from unauthenticated users
+            if (!isAuthenticated) {
+              return new Response('User not authenticated', {
+                status: 404,
+              })
+            }
+
+            const provider = 'notion'
+
+            // Initialize the JS Backend SDK
+            // This varies depending on the SDK you're using
+            // https://clerk.com/docs/js-backend/getting-started/quickstart
+            // Use the JS Backend SDK to get the user's OAuth access token
+            const clerkResponse = await clerkClient().users.getUserOauthAccessToken(userId, provider)
+            const accessToken = clerkResponse.data[0].token || ''
+            if (!accessToken) {
+              return new Response('Access token not found', {
+                status: 401,
+              })
+            }
+
+            // Fetch the user data from the Notion API
+            // This endpoint fetches a list of users
+            // https://developers.notion.com/reference/get-users
+            const notionUrl = 'https://api.notion.com/v1/users'
+
+            const notionResponse = await fetch(notionUrl, {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Notion-Version': '2022-06-28',
+              },
+            })
+
+            // Handle the response from the Notion API
+            const notionData = await notionResponse.json()
+
+            return json(notionData)
+          },
+        },
+      },
+    })
     ```
   </Tab>
 </Tabs>

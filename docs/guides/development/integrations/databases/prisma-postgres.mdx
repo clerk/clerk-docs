@@ -1,0 +1,295 @@
+---
+title: Integrate Prisma Postgres with Clerk
+description: Learn how to integrate Clerk into your Prisma Postgres application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Follow the Next.js quickstart",
+      link: "/docs/nextjs/getting-started/quickstart",
+      icon: "nextjs",
+    }
+  ]}
+/>
+
+Integrating Prisma Postgres with Clerk gives you the benefits of using a Prisma Postgres database while leveraging Clerk's authentication, prebuilt components, and webhooks. This guide will show you how to create a simple blog application that allows users to create and read posts using Prisma Postgres and Clerk. This guide uses Next.js App Router but the same principles can be applied to other SDKs.
+
+<Steps>
+  ## Install Prisma
+
+  Run the following command to install Prisma:
+
+  ```sh {{ filename: 'terminal' }}
+  npm install prisma tsx --save-dev
+  ```
+
+  ## Initialize Prisma
+
+  Run the following command to initialize Prisma:
+
+  ```sh {{ filename: 'terminal' }}
+  npx prisma init --output ../app/generated/prisma
+  ```
+
+  This will:
+
+  - Create a new `prisma/` directory in your project, with a `schema.prisma` file inside of it. The `schema.prisma` file is where you will define your database models.
+  - Create a `prisma.config.ts` file in the root of your project.
+  - Update your `.env` file to include a `DATABASE_URL` environment variable, which is used to store your database connection string for your Prisma Postgres database.
+
+  ## Update the Prisma configuration
+
+  Inside the `prisma.config.ts` file, add `import "dotenv/config";` so that it can load the `DATABASE_URL` environment variable from your `.env` file.
+
+  ```ts {{ filename: 'prisma.config.ts', mark: [1] }}
+  import 'dotenv/config'
+  import { defineConfig, env } from 'prisma/config'
+
+  export default defineConfig({
+    schema: 'prisma/schema.prisma',
+    migrations: {
+      path: 'prisma/migrations',
+    },
+    engine: 'classic',
+    datasource: {
+      url: env('DATABASE_URL'),
+    },
+  })
+  ```
+
+  ## Update the database schema
+
+  In the `prisma/schema.prisma` file, update the schema to include a new model called `Post` with the columns `id`, `title`, `content`, `published`, and `authorId`. The `id` column will be used as the post's primary key, and the `authorId` column will be used to store the user's Clerk ID.
+
+  ```prisma {{ filename: 'prisma/schema.prisma', mark: [[11, 17]] }}
+  generator client {
+    provider = "prisma-client"
+    output   = "../app/generated/prisma"
+  }
+
+  datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+  }
+
+  model Post {
+    id        Int     @id @default(autoincrement())
+    title     String
+    content   String?
+    published Boolean @default(false)
+    authorId  String
+  }
+  ```
+
+  ## Push the schema to the database
+
+  Run the following command to push the updated schema to the database:
+
+  ```sh {{ filename: 'terminal' }}
+  npx prisma db push
+  ```
+
+  ## Create a reusable Prisma Client instance
+
+  At the root of your project, create a folder called `lib`. Inside of it, create a new file called `prisma.ts` and add the following code to it. This will set up a single Prisma Client instance, which is used to interact with your database, and bind it to the global object so that only one instance of the client is created in your application. This helps resolve issues with hot reloading that can occur when using Prisma with Next.js in development mode.
+
+  ```typescript {{ filename: 'lib/prisma.ts' }}
+  import { PrismaClient } from '@prisma/client'
+
+  const prisma = new PrismaClient()
+
+  const globalForPrisma = global as unknown as { prisma: typeof prisma }
+
+  if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+  export default prisma
+  ```
+
+  ## Create the UI for the homepage
+
+  Now that all of the set up is complete, it's time to start building out your app.
+
+  Replace the contents of `app/page.tsx` with the following code. This page fetches all posts from your database and displays them on the homepage, showing the title and author ID for each post. It uses the [`prisma.post.findMany()`](https://www.prisma.io/docs/orm/reference/prisma-client-reference?utm_source=docs#findmany) method, which is a Prisma Client method that retrieves all records from the database.
+
+  ```tsx {{ filename: 'app/page.tsx' }}
+  import Link from 'next/link'
+  import prisma from '@/lib/prisma'
+
+  export default async function Page() {
+    const posts = await prisma.post.findMany() // Query the `Post` model for all posts
+
+    return (
+      <div className="mx-auto mt-8 flex min-h-screen max-w-2xl flex-col">
+        <h1 className="mb-8 text-4xl font-bold">Posts</h1>
+
+        <div className="mb-8 flex max-w-2xl flex-col space-y-4">
+          {posts.map((post) => (
+            <Link
+              key={post.id}
+              href={`/posts/${post.id}`}
+              className="hover:bg-neutral-100 dark:hover:bg-neutral-800 flex flex-col rounded-lg px-2 py-4 transition-all hover:underline"
+            >
+              <span className="text-lg font-semibold">{post.title}</span>
+              <span className="text-sm">by {post.authorId}</span>
+            </Link>
+          ))}
+        </div>
+
+        <Link
+          href="/posts/create"
+          className="inline-block rounded-lg border-2 border-current px-4 py-2 text-current transition-all hover:scale-[0.98]"
+        >
+          Create New Post
+        </Link>
+      </div>
+    )
+  }
+  ```
+
+  ## Create a new post
+
+  Create a new file called `app/posts/create/page.tsx` and add the following code to it. This page allows users to create new posts. It uses Clerk's [`auth`](/docs/reference/backend/types/auth-object) object to get the user's ID.
+
+  - If there is no user ID, the user is not signed in, so a sign in button is displayed.
+  - If the user is signed in, the "Create New Post" form is displayed. When the form is submitted, the `createPost()` function is called. This function creates a new post in the database using the [`prisma.post.create()`](https://www.prisma.io/docs/orm/reference/prisma-client-reference?utm_source=docs#create) method, which is a Prisma Client method that creates a new record in the database.
+
+  ```tsx {{ filename: 'app/posts/create/page.tsx' }}
+  import Form from 'next/form'
+  import prisma from '@/lib/prisma'
+  import { redirect } from 'next/navigation'
+  import { SignInButton, useAuth } from '@clerk/nextjs'
+  import { revalidatePath } from 'next/cache'
+  import { auth } from '@clerk/nextjs/server'
+
+  export default async function NewPost() {
+    // The `Auth` object gives you access to properties like `userId`
+    // Accessing the `Auth` object differs depending on the SDK you're using
+    // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+    const { userId } = await auth()
+
+    // Protect this page from unauthenticated users
+    if (!userId) {
+      return (
+        <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center space-y-4">
+          <p>You must be signed in to create a post.</p>
+          <SignInButton>
+            <button
+              type="submit"
+              className="inline-block cursor-pointer rounded-lg border-2 border-current px-4 py-2 text-current transition-all hover:scale-[0.98]"
+            >
+              Sign in
+            </button>
+          </SignInButton>
+        </div>
+      )
+    }
+
+    async function createPost(formData: FormData) {
+      'use server'
+
+      // Type check
+      if (!userId) return
+
+      const title = formData.get('title') as string
+      const content = formData.get('content') as string
+
+      await prisma.post.create({
+        data: {
+          title,
+          content,
+          authorId: userId,
+        },
+      })
+
+      revalidatePath('/')
+      redirect('/')
+    }
+
+    return (
+      <div className="mx-auto max-w-2xl p-4">
+        <h1 className="mb-6 text-2xl font-bold">Create New Post</h1>
+        <Form action={createPost} className="space-y-6">
+          <div>
+            <label htmlFor="title" className="mb-2 block text-lg">
+              Title
+            </label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              placeholder="Enter your post title"
+              className="w-full rounded-lg border px-4 py-2"
+            />
+          </div>
+          <div>
+            <label htmlFor="content" className="mb-2 block text-lg">
+              Content
+            </label>
+            <textarea
+              id="content"
+              name="content"
+              placeholder="Write your post content here..."
+              rows={6}
+              className="w-full rounded-lg border px-4 py-2"
+            />
+          </div>
+          <button
+            type="submit"
+            className="inline-block w-full rounded-lg border-2 border-current px-4 py-2 text-current transition-all hover:scale-[0.98]"
+          >
+            Create Post
+          </button>
+        </Form>
+      </div>
+    )
+  }
+  ```
+
+  ## Query a single record
+
+  Create a new file called `app/posts/[id]/page.tsx` and add the following code to it. This page uses the URL parameters to get the post's ID, and then fetches it from your database and displays it on the page, showing the title, author ID, and content. It uses the [`prisma.post.findUnique()`](https://www.prisma.io/docs/orm/reference/prisma-client-reference?utm_source=docs#findunique) method, which is a Prisma Client method that retrieves a single record from the database.
+
+  ```tsx {{ filename: 'app/posts/[id]/page.tsx' }}
+  import prisma from '@/lib/prisma'
+
+  export default async function Post({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const post = await prisma.post.findUnique({
+      where: { id: parseInt(id) },
+    })
+
+    if (!post) {
+      return (
+        <div className="mx-auto mt-8 flex min-h-screen max-w-2xl flex-col">
+          <div>No post found.</div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="mx-auto mt-8 flex min-h-screen max-w-2xl flex-col">
+        {post && (
+          <article className="w-full max-w-2xl">
+            <h1 className="mb-2 text-2xl font-bold sm:text-3xl md:text-4xl">{post.title}</h1>
+            <p className="text-sm sm:text-base">by {post.authorId}</p>
+            <div className="prose prose-gray prose-sm sm:prose-base lg:prose-lg mt-4 sm:mt-8">
+              {post.content || 'No content available.'}
+            </div>
+          </article>
+        )}
+      </div>
+    )
+  }
+  ```
+
+  ## Test your app
+
+  Run your application with the following command:
+
+  ```sh {{ filename: 'terminal' }}
+  npm run dev
+  ```
+
+  Visit your application at `http://localhost:3000`. Sign in with Clerk and interact with the application to create and read posts. You should be able to see the posts you created on the homepage, and select a single post to view it.
+</Steps>

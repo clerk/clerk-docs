@@ -34,9 +34,14 @@ The following example uses the `authenticateRequest()` method to verify the sess
 
   To verify the token signature:
 
+  1. Verify that the token's algorithm has the expected value.
   1. Use your instance's public key to verify the token's signature.
   1. Validate that the token isn't expired by checking the `exp` ([expiration time](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.4)) and `nbf` ([not before](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.5)) claims.
   1. Validate that the `azp` (authorized parties) claim equals any of your known origins permitted to generate those tokens. For better security, it's highly recommended to explicitly set the `authorizedParties` option when authorizing requests. The value should be a list of domains allowed to make requests to your application. Not setting this value can open your application to [CSRF attacks](https://owasp.org/www-community/attacks/csrf). For example, if you're permitting tokens retrieved from `http://localhost:3000`, then the `azp` claim should equal `http://localhost:3000`. You can also pass an array of strings, such as `['http://localhost:4003', 'https://clerk.dev']`. If the `azp` claim doesn't exist, you can skip this step.
+
+  ### Optional: Check for a `sts` claim
+
+  If you are using Clerk's [organizations](/docs/guides/organizations/overview) feature and [have not enabled personal accounts](/docs/guides/organizations/overview#allow-personal-accounts), users are _required to be part of an organization before accessing your application_. If the user has completed registration, but is not yet part of an organization, a valid session token will be created, but the token will contain a `sts` (status) claim set to `pending`. You may want to reject requests to your backend with pending statuses to ensure that users are not able to work around the organization requirement.
 
   ### Finished
 
@@ -67,7 +72,7 @@ export default async function (req: Request, res: Response) {
 
   try {
     let decoded
-    const options = { algorithms: ['RS256'] } // The algorithm used to sign the token. Optional.
+    const options = { algorithms: ['RS256'] } // The algorithm used to sign the token.
     const permittedOrigins = ['http://localhost:3000', 'https://example.com'] // Replace with your permitted origins
 
     if (tokenSameOrigin) {

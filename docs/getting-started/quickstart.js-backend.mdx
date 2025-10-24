@@ -345,7 +345,7 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
 
     {/* TODO: The following Tabs example is duplicated in the guides/how-clerk-works/session-tokens.mdx file. It cannot be a partial to be reused across both files because this example includes a partial and partials cannot include partials. Also, the text in each of these tabs is removed in the other file as its not relevant to that file's example. So keep these two Tabs examples in sync please. */}
 
-    <Tabs items={["Next.js", "Astro", "Express", "React Router", "Remix", "Tanstack React Start"]}>
+    <Tabs items={["Next.js", "Astro", "Express", "React Router", "Tanstack React Start"]}>
       <Tab>
         For Next.js, the `Auth` object is accessed using the `auth()` helper in App Router apps and the `getAuth()` function in Pages Router apps. [Learn more about using these helpers](/docs/nextjs/guides/users/reading#server-side).
 
@@ -387,8 +387,9 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
 
         ```tsx {{ filename: 'src/api/example.ts' }}
         import { clerkClient } from '@clerk/astro/server'
+        import type { APIRoute } from 'astro'
 
-        export async function GET(context) {
+        export const GET: APIRoute = async (context) => {
           // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
           // Accessing the `Auth` object differs depending on the SDK you're using
           // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
@@ -474,101 +475,37 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object contains importan
       </Tab>
 
       <Tab>
-        For Remix, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/remix/guides/users/reading#get-auth). Use the following tabs to see examples of how to use the `getAuth()` helper to get the user's ID in Remix Loader and Action functions.
-
-        <CodeBlockTabs options={["Loader Function", "Action Function"]}>
-          ```tsx {{ filename: 'routes/profile.tsx' }}
-          import { LoaderFunction, redirect } from '@remix-run/node'
-          import { getAuth } from '@clerk/remix/ssr.server'
-          import { createClerkClient } from '@clerk/remix/api.server'
-
-          export const loader: LoaderFunction = async (args) => {
-            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
-            // Accessing the `Auth` object differs depending on the SDK you're using
-            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-            const { isAuthenticated, userId } = await getAuth(args)
-
-            // If there is no userId, then redirect to sign-in route
-            if (!isAuthenticated) {
-              return redirect('/sign-in?redirect_url=' + args.request.url)
-            }
-
-            // Initialize the JS Backend SDK
-            // This varies depending on the SDK you're using
-            // https://clerk.com/docs/js-backend/getting-started/quickstart
-            // Use the `getUser()` method to get the Backend User object
-            const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
-              userId,
-            )
-
-            // Return the Backend User object
-            return { serialisedUser: JSON.stringify(user) }
-          }
-          ```
-
-          ```tsx {{ filename: 'routes/profile.tsx' }}
-          import { ActionFunction, redirect } from '@remix-run/node'
-          import { getAuth } from '@clerk/remix/ssr.server'
-          import { createClerkClient } from '@clerk/remix/api.server'
-
-          export const action: ActionFunction = async (args) => {
-            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
-            // Accessing the `Auth` object differs depending on the SDK you're using
-            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-            const { isAuthenticated, userId } = await getAuth(args)
-
-            // If there is no userId, then redirect to sign-in route
-            if (!isAuthenticated) {
-              return redirect('/sign-in?redirect_url=' + args.request.url)
-            }
-
-            // Initialize the JS Backend SDK
-            // This varies depending on the SDK you're using
-            // https://clerk.com/docs/js-backend/getting-started/quickstart
-            // Use the `getUser()` method to get the Backend User object
-            const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
-              userId,
-            )
-
-            // Return the user
-            return { serialisedUser: JSON.stringify(user) }
-          }
-          ```
-        </CodeBlockTabs>
-      </Tab>
-
-      <Tab>
-        For Tanstack React Start, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/tanstack-react-start/guides/users/reading#server-side).
+        For Tanstack React Start, the `Auth` object is accessed using the `auth()` function. [Learn more about using `auth()`](/docs/tanstack-react-start/guides/users/reading#server-side).
 
         ```tsx {{ filename: 'app/routes/api/example.tsx' }}
-        import { createClerkClient } from '@clerk/backend'
         import { json } from '@tanstack/react-start'
-        import { createAPIFileRoute } from '@tanstack/react-start/api'
-        import { getAuth } from '@clerk/tanstack-react-start/server'
+        import { createFileRoute } from '@tanstack/react-router'
+        import { auth, clerkClient } from '@clerk/tanstack-react-start/server'
 
-        export const Route = createAPIFileRoute('/api/example')({
-          GET: async ({ request, params }) => {
-            // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
-            // Accessing the `Auth` object differs depending on the SDK you're using
-            // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
-            const { isAuthenticated, userId } = await getAuth(req)
+        export const ServerRoute = createFileRoute('/api/example')({
+          server: {
+            handlers: {
+              GET: async () => {
+                // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+                // Accessing the `Auth` object differs depending on the SDK you're using
+                // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+                const { isAuthenticated, userId } = await auth()
 
-            // Protect the route by checking if the user is signed in
-            if (!isAuthenticated) {
-              return json({ error: 'Unauthorized' }, { status: 401 })
-            }
+                // Protect the route by checking if the user is signed in
+                if (!isAuthenticated) {
+                  return json({ error: 'Unauthorized' }, { status: 401 })
+                }
 
-            // Instantiate the JS Backend SDK
-            const clerkClient = createClerkClient({ secretKey: import.meta.env.CLERK_SECRET_KEY })
+                // Initialize the JS Backend SDK
+                // This varies depending on the SDK you're using
+                // https://clerk.com/docs/js-backend/getting-started/quickstart
+                // Use the `getUser()` method to get the Backend User object
+                const user = await clerkClient().users.getUser(userId)
 
-            // Initialize the JS Backend SDK
-            // This varies depending on the SDK you're using
-            // https://clerk.com/docs/js-backend/getting-started/quickstart
-            // Use the `getUser()` method to get the Backend User object
-            const user = await clerkClient.users.getUser(userId)
-
-            // Return the Backend User object
-            return json({ user })
+                // Return the Backend User object
+                return json({ user })
+              },
+            },
           },
         })
         ```

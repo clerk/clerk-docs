@@ -4,10 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import simpleGit from 'simple-git'
 
-import { describe, expect, onTestFinished, test } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { build } from './build-docs'
 import { createConfig } from './lib/config'
 import { createBlankStore, invalidateFile } from './lib/store'
+import * as ioModule from './lib/io'
 
 const tempConfig = {
   // Set to true to use local repo temp directory instead of system temp
@@ -158,7 +159,7 @@ const baseConfig = {
   docsPath: '../docs',
   baseDocsLink: '/docs/',
   manifestPath: '../docs/manifest.json',
-  partialsPath: '../docs/_partials',
+  partialsFolderName: '_partials',
   typedocPath: '../typedoc',
   distPath: '../dist',
   ignorePaths: [],
@@ -2253,7 +2254,7 @@ title: Simple Test
     expect(output).toContain(`warning Partial /docs/_partials/test-partial.mdx not found`)
   })
 
-  test('Fail if partial is within a partial', async () => {
+  test('Circular partial dependencies should throw an error', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -2263,11 +2264,7 @@ title: Simple Test
       },
       {
         path: './docs/_partials/test-partial-1.mdx',
-        content: `<Include src="_partials/test-partial-2" />`,
-      },
-      {
-        path: './docs/_partials/test-partial-2.mdx',
-        content: `Test Partial Content`,
+        content: `<Include src="_partials/test-partial-1" />`,
       },
       {
         path: './docs/simple-test.mdx',
@@ -2289,10 +2286,292 @@ title: Simple Test
       }),
     )
 
-    await expect(promise).rejects.toThrow(`Partials inside of partials is not yet supported`)
+    await expect(promise).rejects.toThrow(`Circular dependency detected`)
   })
 
-  test(`Warning if <Include /> src doesn't start with "_partials/"`, async () => {
+  test('Nested partials should work (partial inside a partial)', async () => {
+    const { tempDir, pathJoin, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/level-2-partial.mdx',
+        content: `## Level 2 Content
+
+This is content from the nested partial.`,
+      },
+      {
+        path: './docs/_partials/level-1-partial.mdx',
+        content: `## Level 1 Content
+
+<Include src="_partials/level-2-partial" />
+
+More content after nested partial.`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing nested partials
+---
+
+# Test Page
+
+<Include src="_partials/level-1-partial" />
+
+End of page.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // Verify the content was properly embedded
+    const testPageContent = await readFile('./dist/test-page.mdx')
+
+    // Should contain content from level 1 partial
+    expect(testPageContent).toContain('## Level 1 Content')
+    expect(testPageContent).toContain('More content after nested partial')
+
+    // Should contain content from level 2 partial (nested)
+    expect(testPageContent).toContain('## Level 2 Content')
+    expect(testPageContent).toContain('This is content from the nested partial')
+
+    // Should contain the page's own content
+    expect(testPageContent).toContain('# Test Page')
+    expect(testPageContent).toContain('End of page')
+
+    // Should NOT contain any Include tags (they should all be resolved)
+    expect(testPageContent).not.toContain('<Include')
+  })
+
+  test('Nested partials should validate links correctly', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Test Page', href: '/docs/test-page' }],
+            [{ title: 'Target Page', href: '/docs/target-page' }],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-link.mdx',
+        content: `Check out [Target Page](/docs/target-page) for more info.`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `## Parent Content
+
+<Include src="_partials/nested-with-link" />
+
+Also see [Target Page](/docs/target-page#heading).`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing nested partial link validation
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
+title: Target Page
+description: Target
+---
+
+## Heading
+
+Content here.`,
+      },
+    ])
+
+    // This should pass - all links are valid
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+  })
+
+  test('Nested partials should detect invalid links', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-bad-link.mdx',
+        content: `Check out [Non-existent Page](/docs/does-not-exist) for more info.`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `<Include src="_partials/nested-with-bad-link" />`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should detect the invalid link in the nested partial
+    expect(output).toContain('does-not-exist')
+  })
+
+  test('Nested partials should detect invalid hash links', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [{ title: 'Test Page', href: '/docs/test-page' }],
+            [{ title: 'Target Page', href: '/docs/target-page' }],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/nested-with-bad-hash.mdx',
+        content: `See [Target Section](/docs/target-page#non-existent-heading).`,
+      },
+      {
+        path: './docs/_partials/parent-partial.mdx',
+        content: `<Include src="_partials/nested-with-bad-hash" />`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="_partials/parent-partial" />`,
+      },
+      {
+        path: './docs/target-page.mdx',
+        content: `---
+title: Target Page
+---
+
+## Actual Heading
+
+Content here.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    // Should detect the invalid hash in the nested partial
+    expect(output).toContain('non-existent-heading')
+  })
+
+  test('Deeply nested partials (3 levels) should work', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/level-3-partial.mdx',
+        content: `### Level 3 Content
+
+This is the deepest level.`,
+      },
+      {
+        path: './docs/_partials/level-2-partial.mdx',
+        content: `## Level 2 Content
+
+<Include src="_partials/level-3-partial" />
+
+Back to level 2.`,
+      },
+      {
+        path: './docs/_partials/level-1-partial.mdx',
+        content: `## Level 1 Content
+
+<Include src="_partials/level-2-partial" />
+
+Back to level 1.`,
+      },
+      {
+        path: './docs/test-page.mdx',
+        content: `---
+title: Test Page
+description: Testing deeply nested partials
+---
+
+# Test Page
+
+<Include src="_partials/level-1-partial" />
+
+End of page.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // Verify the content was properly embedded from all levels
+    const testPageContent = await readFile('./dist/test-page.mdx')
+
+    // Should contain content from all three levels
+    expect(testPageContent).toContain('## Level 1 Content')
+    expect(testPageContent).toContain('Back to level 1')
+    expect(testPageContent).toContain('## Level 2 Content')
+    expect(testPageContent).toContain('Back to level 2')
+    expect(testPageContent).toContain('### Level 3 Content')
+    expect(testPageContent).toContain('This is the deepest level')
+
+    // Should NOT contain any Include tags
+    expect(testPageContent).not.toContain('<Include')
+  })
+
+  test(`Warning if <Include /> src doesn't start with "_partials/" or relative path`, async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -2320,7 +2599,362 @@ title: Simple Test
       }),
     )
 
-    expect(output).toContain(`warning <Include /> prop "src" must start with "_partials/"`)
+    expect(output).toContain(
+      `warning <Include /> prop "src" must start with "_partials/" (global) or "./_partials/" or "../_partials/" (relative)`,
+    )
+  })
+
+  test('Relative partial - basic ./_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Billing Page', href: '/docs/billing/for-b2c' }]],
+        }),
+      },
+      {
+        path: './docs/billing/_partials/local-partial.mdx',
+        content: `This is a local partial content`,
+      },
+      {
+        path: './docs/billing/for-b2c.mdx',
+        content: `---
+title: Billing Page
+---
+
+<Include src="./_partials/local-partial" />
+
+# Billing Page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/billing/for-b2c.mdx'))
+    expect(content).toContain('This is a local partial content')
+    expect(content).not.toContain('<Include src="./_partials/local-partial" />')
+  })
+
+  test('Relative partial - parent directory ../_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deep Page', href: '/docs/billing/plans/premium' }]],
+        }),
+      },
+      {
+        path: './docs/billing/_partials/shared-content.mdx',
+        content: `Shared billing content from parent directory`,
+      },
+      {
+        path: './docs/billing/plans/premium.mdx',
+        content: `---
+title: Premium Plan
+---
+
+<Include src="../_partials/shared-content" />
+
+# Premium Plan Details`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/billing/plans/premium.mdx'))
+    expect(content).toContain('Shared billing content from parent directory')
+    expect(content).not.toContain('<Include src="../_partials/shared-content" />')
+  })
+
+  test('Relative partial - multiple levels up ../../_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deep Page', href: '/docs/billing/plans/enterprise/features' }]],
+        }),
+      },
+      {
+        path: './docs/billing/_partials/enterprise-features.mdx',
+        content: `Enterprise features from billing folder`,
+      },
+      {
+        path: './docs/billing/plans/enterprise/features.mdx',
+        content: `---
+title: Enterprise Features
+---
+
+<Include src="../../_partials/enterprise-features" />
+
+# Features List`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/billing/plans/enterprise/features.mdx'))
+    expect(content).toContain('Enterprise features from billing folder')
+    expect(content).not.toContain('<Include src="../../_partials/enterprise-features" />')
+  })
+
+  test('Nested relative partials - relative partial includes another relative partial', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+        }),
+      },
+      {
+        path: './docs/guides/_partials/nested-child.mdx',
+        content: `## Nested Child Content`,
+      },
+      {
+        path: './docs/guides/_partials/parent-partial.mdx',
+        content: `## Parent Partial
+
+<Include src="../_partials/nested-child" />
+
+End of parent partial`,
+      },
+      {
+        path: './docs/guides/test.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="./_partials/parent-partial" />
+
+# Test Page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/guides/test.mdx'))
+    expect(content).toContain('## Parent Partial')
+    expect(content).toContain('## Nested Child Content')
+    expect(content).toContain('End of parent partial')
+    expect(content).not.toContain('<Include')
+  })
+
+  test('Nested relative partials - relative partial includes global partial', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/global-shared.mdx',
+        content: `Global shared content`,
+      },
+      {
+        path: './docs/guides/_partials/local-with-global.mdx',
+        content: `## Local Partial
+
+<Include src="_partials/global-shared" />
+
+End of local partial`,
+      },
+      {
+        path: './docs/guides/test.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="./_partials/local-with-global" />
+
+# Test Page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/guides/test.mdx'))
+    expect(content).toContain('## Local Partial')
+    expect(content).toContain('Global shared content')
+    expect(content).toContain('End of local partial')
+    expect(content).not.toContain('<Include')
+  })
+
+  test('Relative partial - going up many levels ../../../../_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Deep Page', href: '/docs/guides/features/advanced/deep/page' }]],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-content.mdx',
+        content: `Top-level shared content from root partials folder`,
+      },
+      {
+        path: './docs/guides/features/advanced/deep/page.mdx',
+        content: `---
+title: Deep Nested Page
+---
+
+<Include src="../../../../_partials/shared-content" />
+
+# Deep Nested Content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/guides/features/advanced/deep/page.mdx'))
+    expect(content).toContain('Top-level shared content from root partials folder')
+    expect(content).not.toContain('<Include src="../../../../_partials/shared-content" />')
+  })
+
+  test('Relative partial - going into another folder ../../xyz/abc/_partials inclusion', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/billing/plans/page' }]],
+        }),
+      },
+      {
+        path: './docs/authentication/strategies/_partials/oauth-config.mdx',
+        content: `OAuth configuration details from authentication folder`,
+      },
+      {
+        path: './docs/billing/plans/page.mdx',
+        content: `---
+title: Billing Plans
+---
+
+<Include src="../../authentication/strategies/_partials/oauth-config" />
+
+# Plan Configuration`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    const content = await readFile(pathJoin('./dist/billing/plans/page.mdx'))
+    expect(content).toContain('OAuth configuration details from authentication folder')
+    expect(content).not.toContain('<Include src="../../authentication/strategies/_partials/oauth-config" />')
+  })
+
+  test('Error case - relative partial not found', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+        }),
+      },
+      {
+        path: './docs/guides/test.mdx',
+        content: `---
+title: Test Page
+---
+
+<Include src="./_partials/nonexistent" />
+
+# Test Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain('warning Partial')
+    expect(output).toContain('not found')
+  })
+
+  test('Relative partial works with SDK-scoped documents', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'SDK Test', href: '/docs/guides/sdk-test' }]],
+        }),
+      },
+      {
+        path: './docs/guides/_partials/sdk-content.mdx',
+        content: `SDK-specific local content`,
+      },
+      {
+        path: './docs/guides/sdk-test.mdx',
+        content: `---
+title: SDK Test
+sdk: react, nextjs
+---
+
+<Include src="./_partials/sdk-content" />
+
+# SDK Test Page`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const reactContent = await readFile(pathJoin('./dist/react/guides/sdk-test.mdx'))
+    expect(reactContent).toContain('SDK-specific local content')
+    expect(reactContent).not.toContain('<Include src="./_partials/sdk-content" />')
+
+    const nextjsContent = await readFile(pathJoin('./dist/nextjs/guides/sdk-test.mdx'))
+    expect(nextjsContent).toContain('SDK-specific local content')
+    expect(nextjsContent).not.toContain('<Include src="./_partials/sdk-content" />')
   })
 
   test('Should validate heading within a partial', async () => {
@@ -3529,6 +4163,148 @@ canonical: /docs/doc-2
 `,
     )
   })
+
+  test('Should embed links in sdk scoped docs', async () => {
+    const { tempDir, readFile, listFiles } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1
+description: x
+sdk: react
+---
+
+# Guide 1`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: react
+---
+
+# Guide 2`,
+      },
+      {
+        path: './docs/guide-2.nextjs.mdx',
+        content: `---
+title: Guide 2
+description: x
+sdk: nextjs
+---
+
+[Link](/docs/guide-1)
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    expect(await readFile('./dist/nextjs/guide-2.mdx')).toBe(`---
+title: Guide 2
+description: x
+sdk: react, nextjs
+sdkScoped: "true"
+canonical: /docs/:sdk:/guide-2
+availableSdks: react,nextjs
+notAvailableSdks: ""
+activeSdk: nextjs
+---
+
+<SDKLink href="/docs/guide-1" sdks={["react"]}>Link</SDKLink>
+`)
+  })
+
+  test('Should convert links to multi-SDK documents even when target SDK is supported', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Guide 1', href: '/docs/guide-1' },
+              { title: 'Guide 2', href: '/docs/guide-2' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/guide-1.mdx',
+        content: `---
+title: Guide 1 for React
+description: x
+sdk: react
+---
+
+# Guide 1 for React
+
+[\`<Guide 2>\`](/docs/guide-2)
+`,
+      },
+      {
+        path: './docs/guide-1.nextjs.mdx',
+        content: `---
+title: Guide 1 for Nextjs
+description: x
+sdk: nextjs
+---
+# Guide 1 for Nextjs
+`,
+      },
+      {
+        path: './docs/guide-2.mdx',
+        content: `---
+title: '<Guide 2>'
+description: x
+sdk: react, nextjs
+---
+
+# Guide 2 Component
+`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toBe('')
+
+    // When viewing the React version of the guide-1
+    const reactGuide1 = await readFile('./dist/react/guide-1.mdx')
+
+    // This should fail because the current logic doesn't convert the link
+    // since all SDKs of the component (react, nextjs, astro, vue, nuxt)
+    // are supported by the guide-1 document (which has all those SDK variants)
+    // But it SHOULD be converted to show users which SDKs the component supports
+    expect(reactGuide1).toContain(
+      `<SDKLink href="/docs/:sdk:/guide-2" sdks={["react","nextjs"]} code={true}>\\<Guide 2></SDKLink>`,
+    )
+  })
 })
 
 describe('Path and File Handling', () => {
@@ -4344,6 +5120,310 @@ sdk: react
     expect(updatedContent).toContain('Updated Content')
   })
 
+  test('should update doc content when a relative partial changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Billing Doc', href: '/docs/billing/for-b2c' }]],
+        }),
+      },
+      {
+        path: './docs/billing/_partials/local-partial.mdx',
+        content: `# Original Local Content`,
+      },
+      {
+        path: './docs/billing/for-b2c.mdx',
+        content: `---
+title: Billing for B2C
+sdk: react
+---
+
+<Include src="./_partials/local-partial" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Update file content
+    await fs.writeFile(pathJoin('./docs/billing/_partials/local-partial.mdx'), `# Updated Local Content`)
+
+    // Invalidate the relative partial
+    invalidate(pathJoin('./docs/billing/_partials/local-partial.mdx'))
+
+    // Second build with same store (should detect changes)
+    await build(config, store)
+
+    // Check updated content
+    const updatedContent = await readFile(pathJoin('./dist/billing/for-b2c.mdx'))
+    expect(updatedContent).toContain('Updated Local Content')
+  })
+
+  test('should update guide when a nested relative partial changes', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Guides Test', href: '/docs/guides/test' }]],
+        }),
+      },
+      {
+        path: './docs/guides/_partials/nested-child.mdx',
+        content: `## Original Nested Child Content`,
+      },
+      {
+        path: './docs/guides/_partials/parent-partial.mdx',
+        content: `## Parent Partial
+
+<Include src="./nested-child" />
+
+End of parent partial`,
+      },
+      {
+        path: './docs/guides/test.mdx',
+        content: `---
+title: Test Guide
+sdk: react
+---
+
+# Test Guide
+
+<Include src="./_partials/parent-partial" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Update the nested child partial
+    await fs.writeFile(pathJoin('./docs/guides/_partials/nested-child.mdx'), `## Updated Nested Child Content`)
+
+    // Invalidate the nested child partial
+    invalidate(pathJoin('./docs/guides/_partials/nested-child.mdx'))
+
+    // Second build with same store
+    // The guide (test.mdx) IS tracked in dirtyDocMap as depending on parent-partial.mdx
+    // (via markDirty in checkPartials), so invalidating the parent will automatically
+    // invalidate the guide, ensuring the changes propagate all the way through
+    await build(config, store)
+
+    // Check updated content - should contain the updated nested child content
+    const updatedContent = await readFile(pathJoin('./dist/guides/test.mdx'))
+    expect(updatedContent).toContain('## Parent Partial')
+    expect(updatedContent).toContain('## Updated Nested Child Content')
+    expect(updatedContent).toContain('End of parent partial')
+    expect(updatedContent).not.toContain('Original Nested Child Content')
+  })
+
+  test('should cache shared nested partial when included by multiple parent partials', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              { title: 'Page B', href: '/docs/page-b' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-nested.mdx',
+        content: `## Original Shared Content
+
+This content is shared across multiple parent partials.`,
+      },
+      {
+        path: './docs/_partials/parent-a.mdx',
+        content: `## Parent A
+
+<Include src="_partials/shared-nested" />
+
+End of parent A.`,
+      },
+      {
+        path: './docs/_partials/parent-b.mdx',
+        content: `## Parent B
+
+<Include src="_partials/shared-nested" />
+
+End of parent B.`,
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+---
+
+# Page A
+
+<Include src="_partials/parent-a" />`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+---
+
+# Page B
+
+<Include src="_partials/parent-b" />`,
+      },
+    ])
+
+    // Create store to maintain cache across builds
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+    const invalidate = invalidateFile(store, config)
+
+    // First build
+    await build(config, store)
+
+    // Verify both pages have the shared nested content
+    const pageAContent = await readFile(pathJoin('./dist/page-a.mdx'))
+    expect(pageAContent).toContain('Original Shared Content')
+
+    const pageBContent = await readFile(pathJoin('./dist/page-b.mdx'))
+    expect(pageBContent).toContain('Original Shared Content')
+
+    // Now update the shared nested partial
+    await fs.writeFile(
+      pathJoin('./docs/_partials/shared-nested.mdx'),
+      `## Updated Shared Content
+
+This content has been updated and should propagate to all parent partials.`,
+    )
+
+    // Invalidate the shared nested partial
+    invalidate(pathJoin('./docs/_partials/shared-nested.mdx'))
+
+    // Second build with same store (should pick up changes)
+    await build(config, store)
+
+    // Verify both pages now have the updated content
+    const updatedPageAContent = await readFile(pathJoin('./dist/page-a.mdx'))
+    expect(updatedPageAContent).toContain('This content has been updated and should propagate to all parent partials')
+    expect(updatedPageAContent).not.toContain('Original Shared Content')
+
+    const updatedPageBContent = await readFile(pathJoin('./dist/page-b.mdx'))
+    expect(updatedPageBContent).toContain('This content has been updated and should propagate to all parent partials')
+    expect(updatedPageBContent).not.toContain('Original Shared Content')
+  })
+
+  test('should only read shared nested partial from filesystem once (caching proof)', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              { title: 'Page B', href: '/docs/page-b' },
+              { title: 'Page C', href: '/docs/page-c' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/_partials/shared-nested.mdx',
+        content: `## Shared Nested Partial
+
+This partial should only be read from disk once.`,
+      },
+      {
+        path: './docs/_partials/parent-a.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/_partials/parent-b.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/_partials/parent-c.mdx',
+        content: `<Include src="_partials/shared-nested" />`,
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+---
+
+<Include src="_partials/parent-a" />`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+---
+
+<Include src="_partials/parent-b" />`,
+      },
+      {
+        path: './docs/page-c.mdx',
+        content: `---
+title: Page C
+---
+
+<Include src="_partials/parent-c" />`,
+      },
+    ])
+
+    const store = createBlankStore()
+    const config = await createConfig({
+      ...baseConfig,
+      basePath: tempDir,
+      validSdks: ['react'],
+    })
+
+    // Spy on the readMarkdownFile function to count file reads
+    const readMarkdownFileSpy = vi.spyOn(ioModule, 'readMarkdownFile')
+
+    // Build once
+    await build(config, store)
+
+    // Count how many times the shared nested partial was read from disk
+    const sharedNestedPath = pathJoin('./docs/_partials/shared-nested.mdx')
+    const sharedNestedReads = readMarkdownFileSpy.mock.calls.filter((call) => call[0] === sharedNestedPath).length
+
+    // The shared nested partial should only be read from disk ONCE
+    // Even though it's included by 3 different parent partials
+    expect(sharedNestedReads).toBe(1)
+
+    // Verify all three pages have the content (functionality check)
+    for (const page of ['page-a', 'page-b', 'page-c']) {
+      const content = await readFile(pathJoin(`./dist/${page}.mdx`))
+      expect(content).toContain('## Shared Nested Partial')
+      expect(content).toContain('This partial should only be read from disk once')
+    }
+
+    // Cleanup
+    readMarkdownFileSpy.mockRestore()
+  })
+
   test('should update doc content when the typedoc changes in a sdk scoped doc', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -4832,7 +5912,7 @@ description: Test page with partial
           validSdks: ['react'],
           ignoreWarnings: {
             partials: {
-              'test-partial.mdx': ['link-doc-not-found'],
+              '_partials/test-partial.mdx': ['link-doc-not-found'],
             },
             docs: {},
             typedoc: {},

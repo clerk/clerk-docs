@@ -4,7 +4,6 @@ import { map as mdastMap } from 'unist-util-map'
 import type { VFile } from 'vfile'
 import { SDKLink } from '../components/SDKLink'
 import type { BuildConfig } from '../config'
-import type { WarningsSection } from '../error-messages'
 import type { DocsMap } from '../store'
 import { findComponent } from '../utils/findComponent'
 import { removeMdxSuffix } from '../utils/removeMdxSuffix'
@@ -19,7 +18,14 @@ import { SDK } from '../schemas'
  * - Skips links to ignored paths or links.
  */
 export const embedLinks =
-  (config: BuildConfig, docsMap: DocsMap, docSDKs: SDK[], foundLink?: (link: string) => void, href?: string) =>
+  (
+    config: BuildConfig,
+    docsMap: DocsMap,
+    docSDKs: SDK[],
+    foundLink?: (link: string) => void,
+    href?: string,
+    currentPageSDK?: SDK,
+  ) =>
   () =>
   (tree: Node, vfile: VFile) => {
     const scopeHref = scopeHrefToSDK(config)
@@ -87,13 +93,20 @@ export const embedLinks =
 
       const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
 
-      // Check if all SDKs for the current document are also present in the linked document.
-      // If true, the link does not need to be SDK-scoped, as the SDK context is already compatible.
+      // Is the page we are currently rendering, compatible with the linked page?
+      // If no current page sdk is provided, we assume it is compatible
+      const targetSdkSupported = currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true
+
+      // Does the linked page support more than one sdk?
+      const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
+
+      // Do the linked page and the current page use exactly the same sdk?
       const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
 
-      if (usesTheSameSDKs) {
-        return node
-      }
+      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK || !usesTheSameSDKs
+
+      // In these cases, we don't need to convert to a SDKLink
+      if (!shouldConvertToSDKLink) return node
 
       const injectSDK =
         linkedDocSDKs !== undefined &&

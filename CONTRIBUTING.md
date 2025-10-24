@@ -326,6 +326,161 @@ description: Some brief, but effective description of the page's content.
 
 These fields should be present on every documentation page.
 
+#### Metadata
+
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews. It has the following subfields:
+
+| Name          | Type                      | Default | Description                                                                                                                                                  |
+| ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`       | `string`                  | -       | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | -       | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
+| `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
+| `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |
+| `twitter`     | `object`                  | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below. |
+| `robots`      | `object`                  | `{}`    | Controls how crawlers index and follow the page. See its properties below.                                                                                   |
+
+##### Examples
+
+<details>
+<summary>Set a custom browser title</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
+  ---
+```
+
+</details>
+
+<details>
+<summary>Set SEO title and description</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
++   description: Example
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Add page authors</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   authors:
++     - name: Jane Doe
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define canonical or alternate URLs for your documentation page</summary>
+<br /> 
+<p><strong>This is set via the <code>alternates</code> field. It has the following subfields:</strong></p>
+  
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `canonical`  | `string`       | - | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   alternates:
++     canonical: https://docs.example.com/
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Configure Open Graph metadata for social media previews</summary>
+<br /> 
+<p><strong>This is set via the <code>openGraph</code> field. It has the following subfields:</strong></p>
+
+| Name            | Type            | Default | Description                               |
+| --------------- | --------------- | ------- | ----------------------------------------- |
+| `title`         | `string`        | -       | Title displayed in social previews.       |
+| `description`   | `string`        | -       | Description displayed in social previews. |
+| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards. |
+| `publishedTime` | `string`        | -       | Publication timestamp.                    |
+| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.    |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   openGraph:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define X Cards metadata for the page</summary>
+<br /> 
+<p><strong>This is set via the <code>twitter</code> field. It has the following subfields:</strong></p>
+
+| Name          | Type            | Default | Description                                  |
+| ------------- | --------------- | ------- | -------------------------------------------- |
+| `title`       | `string`        | -       | Title displayed in the Twitter card.         |
+| `description` | `string`        | -       | Description displayed in the Twitter card.   |
+| `images`      | `Array<string>` | `[]`    | Image URLs used in the Twitter card preview. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   twitter:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Control search engine indexing and crawler behavior.</summary>
+<br /> 
+<p><strong>This is set via the <code>robots</code> field. It has the following subfields:</strong></p>
+
+| Name     | Type      | Default | Description                                          |
+| -------- | --------- | ------- | ---------------------------------------------------- |
+| `index`  | `boolean` | `true`  | Whether the page should appear in search results.    |
+| `follow` | `boolean` | `true`  | Whether crawlers should follow links from this page. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++  robots:
++    index: false
++    follow: true
+  ---
+```
+
+</details>
+
 #### Search
 
 The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
@@ -717,6 +872,39 @@ pnpm add @clerk/nextjs
 </CodeBlockTabs>
 ````
 
+#### npm commands
+
+npm codeblocks will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
+
+````mdx
+```npm
+npm i @clerk/nextjs
+```
+````
+
+Example output:
+
+````mdx
+<CodeBlockTabs options={["npm", "pnpm", "yarn", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bunx add @clerk/nextjs
+    ```
+
+</CodeBlockTabs>
+````
+
 The image below shows what this example looks like once rendered.
 
 ![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)
@@ -1054,7 +1242,6 @@ Available values for the `sdk` prop:
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
 | JS Backend SDK         | "js-backend"           |
-| SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
@@ -1090,6 +1277,28 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 ```
 
 </details>
+
+### `<Accordion />`
+
+The `<Accordion />` component creates a vertically stacked set of interactive headings that each reveals a section of content. It has no props and accepts `<AccordionPanel />` children.
+
+The `<AccordionPanel />` accepts a `title` and `children`.
+
+| Prop       | Type              | Comment                                                   |
+| ---------- | ----------------- | --------------------------------------------------------- |
+| `children` | `React.ReactNode` | The content that will be rendered in the accordion panel. |
+| `title`    | `string`          | The title of the accordion panel.                         |
+
+```mdx
+<Accordion>
+  <AccordionPanel title="Can I use this?">It's available in v1.2.3 and above.</AccordionPanel>
+  <AccordionPanel title="What if I still have questions?">Send and email to help@example.com.</AccordionPanel>
+</Accordion>
+```
+
+The image below shows what this example looks like once rendered.
+
+![An example of an <Accordion /> component](/.github/media/accordion.png)
 
 ### Images and static assets
 

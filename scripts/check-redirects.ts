@@ -53,6 +53,94 @@ interface RedirectCheckResult {
   error?: string
 }
 
+interface ProtectedRoute {
+  path: string
+  isPattern: boolean
+  basePath: string // For pattern routes, the path prefix to check
+}
+
+// Protected routes that should not be shadowed by redirects
+// These are Next.js API routes and special paths that need to remain accessible
+const PROTECTED_ROUTES = [
+  '/docs/api/instance_keys',
+  '/docs/core-1/[[...slug]]',
+  '/docs/experiment-create_account_from_docs_quickstart/[experiment]',
+  '/docs/experiment-nextjs_quickstart_template/[experiment]',
+  '/docs/images/[[...slug]]',
+  '/docs/llms-full.txt',
+  '/docs/llms.txt',
+  '/docs/pr/[number]/[[...slug]]',
+  '/docs/pr/[number]/experiment-create_account_from_docs_quickstart/[experiment]',
+  '/docs/pr/[number]/experiment-nextjs_quickstart_template/[experiment]',
+  '/docs/pr/[number]/llms-full.txt',
+  '/docs/pr/[number]/llms.txt',
+  '/docs/pr/[number]/quickstart',
+  '/docs/pr/[number]/raw/[[...slug]]',
+  '/docs/quickstart',
+  '/docs/raw/[[...slug]]',
+  '/docs/reference/backend-api/[[...slug]]',
+  '/docs/reference/frontend-api/[[...slug]]',
+  '/docs/reference/spec/[api]/[version]',
+  '/docs/reference/spec/invalidate',
+  '/docs/revalidate',
+]
+
+function parseProtectedRoutes(): ProtectedRoute[] {
+  return PROTECTED_ROUTES.map((path) => {
+    const isPattern = path.includes('[')
+    let basePath = path
+
+    if (isPattern) {
+      // Extract the base path up to the first bracket
+      const bracketIndex = path.indexOf('[')
+      basePath = path.substring(0, bracketIndex)
+    }
+
+    return {
+      path,
+      isPattern,
+      basePath,
+    }
+  })
+}
+
+function checkProtectedRoutes(staticRedirects: Record<string, StaticRedirect>): {
+  violations: Array<{ source: string; protectedRoute: string; reason: string }>
+  count: number
+} {
+  const protectedRoutes = parseProtectedRoutes()
+  const violations: Array<{ source: string; protectedRoute: string; reason: string }> = []
+
+  for (const [source, redirect] of Object.entries(staticRedirects)) {
+    for (const protectedRoute of protectedRoutes) {
+      if (protectedRoute.isPattern) {
+        // For pattern routes, check if source starts with the base path
+        if (source.startsWith(protectedRoute.basePath)) {
+          violations.push({
+            source,
+            protectedRoute: protectedRoute.path,
+            reason: `Source starts with protected pattern base path: ${protectedRoute.basePath}`,
+          })
+        }
+      } else {
+        // For exact routes, check for exact match only
+        if (source === protectedRoute.path) {
+          violations.push({
+            source,
+            protectedRoute: protectedRoute.path,
+            reason: 'Source exactly matches protected route',
+          })
+        }
+      }
+    }
+  }
+
+  return {
+    violations,
+    count: violations.length,
+  }
+}
+
 async function loadDirectory(): Promise<Set<string>> {
   try {
     const directoryPath = path.join(process.cwd(), 'dist', 'directory.json')
@@ -101,7 +189,7 @@ async function loadRedirects(): Promise<{
     const dynamicRedirects: DynamicRedirect[] = dynamicRedirectsRaw.map((redirect) => {
       try {
         // Use native path-to-regexp support for :path* patterns
-        const matcher = match(redirect.source, { decode: decodeURIComponent })
+        const matcher = match<Record<string, string>>(redirect.source, { decode: decodeURIComponent })
         const compiler = compile(redirect.destination, { encode: (str) => str, validate: false })
 
         return {
@@ -169,6 +257,28 @@ async function checkRedirects(): Promise<void> {
 
   console.log(`📁 Found ${validUrls.size} valid pages`)
   console.log(`🔀 Found ${allRedirects.length} redirects to check`)
+  console.log()
+
+  // Check for protected route violations
+  console.log('🛡️  Checking for protected route violations...')
+  const protectedRouteCheck = checkProtectedRoutes(staticRedirects)
+
+  if (protectedRouteCheck.count > 0) {
+    console.log(`❌ Found ${protectedRouteCheck.count} protected route violation(s):`)
+    console.log()
+
+    for (const violation of protectedRouteCheck.violations) {
+      console.log(`   Source: ${violation.source}`)
+      console.log(`   Conflicts with: ${violation.protectedRoute}`)
+      console.log(`   Reason: ${violation.reason}`)
+      console.log()
+    }
+
+    process.exitCode = 1
+    return
+  }
+
+  console.log(`✅ No protected route violations found`)
   console.log()
 
   const results: RedirectCheckResult[] = []

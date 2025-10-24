@@ -1,0 +1,303 @@
+---
+title: Sign in with Apple
+description: Learn how to use Clerk to natively Sign in with Apple in your Expo app.
+sdk: expo
+---
+
+This guide will teach you how to add native Sign in with Apple to your Clerk Expo apps.
+
+> [!NOTE]
+> Apple Sign-In works on both iOS Simulators and physical devices. However, physical devices provide full functionality including biometric authentication (Face ID/Touch ID), while simulators have limited support. Always test on a physical device before releasing to production.
+
+<Steps>
+  ## Install dependencies
+
+  The [Expo Apple Authentication library](https://docs.expo.dev/versions/latest/sdk/apple-authentication/) provides access to Apple's native Sign in with Apple functionality from your Expo app.
+
+  Run the following command to install the library:
+
+  ```npm {{ filename: 'terminal' }}
+  npx expo install expo-apple-authentication
+  ```
+
+  ## Add your Native Application
+
+  Add your iOS application to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page in the Clerk Dashboard. You will need your iOS app's **App ID Prefix** (Team ID) and **Bundle ID**.
+
+  ## Enable Apple as a social connection
+
+  1. In the Clerk Dashboard, navigate to the [**SSO Connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For all users**.
+  1. In the **Choose provider** dropdown, select **Apple**.
+  1. Ensure that **Enable for sign-up and sign-in** is toggled on.
+
+  > [!NOTE]
+  > Apple provides a privacy feature called [Hide My Email](https://support.apple.com/en-us/HT210425#hideemail), allowing users to sign in to your app with Apple without disclosing their actual email addresses. Instead, your instance receives an app-specific email address that forwards any emails to the user's real address. To be able to send emails properly to users with hidden addresses, you must configure an additional setting in the Apple Developer portal. See [Configure Email Source for Apple Private Relay](/docs/guides/configure/auth-strategies/social-connections/apple#configure-email-source-for-apple-private-relay){{ target: '_blank' }} for more information.
+
+  ## Add `expo-apple-authentication` to your app config
+
+  Add the `expo-apple-authentication` plugin to your `app.json` or `app.config.js`.
+
+  <CodeBlockTabs options={["app.json", "app.config.js"]}>
+    ```json {{ filename: 'app.json' }}
+    {
+      "expo": {
+        "plugins": ["expo-apple-authentication"]
+      }
+    }
+    ```
+
+    ```js {{ filename: 'app.config.js' }}
+    export default {
+      expo: {
+        plugins: ['expo-apple-authentication'],
+      },
+    }
+    ```
+  </CodeBlockTabs>
+
+  ## Build your sign-in flow
+
+  The following example uses the [`useAppleSignIn()`](/docs/reference/expo/use-apple-sign-in) hook to manage the Apple sign-in flow. It handles the ID token exchange with Clerk's Backend and automatically manages the transfer flow between sign-in and sign-up.
+
+  <Tabs items={["Sign-in page", "Sign-up page", "Reusable component"]}>
+    <Tab>
+      The following example demonstrates how to add Apple Sign-In to your sign-in page.
+
+      ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+      import { useSignIn, useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignInPage() {
+        const { signIn, setActive, isLoaded } = useSignIn()
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        const onAppleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            // User canceled the sign-in flow
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        // Only show on iOS
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={onAppleSignInPress}>
+              <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-in form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      The following example demonstrates how to add Apple Sign-In to your sign-up page. The same `useAppleSignIn()` hook works for both sign-in and sign-up, and Clerk automatically handles the transfer flow:
+
+      - If the Apple ID exists, it completes sign-in.
+      - If the Apple ID is new, it creates a new sign-up.
+
+      ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
+      import { useSignUp, useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignUpPage() {
+        const { signUp, setActive, isLoaded } = useSignUp()
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        const onAppleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={onAppleSignInPress}>
+              <Text style={styles.appleButtonText}>Sign up with Apple</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-up form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      The following example demonstrates how to implement a reusable component that works on both sign-in and sign-up pages.
+
+      ```tsx {{ filename: 'components/AppleSignInButton.tsx', collapsible: true }}
+      import { useAppleSignIn } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+
+      interface AppleSignInButtonProps {
+        onSignInComplete?: () => void
+        showDivider?: boolean
+      }
+
+      export function AppleSignInButton({
+        onSignInComplete,
+        showDivider = true,
+      }: AppleSignInButtonProps) {
+        const { startAppleSignInFlow } = useAppleSignIn()
+        const router = useRouter()
+
+        // Only render on iOS
+        if (Platform.OS !== 'ios') {
+          return null
+        }
+
+        const handleAppleSignIn = async () => {
+          try {
+            const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+
+              if (onSignInComplete) {
+                onSignInComplete()
+              } else {
+                router.replace('/')
+              }
+            }
+          } catch (err: any) {
+            if (err.code === 'ERR_REQUEST_CANCELED') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+            console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignIn}>
+              <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+            </TouchableOpacity>
+
+            {showDivider && (
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            )}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        appleButton: {
+          backgroundColor: '#000',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        appleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+        divider: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginVertical: 20,
+        },
+        dividerLine: {
+          flex: 1,
+          height: 1,
+          backgroundColor: '#ccc',
+        },
+        dividerText: {
+          marginHorizontal: 10,
+          color: '#666',
+        },
+      })
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Create a native build
+
+  Create a native build with EAS Build or a local prebuild, since Apple Authentication is not supported in Expo Go.
+
+  ```bash {{ filename: 'terminal' }}
+  # Using EAS Build
+  eas build --platform ios
+
+  # Or using local prebuild
+  npx expo prebuild && npx expo run:ios --device
+  ```
+</Steps>

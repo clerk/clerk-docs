@@ -1,0 +1,236 @@
+---
+title: '`useAppleSignIn()`'
+description: Clerk's useAppleSignIn() hook provides native Sign in with Apple functionality for iOS devices.
+sdk: expo
+---
+
+> [!NOTE]
+> This hook is only available on iOS devices and requires a native build. It will not work with Expo Go.
+
+The `useAppleSignIn()` hook provides native Sign in with Apple functionality for iOS devices. It automatically handles the ID token exchange with Clerk's Backend and manages the transfer flow between sign-in and sign-up.
+
+### Prerequisites
+
+Before using this hook, ensure you have:
+
+1. **Installed dependencies**: `npx expo install expo-apple-authentication`.
+1. **Configured Apple Developer Console**: Enabled Sign in with Apple capability for your App ID.
+1. **Enabled Apple in the Clerk Dashboard**: Added Apple as an SSO connection.
+1. **Created a native build**: Using EAS Build or local prebuild (does not work with Expo Go).
+
+For complete setup instructions, see the [Sign in with Apple for Expo guide](/docs/guides/configure/auth-strategies/sign-in-with-apple).
+
+## Returns
+
+The `useAppleSignIn()` hook returns the `startAppleSignInFlow()` method, which you can use to initiate the native Apple Sign-In flow.
+
+### `startAppleSignInFlow()`
+
+`startAppleSignInFlow()` has the following function signature:
+
+```ts
+function startAppleSignInFlow(
+  startAppleSignInFlowParams?: StartAppleSignInFlowParams,
+): Promise<StartAppleSignInFlowReturnType>
+```
+
+#### Parameters
+
+`startAppleSignInFlow()` accepts the following parameters (`StartAppleSignInFlowParams`):
+
+<Properties>
+  - `unsafeMetadata?`
+  - [`SignUpUnsafeMetadata`](/docs/reference/javascript/types/metadata#sign-up-unsafe-metadata)
+
+  Metadata that can be read and set from the frontend and the backend. Once the authentication process is complete, the value of this field will be automatically copied to the created user's unsafe metadata (`User.unsafeMetadata`). One common use case is to collect custom information about the user during the authentication process and store it in this property. Read more about [unsafe metadata](/docs/guides/users/extending#unsafe-metadata).
+</Properties>
+
+#### Returns
+
+`startAppleSignInFlow()` returns the following:
+
+<Properties>
+  - `createdSessionId`
+  - `string | null`
+
+  The ID of the session that was created, if authentication is successful.
+
+  ---
+
+  - `setActive?`
+  - `(params: SetActiveParams) => Promise<void>`
+
+  A method used to set the active session and/or organization. Accepts a [`SetActiveParams`](/docs/reference/javascript/types/set-active-params) object.
+
+  ---
+
+  - `signIn?`
+  - <code>[SignIn](/docs/reference/javascript/sign-in) | undefined</code>
+
+  The [`SignIn`](/docs/reference/javascript/sign-in) object that was created, which holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process.
+
+  ---
+
+  - `signUp?`
+  - <code>[SignUp](/docs/reference/javascript/sign-up) | undefined</code>
+
+  The [`SignUp`](/docs/reference/javascript/sign-up) object that was created, which holds the state of the current sign-up and provides helper methods to navigate and complete the sign-up process.
+</Properties>
+
+## How to use the `useAppleSignIn()` hook
+
+### Basic usage
+
+The following example uses the `useAppleSignIn()` hook to manage both sign-in and sign-up flows. Clerk automatically handles the transfer flow based on whether the Apple ID already exists:
+
+- If the Apple ID exists, it completes sign-in.
+- If the Apple ID is new, it creates a new sign-up.
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { useAppleSignIn } from '@clerk/clerk-expo'
+import { useRouter } from 'expo-router'
+import { Alert, Platform, TouchableOpacity, Text } from 'react-native'
+
+export default function SignInPage() {
+  const { startAppleSignInFlow } = useAppleSignIn()
+  const router = useRouter()
+
+  const onAppleSignInPress = async () => {
+    try {
+      const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId })
+        router.replace('/')
+      }
+    } catch (err: any) {
+      // User canceled the sign-in flow
+      if (err.code === 'ERR_REQUEST_CANCELED') {
+        return
+      }
+
+      Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+      console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+    }
+  }
+
+  // Only show on iOS
+  if (Platform.OS !== 'ios') {
+    return null
+  }
+
+  return (
+    <TouchableOpacity onPress={onAppleSignInPress}>
+      <Text>Sign in with Apple</Text>
+    </TouchableOpacity>
+  )
+}
+```
+
+### With custom metadata
+
+The following example demonstrates how to pass custom metadata that will be saved to the user's unsafe metadata during sign-up.
+
+```tsx
+const { startAppleSignInFlow } = useAppleSignIn()
+
+const onAppleSignInPress = async () => {
+  try {
+    const { createdSessionId, setActive } = await startAppleSignInFlow({
+      unsafeMetadata: {
+        referralSource: 'ios-app',
+        signupDate: new Date().toISOString(),
+      },
+    })
+
+    if (createdSessionId && setActive) {
+      await setActive({ session: createdSessionId })
+      // Navigate to home or onboarding
+    }
+  } catch (err: any) {
+    if (err.code === 'ERR_REQUEST_CANCELED') {
+      return
+    }
+    // Handle error
+  }
+}
+```
+
+### Reusable component
+
+The following example demonstrates how to implement a reusable component that works on both sign-in and sign-up pages.
+
+```tsx {{ filename: 'components/AppleSignInButton.tsx', collapsible: true }}
+import { useAppleSignIn } from '@clerk/clerk-expo'
+import { useRouter } from 'expo-router'
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native'
+
+interface AppleSignInButtonProps {
+  onSignInComplete?: () => void
+}
+
+export function AppleSignInButton({ onSignInComplete }: AppleSignInButtonProps) {
+  const { startAppleSignInFlow } = useAppleSignIn()
+  const router = useRouter()
+
+  // Only render on iOS
+  if (Platform.OS !== 'ios') {
+    return null
+  }
+
+  const handleAppleSignIn = async () => {
+    try {
+      const { createdSessionId, setActive } = await startAppleSignInFlow()
+
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId })
+
+        if (onSignInComplete) {
+          onSignInComplete()
+        } else {
+          router.replace('/')
+        }
+      }
+    } catch (err: any) {
+      if (err.code === 'ERR_REQUEST_CANCELED') {
+        return
+      }
+
+      Alert.alert('Error', err.message || 'An error occurred during Apple Sign-In')
+      console.error('Apple Sign-In error:', JSON.stringify(err, null, 2))
+    }
+  }
+
+  return (
+    <TouchableOpacity style={styles.appleButton} onPress={handleAppleSignIn}>
+      <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+    </TouchableOpacity>
+  )
+}
+
+const styles = StyleSheet.create({
+  appleButton: {
+    backgroundColor: '#000',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  appleButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+})
+```
+
+## Error handling
+
+The `useAppleSignIn()` hook may throw errors in the following scenarios:
+
+- **User cancellation**: The user cancels the sign-in flow, resulting in an error with code `ERR_REQUEST_CANCELED`.
+- **Platform error**: The hook is called on a non-iOS platform.
+- **Missing package**: The `expo-apple-authentication` package is not installed.
+- **Authentication failure**: Apple authentication fails or the returned ID token is invalid.
+
+> [!IMPORTANT]
+> Always wrap calls to `startAppleSignInFlow()` in a `try/catch` block, and handle the `ERR_REQUEST_CANCELED` error separately.

@@ -3,7 +3,6 @@ import { remark } from 'remark'
 import reporter from 'vfile-reporter'
 import { visit } from 'unist-util-visit'
 import remarkFrontmatter from 'remark-frontmatter'
-import type { VFile } from 'vfile'
 // import { toString } from 'mdast-util-to-string'
 // import slugify from '@sindresorhus/slugify'
 
@@ -11,7 +10,7 @@ const ERRORS = {
   DOCS_LINKS_MUST_START_WITH_A_SLASH: 'Docs links must start with a slash',
 }
 
-const remarkPluginCheckLinks = () => (tree, file: VFile) => {
+const remarkPluginCheckLinks = () => (tree, file) => {
   visit(tree, function (node) {
     // TODO: Starter logic to begin checking anchor links
     // if (node.type === 'heading') {
@@ -32,7 +31,7 @@ const processor = remark().use(remarkFrontmatter).use(remarkPluginCheckLinks)
 async function main() {
   console.log('🔎 Checking links...')
 
-  const checkedFiles = [] as VFile[]
+  const checkedFiles = []
 
   for await (const file of glob('docs/**/*.mdx')) {
     const contents = await readFile(file, 'utf8')

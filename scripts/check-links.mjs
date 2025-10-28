@@ -33,7 +33,7 @@ async function main() {
 
   const checkedFiles = []
 
-  for await (const file of glob('docs/**/*.mdx')) {
+  for await (const file of glob('./docs/**/*.mdx')) {
     const contents = await readFile(file, 'utf8')
     const result = await processor.process({
       path: file,

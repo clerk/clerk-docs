@@ -28,6 +28,10 @@ export const validateLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
+
+      // we are overwriting the url with the mdx suffix removed
+      node.url = removeMdxSuffix(node.url)
+
       if (node.url.startsWith('docs/')) {
         safeMessage(
           config,
@@ -41,9 +45,6 @@ export const validateLinks =
       }
       if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
       if (!('children' in node)) return node
-
-      // we are overwriting the url with the mdx suffix removed
-      node.url = removeMdxSuffix(node.url)
 
       let [url, hash] = (node.url as string).split('#')
 

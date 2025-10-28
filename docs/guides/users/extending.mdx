@@ -19,319 +19,29 @@ There are three types of metadata: "public", "private", and "unsafe".
 
 ### Public metadata
 
-Public metadata is accessible by both the frontend and the backend, but can only be set on the backend. This is useful for storing data that you want to expose to the frontend, but don't want the user to be able to modify. For example, you could store a user's birthday.
+Public metadata can be read by both the frontend and the backend, but can only be set on the backend. This is useful for storing data that you want to expose to the frontend, but don't want the user to be able to modify. For example, you could store a user's birthday.
+
+#### Access public metadata
+
+To access public metadata on the frontend, it's available on the [`User`](/docs/reference/javascript/user) object, which can be accessed using the [`useUser()`](/docs/reference/hooks/use-user) hook.
+
+To access public metadata on the backend, it's available on the [Backend `User`](/docs/reference/backend/types/backend-user) object which can be accessed using the [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the public metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so _if you are accessing the metadata frequently_, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
 
 #### Set public metadata
 
-<Tabs items={["JS Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
-  <Tab>
-    <Include src="_partials/backend/usage" />
-
-    ```ts {{ filename: 'route.ts' }}
-    export async function POST(req) {
-      const { birthday, userId } = await req.json()
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          birthday,
-        },
-      })
-
-      return Response.json({ success: true })
-    }
-    ```
-
-    <If sdk="nextjs">
-      If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
-
-      ```ts
-      const client = await clerkClient()
-
-      const response = await client.users.updateUserMetadata()
-      ```
-    </If>
-  </Tab>
-
-  <Tab>
-    ```ts {{ filename: 'public.ts' }}
-    import { clerkClient } from '@clerk/express'
-
-    app.post('/updateBirthday', async (req, res) => {
-      const { birthday, userId } = req.body
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        publicMetadata: {
-          birthday,
-        },
-      })
-      res.status(200).json({ success: true })
-    })
-    ```
-  </Tab>
-
-  <Tab>
-    ```go {{ filename: 'public.go' }}
-    var client clerk.Client
-
-    func addStripeCustomerID(user *clerk.User, birthday string) error {
-        Role := map[string]interface{}{
-            "birthday": birthday,
-        }
-      user, err := s.clerkClient.Users().UpdateMetadata(sess.UserID, &clerk.updateMetadataRequest{
-        PublicMetadata: birthday,
-      })
-
-      if err != nil {
-        panic(err)
-      }
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```ruby {{ filename: 'public.rb' }}
-    # ruby json example with a private metadata and stripe id
-    require 'clerk'
-    require 'json'
-
-    birthday = {
-      "birthday": "1990-01-01",
-    }
-
-    clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-    clerk.users.updateMetadata("user_xyz", public_metadata: birthday)
-    ```
-  </Tab>
-
-  <Tab>
-    ```bash {{ filename: 'curl.sh' }}
-    curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-      "public_metadata": {
-        "birthday": "1990-01-01"
-      }
-    }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-    ```
-  </Tab>
-</Tabs>
-
-#### Retrieve public metadata
-
-There are multiple ways to retrieve public metadata.
-
-On the frontend, it's available on the [`User`](/docs/reference/javascript/user) object, which can be accessed using the [`useUser()`](/docs/reference/hooks/use-user) hook.
-
-On the backend, it's available on the [Backend `User`](/docs/reference/backend/types/backend-user) object which can be accessed using the JS Backend SDK's [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the public metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so _if you are retrieving the metadata frequently_, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
+To set public metadata, see the [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) reference.
 
 ### Private metadata
 
-Private metadata is only accessible by the backend and webhook handlers, which makes this useful for storing sensitive data that you don't want to expose to the frontend. For example, you could store a user's Stripe customer ID.
+Private metadata can only be read and set by the backend and webhook handlers, which makes this useful for storing sensitive data that you don't want to expose to the frontend. For example, you could store a user's Stripe customer ID.
+
+#### Access private metadata
+
+To access private metadata on the backend, it's available on the [Backend `User`](/docs/reference/backend/types/backend-user) object which can be accessed using the [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the private metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so _if you are accessing the metadata frequently_, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
 
 #### Set private metadata
 
-<Tabs items={["JS Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
-  <Tab>
-    <Include src="_partials/backend/usage" />
-
-    ```ts {{ filename: 'route.ts' }}
-    export async function POST(req) {
-      const { stripeId, userId } = await req.json()
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        privateMetadata: {
-          stripeId: stripeId,
-        },
-      })
-
-      return Response.json({ success: true })
-    }
-    ```
-
-    <If sdk="nextjs">
-      If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
-
-      ```ts
-      const client = await clerkClient()
-
-      const response = await client.users.updateUserMetadata()
-      ```
-    </If>
-  </Tab>
-
-  <Tab>
-    ```ts {{ filename: 'private.ts' }}
-    import { clerkClient } from '@clerk/express'
-
-    app.post('/updateStripe', async (req, res) => {
-      const { stripeId, userId } = req.body
-
-      await clerkClient.users.updateUserMetadata(userId, {
-        privateMetadata: {
-          stripeId: stripeId,
-        },
-      })
-
-      res.status(200).json({ success: true })
-    })
-    ```
-  </Tab>
-
-  <Tab>
-    ```go {{ filename: 'private.go' }}
-     import 	(
-    	 "context"
-    	 "encoding/json"
-
-       "github.com/clerk/clerk-sdk-go/v2/user"
-    	 "github.com/clerk/clerk-sdk-go/v2"
-     )
-
-    func addStripeCustomerID(userId string, stripeCustomerId string) (*clerk.User, error) {
-      ctx := context.Background()
-
-      metadata := map[string]any{"stripe_id": stripeCustomerId}
-
-      metadataJSON, err := json.Marshal(metadata)
-
-      if err != nil {
-    	  return nil, err
-        }
-
-      rawMessage := json.RawMessage(metadataJSON)
-
-      updatedUser, err := user.UpdateMetadata(ctx, userId, &user.UpdateMetadataParams{
-    	  PrivateMetadata: &rawMessage,
-      })
-
-      if err != nil {
-    	  return nil, err
-      }
-
-      return updatedUser, nil
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```ruby {{ filename: 'private.rb' }}
-    # ruby json example with a private metadata and stripe id
-    require 'clerk'
-    require 'json'
-
-    privateMetadata = {
-      "stripeID": stripeCustomerID
-    }
-
-
-    clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-    clerk.users.updateMetadata("user_xyz", private_metadata: privateMetadata)
-    ```
-  </Tab>
-
-  <Tab>
-    ```bash {{ filename: 'curl.sh' }}
-    curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-      "private_metadata": {
-        "stripeId": "12356"
-      }
-    }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-    ```
-  </Tab>
-</Tabs>
-
-#### Retrieve private metadata
-
-You can retrieve the private metadata for a user by using the JS Backend SDK's [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the private metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so if you are retrieving the metadata frequently, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
-
-<Tabs items={["JS Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
-  <Tab>
-    <Include src="_partials/backend/usage" />
-
-    ```ts {{ filename: 'route.ts' }}
-    export async function GET(req) {
-      const { userId } = await req.json()
-
-      const user = await clerkClient.users.getUser(userId)
-
-      return Response.json(user.privateMetadata)
-    }
-    ```
-
-    <If sdk="nextjs">
-      If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
-
-      ```ts
-      const client = await clerkClient()
-
-      const response = await client.users.getUser()
-      ```
-    </If>
-  </Tab>
-
-  <Tab>
-    ```ts {{ filename: 'private.ts' }}
-    import { clerkClient } from '@clerk/express'
-
-    app.post('/updateStripe', async (req, res) => {
-      const { userId } = req.body
-
-      const user = await clerkClient.users.getUser(userId)
-
-      res.status(200).json(user.privateMetadata)
-    })
-    ```
-  </Tab>
-
-  <Tab>
-    ```go {{ filename: 'private.go' }}
-    import 	(
-    	 "context"
-    	 "encoding/json"
-
-       "github.com/clerk/clerk-sdk-go/v2/user"
-    	 "github.com/clerk/clerk-sdk-go/v2"
-     )
-
-    type PrivateMetadata struct {
-      StripeID string `json:"stripe_id"`
-    }
-
-    func getPrivateMetadata(userId string) (*PrivateMetadata, error) {
-      ctx := context.Background()
-
-      clerkUser, err := user.Get(ctx, userId)
-
-      if err != nil {
-    	  return nil, err
-      }
-
-      privateMetadata := &PrivateMetadata{}
-
-      err = json.Unmarshal(clerkUser.PrivateMetadata, privateMetadata)
-
-      if err != nil {
-    	  return nil, err
-      }
-
-      return privateMetadata, nil
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    ```ruby {{ filename: 'private.rb' }}
-    # ruby json example with a private metadata and stripe id
-    require 'clerk'
-    clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-    clerk.users.getUser("user_xyz")
-    ```
-  </Tab>
-
-  <Tab>
-    ```bash {{ filename: 'curl.sh' }}
-    curl -XGET -H 'Authorization: CLERK_SECRET_KEY' -H "Content-type: application/json" 'https://api.clerk.com/v1/users/{user_id}'
-    ```
-  </Tab>
-</Tabs>
+To set private metadata, see the [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) reference.
 
 ### Unsafe metadata
 
@@ -339,127 +49,21 @@ Unsafe metadata can be both read and set from the frontend and the backend. It's
 
 Unsafe metadata is the only metadata property that can be set during sign-up, so a common use case is to use it in [custom onboarding flows](/docs/guides/development/add-onboarding-flow). Custom data collected during the onboarding (sign-up) flow can be stored in the [`SignUp`](/docs/reference/javascript/sign-up) object. After a successful sign-up, `SignUp.unsafeMetadata` is copied to the `User` object as `User.unsafeMetadata`. From that point on, the unsafe metadata is accessible as a direct attribute of the `User` object.
 
+#### Access unsafe metadata
+
+To access unsafe metadata on the frontend, it's available on the [`User`](/docs/reference/javascript/user) object, which can be accessed using the [`useUser()`](/docs/reference/hooks/use-user) hook.
+
+To access unsafe metadata on the backend, it's available on the [Backend `User`](/docs/reference/backend/types/backend-user) object which can be accessed using the [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the unsafe metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so _if you are accessing the metadata frequently_, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
+
 #### Set unsafe metadata
 
-The following examples demonstrate how to update unsafe metadata for an existing user. Updating `unsafeMetadata` replaces the previous value; it doesn't perform a merge. To merge data, you can pass a combined object such as `{ …user.unsafeMetadata, …newData }` to the `unsafeMetadata` parameter.
+See the following examples to see how to set unsafe metadata on the frontend (client-side) and backend (server-side).
 
-The following examples demonstrate how to update `unsafeMetadata` on the server-side versus the client-side.
-
-<Tabs items={["Server-side", "Client-side"]}>
-  <Tab>
-    <Tabs items={["JS Backend SDK", "Express", "Go", "Ruby", "cURL"]}>
-      <Tab>
-        <Include src="_partials/backend/usage" />
-
-        ```ts {{ filename: 'route.ts' }}
-        export async function POST(req) {
-          const { userId } = await req.json()
-
-          await clerkClient.users.updateUserMetadata(userId, {
-            unsafeMetadata: {
-              birthday: '11-30-1969',
-            },
-          })
-
-          return Response.json({ success: true })
-        }
-        ```
-
-        <If sdk="nextjs">
-          If you're using Next.js, you must `await` the instantiation of the `clerkClient` instance, like so:
-
-          ```ts
-          const client = await clerkClient()
-
-          const response = await client.users.updateUserMetadata()
-          ```
-        </If>
-      </Tab>
-
-      <Tab>
-        ```ts {{ filename: 'private.ts' }}
-        import { clerkClient } from '@clerk/express'
-
-        app.post('/updateStripe', async (req, res) => {
-          const { stripeId, userId } = await req.body
-
-          await clerkClient.users.updateUserMetadata(userId, {
-            unsafeMetadata: {
-              birthday: '11-30-1969',
-            },
-          })
-
-          res.status(200).json({ success: true })
-        })
-        ```
-      </Tab>
-
-      <Tab>
-        ```go {{ filename: 'private.go' }}
-        import 	(
-        	 "context"
-        	 "encoding/json"
-
-           "github.com/clerk/clerk-sdk-go/v2/user"
-        	 "github.com/clerk/clerk-sdk-go/v2"
-         )
-
-        func addBirthdayToUser(userId string, birthday string) (*clerk.User, error) {
-          ctx := context.Background()
-
-          metadata := map[string]any{"birthday": birthday}
-
-          metadataJSON, err := json.Marshal(metadata)
-
-          if err != nil {
-        	  return nil, err
-          }
-
-          rawMessage := json.RawMessage(metadataJSON)
-
-          updatedUser, err := user.UpdateMetadata(ctx, userId, &user.UpdateMetadataParams{
-        	  UnsafeMetadata: &rawMessage,
-          })
-
-          if err != nil {
-        	  return nil, err
-          }
-
-          return updatedUser, nil
-        }
-        ```
-      </Tab>
-
-      <Tab>
-        ```ruby {{ filename: 'private.rb' }}
-        require 'clerk'
-        require 'json'
-
-        unsafeMetadata = {
-          "birthday": "04-20-1969"
-        }
-
-        clerk = Clerk::SDK.new(api_key: "your_clerk_secret_key")
-        clerk.users.updateMetadata("user_123", unsafe_metadata: unsafeMetadata)
-        ```
-      </Tab>
-
-      <Tab>
-        ```bash {{ filename: 'curl.sh' }}
-        curl -XPATCH -H 'Authorization: Bearer CLERK_SECRET_KEY' -H "Content-type: application/json" -d '{
-          "unsafe_metadata": {
-            "birthday": "11-30-1969"
-          }
-        }' 'https://api.clerk.com/v1/users/{user_id}/metadata'
-        ```
-      </Tab>
-    </Tabs>
-  </Tab>
-
+<Tabs items={["Client-side", "Server-side"]}>
   <Tab>
     <Tabs items={["React-based SDKs", "JavaScript"]}>
       <Tab>
-        For React-based SDKs, such as Next.js, Tanstack React Start, and React Router, use the [`useUser()`](/docs/reference/hooks/use-user) hook to update unsafe metadata.
+        For React-based SDKs, such as Next.js, use the [`useUser()`](/docs/reference/hooks/use-user) hook to update unsafe metadata.
 
         ```tsx {{ filename: 'page.tsx' }}
         export default function Page() {
@@ -519,15 +123,11 @@ The following examples demonstrate how to update `unsafeMetadata` on the server-
       </Tab>
     </Tabs>
   </Tab>
+
+  <Tab>
+    To update unsafe metadata on the server-side, see the [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) reference.
+  </Tab>
 </Tabs>
-
-#### Retrieve unsafe metadata
-
-There are multiple ways to retrieve unsafe metadata.
-
-On the frontend, it's available on the [`User`](/docs/reference/javascript/user) object, which can be accessed using the [`useUser()`](/docs/reference/hooks/use-user) hook.
-
-On the backend, it's available on the [Backend `User`](/docs/reference/backend/types/backend-user) object which can be accessed using the JS Backend SDK's [`getUser()`](/docs/reference/backend/user/get-user) method. This method will return the `User` object which contains the unsafe metadata. However, this method is subject to [rate limits](/docs/guides/how-clerk-works/system-limits#backend-api-requests), so if you are retrieving the metadata frequently, it's recommended to [attach it to the user's session token](#metadata-in-the-session-token).
 
 ## Metadata in the session token
 

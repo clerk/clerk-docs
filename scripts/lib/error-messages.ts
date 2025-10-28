@@ -68,6 +68,8 @@ export const errorMessages = {
   'link-doc-not-found': (url: string, file: string): string =>
     `Matching file not found for path: ${url}. Expected file to exist at ${file}`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
+  'doc-link-must-start-with-a-slash': (url: string): string =>
+    `Doc link much start with a slash (/docs/...). Fix url: ${url}`,
 
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,

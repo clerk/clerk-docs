@@ -28,6 +28,17 @@ export const validateLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
+      if (node.url.startsWith('docs/')) {
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'doc-link-must-start-with-a-slash',
+          [node.url as string],
+          node.position,
+        )
+      }
       if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
       if (!('children' in node)) return node
 

@@ -4305,6 +4305,39 @@ sdk: react, nextjs
       `<SDKLink href="/docs/:sdk:/guide-2" sdks={["react","nextjs"]} code={true}>\\<Guide 2></SDKLink>`,
     )
   })
+
+  test('Should prevent doc links not starting with a slash', async () => {
+    const title = 'Docs link missing starting slash'
+    const href = '/docs/missing-starting-slash'
+    const badDocLink = 'docs/link-to-something'
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title, href }]],
+        }),
+      },
+      {
+        path: `.${href}.mdx`,
+        content: `---
+title: ${title}
+description: Page description
+---
+
+[Doc Link](${badDocLink})`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react'],
+      }),
+    )
+
+    expect(output).toContain(`Doc link must start with a slash (/docs/...). Fix url: ${badDocLink}`)
+  })
 })
 
 describe('Path and File Handling', () => {

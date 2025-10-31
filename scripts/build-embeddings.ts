@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
 import { chunkByHeadings, estimateTokens, extractFrontmatter, extractTextFromMdx } from './lib/embeddings'
+import { VALID_SDKS, type SDK } from './lib/schemas'
 
 interface DirectoryEntry {
   path: string
@@ -17,6 +18,8 @@ interface EmbeddingChunk {
   title: string
   chunk_index: number
   file_path: string
+  sdk?: SDK // SDK extracted from URL
+  base_url?: string // URL without SDK prefix (for grouping SDK variants)
 }
 
 interface EmbeddingsFile {
@@ -26,6 +29,44 @@ interface EmbeddingsFile {
 const EMBEDDING_MODEL = 'text-embedding-3-small'
 const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
 const MAX_TOKENS_PER_CHUNK = 8192 // OpenAI's maximum context length
+
+/**
+ * Extract SDK from URL path
+ * URLs like /docs/react/hooks/use-user -> 'react'
+ * URLs like /docs/guides/overview -> undefined (core doc)
+ */
+function extractSDKFromURL(url: string): SDK | undefined {
+  const segments = url.split('/').filter(Boolean)
+  if (segments.length < 2 || segments[0] !== 'docs') {
+    return undefined
+  }
+
+  const possibleSDK = segments[1]
+  if (VALID_SDKS.includes(possibleSDK as SDK)) {
+    return possibleSDK as SDK
+  }
+
+  return undefined
+}
+
+/**
+ * Get base URL without SDK prefix
+ * /docs/react/hooks/use-user -> /docs/hooks/use-user
+ * /docs/guides/overview -> /docs/guides/overview (no change)
+ */
+function getBaseURL(url: string, sdk?: SDK): string {
+  if (!sdk) {
+    return url
+  }
+
+  const segments = url.split('/').filter(Boolean)
+  if (segments.length >= 2 && segments[0] === 'docs' && segments[1] === sdk) {
+    // Remove SDK segment and reconstruct URL
+    return `/docs/${segments.slice(2).join('/')}`
+  }
+
+  return url
+}
 
 async function main() {
   const args = process.argv.slice(2)
@@ -189,6 +230,8 @@ async function main() {
           const embedding = response.data[0].embedding
 
           const chunkId = `${result.url}-chunk-${i}`
+          const sdk = extractSDKFromURL(result.url)
+          const baseUrl = getBaseURL(result.url, sdk)
 
           allChunks.push({
             id: chunkId,
@@ -198,6 +241,8 @@ async function main() {
             title: result.title,
             chunk_index: i,
             file_path: result.filePath,
+            sdk,
+            base_url: baseUrl,
           })
 
           // Progress indicator

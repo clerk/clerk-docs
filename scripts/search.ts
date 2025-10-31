@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
 import { cosineSimilarity } from './lib/embeddings'
+import { VALID_SDKS, type SDK } from './lib/schemas'
 
 interface EmbeddingChunk {
   id: string
@@ -12,6 +13,8 @@ interface EmbeddingChunk {
   title: string
   chunk_index: number
   file_path: string
+  sdk?: SDK
+  base_url?: string
 }
 
 interface EmbeddingsFile {
@@ -74,22 +77,24 @@ async function main() {
   const args = process.argv.slice(2)
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: npm run search -- <query> [--limit N]')
+    console.log('Usage: npm run search -- <query> [--limit N] [--sdk SDK]')
     console.log('')
     console.log('Options:')
     console.log('  --limit N    Maximum number of results (default: 10)')
+    console.log('  --sdk SDK    Filter results by SDK (e.g., react, nextjs)')
     console.log('  --help, -h  Show this help message')
     console.log('')
     console.log('Examples:')
     console.log('  npm run search -- "authentication"')
     console.log('  npm run search -- "how to setup clerk" --limit 5')
+    console.log('  npm run search -- "use user hook" --sdk react')
     process.exit(0)
   }
 
   const query = args.filter((arg) => !arg.startsWith('--'))[0]
   if (!query) {
     console.error('Error: Query is required')
-    console.error('Usage: npm run search -- <query> [--limit N]')
+    console.error('Usage: npm run search -- <query> [--limit N] [--sdk SDK]')
     process.exit(1)
   }
 
@@ -103,10 +108,24 @@ async function main() {
     process.exit(1)
   }
 
+  const sdkArg = args.find((arg) => arg.startsWith('--sdk'))
+  const userSDK = sdkArg
+    ? (sdkArg.split('=')[1] || args[args.indexOf(sdkArg) + 1]) as SDK
+    : undefined
+
+  if (userSDK && !VALID_SDKS.includes(userSDK)) {
+    console.error(`Error: Invalid SDK "${userSDK}"`)
+    console.error(`Valid SDKs: ${VALID_SDKS.join(', ')}`)
+    process.exit(1)
+  }
+
   const maxLimit = Math.min(limit, 50)
 
   try {
     console.log(`🔍 Searching for: "${query}"`)
+    if (userSDK) {
+      console.log(`📱 Filtering by SDK: ${userSDK}`)
+    }
     console.log(`📊 Loading embeddings...`)
 
     const embeddings = await loadEmbeddings()
@@ -121,7 +140,36 @@ async function main() {
       score: cosineSimilarity(queryEmbedding, chunk.embedding),
     }))
 
-    const topResults = scoredChunks
+    // Filter by SDK if specified
+    let filteredChunks = scoredChunks
+    if (userSDK) {
+      // Group by base_url (or url if no base_url)
+      const groupedByBaseUrl = new Map<string, typeof scoredChunks>()
+      for (const chunk of scoredChunks) {
+        const key = chunk.base_url || chunk.url
+        if (!groupedByBaseUrl.has(key)) {
+          groupedByBaseUrl.set(key, [])
+        }
+        groupedByBaseUrl.get(key)!.push(chunk)
+      }
+
+      // For each group, pick the best match for user's SDK
+      filteredChunks = []
+      for (const group of groupedByBaseUrl.values()) {
+        // Find chunk matching user's SDK
+        const sdkMatch = group.find((chunk) => chunk.sdk === userSDK)
+        if (sdkMatch) {
+          // User's SDK has a variant - use it
+          filteredChunks.push(sdkMatch)
+        } else {
+          // User's SDK doesn't have a variant - use highest scoring variant
+          const bestMatch = group.sort((a, b) => b.score - a.score)[0]
+          filteredChunks.push(bestMatch)
+        }
+      }
+    }
+
+    const topResults = filteredChunks
       .sort((a, b) => b.score - a.score)
       .slice(0, maxLimit)
       .map((chunk) => ({

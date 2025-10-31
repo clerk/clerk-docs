@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
 import { cosineSimilarity } from '../scripts/lib/embeddings'
+import { VALID_SDKS, type SDK } from '../scripts/lib/schemas'
 
 export const config = {
   runtime: 'nodejs',
@@ -10,6 +11,7 @@ export const config = {
 interface SearchRequest {
   query: string
   limit?: number
+  sdk?: SDK
 }
 
 interface EmbeddingChunk {
@@ -20,6 +22,8 @@ interface EmbeddingChunk {
   title: string
   chunk_index: number
   file_path: string
+  sdk?: SDK
+  base_url?: string
 }
 
 interface EmbeddingsFile {
@@ -121,6 +125,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     const limit = body.limit && body.limit > 0 ? Math.min(body.limit, 50) : 10
+    const userSDK = body.sdk && VALID_SDKS.includes(body.sdk) ? body.sdk : undefined
 
     // Load embeddings
     const embeddings = await loadEmbeddings()
@@ -134,8 +139,37 @@ export default async function handler(request: Request): Promise<Response> {
       score: cosineSimilarity(queryEmbedding, chunk.embedding),
     }))
 
+    // Filter by SDK if specified
+    let filteredChunks = scoredChunks
+    if (userSDK) {
+      // Group by base_url (or url if no base_url)
+      const groupedByBaseUrl = new Map<string, typeof scoredChunks>()
+      for (const chunk of scoredChunks) {
+        const key = chunk.base_url || chunk.url
+        if (!groupedByBaseUrl.has(key)) {
+          groupedByBaseUrl.set(key, [])
+        }
+        groupedByBaseUrl.get(key)!.push(chunk)
+      }
+
+      // For each group, pick the best match for user's SDK
+      filteredChunks = []
+      for (const group of groupedByBaseUrl.values()) {
+        // Find chunk matching user's SDK
+        const sdkMatch = group.find((chunk) => chunk.sdk === userSDK)
+        if (sdkMatch) {
+          // User's SDK has a variant - use it
+          filteredChunks.push(sdkMatch)
+        } else {
+          // User's SDK doesn't have a variant - use highest scoring variant
+          const bestMatch = group.sort((a, b) => b.score - a.score)[0]
+          filteredChunks.push(bestMatch)
+        }
+      }
+    }
+
     // Sort by score (descending) and take top N
-    const topResults = scoredChunks
+    const topResults = filteredChunks
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map((chunk) => ({

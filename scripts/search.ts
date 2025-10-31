@@ -1,27 +1,7 @@
 import 'dotenv/config'
-import fs from 'node:fs/promises'
 import path from 'node:path'
-import OpenAI from 'openai'
-import { cosineSimilarity, estimateTokens } from './lib/embeddings'
 import { VALID_SDKS, type SDK } from './lib/schemas'
-
-const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
-
-interface EmbeddingChunk {
-  id: string
-  content: string
-  embedding: number[]
-  url: string
-  title: string
-  chunk_index: number
-  file_path: string
-  sdk?: SDK
-  base_url?: string
-}
-
-interface EmbeddingsFile {
-  chunks: EmbeddingChunk[]
-}
+import { loadEmbeddings, performSearch, type EmbeddingChunk } from './lib/search'
 
 interface SearchResult {
   url: string
@@ -29,39 +9,6 @@ interface SearchResult {
   content: string
   score: number
   chunk_index: number
-}
-
-async function loadEmbeddings(): Promise<EmbeddingChunk[]> {
-  const distPath = path.resolve(__dirname, '../dist')
-  const embeddingsPath = path.join(distPath, 'embeddings.json')
-
-  try {
-    const content = await fs.readFile(embeddingsPath, 'utf-8')
-    const embeddingsFile: EmbeddingsFile = JSON.parse(content)
-    return embeddingsFile.chunks
-  } catch (error) {
-    throw new Error(`Failed to load embeddings: ${error}`)
-  }
-}
-
-async function generateQueryEmbedding(query: string): Promise<number[]> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is not set')
-  }
-
-  const openai = new OpenAI({ apiKey })
-
-  try {
-    const response = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: query,
-    })
-
-    return response.data[0].embedding
-  } catch (error) {
-    throw new Error(`Failed to generate query embedding: ${error}`)
-  }
 }
 
 function formatResult(result: SearchResult, index: number): string {
@@ -126,59 +73,23 @@ async function main() {
     }
     console.log(`📊 Loading embeddings...`)
 
-    const embeddings = await loadEmbeddings()
+    const distPath = path.resolve(__dirname, '../dist')
+    const embeddings = await loadEmbeddings(distPath)
     console.log(`✓ Loaded ${embeddings.length.toLocaleString()} chunks`)
 
     console.log(`🤖 Generating query embedding...`)
-    const queryTokens = estimateTokens(query)
-    const queryEmbedding = await generateQueryEmbedding(query)
-    const queryCost = (queryTokens / 1000) * PRICE_PER_1K_TOKENS
+    const searchResult = await performSearch(query, embeddings, userSDK, maxLimit)
+    const queryCost = searchResult.cost
+    const queryTokens = searchResult.tokens
 
     console.log(`🔎 Calculating similarity scores...`)
-    const scoredChunks = embeddings.map((chunk) => ({
-      ...chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding),
+    const topResults = searchResult.chunks.map((chunk) => ({
+      url: chunk.url,
+      title: chunk.title,
+      content: chunk.content,
+      score: Math.round(chunk.score * 1000) / 1000,
+      chunk_index: chunk.chunk_index,
     }))
-
-    // Filter by SDK if specified
-    let filteredChunks = scoredChunks
-    if (userSDK) {
-      // Group by base_url (or url if no base_url)
-      const groupedByBaseUrl = new Map<string, typeof scoredChunks>()
-      for (const chunk of scoredChunks) {
-        const key = chunk.base_url || chunk.url
-        if (!groupedByBaseUrl.has(key)) {
-          groupedByBaseUrl.set(key, [])
-        }
-        groupedByBaseUrl.get(key)!.push(chunk)
-      }
-
-      // For each group, pick the best match for user's SDK
-      filteredChunks = []
-      for (const group of groupedByBaseUrl.values()) {
-        // Find chunk matching user's SDK
-        const sdkMatch = group.find((chunk) => chunk.sdk === userSDK)
-        if (sdkMatch) {
-          // User's SDK has a variant - use it
-          filteredChunks.push(sdkMatch)
-        } else {
-          // User's SDK doesn't have a variant - use highest scoring variant
-          const bestMatch = group.sort((a, b) => b.score - a.score)[0]
-          filteredChunks.push(bestMatch)
-        }
-      }
-    }
-
-    const topResults = filteredChunks
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxLimit)
-      .map((chunk) => ({
-        url: chunk.url,
-        title: chunk.title,
-        content: chunk.content,
-        score: Math.round(chunk.score * 1000) / 1000,
-        chunk_index: chunk.chunk_index,
-      }))
 
     console.log(`\n📋 Top ${topResults.length} results:\n`)
     console.log('='.repeat(80))

@@ -1189,8 +1189,8 @@ The `<Include />` component can be used to inject the contents of another MDX fi
 
 There are two types of partials you can use:
 
-1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document
-2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them
+1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document.
+2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them.
 
 The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
 
@@ -1206,9 +1206,9 @@ Global partials are stored in `/docs/_partials/` and can be included from any do
 
 Global partials are best for:
 
-- Content that is reused across many different sections of the documentation
-- Shared components, code examples, or explanations that apply broadly
-- Content that doesn't belong to a specific topic area
+- Content that is reused across many different sections of the documentation.
+- Shared components, code examples, or explanations that apply broadly.
+- Content that doesn't belong to a specific topic area.
 
 #### Relative partials
 
@@ -1232,9 +1232,9 @@ If you have a document at `docs/billing/plans/premium.mdx` and a partial at `doc
 
 Relative partials are best for:
 
-- Content that is specific to a particular section or topic area (e.g., billing-specific instructions)
-- Content that is only used by a few documents in the same directory structure
-- Organizing partials near the documents that use them for better maintainability
+- Content that is specific to a particular section or topic area (e.g., billing-specific instructions).
+- Content that is only used by a few documents in the same directory structure.
+- Organizing partials near the documents that use them for better maintainability.
 
 ### `<Typedoc />`
 

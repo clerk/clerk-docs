@@ -1185,13 +1185,56 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. This way, you write the content once and only have to maintain it in one place.
+
+There are two types of partials you can use:
+
+1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document
+2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them
+
+The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
+
+#### Global partials
+
+Global partials are stored in `/docs/_partials/` and can be included from any document using a path starting with `_partials/`:
 
 ```mdx
 {/* Render `docs/_partials/code-example.mdx` */}
 
 <Include src="_partials/code-example" />
 ```
+
+Global partials are best for:
+
+- Content that is reused across many different sections of the documentation
+- Shared components, code examples, or explanations that apply broadly
+- Content that doesn't belong to a specific topic area
+
+#### Relative partials
+
+Relative partials are stored in `_partials/` folders within subdirectories and can be included using relative paths (`./` or `../`). The path is resolved relative to the document's directory.
+
+**Same directory:**
+
+If you have a document at `docs/billing/for-b2c.mdx` and a partial at `docs/billing/_partials/pricing-table.mdx`:
+
+```mdx
+<Include src="./_partials/pricing-table" />
+```
+
+**Parent directory:**
+
+If you have a document at `docs/billing/plans/premium.mdx` and a partial at `docs/billing/_partials/shared-content.mdx`:
+
+```mdx
+<Include src="../_partials/shared-content" />
+```
+
+Relative partials are best for:
+
+- Content that is specific to a particular section or topic area (e.g., billing-specific instructions)
+- Content that is only used by a few documents in the same directory structure
+- Organizing partials near the documents that use them for better maintainability
 
 ### `<Typedoc />`
 

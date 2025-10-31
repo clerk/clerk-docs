@@ -71,6 +71,7 @@ function getBaseURL(url: string, sdk?: SDK): string {
 async function main() {
   const args = process.argv.slice(2)
   const skipConfirmation = args.includes('--skip-confirmation') || args.includes('-y')
+  const costCheck = args.includes('--cost-check') || args.includes('--estimate-cost')
 
   // Check for OpenAI API key
   const apiKey = process.env.OPENAI_API_KEY
@@ -99,8 +100,12 @@ async function main() {
 
   console.log(`✓ Found ${directoryEntries.length} files in directory.json\n`)
 
-  // Phase 1: Analysis & Cost Estimation
-  console.log('📊 Phase 1: Analyzing files and estimating costs...\n')
+  // Phase 1: Analyze files (always needed for Phase 2)
+  if (costCheck) {
+    console.log('📊 Phase 1: Analyzing files and estimating costs...\n')
+  } else {
+    console.log('📊 Analyzing files...\n')
+  }
 
   const analysisResults: Array<{
     filePath: string
@@ -156,41 +161,45 @@ async function main() {
     }
   }
 
-  // Calculate estimated cost
-  const estimatedCost = (totalTokens / 1000) * PRICE_PER_1K_TOKENS
+  // Only show cost estimation and prompt if --cost-check flag is set
+  if (costCheck) {
+    // Calculate estimated cost
+    const estimatedCost = (totalTokens / 1000) * PRICE_PER_1K_TOKENS
 
-  console.log('='.repeat(60))
-  console.log('📊 Cost Estimation Summary')
-  console.log('='.repeat(60))
-  console.log(`Files to process:     ${totalFiles}`)
-  console.log(`Total chunks:         ${totalChunks}`)
-  console.log(`Total tokens:         ${totalTokens.toLocaleString()}`)
-  console.log(`Estimated cost:       $${estimatedCost.toFixed(4)}`)
-  console.log('='.repeat(60))
-  console.log()
+    console.log('='.repeat(60))
+    console.log('📊 Cost Estimation Summary')
+    console.log('='.repeat(60))
+    console.log(`Files to process:     ${totalFiles}`)
+    console.log(`Total chunks:         ${totalChunks}`)
+    console.log(`Total tokens:         ${totalTokens.toLocaleString()}`)
+    console.log(`Estimated cost:       $${estimatedCost.toFixed(4)}`)
+    console.log('='.repeat(60))
+    console.log()
 
-  // Ask for confirmation
-  if (!skipConfirmation) {
-    const readline = await import('readline')
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    })
+    // Ask for confirmation
+    if (!skipConfirmation) {
+      const readline = await import('readline')
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      })
 
-    const answer = await new Promise<string>((resolve) => {
-      rl.question('Continue with embedding generation? (y/n): ', resolve)
-    })
+      const answer = await new Promise<string>((resolve) => {
+        rl.question('Continue with embedding generation? (y/n): ', resolve)
+      })
 
-    rl.close()
+      rl.close()
 
-    if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
-      console.log('Aborted.')
-      process.exit(0)
+      if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+        console.log('Aborted.')
+        process.exit(0)
+      }
     }
+
+    console.log()
   }
 
-  console.log()
-  console.log('🚀 Phase 2: Generating embeddings...\n')
+  console.log('🚀 Generating embeddings...\n')
 
   // Phase 2: Generate embeddings
   const allChunks: EmbeddingChunk[] = []

@@ -25,6 +25,7 @@ interface EmbeddingsFile {
 
 const EMBEDDING_MODEL = 'text-embedding-3-small'
 const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
+const MAX_TOKENS_PER_CHUNK = 8192 // OpenAI's maximum context length
 
 async function main() {
   const args = process.argv.slice(2)
@@ -169,6 +170,16 @@ async function main() {
         processedChunks++
 
         try {
+          // Safety check: verify chunk doesn't exceed token limit
+          const chunkTokens = estimateTokens(chunk.content)
+          if (chunkTokens > MAX_TOKENS_PER_CHUNK) {
+            errors++
+            console.warn(
+              `  ⚠️  Skipping chunk ${i} in ${result.filePath}: ${chunkTokens} tokens exceeds limit of ${MAX_TOKENS_PER_CHUNK}`,
+            )
+            continue
+          }
+
           // Generate embedding
           const response = await openaiClient.embeddings.create({
             model: EMBEDDING_MODEL,
@@ -195,7 +206,8 @@ async function main() {
           }
         } catch (error) {
           errors++
-          console.warn(`  ⚠️  Failed to generate embedding for chunk ${i} in ${result.filePath}: ${error}`)
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          console.warn(`  ⚠️  Failed to generate embedding for chunk ${i} in ${result.filePath}: ${errorMessage}`)
         }
       }
     } catch (error) {

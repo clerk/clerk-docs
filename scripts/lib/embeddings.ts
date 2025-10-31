@@ -119,9 +119,105 @@ export function estimateTokens(text: string): number {
 }
 
 /**
+ * Split a chunk that exceeds the maximum token limit
+ */
+function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
+  const content = chunk.content
+  const tokens = estimateTokens(content)
+
+  if (tokens <= maxTokens) {
+    return [chunk]
+  }
+
+  // Try splitting by paragraphs first
+  const paragraphs = content.split(/\n\n+/)
+  const splitChunks: Chunk[] = []
+  let currentSplit = ''
+  let currentTokens = 0
+
+  for (const para of paragraphs) {
+    const paraTokens = estimateTokens(para)
+
+    // If adding this paragraph would exceed limit, save current split
+    if (currentTokens + paraTokens > maxTokens && currentSplit) {
+      splitChunks.push({
+        content: currentSplit.trim(),
+        headingContext: [...chunk.headingContext],
+        startIndex: chunk.startIndex,
+        endIndex: chunk.endIndex,
+      })
+      currentSplit = para
+      currentTokens = paraTokens
+    } else {
+      currentSplit += (currentSplit ? '\n\n' : '') + para
+      currentTokens += paraTokens
+    }
+  }
+
+  // Add remaining content
+  if (currentSplit.trim()) {
+    splitChunks.push({
+      content: currentSplit.trim(),
+      headingContext: [...chunk.headingContext],
+      startIndex: chunk.startIndex,
+      endIndex: chunk.endIndex,
+    })
+  }
+
+  // If still too large, split by sentences
+  const finalChunks: Chunk[] = []
+  for (const splitChunk of splitChunks) {
+    const splitTokens = estimateTokens(splitChunk.content)
+    if (splitTokens > maxTokens) {
+      // Split by sentences (period, exclamation, question mark followed by space)
+      const sentences = splitChunk.content.split(/([.!?]\s+)/)
+      let currentSentence = ''
+      let currentSentenceTokens = 0
+
+      for (let i = 0; i < sentences.length; i++) {
+        const sentence = sentences[i]
+        const sentenceTokens = estimateTokens(sentence)
+
+        if (currentSentenceTokens + sentenceTokens > maxTokens && currentSentence) {
+          finalChunks.push({
+            content: currentSentence.trim(),
+            headingContext: [...splitChunk.headingContext],
+            startIndex: splitChunk.startIndex,
+            endIndex: splitChunk.endIndex,
+          })
+          currentSentence = sentence
+          currentSentenceTokens = sentenceTokens
+        } else {
+          currentSentence += sentence
+          currentSentenceTokens += sentenceTokens
+        }
+      }
+
+      if (currentSentence.trim()) {
+        finalChunks.push({
+          content: currentSentence.trim(),
+          headingContext: [...splitChunk.headingContext],
+          startIndex: splitChunk.startIndex,
+          endIndex: splitChunk.endIndex,
+        })
+      }
+    } else {
+      finalChunks.push(splitChunk)
+    }
+  }
+
+  return finalChunks
+}
+
+/**
  * Chunk content by headings with smart merging/splitting
+ * Ensures chunks are between 200-7000 tokens (max 7000 to leave buffer for OpenAI's 8192 limit)
  */
 export function chunkByHeadings(content: string): Chunk[] {
+  const MAX_TOKENS = 7000 // Leave buffer for OpenAI's 8192 limit
+  const MIN_TOKENS = 200
+  const TARGET_MAX_TOKENS = 800
+
   const lines = content.split('\n')
   const chunks: Chunk[] = []
   let currentChunk: { content: string; headingContext: string[]; startIndex: number } | null = null
@@ -160,8 +256,8 @@ export function chunkByHeadings(content: string): Chunk[] {
         const chunkContent = currentChunk.content.trim()
         const tokens = estimateTokens(chunkContent)
 
-        // If chunk is too small (< 200 tokens), merge with next section
-        if (tokens < 200) {
+        // If chunk is too small (< MIN_TOKENS), merge with next section
+        if (tokens < MIN_TOKENS) {
           currentChunk.content += line + '\n'
           currentChunk.headingContext.push(h3Match[1])
         } else {
@@ -191,6 +287,20 @@ export function chunkByHeadings(content: string): Chunk[] {
       // Regular content line
       if (currentChunk) {
         currentChunk.content += line + '\n'
+
+        // Check if adding this line would exceed target max tokens
+        const tokens = estimateTokens(currentChunk.content)
+        if (tokens > TARGET_MAX_TOKENS) {
+          // Save current chunk
+          const chunkContent = currentChunk.content.trim()
+          chunks.push({
+            content: chunkContent,
+            headingContext: [...currentChunk.headingContext],
+            startIndex: currentChunk.startIndex,
+            endIndex: i,
+          })
+          currentChunk = null
+        }
       } else {
         // Content without heading - create a chunk for it
         currentChunk = {
@@ -201,38 +311,29 @@ export function chunkByHeadings(content: string): Chunk[] {
       }
     }
 
-    // Check if current chunk is too large (> 800 tokens)
+    // Safety check: if current chunk exceeds MAX_TOKENS, force split it
     if (currentChunk) {
       const tokens = estimateTokens(currentChunk.content)
-      if (tokens > 800) {
-        // Split at paragraph boundaries
-        const paragraphs = currentChunk.content.split(/\n\n+/)
-        let currentSplit = ''
-        let splitStart = currentChunk.startIndex
-
-        for (let j = 0; j < paragraphs.length; j++) {
-          const para = paragraphs[j]
-          const paraTokens = estimateTokens(currentSplit + para)
-
-          if (paraTokens > 800 && currentSplit) {
-            // Save current split
-            chunks.push({
-              content: currentSplit.trim(),
-              headingContext: [...currentChunk.headingContext],
-              startIndex: splitStart,
-              endIndex: i - (paragraphs.length - j),
-            })
-            currentSplit = para + '\n\n'
-            splitStart = i - (paragraphs.length - j) + 1
-          } else {
-            currentSplit += para + '\n\n'
-          }
+      if (tokens > MAX_TOKENS) {
+        // Split immediately
+        const chunkContent = currentChunk.content.trim()
+        const tempChunk: Chunk = {
+          content: chunkContent,
+          headingContext: [...currentChunk.headingContext],
+          startIndex: currentChunk.startIndex,
+          endIndex: i,
         }
+        const splitChunks = splitOversizedChunk(tempChunk, MAX_TOKENS)
+        chunks.push(...splitChunks.slice(0, -1)) // Add all but last
 
-        // Update current chunk with remaining content
-        if (currentSplit.trim()) {
-          currentChunk.content = currentSplit.trim()
-          currentChunk.startIndex = splitStart
+        // Continue with last split chunk
+        if (splitChunks.length > 0) {
+          const lastChunk = splitChunks[splitChunks.length - 1]
+          currentChunk = {
+            content: lastChunk.content,
+            headingContext: lastChunk.headingContext,
+            startIndex: lastChunk.startIndex,
+          }
         } else {
           currentChunk = null
         }
@@ -259,18 +360,38 @@ export function chunkByHeadings(content: string): Chunk[] {
     const chunk = chunks[i]
     const tokens = estimateTokens(chunk.content)
 
-    if (tokens < 200 && mergedChunks.length > 0) {
-      // Merge with previous chunk
+    if (tokens < MIN_TOKENS && mergedChunks.length > 0) {
+      // Merge with previous chunk, but check if result would exceed MAX_TOKENS
       const prevChunk = mergedChunks[mergedChunks.length - 1]
-      prevChunk.content += '\n\n' + chunk.content
-      prevChunk.headingContext = [...new Set([...prevChunk.headingContext, ...chunk.headingContext])]
-      prevChunk.endIndex = chunk.endIndex
+      const mergedContent = prevChunk.content + '\n\n' + chunk.content
+      const mergedTokens = estimateTokens(mergedContent)
+
+      if (mergedTokens <= MAX_TOKENS) {
+        prevChunk.content = mergedContent
+        prevChunk.headingContext = [...new Set([...prevChunk.headingContext, ...chunk.headingContext])]
+        prevChunk.endIndex = chunk.endIndex
+      } else {
+        // Can't merge, add as separate chunk
+        mergedChunks.push(chunk)
+      }
     } else {
       mergedChunks.push(chunk)
     }
   }
 
-  return mergedChunks
+  // Final pass: split any chunks that still exceed MAX_TOKENS
+  const finalChunks: Chunk[] = []
+  for (const chunk of mergedChunks) {
+    const tokens = estimateTokens(chunk.content)
+    if (tokens > MAX_TOKENS) {
+      const splitChunks = splitOversizedChunk(chunk, MAX_TOKENS)
+      finalChunks.push(...splitChunks)
+    } else {
+      finalChunks.push(chunk)
+    }
+  }
+
+  return finalChunks
 }
 
 /**

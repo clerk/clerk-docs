@@ -101,9 +101,7 @@ async function main() {
   }
 
   const limitArg = args.find((arg) => arg.startsWith('--limit'))
-  const limit = limitArg
-    ? parseInt(limitArg.split('=')[1] || args[args.indexOf(limitArg) + 1], 10)
-    : 10
+  const limit = limitArg ? parseInt(limitArg.split('=')[1] || args[args.indexOf(limitArg) + 1], 10) : 10
 
   if (isNaN(limit) || limit <= 0) {
     console.error('Error: Invalid limit value')
@@ -111,9 +109,7 @@ async function main() {
   }
 
   const sdkArg = args.find((arg) => arg.startsWith('--sdk'))
-  const userSDK = sdkArg
-    ? (sdkArg.split('=')[1] || args[args.indexOf(sdkArg) + 1]) as SDK
-    : undefined
+  const userSDK = sdkArg ? ((sdkArg.split('=')[1] || args[args.indexOf(sdkArg) + 1]) as SDK) : undefined
 
   if (userSDK && !VALID_SDKS.includes(userSDK)) {
     console.error(`Error: Invalid SDK "${userSDK}"`)
@@ -203,4 +199,3 @@ async function main() {
 if (require.main === module) {
   main()
 }
-

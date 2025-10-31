@@ -2,8 +2,10 @@ import 'dotenv/config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
-import { cosineSimilarity } from './lib/embeddings'
+import { cosineSimilarity, estimateTokens } from './lib/embeddings'
 import { VALID_SDKS, type SDK } from './lib/schemas'
+
+const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
 
 interface EmbeddingChunk {
   id: string
@@ -132,7 +134,9 @@ async function main() {
     console.log(`✓ Loaded ${embeddings.length.toLocaleString()} chunks`)
 
     console.log(`🤖 Generating query embedding...`)
+    const queryTokens = estimateTokens(query)
     const queryEmbedding = await generateQueryEmbedding(query)
+    const queryCost = (queryTokens / 1000) * PRICE_PER_1K_TOKENS
 
     console.log(`🔎 Calculating similarity scores...`)
     const scoredChunks = embeddings.map((chunk) => ({
@@ -189,6 +193,7 @@ async function main() {
 
     console.log('='.repeat(80))
     console.log(`\nFound ${topResults.length} results (showing top ${maxLimit})`)
+    console.log(`💰 Query cost: $${queryCost.toFixed(8)} (${queryTokens} tokens)`)
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error)
     process.exit(1)

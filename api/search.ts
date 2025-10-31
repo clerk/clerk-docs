@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
-import { cosineSimilarity } from '../scripts/lib/embeddings'
+import { cosineSimilarity, estimateTokens } from '../scripts/lib/embeddings'
 import { VALID_SDKS, type SDK } from '../scripts/lib/schemas'
+
+const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
 
 export const config = {
   runtime: 'nodejs',
@@ -40,6 +42,10 @@ interface SearchResult {
 
 interface SearchResponse {
   results: SearchResult[]
+  cost?: {
+    tokens: number
+    cost: number
+  }
 }
 
 // Cache embeddings in memory (global scope for serverless function)
@@ -131,7 +137,9 @@ export default async function handler(request: Request): Promise<Response> {
     const embeddings = await loadEmbeddings()
 
     // Generate query embedding
+    const queryTokens = estimateTokens(body.query)
     const queryEmbedding = await generateQueryEmbedding(body.query)
+    const queryCost = (queryTokens / 1000) * PRICE_PER_1K_TOKENS
 
     // Calculate similarity scores
     const scoredChunks = embeddings.map((chunk) => ({
@@ -182,6 +190,10 @@ export default async function handler(request: Request): Promise<Response> {
 
     const response: SearchResponse = {
       results: topResults,
+      cost: {
+        tokens: queryTokens,
+        cost: Math.round(queryCost * 100000000) / 100000000, // Round to 8 decimal places
+      },
     }
 
     return new Response(JSON.stringify(response), {

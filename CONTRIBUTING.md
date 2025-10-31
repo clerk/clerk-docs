@@ -1192,8 +1192,6 @@ There are two types of partials you can use:
 1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document.
 2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them.
 
-The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
-
 #### Global partials
 
 Global partials are stored in `/docs/_partials/` and can be included from any document using a path starting with `_partials/`:

@@ -29,14 +29,17 @@ export const filterOtherSDKsContentOut =
 
       if (sdk === undefined) return true
 
-      const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
+      const sdkFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)
 
-      if (sdksFilter === undefined) return true
+      if (sdkFilter === undefined) return true
 
-      if (sdksFilter.includes(targetSdk)) {
-        return true
+      if (sdkFilter.isNegated) {
+        // For negated SDKs, show content when targetSdk is NOT in the list
+        // For arrays, use AND logic (show only if ALL negated SDKs are not the target)
+        return !sdkFilter.sdks.includes(targetSdk)
+      } else {
+        // For regular SDKs, show content when targetSdk IS in the list
+        return sdkFilter.sdks.includes(targetSdk)
       }
-
-      return false
     })
   }

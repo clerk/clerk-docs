@@ -1217,7 +1217,7 @@ The `<If />` component is used for conditional rendering. When the conditions ar
 | ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                            |
 | `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                   |
-| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. You can also use negation by prefixing SDK values with `!` (e.g., `sdk="!react"` or `sdk={["!expo", "!nextjs"]}`). For arrays with negated SDKs, content is shown only when ALL negated SDKs are not selected (AND logic). |
 
 Available values for the `sdk` prop:
 
@@ -1275,6 +1275,26 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
   <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
 </If>
 ```
+
+</details>
+
+<details>
+<summary>Negated SDK (show content when SDK is NOT selected)</summary>
+
+```mdx
+<If sdk="!react">This content will only be rendered if the active SDK is NOT React</If>
+```
+
+</details>
+
+<details>
+<summary>Negated SDK array (show content when ALL listed SDKs are NOT selected)</summary>
+
+```mdx
+<If sdk={['!expo', '!nextjs']}>This content will only be rendered if the active SDK is NOT Expo AND NOT Next.js</If>
+```
+
+For arrays with negated SDKs, content is shown only when ALL negated SDKs are not selected (AND logic).
 
 </details>
 

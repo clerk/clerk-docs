@@ -33,9 +33,9 @@ export const validateIfComponents =
 
       if (sdk === undefined) return
 
-      const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+      const sdkFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
 
-      if (sdksFilter === undefined) return
+      if (sdkFilter === undefined) return
 
       const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
 
@@ -44,7 +44,8 @@ export const validateIfComponents =
       // The doc doesn't exist in the manifest so we are skipping it
       if (manifestItems.length === 0) return
 
-      sdksFilter.forEach((sdk) => {
+      // For validation, we check the SDKs (without ! prefix)
+      sdkFilter.sdks.forEach((sdk) => {
         ;(() => {
           if (doc.sdk === undefined) return
 

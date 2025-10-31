@@ -1589,6 +1589,282 @@ Common content for all SDKs.`,
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
   })
 
+  test('should support <If /> component with single negated SDK', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Negated SDK Test',
+                href: '/docs/negated-sdk-test',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/negated-sdk-test.mdx',
+        content: `---
+title: Negated SDK Test
+sdk: react, nextjs, expo
+---
+
+# Negated SDK Test
+
+<If sdk="!react">
+  This content should NOT appear for React users, but should appear for Next.js and Expo users.
+</If>
+
+Common content for all SDKs.`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'expo'],
+      }),
+    )
+
+    // Check React output - should NOT contain the negated content
+    const reactOutput = await readFile(pathJoin('./dist/react/negated-sdk-test.mdx'))
+    expect(reactOutput).not.toContain('This content should NOT appear for React users')
+    expect(reactOutput).toContain('Common content for all SDKs.')
+
+    // Check Next.js output - should contain the negated content
+    const nextjsOutput = await readFile(pathJoin('./dist/nextjs/negated-sdk-test.mdx'))
+    expect(nextjsOutput).toContain('This content should NOT appear for React users')
+    expect(nextjsOutput).toContain('Common content for all SDKs.')
+
+    // Check Expo output - should contain the negated content
+    const expoOutput = await readFile(pathJoin('./dist/expo/negated-sdk-test.mdx'))
+    expect(expoOutput).toContain('This content should NOT appear for React users')
+    expect(expoOutput).toContain('Common content for all SDKs.')
+  })
+
+  test('should support <If /> component with array of negated SDKs (AND logic)', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Negated Array SDK Test',
+                href: '/docs/negated-array-sdk-test',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/negated-array-sdk-test.mdx',
+        content: `---
+title: Negated Array SDK Test
+sdk: react, nextjs, expo
+---
+
+# Negated Array SDK Test
+
+<If sdk={["!expo", "!nextjs"]}>
+  This content should only appear for React users (when both expo AND nextjs are NOT selected).
+</If>
+
+Common content for all SDKs.`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'expo'],
+      }),
+    )
+
+    // Check React output - should contain the negated content (both expo and nextjs are not selected)
+    const reactOutput = await readFile(pathJoin('./dist/react/negated-array-sdk-test.mdx'))
+    expect(reactOutput).toContain('This content should only appear for React users')
+    expect(reactOutput).toContain('Common content for all SDKs.')
+
+    // Check Next.js output - should NOT contain the negated content (nextjs is selected)
+    const nextjsOutput = await readFile(pathJoin('./dist/nextjs/negated-array-sdk-test.mdx'))
+    expect(nextjsOutput).not.toContain('This content should only appear for React users')
+    expect(nextjsOutput).toContain('Common content for all SDKs.')
+
+    // Check Expo output - should NOT contain the negated content (expo is selected)
+    const expoOutput = await readFile(pathJoin('./dist/expo/negated-array-sdk-test.mdx'))
+    expect(expoOutput).not.toContain('This content should only appear for React users')
+    expect(expoOutput).toContain('Common content for all SDKs.')
+  })
+
+  test('should support mixed regular and negated <If /> components', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Mixed SDK Test',
+                href: '/docs/mixed-sdk-test',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/mixed-sdk-test.mdx',
+        content: `---
+title: Mixed SDK Test
+sdk: react, nextjs, expo
+---
+
+# Mixed SDK Test
+
+<If sdk="react">
+  This content is for React users only.
+</If>
+
+<If sdk="!react">
+  This content is for everyone EXCEPT React users.
+</If>
+
+Common content for all SDKs.`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'expo'],
+      }),
+    )
+
+    // Check React output - should have React content but not negated content
+    const reactOutput = await readFile(pathJoin('./dist/react/mixed-sdk-test.mdx'))
+    expect(reactOutput).toContain('This content is for React users only.')
+    expect(reactOutput).not.toContain('This content is for everyone EXCEPT React users')
+    expect(reactOutput).toContain('Common content for all SDKs.')
+
+    // Check Next.js output - should have negated content but not React content
+    const nextjsOutput = await readFile(pathJoin('./dist/nextjs/mixed-sdk-test.mdx'))
+    expect(nextjsOutput).not.toContain('This content is for React users only.')
+    expect(nextjsOutput).toContain('This content is for everyone EXCEPT React users')
+    expect(nextjsOutput).toContain('Common content for all SDKs.')
+
+    // Check Expo output - should have negated content but not React content
+    const expoOutput = await readFile(pathJoin('./dist/expo/mixed-sdk-test.mdx'))
+    expect(expoOutput).not.toContain('This content is for React users only.')
+    expect(expoOutput).toContain('This content is for everyone EXCEPT React users')
+    expect(expoOutput).toContain('Common content for all SDKs.')
+  })
+
+  test('should validate negated SDKs and fail build for invalid SDKs', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Invalid Negated SDK Test',
+                href: '/docs/invalid-negated-sdk-test',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/invalid-negated-sdk-test.mdx',
+        content: `---
+title: Invalid Negated SDK Test
+sdk: react, nextjs
+---
+
+# Invalid Negated SDK Test
+
+<If sdk="!invalid-sdk">
+  This content should not appear due to invalid SDK.
+</If>
+
+Common content.`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    expect(output).toContain(`warning sdk "invalid-sdk" in <If /> is not a valid SDK`)
+  })
+
+  test('should support negated SDKs in documents with only If components', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'If Only Negated Test',
+                href: '/docs/if-only-negated-test',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/if-only-negated-test.mdx',
+        content: `---
+title: If Only Negated Test
+---
+
+# If Only Negated Test
+
+<If sdk="!react">
+  This content should appear for all SDKs except React.
+</If>
+
+<If sdk={["!expo", "!nextjs"]}>
+  This content should only appear when both expo and nextjs are NOT selected.
+</If>
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs', 'expo'],
+      }),
+    )
+
+    // Check React output - should NOT have first negated content
+    const reactOutput = await readFile(pathJoin('./dist/react/if-only-negated-test.mdx'))
+    expect(reactOutput).not.toContain('This content should appear for all SDKs except React')
+    expect(reactOutput).toContain('This content should only appear when both expo and nextjs are NOT selected')
+
+    // Check Next.js output - should have first negated content but NOT second (nextjs is selected)
+    const nextjsOutput = await readFile(pathJoin('./dist/nextjs/if-only-negated-test.mdx'))
+    expect(nextjsOutput).toContain('This content should appear for all SDKs except React')
+    expect(nextjsOutput).not.toContain('This content should only appear when both expo and nextjs are NOT selected')
+
+    // Check Expo output - should have first negated content but NOT second (expo is selected)
+    const expoOutput = await readFile(pathJoin('./dist/expo/if-only-negated-test.mdx'))
+    expect(expoOutput).toContain('This content should appear for all SDKs except React')
+    expect(expoOutput).not.toContain('This content should only appear when both expo and nextjs are NOT selected')
+  })
+
   test('should embed canonical link in frontmatter', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

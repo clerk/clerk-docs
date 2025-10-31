@@ -1098,11 +1098,22 @@ ${yaml.stringify({
 
       if (sdkProp === undefined) return
 
-      const sdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
+      const sdkFilter = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
 
-      if (sdks === undefined) return
+      if (sdkFilter === undefined) return
 
-      sdks.forEach((sdk) => availableSDKs.add(sdk))
+      if (sdkFilter.isNegated) {
+        // For negated SDKs, we need to generate variants for all SDKs except the negated ones
+        // For arrays with negated SDKs, generate variants for SDKs that are not in the negated list
+        config.validSdks.forEach((sdk) => {
+          if (!sdkFilter.sdks.includes(sdk)) {
+            availableSDKs.add(sdk)
+          }
+        })
+      } else {
+        // For regular SDKs, add them to the set
+        sdkFilter.sdks.forEach((sdk) => availableSDKs.add(sdk))
+      }
     })
 
     for (const sdk of availableSDKs) {
@@ -1124,11 +1135,17 @@ ${yaml.stringify({
             )
             if (!sdkProp) return true
 
-            const ifSdks = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
+            const sdkFilter = extractSDKsFromIfComponent(node, undefined, sdkProp, 'docs', doc.file.filePath)
 
-            if (!ifSdks) return true
+            if (!sdkFilter) return true
 
-            return ifSdks.includes(sdk)
+            if (sdkFilter.isNegated) {
+              // For negated SDKs, show content when targetSdk is NOT in the list
+              return !sdkFilter.sdks.includes(sdk)
+            } else {
+              // For regular SDKs, show content when targetSdk IS in the list
+              return sdkFilter.sdks.includes(sdk)
+            }
           })
         })
         .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
@@ -1138,6 +1155,13 @@ ${yaml.stringify({
         })
 
       headingValidationVFiles.push(vfile)
+
+      // Write the SDK-specific file
+      await writeSdkFile(
+        sdk,
+        doc.file.filePathInDocsFolder,
+        typedocTableSpecialCharacters.decode(vfile.value as string),
+      )
     }
   }
 

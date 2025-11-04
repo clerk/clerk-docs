@@ -880,6 +880,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
               sdkScoped: 'false',
               canonical: doc.file.href,
+              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
             }),
           )
           .process(doc.vfile),
@@ -991,17 +992,22 @@ ${yaml.stringify({
           if (doc.file.filePathInDocsFolder.endsWith(`.${targetSdk}.mdx`)) return null
 
           // if the doc has distinct version, we want to use those instead of the "generic" sdk scoped version
-          const fileContent = (() => {
+          const { fileContent, sourceFile } = (() => {
             if (doc.distinctSDKVariants?.includes(targetSdk)) {
               const distinctSDKVariant = docsMap.get(`${doc.file.href}.${targetSdk}`)
 
-              if (distinctSDKVariant === undefined) return doc.fileContent
-
-              return distinctSDKVariant.fileContent
+              if (distinctSDKVariant !== undefined) {
+                return {
+                  fileContent: distinctSDKVariant.fileContent,
+                  sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
+                }
+              }
             }
-            return doc.fileContent
+            return {
+              fileContent: doc.fileContent,
+              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+            }
           })()
-
           const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
           const hrefSegments = doc.file.href.split('/')
@@ -1032,6 +1038,7 @@ ${yaml.stringify({
                   availableSdks: sdks?.join(','),
                   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
                   activeSdk: targetSdk,
+                  sourceFile: sourceFile,
                 }),
               )
               .process({

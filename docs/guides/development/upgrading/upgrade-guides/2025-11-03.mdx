@@ -1,0 +1,92 @@
+---
+title: Upgrade to API version 2025-11-03
+description: Learn how to upgrade to version 2025-11-03 of Clerk's API.
+---
+
+Version 2025-11-03 of Clerk's Frontend and Backend APIs bring some changes to how Clerk Billing formats its responses. These changes make the APIs easier to consume by making responses more consistent and clearer.
+
+To use the new API version, please see the [versioning guide](/docs/guides/development/upgrading/versioning). This guide will document the various changes in terms of the API; how they are surfaced in each individual SDK will vary. This guide is meant to help identify what parts of the SDK you may need to check the documentation for, and to help consumers using unofficial or custom API clients manage the upgrade.
+
+A full endpoint-by-endpoint guide follows, but at a high level, the changes likely fall under one of the following categories:
+
+1. **Updating branding.** Clerk Billing was originally developed under the working name "Commerce", which is why `/commerce/` appeared in endpoints and object names. This API version standardizes on "Billing" instead of the deprecated "Commerce".
+2. **Making it clear whether data exists.** Sometimes a response type has different information depending on the request that prompted the response. Older API versions handle the absence of this information in inconsistent ways--sometimes it was set to the empty value (like `""` for strings or `0` for numbers), sometimes it was set to `null`, and sometimes it wasn't set at all. 2025-11-03 standardizes on the following semantics:
+  * If the response is trying to tell you that the data definitely doesn't exist, it will explicitly be set to `null`.
+  * If the response is not making any assertion about the existence of the data, it will not include the key at all.
+  * If the response is trying to tell you that the data is set to the empty value (like `""` for strings, or `0` for numbers) it will be set to that value.
+3. **Cleaning up deprecated fields.** As our API responses have evolved, we've left deprecated fields in the responses for backwards compatibility. This API version removes previously-deprecated fields.
+
+# Backend Changes
+
+## Plans
+
+### `GET /v1/commerce/plans`
+
+This endpoint is now available as `GET /v1/billing/plans`.
+
+The following fields are removed:
+
+* `amount` (use `fee.amount` instead)
+* `amount_formatted` (use `fee.amount_formatted` instead)
+* `annual_monthly_amount` (use `annual_monthly_fee.amount` instead)
+* `annual_monthly_amount_formatted` (use `annual_monthly_fee.amount_formatted` instead)
+* `annual_amount` (use `annual_fee.amount` instead)
+* `annual_amount_formatted` (use `annual_fee.amount_formatted` instead)
+* `currency_symbol` (use `fee.currency_symbol`, `annual_fee.currency_symbol`, or `annual_monthly_fee.currency_symbol` instead)
+* `currency` (use `fee.currency`, `annual_fee.currency`, or `annual_monthly_fee.currency` instead)
+* `payer_type` (use `for_payer_type` instead)
+
+The following fields can now be null, when they couldn't be in previous API versions:
+
+* `description`
+* `avatar_url`
+
+The following fields can now be omitted from the response when they were required in previous API versions:
+
+* `features`
+
+## Statements
+
+### `GET /v1/commerce/statements`
+
+This endpoint is now available as `GET /v1/billing/statements`.
+
+When a statement was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a statement was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+### `GET /v1/commerce/statements/{statementID}`
+
+This endpoint is now available as `GET /v1/billing/statements/{statementID}`.
+
+When a statement was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a statement was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+### `GET /v1/commerce/statements/{statementID}/payment_attempts`
+
+This endpoint is now available as `GET /v1/billing/statements/{statementID}/payment_attempts`.
+
+The `payment_source_id` and `payment_source` fields have been removed in favor of the `payment_method_id` and `payment_method` fields.
+
+The `invoice_id` field has been removed. Use the `statement_id` field instead.
+
+The `gateway_external_id` field can now be explicitly `null`. Previously, it would be set to `""` if unset.
+
+The `gateway_external_url` field can now be explicitly `null`. Previously, it was omitted if unset.
+
+The `paid_at` field can now be explicitly `null`. Previously, it was unset if the payment attempt had not succeeded yet.
+
+The `failed_at` field can now be explicitly `null`. Previously, it was unset if the payment attempt hadn't failed.
+
+When a payment attempt was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a payment attempt was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+## Subscription Items
+
+### `GET /v1/commerce/subscription_items`
+
+### `DELETE /v1/commerce/subscription_items/{subscriptionItemID}`
+
+### `POST /v1/commerce/subscription_items/{subscriptionItemID}/extend_free_trial`

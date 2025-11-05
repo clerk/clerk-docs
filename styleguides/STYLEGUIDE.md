@@ -206,12 +206,12 @@ When list items are full sentences, end with a period.
 
 > ❌
 >
-> - Click _Save_
+> - Click **Save**
 > - The system sends you a confirmation email
 
 > ✅
 >
-> - Click _Save_.
+> - Click **Save**.
 > - The system sends you a confirmation email.
 
 When list items aren't full sentences, don't use a period.

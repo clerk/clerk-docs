@@ -1,3 +1,4 @@
+import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { toString } from 'mdast-util-to-string'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -6,6 +7,7 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import { encoding_for_model } from 'tiktoken'
 import yaml from 'yaml'
+import { extractHeadingFromHeadingNode } from './utils/extractHeadingFromHeadingNode'
 
 export interface Frontmatter {
   title?: string
@@ -16,6 +18,7 @@ export interface Frontmatter {
 export interface Chunk {
   content: string
   headingContext: string[]
+  headingSlug?: string // slug for the primary heading
   startIndex: number
   endIndex: number
 }
@@ -34,6 +37,37 @@ export function extractFrontmatter(content: string): Frontmatter {
   } catch {
     return {}
   }
+}
+
+/**
+ * Extract headings with their slugs from MDX content
+ * Returns a map of heading text -> slug (custom ID or auto-generated)
+ */
+export async function extractHeadingsWithSlugs(content: string): Promise<Map<string, string>> {
+  const headingSlugs = new Map<string, string>()
+  const slugify = slugifyWithCounter()
+
+  const processor = remark()
+    .use(remarkFrontmatter)
+    .use(remarkMdx)
+    .use(() => (tree: Node) => {
+      mdastVisit(tree, (node) => {
+        if (node.type === 'heading') {
+          const headingText = toString(node).trim()
+          if (!headingText) return
+
+          // Check for custom ID first
+          const customId = extractHeadingFromHeadingNode(node)
+          const slug = customId !== undefined ? customId : slugify(headingText)
+
+          headingSlugs.set(headingText, slug)
+        }
+      })
+    })
+
+  await processor.process(content)
+
+  return headingSlugs
 }
 
 /**
@@ -63,11 +97,14 @@ export async function extractTextFromMdx(content: string): Promise<string> {
           return
         }
 
-        // Extract text from headings
+        // Extract text from headings (preserve markdown syntax for chunkByHeadings)
         if (node.type === 'heading') {
           const headingText = toString(node)
           if (headingText) {
-            textContent += headingText + '\n'
+            // Preserve markdown heading syntax so chunkByHeadings can detect and split on headings
+            const level = 'depth' in node && typeof node.depth === 'number' ? node.depth : 1
+            const hashes = '#'.repeat(level)
+            textContent += `${hashes} ${headingText}\n`
           }
           return
         }
@@ -143,6 +180,7 @@ function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
       splitChunks.push({
         content: currentSplit.trim(),
         headingContext: [...chunk.headingContext],
+        headingSlug: chunk.headingSlug,
         startIndex: chunk.startIndex,
         endIndex: chunk.endIndex,
       })
@@ -159,6 +197,7 @@ function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
     splitChunks.push({
       content: currentSplit.trim(),
       headingContext: [...chunk.headingContext],
+      headingSlug: chunk.headingSlug,
       startIndex: chunk.startIndex,
       endIndex: chunk.endIndex,
     })
@@ -182,6 +221,7 @@ function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
           finalChunks.push({
             content: currentSentence.trim(),
             headingContext: [...splitChunk.headingContext],
+            headingSlug: splitChunk.headingSlug,
             startIndex: splitChunk.startIndex,
             endIndex: splitChunk.endIndex,
           })
@@ -197,6 +237,7 @@ function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
         finalChunks.push({
           content: currentSentence.trim(),
           headingContext: [...splitChunk.headingContext],
+          headingSlug: splitChunk.headingSlug,
           startIndex: splitChunk.startIndex,
           endIndex: splitChunk.endIndex,
         })
@@ -213,7 +254,7 @@ function splitOversizedChunk(chunk: Chunk, maxTokens: number): Chunk[] {
  * Chunk content by headings with smart merging/splitting
  * Ensures chunks are between 200-7000 tokens (max 7000 to leave buffer for OpenAI's 8192 limit)
  */
-export function chunkByHeadings(content: string): Chunk[] {
+export function chunkByHeadings(content: string, headingSlugs?: Map<string, string>): Chunk[] {
   const MAX_TOKENS = 7000 // Leave buffer for OpenAI's 8192 limit
   const MIN_TOKENS = 200
   const TARGET_MAX_TOKENS = 800
@@ -226,7 +267,7 @@ export function chunkByHeadings(content: string): Chunk[] {
     const line = lines[i]
     const trimmedLine = line.trim()
 
-    // Detect heading levels
+    // Detect heading levels (markdown syntax)
     const h2Match = trimmedLine.match(/^##\s+(.+)$/)
     const h3Match = trimmedLine.match(/^###\s+(.+)$/)
 
@@ -235,9 +276,12 @@ export function chunkByHeadings(content: string): Chunk[] {
       if (currentChunk) {
         const chunkContent = currentChunk.content.trim()
         if (chunkContent) {
+          const primaryHeading = currentChunk.headingContext[0]
+          const headingSlug = primaryHeading && headingSlugs?.get(primaryHeading)
           chunks.push({
             content: chunkContent,
             headingContext: [...currentChunk.headingContext],
+            headingSlug,
             startIndex: currentChunk.startIndex,
             endIndex: i - 1,
           })
@@ -251,37 +295,30 @@ export function chunkByHeadings(content: string): Chunk[] {
         startIndex: i,
       }
     } else if (h3Match) {
-      // If we have a current chunk, check if we should merge or split
+      // Always create a new chunk for H3 headings (each heading should be its own chunk)
       if (currentChunk) {
         const chunkContent = currentChunk.content.trim()
-        const tokens = estimateTokens(chunkContent)
-
-        // If chunk is too small (< MIN_TOKENS), merge with next section
-        if (tokens < MIN_TOKENS) {
-          currentChunk.content += line + '\n'
-          currentChunk.headingContext.push(h3Match[1])
-        } else {
-          // Save current chunk and start new one
+        if (chunkContent) {
+          const primaryHeading = currentChunk.headingContext[0]
+          const headingSlug = primaryHeading && headingSlugs?.get(primaryHeading)
           chunks.push({
             content: chunkContent,
             headingContext: [...currentChunk.headingContext],
+            headingSlug,
             startIndex: currentChunk.startIndex,
             endIndex: i - 1,
           })
+        }
+      }
 
-          currentChunk = {
-            content: line + '\n',
-            headingContext: [...currentChunk.headingContext, h3Match[1]],
-            startIndex: i,
-          }
-        }
-      } else {
-        // No current chunk, start new one with h3
-        currentChunk = {
-          content: line + '\n',
-          headingContext: [h3Match[1]],
-          startIndex: i,
-        }
+      // Start new chunk with h3 heading
+      // Use H3 as primary heading (first in context) so it gets its own slug
+      // Keep parent H2 as context for reference
+      const parentH2 = currentChunk?.headingContext[0]
+      currentChunk = {
+        content: line + '\n',
+        headingContext: parentH2 ? [h3Match[1], parentH2] : [h3Match[1]],
+        startIndex: i,
       }
     } else {
       // Regular content line
@@ -293,9 +330,12 @@ export function chunkByHeadings(content: string): Chunk[] {
         if (tokens > TARGET_MAX_TOKENS) {
           // Save current chunk
           const chunkContent = currentChunk.content.trim()
+          const primaryHeading = currentChunk.headingContext[0]
+          const headingSlug = primaryHeading && headingSlugs?.get(primaryHeading)
           chunks.push({
             content: chunkContent,
             headingContext: [...currentChunk.headingContext],
+            headingSlug,
             startIndex: currentChunk.startIndex,
             endIndex: i,
           })
@@ -317,9 +357,12 @@ export function chunkByHeadings(content: string): Chunk[] {
       if (tokens > MAX_TOKENS) {
         // Split immediately
         const chunkContent = currentChunk.content.trim()
+        const primaryHeading = currentChunk.headingContext[0]
+        const headingSlug = primaryHeading && headingSlugs?.get(primaryHeading)
         const tempChunk: Chunk = {
           content: chunkContent,
           headingContext: [...currentChunk.headingContext],
+          headingSlug,
           startIndex: currentChunk.startIndex,
           endIndex: i,
         }
@@ -345,43 +388,34 @@ export function chunkByHeadings(content: string): Chunk[] {
   if (currentChunk) {
     const chunkContent = currentChunk.content.trim()
     if (chunkContent) {
+      const primaryHeading = currentChunk.headingContext[0]
+      const headingSlug = primaryHeading && headingSlugs?.get(primaryHeading)
       chunks.push({
         content: chunkContent,
         headingContext: [...currentChunk.headingContext],
+        headingSlug,
         startIndex: currentChunk.startIndex,
         endIndex: lines.length - 1,
       })
     }
   }
 
-  // Post-process: merge chunks that are too small
-  const mergedChunks: Chunk[] = []
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    const tokens = estimateTokens(chunk.content)
-
-    if (tokens < MIN_TOKENS && mergedChunks.length > 0) {
-      // Merge with previous chunk, but check if result would exceed MAX_TOKENS
-      const prevChunk = mergedChunks[mergedChunks.length - 1]
-      const mergedContent = prevChunk.content + '\n\n' + chunk.content
-      const mergedTokens = estimateTokens(mergedContent)
-
-      if (mergedTokens <= MAX_TOKENS) {
-        prevChunk.content = mergedContent
-        prevChunk.headingContext = [...new Set([...prevChunk.headingContext, ...chunk.headingContext])]
-        prevChunk.endIndex = chunk.endIndex
-      } else {
-        // Can't merge, add as separate chunk
-        mergedChunks.push(chunk)
-      }
-    } else {
-      mergedChunks.push(chunk)
+  // Post-process: ensure all chunks have heading slugs assigned
+  // Don't merge chunks - each heading should remain its own chunk
+  const processedChunks: Chunk[] = []
+  for (const chunk of chunks) {
+    // Ensure heading slug is set from headingContext
+    if (!chunk.headingSlug && headingSlugs && chunk.headingContext.length > 0) {
+      // Use the primary heading (first in context)
+      const primaryHeading = chunk.headingContext[0]
+      chunk.headingSlug = headingSlugs.get(primaryHeading)
     }
+    processedChunks.push(chunk)
   }
 
   // Final pass: split any chunks that still exceed MAX_TOKENS
   const finalChunks: Chunk[] = []
-  for (const chunk of mergedChunks) {
+  for (const chunk of processedChunks) {
     const tokens = estimateTokens(chunk.content)
     if (tokens > MAX_TOKENS) {
       const splitChunks = splitOversizedChunk(chunk, MAX_TOKENS)
@@ -392,30 +426,4 @@ export function chunkByHeadings(content: string): Chunk[] {
   }
 
   return finalChunks
-}
-
-/**
- * Calculate cosine similarity between two embedding vectors
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length')
-  }
-
-  let dotProduct = 0
-  let normA = 0
-  let normB = 0
-
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB)
-  if (denominator === 0) {
-    return 0
-  }
-
-  return dotProduct / denominator
 }

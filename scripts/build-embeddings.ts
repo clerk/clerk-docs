@@ -2,7 +2,13 @@ import 'dotenv/config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
-import { chunkByHeadings, estimateTokens, extractFrontmatter, extractTextFromMdx } from './lib/embeddings'
+import {
+  chunkByHeadings,
+  estimateTokens,
+  extractFrontmatter,
+  extractHeadingsWithSlugs,
+  extractTextFromMdx,
+} from './lib/embeddings'
 import { VALID_SDKS, type SDK } from './lib/schemas'
 
 interface DirectoryEntry {
@@ -20,6 +26,7 @@ interface EmbeddingChunk {
   file_path: string
   sdk?: SDK // SDK extracted from URL
   base_url?: string // URL without SDK prefix (for grouping SDK variants)
+  heading_slug?: string // slug to append to URL for direct linking to section
 }
 
 interface EmbeddingsFile {
@@ -138,8 +145,9 @@ async function main() {
     try {
       const content = await fs.readFile(filePath, 'utf-8')
       const frontmatter = extractFrontmatter(content)
+      const headingSlugs = await extractHeadingsWithSlugs(content)
       const textContent = await extractTextFromMdx(content)
-      const chunks = chunkByHeadings(textContent)
+      const chunks = chunkByHeadings(textContent, headingSlugs)
 
       const chunkData = chunks.map((chunk) => ({
         content: chunk.content,
@@ -212,8 +220,9 @@ async function main() {
     try {
       const content = await fs.readFile(filePath, 'utf-8')
       const frontmatter = extractFrontmatter(content)
+      const headingSlugs = await extractHeadingsWithSlugs(content)
       const textContent = await extractTextFromMdx(content)
-      const chunks = chunkByHeadings(textContent)
+      const chunks = chunkByHeadings(textContent, headingSlugs)
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
@@ -252,6 +261,7 @@ async function main() {
             file_path: result.filePath,
             sdk,
             base_url: baseUrl,
+            heading_slug: chunk.headingSlug,
           })
 
           // Progress indicator

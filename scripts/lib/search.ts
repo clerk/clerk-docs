@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import OpenAI from 'openai'
-import { cosineSimilarity, estimateTokens } from './embeddings'
+import { estimateTokens } from './embeddings'
+import { cosineSimilarity } from 'ai'
 import { VALID_SDKS, type SDK } from './schemas'
 
 // Constants
@@ -101,10 +102,7 @@ export async function generateQueryEmbedding(query: string): Promise<number[]> {
 /**
  * Filter chunks by SDK, prioritizing SDK-specific variants.
  */
-export function filterChunksBySDK(
-  scoredChunks: ScoredChunk[],
-  userSDK?: SDK,
-): ScoredChunk[] {
+export function filterChunksBySDK(scoredChunks: ScoredChunk[], userSDK?: SDK): ScoredChunk[] {
   if (!userSDK) {
     return scoredChunks
   }
@@ -207,4 +205,3 @@ export function getModelPricing(model: string): { input: number; output: number 
     output: PRICE_PER_1K_TOKENS_GPT_4O_MINI_OUTPUT,
   }
 }
-

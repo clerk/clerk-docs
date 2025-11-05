@@ -209,11 +209,20 @@ async function main() {
 
   console.log('🚀 Generating embeddings...\n')
 
-  // Phase 2: Generate embeddings
-  const allChunks: EmbeddingChunk[] = []
-  let processedChunks = 0
+  // Phase 2: Collect all chunks with metadata
+  interface ChunkWithMetadata {
+    content: string
+    url: string
+    title: string
+    chunk_index: number
+    file_path: string
+    heading_slug?: string
+  }
+
+  const chunksWithMetadata: ChunkWithMetadata[] = []
   let errors = 0
 
+  console.log('📦 Collecting chunks...')
   for (const result of analysisResults) {
     const filePath = path.join(distPath, result.filePath)
 
@@ -226,57 +235,136 @@ async function main() {
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
-        processedChunks++
 
-        try {
-          // Safety check: verify chunk doesn't exceed token limit
-          const chunkTokens = estimateTokens(chunk.content)
-          if (chunkTokens > MAX_TOKENS_PER_CHUNK) {
-            errors++
-            console.warn(
-              `  ⚠️  Skipping chunk ${i} in ${result.filePath}: ${chunkTokens} tokens exceeds limit of ${MAX_TOKENS_PER_CHUNK}`,
-            )
-            continue
-          }
-
-          // Generate embedding
-          const response = await openaiClient.embeddings.create({
-            model: EMBEDDING_MODEL,
-            input: chunk.content,
-          })
-
-          const embedding = response.data[0].embedding
-
-          const chunkId = `${result.url}-chunk-${i}`
-          const sdk = extractSDKFromURL(result.url)
-          const baseUrl = getBaseURL(result.url, sdk)
-
-          allChunks.push({
-            id: chunkId,
-            content: chunk.content,
-            embedding,
-            url: result.url,
-            title: result.title,
-            chunk_index: i,
-            file_path: result.filePath,
-            sdk,
-            base_url: baseUrl,
-            heading_slug: chunk.headingSlug,
-          })
-
-          // Progress indicator
-          if (processedChunks % 50 === 0 || processedChunks === totalChunks) {
-            console.log(`  Processing chunk ${processedChunks}/${totalChunks}...`)
-          }
-        } catch (error) {
+        // Safety check: verify chunk doesn't exceed token limit
+        const chunkTokens = estimateTokens(chunk.content)
+        if (chunkTokens > MAX_TOKENS_PER_CHUNK) {
           errors++
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          console.warn(`  ⚠️  Failed to generate embedding for chunk ${i} in ${result.filePath}: ${errorMessage}`)
+          console.warn(
+            `  ⚠️  Skipping chunk ${i} in ${result.filePath}: ${chunkTokens} tokens exceeds limit of ${MAX_TOKENS_PER_CHUNK}`,
+          )
+          continue
         }
+
+        const sdk = extractSDKFromURL(result.url)
+        const baseUrl = getBaseURL(result.url, sdk)
+
+        chunksWithMetadata.push({
+          content: chunk.content,
+          url: result.url,
+          title: result.title,
+          chunk_index: i,
+          file_path: result.filePath,
+          heading_slug: chunk.headingSlug,
+        })
       }
     } catch (error) {
       errors++
       console.warn(`⚠️  Failed to process file ${result.filePath}: ${error}`)
+    }
+  }
+
+  console.log(`✓ Collected ${chunksWithMetadata.length} chunks\n`)
+
+  // Phase 3: Generate embeddings in batches
+  const BATCH_SIZE = 200 // Safe batch size for OpenAI API
+  const allChunks: EmbeddingChunk[] = []
+  let processedChunks = 0
+  const totalChunksToProcess = chunksWithMetadata.length
+
+  console.log(`🔢 Processing ${totalChunksToProcess} chunks in batches of ${BATCH_SIZE}...\n`)
+
+  for (let batchStart = 0; batchStart < chunksWithMetadata.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, chunksWithMetadata.length)
+    const batch = chunksWithMetadata.slice(batchStart, batchEnd)
+    const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1
+    const totalBatches = Math.ceil(totalChunksToProcess / BATCH_SIZE)
+
+    try {
+      // Generate embeddings for entire batch
+      const response = await openaiClient.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: batch.map((chunk) => chunk.content),
+      })
+
+      // Map embeddings back to chunks
+      for (let i = 0; i < batch.length; i++) {
+        const chunkMetadata = batch[i]
+        const embedding = response.data[i]?.embedding
+
+        if (!embedding) {
+          errors++
+          console.warn(`  ⚠️  Missing embedding for chunk ${i} in batch ${batchNumber}`)
+          continue
+        }
+
+        const chunkId = `${chunkMetadata.url}-chunk-${chunkMetadata.chunk_index}`
+        const sdk = extractSDKFromURL(chunkMetadata.url)
+        const baseUrl = getBaseURL(chunkMetadata.url, sdk)
+
+        allChunks.push({
+          id: chunkId,
+          content: chunkMetadata.content,
+          embedding,
+          url: chunkMetadata.url,
+          title: chunkMetadata.title,
+          chunk_index: chunkMetadata.chunk_index,
+          file_path: chunkMetadata.file_path,
+          sdk,
+          base_url: baseUrl,
+          heading_slug: chunkMetadata.heading_slug,
+        })
+
+        processedChunks++
+      }
+
+      // Progress indicator
+      console.log(
+        `  ✓ Batch ${batchNumber}/${totalBatches}: Processed ${processedChunks}/${totalChunksToProcess} chunks`,
+      )
+    } catch (error) {
+      errors++
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.warn(`  ⚠️  Failed to process batch ${batchNumber}: ${errorMessage}`)
+
+      // Fallback: try processing batch items individually
+      console.log(`  🔄 Retrying batch ${batchNumber} items individually...`)
+      for (let i = 0; i < batch.length; i++) {
+        const chunkMetadata = batch[i]
+        try {
+          const response = await openaiClient.embeddings.create({
+            model: EMBEDDING_MODEL,
+            input: chunkMetadata.content,
+          })
+
+          const embedding = response.data[0]?.embedding
+          if (embedding) {
+            const chunkId = `${chunkMetadata.url}-chunk-${chunkMetadata.chunk_index}`
+            const sdk = extractSDKFromURL(chunkMetadata.url)
+            const baseUrl = getBaseURL(chunkMetadata.url, sdk)
+
+            allChunks.push({
+              id: chunkId,
+              content: chunkMetadata.content,
+              embedding,
+              url: chunkMetadata.url,
+              title: chunkMetadata.title,
+              chunk_index: chunkMetadata.chunk_index,
+              file_path: chunkMetadata.file_path,
+              sdk,
+              base_url: baseUrl,
+              heading_slug: chunkMetadata.heading_slug,
+            })
+
+            processedChunks++
+          }
+        } catch (individualError) {
+          errors++
+          console.warn(
+            `    ⚠️  Failed to generate embedding for chunk ${chunkMetadata.chunk_index} in ${chunkMetadata.file_path}`,
+          )
+        }
+      }
     }
   }
 

@@ -266,19 +266,21 @@ async function main() {
 
   console.log(`✓ Collected ${chunksWithMetadata.length} chunks\n`)
 
-  // Phase 3: Generate embeddings in batches
+  // Phase 3: Generate embeddings in batches (parallelized)
   const BATCH_SIZE = 200 // Safe batch size for OpenAI API
+  const MAX_CONCURRENT_BATCHES = 5 // Process 5 batches in parallel (well under rate limits)
   const allChunks: EmbeddingChunk[] = []
   let processedChunks = 0
   const totalChunksToProcess = chunksWithMetadata.length
+  const totalBatches = Math.ceil(totalChunksToProcess / BATCH_SIZE)
 
-  console.log(`🔢 Processing ${totalChunksToProcess} chunks in batches of ${BATCH_SIZE}...\n`)
+  console.log(
+    `🔢 Processing ${totalChunksToProcess} chunks in ${totalBatches} batches of ${BATCH_SIZE} (${MAX_CONCURRENT_BATCHES} parallel)...\n`,
+  )
 
-  for (let batchStart = 0; batchStart < chunksWithMetadata.length; batchStart += BATCH_SIZE) {
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, chunksWithMetadata.length)
-    const batch = chunksWithMetadata.slice(batchStart, batchEnd)
-    const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1
-    const totalBatches = Math.ceil(totalChunksToProcess / BATCH_SIZE)
+  // Process a single batch
+  async function processBatch(batch: ChunkWithMetadata[], batchNumber: number): Promise<EmbeddingChunk[]> {
+    const batchResults: EmbeddingChunk[] = []
 
     try {
       // Generate embeddings for entire batch
@@ -302,7 +304,7 @@ async function main() {
         const sdk = extractSDKFromURL(chunkMetadata.url)
         const baseUrl = getBaseURL(chunkMetadata.url, sdk)
 
-        allChunks.push({
+        batchResults.push({
           id: chunkId,
           content: chunkMetadata.content,
           embedding,
@@ -314,14 +316,10 @@ async function main() {
           base_url: baseUrl,
           heading_slug: chunkMetadata.heading_slug,
         })
-
-        processedChunks++
       }
 
-      // Progress indicator
-      console.log(
-        `  ✓ Batch ${batchNumber}/${totalBatches}: Processed ${processedChunks}/${totalChunksToProcess} chunks`,
-      )
+      console.log(`  ✓ Batch ${batchNumber}/${totalBatches} completed`)
+      return batchResults
     } catch (error) {
       errors++
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -343,7 +341,7 @@ async function main() {
             const sdk = extractSDKFromURL(chunkMetadata.url)
             const baseUrl = getBaseURL(chunkMetadata.url, sdk)
 
-            allChunks.push({
+            batchResults.push({
               id: chunkId,
               content: chunkMetadata.content,
               embedding,
@@ -355,8 +353,6 @@ async function main() {
               base_url: baseUrl,
               heading_slug: chunkMetadata.heading_slug,
             })
-
-            processedChunks++
           }
         } catch (individualError) {
           errors++
@@ -365,7 +361,33 @@ async function main() {
           )
         }
       }
+
+      return batchResults
     }
+  }
+
+  // Process batches in parallel with concurrency limit
+  // Create all batch jobs first
+  const batchJobs: Array<{ batch: ChunkWithMetadata[]; batchNumber: number }> = []
+  for (let i = 0; i < chunksWithMetadata.length; i += BATCH_SIZE) {
+    const batch = chunksWithMetadata.slice(i, Math.min(i + BATCH_SIZE, chunksWithMetadata.length))
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1
+    batchJobs.push({ batch, batchNumber })
+  }
+
+  // Process batches in parallel groups
+  for (let i = 0; i < batchJobs.length; i += MAX_CONCURRENT_BATCHES) {
+    const parallelGroup = batchJobs.slice(i, i + MAX_CONCURRENT_BATCHES)
+    const batchPromises = parallelGroup.map(({ batch, batchNumber }) => processBatch(batch, batchNumber))
+    const batchResults = await Promise.all(batchPromises)
+
+    // Flatten results and update progress
+    for (const results of batchResults) {
+      allChunks.push(...results)
+      processedChunks += results.length
+    }
+
+    console.log(`  📊 Progress: ${processedChunks}/${totalChunksToProcess} chunks processed\n`)
   }
 
   console.log()

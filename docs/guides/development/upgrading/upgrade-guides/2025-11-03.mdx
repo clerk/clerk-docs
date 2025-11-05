@@ -9,7 +9,7 @@ To use the new API version, please see the [versioning guide](/docs/guides/devel
 
 A full endpoint-by-endpoint guide follows, but at a high level, the changes likely fall under one of the following categories:
 
-1. **Updating branding.** Clerk Billing was originally developed under the working name "Commerce", which is why `/commerce/` appeared in endpoints and object names. This API version standardizes on "Billing" instead of the deprecated "Commerce".
+1. **Updating branding.** Clerk Billing was originally developed under the working name "Commerce", which is why `/commerce/` appeared in endpoints. This API version standardizes on "Billing" instead of the deprecated "Commerce". We've also updated some of the terminology, including renaming "payment sources" to "payment methods".
 1. **Making it clear whether data exists.** Sometimes a response type has different information depending on the request that prompted the response. Older API versions handle the absence of this information in inconsistent ways--sometimes it was set to the empty value (like `""` for strings or `0` for numbers), sometimes it was set to `null`, and sometimes it wasn't set at all. 2025-11-03 standardizes on the following semantics:
    - If the response is trying to tell you that the data definitely doesn't exist, it will explicitly be set to `null`.
    - If the response is not making any assertion about the existence of the data, it will not include the key at all.
@@ -41,9 +41,7 @@ The following fields can now be null, when they couldn't be in previous API vers
 - `description`
 - `avatar_url`
 
-The following fields can now be omitted from the response when they were required in previous API versions:
-
-- `features`
+The `features` field can now be omitted from the response when they were required in previous API versions.
 
 ## Statements
 
@@ -51,23 +49,75 @@ The following fields can now be omitted from the response when they were require
 
 This endpoint is now available as `GET /v1/billing/statements`.
 
-When a statement was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+Each item in the `data.groups[].items[]` array has all the changes listed below for the `GET /v1/commerce/statements/{statementID}/payment_attempts` endpoint.
 
-When a statement was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+When a statement was for a user payer, `data.payer.organization_id` and `data.payer.organization_name` would be omitted.  In this API version, they will be explicitly `null`.
+
+When a statement was for an organization payer, `data.payer.user_id` would be omitted and `data.payer.first_name`, `data.payer.last_name`, and `data.payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
 
 ### `GET /v1/commerce/statements/{statementID}`
 
 This endpoint is now available as `GET /v1/billing/statements/{statementID}`.
 
-When a statement was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+Each item in the `groups[].items[]` array has all the changes listed below for the `GET /v1/commerce/statements/{statementID}/payment_attempts` endpoint.
+
+When a statement was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, they will be explicitly `null`.
 
 When a statement was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+The `payer.created_at` and `payer.updated_at` fields will now be omitted instead of returning `0`.
 
 ### `GET /v1/commerce/statements/{statementID}/payment_attempts`
 
 This endpoint is now available as `GET /v1/billing/statements/{statementID}/payment_attempts`.
 
 The `payment_source_id` and `payment_source` fields have been removed in favor of the `payment_method_id` and `payment_method` fields.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `payment_method.created_at` and `payment_method.updated_at` fields are now omitted, instead of `0`.
+
+The `subscription_item.plan` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription.
+
+The `subscription_item.plan_id` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription.
+
+The `subscription_item.plan.amount` and `subscription_item.plan.amount_formatted` fields are removed in favor of the `subscription_item.plan.fee.amount` and `subscription_item.plan.fee.amount_formatted` fields.
+
+The `subscription_item.plan.annual_monthly_amount` and `subscription_item.plan.annual_monthly_amount_formatted` fields are removed in favor of the `subscription_item.plan.annual_monthly_fee.amount` and `subscription_item.plan.annual_monthly_fee.amount_formatted` fields.
+
+The `subscription_item.plan.annual_amount` and `subscription_item.plan.annual_amount_formatted` fields are removed in favor of the `subscription_item.plan.annual_fee.amount` and `subscription_item.plan.annual_fee.amount_formatted` fields.
+
+The `subscription_item.plan.currency_symbol` field is removed in favor of the `subscription_item.plan.fee.currency_symbol`, `subscription_item.plan.annual_fee.currency_symbol`, or `subscription_item.plan.annual_monthly_fee.currency_symbol` fields.
+
+The `subscription_item.plan.currency` field is removed in favor of the `subscription_item.plan.fee.currency`, `subscription_item.plan.annual_fee.currency`, or `subscription_item.plan.annual_monthly_fee.currency` fields.
+
+The `subscription_item.plan.payer_type` field is removed in favor of the `subscription_item.plan.for_payer_type` field.
+
+The `subscription_item.plan.avatar_url` and `subscription_item.plan.description` fields can now be `null`.
+
+The `subscription_item.plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `subscription_item.lifetime_paid` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount paid over the lifetime of the subscription item.
+
+The `subscription_item.amount` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount.
+
+The `subscription_item.next_invoice` field has been removed, in favor of the `subscription_item.next_payment` field.
+
+The `subscription_item.next_payment` field can be omitted when the response does not contain information about the next payment.
+
+The `subscription_item.next_payment.amount` and `subscription_item.next_payment.date` fields can no longer be `null`.
+
+The `subscription_item.payer` field can no longer be `null`, and will instead be omitted when the response does not contain information about the next payment.
+
+The `period_start` field can no longer be `null`.
+
+The `proration_date` field can now be omitted when the response does not contain information about proration.
 
 The `invoice_id` field has been removed. Use the `statement_id` field instead.
 
@@ -79,14 +129,468 @@ The `paid_at` field can now be explicitly `null`. Previously, it was unset if th
 
 The `failed_at` field can now be explicitly `null`. Previously, it was unset if the payment attempt hadn't failed.
 
-When a payment attempt was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+When a payment attempt was for a user payer, `payer.organization_id`, `payer.organization_name`, `subscription_item.payer.organization_id`, and `subscription_item.payer.organization_name` would be omitted.  In this API version, they will be explicitly `null`.
 
-When a payment attempt was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+When a payment attempt was for an organization payer, `payer.user_id` and `subscription_item.payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, `payer.email`, `subscription_item.payer.first_name`, `subscription_item.payer.last_name`, and `subscription_item.payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+The `payer.created_at` and `payer.updated_at` fields will now be omitted instead of returning `0`.
 
 ## Subscription Items
 
 ### `GET /v1/commerce/subscription_items`
 
+This endpoint is now available as `GET /v1/billing/subscription_items`.
+
+The `plan` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription. It can also be omitted if the plan information is not included in the subscription item.
+
+The `plan_id` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_source_id` and `payment_source` fields are now removed, in favor of the `payment_method_id` and `payment_method` fields that replace them.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `lifetime_paid` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount paid over the lifetime of the subscription item.
+
+The `amount` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount.
+
+The `next_invoice` field has been removed, in favor of the `next_payment` field.
+
+The `next_payment` field can be omitted when the response does not contain information about the next payment.
+
+The `next_payment.amount` and `next_payment.date` fields can no longer be `null`.
+
+The `payer` field can no longer be `null`, and will instead be omitted when the response does not contain information about the next payment.
+
+When a subscription item was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a subscription item was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+The `period_start` field can no longer be `null`.
+
+The `proration_date` field can now be omitted when the response does not contain information about proration.
+
 ### `DELETE /v1/commerce/subscription_items/{subscriptionItemID}`
 
+This endpoint is now available as `DELETE /v1/billing/subscription_items/{subscriptionItemID}`.
+
+The `plan` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription. It can also be omitted if the plan information is not included in the subscription item.
+
+The `plan_id` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_source_id` and `payment_source` fields are now removed, in favor of the `payment_method_id` and `payment_method` fields that replace them.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `lifetime_paid` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount paid over the lifetime of the subscription item.
+
+The `amount` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount.
+
+The `next_invoice` field has been removed, in favor of the `next_payment` field.
+
+The `next_payment` field can be omitted when the response does not contain information about the next payment.
+
+The `next_payment.amount` and `next_payment.date` fields can no longer be `null`.
+
+The `payer` field can no longer be `null`, and will instead be omitted when the response does not contain information about the next payment.
+
+When a subscription item was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a subscription item was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+The `period_start` field can no longer be `null`.
+
+The `proration_date` field can now be omitted when the response does not contain information about proration.
+
 ### `POST /v1/commerce/subscription_items/{subscriptionItemID}/extend_free_trial`
+
+This endpoint is now available as `POST /v1/billing/subscription_items/{subscriptionItemID}/extend_free_trial`.
+
+The `plan` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription. It can also be omitted if the plan information is not included in the subscription item.
+
+The `plan_id` field can now be `null`, in preparation for a future change to subscription items that represent an inactive subscription.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_source_id` and `payment_source` fields are now removed, in favor of the `payment_method_id` and `payment_method` fields that replace them.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `lifetime_paid` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount paid over the lifetime of the subscription item.
+
+The `amount` field can no longer be `null`; it will instead be omitted when the response doesn't include the amount.
+
+The `next_invoice` field has been removed, in favor of the `next_payment` field.
+
+The `next_payment` field can be omitted when the response does not contain information about the next payment.
+
+The `next_payment.amount` and `next_payment.date` fields can no longer be `null`.
+
+The `payer` field can no longer be `null`, and will instead be omitted when the response does not contain information about the next payment.
+
+When a subscription item was for a user payer, `payer.organization_id` and `payer.organization_name` would be omitted.  In this API version, it will be explicitly `null`.
+
+When a subscription item was for an organization payer, `payer.user_id` would be omitted and `payer.first_name`, `payer.last_name`, and `payer.email` were all set to `""`. In this API version, they will all be explicitly `null`.
+
+The `period_start` field can no longer be `null`.
+
+The `proration_date` field can now be omitted when the response does not contain information about proration.
+
+# Frontend Changes
+
+## Checkouts
+
+### `POST /v1/me/commerce/checkouts`
+
+This endpoint is now available as `POST /v1/me/billing/checkouts`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `payer.organization_id` field will now be null, instead of being omitted.
+
+The `payer.first_name`, `payer.last_name`, and `payer.email` will now be omitted instead of set to `""`.
+
+The `payer.user_id` field can no longer be omitted.
+
+The `totals.total_due_after_free_trial`, `totals.credit`, `totals.past_due`, `totals.total_due_now`, and `totals.proration` fields will no longer be omitted when they don't apply to a checkout; instead they will return an explicit `null`.
+
+### `GET /v1/me/commerce/checkouts/{checkoutID}`
+
+This endpoint is now available as `GET /v1/me/billing/checkouts/{checkoutID}`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `payer.organization_id` field will now be null, instead of being omitted.
+
+The `payer.first_name`, `payer.last_name`, and `payer.email` will now be omitted instead of set to `""`.
+
+The `payer.user_id` field can no longer be omitted.
+
+The `totals.total_due_after_free_trial`, `totals.credit`, `totals.past_due`, `totals.total_due_now`, and `totals.proration` fields will no longer be omitted when they don't apply to a checkout; instead they will return an explicit `null`.
+
+### `PATCH /v1/me/commerce/checkouts/{checkoutID}/confirm`
+
+This endpoint is now available as `PATCH /v1/me/billing/checkouts/{checkoutID}/confirm`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+The `plan.amount` and `plan.amount_formatted` fields are removed in favor of the `plan.fee.amount` and `plan.fee.amount_formatted` fields.
+
+The `plan.annual_monthly_amount` and `plan.annual_monthly_amount_formatted` fields are removed in favor of the `plan.annual_monthly_fee.amount` and `plan.annual_monthly_fee.amount_formatted` fields.
+
+The `plan.annual_amount` and `plan.annual_amount_formatted` fields are removed in favor of the `plan.annual_fee.amount` and `plan.annual_fee.amount_formatted` fields.
+
+The `plan.currency_symbol` field is removed in favor of the `plan.fee.currency_symbol`, `plan.annual_fee.currency_symbol`, or `plan.annual_monthly_fee.currency_symbol` fields.
+
+The `plan.currency` field is removed in favor of the `plan.fee.currency`, `plan.annual_fee.currency`, or `plan.annual_monthly_fee.currency` fields.
+
+The `plan.payer_type` field is removed in favor of the `plan.for_payer_type` field.
+
+The `plan.avatar_url` and `plan.description` fields can now be `null`.
+
+The `plan.features` field can now be omitted when the response does not include plan feature information.
+
+The `payment_method.object` field is now set to `"commerce_payment_method"`.
+
+The `payment_method.payment_method` field has been removed. Use `payment_method.payment_type` instead.
+
+The `payment_method.last4`, `payment_method.wallet_type`, `payment_method.card_type`, `payment_method.expiry_year`, and `payment_method.expiry_month` fields can now be set to `null`.
+
+The `payment_method.wallet_type`, `payment_method.expiry_year`, `payment_method.expiry_month`, `payment_method.created_at`, and `payment_method.updated_at` fields can now be omitted.
+
+The `payer.organization_id` field will now be null, instead of being omitted.
+
+The `payer.first_name`, `payer.last_name`, and `payer.email` will now be omitted instead of set to `""`.
+
+The `payer.user_id` field can no longer be omitted.
+
+The `totals.total_due_after_free_trial`, `totals.credit`, `totals.past_due`, `totals.total_due_now`, and `totals.proration` fields will no longer be omitted when they don't apply to a checkout; instead they will return an explicit `null`.
+
+TODO: subscription_item changes
+
+### `POST /v1/organizations/{organizationID}/commerce/checkouts`
+
+This endpoint is now available as `POST /v1/organizations/{organizationID}/billing/checkouts`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+TODO: plan changes
+
+TODO: payer changes
+
+TODO: totals changes
+
+TODO: subscription_item changes
+
+### `GET /v1/organizations/{organizationID}/commerce/checkouts/{checkoutID}`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/checkouts/{checkoutID}`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+TODO: plan changes
+
+TODO: payer changes
+
+TODO: totals changes
+
+TODO: subscription_item changes
+
+### `PATCH /v1/organizations/{organizationID}/commerce/checkouts/{checkoutID}/confirm`
+
+This endpoint is now available as `PATCH /v1/organizations/{organizationID}/billing/checkouts/{checkoutID}/confirm`.
+
+The `payment_source` field has been removed in favor of the `payment_method` field.
+
+TODO: plan changes
+
+TODO: payer changes
+
+TODO: totals changes
+
+TODO: subscription_item changes
+
+## Invoices
+
+### `GET /v1/me/commerce/invoices`
+
+This endpoint is now available as `GET /v1/me/billing/invoices`.
+
+TODO: totals changes
+
+### `GET /v1/organizations/{organizationID}/commerce/invoices`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/invoices`.
+
+TODO: totals changes
+
+## Payment Attempts
+
+### `GET /v1/me/commerce/payment_attempts`
+
+This endpoint is now available as `GET /v1/me/billing/payment_attempts`.
+
+### `GET /v1/me/commerce/payment_attempts/{paymentAttemptID}`
+
+This endpoint is now available as `GET /v1/me/billing/payment_attempts/{paymentAttemptID}`.
+
+### `GET /v1/organizations/{organizationID}/commerce/payment_attempts/{paymentAttemptID}`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/payment_attempts/{paymentAttemptID}`.
+
+### `GET /v1/organizations/{organizationID}/commerce/payment_attempts`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/payment_attempts`.
+
+## Payment Sources
+
+### `POST /v1/me/commerce/payment_sources/initialize`
+
+This endpoint is now available as `POST /v1/me/billing/payment_sources/initialize`.
+
+### `GET /v1/me/commerce/payment_sources`
+
+This endpoint is now available as `GET /v1/me/billing/payment_sources`.
+
+### `POST /v1/me/commerce/payment_sources`
+
+This endpoint is now available as `POST /v1/me/billing/payment_sources`.
+
+### `DELETE /v1/me/commerce/payment_sources/{paymentSourceID}`
+
+This endpoint is now available as `DELETE /v1/me/billing/payment_sources/{paymentSourceID}`.
+
+### `PUT /v1/commerce/payers/default_payment_source`
+
+This endpoint is now available as `PUT /v1/billing/payers/default_payment_source`.
+
+### `POST /v1/organizations/{organizationID}/commerce/payment_sources/initialize`
+
+This endpoint is now available as `POST /v1/organizations/{organizationID}/billing/payment_sources/initialize`.
+
+### `GET /v1/organizations/{organizationID}/commerce/payment_sources`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/payment_sources`.
+
+### `POST /v1/organizations/{organizationID}/commerce/payment_sources`
+
+This endpoint is now available as `POST /v1/organizations/{organizationID}/billing/payment_sources`.
+
+### `DELETE /v1/organizations/{organizationID}/commerce/payment_sources/{paymentSourceID}`
+
+This endpoint is now available as `DELETE /v1/organizations/{organizationID}/billing/payment_sources/{paymentSourceID}`.
+
+### `PUT /v1/organizations/{organizationID}/commerce/payers/default_payment_source
+
+## Plans
+
+### `GET /v1/commerce/plans`
+
+This endpoint is now available as `GET /v1/billing/plans`.
+
+### `GET /v1/commerce/plans/{planIDOrSlug}`
+
+This endpoint is now available as `GET /v1/billing/plans/{planIDOrSlug}`.
+
+## Products
+
+### `GET /v1/commerce/products`
+
+This endpoint is now available as `GET /v1/billing/products`.
+
+## Statements
+
+### `GET /v1/me/commerce/statements`
+
+This endpoint is now available as `GET /v1/me/billing/statements`.
+
+### `GET /v1/me/commerce/statements/{statementID}`
+
+This endpoint is now available as `GET /v1/me/billing/statements/{statementID}`.
+
+### `GET /v1/organizations/{organizationID}/commerce/statements`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/statements`.
+
+### `GET /v1/organizations/{organizationID}/commerce/statements/{statementID}`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/statements/{statementID}`.
+
+## Subscription
+
+### `GET /v1/me/commerce/subscription`
+
+This endpoint is now available as `GET /v1/me/billing/subscription`.
+
+### `GET /v1/organizations/{organizationID}/commerce/subscription`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/subscription`.
+
+## Subscription Items
+
+### `GET /v1/me/commerce/subscription_items`
+
+This endpoint is now available as `GET /v1/me/billing/subscription_items`.
+
+### `DELETE /v1/me/commerce/subscription_items/{subscriptionItemID}`
+
+This endpoint is now available as `DELETE /v1/me/billing/subscription_items/{subscriptionItemID}`.
+
+### `GET /v1/organizations/{organizationID}/commerce/subscription_items`
+
+This endpoint is now available as `GET /v1/organizations/{organizationID}/billing/subscription_items`.
+
+### `DELETE /v1/organizations/{organizationID}/commerce/subscription_items`
+
+This endpoint is now available as `DELETE /v1/organizations/{organizationID}/billing/subscription_items`.

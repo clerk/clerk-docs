@@ -26,17 +26,19 @@ async function main() {
   const args = process.argv.slice(2)
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: npm run search -- <query> [--limit N] [--sdk SDK]')
+    console.log('Usage: npm run search -- <query> [--limit N] [--sdk SDK] [--rerank]')
     console.log('')
     console.log('Options:')
     console.log('  --limit N    Maximum number of results (default: 10)')
     console.log('  --sdk SDK    Filter results by SDK (e.g., react, nextjs)')
-    console.log('  --help, -h  Show this help message')
+    console.log('  --rerank     Enable AI reranking for improved relevance (requires OpenAI API)')
+    console.log('  --help, -h   Show this help message')
     console.log('')
     console.log('Examples:')
     console.log('  npm run search -- "authentication"')
     console.log('  npm run search -- "how to setup clerk" --limit 5')
     console.log('  npm run search -- "use user hook" --sdk react')
+    console.log('  npm run search -- "authentication" --rerank')
     process.exit(0)
   }
 
@@ -64,12 +66,17 @@ async function main() {
     process.exit(1)
   }
 
+  const rerank = args.includes('--rerank')
+
   const maxLimit = Math.min(limit, 50)
 
   try {
     console.log(`🔍 Searching for: "${query}"`)
     if (userSDK) {
       console.log(`📱 Filtering by SDK: ${userSDK}`)
+    }
+    if (rerank) {
+      console.log(`🔄 Reranking enabled`)
     }
     console.log(`📊 Loading embeddings...`)
 
@@ -78,13 +85,11 @@ async function main() {
     console.log(`✓ Loaded ${embeddings.length.toLocaleString()} chunks`)
 
     console.log(`🤖 Generating query embedding...`)
-    const searchResult = await performSearch(query, embeddings, userSDK, maxLimit)
-    const queryCost = searchResult.cost
-    const queryTokens = searchResult.tokens
+    const searchResult = await performSearch(query, embeddings, userSDK, maxLimit, rerank)
 
-    console.log(`🔎 Calculating similarity scores...`)
+    console.log(`🔎 Calculating similarity scores${rerank ? ' and reranking' : ''}...`)
     const topResults = searchResult.chunks.map((chunk) => ({
-      url: chunk.url,
+      url: chunk.heading_slug ? `${chunk.url}#${chunk.heading_slug}` : chunk.url,
       title: chunk.title,
       content: chunk.content,
       score: Math.round(chunk.score * 1000) / 1000,
@@ -100,7 +105,11 @@ async function main() {
 
     console.log('='.repeat(80))
     console.log(`\nFound ${topResults.length} results (showing top ${maxLimit})`)
-    console.log(`💰 Query cost: $${queryCost.toFixed(8)} (${queryTokens} tokens)`)
+    console.log(`💰 Embedding cost: $${searchResult.cost.toFixed(8)} (${searchResult.tokens} tokens)`)
+    if (searchResult.rerankCost && searchResult.rerankTokens) {
+      console.log(`💰 Reranking cost: $${searchResult.rerankCost.toFixed(8)} (${searchResult.rerankTokens} tokens)`)
+    }
+    console.log(`💰 Total cost: $${searchResult.totalCost.toFixed(8)} (${searchResult.totalTokens} tokens)`)
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error)
     process.exit(1)

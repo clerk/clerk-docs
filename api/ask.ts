@@ -18,6 +18,7 @@ interface AskRequest {
   sdk?: SDK
   limit?: number
   model?: string
+  rerank?: boolean
 }
 
 interface AskResponse {
@@ -69,6 +70,7 @@ export default async function handler(request: Request): Promise<Response> {
     const limit = body.limit && body.limit > 0 ? Math.min(body.limit, 20) : 8
     const userSDK = body.sdk && VALID_SDKS.includes(body.sdk) ? body.sdk : undefined
     const model = body.model || 'gpt-4o-mini'
+    const rerank = body.rerank === true // Must explicitly set to true
     const MAX_ITERATIONS = 5
 
     // Load embeddings
@@ -100,14 +102,14 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Perform initial search
-    const initialSearch = await performSearch(body.query, embeddings, userSDK, limit)
+    const initialSearch = await performSearch(body.query, embeddings, userSDK, limit, rerank)
     let allChunks = new Map<string, ScoredChunk>()
     for (const chunk of initialSearch.chunks) {
       allChunks.set(chunk.id, chunk)
     }
 
-    let totalSearchTokens = initialSearch.tokens
-    let totalSearchCost = initialSearch.cost
+    let totalSearchTokens = initialSearch.tokens + (initialSearch.rerankTokens || 0)
+    let totalSearchCost = initialSearch.cost + (initialSearch.rerankCost || 0)
     let iterations = 1
 
     // Build system prompt
@@ -179,9 +181,9 @@ ${initialContext}`
             const searchLimit = Math.min(args.limit || 5, 10)
 
             // Perform search
-            const searchResult = await performSearch(searchQuery, embeddings, userSDK, searchLimit)
-            totalSearchTokens += searchResult.tokens
-            totalSearchCost += searchResult.cost
+            const searchResult = await performSearch(searchQuery, embeddings, userSDK, searchLimit, rerank)
+            totalSearchTokens += searchResult.tokens + (searchResult.rerankTokens || 0)
+            totalSearchCost += searchResult.cost + (searchResult.rerankCost || 0)
 
             // Add new chunks (avoid duplicates)
             for (const chunk of searchResult.chunks) {
@@ -253,10 +255,11 @@ ${initialContext}`
     // Format sources (unique by URL)
     const sourcesMap = new Map<string, { url: string; title: string; chunk_index: number }>()
     for (const chunk of allChunks.values()) {
-      const key = chunk.url
+      const fullUrl = chunk.heading_slug ? `${chunk.url}#${chunk.heading_slug}` : chunk.url
+      const key = fullUrl
       if (!sourcesMap.has(key) || sourcesMap.get(key)!.chunk_index > chunk.chunk_index) {
         sourcesMap.set(key, {
-          url: chunk.url,
+          url: fullUrl,
           title: chunk.title,
           chunk_index: chunk.chunk_index,
         })

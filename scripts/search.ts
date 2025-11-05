@@ -31,6 +31,7 @@ function formatResult(result: SearchResult, index: number, compact: boolean = fa
   if (compact) {
     lines.push(`${index + 1}. ${result.title} (${result.score.toFixed(3)})`)
     lines.push(`   ${result.url}`)
+    lines.push(`   ${result.content.substring(0, 150)}${result.content.length > 150 ? '...' : ''}`)
   } else {
     lines.push(`${index + 1}. ${result.title}`)
     lines.push(`   URL: ${result.url}`)

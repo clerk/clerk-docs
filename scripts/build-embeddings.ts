@@ -27,6 +27,7 @@ interface EmbeddingChunk {
   sdk?: SDK // SDK extracted from URL
   base_url?: string // URL without SDK prefix (for grouping SDK variants)
   heading_slug?: string // slug to append to URL for direct linking to section
+  searchRank?: number // from frontmatter search.rank
 }
 
 interface EmbeddingsFile {
@@ -217,6 +218,7 @@ async function main() {
     chunk_index: number
     file_path: string
     heading_slug?: string
+    searchRank?: number
   }
 
   const chunksWithMetadata: ChunkWithMetadata[] = []
@@ -232,6 +234,14 @@ async function main() {
       const headingSlugs = await extractHeadingsWithSlugs(content)
       const textContent = await extractTextFromMdx(content)
       const chunks = chunkByHeadings(textContent, headingSlugs)
+
+      // Extract search.rank from frontmatter
+      const searchRank =
+        typeof frontmatter.search === 'object' &&
+        frontmatter.search !== null &&
+        typeof (frontmatter.search as any).rank === 'number'
+          ? Math.max(-10, Math.min(10, (frontmatter.search as any).rank))
+          : undefined
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i]
@@ -256,6 +266,7 @@ async function main() {
           chunk_index: i,
           file_path: result.filePath,
           heading_slug: chunk.headingSlug,
+          searchRank,
         })
       }
     } catch (error) {
@@ -315,6 +326,7 @@ async function main() {
           sdk,
           base_url: baseUrl,
           heading_slug: chunkMetadata.heading_slug,
+          searchRank: chunkMetadata.searchRank,
         })
       }
 
@@ -352,6 +364,7 @@ async function main() {
               sdk,
               base_url: baseUrl,
               heading_slug: chunkMetadata.heading_slug,
+              searchRank: chunkMetadata.searchRank,
             })
           }
         } catch (individualError) {

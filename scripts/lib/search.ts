@@ -22,6 +22,7 @@ export interface EmbeddingChunk {
   sdk?: SDK
   base_url?: string
   heading_slug?: string
+  searchRank?: number // from frontmatter search.rank
 }
 
 interface EmbeddingsFile {
@@ -304,7 +305,31 @@ export async function performSearch(
   // Calculate similarity scores
   console.debug(`[performSearch] Calculating cosine similarity for ${embeddings.length} chunks`)
   const scoredChunks: ScoredChunk[] = embeddings.map((chunk, idx) => {
-    const score = cosineSimilarity(queryEmbedding, chunk.embedding)
+    let score = cosineSimilarity(queryEmbedding, chunk.embedding)
+
+    // Apply title matching boost
+    const queryLower = query.toLowerCase().trim()
+    const titleLower = chunk.title.toLowerCase().trim()
+    
+    // Exact title match - strong boost
+    if (titleLower === queryLower) {
+      score = score * 1.5
+    }
+    // Title contains query - moderate boost
+    else if (titleLower.includes(queryLower)) {
+      score = score * 1.3
+    }
+    // Query contains title (partial match) - small boost
+    else if (queryLower.includes(titleLower) && titleLower.length > 3) {
+      score = score * 1.2
+    }
+
+    // Apply manual ranking boost from frontmatter search.rank
+    if (chunk.searchRank !== undefined) {
+      const rankMultiplier = 1.0 + chunk.searchRank / 20.0
+      score = score * rankMultiplier
+    }
+
     // Uncomment to trace individual scores, but can be very verbose:
     // console.debug(`[performSearch] Chunk ${idx}: score=${score} (${chunk.url})`)
     return {
@@ -317,6 +342,26 @@ export async function performSearch(
   let filteredChunks = filterChunksBySDK(scoredChunks, userSDK)
   console.debug(`[performSearch] ${filteredChunks.length} chunks after SDK filter (${userSDK || 'none'})`)
 
+  // Limit results per file to prevent single files from dominating results
+  // Group by base_url (or url if no base_url) and take only the top chunk per file
+  const chunksByFile = new Map<string, ScoredChunk[]>()
+  for (const chunk of filteredChunks) {
+    const fileKey = chunk.base_url || chunk.url
+    if (!chunksByFile.has(fileKey)) {
+      chunksByFile.set(fileKey, [])
+    }
+    chunksByFile.get(fileKey)!.push(chunk)
+  }
+
+  // Take only the top chunk from each file
+  const deduplicatedChunks: ScoredChunk[] = []
+  for (const fileChunks of chunksByFile.values()) {
+    const topChunk = fileChunks.sort((a, b) => b.score - a.score)[0]
+    deduplicatedChunks.push(topChunk)
+  }
+
+  console.debug(`[performSearch] ${deduplicatedChunks.length} chunks after limiting to one per file`)
+
   let finalChunks: ScoredChunk[]
   let rerankTokens = 0
   let rerankCost = 0
@@ -325,7 +370,7 @@ export async function performSearch(
     // Stage 1: Get candidate chunks (more than requested for reranking)
     const candidateLimit = Math.min(limit + 50, 200)
     console.debug(`[performSearch] Selecting up to ${candidateLimit} candidate chunks for reranking`)
-    const candidateChunks = filteredChunks.sort((a, b) => b.score - a.score).slice(0, candidateLimit)
+    const candidateChunks = deduplicatedChunks.sort((a, b) => b.score - a.score).slice(0, candidateLimit)
 
     // Stage 2: Rerank candidates using OpenAI
     console.debug(`[performSearch] Sending ${candidateChunks.length} candidate chunks to rerankWithOpenAI`)
@@ -340,7 +385,7 @@ export async function performSearch(
   } else {
     // No reranking - just sort by similarity score and take top results
     console.debug(`[performSearch] Reranking disabled, using cosine similarity scores`)
-    finalChunks = filteredChunks.sort((a, b) => b.score - a.score).slice(0, limit)
+    finalChunks = deduplicatedChunks.sort((a, b) => b.score - a.score).slice(0, limit)
   }
 
   // Calculate totals

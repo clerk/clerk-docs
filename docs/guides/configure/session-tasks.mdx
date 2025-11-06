@@ -104,27 +104,14 @@ The `<RedirectToTasks />` control component redirects users to the appropriate t
 
 ### Middleware-based redirects
 
-You can use the `isAuthenticated` property in middleware to protect routes. By default, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to the sign-in page using the `redirectToSignIn()` method.
-
-```tsx {{ filename: 'app/proxy.ts' }}
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  const { isAuthenticated, redirectToSignIn } = await auth()
-
-  // `isAuthenticated` will be `false` for pending users
-  // and pending users won't be able to access protected routes
-  if (!isAuthenticated && isProtectedRoute(req)) {
-    // Add logic to handle pending users
-    // This example redirects pending users to the sign-in page
-    // so they can fulfill the session tasks
-    return redirectToSignIn()
-  }
-})
-```
+<If sdk="nextjs">
+  There are many ways to protect routes using middleware. If you'd like to simply redirect users to the sign-in page if they are signed-out, you can [use `auth.protect()`](#using-auth-protect). If you'd like to have more control over what your app does based on user authentication status, you can [use the `isAuthenticated` property](#using-is-authenticated).
+</If>
 
 <If sdk="nextjs">
-  For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to an `active` (signed-in) state.
+  ### Using `auth.protect()`
+
+  When using `auth.protect()` in middleware to protect routes, it will redirect users to the sign-in page if they are signed-out. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to an `active` (signed-in) state.
 
   <Include src="_partials/nextjs/nextjs-15-callout" />
 
@@ -149,6 +136,37 @@ export default clerkMiddleware(async (auth, req) => {
   }
   ```
 </If>
+
+### Using `isAuthenticated`
+
+When using the `isAuthenticated` property in middleware to protect routes, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to a custom page to fulfill the session tasks.
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+export default clerkMiddleware(async (auth, req: NextRequest) => {
+  const { isAuthenticated, redirectToSignIn, sessionStatus } = await auth()
+
+  // Send users with pending sessions to the /session-tasks page
+  if (!isAuthenticated && sessionStatus === 'pending' && isProtectedRoute(req)) {
+    // Add logic to handle pending users
+    // This example redirects pending users to the /session-tasks page
+    // so they can fulfill the session tasks
+    const url = req.nextUrl.clone()
+    url.pathname = '/session-tasks'
+    return NextResponse.redirect(url)
+  }
+
+  // Send users who are not authenticated
+  // and don't have pending tasks to the sign-in page
+  if (!isAuthenticated && isProtectedRoute(req)) {
+    return redirectToSignIn()
+  }
+})
+```
 
 ## Session handling
 

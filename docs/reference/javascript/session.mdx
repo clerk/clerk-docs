@@ -1,6 +1,10 @@
 ---
 title: Session
 description: The Session object is an abstraction over an HTTP session. It models the period of information exchange between a user and the server.
+search:
+  rank: 1
+  keywords:
+     - getToken()
 sdk: js-frontend
 ---
 
@@ -201,7 +205,7 @@ await clerk.session.attemptSecondFactorVerification({
 
 ### `checkAuthorization()`
 
-Checks if the user is [authorized for the specified role or permission](/docs/guides/secure/authorization-checks) or requires the user to [reverify their credentials](/docs/guides/secure/reverification) if their last verification is older than allowed.
+Checks if the user is [authorized for the specified role, permission, feature, or plan](/docs/guides/secure/authorization-checks) or requires the user to [reverify their credentials](/docs/guides/secure/reverification) if their last verification is older than allowed.
 
 ```ts
 function checkAuthorization(param: CheckAuthorizationParams): boolean
@@ -210,20 +214,52 @@ function checkAuthorization(param: CheckAuthorizationParams): boolean
 #### `CheckAuthorizationParams`
 
 ```typescript
-type CheckAuthorizationParams =
+type WithReverification<T> = T & {
+  /**
+   * The reverification configuration to check for. This feature is currently in public beta. **It is not recommended for production use.**
+   */
+  reverification?: ReverificationConfig
+}
+
+type CheckAuthorizationParams = WithReverification<
   | {
-      role: ClerkDefaultRole | CustomRole
+      /**
+       * The [role](https://clerk.com/docs/guides/organizations/roles-and-permissions) to check for.
+       */
+      role: OrganizationCustomRoleKey
+      /**
+       * The [permission](https://clerk.com/docs/guides/organizations/roles-and-permissions) to check for.
+       */
       permission?: never
+      /**
+       * The [feature](https://clerk.com/docs/guides/billing/overview) to check for.
+       */
+      feature?: never
+      /**
+       * The [plan](https://clerk.com/docs/guides/billing/overview) to check for.
+       */
+      plan?: never
     }
   | {
       role?: never
-      permission: ClerkDefaultPermission | CustomPermission
+      permission: OrganizationPermissionKey
+      feature?: never
+      plan?: never
     }
   | {
       role?: never
       permission?: never
-      reverification: ReverficationConfig
+      feature: Autocomplete<`user:${string}` | `org:${string}`>
+      plan?: never
     }
+  | {
+      role?: never
+      permission?: never
+      feature?: never
+      plan: Autocomplete<`user:${string}` | `org:${string}`>
+    }
+  | { role?: never; permission?: never; feature?: never; plan?: never }
+>
 ```
 
 <Properties>
@@ -238,6 +274,20 @@ type CheckAuthorizationParams =
   - `string`
 
   Accepts [permission](/docs/guides/organizations/roles-and-permissions#permissions) key.
+
+  ---
+
+  - `feature`
+  - `string`
+
+  Accepts [feature](/docs/guides/secure/features) key.
+
+  ---
+
+  - `plan`
+  - `string`
+
+  Accepts [plan](/docs/guides/billing/overview) key.
 
   ---
 
@@ -308,7 +358,7 @@ function getToken(options?: GetTokenOptions): Promise<string | null>
   - `template?`
   - `string`
 
-  The name of the JWT template from the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=jwt-templates) to generate a new token from. E.g. 'firebase', 'grafbase', or your custom template's name.
+  The name of the JWT template from the [Clerk Dashboard](https://dashboard.clerk.com/~/jwt-templates) to generate a new token from. E.g. 'firebase', 'grafbase', or your custom template's name.
 
   ---
 

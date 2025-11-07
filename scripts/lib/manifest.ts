@@ -44,6 +44,7 @@ export type ManifestItem = {
   icon?: Icon
   target?: '_blank'
   sdk?: SDK[]
+  shortcut?: boolean
 }
 
 export type ManifestGroup = {
@@ -71,6 +72,7 @@ const createManifestSchema = (config: BuildConfig) => {
       icon: icon.optional(),
       target: z.enum(['_blank']).optional(),
       sdk: z.array(sdk).optional(),
+      shortcut: z.boolean().optional(),
     })
     .strict()
 

@@ -200,6 +200,34 @@ Code examples should always have an explanation preceding them. Typically, they 
 
 > ✅ The following example demonstrates how to configure Clerk and Convex's providers. Clerk's `useAuth()` hook must be passed to `<ConvexProviderWithClerk>` and Clerk's `<ClerkProvider>` must be wrapped around it.
 
+### List item punctuation
+
+When list items are full sentences, end with a period.
+
+> ❌
+>
+> - Click **Save**
+> - The system sends you a confirmation email
+
+> ✅
+>
+> - Click **Save**.
+> - The system sends you a confirmation email.
+
+When list items aren't full sentences, don't use a period.
+
+> ❌
+>
+> - Name.
+> - Email.
+> - Password.
+
+> ✅
+>
+> - Name
+> - Email
+> - Password
+
 ## Accessibility
 
 ### Do not assume proficiency
@@ -311,19 +339,19 @@ Be sure to use the correct term with components vs functions.
 
 ### Provide users with clear instructions and a direct link when navigating the Clerk Dashboard
 
-When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/last-active?path=PAGE`**
+When instructing learners to perform an operation in the Clerk Dashboard, begin with "In the Clerk Dashboard" and end with a link to the page you're directing them to using this URL syntax: **`https://dashboard.clerk.com/~/PAGE`**
 
 > ❌
 > Go to **User & Authentication** in your dashboard.
 
 > ✅
-> In the Clerk Dashboard, navigate to the [**User & Authentication**](https://dashboard.clerk.com/last-active?path=user-authentication) page.
+> In the Clerk Dashboard, navigate to the [**User & Authentication**](https://dashboard.clerk.com/~/user-authentication) page.
 
 > ❌
 > Find fallback redirects in the Redirect tab on the Account Portal in the Clerk Dashboard.
 
 > ✅
-> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/last-active?path=account-portal)** page and open the **Redirects** tab.
+> To specify the fallback redirects, in the Clerk Dashboard, go to the **[Account Portal](https://dashboard.clerk.com/~/account-portal)** page and open the **Redirects** tab.
 
 ### Avoid using "appears"
 
@@ -336,7 +364,7 @@ When instructing learners to perform an operation in the Clerk Dashboard, begin 
 ### Address the top of the Clerk Dashboard
 
 > ❌
-> In the top navigation bar of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/last-active?path=users).
+> In the top navigation bar of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/~/users).
 
 > ✅
-> At the top of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/last-active?path=users).
+> At the top of the Clerk Dashboard, select [**Users**](https://dashboard.clerk.com/~/users).

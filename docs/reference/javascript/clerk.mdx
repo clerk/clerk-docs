@@ -9,48 +9,6 @@ The `Clerk` class is the main entrypoint class for the `@clerk/clerk-js` package
 ## Properties
 
 <Properties>
-  - `version`
-  - `string`
-
-  A getter for the Clerk SDK version
-
-  ---
-
-  - `loaded`
-  - `boolean`
-
-  A getter to see if the `Clerk` object is ready for use or not
-
-  ---
-
-  - `isSatellite`
-  - `boolean`
-
-  Clerk Flag for satellite apps
-
-  ---
-
-  - `domain`
-  - `string`
-
-  A getter for the current Clerk app's domain. Prefixed with `clerk.` on production if not already prefixed. Returns `""` when ran on the server
-
-  ---
-
-  - `proxyUrl`
-  - `string`
-
-  A getter for your Clerk app's proxy URL. Required for applications that run behind a reverse proxy. Can be either a relative path (`/__clerk`) or a full URL (`https://<your-domain>/__clerk`).
-
-  ---
-
-  - `instanceType`
-  - `'production' | 'development'`
-
-  A getter to see if a Clerk instance is running in production or development mode
-
-  ---
-
   - `client`
   - [`Client`][client-ref]
 
@@ -58,17 +16,38 @@ The `Clerk` class is the main entrypoint class for the `@clerk/clerk-js` package
 
   ---
 
-  - `session`
-  - <code>[Session][session-ref] | null | undefined</code>
+  - `domain`
+  - `string`
 
-  The current `Session`, which is guaranteed to be one of the sessions in `Client.sessions`. If there is no current session, this field will be `null`. If the session is loading, this field will be `undefined`.
+  The current Clerk app's domain. Prefixed with `clerk.` on production if not already prefixed. Returns `""` when ran on the server.
 
   ---
 
-  - `user`
-  - <code>[User][user-ref] | null | undefined</code>
+  - `instanceType`
+  - `'production' | 'development'`
 
-  A shortcut to `Session.user` which holds the currently active `User` object. If the session is `null` or `undefined`, the user field will match.
+  Indicates if the Clerk instance is running in production or development mode.
+
+  ---
+
+  - `isSatellite`
+  - `boolean`
+
+  A boolean that indicates if the instance is a satellite app.
+
+  ---
+
+  - `isSignedIn`
+  - `boolean`
+
+  A boolean that indicates if the user is signed in.
+
+  ---
+
+  - `loaded`
+  - `boolean`
+
+  A boolean that indicates if the `Clerk` object is ready for use. Set to `false` when the `status` is `'loading'` or `'error'`. Set to `true` when the `status` is either `'ready'` or `'degraded'`.
 
   ---
 
@@ -79,10 +58,64 @@ The `Clerk` class is the main entrypoint class for the `@clerk/clerk-js` package
 
   ---
 
+  - `proxyUrl`
+  - `string`
+
+  Your Clerk app's proxy URL. Required for applications that run behind a reverse proxy. Can be either a relative path (`/__clerk`) or a full URL (`https://<your-domain>/__clerk`).
+
+  ---
+
   - `publishableKey`
   - `string | undefined`
 
-  The Clerk Publishable Key for your instance. This can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  The Clerk Publishable Key for your instance. This can be found on the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
+
+  ---
+
+  - `sdkMetadata`
+  - `{ name: string; version: string; environment: string }`
+
+  Contains information about the SDK that the host application is using. You don't need to set this value yourself unless you're [developing an SDK](/docs/guides/development/sdk-development/overview).
+
+  ---
+
+  - `session`
+  - <code>[Session][session-ref] | null | undefined</code>
+
+  The currently active `Session`, which is guaranteed to be one of the sessions in `Client.sessions`. If there is no active session, this field will be `null`. If the session is loading, this field will be `undefined`.
+
+  ---
+
+  - `status`
+  - `'degraded' | 'error' | 'loading' | 'ready'`
+
+  The status of the Clerk instance. Possible values are:
+
+  - `'degraded'`: Set when Clerk is partially operational.
+  - `'error'`: Set when hotloading `clerk-js` failed or `Clerk.load()` failed.
+  - `'loading'`: Set during initialization.
+  - `'ready'`: Set when Clerk is fully operational.
+
+  ---
+
+  - `telemetry?`
+  - `{ disabled: boolean, debug: boolean }`
+
+  [Telemetry](/docs/guides/how-clerk-works/security/clerk-telemetry) configuration.
+
+  ---
+
+  - `user`
+  - <code>[User][user-ref] | null | undefined</code>
+
+  A shortcut to `Session.user` which holds the currently active `User` object. If the session is `null` or `undefined`, the user field will match.
+
+  ---
+
+  - `version`
+  - `string`
+
+  The Clerk SDK version.
 </Properties>
 
 ## Methods
@@ -495,7 +528,7 @@ class Clerk {
   - `key`
   - `string`
 
-  The Clerk Publishable Key for your instance. This can be found on the [**API keys**](https://dashboard.clerk.com/last-active?path=api-keys) page in the Clerk Dashboard.
+  The Clerk Publishable Key for your instance. This can be found on the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
 
   ---
 
@@ -874,6 +907,81 @@ await clerk.navigate('/dashboard')
   - `string | undefined`
 
   The route to navigate to.
+</Properties>
+
+### `on()`
+
+Registers an event handler for a specific Clerk event.
+
+```ts
+type OnEventListener = <E extends ClerkEvent>(
+  event: E,
+  handler: EventHandler<E>,
+  opt?: {
+    notify: boolean
+  },
+) => void
+```
+
+#### Example
+
+```js
+window.Clerk.on('status', (status) => {})
+window.Clerk.on('status', (status) => {}, { notify: true })
+```
+
+#### Parameters
+
+<Properties>
+  - `event`
+  - `E`
+
+  The event to listen to. Currently, the only supported event is `status`.
+
+  ---
+
+  - `handler`
+  - `EventHandler<E>`
+
+  The handler to call when the event is triggered.
+
+  ---
+
+  - `opt?`
+  - `{ notify: boolean }`
+
+  An optional object to control the behavior of the event handler. If true, and the event was previously dispatched, handler will be called immediately with the latest payload
+</Properties>
+
+### `off()`
+
+Removes an event handler for a specific Clerk event.
+
+```ts
+type OffEventListener = <E extends ClerkEvent>(event: E, handler: EventHandler<E>) => void
+```
+
+#### Example
+
+```js
+window.Clerk.off('status')
+window.Clerk.off('status', (status) => {})
+```
+
+#### Parameters
+
+<Properties>
+  - `event`
+  - `E`
+
+  The event to remove the handler from. Currently, the only supported event is `status`.
+
+  ---
+
+  - `handler`
+  - `EventHandler<E>`
+
+  The handler to remove.
 </Properties>
 
 ### `redirectToCreateOrganization()`

@@ -1801,6 +1801,72 @@ sourceFile: /docs/api-doc.mdx
 `)
   })
 
+  test('should remove /index from canonical URLs for index.mdx files', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Home', href: '/docs/index' },
+              { title: 'Guides', href: '/docs/guides/index' },
+              { title: 'SDK Overview', href: '/docs/sdk/index' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/index.mdx',
+        content: `---
+title: Home
+description: Welcome to the docs
+---
+
+# Welcome
+`,
+      },
+      {
+        path: './docs/guides/index.mdx',
+        content: `---
+title: Guides
+description: Guides overview
+---
+
+# Guides Overview
+`,
+      },
+      {
+        path: './docs/sdk/index.mdx',
+        content: `---
+title: SDK Overview
+description: SDK documentation
+sdk: react, nextjs
+---
+
+# SDK Overview
+`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    // Test root index.mdx - canonical should be /docs not /docs/index
+    expect(await readFile('./dist/index.mdx')).toContain('canonical: /docs\n')
+
+    // Test nested index.mdx - canonical should be /docs/guides not /docs/guides/index
+    expect(await readFile('./dist/guides/index.mdx')).toContain('canonical: /docs/guides\n')
+
+    // Test SDK-scoped nested index.mdx - canonical should be /docs/:sdk:/sdk not /docs/:sdk:/sdk/index
+    expect(await readFile('./dist/react/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
+    expect(await readFile('./dist/nextjs/sdk/index.mdx')).toContain('canonical: /docs/:sdk:/sdk\n')
+  })
+
   test('should not inject :sdk: for single SDK documents when multiple SDKs are available', async () => {
     const { tempDir, readFile, listFiles } = await createTempFiles([
       {

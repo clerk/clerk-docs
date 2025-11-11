@@ -879,7 +879,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
               sdkScoped: 'false',
-              canonical: doc.file.href,
+              canonical: doc.file.href.replace('/index', ''),
               sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
             }),
           )
@@ -961,7 +961,7 @@ ${yaml.stringify({
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
   search: { exclude: true },
-  canonical: canonical,
+  canonical: canonical.replace('/index', ''),
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
@@ -1014,6 +1014,11 @@ ${yaml.stringify({
           const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
           const isSingleSdkDocument = sdks.length === 1
 
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
+
           const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
             remark()
               .use(remarkFrontmatter)
@@ -1029,10 +1034,7 @@ ${yaml.stringify({
               .use(
                 insertFrontmatter({
                   sdkScoped: 'true',
-                  canonical:
-                    hrefAlreadyContainsSdk || isSingleSdkDocument
-                      ? doc.file.href
-                      : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
+                  canonical: canonical.replace('/index', ''),
                   lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
                   sdk: sdks.join(', '),
                   availableSdks: sdks?.join(','),

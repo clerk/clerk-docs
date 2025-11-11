@@ -1,0 +1,383 @@
+---
+title: Sign in with Google
+description: Learn how to use Clerk to natively Sign in with Google in your Expo app.
+sdk: expo
+---
+
+This guide will teach you how to add native Sign in with Google to your Clerk Expo apps.
+
+> [!NOTE]
+> Google Sign-In works on both iOS and Android devices and requires a native build. It will not work with Expo Go.
+
+<Steps>
+  ## Install dependencies
+
+  The [@react-native-google-signin/google-signin library](https://react-native-google-signin.github.io/docs/) provides access to Google's native Sign-In functionality from your Expo app.
+
+  Run the following command to install the library:
+
+  ```npm {{ filename: 'terminal' }}
+  npm install @react-native-google-signin/google-signin
+  ```
+
+  ## Configure Google Cloud Console
+
+  Before you can use Google Sign-In in your app, you need to create OAuth 2.0 credentials in the Google Cloud Console.
+
+  ### Create a Google Cloud Project
+
+  1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+  2. Create a new project or select an existing one
+  3. Enable the **Google+ API** for your project
+
+  ### Create OAuth 2.0 Credentials
+
+  You'll need to create three sets of credentials:
+
+  #### 1. Web Client ID (for token verification)
+
+  1. Navigate to **APIs & Services** → **Credentials**
+  2. Click **Create Credentials** → **OAuth client ID**
+  3. Select **Web application**
+  4. Add a name (e.g., "Web client for token verification")
+  5. Click **Create**
+  6. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+
+  #### 2. iOS Client ID
+
+  1. Click **Create Credentials** → **OAuth client ID**
+  2. Select **iOS**
+  3. Add your iOS **Bundle ID** (from your `app.json` or `app.config.ts`)
+  4. Click **Create**
+  5. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`
+
+  #### 3. Android Client ID
+
+  1. Click **Create Credentials** → **OAuth client ID**
+  2. Select **Android**
+  3. Add your Android **Package name** (from your `app.json` or `app.config.ts`)
+  4. Add your **SHA-1 certificate fingerprint**:
+
+     For debug builds:
+     ```bash {{ filename: 'terminal' }}
+     # macOS/Linux
+     keytool -keystore ~/.android/debug.keystore -list -v -alias androiddebugkey -storepass android -keypass android
+
+     # Windows
+     keytool -keystore %USERPROFILE%\.android\debug.keystore -list -v -alias androiddebugkey -storepass android -keypass android
+     ```
+
+     For release builds, use your release keystore
+  5. Click **Create**
+  6. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`
+
+  ## Add your iOS application to Clerk
+
+  Add your iOS application to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page in the Clerk Dashboard. You will need your iOS app's **App ID Prefix** (Team ID) and **Bundle ID**.
+
+  ## Add your Android application to Clerk
+
+  Add your Android application to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page in the Clerk Dashboard. You will need your Android app's **Package Name**.
+
+  ## Enable Google as a social connection
+
+  1. In the Clerk Dashboard, navigate to the [**SSO Connections**](https://dashboard.clerk.com/last-active?path=user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For all users**.
+  1. In the **Choose provider** dropdown, select **Google**.
+  1. Ensure that **Enable for sign-up and sign-in** is toggled on.
+
+  ## Configure environment variables
+
+  Add the Google OAuth client IDs to your `.env` file:
+
+  ```bash {{ filename: '.env' }}
+  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your-ios-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your-android-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+  ```
+
+  ## Add @react-native-google-signin/google-signin to your app config
+
+  Add the `@react-native-google-signin/google-signin` plugin to your `app.json` or `app.config.ts` and configure it with your client IDs.
+
+  <CodeBlockTabs options={["app.json", "app.config.ts"]}>
+    ```json {{ filename: 'app.json' }}
+    {
+      "expo": {
+        "plugins": [
+          [
+            "@react-native-google-signin/google-signin",
+            {
+              "iosClientId": "your-ios-client-id.apps.googleusercontent.com",
+              "androidClientId": "your-android-client-id.apps.googleusercontent.com"
+            }
+          ]
+        ]
+      }
+    }
+    ```
+
+    ```ts {{ filename: 'app.config.ts' }}
+    export default {
+      expo: {
+        plugins: [
+          [
+            '@react-native-google-signin/google-signin',
+            {
+              iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+              androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+            },
+          ],
+        ],
+      },
+    }
+    ```
+  </CodeBlockTabs>
+
+  ## Build your sign-in flow
+
+  The following example uses the [`useSignInWithGoogle()`](/docs/reference/expo/use-google-sign-in) hook to manage the Google sign-in flow. It handles the ID token exchange with Clerk's Backend and automatically manages the transfer flow between sign-in and sign-up.
+
+  <Tabs items={["Sign-in page", "Sign-up page", "Reusable component"]}>
+    <Tab>
+      The following example demonstrates how to add Google Sign-In to your sign-in page.
+
+      ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+      import { useSignIn, useSignInWithGoogle } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignInPage() {
+        const { signIn, setActive, isLoaded } = useSignIn()
+        const { startGoogleAuthenticationFlow } = useSignInWithGoogle()
+        const router = useRouter()
+
+        const onGoogleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startGoogleAuthenticationFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            // User canceled the sign-in flow
+            if (err.code === 'SIGN_IN_CANCELLED' || err.code === '-5') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Google Sign-In')
+            console.error('Google Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        // Only show on iOS and Android
+        if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.googleButton} onPress={onGoogleSignInPress}>
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-in form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        googleButton: {
+          backgroundColor: '#4285F4',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        googleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      The following example demonstrates how to add Google Sign-In to your sign-up page. The same `useSignInWithGoogle()` hook works for both sign-in and sign-up, and Clerk automatically handles the transfer flow:
+
+      - If the Google account exists, it completes sign-in.
+      - If the Google account is new, it creates a new sign-up.
+
+      ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
+      import { useSignUp, useSignInWithGoogle } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+
+      export default function SignUpPage() {
+        const { signUp, setActive, isLoaded } = useSignUp()
+        const { startGoogleAuthenticationFlow } = useSignInWithGoogle()
+        const router = useRouter()
+
+        const onGoogleSignInPress = async () => {
+          try {
+            const { createdSessionId, setActive } = await startGoogleAuthenticationFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+              router.replace('/')
+            }
+          } catch (err: any) {
+            if (err.code === 'SIGN_IN_CANCELLED' || err.code === '-5') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Google Sign-In')
+            console.error('Google Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+          return null
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.googleButton} onPress={onGoogleSignInPress}>
+              <Text style={styles.googleButtonText}>Sign up with Google</Text>
+            </TouchableOpacity>
+
+            {/* Your email/password sign-up form */}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        googleButton: {
+          backgroundColor: '#4285F4',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        googleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+      })
+      ```
+    </Tab>
+
+    <Tab>
+      The following example demonstrates how to implement a reusable component that works on both sign-in and sign-up pages.
+
+      ```tsx {{ filename: 'components/GoogleSignInButton.tsx', collapsible: true }}
+      import { useSignInWithGoogle } from '@clerk/clerk-expo'
+      import { useRouter } from 'expo-router'
+      import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+
+      interface GoogleSignInButtonProps {
+        onSignInComplete?: () => void
+        showDivider?: boolean
+      }
+
+      export function GoogleSignInButton({
+        onSignInComplete,
+        showDivider = true,
+      }: GoogleSignInButtonProps) {
+        const { startGoogleAuthenticationFlow } = useSignInWithGoogle()
+        const router = useRouter()
+
+        // Only render on iOS and Android
+        if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+          return null
+        }
+
+        const handleGoogleSignIn = async () => {
+          try {
+            const { createdSessionId, setActive } = await startGoogleAuthenticationFlow()
+
+            if (createdSessionId && setActive) {
+              await setActive({ session: createdSessionId })
+
+              if (onSignInComplete) {
+                onSignInComplete()
+              } else {
+                router.replace('/')
+              }
+            }
+          } catch (err: any) {
+            if (err.code === 'SIGN_IN_CANCELLED' || err.code === '-5') {
+              return
+            }
+
+            Alert.alert('Error', err.message || 'An error occurred during Google Sign-In')
+            console.error('Google Sign-In error:', JSON.stringify(err, null, 2))
+          }
+        }
+
+        return (
+          <>
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </TouchableOpacity>
+
+            {showDivider && (
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            )}
+          </>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        googleButton: {
+          backgroundColor: '#4285F4',
+          padding: 15,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginBottom: 10,
+        },
+        googleButtonText: {
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: '600',
+        },
+        divider: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginVertical: 20,
+        },
+        dividerLine: {
+          flex: 1,
+          height: 1,
+          backgroundColor: '#ccc',
+        },
+        dividerText: {
+          marginHorizontal: 10,
+          color: '#666',
+        },
+      })
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Create a native build
+
+  Create a native build with EAS Build or a local prebuild, since Google Sign-In is not supported in Expo Go.
+
+  ```bash {{ filename: 'terminal' }}
+  # Using EAS Build
+  eas build --platform ios
+  eas build --platform android
+
+  # Or using local prebuild
+  npx expo prebuild && npx expo run:ios --device
+  npx expo prebuild && npx expo run:android --device
+  ```
+</Steps>

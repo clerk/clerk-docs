@@ -28,11 +28,23 @@ export const validateLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
-      if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed
       node.url = removeMdxSuffix(node.url)
+
+      if (node.url.startsWith('docs/')) {
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'doc-link-must-start-with-a-slash',
+          [node.url as string],
+          node.position,
+        )
+      }
+      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
+      if (!('children' in node)) return node
 
       let [url, hash] = (node.url as string).split('#')
 

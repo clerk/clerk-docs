@@ -200,6 +200,34 @@ Code examples should always have an explanation preceding them. Typically, they 
 
 > ✅ The following example demonstrates how to configure Clerk and Convex's providers. Clerk's `useAuth()` hook must be passed to `<ConvexProviderWithClerk>` and Clerk's `<ClerkProvider>` must be wrapped around it.
 
+### List item punctuation
+
+When list items are full sentences, end with a period.
+
+> ❌
+>
+> - Click **Save**
+> - The system sends you a confirmation email
+
+> ✅
+>
+> - Click **Save**.
+> - The system sends you a confirmation email.
+
+When list items aren't full sentences, don't use a period.
+
+> ❌
+>
+> - Name.
+> - Email.
+> - Password.
+
+> ✅
+>
+> - Name
+> - Email
+> - Password
+
 ## Accessibility
 
 ### Do not assume proficiency

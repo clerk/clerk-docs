@@ -11,7 +11,7 @@ const EMBEDDING_MODELS = {
     batch_cost: 0.065 / 1_000_000,
     max_tokens: 8_192,
   },
-} as const
+} as const satisfies Record<string, { model: EmbeddingModel; cost: number; batch_cost: number; max_tokens: number }>
 
 import 'dotenv/config'
 import { OpenAI } from 'openai'
@@ -24,22 +24,36 @@ import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { remark } from 'remark'
 import remarkMdx from 'remark-mdx'
 import { filter as mdastFilter } from 'unist-util-filter'
+import type { EmbeddingModel } from 'openai/resources/embeddings.mjs'
 
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
 const EMBEDDING_MODEL = EMBEDDING_MODELS[EMBEDDING_MODEL_SIZE]
+const EMBEDDING_DIMENSIONS = cliFlag('dimensions', z.coerce.number().positive().optional()) ?? 1_536 // higher dimensions are more accurate but more expensive, and slower
 const OPENAI_EMBEDDINGS_API_KEY = env('OPENAI_EMBEDDINGS_API_KEY')
 // We want to use the dist folder as the markdown in there has the partials, tooltips, typedocs, etc. embedded in it.
-const DOCUMENTATION_FOLDER = cliFlag('docs', true) ?? './dist'
-const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', true) ?? './dist/embeddings.json'
+const DOCUMENTATION_FOLDER = cliFlag('docs', z.string().optional()) ?? './dist'
+const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './dist/embeddings.json'
+const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().positive().optional()) ?? 150_000 - 10_000 // 10k tokens for safety
+
+type Chunk = {
+  canonical: string
+  sdk?: string[]
+  heading?: string
+  content: string
+  tokens: number
+  cost: number
+}
 
 async function main() {
   console.log({
     EMBEDDING_MODEL_SIZE,
     EMBEDDING_MODEL,
+    EMBEDDING_DIMENSIONS,
     ESTIMATE_COST,
     DOCUMENTATION_FOLDER,
     EMBEDDINGS_OUTPUT_PATH,
+    OPENAI_MAX_TOKENS_PER_REQUEST,
   })
 
   // List all the markdown files in the dist folder
@@ -89,15 +103,43 @@ async function main() {
       let currentHeading: string | undefined = undefined
       const slugify = slugifyWithCounter()
 
-      return content.split('\n').reduce(
-        (chunks, line, lineCount, lines) => {
-          const trimmedLine = line.trim()
+      return content.split('\n').reduce((chunks, line, lineCount, lines) => {
+        const trimmedLine = line.trim()
 
-          // Detect if the current line is a h2 or h3 heading
-          const heading = isH2(trimmedLine) ?? isH3(trimmedLine)
+        // Detect if the current line is a h2 or h3 heading
+        const heading = isH2(trimmedLine) ?? isH3(trimmedLine)
 
-          if (currentChunkContent !== null && heading) {
-            // We have reached a new heading, so we need to add the current chunk to the chunks array
+        if (currentChunkContent !== null && heading) {
+          // We have reached a new heading, so we need to add the current chunk to the chunks array
+          const content = currentChunkContent.join('\n')
+          const tokens = calcTokens(content)
+
+          if (tokens > EMBEDDING_MODEL.max_tokens) {
+            throw new Error(`Chunk content is too large, max tokens: ${EMBEDDING_MODEL.max_tokens}, tokens: ${tokens}`)
+          }
+
+          chunks.push({
+            canonical: frontmatter.canonical,
+            sdk: frontmatter.sdk,
+            heading: currentHeading ? slugify(currentHeading) : undefined,
+            content,
+            tokens,
+            cost: calcTokenCost({ tokens }),
+          })
+          // Reset the current chunk content
+          currentChunkContent = null
+        }
+
+        if (heading) {
+          currentHeading = heading
+        }
+
+        if (currentChunkContent !== null && !heading) {
+          // Add the current line to the current chunk content
+          currentChunkContent.push(trimmedLine)
+
+          if (lineCount === lines.length - 1) {
+            // We have reached the end of the file, so we need to add the current chunk to the chunks array
             const content = currentChunkContent.join('\n')
             const tokens = calcTokens(content)
 
@@ -115,56 +157,16 @@ async function main() {
               tokens,
               cost: calcTokenCost({ tokens }),
             })
-            // Reset the current chunk content
-            currentChunkContent = null
           }
+        }
 
-          if (heading) {
-            currentHeading = heading
-          }
+        if (currentChunkContent === null) {
+          // We are starting a new chunk, so just add in the first line
+          currentChunkContent = [trimmedLine]
+        }
 
-          if (currentChunkContent !== null && !heading) {
-            // Add the current line to the current chunk content
-            currentChunkContent.push(trimmedLine)
-
-            if (lineCount === lines.length - 1) {
-              // We have reached the end of the file, so we need to add the current chunk to the chunks array
-              const content = currentChunkContent.join('\n')
-              const tokens = calcTokens(content)
-
-              if (tokens > EMBEDDING_MODEL.max_tokens) {
-                throw new Error(
-                  `Chunk content is too large, max tokens: ${EMBEDDING_MODEL.max_tokens}, tokens: ${tokens}`,
-                )
-              }
-
-              chunks.push({
-                canonical: frontmatter.canonical,
-                sdk: frontmatter.sdk,
-                heading: currentHeading ? slugify(currentHeading) : undefined,
-                content,
-                tokens,
-                cost: calcTokenCost({ tokens }),
-              })
-            }
-          }
-
-          if (currentChunkContent === null) {
-            // We are starting a new chunk, so just add in the first line
-            currentChunkContent = [trimmedLine]
-          }
-
-          return chunks
-        },
-        [] as {
-          canonical: string
-          sdk?: string[]
-          heading?: string
-          content: string
-          tokens: number
-          cost: number
-        }[],
-      )
+        return chunks
+      }, [] as Chunk[])
     } catch (error) {
       throw new Error(`Failed to chunk ${fullPath}`, { cause: error })
     }
@@ -185,7 +187,54 @@ async function main() {
     process.exit(0)
   }
 
+  const batches = markdownChunks.reduce(
+    (batches, chunk) => {
+      // Find the next batch that has less than OPENAI_MAX_TOKENS_PER_REQUEST tokens
+      const nextBatch = batches.find(
+        (batch) => batch.reduce((acc, chunk) => acc + chunk.tokens, 0) < OPENAI_MAX_TOKENS_PER_REQUEST,
+      )
+      if (nextBatch) {
+        nextBatch.push(chunk)
+      } else {
+        batches.push([chunk])
+      }
+
+      return batches
+    },
+    [[]] as Chunk[][],
+  )
+  console.info(`✓ Split chunks into ${batches.length} batches`)
+
   const openai = new OpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
+
+  const chunksWithEmbeddings = await processQueue(batches, async (batch, index) => {
+    const tokens = batch.reduce((acc, chunk) => acc + chunk.tokens, 0)
+    console.info(
+      `Generating embeddings for batch ${index} of ${batches.length} (${batch.length} chunks, ${tokens} tokens)`,
+    )
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL.model,
+      input: batch.map((chunk) => chunk.content),
+      dimensions: EMBEDDING_DIMENSIONS,
+      encoding_format: 'float',
+    })
+    return batch.map((chunk, index) => {
+      const result = response.data.find((data) => data.index === index)
+
+      if (!result) {
+        throw new Error(`No embedding found for chunk ${index}`)
+      }
+
+      return {
+        ...chunk,
+        embedding: result.embedding,
+      }
+    })
+  }).then((results) => results.flat())
+  console.info(`✓ Generated embeddings for ${chunksWithEmbeddings.length} chunks`)
+
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(chunksWithEmbeddings))
+  console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts
@@ -205,13 +254,17 @@ function env(name: string, required: boolean = true): string | undefined {
 }
 
 function cliFlag(name: string): boolean
-function cliFlag(name: string, requiresValue: true): string | undefined
-function cliFlag(name: string, requiresValue: false): boolean
-function cliFlag(name: string, requiresValue: boolean = false): boolean | string | undefined {
-  if (requiresValue) {
-    const value = process.argv.find((f) => f.startsWith(`--${name}=`))
-    if (!value) return undefined
-    return value.split('=')[1]
+function cliFlag<T extends z.ZodTypeAny>(name: string, schema: T): z.infer<T> | undefined
+function cliFlag<T extends z.ZodTypeAny>(name: string, schema?: T): boolean | z.infer<T> | undefined {
+  if (schema) {
+    const arg = process.argv.find((f) => f.startsWith(`--${name}=`))
+    if (!arg) return undefined
+    const value = arg.split('=')[1]
+    try {
+      return schema.parse(value)
+    } catch (err) {
+      throw new Error(`Invalid value for flag --${name}: ${value}. Error: ${err}`)
+    }
   } else {
     return process.argv.includes(`--${name}`)
   }
@@ -268,3 +321,36 @@ const isH2 = (line: string) => line.match(H2Regex)?.[1]
 
 const H3Regex = /^###\s+(.+)$/
 const isH3 = (line: string) => line.match(H3Regex)?.[1]
+
+async function processQueue<T, R>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<R>,
+  concurrency = 1,
+): Promise<R[]> {
+  const results: R[] = []
+  let nextIndex = 0
+  let active = 0
+
+  return new Promise<R[]>((resolve, reject) => {
+    const processNext = () => {
+      if (nextIndex >= items.length && active === 0) {
+        resolve(results)
+        return
+      }
+      while (active < concurrency && nextIndex < items.length) {
+        const i = nextIndex++
+        active++
+        worker(items[i], i)
+          .then((result) => {
+            results[i] = result
+          })
+          .catch(reject)
+          .finally(() => {
+            active--
+            processNext()
+          })
+      }
+    }
+    processNext()
+  })
+}

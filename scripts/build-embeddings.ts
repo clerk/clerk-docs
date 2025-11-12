@@ -1,0 +1,438 @@
+import 'dotenv/config'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import OpenAI from 'openai'
+import {
+  chunkByHeadings,
+  estimateTokens,
+  extractFrontmatter,
+  extractHeadingsWithSlugs,
+  extractTextFromMdx,
+} from './lib/embeddings'
+import { VALID_SDKS, type SDK } from './lib/schemas'
+
+interface DirectoryEntry {
+  path: string
+  url: string
+}
+
+interface EmbeddingChunk {
+  id: string
+  content: string
+  embedding: number[]
+  url: string
+  title: string
+  chunk_index: number
+  file_path: string
+  sdk?: SDK // SDK extracted from URL
+  base_url?: string // URL without SDK prefix (for grouping SDK variants)
+  heading_slug?: string // slug to append to URL for direct linking to section
+  searchRank?: number // from frontmatter search.rank
+}
+
+interface EmbeddingsFile {
+  chunks: EmbeddingChunk[]
+}
+
+const EMBEDDING_MODEL = 'text-embedding-3-small'
+const PRICE_PER_1K_TOKENS = 0.00002 // $0.00002 per 1K tokens for text-embedding-3-small
+const MAX_TOKENS_PER_CHUNK = 8192 // OpenAI's maximum context length
+
+/**
+ * Extract SDK from URL path
+ * URLs like /docs/react/hooks/use-user -> 'react'
+ * URLs like /docs/guides/overview -> undefined (core doc)
+ */
+function extractSDKFromURL(url: string): SDK | undefined {
+  const segments = url.split('/').filter(Boolean)
+  if (segments.length < 2 || segments[0] !== 'docs') {
+    return undefined
+  }
+
+  const possibleSDK = segments[1]
+  if (VALID_SDKS.includes(possibleSDK as SDK)) {
+    return possibleSDK as SDK
+  }
+
+  return undefined
+}
+
+/**
+ * Get base URL without SDK prefix
+ * /docs/react/hooks/use-user -> /docs/hooks/use-user
+ * /docs/guides/overview -> /docs/guides/overview (no change)
+ */
+function getBaseURL(url: string, sdk?: SDK): string {
+  if (!sdk) {
+    return url
+  }
+
+  const segments = url.split('/').filter(Boolean)
+  if (segments.length >= 2 && segments[0] === 'docs' && segments[1] === sdk) {
+    // Remove SDK segment and reconstruct URL
+    return `/docs/${segments.slice(2).join('/')}`
+  }
+
+  return url
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const skipConfirmation = args.includes('--skip-confirmation') || args.includes('-y')
+  const costCheck = args.includes('--cost-check') || args.includes('--estimate-cost')
+
+  // Check for OpenAI API key
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    console.error('Error: OPENAI_API_KEY environment variable is not set')
+    console.error('Please set it in your .env file or export it:')
+    console.error('  export OPENAI_API_KEY=your_api_key_here')
+    process.exit(1)
+  }
+
+  const openaiClient = new OpenAI({ apiKey })
+  const distPath = path.resolve(__dirname, '../dist')
+  const directoryJsonPath = path.join(distPath, 'directory.json')
+  const embeddingsJsonPath = path.join(distPath, 'embeddings.json')
+
+  // Load directory.json
+  console.log('📂 Loading directory.json...')
+  let directoryEntries: DirectoryEntry[]
+  try {
+    const directoryContent = await fs.readFile(directoryJsonPath, 'utf-8')
+    directoryEntries = JSON.parse(directoryContent) as DirectoryEntry[]
+  } catch (error) {
+    console.error(`Error reading directory.json: ${error}`)
+    process.exit(1)
+  }
+
+  console.log(`✓ Found ${directoryEntries.length} files in directory.json\n`)
+
+  // Phase 1: Analyze files (always needed for Phase 2)
+  if (costCheck) {
+    console.log('📊 Phase 1: Analyzing files and estimating costs...\n')
+  } else {
+    console.log('📊 Analyzing files...\n')
+  }
+
+  const analysisResults: Array<{
+    filePath: string
+    url: string
+    title: string
+    chunks: Array<{ content: string; tokens: number }>
+  }> = []
+
+  let totalFiles = 0
+  let totalChunks = 0
+  let totalTokens = 0
+
+  for (const entry of directoryEntries) {
+    const filePath = path.join(distPath, entry.path)
+
+    // Skip if file doesn't exist
+    try {
+      await fs.access(filePath)
+    } catch {
+      continue
+    }
+
+    // Skip partials
+    if (entry.path.includes('_partials/')) {
+      continue
+    }
+
+    totalFiles++
+
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      const frontmatter = extractFrontmatter(content)
+      const headingSlugs = await extractHeadingsWithSlugs(content)
+      const textContent = await extractTextFromMdx(content)
+      const chunks = chunkByHeadings(textContent, headingSlugs)
+
+      const chunkData = chunks.map((chunk) => ({
+        content: chunk.content,
+        tokens: estimateTokens(chunk.content),
+      }))
+
+      const fileTokens = chunkData.reduce((sum, chunk) => sum + chunk.tokens, 0)
+      totalChunks += chunks.length
+      totalTokens += fileTokens
+
+      analysisResults.push({
+        filePath: entry.path,
+        url: entry.url,
+        title: (frontmatter.title as string) || 'Untitled',
+        chunks: chunkData,
+      })
+    } catch (error) {
+      console.warn(`⚠️  Warning: Failed to process ${entry.path}: ${error}`)
+    }
+  }
+
+  // Only show cost estimation and prompt if --cost-check flag is set
+  if (costCheck) {
+    // Calculate estimated cost
+    const estimatedCost = (totalTokens / 1000) * PRICE_PER_1K_TOKENS
+
+    console.log('='.repeat(60))
+    console.log('📊 Cost Estimation Summary')
+    console.log('='.repeat(60))
+    console.log(`Files to process:     ${totalFiles}`)
+    console.log(`Total chunks:         ${totalChunks}`)
+    console.log(`Total tokens:         ${totalTokens.toLocaleString()}`)
+    console.log(`Estimated cost:       $${estimatedCost.toFixed(4)}`)
+    console.log('='.repeat(60))
+    console.log()
+
+    // Ask for confirmation
+    if (!skipConfirmation) {
+      const readline = await import('readline')
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      })
+
+      const answer = await new Promise<string>((resolve) => {
+        rl.question('Continue with embedding generation? (y/n): ', resolve)
+      })
+
+      rl.close()
+
+      if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+        console.log('Aborted.')
+        process.exit(0)
+      }
+    }
+
+    console.log()
+  }
+
+  console.log('🚀 Generating embeddings...\n')
+
+  // Phase 2: Collect all chunks with metadata
+  interface ChunkWithMetadata {
+    content: string
+    url: string
+    title: string
+    chunk_index: number
+    file_path: string
+    heading_slug?: string
+    searchRank?: number
+  }
+
+  const chunksWithMetadata: ChunkWithMetadata[] = []
+  let errors = 0
+
+  console.log('📦 Collecting chunks...')
+  for (const result of analysisResults) {
+    const filePath = path.join(distPath, result.filePath)
+
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      const frontmatter = extractFrontmatter(content)
+      const headingSlugs = await extractHeadingsWithSlugs(content)
+      const textContent = await extractTextFromMdx(content)
+      const chunks = chunkByHeadings(textContent, headingSlugs)
+
+      // Extract search.rank from frontmatter
+      const searchRank =
+        typeof frontmatter.search === 'object' &&
+        frontmatter.search !== null &&
+        typeof (frontmatter.search as any).rank === 'number'
+          ? Math.max(-10, Math.min(10, (frontmatter.search as any).rank))
+          : undefined
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i]
+
+        // Safety check: verify chunk doesn't exceed token limit
+        const chunkTokens = estimateTokens(chunk.content)
+        if (chunkTokens > MAX_TOKENS_PER_CHUNK) {
+          errors++
+          console.warn(
+            `  ⚠️  Skipping chunk ${i} in ${result.filePath}: ${chunkTokens} tokens exceeds limit of ${MAX_TOKENS_PER_CHUNK}`,
+          )
+          continue
+        }
+
+        const sdk = extractSDKFromURL(result.url)
+        const baseUrl = getBaseURL(result.url, sdk)
+
+        chunksWithMetadata.push({
+          content: chunk.content,
+          url: result.url,
+          title: result.title,
+          chunk_index: i,
+          file_path: result.filePath,
+          heading_slug: chunk.headingSlug,
+          searchRank,
+        })
+      }
+    } catch (error) {
+      errors++
+      console.warn(`⚠️  Failed to process file ${result.filePath}: ${error}`)
+    }
+  }
+
+  console.log(`✓ Collected ${chunksWithMetadata.length} chunks\n`)
+
+  // Phase 3: Generate embeddings in batches (parallelized)
+  const BATCH_SIZE = 200 // Safe batch size for OpenAI API
+  const MAX_CONCURRENT_BATCHES = 5 // Process 5 batches in parallel (well under rate limits)
+  const allChunks: EmbeddingChunk[] = []
+  let processedChunks = 0
+  const totalChunksToProcess = chunksWithMetadata.length
+  const totalBatches = Math.ceil(totalChunksToProcess / BATCH_SIZE)
+
+  console.log(
+    `🔢 Processing ${totalChunksToProcess} chunks in ${totalBatches} batches of ${BATCH_SIZE} (${MAX_CONCURRENT_BATCHES} parallel)...\n`,
+  )
+
+  // Process a single batch
+  async function processBatch(batch: ChunkWithMetadata[], batchNumber: number): Promise<EmbeddingChunk[]> {
+    const batchResults: EmbeddingChunk[] = []
+
+    try {
+      // Generate embeddings for entire batch
+      const response = await openaiClient.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: batch.map((chunk) => chunk.content),
+      })
+
+      // Map embeddings back to chunks
+      for (let i = 0; i < batch.length; i++) {
+        const chunkMetadata = batch[i]
+        const embedding = response.data[i]?.embedding
+
+        if (!embedding) {
+          errors++
+          console.warn(`  ⚠️  Missing embedding for chunk ${i} in batch ${batchNumber}`)
+          continue
+        }
+
+        const chunkId = `${chunkMetadata.url}-chunk-${chunkMetadata.chunk_index}`
+        const sdk = extractSDKFromURL(chunkMetadata.url)
+        const baseUrl = getBaseURL(chunkMetadata.url, sdk)
+
+        batchResults.push({
+          id: chunkId,
+          content: chunkMetadata.content,
+          embedding,
+          url: chunkMetadata.url,
+          title: chunkMetadata.title,
+          chunk_index: chunkMetadata.chunk_index,
+          file_path: chunkMetadata.file_path,
+          sdk,
+          base_url: baseUrl,
+          heading_slug: chunkMetadata.heading_slug,
+          searchRank: chunkMetadata.searchRank,
+        })
+      }
+
+      console.log(`  ✓ Batch ${batchNumber}/${totalBatches} completed`)
+      return batchResults
+    } catch (error) {
+      errors++
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.warn(`  ⚠️  Failed to process batch ${batchNumber}: ${errorMessage}`)
+
+      // Fallback: try processing batch items individually
+      console.log(`  🔄 Retrying batch ${batchNumber} items individually...`)
+      for (let i = 0; i < batch.length; i++) {
+        const chunkMetadata = batch[i]
+        try {
+          const response = await openaiClient.embeddings.create({
+            model: EMBEDDING_MODEL,
+            input: chunkMetadata.content,
+          })
+
+          const embedding = response.data[0]?.embedding
+          if (embedding) {
+            const chunkId = `${chunkMetadata.url}-chunk-${chunkMetadata.chunk_index}`
+            const sdk = extractSDKFromURL(chunkMetadata.url)
+            const baseUrl = getBaseURL(chunkMetadata.url, sdk)
+
+            batchResults.push({
+              id: chunkId,
+              content: chunkMetadata.content,
+              embedding,
+              url: chunkMetadata.url,
+              title: chunkMetadata.title,
+              chunk_index: chunkMetadata.chunk_index,
+              file_path: chunkMetadata.file_path,
+              sdk,
+              base_url: baseUrl,
+              heading_slug: chunkMetadata.heading_slug,
+              searchRank: chunkMetadata.searchRank,
+            })
+          }
+        } catch (individualError) {
+          errors++
+          console.warn(
+            `    ⚠️  Failed to generate embedding for chunk ${chunkMetadata.chunk_index} in ${chunkMetadata.file_path}`,
+          )
+        }
+      }
+
+      return batchResults
+    }
+  }
+
+  // Process batches in parallel with concurrency limit
+  // Create all batch jobs first
+  const batchJobs: Array<{ batch: ChunkWithMetadata[]; batchNumber: number }> = []
+  for (let i = 0; i < chunksWithMetadata.length; i += BATCH_SIZE) {
+    const batch = chunksWithMetadata.slice(i, Math.min(i + BATCH_SIZE, chunksWithMetadata.length))
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1
+    batchJobs.push({ batch, batchNumber })
+  }
+
+  // Process batches in parallel groups
+  for (let i = 0; i < batchJobs.length; i += MAX_CONCURRENT_BATCHES) {
+    const parallelGroup = batchJobs.slice(i, i + MAX_CONCURRENT_BATCHES)
+    const batchPromises = parallelGroup.map(({ batch, batchNumber }) => processBatch(batch, batchNumber))
+    const batchResults = await Promise.all(batchPromises)
+
+    // Flatten results and update progress
+    for (const results of batchResults) {
+      allChunks.push(...results)
+      processedChunks += results.length
+    }
+
+    console.log(`  📊 Progress: ${processedChunks}/${totalChunksToProcess} chunks processed\n`)
+  }
+
+  console.log()
+  console.log('💾 Writing embeddings to embeddings.json...')
+
+  // Write embeddings file
+  const embeddingsFile: EmbeddingsFile = {
+    chunks: allChunks,
+  }
+
+  await fs.writeFile(embeddingsJsonPath, JSON.stringify(embeddingsFile, null, 2))
+
+  // Final summary
+  const actualTokens = allChunks.reduce((sum, chunk) => sum + estimateTokens(chunk.content), 0)
+  const actualCost = (actualTokens / 1000) * PRICE_PER_1K_TOKENS
+
+  console.log()
+  console.log('='.repeat(60))
+  console.log('✅ Embedding Generation Complete!')
+  console.log('='.repeat(60))
+  console.log(`Files processed:      ${totalFiles}`)
+  console.log(`Chunks generated:     ${allChunks.length}`)
+  console.log(`Errors encountered:   ${errors}`)
+  console.log(`Total tokens:          ${actualTokens.toLocaleString()}`)
+  console.log(`Estimated cost:       $${actualCost.toFixed(4)}`)
+  console.log(`Output file:           ${embeddingsJsonPath}`)
+  console.log('='.repeat(60))
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Fatal error:', error)
+    process.exit(1)
+  })
+}

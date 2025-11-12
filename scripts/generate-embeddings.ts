@@ -299,6 +299,7 @@ async function main() {
       sdk: chunk.sdk,
       type: chunk.type,
       title: chunk.title,
+      searchRank: chunk.rank,
     }
   })
 

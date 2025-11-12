@@ -34,7 +34,8 @@ const EMBEDDING_DIMENSIONS = cliFlag('dimensions', z.coerce.number().positive().
 const OPENAI_EMBEDDINGS_API_KEY = env('OPENAI_EMBEDDINGS_API_KEY')
 // We want to use the dist folder as the markdown in there has the partials, tooltips, typedocs, etc. embedded in it.
 const DOCUMENTATION_FOLDER = cliFlag('docs', z.string().optional()) ?? './dist'
-const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './api/embeddings.json'
+const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './dist/embeddings.json'
+const EMBEDDINGS_OUTPUT_PATH_TS = cliFlag('output', z.string().optional()) ?? './api/embeddings.ts'
 const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().positive().optional()) ?? 150_000 - 10_000 // 10k tokens for safety
 
 type Chunk = {
@@ -272,6 +273,9 @@ async function main() {
 
   await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(chunksWithEmbeddings))
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
+
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH_TS, `export default ${JSON.stringify(chunksWithEmbeddings)}`)
+  console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH_TS}`)
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts

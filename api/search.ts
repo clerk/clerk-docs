@@ -1,4 +1,4 @@
-import embeddings from './embeddings.json'
+import embeddings from './embeddings'
 import { OpenAI } from 'openai'
 import { cosineSimilarity } from 'ai'
 

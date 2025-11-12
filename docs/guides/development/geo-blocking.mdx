@@ -1,0 +1,96 @@
+---
+title: Basic geo blocking
+description: Learn how to add geo blocking to your Next.js + Clerk application.
+sdk: nextjs
+---
+
+While Clerk does not provide a geo blocking feature, deployment platforms, such as Vercel and Render, expose geolocation data through request headers. This allows you to implement custom geo blocking logic by accessing the client's location data at runtime and conditionally allowing or blocking requests based on your requirements.
+
+<Tabs items={["Vercel", "Render"]}>
+  <Tab>
+    The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) using [Vercel's `geolocation()` function](https://vercel.com/guides/geo-ip-headers-geolocation-vercel-functions). If a user visits any route that is not a `/block` route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
+
+    <Include src="_partials/nextjs/nextjs-15-callout" />
+
+    ```tsx {{ filename: 'proxy.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+    import { geolocation } from '@vercel/functions'
+    import { NextResponse } from 'next/server'
+
+    // Define your protected and blocked routes
+    const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+    const isBlockRoute = createRouteMatcher(['/block(.*)'])
+
+    // Define the countries you want to allow
+    const allowedCountries = ['US']
+
+    export default clerkMiddleware(async (auth, req) => {
+      if (isBlockRoute(req)) {
+        return
+      }
+
+      // Use Vercel's `geolocation()` function to get the client's country
+      const { country } = geolocation(req)
+
+      // Redirect if the client's country is not allowed
+      if (country && !allowedCountries.includes(country)) {
+        return NextResponse.redirect(new URL('/block', req.url))
+      }
+
+      // Protect routes based on authentication status
+      if (isProtectedRoute(req)) await auth.protect()
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The following example shows how to implement geo blocking in your [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) using Render's `cf-ipcountry` header. If a user visits any route that is not a `/block` route, the middleware checks the client's country and redirects to the `/block` route if the country is not allowed. If that route is protected, the middleware also checks if the user is authenticated.
+
+    <Include src="_partials/nextjs/nextjs-15-callout" />
+
+    ```tsx {{ filename: 'proxy.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+    import { NextResponse } from 'next/server'
+
+    const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+    const isBlockRoute = createRouteMatcher(['/block(.*)'])
+
+    const allowedCountries = ['US']
+
+    export default clerkMiddleware(async (auth, req) => {
+      if (isBlockRoute(req)) {
+        return
+      }
+
+      // Use Render's `cf-ipcountry` header to get the client's country
+      const country = req.headers.get('cf-ipcountry')
+
+      // Redirect if the client's country is not allowed
+      if (country && !allowedCountries.includes(country)) {
+        return NextResponse.redirect(new URL('/block', req.url))
+      }
+
+      // Protect routes based on authentication status
+      if (isProtectedRoute(req)) await auth.protect()
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
+  </Tab>
+</Tabs>

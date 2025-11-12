@@ -242,13 +242,13 @@ To update the SDK selector, the files you need are in `clerk/clerk`:
 
 If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then follow these instructions. If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then see the [section on adding an external SDK](#add-an-external-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Next.js`), key (e.g. `nextjs`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs), [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview), and if there is a quickstart for it, [https://clerk.com/docs/quickstarts/overview](https://clerk.com/docs/quickstarts/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx`, `references/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
+1. Add the SDK to `index.mdx`, `reference/overview.mdx`, and if there is a quickstart for it, `quickstarts/overview.mdx`.
 1. In the `manifest.json`, find the `"title": "Clerk SDK",` object. It should be the first object in the `"navigation"` array. Add the SDK accordingly. For example, it could include files like a quickstart, a references section with an overview and some reference docs, or a guides section with some dedicated guides for that SDK.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
@@ -262,13 +262,13 @@ In the `clerk/clerk` repo:
 
 If the SDK has docs that are external, e.g. Python located at `https://github.com/clerk/clerk-sdk-python/blob/main/README.md`, then follow these instructions. If the SDK has docs that are internal, i.e. maintained in `clerk-docs`, then see the [section on adding a new SDK](#add-a-new-sdk).
 
-To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/references/overview](https://clerk.com/docs/references/overview).
+To add a new SDK, you'll need the SDK name (e.g. `Python`), key (e.g. `python`), and 2 SVG icons: one in color and one in grayscale. These must be converted to JSX syntax, not HTML / standard SVG syntax. You will need these SVG's because we list the Clerk SDK's on [https://clerk.com/docs](https://clerk.com/docs) and [https://clerk.com/docs/reference/overview](https://clerk.com/docs/reference/overview).
 
 In this repo (`clerk/clerk-docs`):
 
 1. In the `manifest.schema.json`, add a reference name in the `icon` enum and add the SDK key to the `sdk` enum.
 1. Add the color SVG to the partials icon folder `_partials/icons/`.
-1. Add the SDK to `index.mdx` and `references/overview.mdx`.
+1. Add the SDK to `index.mdx` and `reference/overview.mdx`.
 
 Now, the sidenav is set up to render the items for the new SDK you've added, and to link to the routes/doc files that you defined. However, you've got to get the SDK selector working as well:
 
@@ -325,6 +325,161 @@ description: Some brief, but effective description of the page's content.
 - **`description`** - The description of the page. Used to populate a page's `<meta name="description">` tag
 
 These fields should be present on every documentation page.
+
+#### Metadata
+
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews. It has the following subfields:
+
+| Name          | Type                      | Default | Description                                                                                                                                                  |
+| ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`       | `string`                  | -       | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | -       | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
+| `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
+| `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |
+| `twitter`     | `object`                  | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below. |
+| `robots`      | `object`                  | `{}`    | Controls how crawlers index and follow the page. See its properties below.                                                                                   |
+
+##### Examples
+
+<details>
+<summary>Set a custom browser title</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
+  ---
+```
+
+</details>
+
+<details>
+<summary>Set SEO title and description</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
++   description: Example
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Add page authors</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   authors:
++     - name: Jane Doe
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define canonical or alternate URLs for your documentation page</summary>
+<br /> 
+<p><strong>This is set via the <code>alternates</code> field. It has the following subfields:</strong></p>
+  
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `canonical`  | `string`       | - | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   alternates:
++     canonical: https://docs.example.com/
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Configure Open Graph metadata for social media previews</summary>
+<br /> 
+<p><strong>This is set via the <code>openGraph</code> field. It has the following subfields:</strong></p>
+
+| Name            | Type            | Default | Description                               |
+| --------------- | --------------- | ------- | ----------------------------------------- |
+| `title`         | `string`        | -       | Title displayed in social previews.       |
+| `description`   | `string`        | -       | Description displayed in social previews. |
+| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards. |
+| `publishedTime` | `string`        | -       | Publication timestamp.                    |
+| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.    |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   openGraph:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define X Cards metadata for the page</summary>
+<br /> 
+<p><strong>This is set via the <code>twitter</code> field. It has the following subfields:</strong></p>
+
+| Name          | Type            | Default | Description                                  |
+| ------------- | --------------- | ------- | -------------------------------------------- |
+| `title`       | `string`        | -       | Title displayed in the Twitter card.         |
+| `description` | `string`        | -       | Description displayed in the Twitter card.   |
+| `images`      | `Array<string>` | `[]`    | Image URLs used in the Twitter card preview. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   twitter:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Control search engine indexing and crawler behavior.</summary>
+<br /> 
+<p><strong>This is set via the <code>robots</code> field. It has the following subfields:</strong></p>
+
+| Name     | Type      | Default | Description                                          |
+| -------- | --------- | ------- | ---------------------------------------------------- |
+| `index`  | `boolean` | `true`  | Whether the page should appear in search results.    |
+| `follow` | `boolean` | `true`  | Whether crawlers should follow links from this page. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++  robots:
++    index: false
++    follow: true
+  ---
+```
+
+</details>
 
 #### Search
 
@@ -500,23 +655,6 @@ export function Layout() {
 
 </details>
 
-<details>
-<summary>TypeScript type for code block props</summary>
-
-```tsx
-type LineNumber = number
-type Mark = LineNumber | [start: LineNumber, end: LineNumber]
-
-interface CodeBlockProps {
-  filename?: string
-  mark?: Array<Mark>
-  ins?: Array<Mark>
-  del?: Array<Mark>
-}
-```
-
-</details>
-
 You can also specify **deleted**, **inserted**, or **marked** lines by prepending them with a special character. This is available for any code block language except Markdown.
 
 | Type     | Character |
@@ -533,6 +671,62 @@ You can also specify **deleted**, **inserted**, or **marked** lines by prependin
   }
 ```
 ````
+
+#### Collapsing sections of code
+
+You can collapse sections of a code block by using the `fold` prop. The type for the `fold` prop is `Array<[start: number, end: number, label?: string]>`, where `start` and `end` define the inclusive range of lines to collapse, and `label` is a custom label for the expand button. By default the label will be `{n} lines collapsed`.
+
+````mdx
+```ts {{ fold: [[2, 4]] }}
+export function Example() {
+  useEffect(() => {
+    // some long unimportant code here
+  }, [])
+
+  return null
+}
+```
+````
+
+<details>
+<summary>Fold example</summary>
+
+| Default                                                                                   | Expanded                                                                                   |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| <img width="1204" height="416" alt="" src="/.github/media/code-block-fold-default.png" /> | <img width="1204" height="478" alt="" src="/.github/media/code-block-fold-expanded.png" /> |
+
+</details>
+
+You can also truncate a code block by using the `collapsible` prop. This will reduce the height of the code block by default and display an "expand" button to reveal the full code block.
+
+````mdx
+```ts {{ collapsible: true }}
+// ...
+```
+````
+
+<details>
+<summary>Collapsible example</summary>
+
+![](/.github/media/code-block-collapsible.png)
+
+</details>
+
+#### TypeScript type for code block props
+
+```tsx
+type LineNumber = number
+type Mark = LineNumber | [start: LineNumber, end: LineNumber]
+
+interface CodeBlockProps {
+  filename?: string
+  mark?: Array<Mark>
+  ins?: Array<Mark>
+  del?: Array<Mark>
+  collapsible?: boolean
+  fold?: Array<[start: LineNumber, end: LineNumber, label?: string]>
+}
+```
 
 #### Code block shortcodes
 
@@ -678,6 +872,39 @@ pnpm add @clerk/nextjs
 </CodeBlockTabs>
 ````
 
+#### npm commands
+
+npm codeblocks will automatically generate the commands for `pnpm`, `yarn`, and `bun` within a `<CodeBlockTabs />`.
+
+````mdx
+```npm
+npm i @clerk/nextjs
+```
+````
+
+Example output:
+
+````mdx
+<CodeBlockTabs options={["npm", "pnpm", "yarn", "bun"]}>
+    ```bash {{ filename: 'terminal' }}
+    npm i @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    pnpm add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    yarn add @clerk/nextjs
+    ```
+
+    ```bash {{ filename: 'terminal' }}
+    bunx add @clerk/nextjs
+    ```
+
+</CodeBlockTabs>
+````
+
 The image below shows what this example looks like once rendered.
 
 ![An example of a <CodeBlockTabs /> component with three tabs options for 'npm', 'yarn', and 'pnpm'. Each tab shows a code example of how to install the @clerk/nextjs package.](/.github/media/code-block-tabs.png)
@@ -705,6 +932,20 @@ The `<Tabs />` component structures content in a tabular format. It accepts an `
 The video below shows what this example looks like once rendered.
 
 https://github.com/clerk/clerk-docs/assets/2615508/9b07ba1d-8bb0-498b-935f-432d2d047ab6
+
+### Tooltips
+
+A tooltip is content that appears when the user hovers over a word or phrase in order to provide additional information. A common use case is for definitions.
+
+Tooltips are defined in the `_tooltips` folder and written in MDX, but they do not support custom MDX components, like callouts or `<Tabs />` components. Try to keep the tooltip content as text.
+
+The tooltip syntax is similar to a link, but with a `!` prefix, as shown in the following example:
+
+```mdx
+The ID of the [active organization](!active-organization) that the user belongs to.
+```
+
+Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.
 
 ### `<TutorialHero />`
 
@@ -789,7 +1030,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 
 </Cards>
@@ -811,7 +1052,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -834,7 +1075,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 ---
 
-- [UI Components](/docs/components/overview)
+- [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
 - {<svg viewBox="0 0 32 32">{/*  */}</svg>}
 
@@ -851,13 +1092,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 ```mdx
 <Cards variant="image">
 
-- [What is Clerk authentication?](/docs/authentication/overview)
+- [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
 - ![](/what-is-clerk.png)
 
 ---
 
-- [What is the “User” object?](/docs/users/overview)
+- [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
 - ![](/user-object.png)
 
@@ -944,13 +1185,54 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. This way, you write the content once and only have to maintain it in one place.
+
+There are two types of partials you can use:
+
+1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document.
+2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them.
+
+#### Global partials
+
+Global partials are stored in `/docs/_partials/` and can be included from any document using a path starting with `_partials/`:
 
 ```mdx
 {/* Render `docs/_partials/code-example.mdx` */}
 
 <Include src="_partials/code-example" />
 ```
+
+Global partials are best for:
+
+- Content that is reused across many different sections of the documentation.
+- Shared components, code examples, or explanations that apply broadly.
+- Content that doesn't belong to a specific topic area.
+
+#### Relative partials
+
+Relative partials are stored in `_partials/` folders within subdirectories and can be included using relative paths (`./` or `../`). The path is resolved relative to the document's directory.
+
+**Same directory:**
+
+If you have a document at `docs/billing/for-b2c.mdx` and a partial at `docs/billing/_partials/pricing-table.mdx`:
+
+```mdx
+<Include src="./_partials/pricing-table" />
+```
+
+**Parent directory:**
+
+If you have a document at `docs/billing/plans/premium.mdx` and a partial at `docs/billing/_partials/shared-content.mdx`:
+
+```mdx
+<Include src="../_partials/shared-content" />
+```
+
+Relative partials are best for:
+
+- Content that is specific to a particular section or topic area (e.g., billing-specific instructions).
+- Content that is only used by a few documents in the same directory structure.
+- Organizing partials near the documents that use them for better maintainability.
 
 ### `<Typedoc />`
 
@@ -1001,7 +1283,6 @@ Available values for the `sdk` prop:
 | Ruby / Rails / Sinatra | "ruby"                 |
 | Python                 | "python"               |
 | JS Backend SDK         | "js-backend"           |
-| SDK Development        | "sdk-development"      |
 | Community SDKs         | "community-sdk"        |
 
 To update the value, or `key`, for an SDK, see the [section on updating the key of an SDK](#update-the-key-of-an-sdk).
@@ -1038,23 +1319,125 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 
 </details>
 
+### `<Accordion />`
+
+The `<Accordion />` component creates a vertically stacked set of interactive headings that each reveals a section of content. It has no props and accepts `<AccordionPanel />` children.
+
+The `<AccordionPanel />` accepts a `title` and `children`.
+
+| Prop       | Type              | Comment                                                   |
+| ---------- | ----------------- | --------------------------------------------------------- |
+| `children` | `React.ReactNode` | The content that will be rendered in the accordion panel. |
+| `title`    | `string`          | The title of the accordion panel.                         |
+
+```mdx
+<Accordion>
+  <AccordionPanel title="Can I use this?">It's available in v1.2.3 and above.</AccordionPanel>
+  <AccordionPanel title="What if I still have questions?">Send and email to help@example.com.</AccordionPanel>
+</Accordion>
+```
+
+The image below shows what this example looks like once rendered.
+
+![An example of an <Accordion /> component](/.github/media/accordion.png)
+
 ### Images and static assets
 
 Images and static assets should be placed in the `public/` folder. To reference an image or asset in content, prefix the path with `/docs`. For example, if an image exists at `public/images/logo.png`, to render it on a page you would use the following: `![Logo](/docs/images/logo.png)`.
 
+When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+
+Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![](/docs/images/sign-in.png 'Clerk SignIn component.')`
+
+#### Image props
+
+<details>
+<summary><code>dark</code></summary>
 Use the `dark` prop to specify a different image to use in dark mode:
 
 ```mdx
 ![Logo](/docs/images/logo.png){{ dark: '/docs/images/logo-dark.png' }}
 ```
 
-You may also optionally provide the following [`next/image`](https://nextjs.org/docs/pages/api-reference/components/image) props: [`quality`](https://nextjs.org/docs/pages/api-reference/components/image#quality), [`priority`](https://nextjs.org/docs/pages/api-reference/components/image#priority)
+</details>
+
+<details>
+<summary><code>priority</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#priority
 
 ```mdx
-![Image](/docs/images/my-image.png){{ quality: 90, priority: true }}
+![Image](/docs/images/my-image.png){{ priority: true }}
 ```
 
-When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
+</details>
+
+<details>
+<summary><code>quality</code></summary>
+https://nextjs.org/docs/app/api-reference/components/image#quality
+
+```mdx
+![Image](/docs/images/my-image.png){{ quality: 90 }}
+```
+
+</details>
+
+<details>
+<summary><code>width</code> and <code>height</code></summary>
+The `width` and `height` props can now be used to specify the (max) display size of an image in pixels.
+
+```mdx
+![](/docs/images/my-image.png){{ width: 345 }}
+```
+
+| Without `width`                                                                        | With `width`                                                                        |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| <img width="1320" height="2736" alt="" src="/.github/media/image-width-without.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-width-with.png" /> |
+
+</details>
+
+<details>
+<summary><code>align</code></summary>
+
+`align` can be set to `left`, `center`, or `right` to align an image horizontally. The default is `left`.
+
+| `left`                                                                              | `center`                                                                              | `right`                                                                              |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| <img width="1320" height="1834" alt="" src="/.github/media/image-align-left.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-center.png" /> | <img width="1320" height="1834" alt="" src="/.github/media/image-align-right.png" /> |
+
+</details>
+
+<details>
+<summary><code>variant</code></summary>
+
+The `variant` prop can be used to display an image in a different style. Possible values are `default` and `browser`.
+
+| `default`                                                                                | `browser`                                                                                |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| <img width="1706" height="1328" alt="" src="/.github/media/image-variant-default.png" /> | <img width="1706" height="1328" alt="" src="/.github/media/image-variant-browser.png" /> |
+
+When using the `browser` variant the caption is displayed in the menu bar.
+
+</details>
+
+#### `<Gallery>`
+
+The `Gallery` component displays multiple images in a grid layout. On mobile the images are laid out horizontally in a scrollable container.
+
+<details>
+<summary>Example</summary>
+
+```
+<Gallery>
+  ![Light Mode](./ios-user-profile-view.png)
+  ![Dark Mode](./ios-user-profile-view-dark.png)
+</Gallery>
+```
+
+| Desktop                                                                            | Mobile                                                                           |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
+
+</details>
 
 ## Help wanted!
 

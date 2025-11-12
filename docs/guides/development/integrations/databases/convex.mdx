@@ -1,0 +1,289 @@
+---
+title: Integrate Convex with Clerk
+description: Learn how to integrate Clerk into your Convex application.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate a Clerk SDK into your app",
+      link: "/docs/getting-started/quickstart/overview",
+      icon: "code-bracket",
+    },
+    {
+      title: "Integrate Convex into your app",
+      link: "https://docs.convex.dev/quickstarts",
+      icon: "code-bracket"
+    }
+  ]}
+  exampleRepo={[
+    {
+      title: "Convex's Next.js + Clerk Template",
+      link: "https://github.com/get-convex/template-nextjs-clerk"
+    },
+    {
+      title: "Convex's React + Clerk Template",
+      link: "https://github.com/get-convex/template-react-vite-clerk"
+    }
+  ]}
+>
+  - Create a JWT template in Clerk to generate Convex JWTs
+  - Configure Convex to accept JWTs from Clerk
+  - Configure the Clerk and Convex providers to work together
+</TutorialHero>
+
+With [Convex](https://www.convex.dev/), you can build a backend with a provided realtime database, file storage, text search, scheduling and more. Paired with Clerk's user authentication and management features, you can build a powerful application with minimal effort. This tutorial will show you how to integrate Clerk into your Convex application. It assumes that you have already integrated both Convex and one of Clerk's SDKs into your app.
+
+<Steps>
+  ## Create a JWT template based on Convex
+
+  1. In the Clerk Dashboard, navigate to the [**JWT templates**](https://dashboard.clerk.com/~/jwt-templates) page.
+  1. Select **New template** and then from the list of templates, select **Convex**. You'll be redirected to the template's settings page.
+  1. Copy and save the **Issuer** URL somewhere secure. This URL is the issuer domain for Clerk's JWT templates, which is your application's **Frontend API URL**. In development, it's format will be `https://verb-noun-00.clerk.accounts.dev`. In production, it's format will be `https://clerk.<your-domain>.com`.
+
+  ## Map additional claims (optional)
+
+  In the **Claims** section, the default audience (`aud`) claim required by Convex is pre-mapped, as well as some other helpful claims like Convex's `name` claim to Clerk's `user.full_name` claim. You can include additional claims as necessary. [Shortcodes](/docs/guides/sessions/jwt-templates#shortcodes) are available to make adding dynamic user values easy.
+
+  ## Configure Convex with the Clerk issuer domain
+
+  1. In your `env` file, add your **Issuer** URL as the `CLERK_FRONTEND_API_URL` environment variable. If you already have it set, great!
+     ```env {{ filename: '.env' }}
+     CLERK_FRONTEND_API_URL={{fapi_url}}
+     ```
+  1. In your app's `convex` folder, create a `auth.config.js` file with the following configuration:
+     ```ts {{ filename: 'convex/auth.config.js' }}
+     export default {
+       providers: [
+         {
+           domain: process.env.CLERK_FRONTEND_API_URL,
+           applicationID: 'convex',
+         },
+       ],
+     }
+     ```
+
+  ## Deploy your changes to Convex
+
+  Run `npx convex dev` to automatically sync your configuration to your backend.
+
+  ## Configure the Clerk and Convex providers
+
+  Both Clerk and Convex have provider components that are required to provide authentication and client context. You should already have Clerk's provider component, `<ClerkProvider>`, in your app. Convex offers a provider that is specifically for integrating with Clerk called `<ConvexProviderWithClerk>`.
+
+  <Tabs items={["Next.js", "React"]}>
+    <Tab>
+      `<ConvexProviderWithClerk>` calls `ConvexReactClient()` to get Convex's client, so it must be used in a Client Component. Your `app/layout.tsx`, where you would use `<ConvexProviderWithClerk>`, is a Server Component, and a Server Component cannot contain Client Component code. To solve this, you must first create a _wrapper_ Client Component around `<ConvexProviderWithClerk>`.
+
+      ```tsx {{ filename: 'components/ConvexClientProvider.tsx' }}
+      'use client'
+
+      import { ReactNode } from 'react'
+      import { ConvexReactClient } from 'convex/react'
+      import { ConvexProviderWithClerk } from 'convex/react-clerk'
+      import { useAuth } from '@clerk/nextjs'
+
+      if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
+        throw new Error('Missing NEXT_PUBLIC_CONVEX_URL in your .env file')
+      }
+
+      const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL)
+
+      export default function ConvexClientProvider({ children }: { children: ReactNode }) {
+        return (
+          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+            {children}
+          </ConvexProviderWithClerk>
+        )
+      }
+      ```
+
+      Now, your Server Component, `app/layout.tsx`, can use the wrapper component, `<ConvexClientProvider>`. It's important that `<ClerkProvider>` wraps `<ConvexClientProvider>`, and not the other way around, as Convex needs to be able to access the Clerk context.
+
+      ```tsx {{ filename: 'app/layout.tsx', mark: [5, 31] }}
+      import type { Metadata } from 'next'
+      import { Geist, Geist_Mono } from 'next/font/google'
+      import './globals.css'
+      import { ClerkProvider } from '@clerk/nextjs'
+      import ConvexClientProvider from '@/components/ConvexClientProvider'
+
+      const geistSans = Geist({
+        variable: '--font-geist-sans',
+        subsets: ['latin'],
+      })
+
+      const geistMono = Geist_Mono({
+        variable: '--font-geist-mono',
+        subsets: ['latin'],
+      })
+
+      export const metadata: Metadata = {
+        title: 'Clerk Next.js Quickstart',
+        description: 'Generated by create next app',
+      }
+
+      export default function RootLayout({
+        children,
+      }: Readonly<{
+        children: React.ReactNode
+      }>) {
+        return (
+          <html lang="en">
+            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+              <ClerkProvider>
+                <ConvexClientProvider>{children}</ConvexClientProvider>
+              </ClerkProvider>
+            </body>
+          </html>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      The following example demonstrates how to configure Clerk and Convex's providers. Clerk's [`useAuth()`](/docs/reference/hooks/use-auth) hook must be passed to Convex's `<ConvexProviderWithClerk>` and Clerk's `<ClerkProvider>` must be wrapped around it.
+
+      ```ts {{ filename: 'src/main.tsx', mark: [[5, 7], 25, 27] }}
+      import React from 'react'
+      import ReactDOM from 'react-dom/client'
+      import App from './App.tsx'
+      import './index.css'
+      import { ClerkProvider, useAuth } from '@clerk/clerk-react'
+      import { ConvexProviderWithClerk } from 'convex/react-clerk'
+      import { ConvexReactClient } from 'convex/react'
+
+      // Import your Publishable Key
+      const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      if (!PUBLISHABLE_KEY) {
+        throw new Error('Add your Clerk Publishable Key to the .env file')
+      }
+
+      if (!process.env.VITE_CONVEX_URL) {
+        throw new Error('Missing VITE_CONVEX_URL in your .env file')
+      }
+
+      const convex = new ConvexReactClient(process.env.VITE_CONVEX_URL)
+
+      ReactDOM.createRoot(document.getElementById('root')!).render(
+        <React.StrictMode>
+          <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+            <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+              <App />
+            </ConvexProviderWithClerk>
+          </ClerkProvider>
+        </React.StrictMode>,
+      )
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Show UI based on auth state
+
+  You can control which UI is shown when the user is signed in or signed out using Convex's `<Authenticated>`, `<Unauthenticated>` and `<AuthLoading>` helper components. These should be used instead of Clerk's `<SignedIn>`, `<SignedOut>` and `<ClerkLoading>` components, respectively.
+
+  It's important to use the [`useConvexAuth()`](https://docs.convex.dev/api/modules/react#useconvexauth) hook instead of Clerk's `useAuth()` hook when you need to check whether the user is logged in or
+  not. The `useConvexAuth()` hook makes sure that the browser has fetched the auth token needed to make authenticated requests to your Convex backend, and that the Convex backend has validated it.
+
+  In the following example, the `<Content />` component is a child of `<Authenticated>`, so its content and any of its child components are guaranteed to have an authenticated user, and Convex queries can require authentication.
+
+  <Tabs items={["Next.js", "React"]}>
+    <Tab>
+      ```tsx title="app/page.tsx"
+      'use client'
+
+      import { Authenticated, Unauthenticated } from 'convex/react'
+      import { SignInButton, UserButton } from '@clerk/nextjs'
+      import { useQuery } from 'convex/react'
+      import { api } from '../convex/_generated/api'
+
+      export default function Home() {
+        return (
+          <>
+            <Authenticated>
+              <UserButton />
+              <Content />
+            </Authenticated>
+            <Unauthenticated>
+              <SignInButton />
+            </Unauthenticated>
+          </>
+        )
+      }
+
+      function Content() {
+        const messages = useQuery(api.messages.getForCurrentUser)
+        return <div>Authenticated content: {messages?.length}</div>
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx title="src/App.tsx"
+      import { SignInButton, UserButton } from '@clerk/clerk-react'
+      import { Authenticated, Unauthenticated, AuthLoading, useQuery } from 'convex/react'
+      import { api } from '../convex/_generated/api'
+
+      function App() {
+        return (
+          <main>
+            <Unauthenticated>
+              <SignInButton />
+            </Unauthenticated>
+            <Authenticated>
+              <UserButton />
+              <Content />
+            </Authenticated>
+            <AuthLoading>
+              <p>Still loading</p>
+            </AuthLoading>
+          </main>
+        )
+      }
+
+      function Content() {
+        const messages = useQuery(api.messages.getForCurrentUser)
+        return <div>Authenticated content: {messages?.length}</div>
+      }
+
+      export default App
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Use auth state in your Convex functions
+
+  If the client is authenticated, you can access the information stored in the JWT via `ctx.auth.getUserIdentity`.
+
+  If the client isn't authenticated, `ctx.auth.getUserIdentity` will return `null`.
+
+  **Make sure that the component calling this query is a child of `<Authenticated>` from
+  `convex/react`**. Otherwise, it will throw on page load.
+
+  ```ts {{ filename: 'convex/messages.ts' }}
+  import { query } from './_generated/server'
+
+  export const getForCurrentUser = query({
+    args: {},
+    handler: async (ctx) => {
+      const identity = await ctx.auth.getUserIdentity()
+      if (identity === null) {
+        throw new Error('Not authenticated')
+      }
+      return await ctx.db
+        .query('messages')
+        .filter((q) => q.eq(q.field('author'), identity.email))
+        .collect()
+    },
+  })
+  ```
+</Steps>
+
+## Next steps
+
+Be aware that Convex may require usage of their custom hooks and methods rather than Clerk's, such as using Convex's `useConvexAuth()` hook instead of Clerk's `useAuth()` hook in some cases. For more information on how to use Convex with Clerk, see the [Convex docs](https://docs.convex.dev/auth/clerk).

@@ -1,0 +1,150 @@
+---
+title: "Using M2M tokens"
+description: Learn how to use Clerk's M2M tokens feature to authenticate requests between machines.
+---
+
+<TutorialHero
+  exampleRepo={[
+    {
+      title: "Express & Clerk M2M Tokens Demo Repo",
+      link: "https://github.com/clerk/m2m-example/tree/main"
+    }
+  ]}
+/>
+
+Clerk's M2M tokens feature allows you to create machines, dictate which machines are allowed to communicate with each other, and create tokens that can be used to authenticate requests between these machines. It is intended primarily as _a method for authenticating requests between different backend services within your own infrastructure_.
+
+This guide demonstrates how to create and configure machines, how to create m2m tokens, and how to use a token to authenticate a request.
+
+> [!NOTE]
+> If you find that the use case being described does not fit what you are looking to accomplish with machine authentication, check out the [machine authentication overview](/docs/guides/development/machine-auth/overview) for more information on the different types of machine authentication that Clerk supports and what features are available for each type.
+
+## Pricing
+
+Before getting started, it's important to note that M2M tokens will be a paid feature. They are currently free to use while in beta, but will be charged based on usage after the beta period comes to an end. The pricing will be as follows:
+
+- `$0.001` per token creation.
+- `$0.0001` per token verification.
+
+There will be usage stats and monitoring available in the Clerk Dashboard before the beta period comes to an end to make it easy to understand your usage and what you're being charged.
+
+There will also be a feature that allows the use of [JSON Web Tokens (JWTs)](https://en.wikipedia.org/wiki/JSON_Web_Token) instead of opaque tokens before the beta period comes to an end. While JWTs can't be instantly revoked, they don't require a network request for verification and incur charges only for creation, not verification.
+
+## Creating machines
+
+Clerk's M2M feature is designed to secure and facilitate communication between different machines within your backend infrastructure. To get started, head to the [**Machines**](https://dashboard.clerk.com/~/machines/configure) page in the Clerk Dashboard, where you can create machines and configure their allowed communication partners.
+
+This example creates two machines, `Machine A` and `Machine B`, and configures them to allow communication with each other.
+
+1. Select **Add machine** to add a machine.
+1. Under **Name**, enter your machine name (`Machine A`). Select **Create**.
+1. Repeat this process for another machine (`Machine B`), but this time, in the **Scopes** section, select `Machine A` to allow `Machine B` to communicate with `Machine A`.
+1. In the list of machines, next to `Machine A`, select **Edit machine**.
+1. In the **Scopes** section, select `Machine B` to allow `Machine A` to communicate with `Machine B`.
+1. Select **Update** to save the changes.
+
+Both machines are now configured to enable full bi-directional communication between them, allowing them to create tokens to authenticate requests in either direction.
+
+> [!IMPORTANT]
+> When you modify machine scopes, the changes only apply to newly created M2M tokens. Any existing M2M tokens that were created before the scope modification will retain their original scopes and will not be affected by the changes.
+
+Now that you have your machines set up, the next step is to create tokens that will allow them to authenticate requests between each other.
+
+## Creating M2M tokens
+
+Before creating an M2M token, you need to ensure that you have set up your environment variables to include the **machine secret key** that was generated when configuring the machines in the Clerk Dashboard. This key can be viewed at any time by selecting the **View machine secret** option under the **...** menu by any given machine in the Clerk Dashboard.
+
+Note that each machine has a unique machine secret key, so you will need to set up environment variables for each machine, and ensure that the correct machine secret key is available for each machine.
+
+```ts {{ filename: '.env' }}
+CLERK_MACHINE_SECRET_KEY = ak_xxx
+```
+
+> [!IMPORTANT]
+> Loading environment variables is different depending on the framework you are using. For example, Next.js requires the `NEXT_PUBLIC_` prefix for environment variables that are available on the frontend. In other frameworks, you can use a package like [dotenv](https://www.npmjs.com/package/dotenv). Check your framework's documentation for information on how to load environment variables.
+
+To create an M2M token, call the [`createToken()`](/docs/reference/backend/m2m-tokens/create-token) method:
+
+<Include src="_partials/machine-auth/create-token-example" />
+
+The method will return an object with the following properties:
+
+```json
+{
+  "id": "mt_xxx",
+  "subject": "mch_xxx",
+  "scopes": ["mch_xxx"],
+  "claims": null,
+  "revoked": false,
+  "revocationReason": null,
+  "expired": false,
+  "expiration": 1754942036732,
+  "createdAt": 1754938436732,
+  "updatedAt": 1754938436732,
+  "token": "mt_xxx"
+}
+```
+
+The `token` property contains the token that you will use to authenticate requests between machines. You can transmit this token however you wish, but it is common to use it as a bearer token in the `Authorization` header of your requests, as shown in the following example:
+
+```ts
+await fetch('<machine-b-url>', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${m2mToken.secret}`,
+  },
+  body: JSON.stringify({ message: 'Hello from Machine A' }),
+})
+```
+
+There are two additional optional arguments that can be passed to the `createToken()` method:
+
+- `secondsUntilExpiration` - The number of seconds until the token will expire. By default, the token will not expire.
+- `claims` - A JavaScript object that can be used to store additional information about the token.
+
+## Verifying M2M tokens
+
+Imagine a request was made from **Machine A** to **Machine B**, and Machine B received it successfully. The next step is to verify that the token is valid and that the request is coming from a valid machine. To do so, you can use the [`verifyToken()`](/docs/reference/backend/m2m-tokens/verify-token) method:
+
+```ts
+// code for receiving the request and extracting the token from the
+// Authorization header...
+
+const m2mToken = await clerkClient.m2m.verifyToken({ token })
+```
+
+Keep in mind that this code would be running on Machine B. On Machine B, set `process.env.CLERK_MACHINE_SECRET_KEY` to the machine secret key for Machine B (or pass it directly with the `machineSecretKey` argument). The `token` parameter would be the token that was received from the request sent from Machine A.
+
+If the token is valid, the method will return an object with the following properties:
+
+```json
+{
+  "id": "mt_xxx",
+  "subject": "mch_xxx",
+  "scopes": ["mch_xxx"],
+  "claims": null,
+  "revoked": false,
+  "revocationReason": null,
+  "expired": false,
+  "expiration": 1754943177115,
+  "createdAt": 1754939577115,
+  "updatedAt": 1754939577568,
+  "token": undefined
+}
+```
+
+You can then fulfill the request, or reject it if the token is invalid.
+
+## Revoking M2M tokens
+
+To revoke an M2M token, call the [`revokeToken()`](/docs/reference/backend/m2m-tokens/revoke-token) method:
+
+```ts
+await clerkClient.m2m.revokeToken({
+  m2mTokenId: m2mToken.id,
+  revocationReason: 'Just because 🤪', // optional, for your records
+})
+```
+
+This will revoke the token and prevent it from being used to authenticate any future requests.

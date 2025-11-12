@@ -1,0 +1,173 @@
+---
+title: Build a custom multi-session flow
+description: Learn how to use the Clerk API to add multi-session handling to your application.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+A multi-session application is an application that allows multiple accounts to be signed in from the same browser at the same time. The user can switch from one account to another seamlessly. Each account is independent from the rest and has access to different resources.
+
+This guide provides you with the necessary information to build a custom multi-session flow using the Clerk API.
+
+To implement the multi-session feature to your application, you need to handle the following scenarios:
+
+- [Switching between different accounts](#switch-between-sessions)
+- [Adding new accounts](#add-a-new-session)
+- [Signing out from one account, while remaining signed in to the rest](#sign-out-active-session)
+- [Signing out from all accounts](#sign-out-all-sessions)
+
+## Enable multi-session in your application
+
+To enable multi-session in your application, you need to configure it in the Clerk Dashboard.
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Toggle on **Multi-session handling**.
+1. Select **Save changes**.
+
+## Get the session and user
+
+<CodeBlockTabs options={["React", "JavaScript", "iOS"]}>
+  ```jsx
+  import { useClerk } from '@clerk/clerk-react'
+
+  // Get the session and user
+  const { session, user } = useClerk()
+  ```
+
+  ```js
+  // Get the session
+  const currentSession = window.Clerk.session
+
+  // Get the user
+  const currentUser = window.Clerk.user
+  ```
+
+  ```swift
+  // Get the current session
+  var currentSession: Session? { Clerk.shared.session }
+
+  // Get the current user
+  var currentUser: User? { Clerk.shared.user }
+  ```
+</CodeBlockTabs>
+
+## Switch between sessions
+
+<CodeBlockTabs options={["React", "JavaScript", "iOS"]}>
+  ```jsx
+  import { useClerk } from '@clerk/clerk-react'
+
+  const { client, setActive } = useClerk()
+
+  // You can get all the available sessions through the client
+  const availableSessions = client.sessions
+  const currentSession = availableSessions[0].id
+
+  // Use setActive() to set the session as active
+  await setActive({
+    session: currentSession.id,
+    navigate: async ({ session }) => {
+      if (session?.currentTask) {
+        // Check for tasks and navigate to custom UI to help users resolve them
+        // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+        console.log(session?.currentTask)
+        return
+      }
+
+      router.push('/')
+    },
+  })
+  ```
+
+  ```js
+  // You can get all the available sessions through the client
+  const availableSessions = window.Clerk.client.sessions
+
+  // Use setActive() to set the session as active
+  await window.Clerk.setActive({
+    session: availableSessions[0].id,
+    navigate: async ({ session }) => {
+      if (session?.currentTask) {
+        // Check for tasks and navigate to custom UI to help users resolve them
+        // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+        console.log(session?.currentTask)
+        return
+      }
+
+      router.push('/')
+    },
+  })
+  ```
+
+  ```swift
+  // You can get all the available sessions through the client
+  var availableSessions: [Session] { Clerk.shared.client?.sessions ?? [] }
+
+  // Use setActive() to set the session as active
+  try await Clerk.shared.setActive(sessionId: session.id)
+  ```
+</CodeBlockTabs>
+
+## Add a new session
+
+To add a new session, simply link to your existing sign-in flow. New sign-ins will automatically add to the list of available sessions on the client. To create a sign-in flow, see one of the following popular guides:
+
+- [Email and password](/docs/guides/development/custom-flows/authentication/email-password)
+- [Passwordless authentication](/docs/guides/development/custom-flows/authentication/email-sms-otp)
+- [Social sign-in (OAuth)](/docs/guides/configure/auth-strategies/social-connections/overview)
+
+For more information on how Clerk's sign-in flow works, see the [detailed sign-in guide](/docs/guides/development/custom-flows/overview#sign-in-flow).
+
+## Sign out all sessions
+
+Use [`signOut()`](/docs/reference/javascript/clerk#sign-out) to deactivate all sessions on the current client.
+
+<CodeBlockTabs options={["React", "JavaScript", "iOS"]}>
+  ```jsx
+  import { useClerk } from '@clerk/clerk-react'
+
+  const { signOut, session } = useClerk()
+
+  // Use signOut to sign-out all active sessions.
+  await signOut()
+  ```
+
+  ```js
+  // Use signOut to sign-out all active sessions.
+  await window.Clerk.signOut()
+  ```
+
+  ```swift
+  // Use signOut to sign-out all active sessions.
+  try await Clerk.shared.signOut()
+  ```
+</CodeBlockTabs>
+
+## Sign out active session
+
+Use [`signOut()`](/docs/reference/javascript/clerk#sign-out) to deactivate a specific session by passing the session ID.
+
+<CodeBlockTabs options={["React", "JavaScript", "iOS"]}>
+  ```jsx
+  import { useClerk } from '@clerk/clerk-react'
+
+  // Get the signOut method and the active session
+  const { signOut, session } = useClerk()
+
+  // Use signOut to sign-out the active session
+  await signOut(session.id)
+  ```
+
+  ```js
+  // Get the current session
+  const currentSession = window.Clerk.session
+
+  // Use signOut to sign-out the active session
+  await window.Clerk.signOut(currentSession.id)
+  ```
+
+  ```swift
+  // Use signOut to sign-out a specific session
+  try await Clerk.shared.signOut(sessionId: session.id)
+  ```
+</CodeBlockTabs>

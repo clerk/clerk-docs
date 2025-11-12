@@ -1,0 +1,243 @@
+---
+title: '`createUser()`'
+description: Use Clerk's JS Backend SDK to create a user.
+sdk: js-backend
+---
+
+{/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/api/endpoints/UserApi.ts#L140 */}
+
+Creates a [`User`](/docs/reference/backend/types/backend-user).
+
+Your user management settings in the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) determine how you should setup your user model. Anything **Required** in **Users & Authentication -> User & authentication** will need to be provided when creating a user. Trying to add a field that isn't enabled in **Users & Authentication -> User & authentication** will result in an error.
+
+Any email address and phone number created using this method will be automatically marked as verified.
+
+> [!CAUTION]
+>
+> This endpoint is [rate limited](/docs/guides/how-clerk-works/system-limits). For development instances, a rate limit rule of **100 requests per 10 seconds** is applied.
+> For production instances, that limit goes up to **1000 requests per 10 seconds**.
+
+```ts
+function createUser(params: CreateUserParams): Promise<User>
+```
+
+## `CreateUserParams`
+
+<Properties>
+  - `externalId?`
+  - `string`
+
+  The ID of the user as used in your external systems. Must be unique across your instance.
+
+  ---
+
+  - `firstName?`
+  - `string`
+
+  The user's first name.
+
+  ---
+
+  - `lastName?`
+  - `string`
+
+  The user's last name.
+
+  ---
+
+  - `emailAddress[]?`
+  - `string[]`
+
+  Email addresses to add to the user. Must be unique across your instance. The first email address will be set as the users primary email address.
+
+  ---
+
+  - `phoneNumber[]?`
+  - `string[]`
+
+  Phone numbers that will be added to the user. Must be unique across your instance. The first phone number will be set as the users primary phone number.
+
+  ---
+
+  - `web3_wallet[]?`
+  - `string[]`
+
+  Web3 wallet addresses that will be added to the user. Must be unique across your instance. The first wallet will be set as the users primary wallet.
+
+  ---
+
+  - `username?`
+  - `string`
+
+  The username to give to the user. Must be unique across your instance.
+
+  ---
+
+  - `password?`
+  - `string`
+
+  The plaintext password to give the user. Must be at least 8 characters long, and can not be in any list of hacked passwords.
+
+  ---
+
+  - `passwordDigest?`
+  - `string`
+
+  In case you already have the password digests and not the passwords, you can use them for the newly created user via this property. The digests should be generated with one of the supported algorithms. The hashing algorithm can be specified using the `password_hasher` property.
+
+  ---
+
+  - `passwordHasher?`
+  - `'argon2i' | 'argon2id' | 'awscognito' | 'bcrypt' | 'bcrypt_sha256_django' | 'md5' | 'pbkdf2_sha256' | 'pbkdf2_sha256_django' | 'pbkdf2_sha1' | 'phpass' | 'scrypt_firebase' | 'scrypt_werkzeug' | 'sha256'`
+
+  The hashing algorithm that was used to generate the password digest.
+  The algorithms we support at the moment are:
+
+  > [!WARNING]
+  > For password hashers considered insecure (currently, `MD5` and `SHA256`), the corresponding user password hashes will be transparently migrated to `bcrypt` (a secure hasher) upon the user's first successful password sign in.
+  > Insecure schemes are marked with `(insecure)` in the list below.
+
+  - `awscognito`
+    - When set, `password_digest` must be in the format of `awscognito#<userpoolid>#<clientid>#<identifier>`.
+    - Upon a successful migration, `password_hasher` will be updated to `bcrypt`, and `password_digest` will be updated to a `bcrypt` hash.
+    - See the [migration guide](/docs/guides/development/migrating/cognito) for usage details.
+  - [`bcrypt`](https://en.wikipedia.org/wiki/Bcrypt)
+    - When set, `password_digest` must be in the format of `$<algorithm version>$<cost>$<salt & hash>`
+  - [`bcrypt_sha256_django`](https://docs.djangoproject.com/en/4.0/topics/auth/passwords/)
+    - This is the Django-specific variant of Bcrypt, using SHA256 hashing function. When set, `password_digest` must be in the format of (as exported from Django): `bcrypt_sha256$$<algorithm version>$<cost>$<salt & hash>`
+  - [`bcrypt_peppered`](https://github.com/heartcombo/devise)
+    - Used in implementations such as Devise for Ruby on Rails applications. Identical to `bcrypt` except that a `pepper` string is appended to the input before hashing. When set, `password_digest` must be in the format of `$<algorithm version>$<cost>$<salt & hash>$<pepper>`
+  - [`md5` (insecure)](https://en.wikipedia.org/wiki/MD5)
+    - When set, `password_digest` must be in the format of `5f4dcc3b5aa765d61d8327deb882cf99`
+  - [`pbkdf2_sha1`](https://en.wikipedia.org/wiki/PBKDF2)
+    - When set, `password_digest` must be in the format of `pbkdf2_sha1$<iterations>$<salt>$<hash-as-hex-string>` or `pbkdf2_sha1$<iterations>$<salt-as-hex-string>$<hash-as-hex-string>$<key-length>`
+    - Accepts the salt as a hex-encoded string. If the salt is not a valid hex string, the raw bytes will be used instead. Accepts the hash as a hex-encoded string. Optionally accepts the key length as the last parameter (defaults to 32).
+  - [`pbkdf2_sha256`](https://en.wikipedia.org/wiki/PBKDF2)
+    - This is the PBKDF2 algorithm using the SHA256 hashing function. When set, `password_digest` must be in the format of `pbkdf2_sha256$<iterations>$<salt>$<hash>`
+    - Both the salt and the hash are expected to be base64-encoded.
+  - [`pbkdf2_sha512`](https://en.wikipedia.org/wiki/PBKDF2)
+    - This is the PBKDF2 algorithm using the SHA512 hashing function. When set, `password_digest` must be in the format of `pbkdf2_sha512$<iterations>$<salt>$<hash>`
+  - [`pbkdf2_sha256_django`](https://docs.djangoproject.com/en/4.0/topics/auth/passwords/)
+    - This is the Django-specific variant of PBKDF2. When set, `password_digest` must be in the format of (as exported from Django): `pbkdf2_sha256$<iterations>$<salt>$<hash>`
+    - The salt is expected to be un-encoded, the hash is expected base64-encoded.
+  - [`phpass`](https://www.openwall.com/phpass/)
+    - Portable public domain password hashing framework for use in PHP applications. When set, `password_digest` must be in the format of `$P$<rounds><salt><encoded-checksum>`
+    - `$P$` is the prefix used to identify `phpass` hashes.
+    - _rounds_ is a single character encoding a 6-bit integer representing the number of rounds used.
+    - _salt_ is eight characters drawn from \[./0-9A-Za-z], providing a 48-bit salt.
+    - _checksum_ is 22 characters drawn from the same set, encoding the 128-bit checksum with MD5.
+  - [`scrypt_firebase`](https://firebaseopensource.com/projects/firebase/scrypt/)
+    - The Firebase-specific variant of scrypt. When set, `password_digest` must be in the format of `<hash>$<salt>$<signer key>$<salt separator>$<rounds>$<memory cost>`
+    - _hash:_ The actual Base64 hash. This can be retrieved when exporting the user from Firebase.
+    - _salt:_ The salt used to generate the above hash. Again, this is given when exporting the user from Firebase.
+    - _signer key:_ The base64 encoded signer key.
+    - _salt separator:_ The base64 encoded salt separator.
+    - _rounds:_ The number of rounds the algorithm needs to run.
+    - _memory cost:_ The cost of the algorithm run
+    - The first 2 (hash and salt) are per user and can be retrieved when exporting the user from Firebase. The other 4 values (signer key, salt separator, rounds and memory cost) are project-wide settings and can be retrieved from the project's password hash parameters.
+  - [`scrypt_werkzeug`](https://werkzeug.palletsprojects.com/en/3.0.x/utils/#werkzeug.security.generate_password_hash)
+    - The Werkzeug-specific variant of scrypt. When set, `password_digest` must be in the format of `$<algorithm args>$<salt>$<hash>`
+    - _algorithm args:_ The algorithm used to generate the hash.
+    - _salt:_ The salt used to generate the above hash.
+    - _hash:_ The actual Base64 hash.
+  - [`sha256` (insecure)](https://en.wikipedia.org/wiki/SHA-2)
+    - When set, `password_digest` must be a 64-length hex string. For example: `9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08`
+  - [`argon2`](https://argon2.online/) variants: `argon2i` and `argon2id`.
+    - Algorithms in the argon2 family generate digests that encode the following information:
+      - _version (v):_ The argon version, version 19 is assumed
+      - _memory (m):_ The memory used by the algorithm (in kibibytes)
+      - _iterations (t):_ The number of iterations to perform
+      - _parallelism (p):_ The number of threads to use
+    - Parts are demarcated by the `$` character, with the first part identifying the algorithm variant The middle part is a comma-separated list of the encoding options (memory, iterations, parallelism). The final part is the actual digest.
+    - When set, `password_digest` must be in the format of `$argon2i$v=19$m=4096,t=3,p=1$4t6CL3P7YiHBtwESXawI8Hm20zJj4cs7/4/G3c187e0$m7RQFczcKr5bIR0IIxbpO2P0tyrLjf3eUW3M3QSwnLc`
+    - For the argon2id case, the value of the algorithm in the first part of the digest is `argon2id`: `$argon2id$v=19$m=64,t=4,p=8$Z2liZXJyaXNo$iGXEpMBTDYQ8G/71tF0qGjxRHEmR3gpGULcE93zUJVU`
+
+  If you need support for any particular hashing algorithm, [contact support](https://clerk.com/support).
+
+  ---
+
+  - `skipPasswordChecks?`
+  - `boolean`
+
+  When set to `true`, all password checks are skipped. It is recommended to use this method only when migrating plaintext passwords to Clerk. Upon migration the user base should be prompted to pick stronger password.
+
+  ---
+
+  - `skipPasswordRequirement?`
+  - `boolean`
+
+  When set to `true`, password is not required anymore when creating the user and can be omitted. This is useful when you are trying to create a user that doesn't have a password, in an instance that is using passwords. You cannot use this flag if password is the only way for a user to sign into your instance.
+
+  ---
+
+  - `totpSecret?`
+  - `string`
+
+  In case TOTP is configured on the instance, you can provide the secret to enable it on the newly created user without the need to reset it. Currently, the supported options are: <ul><li>Period: 30 seconds</li><li>Code length: 6 digits</li><li>Algorithm: SHA1</li></ul>
+
+  ---
+
+  - `backupCodes?`
+  - `string[]`
+
+  If backup codes are configured on the instance, you can provide them to enable it on the newly created user without the need to reset them. You must provide the backup codes in plain format or the corresponding bcrypt digest.
+
+  ---
+
+  - `publicMetadata?`
+  - [`UserPublicMetadata`](/docs/reference/javascript/types/metadata#user-public-metadata)
+
+  Metadata that can be read from the Frontend API and [Backend API](/docs/reference/backend-api){{ target: '_blank' }} and can be set only from the Backend API.
+
+  ---
+
+  - `privateMetadata?`
+  - [`UserPrivateMetadata`](/docs/reference/javascript/types/metadata#user-private-metadata)
+
+  Metadata that can be read and set only from the [Backend API](/docs/reference/backend-api){{ target: '_blank' }}.
+
+  ---
+
+  - `unsafeMetadata?`
+  - [`UserUnsafeMetadata`](/docs/reference/javascript/types/metadata#user-unsafe-metadata)
+
+  Metadata that can be read and set from the Frontend API. It's considered unsafe because it can be modified from the frontend.
+
+  ---
+
+  - `legalAcceptedAt?`
+  - `Date`
+
+  The date when the user accepted the legal documents. `null` if [**Require express consent to legal documents**](/docs/guides/secure/legal-compliance) is not enabled.
+
+  ---
+
+  - `skipLegalChecks?`
+  - `boolean`
+
+  When set to `true` all legal checks are skipped. It is not recommended to skip legal checks unless you are migrating a user to Clerk.
+
+  ---
+
+  - `createdAt`
+  - `string`
+
+  A custom date/time denoting when the user signed up to the application, specified in [RFC3339 format](https://datatracker.ietf.org/doc/html/rfc3339). For example: `2012-10-20T07:15:20.902Z`.
+</Properties>
+
+## Example
+
+<Include src="_partials/backend/usage" />
+
+```tsx
+const response = await clerkClient.users.createUser({
+  firstName: 'Test',
+  lastName: 'User',
+  emailAddress: ['testclerk123@gmail.com'],
+  password: 'password',
+})
+```
+
+## Backend API (BAPI) endpoint
+
+This method in the SDK is a wrapper around the BAPI endpoint `POST/users`. See the [BAPI reference](/docs/reference/backend-api/tag/users/post/users){{ target: '_blank' }} for more information.

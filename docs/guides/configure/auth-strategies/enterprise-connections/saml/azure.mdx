@@ -1,0 +1,138 @@
+---
+title: Add Microsoft Entra ID as a SAML connection
+description: Learn how to allow users to sign up and sign in to your Clerk app with their Microsoft account using SAML SSO.
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Add the Enhanced authentication add-on to your Pro plan",
+      link: "/pricing",
+      icon: "plus-circle",
+    },
+    {
+      title: "Enable email for your app.",
+      link: "/docs/guides/configure/auth-strategies/sign-up-sign-in-options",
+      icon: "key",
+    }
+  ]}
+/>
+
+Enabling SAML with Microsoft Entra ID (formerly [Azure Active Directory](https://learn.microsoft.com/en-us/entra/fundamentals/new-name)) allows your users to sign up and sign in to your Clerk application with their Microsoft account. It requires that a SAML connection is configured in both the Clerk Dashboard and Microsoft Entra ID. This guide assumes that you have access to the Clerk app's settings in the Clerk Dashboard. The "customer" in this case is whoever has access to the Microsoft Entra ID settings.
+
+<Steps>
+  ## Create a Microsoft Entra ID SAML connection in Clerk
+
+  1. In the Clerk Dashboard, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page.
+  1. Select **Add connection** and select **For specific domains or organizations**.
+  1. Under **SAML**, select **Microsoft Entra ID (Formerly AD)**.
+  1. Enter the **Domain**. This is the email domain of the users you want to allow to sign in to your application. Optionally, select an **Organization**.
+  1. Enter the **Name**. This will be displayed on the sign-in form.
+  1. Select **Add connection**. You'll be redirected to the connection's configuration page. Note that the connection is disabled by default.
+  1. In the **Service Provider Configuration** section, save the **Reply URL (Assertion Consumer Service URL)** and **Identifier (Entity ID)** values somewhere secure. You'll need to give these to the customer so they can configure their Microsoft Entra ID application.
+
+  ## Configure SAML application
+
+  Now that the enterprise connection is configured in Clerk and the **Reply URL** and **Identifier** are known, the customer's Microsoft application needs to be configured. At a high level, the process is:
+
+  - Create a new enterprise app in Microsoft Azure.
+  - Assign selected users or groups to that Microsoft application.
+  - Add the **Reply URL** and **Identifier** from Clerk to the Microsoft application's SAML configuration.
+  - Verify that the attribute mappings are correct.
+  - Obtain and share the application's metadata URL.
+
+  You are welcome the use the below email template with detailed instructions. They contain the following
+  template strings that you should replace with your actual values:
+
+  - \[YOUR\_APPLICATION\_NAME]
+  - \[YOUR\_CLERK\_ENTITY\_ID]
+  - \[YOUR\_CLERK\_REPLY\_URL]
+
+  <Copyable as="html">
+    Here are the instructions for setting up SAML SSO with Microsoft Entra ID:
+
+    **Step 1: Create a new enterprise application in Microsoft**
+
+    1. Navigate to the [Microsoft Azure portal](https://azure.microsoft.com/en-us/get-started/azure-portal) and sign in.
+    1. Under the **Azure Services** section, find and select **Enterprise applications**. You may have to go to the [**All services**](https://portal.azure.com/#allservices) page and then scroll down to the **Identity** section to find it.
+    1. Select **New application**. You'll be redirected to the **Browse Microsoft Entra Gallery** page.
+    1. Select **Create your own application**.
+    1. In the modal that opens:
+       - **Name** of your application (likely \[YOUR\_APPLICATION\_NAME]).
+       - Select **Integrate any other application you don't find in the gallery (Non-gallery)**.
+       - Select **Create**.
+
+    **Step 2: Assign your users or groups in Microsoft**
+
+    Now that you have created the enterprise app, you need to assign users or groups before they can use it to log in. Below are instructions for assigning an individual user, but for more options and instructions for groups, see Microsoft's docs [here](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal?pivots=portal).
+
+    1. In the **Getting Started** section, select the **Assign users and groups** link.
+    1. Select **Add user/group**. You'll be redirected to the **Add Assignment** page.
+    1. Select the **None Selected** link.
+    1. To assign a user to the enterprise app, you can either use the search field to find a user or select the checkbox next to the user in the table.
+    1. Select **Select** at the bottom of the page. You'll be redirected to the **Add Assignment** page.
+    1. Select **Assign** at the bottom of the page.
+
+    **Step 3: Set Basic SAML Configuration**
+
+    1. In the navigation sidenav, open the **Manage** dropdown and select **Single sign-on**.
+    1. In the **Select a single sign-on method** section, select **SAML**. You'll be redirected to the **Set up Single Sign-On with SAML** page.
+    1. Find the **Basic SAML Configuration** section.
+    1. Select **Edit**. The **Basic SAML Configuration** panel will open.
+    1. Add the following **Identifier (Entity ID)** and **Reply URL (Assertion Consumer Service URL)** values. These values will be saved automatically.
+       - **Identifier (Entity ID)**: `[YOUR_CLERK_ENTITY_ID]`
+       - **Reply URL (Assertion Consumer Service URL)**: `[YOUR_CLERK_REPLY_URL]`
+    1. Select **Save** at the top of the panel. Close the panel.
+
+    **Step 4: Verify correct configuration of attributes and claims**
+
+    We expect your SAML responses to have the following specific attributes:
+
+    Email address (required). This is the email address that your users will use to authenticate into your app:
+
+    - Claim name: `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`
+    - Value: `user.mail`
+
+    First name (optional):
+
+    - Claim name: `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname`
+    - Value: `user.givenname`
+
+    Last name (optional):
+
+    - Claim name: `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname`
+    - Value: `user.surname`
+
+    These are the defaults, and probably won't need you to change them. However, many SAML configuration errors are due to incorrect attribute mappings, so it's worth double-checking. Here's how:
+
+    1. Still on the **Set up Single Sign-On with SAML** page, find the **Attributes & Claims** section.
+    1. Select **Edit**.
+    1. Verify that the above three attributes and values are present.
+
+    **Step 5: Share the application's metadata URL**
+
+    1. Still on the **Set up Single Sign-On with SAML** page, find the **SAML Certificates** section.
+    1. Copy the **App Federation Metadata Url**, and reply to this email with it. This is the final piece of information we need to enable SAML.
+  </Copyable>
+
+  ## Add App Federation Metadata URL in the Clerk Dashboard
+
+  After following the instructions in the email, your customer should have sent you the Microsoft app's **App Federation Metadata URL**. Now, you're going to add it to the Clerk connection, completing the SAML connection configuration.
+
+  1. Navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page in the Clerk Dashboard.
+  1. Select the SAML connection.
+  1. In the **Identity Provider Configuration** section, under **App Federation Metadata Url**, paste the **App Federation Metadata URL**.
+  1. Select **Fetch & save**. Keep the page open for the next step.
+
+  ## Enable the connection in Clerk
+
+  The SAML connection is ready to enable! Once enabled, all users with email addresses ending in the domain will be redirected to Microsoft at sign-up and sign-in.
+
+  > [!WARNING]
+  > If there are existing users with email domains that match the SAML connection, and there is an error in the SAML configuration in Clerk or Microsoft, those users will be **unable to sign in** when the connection is enabled. If this is a concern, we recommend coordinating with your counterpart to test the connection at an off-peak time.
+
+  To make the connection available for users to authenticate with:
+
+  1. Navigate back to the Clerk Dashboard where you should still have the connection's configuration page open. If not, navigate to the [**SSO connections**](https://dashboard.clerk.com/~/user-authentication/sso-connections) page and select the connection.
+  1. At the top of the page, toggle on **Enable connection** and select **Save**.
+</Steps>

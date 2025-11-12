@@ -24,7 +24,9 @@ import { slugifyWithCounter } from '@sindresorhus/slugify'
 import { remark } from 'remark'
 import remarkMdx from 'remark-mdx'
 import { filter as mdastFilter } from 'unist-util-filter'
+import { map as mdastMap } from 'unist-util-map'
 import type { EmbeddingModel } from 'openai/resources/embeddings.mjs'
+import path from 'path'
 
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
@@ -46,7 +48,7 @@ type Chunk = {
 }
 
 async function main() {
-  console.log({
+  console.info({
     EMBEDDING_MODEL_SIZE,
     EMBEDDING_MODEL,
     EMBEDDING_DIMENSIONS,
@@ -57,43 +59,79 @@ async function main() {
   })
 
   // List all the markdown files in the dist folder
-  const markdownFiles = await Promise.all(
-    (
-      await readdirp.promise(DOCUMENTATION_FOLDER, {
-        type: 'files',
-        fileFilter: '*.mdx',
-      })
-    ).map(async ({ fullPath }) => {
-      try {
-        const fileContents = await fs.readFile(fullPath, 'utf8')
-        const { frontmatter, content } = extractFrontmatter(fileContents)
+  const markdownFiles = (
+    await Promise.all(
+      (
+        await readdirp.promise(DOCUMENTATION_FOLDER, {
+          type: 'files',
+          fileFilter: '*.mdx',
+        })
+      ).map(async ({ fullPath }) => {
+        try {
+          const fileContents = await fs.readFile(fullPath, 'utf8')
+          const { frontmatter, content } = extractFrontmatter(fileContents)
 
-        const vfile = await remark()
-          .use(remarkMdx)
-          .use(() => (tree) => {
-            // Here we can filter out any nodes that we don't want to include in the search
-            // In the future we may want to transform the tree to be more efficient for the search index
-            return mdastFilter(tree, (node) => {
-              if (node.type === 'code') return false // remove code blocks from search
-              if (node.type === 'mdxJsxFlowElement') return false // remove mdx elements from search
-              if (node.type === 'mdxJsxTextElement') return false // remove mdx elements from search
-              return true
+          if (frontmatter.title === undefined) return null
+
+          const vfile = await remark()
+            .use(remarkMdx)
+            .use(() => (tree) => {
+              // Here we can filter out any nodes that we don't want to include in the search
+              return mdastFilter(tree, (node) => {
+                if (node.type === 'code') return false // remove code blocks from search
+                if (node.type === 'mdxJsxFlowElement') return false // remove mdx elements from search
+                if (node.type === 'mdxJsxTextElement') return false // remove mdx elements from search
+                if (node.type === 'mdxTextExpression') return false // remove `{ target: '_blank' }` tags
+                if (node.type === 'mdxFlowExpression') return false // remove `{/* ... */}` comments
+                if (node.type === 'image') return false // remove images from search
+
+                return true
+              })
             })
-          })
-          .process({
-            value: content,
-          })
+            .use(() => (tree) => {
+              return mdastMap(tree, (node) => {
+                // Remove the url by replacing the node with its children (the link text)
+                if (node.type === 'link' && 'children' in node && Array.isArray(node.children)) {
+                  return node.children[0]
+                }
 
-        return {
-          fullPath,
-          frontmatter,
-          content: String(vfile),
+                // Remove bold, italic, underline, etc tags
+                if (
+                  node.type === 'emphasis' ||
+                  node.type === 'strong' ||
+                  node.type === 'underline' ||
+                  node.type === 'strikethrough'
+                ) {
+                  if ('children' in node && Array.isArray(node.children)) {
+                    return node.children[0]
+                  }
+                }
+
+                // Remove blockquote style
+                if (node.type === 'blockquote') {
+                  if ('children' in node && Array.isArray(node.children)) {
+                    return node.children[0]
+                  }
+                }
+
+                return node
+              })
+            })
+            .process({
+              value: content,
+            })
+
+          return {
+            fullPath,
+            frontmatter,
+            content: String(vfile),
+          }
+        } catch (error) {
+          throw new Error(`Failed to parse ${fullPath}`, { cause: error })
         }
-      } catch (error) {
-        throw new Error(`Failed to parse ${fullPath}`, { cause: error })
-      }
-    }),
-  )
+      }),
+    )
+  ).filter((file) => file !== null)
   console.info(`✓ Loaded ${markdownFiles.length} markdown files from ${DOCUMENTATION_FOLDER}`)
 
   // Chunk the markdown
@@ -178,10 +216,10 @@ async function main() {
   const largestChunk = markdownChunks.reduce((acc, chunk) => Math.max(acc, chunk.tokens), 0)
   const smallestChunk = markdownChunks.reduce((acc, chunk) => Math.min(acc, chunk.tokens), 10_000)
 
-  console.log(`Total chunk Tokens: ${totalChunks}`)
-  console.log(`Largest chunk Tokens: ${largestChunk}`)
-  console.log(`Smallest chunk Tokens: ${smallestChunk}`)
-  console.log(`Estimated cost: $${totalCost.toFixed(6)}`)
+  console.info(`Total chunk Tokens: ${totalChunks}`)
+  console.info(`Largest chunk Tokens: ${largestChunk}`)
+  console.info(`Smallest chunk Tokens: ${smallestChunk}`)
+  console.info(`Estimated cost: $${totalCost.toFixed(6)}`)
 
   if (ESTIMATE_COST) {
     process.exit(0)

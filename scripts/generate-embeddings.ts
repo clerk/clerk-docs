@@ -177,6 +177,9 @@ async function main() {
           })
           // Reset the current chunk content
           currentChunkContent = null
+
+          // Now switch to paragraphs for the rest of the file
+          type = 'paragraph'
         }
 
         if (heading) {
@@ -184,8 +187,6 @@ async function main() {
         }
 
         if (currentChunkContent !== null && !heading) {
-          type = 'paragraph'
-
           // Add the current line to the current chunk content
           currentChunkContent.push(trimmedLine)
 

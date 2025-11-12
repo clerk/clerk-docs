@@ -46,6 +46,7 @@ type Chunk = {
   content: string
   tokens: number
   cost: number
+  rank?: number
 }
 
 async function main() {
@@ -126,11 +127,10 @@ async function main() {
 
           return {
             fullPath,
-            frontmatter: {
-              title: frontmatterTitle,
-              canonical: frontmatter.canonical,
-              sdk: frontmatter.sdk,
-            },
+            title: frontmatterTitle,
+            canonical: frontmatter.canonical,
+            sdk: frontmatter.sdk,
+            searchRank: frontmatter.search?.rank,
             content: String(vfile),
           }
         } catch (error) {
@@ -142,15 +142,15 @@ async function main() {
   console.info(`✓ Loaded ${markdownFiles.length} markdown files from ${DOCUMENTATION_FOLDER}`)
 
   // Chunk the markdown
-  const markdownChunks = markdownFiles.flatMap(({ fullPath, content, frontmatter }) => {
+  const markdownChunks = markdownFiles.flatMap((file) => {
     try {
       // Include the title in the first chunk
-      let currentChunkContent: string[] | null = [`# ${frontmatter.title}`]
+      let currentChunkContent: string[] | null = [`# ${file.title}`]
       let currentHeading: string | undefined = undefined
       let type: 'page' | 'paragraph' = 'page'
       const slugify = slugifyWithCounter()
 
-      return content.split('\n').reduce((chunks, line, lineCount, lines) => {
+      return file.content.split('\n').reduce((chunks, line, lineCount, lines) => {
         const trimmedLine = line.trim()
 
         // Detect if the current line is a h2 or h3 heading
@@ -166,14 +166,15 @@ async function main() {
           }
 
           chunks.push({
-            title: frontmatter.title,
-            canonical: frontmatter.canonical,
-            sdk: frontmatter.sdk,
+            title: file.title,
+            canonical: file.canonical,
+            sdk: file.sdk,
             heading: currentHeading ? slugify(currentHeading) : undefined,
             content,
             tokens,
             cost: calcTokenCost({ tokens }),
             type,
+            rank: file.searchRank,
           })
           // Reset the current chunk content
           currentChunkContent = null
@@ -202,14 +203,15 @@ async function main() {
             }
 
             chunks.push({
-              title: frontmatter.title,
-              canonical: frontmatter.canonical,
-              sdk: frontmatter.sdk,
+              title: file.title,
+              canonical: file.canonical,
+              sdk: file.sdk,
               heading: currentHeading ? slugify(currentHeading) : undefined,
               content,
               tokens,
               cost: calcTokenCost({ tokens }),
               type,
+              rank: file.searchRank,
             })
           }
         }
@@ -222,7 +224,7 @@ async function main() {
         return chunks
       }, [] as Chunk[])
     } catch (error) {
-      throw new Error(`Failed to chunk ${fullPath}`, { cause: error })
+      throw new Error(`Failed to chunk ${file.fullPath}`, { cause: error })
     }
   })
   console.info(`✓ Converted ${markdownFiles.length} markdown files into ${markdownChunks.length} chunks`)
@@ -345,6 +347,11 @@ const frontmatterSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.split(', ')),
+  search: z
+    .object({
+      rank: z.number().optional(),
+    })
+    .optional(),
 })
 
 function extractFrontmatter(content: string) {

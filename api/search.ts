@@ -1,4 +1,4 @@
-import embeddings from '../embeddings.json'
+import embeddings from './embeddings.json'
 
 export async function GET(request: Request) {
   console.log(embeddings[0])

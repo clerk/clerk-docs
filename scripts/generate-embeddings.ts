@@ -275,9 +275,6 @@ async function main() {
 
   await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, stringifiedEmbeddings)
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
-
-  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH_TS, 'export default ' + stringifiedEmbeddings + ';')
-  console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH_TS}`)
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts

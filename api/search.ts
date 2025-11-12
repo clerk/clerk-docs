@@ -1,6 +1,7 @@
-import embeddings from './embeddings'
+import fs from 'node:fs/promises'
 import { OpenAI } from 'openai'
 import { cosineSimilarity } from 'ai'
+import path from 'path'
 
 const apiKey = process.env.OPENAI_EMBEDDINGS_API_KEY
 
@@ -9,6 +10,17 @@ if (!apiKey) {
 }
 
 const openai = new OpenAI({ apiKey })
+
+type Embedding = {
+  embedding: number[]
+  content: string
+  canonical: string
+  heading: string
+  sdk?: string[]
+}
+
+const embeddingsPath = path.join(process.cwd(), 'embeddings.json')
+const embeddings = JSON.parse(await fs.readFile(embeddingsPath, 'utf8')) as Embedding[]
 
 export async function GET(request: Request) {
   const url = new URL(request.url)

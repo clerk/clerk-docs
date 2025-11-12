@@ -21,6 +21,9 @@ import yaml from 'yaml'
 import z from 'zod'
 import { encoding_for_model } from 'tiktoken'
 import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { remark } from 'remark'
+import remarkMdx from 'remark-mdx'
+import { filter as mdastFilter } from 'unist-util-filter'
 
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
@@ -39,8 +42,6 @@ async function main() {
     EMBEDDINGS_OUTPUT_PATH,
   })
 
-  const openai = new OpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
-
   // List all the markdown files in the dist folder
   const markdownFiles = await Promise.all(
     (
@@ -52,10 +53,27 @@ async function main() {
       try {
         const fileContents = await fs.readFile(fullPath, 'utf8')
         const { frontmatter, content } = extractFrontmatter(fileContents)
+
+        const vfile = await remark()
+          .use(remarkMdx)
+          .use(() => (tree) => {
+            // Here we can filter out any nodes that we don't want to include in the search
+            // In the future we may want to transform the tree to be more efficient for the search index
+            return mdastFilter(tree, (node) => {
+              if (node.type === 'code') return false // remove code blocks from search
+              if (node.type === 'mdxJsxFlowElement') return false // remove mdx elements from search
+              if (node.type === 'mdxJsxTextElement') return false // remove mdx elements from search
+              return true
+            })
+          })
+          .process({
+            value: content,
+          })
+
         return {
           fullPath,
           frontmatter,
-          content,
+          content: String(vfile),
         }
       } catch (error) {
         throw new Error(`Failed to parse ${fullPath}`, { cause: error })
@@ -94,6 +112,7 @@ async function main() {
               sdk: frontmatter.sdk,
               heading: currentHeading ? slugify(currentHeading) : undefined,
               content,
+              tokens,
               cost: calcTokenCost({ tokens }),
             })
             // Reset the current chunk content
@@ -124,6 +143,7 @@ async function main() {
                 sdk: frontmatter.sdk,
                 heading: currentHeading ? slugify(currentHeading) : undefined,
                 content,
+                tokens,
                 cost: calcTokenCost({ tokens }),
               })
             }
@@ -141,6 +161,7 @@ async function main() {
           sdk?: string[]
           heading?: string
           content: string
+          tokens: number
           cost: number
         }[],
       )
@@ -148,16 +169,23 @@ async function main() {
       throw new Error(`Failed to chunk ${fullPath}`, { cause: error })
     }
   })
-  console.info(`✓ Converted ${markdownChunks.length} markdown files into ${markdownChunks.length} chunks`)
+  console.info(`✓ Converted ${markdownFiles.length} markdown files into ${markdownChunks.length} chunks`)
 
   const totalCost = markdownChunks.reduce((acc, chunk) => acc + chunk.cost, 0)
+  const totalChunks = markdownChunks.reduce((acc, chunk) => acc + chunk.tokens, 0)
+  const largestChunk = markdownChunks.reduce((acc, chunk) => Math.max(acc, chunk.tokens), 0)
+  const smallestChunk = markdownChunks.reduce((acc, chunk) => Math.min(acc, chunk.tokens), 10_000)
+
+  console.log(`Total chunk Tokens: ${totalChunks}`)
+  console.log(`Largest chunk Tokens: ${largestChunk}`)
+  console.log(`Smallest chunk Tokens: ${smallestChunk}`)
   console.log(`Estimated cost: $${totalCost.toFixed(6)}`)
 
   if (ESTIMATE_COST) {
     process.exit(0)
   }
 
-  //   console.log(markdownChunks)
+  const openai = new OpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
 }
 
 // Only invokes the main function if we run the script directly eg npm run build, bun run ./scripts/build-docs.ts

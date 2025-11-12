@@ -271,10 +271,12 @@ async function main() {
   }).then((results) => results.flat())
   console.info(`✓ Generated embeddings for ${chunksWithEmbeddings.length} chunks`)
 
-  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(chunksWithEmbeddings))
+  const stringifiedEmbeddings = JSON.stringify(chunksWithEmbeddings)
+
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, stringifiedEmbeddings)
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
 
-  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH_TS, `export default ${JSON.stringify(chunksWithEmbeddings)}`)
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH_TS, 'export default ' + stringifiedEmbeddings + ';')
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH_TS}`)
 }
 

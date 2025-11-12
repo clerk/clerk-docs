@@ -26,8 +26,11 @@ import path from 'path'
 const files = await fs.readdir(path.join(process.cwd()))
 console.log(files)
 
+const apiFiles = await fs.readdir(path.join(process.cwd(), 'api'))
+console.log(apiFiles)
+
 export async function GET(request: Request) {
-  return Response.json({ message: 'Hello, world!' })
+  return Response.json({ files, apiFiles })
   // const url = new URL(request.url)
   // const searchParams = url.searchParams
   // const query = searchParams.get('q')

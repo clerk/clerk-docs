@@ -38,6 +38,8 @@ const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './di
 const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().positive().optional()) ?? 150_000 - 10_000 // 10k tokens for safety
 
 type Chunk = {
+  type: 'page' | 'paragraph'
+  title: string
   canonical: string
   sdk?: string[]
   heading?: string
@@ -70,7 +72,9 @@ async function main() {
           const fileContents = await fs.readFile(fullPath, 'utf8')
           const { frontmatter, content } = extractFrontmatter(fileContents)
 
-          if (frontmatter.title === undefined) return null
+          const frontmatterTitle = frontmatter.title
+
+          if (frontmatterTitle === undefined) return null
 
           const vfile = await remark()
             .use(remarkMdx)
@@ -122,7 +126,11 @@ async function main() {
 
           return {
             fullPath,
-            frontmatter,
+            frontmatter: {
+              title: frontmatterTitle,
+              canonical: frontmatter.canonical,
+              sdk: frontmatter.sdk,
+            },
             content: String(vfile),
           }
         } catch (error) {
@@ -136,8 +144,10 @@ async function main() {
   // Chunk the markdown
   const markdownChunks = markdownFiles.flatMap(({ fullPath, content, frontmatter }) => {
     try {
-      let currentChunkContent: string[] | null = null
+      // Include the title in the first chunk
+      let currentChunkContent: string[] | null = [`# ${frontmatter.title}`]
       let currentHeading: string | undefined = undefined
+      let type: 'page' | 'paragraph' = 'page'
       const slugify = slugifyWithCounter()
 
       return content.split('\n').reduce((chunks, line, lineCount, lines) => {
@@ -156,12 +166,14 @@ async function main() {
           }
 
           chunks.push({
+            title: frontmatter.title,
             canonical: frontmatter.canonical,
             sdk: frontmatter.sdk,
             heading: currentHeading ? slugify(currentHeading) : undefined,
             content,
             tokens,
             cost: calcTokenCost({ tokens }),
+            type,
           })
           // Reset the current chunk content
           currentChunkContent = null
@@ -172,6 +184,8 @@ async function main() {
         }
 
         if (currentChunkContent !== null && !heading) {
+          type = 'paragraph'
+
           // Add the current line to the current chunk content
           currentChunkContent.push(trimmedLine)
 
@@ -187,12 +201,14 @@ async function main() {
             }
 
             chunks.push({
+              title: frontmatter.title,
               canonical: frontmatter.canonical,
               sdk: frontmatter.sdk,
               heading: currentHeading ? slugify(currentHeading) : undefined,
               content,
               tokens,
               cost: calcTokenCost({ tokens }),
+              type,
             })
           }
         }
@@ -270,7 +286,20 @@ async function main() {
   }).then((results) => results.flat())
   console.info(`✓ Generated embeddings for ${chunksWithEmbeddings.length} chunks`)
 
-  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(chunksWithEmbeddings))
+  const outputEmbeddings = chunksWithEmbeddings.map((chunk, index) => {
+    return {
+      id: index,
+      embedding: chunk.embedding,
+      content: chunk.content,
+      canonical: chunk.canonical,
+      heading: chunk.heading,
+      sdk: chunk.sdk,
+      type: chunk.type,
+      title: chunk.title,
+    }
+  })
+
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(outputEmbeddings))
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
 }
 

@@ -26,7 +26,6 @@ import remarkMdx from 'remark-mdx'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { map as mdastMap } from 'unist-util-map'
 import type { EmbeddingModel } from 'openai/resources/embeddings.mjs'
-import path from 'path'
 
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
@@ -35,7 +34,7 @@ const EMBEDDING_DIMENSIONS = cliFlag('dimensions', z.coerce.number().positive().
 const OPENAI_EMBEDDINGS_API_KEY = env('OPENAI_EMBEDDINGS_API_KEY')
 // We want to use the dist folder as the markdown in there has the partials, tooltips, typedocs, etc. embedded in it.
 const DOCUMENTATION_FOLDER = cliFlag('docs', z.string().optional()) ?? './dist'
-const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './dist/embeddings.json'
+const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './embeddings.json'
 const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().positive().optional()) ?? 150_000 - 10_000 // 10k tokens for safety
 
 type Chunk = {

@@ -11,10 +11,14 @@ const EMBEDDING_MODELS = {
     batch_cost: 0.065 / 1_000_000,
     max_tokens: 8_192,
   },
-} as const satisfies Record<string, { model: EmbeddingModel; cost: number; batch_cost: number; max_tokens: number }>
+} as const satisfies Record<
+  string,
+  { model: OpenAIEmbeddingModelId; cost: number; batch_cost: number; max_tokens: number }
+>
 
 import 'dotenv/config'
-import { OpenAI } from 'openai'
+import { embedMany } from 'ai'
+import { createOpenAI, type openai } from '@ai-sdk/openai'
 import readdirp from 'readdirp'
 import fs from 'fs/promises'
 import yaml from 'yaml'
@@ -25,7 +29,6 @@ import { remark } from 'remark'
 import remarkMdx from 'remark-mdx'
 import { filter as mdastFilter } from 'unist-util-filter'
 import { map as mdastMap } from 'unist-util-map'
-import type { EmbeddingModel } from 'openai/resources/embeddings.mjs'
 
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
@@ -35,7 +38,6 @@ const OPENAI_EMBEDDINGS_API_KEY = env('OPENAI_EMBEDDINGS_API_KEY')
 // We want to use the dist folder as the markdown in there has the partials, tooltips, typedocs, etc. embedded in it.
 const DOCUMENTATION_FOLDER = cliFlag('docs', z.string().optional()) ?? './dist'
 const EMBEDDINGS_OUTPUT_PATH = cliFlag('output', z.string().optional()) ?? './dist/embeddings.json'
-const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().positive().optional()) ?? 150_000 - 10_000 // 10k tokens for safety
 
 type Chunk = {
   type: 'page' | 'paragraph'
@@ -47,8 +49,9 @@ type Chunk = {
   content: string
   tokens: number
   cost: number
-  rank?: number
+  searchRank?: number
 }
+type OpenAIEmbeddingModelId = Parameters<typeof openai.textEmbeddingModel>[0]
 
 async function main() {
   console.info({
@@ -58,7 +61,6 @@ async function main() {
     ESTIMATE_COST,
     DOCUMENTATION_FOLDER,
     EMBEDDINGS_OUTPUT_PATH,
-    OPENAI_MAX_TOKENS_PER_REQUEST,
   })
 
   // List all the markdown files in the dist folder
@@ -177,7 +179,7 @@ async function main() {
             tokens,
             cost: calcTokenCost({ tokens }),
             type,
-            rank: file.searchRank,
+            searchRank: file.searchRank,
           })
           // Reset the current chunk content
           currentChunkContent = null
@@ -215,7 +217,7 @@ async function main() {
               tokens,
               cost: calcTokenCost({ tokens }),
               type,
-              rank: file.searchRank,
+              searchRank: file.searchRank,
             })
           }
         }
@@ -247,69 +249,35 @@ async function main() {
     process.exit(0)
   }
 
-  const batches = markdownChunks.reduce(
-    (batches, chunk) => {
-      // Find the next batch that has less than OPENAI_MAX_TOKENS_PER_REQUEST tokens
-      const nextBatch = batches.find(
-        (batch) => batch.reduce((acc, chunk) => acc + chunk.tokens, 0) < OPENAI_MAX_TOKENS_PER_REQUEST,
-      )
-      if (nextBatch) {
-        nextBatch.push(chunk)
-      } else {
-        batches.push([chunk])
-      }
+  const openai = createOpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
 
-      return batches
+  const { embeddings } = await embedMany({
+    model: openai.textEmbeddingModel(EMBEDDING_MODEL.model),
+    values: markdownChunks.map((chunk) => chunk.content),
+    providerOptions: {
+      openai: {
+        dimensions: EMBEDDING_DIMENSIONS,
+      },
     },
-    [[]] as Chunk[][],
-  )
-  console.info(`✓ Split chunks into ${batches.length} batches`)
+  })
 
-  const openai = new OpenAI({ apiKey: OPENAI_EMBEDDINGS_API_KEY })
+  const chunksWithEmbeddings = markdownChunks.map(({ cost, tokens, ...chunk }, index) => {
+    const embedding = embeddings[index]
 
-  const chunksWithEmbeddings = await processQueue(batches, async (batch, index) => {
-    const tokens = batch.reduce((acc, chunk) => acc + chunk.tokens, 0)
-    console.info(
-      `Generating embeddings for batch ${index} of ${batches.length} (${batch.length} chunks, ${tokens} tokens)`,
-    )
-    const response = await openai.embeddings.create({
-      model: EMBEDDING_MODEL.model,
-      input: batch.map((chunk) => chunk.content),
-      dimensions: EMBEDDING_DIMENSIONS,
-      // We specifically don't want to define this, even though it effectively defaults to float, if we set it as float then the network request asks for it in float, which is ~4x larger than base64 so slows down the network request. If we don't define it, the sdk uses base64 but handles the conversion to float before returning it to us. If we define it as base64 then then the sdk doesn't do the conversion back to float for us.
-      encoding_format: undefined,
-    })
-    return batch.map((chunk, index) => {
-      const result = response.data.find((data) => data.index === index)
+    if (!embedding) {
+      throw new Error(`No embedding found for chunk ${index}`)
+    }
 
-      if (!result) {
-        throw new Error(`No embedding found for chunk ${index}`)
-      }
-
-      return {
-        ...chunk,
-        embedding: result.embedding,
-      }
-    })
-  }).then((results) => results.flat())
-  console.info(`✓ Generated embeddings for ${chunksWithEmbeddings.length} chunks`)
-
-  const outputEmbeddings = chunksWithEmbeddings.map((chunk, index) => {
     return {
+      ...chunk,
       id: index,
-      embedding: chunk.embedding,
-      content: chunk.content,
-      canonical: chunk.canonical,
-      heading: chunk.heading,
-      availableSdks: chunk.availableSdks,
-      activeSdk: chunk.activeSdk,
-      type: chunk.type,
-      title: chunk.title,
-      searchRank: chunk.rank,
+      embedding: embedding,
     }
   })
 
-  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(outputEmbeddings))
+  console.info(`✓ Generated embeddings for ${chunksWithEmbeddings.length} chunks`)
+
+  await fs.writeFile(EMBEDDINGS_OUTPUT_PATH, JSON.stringify(chunksWithEmbeddings))
   console.info(`✓ Wrote embeddings to ${EMBEDDINGS_OUTPUT_PATH}`)
 }
 
@@ -403,36 +371,3 @@ const isH2 = (line: string) => line.match(H2Regex)?.[1]
 
 const H3Regex = /^###\s+(.+)$/
 const isH3 = (line: string) => line.match(H3Regex)?.[1]
-
-async function processQueue<T, R>(
-  items: T[],
-  worker: (item: T, index: number) => Promise<R>,
-  concurrency = 1,
-): Promise<R[]> {
-  const results: R[] = []
-  let nextIndex = 0
-  let active = 0
-
-  return new Promise<R[]>((resolve, reject) => {
-    const processNext = () => {
-      if (nextIndex >= items.length && active === 0) {
-        resolve(results)
-        return
-      }
-      while (active < concurrency && nextIndex < items.length) {
-        const i = nextIndex++
-        active++
-        worker(items[i], i)
-          .then((result) => {
-            results[i] = result
-          })
-          .catch(reject)
-          .finally(() => {
-            active--
-            processNext()
-          })
-      }
-    }
-    processNext()
-  })
-}

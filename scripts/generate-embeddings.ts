@@ -33,7 +33,7 @@ import { map as mdastMap } from 'unist-util-map'
 const EMBEDDING_MODEL_SIZE = cliFlag('large') ? 'large' : 'small'
 const ESTIMATE_COST = cliFlag('estimate-cost')
 const EMBEDDING_MODEL = EMBEDDING_MODELS[EMBEDDING_MODEL_SIZE]
-const EMBEDDING_DIMENSIONS = cliFlag('dimensions', z.coerce.number().positive().optional()) ?? 1_536 // higher dimensions are more accurate but more expensive, and slower
+const EMBEDDING_DIMENSIONS = cliFlag('dimensions', z.coerce.number().positive().optional()) ?? 1_536 / 3 // higher dimensions are more accurate but more expensive, and slower
 const OPENAI_EMBEDDINGS_API_KEY = env('OPENAI_EMBEDDINGS_API_KEY')
 // We want to use the dist folder as the markdown in there has the partials, tooltips, typedocs, etc. embedded in it.
 const DOCUMENTATION_FOLDER = cliFlag('docs', z.string().optional()) ?? './dist'

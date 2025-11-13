@@ -272,7 +272,8 @@ async function main() {
       model: EMBEDDING_MODEL.model,
       input: batch.map((chunk) => chunk.content),
       dimensions: EMBEDDING_DIMENSIONS,
-      encoding_format: 'float',
+      // We specifically don't want to define this, even though it effectively defaults to float, if we set it as float then the network request asks for it in float, which is ~4x larger than base64 so slows down the network request. If we don't define it, the sdk uses base64 but handles the conversion to float before returning it to us. If we define it as base64 then then the sdk doesn't do the conversion back to float for us.
+      encoding_format: undefined,
     })
     return batch.map((chunk, index) => {
       const result = response.data.find((data) => data.index === index)

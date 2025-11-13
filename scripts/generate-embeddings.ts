@@ -39,9 +39,10 @@ const OPENAI_MAX_TOKENS_PER_REQUEST = cliFlag('max-tokens', z.coerce.number().po
 
 type Chunk = {
   type: 'page' | 'paragraph'
+  availableSdks?: string[]
+  activeSdk?: string
   title: string
   canonical: string
-  sdk?: string[]
   heading?: string
   content: string
   tokens: number
@@ -129,7 +130,8 @@ async function main() {
             fullPath,
             title: frontmatterTitle,
             canonical: frontmatter.canonical,
-            sdk: frontmatter.sdk,
+            availableSdks: frontmatter.availableSdks,
+            activeSdk: frontmatter.activeSdk,
             searchRank: frontmatter.search?.rank,
             content: String(vfile),
           }
@@ -168,7 +170,8 @@ async function main() {
           chunks.push({
             title: file.title,
             canonical: file.canonical,
-            sdk: file.sdk,
+            availableSdks: file.availableSdks,
+            activeSdk: file.activeSdk,
             heading: currentHeading ? slugify(currentHeading) : undefined,
             content,
             tokens,
@@ -205,7 +208,8 @@ async function main() {
             chunks.push({
               title: file.title,
               canonical: file.canonical,
-              sdk: file.sdk,
+              availableSdks: file.availableSdks,
+              activeSdk: file.activeSdk,
               heading: currentHeading ? slugify(currentHeading) : undefined,
               content,
               tokens,
@@ -297,7 +301,8 @@ async function main() {
       content: chunk.content,
       canonical: chunk.canonical,
       heading: chunk.heading,
-      sdk: chunk.sdk,
+      availableSdks: chunk.availableSdks,
+      activeSdk: chunk.activeSdk,
       type: chunk.type,
       title: chunk.title,
       searchRank: chunk.rank,
@@ -345,10 +350,11 @@ const frontmatterRegex = /---[\s\S]*?---/
 const frontmatterSchema = z.object({
   canonical: z.string(),
   title: z.string().optional(),
-  sdk: z
+  availableSdks: z
     .string()
     .optional()
-    .transform((value) => value?.split(', ')),
+    .transform((value) => value?.split(',')),
+  activeSdk: z.string().optional(),
   search: z
     .object({
       rank: z.number().optional(),

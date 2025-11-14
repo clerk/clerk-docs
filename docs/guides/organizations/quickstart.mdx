@@ -1,0 +1,162 @@
+---
+title: Organizations quickstart for Next.js
+description: Learn how to add organizations to your Next.js app with Clerk's prebuilt components.
+sdk: nextjs
+---
+
+Organizations let you group users with roles and permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts.
+
+> [!NOTE]
+> Just getting started with Clerk and Next.js? See the [quickstart tutorial](/docs/nextjs/getting-started/quickstart)!
+
+<Steps>
+  ## Enable organizations in the Clerk Dashboard
+
+  Organizations are disabled by default. To enable them:
+
+  1. In the Clerk Dashboard, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/~/organizations-settings) page.
+  1. Select **Enable Organizations**.
+  1. In the modal, choose whether to allow personal accounts:
+     - **Personal accounts disabled (default)**: Every user must belong to an organization. This is recommended for most B2B applications.
+     - **Personal accounts enabled**: Users can operate in their own individual workspace or join organizations.
+  1. Select **Enable**.
+
+  Learn more about configuring organizations in the [dedicated guide](/docs/guides/organizations/configure).
+
+  ## Add the OrganizationSwitcher component
+
+  The [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component is the easiest way to let users create, switch between, and manage organizations. Add it to your app's header or navigation:
+
+  ```tsx {{ filename: 'components/Header.tsx' }}
+  import { OrganizationSwitcher } from '@clerk/nextjs'
+
+  export default function Header() {
+    return (
+      <header>
+        <OrganizationSwitcher />
+      </header>
+    )
+  }
+  ```
+
+  The `<OrganizationSwitcher />` component handles all organization flows including:
+  - Creating new organizations
+  - Switching between organizations
+  - Managing the active organization's profile
+  - Viewing organization members and invitations
+
+  ## Access organization data
+
+  Use Clerk's hooks to access the current organization and role in your components:
+
+  ```tsx {{ filename: 'app/page.tsx', mark: [3, [6, 9], 14, 17]}}
+  'use client'
+  
+  import { useOrganization, useOrganizationList } from '@clerk/nextjs'
+
+  export default function Home() {
+    const { organization } = useOrganization()
+    const { userMemberships } = useOrganizationList({
+      userMemberships: true,
+    })
+    
+    return (
+      <div className="p-8">
+        <h1 className="text-2xl font-bold mb-4">
+          Welcome to the <strong>{organization?.name}</strong> organization
+        </h1>
+        <p className="mb-6">
+          Your role in this organization: <strong>{userMemberships?.data?.find((membership) => membership.organization.id === organization?.id)?.role}</strong>
+        </p>
+      </div>
+    )
+  }
+  ```
+
+  ## Visit your app
+
+  Run your project with the following command:
+
+  ```npm
+  npm run dev
+  ```
+
+  Visit your app locally at [localhost:3000](http://localhost:3000).
+
+  ## Create and switch organization
+
+  Use `<OrganizationSwitcher />` to create, switch between, and manage organizations.
+
+  1. Click on the `<OrganizationSwitcher />` component, then **Create an organization**.
+
+  1. Enter `Acme Org` as the organization name.
+  
+  1. Invite users to your organization and select their role.
+
+  ## Protect routes by organization and roles
+
+  You can protect routes based on organization membership, roles, and permissions. The `/protected` page checks if you are an admin in the `Acme Corp` organization:
+
+  ```tsx {{ filename: 'app/protected/page.tsx', mark: [1, 6, 13, 14, 17, 18]}}
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+
+  export default async function Page() {
+    // Protect the route by checking for a specific role
+    // This will throw a 404 if the user is not authenticated or doesn't have the role
+    const { orgId } = await auth.protect({ role: 'org:admin' })
+
+    if (!orgId) {
+      return <p className="text-red-600">You must be signed in as an <strong>admin</strong> to access this page.</p>
+    }
+
+    // Fetch the organization to check its name
+    const client = await clerkClient()
+    const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+    // Check if organization name matches (e.g., "Acme Corp")
+    const requiredOrgName = 'Acme Corp'
+    if (organization.name !== requiredOrgName) {
+      return <p className="text-red-600">You are currently not signed in as an <strong>admin</strong> in the <strong>{requiredOrgName}</strong> organization.</p>
+    }
+    
+    return <p className="text-green-600">You are currently signed in as an <strong>admin</strong> in the <strong>{requiredOrgName}</strong> organization.</p>
+  }
+  ```
+
+  Learn more about protecting routes and checking organization roles in the [authorization guide](/docs/guides/organizations/roles-and-permissions#authorization-checks).
+
+  ## It's time to build your B2B SaaS!
+
+  You've added Clerk organizations to your Next.js app 🎉. Ready to scale to enterprise customers? 
+  
+  - **Control access** with [custom roles and permissions](/docs/guides/organizations/roles-and-permissions) define granular permissions for different user types within organizations.
+  
+  - **Onboard entire companies** with [verified domains](/docs/guides/organizations/verified-domains) automatically invite users with approved email domains (e.g., `@company.com`) to join organizations without manual invitations.
+  
+  - **Enable enterprise SSO** with [SAML and OIDC](/docs/guides/organizations/sso) let customers authenticate through their identity provider (Okta, Entra ID, Google Workspace) with unlimited connections, no per-connection fees.
+
+  
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Create and manage organizations](/docs/guides/organizations/create-and-manage)
+  - Learn how to create organizations, manage members, and switch between organizations.
+
+  ---
+
+  - [Invite members to organizations](/docs/guides/organizations/invitations)
+  - Learn how to invite team members to your organizations with role-based access.
+
+  ---
+
+  - [Roles and permissions](/docs/guides/organizations/roles-and-permissions)
+  - Set up custom roles and permissions to control access within organizations.
+
+  ---
+
+  - [Organization components](/docs/reference/components/organization/overview)
+  - Learn more about Clerk's prebuilt organization components.
+</Cards>
+

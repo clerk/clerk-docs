@@ -1,15 +1,13 @@
 ---
-title: Request authentication
+title: Making authenticated requests
 description: Learn about various ways to make authenticated requests to the backend when using Clerk SDKs.
 ---
 
-A request is considered “authenticated” when the backend can securely identify the user and device that is making the request. Reasons for making authenticated requests to the backend include:
+It's important to authenticate requests to ensure that the user is who they say they are and that they have permission to perform the action they are trying to perform.
 
-- Associating the user with the action being performed
-- Ensuring the user has permission to make the request
-- Keeping an audit log of which device the user is performing actions from
+A request is considered **authenticated** when the backend can securely identify the user and device that is making the request. This is done by passing the user's [session token](/docs/guides/sessions/session-tokens) to the backend. The session token contains cryptographically signed claims about the user's identity and authentication state.
 
-To authenticate requests when using a Clerk SDK, you must pass Clerk's short-lived [session token](/docs/guides/sessions/session-tokens) to your server. The session token contains cryptographically signed claims about the user's identity and authentication state. [Read more about making requests](/docs/guides/development/making-requests).
+Authenticating a request depends on what _type_ of request you are making. If the request is made from the [same origin](#same-origin-requests) as the server, Clerk automatically includes the session token in the request. If the request is made from a [different origin](#cross-origin-requests), you must manually pass the session token in the Authorization header.
 
 ## Required headers
 
@@ -32,30 +30,20 @@ To make authenticated requests, the approach differs based on whether your clien
 
 ### Same-origin requests
 
-If your client and server are on the same origin (e.g. making an API call to `foo.com/api` from JavaScript running on `foo.com`), the [session token](/docs/guides/sessions/session-tokens) is automatically passed to the backend in a cookie. This means that all requests to same-origin endpoints are **authenticated by default**.
+If your client and server are on the same origin (e.g. making an API call to `foo.com/api` from JavaScript running on `foo.com`), the [session token](/docs/guides/sessions/session-tokens) is automatically passed to the backend in a cookie. All requests to same-origin endpoints are **authenticated by default**; simply make the request as you normally would and the session token will be included.
 
-Use the following tabs to see how to
+Use the following examples to see how to make authenticated same-origin requests using different frameworks.
 
 <Tabs items={["Hook", "JavaScript"]}>
   <Tab>
-    You can use the native browser [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) as you normally would and the request will be authenticated. But when a tab loses focus, and data must be fetched in the background, the session token cookie is not automatically included. You'll need to explicitly pass the [session token](/docs/guides/sessions/session-tokens) as a Bearer token in the Authorization header.
-
-    Use the [`useAuth()`](/docs/reference/hooks/use-auth) hook's `getToken()` method to get the session token. Since `getToken()` returns a Promise, you'll need to await its resolution before making the request.
+    You can use the native browser [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch) as you normally would and the request will be authenticated. The cookie holding the session token is automatically included with same-origin requests.
 
     <Tabs items={["Fetch", "Fetch with SWR", "Fetch with Tanstack Query"]}>
       <Tab>
         ```jsx
         export default async function useFetch() {
-          // Use `useAuth()` to access the `getToken()` method
-          const { getToken } = useAuth()
-
-          // Use `getToken()` to get the current session token
-          const token = await getToken()
-
           const authenticatedFetch = async (...args) => {
-            return fetch(...args, {
-              headers: { Authorization: `Bearer ${token}` }, // Include the session token as a Bearer token in the Authorization header
-            }).then((res) => res.json())
+            return fetch(...args).then((res) => res.json())
           }
           return authenticatedFetch
         }
@@ -67,16 +55,8 @@ Use the following tabs to see how to
         import useSWR from 'swr'
 
         export default async function useClerkSWR(url: string) {
-          // Use `useAuth()` to access the `getToken()` method
-          const { getToken } = useAuth()
-
-          // Use `getToken()` to get the current session token
-          const token = await getToken()
-
           const fetcher = async (...args: [RequestInfo]) => {
-            return fetch(...args, {
-              headers: { Authorization: `Bearer ${token}` }, // Include the session token as a Bearer token in the Authorization header
-            }).then((res) => res.json())
+            return fetch(...args).then((res) => res.json())
           }
 
           return useSWR(url, fetcher)
@@ -92,7 +72,6 @@ Use the following tabs to see how to
 
         ```tsx
         import { useQuery } from '@tanstack/react-query'
-        import { useAuth } from '@clerk/nextjs'
 
         // Define your query keys as constants to avoid typos
         export const queryKeys = {
@@ -108,22 +87,11 @@ Use the following tabs to see how to
         }
 
         export function useFooQuery() {
-          // Use `useAuth()` to access the `getToken()` method
-          const { getToken } = useAuth()
-
           return useQuery({
             queryKey: queryKeys.foo,
             queryFn: async (): Promise<FooResponse> => {
-              // Use `getToken()` to get the current session token
-              const token = await getToken()
-
-              // Make the request
-              const response = await fetch('/api/foo', {
-                headers: {
-                  Authorization: `Bearer ${token}`, // Include the session token as a Bearer token in the Authorization header
-                  'Content-Type': 'application/json',
-                },
-              })
+              // Make the authenticated request
+              const response = await fetch('/api/foo')
 
               if (!response.ok) {
                 // Include status code and status text in error message

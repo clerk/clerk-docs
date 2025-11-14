@@ -30,7 +30,7 @@ Actor tokens are similar to [sign-in tokens](/docs/reference/backend-api/tag/sig
 
 To create an actor token, you can use the [Backend API](/docs/reference/backend-api/tag/actor-tokens/post/actor_tokens){{ target: '_blank' }}.
 
-The following example demonstrates how to create an actor token that is valid for 600 seconds (10 minutes). Using the generated token will result in user with ID `user_21Ufcy98STcA11s3QckIwtwHIES` (the actor/impersonator) signing in as user with ID `user_1o4qfak5AdI2qlXSXENGL05iei6` (the subject/impersonated).
+The following example demonstrates how to create an actor token by making a request directly to Clerk's Backend API using cURL. Using the generated token will result in user with ID `user_21Ufcy98STcA11s3QckIwtwHIES` (the actor/impersonator) signing in as user with ID `user_1o4qfak5AdI2qlXSXENGL05iei6` (the subject/impersonated).
 
 ```bash
 curl -X POST https://api.clerk.com/v1/actor_tokens -d '{ \
@@ -50,7 +50,7 @@ To revoke an actor token, you can use the [Backend API](/docs/reference/backend-
 
 Despite it's expiration date, you can revoke a token at any time. Revoked actor tokens can no longer be used for signing in.
 
-The following example demonstrates how to revoke an actor token, even if it's not expired yet.
+The following example demonstrates how to revoke an actor token by making a request directly to Clerk's Backend API using cURL, even if it's not expired yet.
 
 ```bash
 curl -X POST https://api.clerk.com/v1/actor_tokens/act_2EL6mQKzeUtoRwGuLZsznyfkIsH/revoke
@@ -79,7 +79,7 @@ Clerk also adds an `act` claim on the [Clerk session token](/docs/guides/session
 
 To detect impersonated sessions in the frontend, the `actor` object contains the `sub` claim of the impersonator. You can use this information to detect impersonated sessions.
 
-<Tabs items={["React-based SDKs", "JavaScript"]}>
+<Tabs items={["Hook", "JavaScript"]}>
   <Tab>
     You can use the [`useAuth()`](/docs/reference/hooks/use-auth) hook to get access to the authentication context, which includes the `actor` object.
 
@@ -126,9 +126,9 @@ To detect impersonated sessions in the frontend, the `actor` object contains the
 
 ### Detect impersonated sessions in the backend
 
-The [`Auth`](/docs/reference/backend/types/auth-object) object is a server-side object that contains the `actor` object, as well as important information like the current user's session ID and user ID. Accessing the `Auth` object differs [depending on the SDK you're using](/docs/reference/backend/types/auth-object#how-to-access-the-auth-object). Here are some examples:
+The [`Auth`](/docs/reference/backend/types/auth-object) object is a server-side object that contains the `actor` object, as well as important information like the current user's session ID and user ID. **Accessing the `Auth` object differs [depending on the SDK you're using](/docs/reference/backend/types/auth-object#how-to-access-the-auth-object).** Here are some examples:
 
-<Tabs items={["Next.js", "Express"]}>
+<Tabs items={["Next.js", "Astro", "Express", "React Router", "Tanstack React Start"]}>
   <Tab>
     The Next.js SDK provides the [`auth()`](/docs/reference/nextjs/app-router/auth) helper to App Router apps to access the `Auth` object.
 
@@ -136,8 +136,8 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object is a server-side 
     import { auth } from '@clerk/nextjs/server'
 
     export default async function Page() {
-      // Use Clerk's `auth()` helper to access the `Auth` object
-      const { userId, actor } = await auth()
+      // Use `auth()` to access the `Auth` object
+      const { actor, userId } = await auth()
 
       return (
         <div>
@@ -149,6 +149,27 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object is a server-side 
         </div>
       )
     }
+    ```
+  </Tab>
+
+  <Tab>
+    The Astro SDK provides the `locals.auth()` function to access the `Auth` object. [Learn more about using `locals.auth()`](/docs/astro/guides/users/reading#server-side).
+
+    ```astro {{ filename: 'src/pages/example.astro' }}
+    ---
+    // Use `locals.auth()` to access the `Auth` object
+    const { actor, userId } = Astro.locals.auth()
+    ---
+
+    <div>
+      {
+        actor && (
+          <span>
+            user {actor.sub} has signed in as user {userId || ''}
+          </span>
+        )
+      }
+    </div>
     ```
   </Tab>
 
@@ -172,6 +193,61 @@ The [`Auth`](/docs/reference/backend/types/auth-object) object is a server-side 
 
     app.listen(3000, () => {
       console.log('Booted.')
+    })
+    ```
+  </Tab>
+
+  <Tab>
+    The React Router SDK provides the [`getAuth()`](/docs/reference/react-router/get-auth) function to access the `Auth` object.
+
+    ```tsx {{ filename: 'app/routes/example.tsx' }}
+    import { redirect } from 'react-router'
+    import { clerkClient, getAuth } from '@clerk/react-router/server'
+    import type { Route } from './+types/example'
+
+    export async function loader(args: Route.LoaderArgs) {
+      // Use `getAuth()` to access the `Auth` object
+      const { isAuthenticated, actor, userId } = await getAuth(args)
+
+      return {
+        actor: actor,
+        userId: userId || '',
+      }
+    }
+
+    export default function Example({ loaderData }: Route.ComponentProps) {
+      return (
+        <div>
+          {loaderData.actor && (
+            <span>
+              user {loaderData.actor.sub} has signed in as user {loaderData.userId}
+            </span>
+          )}
+        </div>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The Tanstack React Start SDK provides the `auth()` function to access the `Auth` object. [Learn more about using `auth()`](/docs/tanstack-react-start/guides/users/reading#server-side).
+
+    ```tsx {{ filename: 'src/routes/api/example.tsx' }}
+    import { auth } from '@clerk/tanstack-react-start/server'
+    import { json } from '@tanstack/react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+
+    export const ServerRoute = createFileRoute('/api/example')({
+      server: {
+        handlers: {
+          GET: async () => {
+            // Use `auth()` to access the `Auth` object
+            const { actor, userId } = await auth()
+
+            return json({ actor, userId })
+          },
+        },
+      },
     })
     ```
   </Tab>

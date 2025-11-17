@@ -25,9 +25,7 @@ After authentication, users enter one of three states:
 
 When authenticating, sessions remain `pending` until users complete the required tasks. By default, `pending` sessions are treated as signed-out across Clerk's authentication context.
 
-## Implementation
-
-### Displaying tasks
+## Displaying tasks
 
 Once enabled in the Clerk Dashboard, tasks are **embedded by default** within the `<SignUp />` and `<SignIn />` components. For more customization, you can opt out of using the `<SignUp />` and `<SignIn />` components and [create custom pages for tasks](/docs/guides/development/custom-flows/overview#session-tasks).
 
@@ -40,12 +38,10 @@ The following table lists the available tasks and their corresponding components
 > [!IMPORTANT]
 > Personal accounts being disabled by default was released on 08-22-2025. Applications created before this date will not be able to see the **Allow personal accounts** setting, because personal accounts were enabled by default.
 
-If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending session tasks. Refer to the [custom flows documentation](/docs/guides/development/custom-flows/overview) for specific implementation guides.
+If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending session tasks. To access the `Session.currentTask` property, you can use either the `useSession()` hook for React-based applications or `window.Clerk` for other frameworks.
 
-<CodeBlockTabs options={["React", "JavaScript"]}>
+<CodeBlockTabs options={["Hook", "JavaScript"]}>
   ```jsx
-  import { useSession } from '@clerk/clerk-react'
-
   const { session } = useSession()
 
   if (session?.currentTask) {
@@ -64,132 +60,122 @@ If the prebuilt components don't meet your specific needs or if you require more
   ```
 </CodeBlockTabs>
 
-### Redirecting to tasks
+## Redirecting to tasks
 
 When users have pending session tasks, you can redirect them to specific pages or components to complete these requirements. This is useful when you want to handle session tasks outside of the default `<SignIn />` and `<SignUp />` components.
 
-#### Using the `taskUrls` option
+### Using the `taskUrls` option
 
 The `taskUrls` option allows you to specify custom URL paths where users are redirected after sign-up or sign-in when specific session tasks need to be completed. This allows you to still use `<SignIn />` and `<SignUp />` but have tasks with custom pages.
 
-<Tabs items={['layout.tsx', 'choose-organization/page.tsx']}>
-  <Tab>
-    Configure the `taskUrls` option in your root layout to specify where users should be redirected for different session tasks.
+The `taskUrls` option is available wherever you initialize the Clerk integration. For most SDKs, it's `<ClerkProvider>`.
 
-    ```tsx {{ filename: 'app/layout.tsx' }}
-    import { ClerkProvider } from '@clerk/nextjs'
+```tsx
+<ClerkProvider
+  taskUrls={{
+    'choose-organization': '/onboarding/choose-organization',
+  }}
+>
+  {children}
+</ClerkProvider>
+```
 
-    export default function RootLayout({ children }: { children: React.ReactNode }) {
-      return (
-        <ClerkProvider
-          publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-          taskUrls={{
-            'choose-organization': '/onboarding/choose-organization',
-          }}
-        >
-          {children}
-        </ClerkProvider>
-      )
-    }
-    ```
-  </Tab>
+Then, create a page at that URL path that imports the [`<TaskChooseOrganization />`](/docs/reference/components/authentication/task-choose-organization) component to handle the task.
 
-  <Tab>
-    Create a custom page that imports the `TaskChooseOrganization` component to handle the task.
+```tsx {{ filename: 'app/onboarding/choose-organization/page.tsx' }}
+export default function Page() {
+  return <TaskChooseOrganization redirectUrlComplete="/dashboard" />
+}
+```
 
-    ```tsx {{ filename: 'app/onboarding/choose-organization/page.tsx' }}
-    import { TaskChooseOrganization } from '@clerk/nextjs'
-
-    export default function ChooseOrganizationPage() {
-      return <TaskChooseOrganization redirectUrlComplete="/dashboard" />
-    }
-    ```
-  </Tab>
-</Tabs>
-
-#### Using the `RedirectToTasks` control component
+### Using the `<RedirectToTasks />` control component
 
 The `<RedirectToTasks />` control component redirects users to the appropriate task page when they have pending session tasks.
 
-```tsx {{ filename: 'app/dashboard/layout.tsx' }}
-import { SignedOut, RedirectToTasks } from '@clerk/nextjs'
-
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <SignedOut>
-        <RedirectToTasks />
-      </SignedOut>
-      {children}
-    </>
-  )
-}
+```tsx
+<>
+  {/* Until the user completes their session tasks,
+  Clerk considers them as signed out, by default */}
+  <SignedOut>
+    <RedirectToTasks />
+  </SignedOut>
+</>
 ```
 
-{/* TODO: Add examples for other sdk's that support middleware */}
+### Middleware-based redirects
 
-#### Middleware-based redirects
+<If sdk="nextjs">
+  There are many ways to protect routes using middleware. If you'd like to simply redirect users to the sign-in page if they are signed-out, you can [use `auth.protect()`](#using-auth-protect). If you'd like to have more control over what your app does based on user authentication status, you can [use the `isAuthenticated` property](#using-is-authenticated).
+</If>
 
-For `auth.protect()`, signed-out users will be redirected to the sign-in page. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks, which in this case is selecting or creating an organization. Once finished, their session will move from `pending` to an `active` (signed-in) state.
+<If sdk="nextjs">
+  ### Using `auth.protect()`
 
-<Include src="_partials/nextjs/nextjs-15-callout" />
+  When using `auth.protect()` in middleware to protect routes, it will redirect users to the sign-in page if they are signed-out. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to an `active` (signed-in) state.
 
-```tsx {{ filename: 'proxy.ts', mark: [[6, 8]] }}
+  <Include src="_partials/nextjs/nextjs-15-callout" />
+
+  ```tsx {{ filename: 'proxy.ts', mark: [[6, 8]] }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    // pending users won't be able to access protected routes
+    // and will be redirected to the sign-in page
+    if (isProtectedRoute(req)) await auth.protect()
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+</If>
+
+### Using `isAuthenticated`
+
+When using the `isAuthenticated` property in middleware to protect routes, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to a custom page to fulfill the session tasks.
+
+```tsx {{ filename: 'proxy.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
-export default clerkMiddleware(async (auth, req) => {
-  // pending users won't be able to access protected routes
-  // and will be redirected to the sign-in page
-  if (isProtectedRoute(req)) await auth.protect()
-})
+export default clerkMiddleware(async (auth, req: NextRequest) => {
+  const { isAuthenticated, redirectToSignIn, sessionStatus } = await auth()
 
-export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
-}
-```
+  // Send users with pending sessions to the /session-tasks page
+  if (!isAuthenticated && sessionStatus === 'pending' && isProtectedRoute(req)) {
+    // Add logic to handle pending users
+    // This example redirects pending users to the /session-tasks page
+    // so they can fulfill the session tasks
+    const url = req.nextUrl.clone()
+    url.pathname = '/session-tasks'
+    return NextResponse.redirect(url)
+  }
 
-For `auth().isAuthenticated`, it would return `false` if the user has a `pending` session. Pending users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to a `signed-in` state.
-
-```tsx {{ filename: 'app/proxy.ts', mark: [[6, 12]] }}
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-
-const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
-
-export default clerkMiddleware(async (auth, req) => {
-  const { isAuthenticated, redirectToSignIn } = await auth()
-
-  // `isAuthenticated` will be `false` for pending users
-  // and they will be redirected to the sign-in page
+  // Send users who are not authenticated
+  // and don't have pending tasks to the sign-in page
   if (!isAuthenticated && isProtectedRoute(req)) {
     return redirectToSignIn()
   }
 })
-
-export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
-}
 ```
 
-### Session handling
+## Session handling
 
 By default, `pending` sessions are treated as signed-out across Clerk's authentication context. Some control components and authentication utilities accept a `treatPendingAsSignedOut` prop to control how `pending` sessions are handled:
 
 - `true` (default): Treats `pending` sessions as signed-out. Users can't access protected content or routes.
 - `false`: Treats `pending` sessions as signed-in. Users can access protected content or routes.
 
-#### Control components
+### Control components
 
 <Tabs items={['<Protect />', '<SignedOut />', '<SignedIn />']}>
   <Tab>
@@ -280,11 +266,11 @@ By default, `pending` sessions are treated as signed-out across Clerk's authenti
   </Tab>
 </Tabs>
 
-#### Authentication utilities
+### Authentication utilities
 
-The `useAuth()` hook and helpers that access the [`auth` object](/docs/reference/backend/types/auth-object), such as `getAuth()` or `request.auth`, will return `null` if the user has a `pending` session. Most utilities accept a `treatPendingAsSignedOut` option that defaults to `true`. You can pass `false` to treat `pending` sessions as signed-in.
+The `useAuth()` hook and helpers that access the [`Auth` object](/docs/reference/backend/types/auth-object), such as `getAuth()` or `request.auth`, will return `null` if the user has a `pending` session. Most utilities accept a `treatPendingAsSignedOut` option that defaults to `true`. You can pass `false` to treat `pending` sessions as signed-in.
 
-##### Example: Personal accounts disabled
+#### Example: Personal accounts disabled
 
 When organizations are enabled, [personal accounts are disabled by default](/docs/guides/organizations/overview#allow-personal-accounts) and your users will be required to select or create an organization after authenticating. Until completed, their session remains `pending`. Pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
 
@@ -311,57 +297,62 @@ export default function Dashboard() {
 }
 ```
 
-<If sdk="nextjs">
-  For `auth()`, `isAuthenticated` would return `false` and `userId` and `orgId` would return `null` if the user has a `pending` session.
+For helpers that access the [`Auth` object](/docs/reference/backend/types/auth-object), `isAuthenticated` would return `false` and `userId` and `orgId` would return `null` if the user has a `pending` session. This example uses the Next.js-specific [`auth()`](/docs/reference/nextjs/app-router/auth) helper, but you can use the comments in the example to help you adapt it to your SDK.
 
-  ```tsx {{ filename: 'app/page.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
+```tsx {{ filename: 'app/page.tsx' }}
+import { auth } from '@clerk/nextjs/server'
 
-  export default async function Page() {
-    const { isAuthenticated, userId, orgId } = await auth()
+export default async function Page() {
+  // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+  // Accessing the `Auth` object differs depending on the SDK you're using
+  // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+  const { isAuthenticated, userId, orgId } = await auth()
 
-    if (!isAuthenticated) {
-      return (
-        <p>
-          User has no session, or has a pending session. They either need to sign in, or they need to
-          complete pending session tasks by selecting or creating an organization.
-        </p>
-      )
-    }
-
+  if (!isAuthenticated) {
     return (
       <p>
-        User {userId} has a valid session and {orgId} is defined
+        User has no session, or has a pending session. They either need to sign in, or they need to
+        complete pending session tasks by selecting or creating an organization.
       </p>
     )
   }
-  ```
 
-  By default, users with a `pending` session are treated as signed-out, and their `userId` will not be available. However, in some cases, you may want to access the user's ID even if their session is still `pending`. In these cases, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow you to access the `userId`.
+  return (
+    <p>
+      User {userId} has a valid session and {orgId} is defined
+    </p>
+  )
+}
+```
 
-  ```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
-  import { auth } from '@clerk/nextjs/server'
+#### Example: Accessing the `userId` for pending sessions
 
-  export const POST = async () => {
-    // `treatPendingAsSignedOut` is set to `false` to allow access to the `userId` for pending sessions
-    const { isAuthenticated, userId, has } = await auth({ treatPendingAsSignedOut: false })
+By default, users with a `pending` session are treated as signed-out, and their `userId` will not be available. However, in some cases, you may want to access the user's ID even if their session is still `pending`. In these cases, you can set `treatPendingAsSignedOut` to `false`, which will treat `pending` sessions as signed-in and allow you to access the `userId`. This example uses the Next.js-specific [`auth()`](/docs/reference/nextjs/app-router/auth) helper, but you can use the comments in the example to help you adapt it to your SDK.
 
-    // Check if the user is signed-out
-    if (!isAuthenticated) {
-      return Response.json({ error: 'User is signed-out' }, { status: 401 })
-    }
+```tsx {{ filename: 'app/api/get-teams/route.tsx' }}
+import { auth } from '@clerk/nextjs/server'
 
-    // Now the pending user's `userId` can be used for your use case
-    // This is a basic example of creating a resource using the `userId`
-    try {
-      const newResource = await resources.create({
-        userId,
-      })
+export const POST = async () => {
+  // `treatPendingAsSignedOut` is set to `false` to allow access to the `userId` for pending sessions
+  // Accessing the `Auth` object differs depending on the SDK you're using
+  // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+  const { isAuthenticated, userId, has } = await auth({ treatPendingAsSignedOut: false })
 
-      return Response.json({ data: newResource }, { status: 201 })
-    } catch (error) {
-      return Response.json({ error: 'Failed to create resource' }, { status: 500 })
-    }
+  // Check if the user is signed-out
+  if (!isAuthenticated) {
+    return Response.json({ error: 'User is signed-out' }, { status: 401 })
   }
-  ```
-</If>
+
+  // Now the pending user's `userId` can be used for your use case
+  // This is a basic example of creating a resource using the `userId`
+  try {
+    const newResource = await resources.create({
+      userId,
+    })
+
+    return Response.json({ data: newResource }, { status: 201 })
+  } catch (error) {
+    return Response.json({ error: 'Failed to create resource' }, { status: 500 })
+  }
+}
+```

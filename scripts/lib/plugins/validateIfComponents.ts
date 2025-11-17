@@ -19,6 +19,14 @@ export const validateIfComponents =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastVisit(tree, (node) => {
+      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
+
+      const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
+
+      // The doc doesn't exist in the manifest so we are skipping it
+      if (manifestItems.length === 0) return
+
+      // Validate `sdk` prop
       const sdk = extractComponentPropValueFromNode(
         config,
         node,
@@ -31,55 +39,105 @@ export const validateIfComponents =
         z.string(),
       )
 
-      if (sdk === undefined) return
+      if (sdk !== undefined) {
+        const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
 
-      const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+        if (sdksFilter !== undefined) {
+          sdksFilter.forEach((sdk) => {
+            ;(() => {
+              if (doc.sdk === undefined) return
 
-      if (sdksFilter === undefined) return
+              const available = doc.sdk.includes(sdk)
 
-      const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
+              if (available === false) {
+                safeFail(
+                  config,
+                  vfile,
+                  filePath,
+                  'docs',
+                  'if-component-sdk-not-in-frontmatter',
+                  [sdk, doc.sdk],
+                  node.position,
+                )
+              }
+            })()
+            ;(() => {
+              // The doc is generic so we are skipping it
+              if (availableSDKs.length === 0) return
 
-      const availableSDKs = manifestItems.flatMap((item) => item.sdk).filter(Boolean)
+              const available = availableSDKs.includes(sdk)
 
-      // The doc doesn't exist in the manifest so we are skipping it
-      if (manifestItems.length === 0) return
+              if (available === false) {
+                safeFail(
+                  config,
+                  vfile,
+                  filePath,
+                  'docs',
+                  'if-component-sdk-not-in-manifest',
+                  [sdk, doc.file.href],
+                  node.position,
+                )
+              }
+            })()
+          })
+        }
+      }
 
-      sdksFilter.forEach((sdk) => {
-        ;(() => {
-          if (doc.sdk === undefined) return
+      // Validate `not` prop
+      const notSdk = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'If',
+        'not',
+        false,
+        'docs',
+        filePath,
+        z.string(),
+      )
 
-          const available = doc.sdk.includes(sdk)
+      if (notSdk !== undefined) {
+        const notSdksFilter = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
 
-          if (available === false) {
-            safeFail(
-              config,
-              vfile,
-              filePath,
-              'docs',
-              'if-component-sdk-not-in-frontmatter',
-              [sdk, doc.sdk],
-              node.position,
-            )
-          }
-        })()
-        ;(() => {
-          // The doc is generic so we are skipping it
-          if (availableSDKs.length === 0) return
+        if (notSdksFilter !== undefined) {
+          notSdksFilter.forEach((sdk) => {
+            ;(() => {
+              if (doc.sdk === undefined) return
 
-          const available = availableSDKs.includes(sdk)
+              const available = doc.sdk.includes(sdk)
 
-          if (available === false) {
-            safeFail(
-              config,
-              vfile,
-              filePath,
-              'docs',
-              'if-component-sdk-not-in-manifest',
-              [sdk, doc.file.href],
-              node.position,
-            )
-          }
-        })()
-      })
+              if (available === false) {
+                safeFail(
+                  config,
+                  vfile,
+                  filePath,
+                  'docs',
+                  'if-component-sdk-not-in-frontmatter',
+                  [sdk, doc.sdk],
+                  node.position,
+                )
+              }
+            })()
+            ;(() => {
+              // The doc is generic so we are skipping it
+              if (availableSDKs.length === 0) return
+
+              const available = availableSDKs.includes(sdk)
+
+              if (available === false) {
+                safeFail(
+                  config,
+                  vfile,
+                  filePath,
+                  'docs',
+                  'if-component-sdk-not-in-manifest',
+                  [sdk, doc.file.href],
+                  node.position,
+                )
+              }
+            })()
+          })
+        }
+      }
     })
   }

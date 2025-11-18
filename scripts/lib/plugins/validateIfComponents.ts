@@ -9,6 +9,41 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
+function extractIfComponentSdks(
+  config: BuildConfig,
+  node: Node,
+  vfile: VFile,
+  filePath: string,
+  sdk: string | undefined,
+  notSdk: string | undefined,
+) {
+  if (sdk && notSdk) {
+    safeFail(
+      config,
+      vfile,
+      filePath,
+      'docs',
+      'if-component-sdk-and-not-sdk-props-cannot-be-used-together',
+      [],
+      node.position,
+    )
+  }
+
+  if (notSdk) {
+    const notAllowedSdks = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
+    return notAllowedSdks
+  }
+
+  if (sdk) {
+    const allowedSdks = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+    return allowedSdks
+  }
+
+  // Don't throw an error if neither `sdk` nor `not` is present
+  // because <If> accepts a `condition` prop
+  return undefined
+}
+
 export const validateIfComponents =
   (
     config: BuildConfig,
@@ -52,104 +87,46 @@ export const validateIfComponents =
         z.string(),
       )
 
-      if (sdk && notSdk) {
-        safeMessage(
-          config,
-          vfile,
-          filePath,
-          'docs',
-          'if-component-sdk-and-not-sdk-props-cannot-be-used-together',
-          [],
-          node.position,
-        )
-      }
+      const ifComponentSdks = extractIfComponentSdks(config, node, vfile, filePath, sdk, notSdk)
 
-      if (sdk !== undefined) {
-        const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+      if (ifComponentSdks !== undefined) {
+        ifComponentSdks.forEach((sdk) => {
+          ;(() => {
+            if (doc.sdk === undefined) return
 
-        if (sdksFilter !== undefined) {
-          sdksFilter.forEach((sdk) => {
-            ;(() => {
-              if (doc.sdk === undefined) return
+            const available = doc.sdk.includes(sdk)
 
-              const available = doc.sdk.includes(sdk)
+            if (available === false) {
+              safeFail(
+                config,
+                vfile,
+                filePath,
+                'docs',
+                'if-component-sdk-not-in-frontmatter',
+                [sdk, doc.sdk],
+                node.position,
+              )
+            }
+          })()
+          ;(() => {
+            // The doc is generic so we are skipping it
+            if (availableSDKs.length === 0) return
 
-              if (available === false) {
-                safeFail(
-                  config,
-                  vfile,
-                  filePath,
-                  'docs',
-                  'if-component-sdk-not-in-frontmatter',
-                  [sdk, doc.sdk],
-                  node.position,
-                )
-              }
-            })()
-            ;(() => {
-              // The doc is generic so we are skipping it
-              if (availableSDKs.length === 0) return
+            const available = availableSDKs.includes(sdk)
 
-              const available = availableSDKs.includes(sdk)
-
-              if (available === false) {
-                safeFail(
-                  config,
-                  vfile,
-                  filePath,
-                  'docs',
-                  'if-component-sdk-not-in-manifest',
-                  [sdk, doc.file.href],
-                  node.position,
-                )
-              }
-            })()
-          })
-        }
-      }
-
-      if (notSdk !== undefined) {
-        const notSdksFilter = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
-
-        if (notSdksFilter !== undefined) {
-          notSdksFilter.forEach((sdk) => {
-            ;(() => {
-              if (doc.sdk === undefined) return
-
-              const available = doc.sdk.includes(sdk)
-
-              if (available === false) {
-                safeFail(
-                  config,
-                  vfile,
-                  filePath,
-                  'docs',
-                  'if-component-sdk-not-in-frontmatter',
-                  [sdk, doc.sdk],
-                  node.position,
-                )
-              }
-            })()
-            ;(() => {
-              // The doc is generic so we are skipping it
-              if (availableSDKs.length === 0) return
-
-              const available = availableSDKs.includes(sdk)
-
-              if (available === false) {
-                safeFail(
-                  config,
-                  vfile,
-                  filePath,
-                  'docs',
-                  'if-component-sdk-not-in-manifest',
-                  [sdk, doc.file.href],
-                  node.position,
-                )
-              }
-            })()
-          })
-        }
+            if (available === false) {
+              safeFail(
+                config,
+                vfile,
+                filePath,
+                'docs',
+                'if-component-sdk-not-in-manifest',
+                [sdk, doc.file.href],
+                node.position,
+              )
+            }
+          })()
+        })
       }
     })
   }

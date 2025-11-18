@@ -2,7 +2,7 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'
-import { safeFail } from '../error-messages'
+import { safeFail, safeMessage } from '../error-messages'
 import { ManifestItem } from '../manifest'
 import { type SDK } from '../schemas'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
@@ -38,6 +38,31 @@ export const validateIfComponents =
         filePath,
         z.string(),
       )
+
+      // Validate `not` prop
+      const notSdk = extractComponentPropValueFromNode(
+        config,
+        node,
+        vfile,
+        'If',
+        'not',
+        false,
+        'docs',
+        filePath,
+        z.string(),
+      )
+
+      if (sdk && notSdk) {
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          'docs',
+          'if-component-sdk-and-not-sdk-props-cannot-be-used-together',
+          [],
+          node.position,
+        )
+      }
 
       if (sdk !== undefined) {
         const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
@@ -82,19 +107,6 @@ export const validateIfComponents =
           })
         }
       }
-
-      // Validate `not` prop
-      const notSdk = extractComponentPropValueFromNode(
-        config,
-        node,
-        vfile,
-        'If',
-        'not',
-        false,
-        'docs',
-        filePath,
-        z.string(),
-      )
 
       if (notSdk !== undefined) {
         const notSdksFilter = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)

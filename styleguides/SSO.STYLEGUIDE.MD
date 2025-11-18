@@ -36,6 +36,7 @@ These are the guidelines we use to write our SSO guides.
 
 - Use `<Steps />` to lay out the steps
 - For the "Set the Client ID and Client Secret in the Clerk Dashboard" step, it can be formatted in one of two ways:
+
   1. With a partial. Use this method if the provider uses "Client ID" and "Client Secret" for their terminology.
 
      ```mdx

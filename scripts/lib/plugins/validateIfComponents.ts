@@ -9,7 +9,10 @@ import { extractComponentPropValueFromNode } from '../utils/extractComponentProp
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
-function extractIfComponentSdks(
+/**
+ * Extracts list of allowed SDKs from the `sdk` and `not` props of the <If /> component
+ */
+function extractSDKsFromIfComponent(
   config: BuildConfig,
   node: Node,
   vfile: VFile,
@@ -61,7 +64,6 @@ export const validateIfComponents =
       // The doc doesn't exist in the manifest so we are skipping it
       if (manifestItems.length === 0) return
 
-      // Validate `sdk` prop
       const sdk = extractComponentPropValueFromNode(
         config,
         node,
@@ -74,7 +76,6 @@ export const validateIfComponents =
         z.string(),
       )
 
-      // Validate `not` prop
       const notSdk = extractComponentPropValueFromNode(
         config,
         node,
@@ -87,10 +88,10 @@ export const validateIfComponents =
         z.string(),
       )
 
-      const ifComponentSdks = extractIfComponentSdks(config, node, vfile, filePath, sdk, notSdk)
+      const allowedSdks = extractSDKsFromIfComponent(config, node, vfile, filePath, sdk, notSdk)
 
-      if (ifComponentSdks !== undefined) {
-        ifComponentSdks.forEach((sdk) => {
+      if (allowedSdks !== undefined) {
+        allowedSdks.forEach((sdk) => {
           ;(() => {
             if (doc.sdk === undefined) return
 

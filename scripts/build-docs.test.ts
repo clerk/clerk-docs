@@ -1589,7 +1589,7 @@ Common content for all SDKs.`,
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
   })
 
-  test('should handle <If /> components with `not` prop', async () => {
+  test('should handle <If /> components with `notSdk` prop', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1613,11 +1613,11 @@ sdk: nextjs, react
 
 # Hello World
 
-<If not="nextjs">
+<If notSdk="nextjs">
   This content is for React users only.
 </If>
 
-<If not="react">
+<If notSdk="react">
   This content is for Next.js users only.
 </If>`,
       },
@@ -1635,7 +1635,7 @@ sdk: nextjs, react
     expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for React users only.')
   })
 
-  test('should handle <If /> components with both `sdk` and `not` props', async () => {
+  test('should handle <If /> components with both `sdk` and `notSdk` props', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
@@ -1659,7 +1659,7 @@ sdk: nextjs, react
 
 # Hello World
 
-<If not="nextjs" sdk="react">
+<If notSdk="nextjs" sdk="react">
   This content is for React users only.
 </If>
 `,
@@ -1675,7 +1675,7 @@ sdk: nextjs, react
     )
 
     await expect(promise).rejects.toThrow(
-      'Cannot pass both "sdk" and "not" props to <If /> component, you must choose one or the other.',
+      'Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.',
     )
   })
 

@@ -1254,12 +1254,12 @@ The `<If />` component is used for conditional rendering. When the conditions ar
 > [!IMPORTANT]
 > This component cannot be used within code blocks.
 
-| Props                   | Type                 | Comment                                                                                                                                                                                                                               |
-| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                                                      |
-| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                                             |
-| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React.                           |
-| `not?` (optional)       | `string \| string[]` | Filter the content to only display based on the SDK(s) that were **NOT** passed. For example, if the `not` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is **NOT** Next.js or React. |
+| Props                   | Type                 | Comment                                                                                                                                                                                                                                  |
+| ----------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                                                         |
+| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                                                |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React.                              |
+| `notSdk?` (optional)    | `string \| string[]` | Filter the content to only display based on the SDK(s) that were **NOT** passed. For example, if the `notSdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is **NOT** Next.js or React. |
 
 Available values for the `sdk` prop:
 
@@ -1324,7 +1324,7 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
 <summary>Filter to all SDKs except the ones passed</summary>
 
 ```mdx
-<If not="nextjs">This content will only be rendered if the active SDK is **NOT** Next.js</If>
+<If notSdk="nextjs">This content will only be rendered if the active SDK is **NOT** Next.js</If>
 ```
 
 </details>

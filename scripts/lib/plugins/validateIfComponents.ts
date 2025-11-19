@@ -10,7 +10,7 @@ import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
 
 /**
- * Extracts list of allowed SDKs from the `sdk` and `not` props of the <If /> component
+ * Extracts list of allowed SDKs from the `sdk` and `notSdk` props of the <If /> component
  */
 function extractSDKsFromIfComponent(
   config: BuildConfig,
@@ -42,7 +42,7 @@ function extractSDKsFromIfComponent(
     return allowedSdks
   }
 
-  // Don't throw an error if neither `sdk` nor `not` is present
+  // Don't throw an error if neither `sdk` nor `notSdk` is present
   // because <If> accepts a `condition` prop
   return undefined
 }
@@ -81,7 +81,7 @@ export const validateIfComponents =
         node,
         vfile,
         'If',
-        'not',
+        'notSdk',
         false,
         'docs',
         filePath,

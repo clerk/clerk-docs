@@ -17,13 +17,13 @@ export const filterOtherSDKsContentOut =
       // should have already been reported above when we initially
       // parsed the file
 
-      // Check for `not` prop first - if targetSdk is in `not`, filter it out
+      // Check for `notSdk` prop first - if targetSdk is in `notSdk`, filter it out
       const notSdk = extractComponentPropValueFromNode(
         config,
         node,
         undefined,
         'If',
-        'not',
+        'notSdk',
         false,
         'docs',
         filePath,
@@ -33,12 +33,12 @@ export const filterOtherSDKsContentOut =
       if (notSdk !== undefined) {
         const notSdksFilter = extractSDKsFromIfProp(config)(node, undefined, notSdk, 'docs', filePath)
 
-        // If targetSdk is in the not list, filter out this node and its children
+        // If targetSdk is in the notSdk list, filter out this node and its children
         if (notSdksFilter !== undefined && notSdksFilter.includes(targetSdk)) {
           return false
         }
 
-        // If targetSdk is NOT in the not list, keep this node and its children
+        // If targetSdk is NOT in the notSdk list, keep this node and its children
         return true
       }
 
@@ -55,7 +55,7 @@ export const filterOtherSDKsContentOut =
         z.string(),
       )
 
-      // If no `sdk` prop and no `not` prop, keep the node
+      // If no `sdk` prop and no `notSdk` prop, keep the node
       if (sdk === undefined) return true
 
       const sdksFilter = extractSDKsFromIfProp(config)(node, undefined, sdk, 'docs', filePath)

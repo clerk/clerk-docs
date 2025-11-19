@@ -338,7 +338,50 @@ The `search` frontmatter field can be used to control how a page is indexed by [
 
 You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
 
+#### Preview
+
+The `preview` frontmatter field can be used to render a component preview at the start of the page. It has the following subfields:
+
+| Name     | Type     | Default | Description                                                                                                                                               |
+| -------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`    | `string` | N/A     | The URL path to the live preview (e.g., `/sign-in`)                                                                                                       |
+| `shadcn` | `object` | N/A     | Optional object containing framework-specific shadcn component names for installation references that renders a button to copy the shadcn install command |
+
+The `shadcn` subfield supports the following framework keys:
+
+| Name     | Type     | Description                                                            |
+| -------- | -------- | ---------------------------------------------------------------------- |
+| `nextjs` | `string` | The name of the Next.js Shadcn component (e.g., `nextjs-sign-in-page`) |
+
 ##### Examples
+
+<details>
+<summary>Add a preview with live demo</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
+  ---
+```
+
+</details>
+
+<details>
+<summary>Add a preview with Shadcn component reference</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
++   shadcn:
++     nextjs: 'nextjs-sign-in-page'
+  ---
+```
+
+</details>
 
 <details>
 <summary>Exclude a page from search</summary>

@@ -18,64 +18,156 @@ Some types in Clerk's JavaScript SDK, such as [`User`](/docs/reference/javascrip
 
 ## Example
 
-The following example demonstrates how you can get the `imageUrl` from the currently active user in a session, and display their profile picture using Clerk's image optimization options:
+The following example demonstrates how you can get the `imageUrl` from the currently active user in a session, and display their profile picture using Clerk's image optimization options.
 
-<CodeBlockTabs options={["Next.js", "React"]}>
-  ```tsx {{ filename: 'app/image-optimization/page.tsx' }}
-  import { currentUser } from '@clerk/nextjs/server'
+<Tabs items={["Client-side", "Server-side"]}>
+  <Tab>
+    On the client-side, you can use the [`useClerk()`](/docs/reference/hooks/use-clerk) hook to get the `imageUrl` from the currently active user's `User` object.
 
-  export default async function ImageOptimization() {
-    const user = await currentUser()
-    if (!user) return <p>No Image URL found</p>
+    ```tsx
+    export default function ImageOptimization() {
+      // Use the `useClerk()` hook to get the current user's `User` object
+      const clerk = useClerk()
+      const { user } = clerk
+      if (!user) return <p>No Image URL found</p>
 
-    const { imageUrl } = user
-    const params = new URLSearchParams()
+      // Get the image URL from the user's `User` object
+      const { imageUrl } = user
 
-    params.set('height', '200')
-    params.set('width', '200')
-    params.set('quality', '100')
-    params.set('fit', 'crop')
+      // Add image optimization options to the image URL
+      const params = new URLSearchParams()
+      params.set('height', '200')
+      params.set('width', '200')
+      params.set('quality', '100')
+      params.set('fit', 'crop')
 
-    const imageSrc = `${imageUrl}?${params.toString()}`
+      // Construct the final image URL with the optimization options
+      const imageSrc = `${imageUrl}?${params.toString()}`
 
-    return (
+      return (
+        <div>
+          <h1>Image source:</h1>
+          <p>{imageSrc}</p>
+          <h2>Image:</h2>
+          <img src={imageSrc} alt="User image" />
+        </div>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    On the server-side, you can use the [`getUser()`](/docs/reference/backend/user/get-user) method to get the `imageUrl` from the user's `User` object, and display their profile picture using Clerk's image optimization options.
+
+    `getUser()` requires a valid user ID. You can access the current user's ID from the [`Auth`](/docs/reference/backend/types/auth-object#how-to-access-the-auth-object) object.
+
+    ```tsx {{ filename: 'app/image-optimization/page.tsx' }}
+    export default async function ImageOptimization() {
+      // Get the user's ID from the `Auth` object
+      // Accessing the `Auth` object differs depending on the SDK you're using
+      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+      const { userId } = await auth()
+
+      // Initialize `clerkClient()`
+      // This varies depending on the SDK you're using
+      // https://clerk.com/docs/js-backend/getting-started/quickstart
+      const client = await clerkClient()
+
+      // Use the `getUser()` method to get the `User` object
+      const user = await client.users.getUser(userId)
+
+      if (!user) return <p>No Image URL found</p>
+
+      // Get the image URL from the user's `User` object
+      const { imageUrl } = user
+
+      // Add image optimization options to the image URL
+      const params = new URLSearchParams()
+      params.set('height', '200')
+      params.set('width', '200')
+      params.set('quality', '100')
+      params.set('fit', 'crop')
+
+      // Construct the final image URL with the optimization options
+      const imageSrc = `${imageUrl}?${params.toString()}`
+
+      return (
+        <div>
+          <h1>Image source:</h1>
+          <p>{imageSrc}</p>
+          <h2>Image:</h2>
+          <img src={imageSrc} alt="User image" />
+        </div>
+      )
+    }
+    ```
+
+    <If sdk="nextjs">
+      If you're using Next.js, you can use the [`currentUser()`](/docs/reference/nextjs/app-router/current-user) helper to get the current user's `User` object. This is more efficient than using the [`getUser()`](/docs/reference/backend/user/get-user) method directly as it abstracts the user ID retrieval and user object fetching into a single helper.
+
+      ```tsx {{ filename: 'app/image-optimization/page.tsx' }}
+      import { currentUser } from '@clerk/nextjs/server'
+
+      export default async function ImageOptimization() {
+        // Use the `currentUser()` helper to get the current user's `User` object
+        const user = await currentUser()
+        if (!user) return <p>No Image URL found</p>
+
+        // Get the image URL from the user's `User` object
+        const { imageUrl } = user
+
+        // Add image optimization options to the image URL
+        const params = new URLSearchParams()
+        params.set('height', '200')
+        params.set('width', '200')
+        params.set('quality', '100')
+        params.set('fit', 'crop')
+
+        // Construct the final image URL with the optimization options
+        const imageSrc = `${imageUrl}?${params.toString()}`
+
+        return (
+          <div>
+            <h1>Image source:</h1>
+            <p>{imageSrc}</p>
+            <h2>Image:</h2>
+            <img src={imageSrc} alt="User image" />
+          </div>
+        )
+      }
+      ```
+    </If>
+
+    <If sdk="astro">
+      If you're using Astro, you can use the [`locals.currentUser()`](/docs/reference/astro/locals) helper to get the current user's `User` object. This is more efficient than using the [`getUser()`](/docs/reference/backend/user/get-user) method directly as it abstracts the user ID retrieval and user object fetching into a single helper.
+
+      ```astro {{ filename: 'src/pages/image-optimization.astro' }}
+      ---
+      const user = await Astro.locals.currentUser()
+
+      if (!user) throw new Error('No Image URL found')
+
+      // Get the image URL from the user's `User` object
+      const { imageUrl } = user
+
+      // Add image optimization options to the image URL
+      const params = new URLSearchParams()
+      params.set('height', '200')
+      params.set('width', '200')
+      params.set('quality', '100')
+      params.set('fit', 'crop')
+
+      // Construct the final image URL with the optimization options
+      const imageSrc = `${imageUrl}?${params.toString()}`
+      ---
+
       <div>
         <h1>Image source:</h1>
         <p>{imageSrc}</p>
         <h2>Image:</h2>
         <img src={imageSrc} alt="User image" />
       </div>
-    )
-  }
-  ```
-
-  ```tsx {{ filename: 'components/image-optimization.tsx' }}
-  import { useClerk } from '@clerk/clerk-react'
-  import React from 'react'
-
-  export default function ImageOptimization() {
-    const clerk = useClerk()
-    const { user } = clerk
-    if (!user) return <p>No Image URL found</p>
-
-    const { imageUrl } = user
-    const params = new URLSearchParams()
-
-    params.set('height', '200')
-    params.set('width', '200')
-    params.set('quality', '100')
-    params.set('fit', 'crop')
-
-    const imageSrc = `${imageUrl}?${params.toString()}`
-
-    return (
-      <div>
-        <h1>Image source:</h1>
-        <p>{imageSrc}</p>
-        <h2>Image:</h2>
-        <img src={imageSrc} alt="User image" />
-      </div>
-    )
-  }
-  ```
-</CodeBlockTabs>
+      ```
+    </If>
+  </Tab>
+</Tabs>

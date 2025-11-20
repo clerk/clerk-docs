@@ -326,6 +326,161 @@ description: Some brief, but effective description of the page's content.
 
 These fields should be present on every documentation page.
 
+#### Metadata
+
+The `metadata` frontmatter field can be used to define additional information about a documentation page, such as SEO metadata, social sharing tags, or indexing information. It allows you to control how the page appears in browsers, search engines, and social media previews. It has the following subfields:
+
+| Name          | Type                      | Default | Description                                                                                                                                                  |
+| ------------- | ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`       | `string`                  | -       | Overrides the browser title and `<title>` meta tag.                                                                                                          |
+| `description` | `string`                  | -       | Overrides the meta description shown in search results and link previews.                                                                                    |
+| `authors`     | `Array<{ name: string }>` | `[]`    | Lists the authors of the page for structured data or article metadata.                                                                                       |
+| `alternates`  | `object`                  | `{}`    | Defines canonical and alternate URLs for the page. See its properties below.                                                                                 |
+| `openGraph`   | `object`                  | `{}`    | Configures [Open Graph](https://ogp.me/) data for social previews (Facebook, LinkedIn, etc). See its properties below.                                       |
+| `twitter`     | `object`                  | `{}`    | Configures [X Cards](https://developer.x.com/en/docs/x-for-websites/cards/overview/abouts-cards) data for previews on X (Twitter). See its properties below. |
+| `robots`      | `object`                  | `{}`    | Controls how crawlers index and follow the page. See its properties below.                                                                                   |
+
+##### Examples
+
+<details>
+<summary>Set a custom browser title</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
+  ---
+```
+
+</details>
+
+<details>
+<summary>Set SEO title and description</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   title: Example
++   description: Example
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Add page authors</summary>
+
+```diff
+  ---
+  title: Example
++ metadata:
++   authors:
++     - name: Jane Doe
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define canonical or alternate URLs for your documentation page</summary>
+<br /> 
+<p><strong>This is set via the <code>alternates</code> field. It has the following subfields:</strong></p>
+  
+| Name       | Type            | Default | Description                                                                                                                                                                                                                                                                                |
+| ---------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `canonical`  | `string`       | - | The canonical URL to avoid duplicate content across versions or domains.                                                                                                                                                                                                                                           |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   alternates:
++     canonical: https://docs.example.com/
+  ---
+```
+
+</details>
+
+</details>
+
+<details>
+<summary>Configure Open Graph metadata for social media previews</summary>
+<br /> 
+<p><strong>This is set via the <code>openGraph</code> field. It has the following subfields:</strong></p>
+
+| Name            | Type            | Default | Description                               |
+| --------------- | --------------- | ------- | ----------------------------------------- |
+| `title`         | `string`        | -       | Title displayed in social previews.       |
+| `description`   | `string`        | -       | Description displayed in social previews. |
+| `images`        | `Array<string>` | `[]`    | One or more image URLs for preview cards. |
+| `publishedTime` | `string`        | -       | Publication timestamp.                    |
+| `authors`       | `Array<string>` | `[]`    | Author names associated with the page.    |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   openGraph:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Define X Cards metadata for the page</summary>
+<br /> 
+<p><strong>This is set via the <code>twitter</code> field. It has the following subfields:</strong></p>
+
+| Name          | Type            | Default | Description                                  |
+| ------------- | --------------- | ------- | -------------------------------------------- |
+| `title`       | `string`        | -       | Title displayed in the Twitter card.         |
+| `description` | `string`        | -       | Description displayed in the Twitter card.   |
+| `images`      | `Array<string>` | `[]`    | Image URLs used in the Twitter card preview. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++   twitter:
++     title: Clerk organizations - invite users
++     description: Guide to sending and managing invitations within Clerk.
++     images:
++       - https://example.com/social-preview.png
+  ---
+```
+
+</details>
+
+<details>
+<summary>Control search engine indexing and crawler behavior.</summary>
+<br /> 
+<p><strong>This is set via the <code>robots</code> field. It has the following subfields:</strong></p>
+
+| Name     | Type      | Default | Description                                          |
+| -------- | --------- | ------- | ---------------------------------------------------- |
+| `index`  | `boolean` | `true`  | Whether the page should appear in search results.    |
+| `follow` | `boolean` | `true`  | Whether crawlers should follow links from this page. |
+
+```diff
+  ---
+  title: Example
++ metadata:
++  robots:
++    index: false
++    follow: true
+  ---
+```
+
+</details>
+
 #### Search
 
 The `search` frontmatter field can be used to control how a page is indexed by [Algolia Crawler](https://www.algolia.com/doc/tools/crawler/getting-started/overview/). It has the following subfields:
@@ -1030,13 +1185,54 @@ Fallback markup to render while Clerk is loading. Default: `null`
 
 ### `<Include />`
 
-The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. For example, say you have a code example that you'd like to use in multiple pages. You can create a file `code-example.mdx` in the `_partials` folder and then include it in other pages using the `<Include />` component. This way, you write the code example once and only have to maintain it in one place. The `_partials` folder uses Next.js's `_` prefix to ensure that the files are not rendered as pages.
+The `<Include />` component can be used to inject the contents of another MDX file. We like to use this component to include partial files that are used in multiple pages. This way, you write the content once and only have to maintain it in one place.
+
+There are two types of partials you can use:
+
+1. **Global partials** - Located in `/docs/_partials/` and can be referenced from any document.
+2. **Relative partials** - Located in `_partials/` folders within any subdirectory and are scoped to documents near them.
+
+#### Global partials
+
+Global partials are stored in `/docs/_partials/` and can be included from any document using a path starting with `_partials/`:
 
 ```mdx
 {/* Render `docs/_partials/code-example.mdx` */}
 
 <Include src="_partials/code-example" />
 ```
+
+Global partials are best for:
+
+- Content that is reused across many different sections of the documentation.
+- Shared components, code examples, or explanations that apply broadly.
+- Content that doesn't belong to a specific topic area.
+
+#### Relative partials
+
+Relative partials are stored in `_partials/` folders within subdirectories and can be included using relative paths (`./` or `../`). The path is resolved relative to the document's directory.
+
+**Same directory:**
+
+If you have a document at `docs/billing/for-b2c.mdx` and a partial at `docs/billing/_partials/pricing-table.mdx`:
+
+```mdx
+<Include src="./_partials/pricing-table" />
+```
+
+**Parent directory:**
+
+If you have a document at `docs/billing/plans/premium.mdx` and a partial at `docs/billing/_partials/shared-content.mdx`:
+
+```mdx
+<Include src="../_partials/shared-content" />
+```
+
+Relative partials are best for:
+
+- Content that is specific to a particular section or topic area (e.g., billing-specific instructions).
+- Content that is only used by a few documents in the same directory structure.
+- Organizing partials near the documents that use them for better maintainability.
 
 ### `<Typedoc />`
 

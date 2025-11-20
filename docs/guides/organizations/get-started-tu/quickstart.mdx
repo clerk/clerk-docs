@@ -127,7 +127,7 @@ Organizations let you group users with roles and permissions, enabling you to bu
 
   You must sign in to use organizations. When prompted, select **Sign in to continue**. Then, authenticate to create your first user.
 
-  Since you selected disabled personal accounts when you enabled organizations, every user must be in at least one organization. Clerk will prompt you to create an organization for your user.
+  Since you selected disabled personal accounts when you enabled organizations, every user must be in at least one organization. [Clerk will prompt you](!choose-organization) to create an organization for your user.
 
   ## Create and switch organizations
 
@@ -141,49 +141,61 @@ Organizations let you group users with roles and permissions, enabling you to bu
 
   You can protect content and even entire routes based on organization membership, roles, and permissions by performing [authorization checks](!authorization-check).
 
-      In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` role, and users that are not in the `Acme Corp` organization.
+  In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` role, and users that are not in the `Acme Corp` organization.
 
-      - The [`Auth`](/docs/reference/backend/types/auth-object) object is used to access the `isSignedIn` and `has()` properties.
-      - The `isSignedIn` property is used to check if the user is signed in.
-      - The `has()` helper is used to check if the user has the `org:admin` role.
-      - The [`useOrganization()`](/docs/reference/hooks/use-organization) hook is used to access the organization data.
-      - The organization name is checked to ensure it matches the required organization name. If a user is not in the required organization, the page will display a message and the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component will be rendered to allow the user to switch to the required organization.
+  - The [`Auth`](/docs/reference/backend/types/auth-object) object is used to access the `isSignedIn` and `has()` properties.
+  - The `isSignedIn` property is used to check if the user is signed in.
+  - The `has()` helper is used to check if the user has the `org:admin` role.
+  - The [`useOrganization()`](/docs/reference/hooks/use-organization) hook is used to access the organization data.
+  - The organization name is checked to ensure it matches the required organization name. If a user is not in the required organization, the page will display a message and the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component will be rendered to allow the user to switch to the required organization.
 
-  ```tsx {{ filename: 'app/protected/page.tsx', mark: [1, 6, 17, 18, 21, 22] }}
-  import { auth, clerkClient } from '@clerk/nextjs/server'
+  ```tsx {{ filename: 'app/protected/page.tsx', collapsible: true }}
+  'use client'
+  import { OrganizationSwitcher, useAuth, useOrganization } from '@clerk/nextjs'
 
-  export default async function Page() {
-    // Protect the route by checking for a specific role
-    // This will throw a 404 if the user is not authenticated or doesn't have the role
-    const { orgId } = await auth.protect({ role: 'org:admin' })
+  export default function Page() {
+    // The `useAuth()` hook gives you access to properties like `isSignedIn` and `has()`
+    const { isSignedIn, has } = useAuth()
+    const { organization } = useOrganization()
 
-    if (!orgId) {
+    // Check if the user is authenticated
+    if (!isSignedIn) {
+      return <p>You must be signed in to access this page.</p>
+    }
+
+    // Check if there is an active organization
+    if (!organization) {
       return (
-        <p className="text-red-600">
-          You must be signed in as an <strong>admin</strong> to access this page.
-        </p>
+        <>
+          <p>Set an active organization to access this page.</p>
+          <OrganizationSwitcher />
+        </>
       )
     }
 
-    // Fetch the organization to check its name
-    const client = await clerkClient()
-    const organization = await client.organizations.getOrganization({ organizationId: orgId })
+    // Check if the user has the `org:admin` role
+    if (!has({ role: 'org:admin' })) {
+      return <p>You must be an admin to access this page.</p>
+    }
 
     // Check if organization name matches (e.g., "Acme Corp")
     const requiredOrgName = 'Acme Corp'
     if (organization.name !== requiredOrgName) {
       return (
-        <p className="text-red-600">
-          You are currently not signed in as an <strong>admin</strong> in the{' '}
-          <strong>{requiredOrgName}</strong> organization.
-        </p>
+        <>
+          <p>
+            This page is only accessible in the <strong>{requiredOrgName}</strong> organization.
+            Switch to the <strong>{requiredOrgName}</strong> organization to access this page.
+          </p>
+          <OrganizationSwitcher />
+        </>
       )
     }
 
     return (
-      <p className="text-green-600">
+      <p>
         You are currently signed in as an <strong>admin</strong> in the{' '}
-        <strong>{requiredOrgName}</strong> organization.
+        <strong>{organization.name}</strong> organization.
       </p>
     )
   }
@@ -205,25 +217,3 @@ Organizations let you group users with roles and permissions, enabling you to bu
 
   - **Enable enterprise SSO** with [SAML and OIDC](/docs/guides/organizations/add-members/sso): let customers authenticate through their identity provider (Okta, Entra ID, Google Workspace) with unlimited connections, no per-connection fees.
 </Steps>
-
-## Additional resources
-
-<Cards>
-  - [Create and manage organizations](/docs/guides/organizations/create-and-manage)
-  - Learn how to create organizations, manage members, and switch between organizations.
-
-  ---
-
-  - [Invite members to organizations](/docs/guides/organizations/add-members/invitations)
-  - Learn how to invite team members to your organizations with role-based access.
-
-  ---
-
-  - [Roles and permissions](/docs/guides/organizations/control-access/roles-and-permissions)
-  - Set up custom roles and permissions to control access within organizations.
-
-  ---
-
-  - [\`<OrganizationSwitcher /> component](/docs/reference/components/organization/organization-switcher)
-  - Learn more about Clerk's prebuilt organization components.
-</Cards>

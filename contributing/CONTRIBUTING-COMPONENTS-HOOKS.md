@@ -2,7 +2,6 @@
 
 Component and hook documentation includes SDK-specific code examples and supporting content across all supported SDKs to ensure the best user experience. This means every component and hook must have code examples for each SDK it supports. If you're adding a new component or hook, or updating an existing one, the sections below outline the process for each.
 
-
 <details open="open">
 <summary><strong>Table of contents</strong></summary>
 

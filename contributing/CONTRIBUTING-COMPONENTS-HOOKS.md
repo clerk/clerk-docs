@@ -2,6 +2,20 @@
 
 Component and hook documentation includes SDK-specific code examples and supporting content across all supported SDKs to ensure the best user experience. This means every component and hook must have code examples for each SDK it supports. If you're adding a new component or hook, or updating an existing one, the sections below outline the process for each.
 
+
+<details open="open">
+<summary><strong>Table of contents</strong></summary>
+
+- [Contributing to Clerk's hooks and components documentation](#contributing-to-clerks-hooks-and-components-documentation)
+  - [Components](#components)
+    - [How component documentation works](#how-component-documentation-works)
+    - [How to update component documentation](#how-to-update-component-documentation)
+  - [Hooks](#hooks)
+    - [How hook documentation works](#how-hook-documentation-works)
+    - [How to update hook documentation](#how-to-update-hook-documentation)
+
+</details>
+
 ## Components
 
 All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview), and live under `docs/reference/components` within our docs. Each component belongs to a specific category apart from `<ClerkProvider>`, and these categories determine how components are organized in both the sidebar and the reference overview. It's therefore important to ensure that the ordering in the sidebar matches the ordering in the reference overview.

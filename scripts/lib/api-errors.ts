@@ -28,6 +28,8 @@ function parseApiErrors(errors: ApiError[], opts: ParseApiErrorsOpts): string {
 title: ${opts.title}
 description: ${opts.description}
 type: reference
+search:
+  rank: -10
 ---
 
 ${opts.description}

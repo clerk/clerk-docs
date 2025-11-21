@@ -2,6 +2,8 @@
 
 Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
+If you're contributing specifically to our hooks and components documentation, please refer to the [dedicated guide](./CONTRIBUTING-COMPONENTS-HOOKS.md).
+
 ## Written in MDX
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
@@ -1438,59 +1440,6 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 | <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
 
 </details>
-
-## Contributing to hooks and components documentation 
-
-Component and hook documentation includes SDK-specific code examples and supporting content across all supported SDKs to ensure the best user experience. This means every component and hook must have code examples for each SDK it supports. If you're adding a new component or hook, or updating an existing one, the sections below outline the process for each.
-
-### Components
-
-All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview), and live under `docs/reference/components`. Each component belongs to a specific category apart from `<ClerkProvider>`, and these categories determine how components are organized in both the sidebar and the reference overview. It's therefore important to keep the listed order up to standard.
-
-A component page _usually_ includes the following: 
-
-- An image of the component at the top.
-- A description of the component.
-- An SDK-specific code example showing how to use the component, with an explanation.
-- A list of any optional properties the component accepts, rendered via the `<Properties>` component.
-- Any additional information.
-
-If you have to make any changes to the components documentation, here are two common scenarios you might encounter and how to handle them. **All component documentation is directly maintained in this repository**: 
-
-- If **you need to add a new component** to the docs, make sure to do the following:
-
-  - Add the component to the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview) under its appropriate category. 
-  - Add the component to the sidebar under its appropriate category (e.g., **Organization components**).
-  - Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). [Learn about adding images to the docs](#images-and-static-assets).
-  - Provide SDK-specific code examples for each supported SDK, using the `<If>` component.
-  - Place all code examples **before** the properties documentation, if any.
-
-- If **a component is now supported by an additional SDK**, update the sdk property in the frontmatter of that component's page and add a corresponding code example using the `<If>` component. For updates to code examples for SDKs that are already supported, simply locate the existing example and modify it as needed. 
-
-### Hooks
-
-All existing hooks are listed in the [Hooks Reference overview](https://clerk.com/docs/nextjs/reference/hooks/overview), and live under `docs/reference/hooks`. 
-
-A hook page _usually_ includes the following: 
-
-- A description of the hook.
-- A list of the parameters the hook accepts, under a `Parameters` heading. 
-- A list of the properties the hook returns, under a `Returns` heading. 
-- SDK-specific code examples showing how to use the hook, with explanations.
-- Any additional information.
-
-Unlike component documentation, hook documentation is not fully maintained in this repository. Parameters and return types come from Typedoc, while explanations and code examples live directly in the docs. To update any part of a hook's documentation, you may need to make changes in two places:
-
-- [javascript repo](), when you need to update parameters and return types surfaced by Typedoc. 
-- This repository, when you need to update explanations and SDK-specific code examples. 
-
-
-<!-- which sdks are supported by hooks and components -->
-
-This hybrid approach ensures:
-- Type information always stays in sync with the SDK source.
-- Contributors can freely write explanations and add SDK-specific examples without touching the Typedoc generation pipeline. 
-
 
 ## Help wanted!
 

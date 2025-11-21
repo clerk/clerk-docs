@@ -42,7 +42,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [Tooltips](#tooltips)
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
-    - [`<Properties>`](#properties)
+    - [`<Properties>`](#properties-1)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)

@@ -103,7 +103,16 @@ If you need to update **parameters or return types** for a hook, the changes mus
 
 When embedding Typedoc output for a hook in the docs, the package you import from inside the `clerk-typedoc` folder depends on where that hook is exported from in the `clerk/javascript` repo. Use the following mapping:
 
-- If the hook is exported from `packages/react/src/hooks/index.ts`, **import its Typedoc output from the `clerk-react` package**, with the exception of `useOrganization`, `useOrganizationList`, and `useReverification`.
-- If the hook is exported from `packages/shared/src/react/hooks/index.ts`, **import its Typedoc output from the `shared` package**.
+- If the hook is exported from `packages/react/src/hooks/index.ts`, **import its Typedoc output from the `clerk-react` package**, with the exception of `useOrganization`, `useOrganizationList`, and `useReverification`. Here's how the import would look like:
+
+```
+<Typedoc src="clerk-react/<FILENAME>" />
+```
+
+- If the hook is exported from `packages/shared/src/react/hooks/index.ts`, **import its Typedoc output from the `shared` package**, as such:
+
+```
+<Typedoc src="shared/<FILENAME>" />
+```
 
 This ensures that when you embed a Typedoc block (e.g., parameters or returns), you load the correct MDX file.

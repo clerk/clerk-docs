@@ -23,11 +23,11 @@ This guide will show you how to customize a session token to include additional 
 
   ## Use the custom claims in your application
 
-  The [`Auth`](/docs/reference/backend/types/auth-object) object includes a `sessionClaims` property that contains the custom claims you added to your session token. Accessing the `Auth` object differs depending on the framework you are using. See the [reference doc](/docs/reference/backend/types/auth-object) for more information.
+  The [`Auth`](/docs/reference/backend/types/auth-object) object includes a `sessionClaims` property that contains the custom claims you added to your session token. **Accessing the `Auth` object differs depending on the SDK you're using. See the [reference doc](/docs/reference/backend/types/auth-object) for more information.**
 
   The following example demonstrates how to access the `fullName` and `primaryEmail` claims that were added to the session token in the last step.
 
-  <Tabs items={["Next.js", "Astro", "Express", "Go", "React Router", "Remix", "Tanstack React Start"]}>
+  <Tabs items={["Next.js", "Astro", "Express", "Go", "React Router", "Tanstack React Start"]}>
     <Tab>
       For Next.js, the `Auth` object is accessed using the `auth()` helper in App Router apps and the `getAuth()` function in Pages Router apps. [Learn more about using these helpers](/docs/nextjs/guides/users/reading#server-side).
 
@@ -37,7 +37,12 @@ This guide will show you how to customize a session token to include additional 
         import { NextResponse } from 'next/server'
 
         export async function GET() {
-          const { sessionClaims } = await auth()
+          // Use `auth()` to access the user's session claims
+          const { isAuthenticated, sessionClaims } = await auth()
+
+          if (!isAuthenticated) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+          }
 
           const fullName = sessionClaims.fullName
 
@@ -52,8 +57,12 @@ This guide will show you how to customize a session token to include additional 
         import type { NextApiRequest, NextApiResponse } from 'next'
 
         export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-          // Use `getAuth()` to access `isAuthenticated` and the user's ID and session claims
-          const { sessionClaims } = getAuth(req)
+          // Use `getAuth()` to access the user's session claims
+          const { isAuthenticated, sessionClaims } = getAuth(req)
+
+          if (!isAuthenticated) {
+            return res.status(401).json({ error: 'Unauthorized' })
+          }
 
           const fullName = sessionClaims.fullName
 
@@ -72,10 +81,9 @@ This guide will show you how to customize a session token to include additional 
       import type { APIRoute } from 'astro'
 
       export const GET: APIRoute = async ({ locals }) => {
-        // Use `locals.auth()` to access `isAuthenticated` and the user's ID and session claims
-        const { isAuthenticated, userId, sessionClaims } = await locals.auth()
+        // Use `locals.auth()` to access the user's session claims
+        const { isAuthenticated, sessionClaims } = await locals.auth()
 
-        // Protect the route by checking if the user is signed in
         if (!isAuthenticated) {
           return new Response('Unauthorized', { status: 401 })
         }
@@ -102,9 +110,13 @@ This guide will show you how to customize a session token to include additional 
       // Apply `clerkMiddleware()` to all routes
       app.use(clerkMiddleware())
 
-      // Use `getAuth()` to get the session claims
       const getSessionClaims = (req, res, next) => {
-        const { sessionClaims } = getAuth(req)
+        // Use `getAuth()` to access the user's session claims
+        const { isAuthenticated, sessionClaims } = getAuth(req)
+
+        if (!isAuthenticated) {
+          return res.status(401).json({ error: 'Unauthorized' })
+        }
 
         const fullName = sessionClaims.fullName
 
@@ -115,7 +127,6 @@ This guide will show you how to customize a session token to include additional 
 
       app.get('/profile', requireAuth(), getSessionClaims)
 
-      // Start the server and listen on the specified port
       app.listen(PORT, () => {
         console.log(`Server is running on http://localhost:${PORT}`)
       })
@@ -197,7 +208,6 @@ This guide will show you how to customize a session token to include additional 
         // Use `getAuth()` to access `isAuthenticated` and the user's ID and session claims
         const { isAuthenticated, sessionClaims } = await getAuth(args)
 
-        // Protect the route by checking if the user is signed in
         if (!isAuthenticated) {
           return redirect('/sign-in?redirect_url=' + args.request.url)
         }
@@ -224,54 +234,31 @@ This guide will show you how to customize a session token to include additional 
     </Tab>
 
     <Tab>
-      For Remix, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/remix/guides/users/reading#get-auth).
-
-      ```tsx {{ filename: 'routes/profile.tsx' }}
-      import { LoaderFunction, redirect } from '@remix-run/node'
-      import { getAuth } from '@clerk/remix/ssr.server'
-      import { createClerkClient } from '@clerk/remix/api.server'
-
-      export const loader: LoaderFunction = async (args) => {
-        // Use `getAuth()` to access `isAuthenticated` and the user's ID and session claims
-        const { isAuthenticated, userId, sessionClaims } = await getAuth(args)
-
-        // Protect the route by checking if the user is signed in
-        if (!isAuthenticated) {
-          return redirect('/sign-in?redirect_url=' + args.request.url)
-        }
-
-        const fullName = sessionClaims.fullName
-
-        const primaryEmail = sessionClaims.primaryEmail
-
-        return { fullName, primaryEmail }
-      }
-      ```
-    </Tab>
-
-    <Tab>
       For Tanstack React Start, the `Auth` object is accessed using the `getAuth()` function. [Learn more about using `getAuth()`](/docs/tanstack-react-start/guides/users/reading#server-side).
 
       ```ts {{ filename: 'src/routes/api/example.ts' }}
-      import { getAuth } from '@clerk/tanstack-react-start/server'
+      import { auth } from '@clerk/tanstack-react-start/server'
       import { json } from '@tanstack/react-start'
-      import { createServerFileRoute } from '@tanstack/react-start/server'
+      import { createFileRoute } from '@tanstack/react-router'
 
-      export const ServerRoute = createServerFileRoute().methods({
-        GET: async ({ request, params }) => {
-          // Use `getAuth()` to access `isAuthenticated` and the user's ID and session claims
-          const { isAuthenticated, userId, sessionClaims } = await getAuth(request)
+      export const ServerRoute = createFileRoute('/api/example')({
+        server: {
+          handlers: {
+            GET: async () => {
+              // Use `auth()` to access the user's session claims
+              const { isAuthenticated, sessionClaims } = await auth
 
-          // Protect the API route by checking if the user is signed in
-          if (!isAuthenticated) {
-            return json({ error: 'Unauthorized' }, { status: 401 })
-          }
+              if (!isAuthenticated) {
+                return json({ error: 'Unauthorized' }, { status: 401 })
+              }
 
-          const fullName = sessionClaims.fullName
+              const fullName = sessionClaims.fullName
 
-          const primaryEmail = sessionClaims.primaryEmail
+              const primaryEmail = sessionClaims.primaryEmail
 
-          return json({ fullName, primaryEmail })
+              return json({ fullName, primaryEmail })
+            },
+          },
         },
       })
       ```

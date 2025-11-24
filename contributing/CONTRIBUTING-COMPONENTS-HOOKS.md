@@ -17,7 +17,7 @@ Component and hook documentation includes SDK-specific code examples and support
 
 ## Components
 
-All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview), and live under `docs/reference/components` within our docs. Each component belongs to a specific category apart from `<ClerkProvider>`, and these categories determine how components are organized in both the sidebar and the reference overview. It's therefore important to ensure that the ordering in the sidebar matches the ordering in the reference overview.
+All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview){{ target: '_blank' }}, and live under `docs/reference/components` within our docs. Each component belongs to a specific category apart from `<ClerkProvider>`, and these categories determine how components are organized in both the sidebar and the reference overview. **It's therefore important to ensure that the ordering in the sidebar matches the ordering in the reference overview**.
 
 ### How component documentation works
 
@@ -26,7 +26,7 @@ A component page _usually_ includes the following:
 - An image of the component at the top.
 - A description of the component.
 - An SDK-specific code example showing how to use the component, with an explanation.
-- A list of any optional properties the component accepts, rendered via the [`<Properties>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#properties-1) component.
+- A list of any optional properties the component accepts, rendered via the [`<Properties>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#properties-1){{ target: '_blank' }} component.
 - Any additional information.
 
 ### How to update component documentation
@@ -37,17 +37,17 @@ If you have to make any changes to the components documentation, here are two co
 
 1. If **you need to add a new component** to the docs:
 
-- Add the component to the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview) under its corresponding category.
+- Add the component to the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview){{ target: '_blank' }} under its corresponding category.
 - Add the component to the sidebar under the same category.
-- Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). To learn how to add images to the docs, see this [section](./CONTRIBUTING.md#images-and-static-assets).
-- Provide SDK-specific code examples for each supported SDK, using the [`<If>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#if-) component. Avoid examples that only show the import statement.
+- Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all){{ target: '_blank' }}. To learn how to add images to the docs, see this [section](./CONTRIBUTING.md#images-and-static-assets){{ target: '_blank' }}.
+- Provide SDK-specific code examples for each supported SDK, using the [`<If>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#if-){{ target: '_blank' }} component. Avoid examples that only show the import statement.
 - Place all code examples **before** the properties documentation (if applicable).
 
-2. If **a component is now supported by an additional SDK**, update the [`sdk`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#sdk) property in the frontmatter of that component's page and add the appropriate code example using `<If>`. For updates to existing code examples, simply modify the relevant example in place.
+2. If **a component is now supported by an additional SDK**, update the [`sdk`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#sdk){{ target: '_blank' }} property in the frontmatter of that component's page and add the appropriate code example using `<If>`. For updates to existing code examples, simply modify the relevant example in place.
 
 ## Hooks
 
-All existing hooks are listed in the [Hooks Reference overview](https://clerk.com/docs/nextjs/reference/hooks/overview), and live under `docs/reference/hooks` within our docs.
+All existing hooks are listed in the [Hooks Reference overview](https://clerk.com/docs/nextjs/reference/hooks/overview){{ target: '_blank' }}, and live under `docs/reference/hooks` within our docs.
 
 ### How hook documentation works
 
@@ -65,7 +65,7 @@ Each hook page contains two distinct layers:
 
 1. Typedoc-generated content
 
-The parameters, return types, and type definitions for each hook are autogenerated from [JSDoc comments](https://jsdoc.app/about-getting-started) in the `clerk/javascript` repo. Typedoc converts these comments into MDX output, which lives in `clerk-docs` in the `clerk-typedoc/` folder. These MDX files are embedded via the [<Typedoc />](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#typedoc-) component. You can learn more about this process in [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information).
+The parameters, return types, and type definitions for each hook are autogenerated from [JSDoc comments](https://jsdoc.app/about-getting-started){{ target: '_blank' }} in the `clerk/javascript` repo. Typedoc converts these comments into MDX output, which lives in `clerk-docs` in the `clerk-typedoc/` folder. These MDX files are embedded via the [`<Typedoc />`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#typedoc-){{ target: '_blank' }} component. You can learn more about this process in [this section](https://github.com/clerk/javascript/blob/main/docs/CONTRIBUTING.md#authoring-typedoc-information){{ target: '_blank' }}.
 
 > [!IMPORTANT]
 > When working locally, Typedoc output lives in `/local-clerk-typedoc` instead.
@@ -92,8 +92,8 @@ This split ensures:
 
 Because hook pages combine two sources, updates may need to happen in two places:
 
-- The [javascript](https://github.com/clerk/javascript) repository, when adding or updating parameters, return types, or type definitions through JSDoc.
-- The [clerk-docs](https://github.com/clerk/clerk-docs) repository, when adding or updating explanations, SDK-specific code examples, or any other written content.
+- The [javascript](https://github.com/clerk/javascript){{ target: '_blank' }} repository, when adding or updating parameters, return types, or type definitions through JSDoc.
+- The [clerk-docs](https://github.com/clerk/clerk-docs){{ target: '_blank' }} repository, when adding or updating explanations, SDK-specific code examples, or any other written content.
 
 If you need to update **parameters or return types** for a hook, the changes must be made in the `clerk/javascript` repo:
 

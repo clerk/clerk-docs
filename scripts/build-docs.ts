@@ -1082,7 +1082,7 @@ ${yaml.stringify({
   const headingValidationVFiles: VFile[] = []
 
   for (const doc of docsWithOnlyIfComponents) {
-    // Extract all SDK values from <If /> all components
+    // Extract all SDK values from <If /> components
     const availableSDKs = new Set<SDK>()
 
     mdastVisit(doc.node, (node) => {

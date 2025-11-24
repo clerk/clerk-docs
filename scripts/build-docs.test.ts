@@ -1589,6 +1589,96 @@ Common content for all SDKs.`,
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
   })
 
+  test('should handle <If /> components with `notSdk` prop', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk="nextjs">
+  This content is for React users only.
+</If>
+
+<If notSdk="react">
+  This content is for Next.js users only.
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).toContain('This content is for Next.js users only.')
+    expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for React users only.')
+  })
+
+  test('should handle <If /> components with both `sdk` and `notSdk` props', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk="nextjs" sdk="react">
+  This content is for React users only.
+</If>
+`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow(
+      'Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.',
+    )
+  })
+
   test('should embed canonical link in frontmatter', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

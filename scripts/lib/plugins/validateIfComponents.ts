@@ -2,12 +2,50 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import { type BuildConfig } from '../config'
-import { safeFail } from '../error-messages'
+import { safeFail, safeMessage } from '../error-messages'
 import { ManifestItem } from '../manifest'
 import { type SDK } from '../schemas'
 import { extractComponentPropValueFromNode } from '../utils/extractComponentPropValueFromNode'
 import { extractSDKsFromIfProp } from '../utils/extractSDKsFromIfProp'
 import { z } from 'zod'
+
+/**
+ * Extracts list of allowed SDKs from the `sdk` and `notSdk` props of the <If /> component
+ */
+function extractSDKsFromIfComponent(
+  config: BuildConfig,
+  node: Node,
+  vfile: VFile,
+  filePath: string,
+  sdk: string | undefined,
+  notSdk: string | undefined,
+) {
+  if (sdk && notSdk) {
+    safeFail(
+      config,
+      vfile,
+      filePath,
+      'docs',
+      'if-component-sdk-and-not-sdk-props-cannot-be-used-together',
+      [],
+      node.position,
+    )
+  }
+
+  if (notSdk) {
+    const notAllowedSdks = extractSDKsFromIfProp(config)(node, vfile, notSdk, 'docs', filePath)
+    return notAllowedSdks
+  }
+
+  if (sdk) {
+    const allowedSdks = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
+    return allowedSdks
+  }
+
+  // Don't throw an error if neither `sdk` nor `notSdk` is present
+  // because <If> accepts a `condition` prop
+  return undefined
+}
 
 export const validateIfComponents =
   (
@@ -19,23 +57,16 @@ export const validateIfComponents =
   () =>
   (tree: Node, vfile: VFile) => {
     mdastVisit(tree, (node) => {
-      const sdk = extractComponentPropValueFromNode(
+      const allowedSdks = extractSDKsFromIfComponent(
         config,
         node,
         vfile,
-        'If',
-        'sdk',
-        false,
-        'docs',
         filePath,
-        z.string(),
+        extractComponentPropValueFromNode(config, node, vfile, 'If', 'sdk', false, 'docs', filePath, z.string()),
+        extractComponentPropValueFromNode(config, node, vfile, 'If', 'notSdk', false, 'docs', filePath, z.string()),
       )
 
-      if (sdk === undefined) return
-
-      const sdksFilter = extractSDKsFromIfProp(config)(node, vfile, sdk, 'docs', filePath)
-
-      if (sdksFilter === undefined) return
+      if (allowedSdks === undefined) return
 
       const manifestItems = flatSDKScopedManifest.filter((item) => item.href === doc.file.href)
 
@@ -44,7 +75,7 @@ export const validateIfComponents =
       // The doc doesn't exist in the manifest so we are skipping it
       if (manifestItems.length === 0) return
 
-      sdksFilter.forEach((sdk) => {
+      allowedSdks.forEach((sdk) => {
         ;(() => {
           if (doc.sdk === undefined) return
 

@@ -1029,7 +1029,6 @@ ${yaml.stringify({
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))
               .use(checkPrompts(config, prompts, doc.file, { reportWarnings: true, update: true }))
               .use(embedLinks(config, docsMap, sdks, undefined, doc.file.href, targetSdk))
-              .use(validateIfComponents(config, doc.file.filePath, doc, flatSDKScopedManifest))
               .use(filterOtherSDKsContentOut(config, doc.file.filePath, targetSdk))
               .use(validateUniqueHeadings(config, doc.file.filePath, 'docs'))
               .use(

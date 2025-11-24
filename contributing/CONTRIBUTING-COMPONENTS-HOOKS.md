@@ -36,6 +36,7 @@ A component page _usually_ includes the following:
 If you have to make any changes to the components documentation, here are two common scenarios you may encounter:
 
 - If **you need to add a new component** to the docs:
+
   - Add the component to the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview) under its corresponding category.
   - Add the component to the sidebar under the same category.
   - Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). To learn how to add images to the docs, see this [section](./CONTRIBUTING.md#images-and-static-assets).

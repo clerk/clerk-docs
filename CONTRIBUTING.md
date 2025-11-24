@@ -425,7 +425,7 @@ The `metadata` frontmatter field can be used to define additional information ab
   title: Example
 + metadata:
 +   openGraph:
-+     title: Clerk organizations - invite users
++     title: Clerk Organizations - invite users
 +     description: Guide to sending and managing invitations within Clerk.
 +     images:
 +       - https://example.com/social-preview.png
@@ -450,7 +450,7 @@ The `metadata` frontmatter field can be used to define additional information ab
   title: Example
 + metadata:
 +   twitter:
-+     title: Clerk organizations - invite users
++     title: Clerk Organizations - invite users
 +     description: Guide to sending and managing invitations within Clerk.
 +     images:
 +       - https://example.com/social-preview.png
@@ -942,7 +942,7 @@ Tooltips are defined in the `_tooltips` folder and written in MDX, but they do n
 The tooltip syntax is similar to a link, but with a `!` prefix, as shown in the following example:
 
 ```mdx
-The ID of the [active organization](!active-organization) that the user belongs to.
+The ID of the [Active Organization](!active-organization) that the user belongs to.
 ```
 
 Tooltips should follow the same styleguide as links - only add them on the first mention of a term and only in the highest heading section. So if a term is mentioned in an H2 section and again in its H3 section, it doesn't need to be added in the H3 section.

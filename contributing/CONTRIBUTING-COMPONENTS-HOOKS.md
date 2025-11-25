@@ -1,6 +1,6 @@
 # Contributing to Clerk's hooks and components documentation
 
-Component and hook documentation includes SDK-specific code examples and supporting content for all supported SDKs to ensure the best user experience. Each component and hook must have code examples for each supported SDK. If you're adding a new component or updating an existing one, the sections below outline the process.
+Component and hook documentation includes SDK-specific code examples and supporting content for all supported SDKs to ensure the best user experience. Each component and hook must have code examples for each supported SDK. If you're adding a new component or hook, or updating an existing one, the sections below outline the process.
 
 <details open="open">
 <summary><strong>Table of contents</strong></summary>
@@ -39,7 +39,7 @@ If you have to make any changes to the components documentation, here are two co
 
   - Add the component to the [Component Reference overview](https://clerk.com/docs/reference/components/overview) under its corresponding category.
   - Add the component to the sidebar under the same category.
-  - Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). [Learn how to add images to the docs](./CONTRIBUTING.md#images-and-static-assets).
+  - Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). Learn [how to add images to the docs](./CONTRIBUTING.md#images-and-static-assets).
   - Provide SDK-specific code examples for each supported SDK, using the [`<If>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#if-) component. **Avoid examples that only show the import statement.**
   - Place all code examples **before** the properties documentation (if applicable).
 
@@ -47,7 +47,7 @@ If you have to make any changes to the components documentation, here are two co
 
 ## Hooks
 
-All existing hooks are listed in the [Hooks Reference overview](https://clerk.com/docs/reference/hooks/overview), and live under `docs/reference/hooks` within our docs.
+All existing hooks are listed in the [Hooks Reference overview](https://clerk.com/docs/reference/hooks/overview), and live under [`docs/reference/hooks`](/docs/reference/hooks) within our docs.
 
 ### How hook documentation works
 

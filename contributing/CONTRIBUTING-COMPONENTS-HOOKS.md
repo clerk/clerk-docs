@@ -40,7 +40,7 @@ If you have to make any changes to the components documentation, here are two co
   - Add the component to the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview) under its corresponding category.
   - Add the component to the sidebar under the same category.
   - Include an image of the component at the top of the page, in both SVG and PNG formats. You can request image assets from the Design team by contacting them directly or by creating a ticket in their [Linear board](https://linear.app/clerk/team/DSN/all). To learn how to add images to the docs, see this [section](./CONTRIBUTING.md#images-and-static-assets).
-  - Provide SDK-specific code examples for each supported SDK, using the [`<If>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#if-) component. Avoid examples that only show the import statement.
+  - Provide SDK-specific code examples for each supported SDK, using the [`<If>`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#if-) component. **Avoid examples that only show the import statement.**
   - Place all code examples **before** the properties documentation (if applicable).
 
 - If **a component is now supported by an additional SDK**, update the [`sdk`](https://github.com/clerk/clerk-docs/blob/main/CONTRIBUTING.md#sdk) property in the frontmatter of that component's page and add the appropriate code example using `<If>`. For updates to existing code examples, simply modify the relevant example in place.
@@ -59,7 +59,8 @@ A hook page _usually_ includes the following:
 - SDK-specific code examples showing how to use the hook, with explanations.
 - Any additional information.
 
-Unlike component documentation, hook documentation is split between two sources. This is intentional, and reflects how we handle type information versus written content. Historically, many hook pages were fully generated from JSDoc + Typedoc, including code examples. However, adding examples for multiple SDKs through Typedoc required significant restructuring of the `clerk/javascript` repo, so we shifted to a hybrid model.
+> [!NOTE]
+> Unlike component documentation, hook documentation is split between two sources. This is intentional, and reflects how we handle type information versus written content. Historically, many hook pages were fully generated from JSDoc + Typedoc, including code examples. However, adding examples for multiple SDKs through Typedoc required significant restructuring of the `clerk/javascript` repo, so we shifted to a hybrid model.
 
 Each hook page contains two distinct layers:
 

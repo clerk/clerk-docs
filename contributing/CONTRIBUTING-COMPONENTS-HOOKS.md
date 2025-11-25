@@ -17,7 +17,7 @@ Component and hook documentation includes SDK-specific code examples and support
 
 ## Components
 
-All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview), and live under `docs/reference/components` within our docs. Each component belongs to a specific category apart from `<ClerkProvider>`, and these categories determine how components are organized in both the sidebar and the reference overview. **It's therefore important to ensure that the ordering in the sidebar matches the ordering in the reference overview**.
+All existing components are listed in the [Component Reference overview](https://clerk.com/docs/nextjs/reference/components/overview), and live under [`docs/reference/components`](/docs/reference/components) within our docs. Each component belongs to a specific category (except for `<ClerkProvider>`), and these categories determine how components are organized in both the sidebar and the reference overview. **Therefore, it's important to ensure that the ordering in the sidebar matches the ordering in the reference overview**.
 
 ### How component documentation works
 

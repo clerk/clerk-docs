@@ -1219,6 +1219,90 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
+  test('<If> SDK not in frontmatter fails the build', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+sdk: react, expo
+---
+
+# Simple Test Page
+
+<If sdk="nextjs">
+  Next.js Content
+</If>
+
+Testing with a simple page.`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'expo', 'nextjs'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow(
+      `<If /> component is attempting to filter to sdk "nextjs" but it is not available in the docs frontmatter ["react", "expo"]`,
+    )
+  })
+
+  test('<If> SDK not in manifest fails the build', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'React Section',
+                sdk: ['react'],
+                items: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/simple-test.mdx',
+        content: `---
+title: Simple Test
+description: A simple test page
+---
+
+# Simple Test Page
+
+<If sdk="expo">
+  Expo Content
+</If>
+
+Testing with a simple page.`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'expo'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow(
+      `<If /> component is attempting to filter to sdk "expo" but it is not available in the manifest.json for /docs/simple-test`,
+    )
+  })
+
   test('should generate appropriate landing pages for SDK-specific docs', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -1587,6 +1671,96 @@ Common content for all SDKs.`,
     const jsOutput = await readFile(pathJoin('./dist/js-frontend/multiple-sdk-test.mdx'))
     expect(jsOutput).toContain('This content is for JavaScript Frontend users.')
     expect(jsOutput).not.toContain('This content is for React and Next.js users.')
+  })
+
+  test('should handle <If /> components with `notSdk` prop', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk="nextjs">
+  This content is for React users only.
+</If>
+
+<If notSdk="react">
+  This content is for Next.js users only.
+</If>`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    expect(await readFile(pathJoin('./dist/nextjs/overview.mdx'))).toContain('This content is for Next.js users only.')
+    expect(await readFile(pathJoin('./dist/react/overview.mdx'))).toContain('This content is for React users only.')
+  })
+
+  test('should handle <If /> components with both `sdk` and `notSdk` props', async () => {
+    const { tempDir, pathJoin } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Overview',
+                href: '/docs/overview',
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/overview.mdx',
+        content: `---
+title: Overview
+sdk: nextjs, react
+---
+
+# Hello World
+
+<If notSdk="nextjs" sdk="react">
+  This content is for React users only.
+</If>
+`,
+      },
+    ])
+
+    const promise = build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    await expect(promise).rejects.toThrow(
+      'Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.',
+    )
   })
 
   test('should embed canonical link in frontmatter', async () => {

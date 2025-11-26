@@ -65,7 +65,6 @@ export const icon = z.enum([
   'plus-circle',
   'python',
   'react',
-  'redwood',
   'remix',
   'react-router',
   'rocket',

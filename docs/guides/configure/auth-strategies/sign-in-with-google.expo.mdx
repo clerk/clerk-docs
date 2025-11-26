@@ -55,7 +55,7 @@ To make the setup process easier, it's recommended to keep two browser tabs open
   1. For the **Application type**, select **Web application**.
   1. Add a name (e.g., "Web client for token verification").
   1. Select **Create**.
-  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`.
+  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID`.
 
   #### iOS Client ID
 
@@ -63,7 +63,7 @@ To make the setup process easier, it's recommended to keep two browser tabs open
   1. For the **Application type**, select **iOS**.
   1. Add your iOS **Bundle ID** (from your `app.json` or `app.config.ts`).
   1. Select **Create**.
-  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`.
+  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID`.
 
   #### Android Client ID
 
@@ -80,7 +80,7 @@ To make the setup process easier, it's recommended to keep two browser tabs open
        > [!NOTE]
        > Replace `path-to-debug-or-production-keystore` with the path to your debug or ßproduction keystore. By default, the debug keystore is located in `~/.android/debug.keystore`. It may ask for a keystore password, which is `android`. **Please note that Java is required to run the `keytool` command.**
   1. Select **Create**.
-  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`.
+  1. Copy the **Client ID** - you'll need this for `EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID`.
 
   ## Add your iOS application to Clerk
 
@@ -90,43 +90,37 @@ To make the setup process easier, it's recommended to keep two browser tabs open
 
   Add your Android application to the [**Native Applications**](https://dashboard.clerk.com/last-active?path=native-applications) page in the Clerk Dashboard. You will need your Android app's **package Name**.
 
-  ## Install dependencies
-
-  The [@react-native-google-signin/google-signin library](https://react-native-google-signin.github.io/docs/) provides access to Google's native Sign-In functionality from your Expo app.
-
-  Run the following command to install the library:
-
-  ```npm
-  npm install @react-native-google-signin/google-signin
-  ```
-
   ## Configure environment variables
 
   Add the Google OAuth client IDs to your `.env` file:
 
   ```bash {{ filename: '.env' }}
-  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=your-ios-client-id.apps.googleusercontent.com
-  EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=your-android-client-id.apps.googleusercontent.com
-  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID=your-ios-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID=your-android-client-id.apps.googleusercontent.com
+
+  # iOS only: URL scheme for Google Sign-In callback
+  # Format: com.googleusercontent.apps.{IOS_CLIENT_ID_PREFIX}
+  EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME=com.googleusercontent.apps.your-ios-client-id
   ```
 
-  ## Add @react-native-google-signin/google-signin to your app config
+  ## Configure the Clerk Expo plugin (iOS only)
 
-  Add the `@react-native-google-signin/google-signin` plugin to your `app.json` or `app.config.ts` and configure it with your client IDs.
+  > [!NOTE]
+  > The `@clerk/clerk-expo` config plugin is **optional** and only required if you're using native Google Sign-In on iOS. It configures the URL scheme needed for Google's authentication callback. Android does not require this configuration.
+
+  Add the `@clerk/clerk-expo` plugin to your `app.json` or `app.config.ts`:
 
   <CodeBlockTabs options={["app.json", "app.config.ts"]}>
     ```json {{ filename: 'app.json' }}
     {
       "expo": {
         "plugins": [
-          [
-            "@react-native-google-signin/google-signin",
-            {
-              "iosClientId": "your-ios-client-id.apps.googleusercontent.com",
-              "androidClientId": "your-android-client-id.apps.googleusercontent.com"
-            }
-          ]
-        ]
+          "@clerk/clerk-expo"
+        ],
+        "extra": {
+          "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.your-ios-client-id"
+        }
       }
     }
     ```
@@ -135,18 +129,34 @@ To make the setup process easier, it's recommended to keep two browser tabs open
     export default {
       expo: {
         plugins: [
-          [
-            '@react-native-google-signin/google-signin',
-            {
-              iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-              androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-            },
-          ],
+          '@clerk/clerk-expo',
         ],
+        extra: {
+          EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME:
+            process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
+        },
       },
     }
     ```
   </CodeBlockTabs>
+
+  The plugin reads the `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME` from either:
+  1. Environment variable (for EAS builds, set in `eas.json`)
+  2. `config.extra` field in your app config
+
+  For EAS builds, add the environment variable to your build profile in `eas.json`:
+
+  ```json {{ filename: 'eas.json' }}
+  {
+    "build": {
+      "development": {
+        "env": {
+          "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.your-ios-client-id"
+        }
+      }
+    }
+  }
+  ```
 
   ## Build your authentication flow
 

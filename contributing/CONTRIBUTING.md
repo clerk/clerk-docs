@@ -2,6 +2,56 @@
 
 Thanks for being willing to contribute to [Clerk's documentation](https://clerk.com/docs)! This document outlines how to effectively contribute to the documentation content located in this repository. See the [style guide](./styleguides/STYLEGUIDE.md) for more information on our guidelines for writing content.
 
+If you're contributing specifically to our hooks and components documentation, please refer to the [dedicated guide](./CONTRIBUTING-COMPONENTS-HOOKS.md).
+
+<details open="open">
+<summary><strong>Table of contents</strong></summary>
+
+- [Contributing to Clerk's documentation](#contributing-to-clerks-documentation)
+  - [Written in MDX](#written-in-mdx)
+  - [Project setup](#project-setup)
+  - [Creating an issue](#creating-an-issue)
+  - [Creating a pull request](#creating-a-pull-request)
+  - [Preview your changes](#preview-your-changes)
+    - [Previewing changes locally (for Clerk employees)](#previewing-changes-locally-for-clerk-employees)
+  - [Validating your changes](#validating-your-changes)
+  - [Getting your contributions reviewed](#getting-your-contributions-reviewed)
+  - [Deployment](#deployment)
+  - [Repository structure](#repository-structure)
+    - [Sidenav](#sidenav)
+    - [Update the SDK selector](#update-the-sdk-selector)
+      - [Add a new SDK](#add-a-new-sdk)
+      - [Add an external SDK](#add-an-external-sdk)
+      - [Update the 'key' of an SDK](#update-the-key-of-an-sdk)
+  - [Editing content](#editing-content)
+    - [File metadata](#file-metadata)
+      - [Metadata](#metadata)
+      - [Search](#search)
+      - [SDK](#sdk)
+    - [Headings](#headings)
+    - [Code blocks](#code-blocks)
+      - [Highlighting](#highlighting)
+      - [Collapsing sections of code](#collapsing-sections-of-code)
+      - [TypeScript type for code block props](#typescript-type-for-code-block-props)
+      - [Code block shortcodes](#code-block-shortcodes)
+      - [Prettier integration](#prettier-integration)
+    - [`<Steps />`](#steps-)
+    - [Callouts](#callouts)
+    - [`<CodeBlockTabs />`](#codeblocktabs-)
+    - [`<Tabs />`](#tabs-)
+    - [Tooltips](#tooltips)
+    - [`<TutorialHero />`](#tutorialhero-)
+    - [`<Cards>`](#cards)
+    - [`<Properties>`](#properties-1)
+    - [`<Include />`](#include-)
+    - [`<Typedoc />`](#typedoc-)
+    - [`<If />`](#if-)
+    - [`<Accordion />`](#accordion-)
+    - [Images and static assets](#images-and-static-assets)
+  - [Help wanted!](#help-wanted)
+
+</details>
+
 ## Written in MDX
 
 Clerk's documentation content is written in a variation of markdown called [MDX](https://mdxjs.com/). MDX allows us to embed React components in the content, unlocking rich, interactive documentation experiences. Clerk's documentation site also supports [GitHub Flavored Markdown](https://github.github.com/gfm/), adding support for things like tables and task lists.
@@ -1254,11 +1304,12 @@ The `<If />` component is used for conditional rendering. When the conditions ar
 > [!IMPORTANT]
 > This component cannot be used within code blocks.
 
-| Props                   | Type                 | Comment                                                                                                                                                                                                     |
-| ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                            |
-| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                   |
-| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React. |
+| Props                   | Type                 | Comment                                                                                                                                                                                                                                  |
+| ----------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `children`              | `React.ReactNode`    | The content that will be conditionally rendered.                                                                                                                                                                                         |
+| `condition?` (optional) | `boolean`            | The condition that determines if the content is rendered.                                                                                                                                                                                |
+| `sdk?` (optional)       | `string \| string[]` | Filter the content to only display based on the passed SDK(s). For example, if the `sdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is Next.js or React.                              |
+| `notSdk?` (optional)    | `string \| string[]` | Filter the content to only display based on the SDK(s) that were **NOT** passed. For example, if the `notSdk` prop is set to `['nextjs', 'react']`, the content will only be rendered if the **active SDK** is **NOT** Next.js or React. |
 
 Available values for the `sdk` prop:
 
@@ -1315,6 +1366,15 @@ To update the value, or `key`, for an SDK, see the [section on updating the key 
   This content will only be rendered if the active SDK is Next.js or Remix.
   <If sdk="nextjs">This content will only be rendered if the active SDK is Next.js</If>
 </If>
+```
+
+</details>
+
+<details>
+<summary>Filter to all SDKs except the ones passed</summary>
+
+```mdx
+<If notSdk="nextjs">This content will only be rendered if the active SDK is **NOT** Next.js</If>
 ```
 
 </details>

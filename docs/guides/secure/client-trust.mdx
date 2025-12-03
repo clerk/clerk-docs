@@ -1,0 +1,60 @@
+---
+title: Client Trust
+description: Protect your users from credential stuffing attacks with automatic second-factor verification on new devices.
+---
+
+Client Trust is Clerk's defense against [credential stuffing](https://owasp.org/www-community/attacks/Credential_stuffing) attacks - a type of attack where bad actors use lists of stolen passwords to attempt to gain unauthorized access to user accounts.
+
+When Client Trust is enabled, Clerk treats every new device as untrusted until the user has verified their identity with a second factor.
+
+## How Client Trust works
+
+Client Trust automatically requires a second factor when **all of the following conditions are met**:
+
+1. The user enters a **valid password**.
+1. The user **hasn't enabled [multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication)**.
+1. The user is signing in from a **new device**.
+
+When these conditions are met, Clerk sends a one-time verification code to the user's email address or phone number. The user must enter this code to complete the sign-in process.
+
+> [!NOTE]
+> If the user has already enabled MFA (such as an authenticator app or SMS verification), Client Trust will not trigger - their existing MFA method will be used instead.
+
+## Enable Client Trust
+
+Client Trust is automatically enabled for Clerk applications created after November 14, 2025. For applications created before this date, you can enable Client Trust in the Clerk Dashboard:
+
+1. In the Clerk Dashboard, navigate to the [**Updates**](https://dashboard.clerk.com/~/updates) page.
+1. Enable the **Client Trust** update.
+
+## How Client Trust differs from traditional MFA
+
+| Aspect | Client Trust | Traditional MFA |
+| - | - | - |
+| **Trigger** | Automatic on new devices | User must enable it |
+| **Verification method** | Email/phone code | TOTP, SMS code, backup codes |
+| **User setup required** | None | User must configure their preferred method |
+| **When it applies** | Only for password sign-ins | All sign-ins |
+
+## Impact on custom sign-in flows
+
+If you've built a [custom sign-in flow](!custom-flow) that allows password-based sign-ins using the Clerk API or SDKs, you'll need to handle the `needs_second_factor` status that Client Trust can trigger.
+
+When Client Trust requires verification, the sign-in attempt will return a status of `needs_second_factor` with `email_code` in the `supportedSecondFactors` array. Your flow should:
+
+1. Check if the sign-in status is `needs_second_factor`.
+1. Check if `email_code` is in the `supportedSecondFactors` array.
+1. Call `prepareSecondFactor()` to send the verification code to the user's email address or phone number.
+1. Collect the code from the user.
+1. Call `attemptSecondFactor()` to verify the code.
+1. If successful, set the session as active.
+
+For a complete implementation example, see the [email/password custom flow guide](/docs/guides/development/custom-flows/authentication/email-password#sign-in-flow).
+
+> [!TIP]
+> If your application supports both Client Trust and user-enabled MFA, make sure to check for all possible second factor strategies when handling the `needs_second_factor` status.
+
+## Limitations
+
+- **Password-only**: Client Trust only applies to password-based sign-ins. Passwordless authentication methods (such as email links, [OTPs](!otp), passkeys, and OAuth) are not affected.
+- **Email/Phone number required**: Client Trust requires the user to have a verified email address or phone number to receive the verification code.

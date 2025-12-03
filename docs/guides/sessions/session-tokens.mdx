@@ -28,37 +28,37 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
     | `sid` | session ID | The ID of the current session. | `sess_123` |
     | `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
     | `v` | version | The version number of the session token. | `2` |
-    | `pla` | plan | The plan that is active. The value is in the format `scope:planslug`, where `scope` can be `u` or `o` representing user or org-level plans, respectively. The `u:` prefix is used if no org is active, and the `o:` prefix appears if an org is active. | `u:free`,`o:pro` |
-    | `fea` | features | A list of enabled features and their scope. The scope can either be `o` for org-level features if there is an [active org](!active-organization), or `u` for user-level features or if there is no active org. | `o:dashboard,o:impersonation` |
+    | `pla` | plan | The Plan that is active. The value is in the format `scope:planslug`, where `scope` can be `u` or `o` representing user or Organization-level Plans, respectively. The `u:` prefix is used if no Organization is active, and the `o:` prefix appears if an Organization is active. | `u:free`,`o:pro` |
+    | `fea` | features | A list of enabled Features and their scope. The scope can either be `o` for Organization-level Features if there is an [Active Organization](!active-organization), or `u` for user-level Features or if there is no active Organization. | `o:dashboard,o:impersonation` |
     | `sts` | session status | The status of the current session | `pending` |
 
     ### Organization claim
 
-    The **`o` claim**, or organization claim, is only included if the user is part of an [organization](/docs/guides/organizations/overview) and that organization is [active](!active-organization). Its value is an object that contains the following properties:
+    The **`o` claim**, or Organization claim, is only included if the user is part of an [Organization](/docs/guides/organizations/overview) and that Organization is [active](!active-organization). Its value is an object that contains the following properties:
 
     | Claim | Abbreviation expanded | Description | Example | |
     | - | - | - | - | - |
-    | `id` | ID | The ID of the organization. | `org_123` | |
-    | `slg` | slug | The slug of the organization. | `org-slug` | |
-    | `rol` | role | The role of the user in the organization, without the `org:` prefix. | `admin` | |
-    | `per` | permissions | The names of the permissions the user has in the organization. | `read,manage` | |
-    | `fpm` | feature-permission map | feature-permission map | The mapping of features with permissions. [Learn how this value is constructed](#decode-o-fpm-manually). | `3,2` |
+    | `id` | ID | The ID of the Organization. | `org_123` | |
+    | `slg` | slug | The slug of the Organization. | `org-slug` | |
+    | `rol` | role | The Role of the user in the Organization, without the `org:` prefix. | `admin` | |
+    | `per` | permissions | The names of the Permissions the user has in the Organization. | `read,manage` | |
+    | `fpm` | feature-permission map | feature-permission map | The mapping of Features with Permissions. [Learn how this value is constructed](#decode-o-fpm-manually). | `3,2` |
 
     > [!WARNING]
-    > The organization claims above are intentionally designed to be as compact as possible to keep JWT tokens small.
+    > The Organization claims above are intentionally designed to be as compact as possible to keep JWT tokens small.
     > As a result, they can be difficult to decode manually. We strongly recommend using one of our SDKs that support API version [2025-04-10](/docs/guides/development/upgrading/versioning#2025-04-10) to handle decoding reliably.
 
     #### Decode `o.fpm` manually
 
     For those that need to decode the `o.fpm` claim manually, here is how the claim value is computed.
 
-    The `o.fpm` value is a list of comma-separated integers where the position of the integer corresponds to a feature in the same position in the `fea` claim. So, the first feature in the `fea` claim corresponds to the first integer in the `o.fpm` claim, and so on.
+    The `o.fpm` value is a list of comma-separated integers where the position of the integer corresponds to a Feature in the same position in the `fea` claim. So, the first Feature in the `fea` claim corresponds to the first integer in the `o.fpm` claim, and so on.
 
-    Each integer, when converted to binary, represents a bitmask where each bit's position corresponds to a permission in the `o.per` list, where `0` = `not-allowed` and `1` = `allowed`. The first bit position in the bitmask is the rightmost, least significant bit. It corresponds to the first permission in the `o.per` list, which is the leftmost element. This results in a sort of "reverse" mapping, seen in the example below.
+    Each integer, when converted to binary, represents a bitmask where each bit's position corresponds to a Permission in the `o.per` list, where `0` = `not-allowed` and `1` = `allowed`. The first bit position in the bitmask is the rightmost, least significant bit. It corresponds to the first Permission in the `o.per` list, which is the leftmost element. This results in a sort of "reverse" mapping, seen in the example below.
 
     #### Example
 
-    Consider a user with an active organization has role `admin`. This role has the following feature permissions: `dashboard:read`, `dashboard:manage`, `teams:read`. Therefore, the user's claims are as follows:
+    Consider a user with an Active Organization has Role `admin`. This Role has the following Feature-Permission mapping: `dashboard:read`, `dashboard:manage`, `teams:read`. Therefore, the user's claims are as follows:
 
     - `fea` claim has value `o:dashboard,o:teams`
     - `o.per` claim has value `manage,read`
@@ -66,9 +66,9 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
 
     Now, let's manually decode the `o.fpm` claim.
 
-    The first integer `3` represents the feature-permission mapping for the `dashboard` feature, since it's the first feature in the `fea` claim. Then, converting `3` to binary, you get `11`, which means both permissions are allowed (`dashboard:read` and `dashboard:manage`).
+    The first integer `3` represents the Feature-Permission mapping for the `dashboard` Feature, since it's the first Feature in the `fea` claim. Then, converting `3` to binary, you get `11`, which means both Permissions are allowed (`dashboard:read` and `dashboard:manage`).
 
-    The second integer `2` represents the feature-permission mapping for the `teams` feature, since it's the second feature in the `fea` claim. Then, converting `2` to binary, you get `10`, which means the _second_ permission is allowed (`teams:read`). This is because **you read bitmask from right to left**, so the first bit, `0`, corresponds to the first permission in the `o.per` list (`manage`) and the second bit, `1`, corresponds to the second permission in the `o.per` list (`read`).
+    The second integer `2` represents the Feature-Permission mapping for the `teams` Feature, since it's the second Feature in the `fea` claim. Then, converting `2` to binary, you get `10`, which means the _second_ Permission is allowed (`teams:read`). This is because **you read bitmask from right to left**, so the first bit, `0`, corresponds to the first Permission in the `o.per` list (`manage`) and the second bit, `1`, corresponds to the second Permission in the `o.per` list (`read`).
 
     ### Actor claim
 
@@ -98,14 +98,14 @@ Read more about Clerk session tokens and how they work in [the guide on how Cler
     | `sid` | session ID | The ID of the current session. | `sess_123` |
     | `sub` | subject | The ID of the current user of the session. See [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.2) for more information. | `user_123` |
 
-    The following claims are only included if the user is part of an organization and that organization is [active](!active-organization):
+    The following claims are only included if the user is part of an Organization and that Organization is [active](!active-organization):
 
     | Claim | Abbreviation expanded | Description | Example |
     | - | - | - | - |
-    | `org_id` | organization ID | The ID of the [active organization](!active-organization) that the user belongs to. | `org_123` |
-    | `org_permissions` | organization permissions | The permissions of the user in the currently [active organization](!active-organization). System permissions are not included in the session token. | `["org:admin:example_permission", "org:member:example_permission"]` |
-    | `org_slug` | organization slug | The slug of the currently [active organization](!active-organization) that the user belongs to. | `org-slug` |
-    | `org_role` | organization role | The role of the user in the currently [active organization](!active-organization). | `org:admin` |
+    | `org_id` | Organization ID | The ID of the [Active Organization](!active-organization) that the user belongs to. | `org_123` |
+    | `org_permissions` | Organization Permissions | The Permissions of the user in the currently [Active Organization](!active-organization). System Permissions are not included in the session token. | `["org:admin:example_permission", "org:member:example_permission"]` |
+    | `org_slug` | Organization Slug | The slug of the currently [Active Organization](!active-organization) that the user belongs to. | `org-slug` |
+    | `org_role` | Organization Role | The role of the user in the currently [Active Organization](!active-organization). | `org:admin` |
 
     The **`act` (actor) claim** is only included if the user is [impersonating](/docs/guides/users/impersonation) another user. It's value is an object that contains the following properties:
 

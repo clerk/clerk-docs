@@ -4,10 +4,17 @@ description: Create and manage Organizations in your Next.js app in this guided 
 sdk: nextjs
 ---
 
-Organizations let you group users with Roles and Permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts.
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk + Next.js application",
+      link: "/docs/nextjs/getting-started/quickstart",
+      icon: "clerk",
+    }
+  ]}
+/>
 
-> [!NOTE]
-> Haven't set up Clerk auth yet? Head over to the [Next.js quickstart](/docs/nextjs/getting-started/quickstart)!
+Organizations let you group users with Roles and Permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts. This tutorial will demonstrate how to add Organizations, create and switch Organizations, and protect routes by Organization and Roles.
 
 <Steps>
   ## Add `<OrganizationSwitcher/>` to your app
@@ -76,38 +83,82 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
 
   ## Access Organization data
 
-  Use Clerk's [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently active Organization. Use Clerk's [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+  <Tabs items={['Client-side', 'Server-side']}>
+    <Tab>
+      Use Clerk's [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use Clerk's [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's organization memberships.
 
-  ```tsx {{ filename: 'app/page.tsx' }}
-  'use client'
+      ```tsx {{ filename: 'app/page.tsx' }}
+      'use client'
 
-  import { useOrganization, useOrganizationList } from '@clerk/nextjs'
+      import { useOrganization, useOrganizationList } from '@clerk/nextjs'
 
-  export default function Home() {
-    const { organization } = useOrganization()
-    const { userMemberships } = useOrganizationList({
-      userMemberships: true,
-    })
+      export default function Page() {
+        const { organization } = useOrganization()
+        const { userMemberships } = useOrganizationList({
+          userMemberships: true,
+        })
 
-    return (
-      <div className="p-8">
-        <h1 className="text-2xl font-bold mb-4">
-          Welcome to the <strong>{organization?.name}</strong> organization
-        </h1>
-        <p className="mb-6">
-          Your role in this organization:{' '}
-          <strong>
-            {
-              userMemberships?.data?.find(
-                (membership) => membership.organization.id === organization?.id,
-              )?.role
-            }
-          </strong>
-        </p>
-      </div>
-    )
-  }
-  ```
+        return (
+          <div className="p-8">
+            <h1 className="text-2xl font-bold mb-4">
+              Welcome to the <strong>{organization?.name}</strong> organization
+            </h1>
+            <p className="mb-6">
+              Your role in this organization:{' '}
+              <strong>
+                {/* Find the organization membership that matches the
+                  currently active organization and return the role */}
+                {
+                  userMemberships?.data?.find(
+                    (membership) => membership.organization.id === organization?.id,
+                  )?.role
+                }
+              </strong>
+            </p>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      To access information about the currently [Active Organization](!active-organization) on the server-side, use [`clerkClient()`](/docs/reference/astro/overview#example-use-clerk-client-to-get-a-users-information) to call the [`getOrganization()`](/docs/reference/backend/organization/get-organization) method, which returns the Backend [`Organization`](/docs/reference/backend/types/backend-organization) object. You'll need to pass an `orgId`, which you can access from the [`Auth`](/docs/reference/backend/types/auth-object) object.
+
+      ```tsx
+      import { auth, clerkClient } from '@clerk/nextjs/server'
+      import { OrganizationSwitcher } from '@clerk/nextjs'
+
+      export default async function Page() {
+        const { isAuthenticated, orgId, orgRole } = await auth()
+
+        // Check if user is authenticated
+        if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
+
+        // Check if there is an Active Organization
+        if (!orgId) return <p>Set an Active Organization to access this page.</p>
+
+        // Initialize the JS Backend SDK
+        // This varies depending on the SDK you're using
+        // https://clerk.com/docs/js-backend/getting-started/quickstart
+        const client = await clerkClient()
+
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+        return (
+          <div class="p-8">
+            <h1 class="text-2xl font-bold mb-4">
+              Welcome to the <strong>{organization.name}</strong> organization
+            </h1>
+            <p class="mb-6">
+              Your role in this organization: <strong>{orgRole}</strong>
+            </p>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
 
   ## Visit your app
 
@@ -139,66 +190,98 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
 
   ## Protect routes by Organization and Roles
 
-  You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
+  <Tabs items={['Server-side', 'Client-side']}>
+    <Tab>
+      You can protect content and even entire routes based on organization membership, roles, and permissions by performing [authorization checks](!authorization-check).
 
-  In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` Role, and users that are not in the `Acme Corp` Organization.
+      In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` Role, and users that are not in the `Acme Corp` Organization.
 
-  - The [`Auth`](/docs/reference/backend/types/auth-object) object is used to access the `isSignedIn` and `has()` properties.
-  - The `isSignedIn` property is used to check if the user is signed in.
-  - The `has()` helper is used to check if the user has the `org:admin` role.
-  - The [`useOrganization()`](/docs/reference/hooks/use-organization) hook is used to access the organization data.
-  - The organization name is checked to ensure it matches the required organization name. If a user is not in the required organization, the page will display a message.
+      ```tsx {{ filename: 'app/protected/page.tsx' }}
+      import { auth, clerkClient } from '@clerk/nextjs/server'
+      import { OrganizationSwitcher } from '@clerk/nextjs'
 
-  ```tsx {{ filename: 'app/protected/page.tsx', collapsible: true }}
-  'use client'
-  import { useAuth, useOrganization } from '@clerk/nextjs'
+      export default async function Page() {
+        const { isAuthenticated, orgId, has } = await auth()
 
-  export default function Page() {
-    // The `useAuth()` hook gives you access to
-    // properties like `isSignedIn` and `has()`
-    const { isSignedIn, has } = useAuth()
-    const { organization } = useOrganization()
+        // Check if the user is authenticated
+        if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
 
-    // Check if the user is authenticated
-    if (!isSignedIn) {
-      return <p>You must be signed in to access this page.</p>
-    }
+        // Check if there is an Active Organization
+        if (!orgId) return <p>Set an Active Organization to access this page.</p>
 
-    // Check if there is an Active Organization
-    if (!organization) {
-      return (
-        <>
-          <p>Set an active organization to access this page.</p>
-        </>
-      )
-    }
+        // Check if the user has the `org:admin` Role
+        if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
 
-    // Check if the user has the `org:admin` Role
-    if (!has({ role: 'org:admin' })) {
-      return <p>You must be an admin to access this page.</p>
-    }
+        // Initialize the JS Backend SDK
+        // This varies depending on the SDK you're using
+        // https://clerk.com/docs/js-backend/getting-started/quickstart
+        const client = await clerkClient()
 
-    // Check if Organization name matches (e.g., "Acme Corp")
-    const requiredOrgName = 'Acme Corp'
-    if (organization.name !== requiredOrgName) {
-      return (
-        <>
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+        // Check if Organization name matches (e.g. 'Acme Corp')
+        if (organization.name !== requiredOrgName)
+          return (
+            <p>
+              This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+              to the <strong>{requiredOrgName}</strong> Organization to access this page.
+            </p>
+          )
+
+        return (
           <p>
-            This page is only accessible in the <strong>{requiredOrgName}</strong> organization.
-            Switch to the <strong>{requiredOrgName}</strong> organization to access this page.
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{organization.name}</strong> Organization.
           </p>
-        </>
-      )
-    }
+        )
+      }
+      ```
+    </Tab>
 
-    return (
-      <p>
-        You are currently signed in as an <strong>admin</strong> in the{' '}
-        <strong>{organization.name}</strong> organization.
-      </p>
-    )
-  }
-  ```
+    <Tab>
+      You can protect content and even entire routes based on organization membership, roles, and permissions by performing [authorization checks](!authorization-check).
+
+      In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` role, and users that are not in the `Acme Corp` organization.
+
+      ```tsx {{ filename: 'app/protected/page.tsx' }}
+      'use client'
+      import { OrganizationSwitcher, useAuth, useOrganization } from '@clerk/nextjs'
+
+      export default function Page() {
+        // The `useAuth()` hook gives you access to properties like `isSignedIn` and `has()`
+        const { isSignedIn, has } = useAuth()
+        const { organization } = useOrganization()
+        const requiredOrgName = 'Acme Corp'
+
+        // Check if the user is authenticated
+        if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+        // Check if there is an Active Organization
+        if (!organization) return <p>Set an active organization to access this page.</p>
+
+        // Check if the user has the `org:admin` Role
+        if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+        // Check if Organization name matches (e.g. 'Acme Corp')
+        if (organization.name !== requiredOrgName)
+          return (
+            <p>
+              This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+              to the <strong>{requiredOrgName}</strong> Organization to access this page.
+            </p>
+          )
+
+        return (
+          <p>
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{organization.name}</strong> Organization.
+          </p>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
 
   Navigate to [`localhost:3000/protected`](localhost:3000/protected). You should see a green message confirming you are an admin in `Acme Corp`. Use the `<OrganizationSwitcher/>` to switch Organizations or rename the Organization to show the red message.
 
@@ -206,13 +289,15 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
 
   ## It's time to build your B2B SaaS!
 
-  You've added Clerk Organizations to your Next.js app 🎉. If your app needs to scale to enterprise customers, here's what you can do next:
+  You've added Clerk Organizations to your Next.js app 🎉.
 
   To make configuration changes to your Clerk development instance, claim the Clerk keys that were generated for you by selecting **Claim your application** in the bottom right of your app. This will associate the application with your Clerk account.
 
-  - **Control access** with [custom Roles and Permissions](/docs/guides/organizations/control-access/roles-and-permissions): define granular Permissions for different user types within Organizations.
+  Here are some next steps you can take to scale your app:
 
-  - **Onboard entire companies** with [Verified Domains](/docs/guides/organizations/add-members/verified-domains): automatically invite users with approved email domains (e.g., `@company.com`) to join Organizations without manual invitations.
+  - **Control access** with [Custom Roles and Permissions](/docs/guides/organizations/control-access/roles-and-permissions): define granular Permissions for different user types within Organizations.
 
-  - **Enable Enterprise SSO** with [SAML and OIDC](/docs/guides/organizations/add-members/sso): let customers authenticate through their identity provider (Okta, Entra ID, Google Workspace) with unlimited connections, no per-connection fees.
+  - **Onboard entire companies** with [Verified Domains](/docs/guides/organizations/add-members/verified-domains): automatically invite users with approved email domains (e.g. `@company.com`) to join Organizations without manual invitations.
+
+  - **Enable Enterprise SSO** with [SAML and OIDC](/docs/guides/organizations/add-members/sso): let customers authenticate through their identity provider (e.g. Okta, Entra ID, Google Workspace) with unlimited connections, no per-connection fees.
 </Steps>

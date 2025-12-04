@@ -158,10 +158,21 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
     </Tab>
 
     <Tab>
-      ```tsx {{ filename: 'app/welcome/welcome.tsx' }}
+      Use [`getAuth()`](/docs/reference/react-router/get-auth) hook to access information about the current user session including their [Active Organization](!active-organization) and role. The loader runs on the server before the `Welcome` component renders. This lets you perform auth checks before you send any data and the data is ready before you render.
+
+      ```tsx {{ filename: 'app/routes/home.tsx', mark: [2, 3, 17, [20, 22], [25, 27], [33, 37]]}}
       import { redirect } from 'react-router'
       import { clerkClient, getAuth } from '@clerk/react-router/server'
-      import type { Route } from './+types/welcome'
+      import type { Organization } from '@clerk/backend'
+      import type { Route } from "./+types/home";
+      import { Welcome } from "../welcome/welcome";
+
+      export function meta({}: Route.MetaArgs) {
+        return [
+          { title: "New React Router App" },
+          { name: "description", content: "Welcome to React Router!" },
+        ];
+      }
 
       export async function loader(args: Route.LoaderArgs) {
         // Use the `getAuth()` helper to access the `Auth` object
@@ -174,7 +185,9 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
         }
 
         // Check if there is an Active Organization
-        if (!orgId) return null
+        if (!orgId) {
+          return { organization: null, orgRole: null, hasOrganization: false }
+        }
 
         // Initialize the JS Backend SDK
         // This varies depending on the SDK you're using
@@ -187,7 +200,23 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
         return { organization, orgRole }
       }
 
-      export default function Welcome({ loaderData }: Route.ComponentProps) {
+      export default function Home({ loaderData }: Route.ComponentProps) {
+        return <Welcome loaderData={loaderData as { organization: Organization; orgRole: string | undefined; hasOrganization?: undefined; }} />;
+      }
+      ```
+
+      Update the `Welcome` component to display information about the Active Organization.
+
+      ```tsx {{ filename: 'app/welcome/welcome.tsx' }}
+      type LoaderData = Awaited<ReturnType<typeof import('../routes/home').loader>>
+
+      interface WelcomeProps {
+        loaderData: LoaderData
+      }
+
+      export function Welcome({ loaderData }: WelcomeProps) {
+        if (!loaderData || loaderData instanceof Response) return null
+
         return (
           <div>
             <h1>Welcome to the {loaderData.organization?.name} Organization</h1>
@@ -195,17 +224,6 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
           </div>
         )
       }
-      ```
-
-      Update your routes configuration to show the `<Welcome />` component when you land on `/welcome`.
-
-      ```tsx {{ filename: 'app/routes.ts', mark: [5] }}
-      import { type RouteConfig, index, route } from '@react-router/dev/routes'
-
-      export default [
-        index('routes/home.tsx'),
-        route('welcome', 'routes/welcome.tsx'),
-      ] satisfies RouteConfig
       ```
     </Tab>
   </Tabs>
@@ -356,7 +374,6 @@ Organizations let you group users with Roles and Permissions, enabling you to bu
 
   export default [
     index('routes/home.tsx'),
-    route('welcome', 'routes/welcome.tsx'),
     route('protected', 'routes/protected.tsx'),
   ] satisfies RouteConfig
   ```

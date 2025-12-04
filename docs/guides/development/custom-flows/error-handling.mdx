@@ -295,256 +295,248 @@ When a user password is marked as compromised, they will not be able to sign in 
 
 <Tabs items={["Next.js"]}>
   <Tab>
-      This example is written for Next.js App Router but it can be adapted for any React-based framework.
+    This example is written for Next.js App Router but it can be adapted for any React-based framework.
 
-      ```tsx {{ filename: 'app/sign-in/page.tsx' }}
-      "use client";
+    ```tsx {{ filename: 'app/sign-in/page.tsx' }}
+    'use client'
 
-      import * as React from "react";
-      import { useSignIn } from "@clerk/nextjs";
-      import { useRouter } from "next/navigation";
-      import {
-        ClerkAPIError,
-        EmailCodeFactor,
-        SignInFirstFactor,
-      } from "@clerk/types";
-      import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
+    import * as React from 'react'
+    import { useSignIn } from '@clerk/nextjs'
+    import { useRouter } from 'next/navigation'
+    import { ClerkAPIError, EmailCodeFactor, SignInFirstFactor } from '@clerk/types'
+    import { isClerkAPIResponseError } from '@clerk/nextjs/errors'
 
-      const SignInWithEmailCode = () => {
-        const { isLoaded, signIn, setActive } = useSignIn();
-        const [errors, setErrors] = React.useState<ClerkAPIError[]>();
-        const [verifying, setVerifying] = React.useState(false);
-        const [email, setEmail] = React.useState("");
-        const [code, setCode] = React.useState("");
-        const router = useRouter();
+    const SignInWithEmailCode = () => {
+      const { isLoaded, signIn, setActive } = useSignIn()
+      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
+      const [verifying, setVerifying] = React.useState(false)
+      const [email, setEmail] = React.useState('')
+      const [code, setCode] = React.useState('')
+      const router = useRouter()
 
-        async function handleSubmit(e: React.FormEvent) {
-          e.preventDefault();
+      async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
 
-          if (!isLoaded && !signIn) return null;
+        if (!isLoaded && !signIn) return null
 
-          try {
-            // Start the sign-in process using the email code method
-            const { supportedFirstFactors } = await signIn.create({
-              identifier: email,
-            });
+        try {
+          // Start the sign-in process using the email code method
+          const { supportedFirstFactors } = await signIn.create({
+            identifier: email,
+          })
 
-            // Filter the returned array to find the 'email_code' entry
-            const isEmailCodeFactor = (
-              factor: SignInFirstFactor
-            ): factor is EmailCodeFactor => {
-              return factor.strategy === "email_code";
-            };
-            const emailCodeFactor = supportedFirstFactors?.find(isEmailCodeFactor);
-
-            if (emailCodeFactor) {
-              // Grab the emailAddressId
-              const { emailAddressId } = emailCodeFactor;
-
-              // Send the OTP code to the user
-              await signIn.prepareFirstFactor({
-                strategy: "email_code",
-                emailAddressId,
-              });
-
-              // Set verifying to true to display second form
-              // and capture the OTP code
-              setVerifying(true);
-            }
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error("Error:", JSON.stringify(err, null, 2));
+          // Filter the returned array to find the 'email_code' entry
+          const isEmailCodeFactor = (factor: SignInFirstFactor): factor is EmailCodeFactor => {
+            return factor.strategy === 'email_code'
           }
-        }
+          const emailCodeFactor = supportedFirstFactors?.find(isEmailCodeFactor)
 
-        async function handleVerification(e: React.FormEvent) {
-          e.preventDefault();
+          if (emailCodeFactor) {
+            // Grab the emailAddressId
+            const { emailAddressId } = emailCodeFactor
 
-          if (!isLoaded && !signIn) return null;
+            // Send the OTP code to the user
+            await signIn.prepareFirstFactor({
+              strategy: 'email_code',
+              emailAddressId,
+            })
 
-          try {
-            // Use the code provided by the user and attempt verification
-            const signInAttempt = await signIn.attemptFirstFactor({
-              strategy: "email_code",
-              code,
-            });
-
-            // If verification was completed, set the session to active
-            // and redirect the user
-            if (signInAttempt.status === "complete") {
-              await setActive({
-                session: signInAttempt.createdSessionId,
-                navigate: async ({ session }) => {
-                  if (session?.currentTask) {
-                    // Check for tasks and navigate to custom UI to help users resolve them
-                    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                    console.log(session?.currentTask);
-                    return;
-                  }
-
-                  router.push("/");
-                },
-              });
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(signInAttempt);
-            }
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error("Error:", JSON.stringify(err, null, 2));
+            // Set verifying to true to display second form
+            // and capture the OTP code
+            setVerifying(true)
           }
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
         }
+      }
 
-        if (verifying) {
-          return (
-            <>
-              <h1>Verify your email address</h1>
-              <form onSubmit={handleVerification}>
-                <label htmlFor="code">Enter your email verification code</label>
-                <input
-                  value={code}
-                  id="code"
-                  name="code"
-                  onChange={(e) => setCode(e.target.value)}
-                />
-                <button type="submit">Verify</button>
-              </form>
-            </>
-          );
+      async function handleVerification(e: React.FormEvent) {
+        e.preventDefault()
+
+        if (!isLoaded && !signIn) return null
+
+        try {
+          // Use the code provided by the user and attempt verification
+          const signInAttempt = await signIn.attemptFirstFactor({
+            strategy: 'email_code',
+            code,
+          })
+
+          // If verification was completed, set the session to active
+          // and redirect the user
+          if (signInAttempt.status === 'complete') {
+            await setActive({
+              session: signInAttempt.createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(signInAttempt)
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
         }
+      }
 
+      if (verifying) {
         return (
           <>
-            <form onSubmit={handleSubmit}>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                value={email}
-                id="email"
-                name="email"
-                type="email"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <button type="submit">Continue</button>
+            <h1>Verify your email address</h1>
+            <form onSubmit={handleVerification}>
+              <label htmlFor="code">Enter your email verification code</label>
+              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
+              <button type="submit">Verify</button>
             </form>
-
-            {errors && (
-              <ul>
-                {errors.map((el, index) => (
-                  <li key={index}>{el.longMessage}</li>
-                ))}
-              </ul>
-            )}
           </>
-        );
-      };
+        )
+      }
 
-      export default function SignInForm() {
-        const { isLoaded, signIn, setActive } = useSignIn();
-        const [email, setEmail] = React.useState("");
-        const [password, setPassword] = React.useState("");
-        const [errors, setErrors] = React.useState<ClerkAPIError[]>();
+      return (
+        <>
+          <form onSubmit={handleSubmit}>
+            <label htmlFor="email">Enter email address</label>
+            <input
+              value={email}
+              id="email"
+              name="email"
+              type="email"
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button type="submit">Continue</button>
+          </form>
 
-        const router = useRouter();
+          {errors && (
+            <ul>
+              {errors.map((el, index) => (
+                <li key={index}>{el.longMessage}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )
+    }
 
-        // Handle the submission of the sign-in form
-        const handleSignInWithPassword = async (e: React.FormEvent) => {
-          e.preventDefault();
+    export default function SignInForm() {
+      const { isLoaded, signIn, setActive } = useSignIn()
+      const [email, setEmail] = React.useState('')
+      const [password, setPassword] = React.useState('')
+      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
 
-          // Clear any errors that may have occurred during previous form submission
-          setErrors(undefined);
+      const router = useRouter()
 
-          if (!isLoaded) {
-            return;
-          }
+      // Handle the submission of the sign-in form
+      const handleSignInWithPassword = async (e: React.FormEvent) => {
+        e.preventDefault()
 
-          // Start the sign-in process using the email and password provided
-          try {
-            const signInAttempt = await signIn.create({
-              identifier: email,
-              password,
-            });
+        // Clear any errors that may have occurred during previous form submission
+        setErrors(undefined)
 
-            // If sign-in process is complete, set the created session as active
-            // and redirect the user
-            if (signInAttempt.status === "complete") {
-              await setActive({
-                session: signInAttempt.createdSessionId,
-                navigate: async ({ session }) => {
-                  if (session?.currentTask) {
-                    // Check for tasks and navigate to custom UI to help users resolve them
-                    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                    console.log(session?.currentTask);
-                    return;
-                  }
-
-                  router.push("/");
-                },
-              });
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(JSON.stringify(signInAttempt, null, 2));
-            }
-          } catch (err) {
-            if (isClerkAPIResponseError(err)) setErrors(err.errors);
-            console.error(JSON.stringify(err, null, 2));
-          }
-        };
-
-        if (errors && errors[0].code === "form_password_compromised") {
-          return (
-            <>
-              <h1>Sign in</h1>
-
-              <p>Your password appears to have been compromised or it&apos;s no longer trusted and cannot be used. Please use email code to continue.</p>
-
-              <SignInWithEmailCode />
-            </>
-          );
+        if (!isLoaded) {
+          return
         }
 
-        // Display a form to capture the user's email and password
+        // Start the sign-in process using the email and password provided
+        try {
+          const signInAttempt = await signIn.create({
+            identifier: email,
+            password,
+          })
+
+          // If sign-in process is complete, set the created session as active
+          // and redirect the user
+          if (signInAttempt.status === 'complete') {
+            await setActive({
+              session: signInAttempt.createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(signInAttempt, null, 2))
+          }
+        } catch (err) {
+          if (isClerkAPIResponseError(err)) setErrors(err.errors)
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      if (errors && errors[0].code === 'form_password_compromised') {
         return (
           <>
             <h1>Sign in</h1>
 
-            <form onSubmit={(e) => handleSignInWithPassword(e)}>
-              <div>
-                <label htmlFor="email">Enter email address</label>
-                <input
-                  onChange={(e) => setEmail(e.target.value)}
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={email}
-                />
-              </div>
-              <div>
-                <label htmlFor="password">Enter password</label>
-                <input
-                  onChange={(e) => setPassword(e.target.value)}
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={password}
-                />
-              </div>
-              <button type="submit">Sign in</button>
-            </form>
+            <p>
+              Your password appears to have been compromised or it&apos;s no longer trusted and cannot
+              be used. Please use email code to continue.
+            </p>
 
-            {errors && (
-              <ul>
-                {errors.map((el, index) => (
-                  <li key={index}>{el.longMessage}</li>
-                ))}
-              </ul>
-            )}
+            <SignInWithEmailCode />
           </>
-        );
+        )
       }
-      ```
-    </Tab>
+
+      // Display a form to capture the user's email and password
+      return (
+        <>
+          <h1>Sign in</h1>
+
+          <form onSubmit={(e) => handleSignInWithPassword(e)}>
+            <div>
+              <label htmlFor="email">Enter email address</label>
+              <input
+                onChange={(e) => setEmail(e.target.value)}
+                id="email"
+                name="email"
+                type="email"
+                value={email}
+              />
+            </div>
+            <div>
+              <label htmlFor="password">Enter password</label>
+              <input
+                onChange={(e) => setPassword(e.target.value)}
+                id="password"
+                name="password"
+                type="password"
+                value={password}
+              />
+            </div>
+            <button type="submit">Sign in</button>
+          </form>
+
+          {errors && (
+            <ul>
+              {errors.map((el, index) => (
+                <li key={index}>{el.longMessage}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )
+    }
+    ```
+  </Tab>
 </Tabs>

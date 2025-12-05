@@ -1,0 +1,142 @@
+---
+title: Organization-level Enterprise SSO
+description: Integrate as many Enterprise SSO methods within Clerk Organizations. Enable SAML SSO, OAuth/OIDC, and other secure MFA/single sign-on options for B2B SaaS apps.
+metadata:
+  title: Set up Organization-level SAML and OIDC for B2B/B2C apps
+---
+
+Clerk provides Enterprise Single Sign-On (SSO) through a feature called [**Enterprise Connections**](/docs/guides/configure/auth-strategies/enterprise-connections/overview). You can enable Enterprise Connections for specific Organizations, allowing members to authenticate through their company's identity provider using SAML or OIDC protocols.
+
+When users sign up or sign in using an Organization's Enterprise Connection, Clerk automatically adds them as members of that Organization and assigns them the [default Role](/docs/guides/organizations/control-access/roles-and-permissions#the-default-role-for-members). This process is known as [Just-in-Time (JIT) provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning).
+
+## When to use Enterprise SSO
+
+Enterprise SSO works well when customers require centralized authentication through their Identity Provider (IdP). This approach fits scenarios where:
+
+- Enterprise customers have security requirements that mandate IdP-based authentication.
+- IT teams need to manage user provisioning from a central location.
+- Organizations want to maintain existing identity management workflows.
+
+If you need manual control over who joins and their [Roles](/docs/guides/organizations/control-access/roles-and-permissions), use [invitations](/docs/guides/organizations/add-members/invitations). If you want automatic enrollment without IdP requirements, use [Verified Domains](/docs/guides/organizations/add-members/verified-domains).
+
+## Common onboarding flows
+
+The timing of when you set up Enterprise SSO depends on how customers adopt your product. The two common approaches are to create the Organization and configure SSO before users sign in (top-down) or to let users start individually and add SSO later (bottom-up).
+
+### Organization created first (top-down approach)
+
+This flow is common for enterprise sales where the relationship is established before users access the application.
+
+1. [Create an Organization](/docs/guides/organizations/create-and-manage#create-an-organization) for your customer through the Clerk Dashboard.
+1. Collaborate with the customer's IT administrator to obtain the necessary configuration details.
+1. Configure the Enterprise SSO Connection for the Organization.
+1. Invite users to the Organization, who can then sign in using Enterprise SSO.
+
+### User-initiated setup (bottom-up approach)
+
+This flow is common when individual users try the product before company-wide adoption.
+
+1. An end user signs up to evaluate your application, starting with an individual account.
+1. After adopting the application, the user [creates an Organization](/docs/guides/organizations/create-and-manage#create-an-organization) for their company.
+1. Configure Enterprise SSO for the Organization through the Clerk Dashboard.
+1. All subsequent users from that Organization can now sign in using Enterprise SSO.
+
+## Add an Enterprise SSO connection for an Organization
+
+Clerk supports Enterprise SSO via [SAML](/docs/guides/configure/auth-strategies/enterprise-connections/overview#saml) or via the [OpenID Connect (OIDC) protocol](/docs/guides/configure/auth-strategies/enterprise-connections/overview#oidc), either through EASIE or by integrating with any OIDC-compatible provider.
+
+To add an Enterprise SSO Connection for an Organization, go to the [Enterprise Connections](/docs/guides/configure/auth-strategies/enterprise-connections/overview) docs and follow the appropriate guide based on the platform you want to use, such as the [Google SAML guide](/docs/guides/configure/auth-strategies/enterprise-connections/saml/google). When configuring the connection in the Clerk Dashboard, there will be an option to select the **Organization** for which you want to enable this connection. If you don't select an Organization, Clerk will add the connection for your entire application.
+
+> [!WARNING]
+> A domain used for Enterprise SSO can't be used as a [Verified Domain](/docs/guides/organizations/add-members/verified-domains) for the same Organization.
+
+## Enforce Enterprise SSO by domain
+
+Clerk enforces Enterprise SSO connections on a per-domain basis in Organizations, enabling flexible access management:
+
+- Configure Enterprise SSO for your primary domain (e.g., `company.com`) to enforce Enterprise SSO authentication for employees.
+- Add additional domains without Enterprise SSO for external collaborators (e.g., contractors, consultants).
+- Each domain in an Organization can have different authentication requirements.
+
+## Remove a member from your Organization
+
+Users who joined through an Enterprise Connection cannot leave the Organization on their own. You can remove them through the Clerk Dashboard, the [Backend API](/docs/reference/backend-api/tag/organization-memberships/delete/organizations/\{organization_id}/memberships/\{user_id}){{ target: '_blank' }}, or by another member with the [manage members Permission](/docs/guides/organizations/control-access/roles-and-permissions#system-permissions) (`org:sys_memberships:manage`). However, the user will be added back to the Organization on next sign-in, unless they are removed from the IdP or the Enterprise Connection is no longer associated with the Organization.
+
+Removed users will automatically rejoin the Organization on their next sign-in unless you also remove them from the IdP or disconnect the Enterprise Connection.
+
+## Move an Enterprise Connection to a different Organization
+
+When you reassign an Enterprise Connection to a new Organization, existing members stay in the original Organization. They will automatically join the new Organization the next time they sign in.
+
+## Common SSO setup errors
+
+When setting up Enterprise SSO, you may encounter errors during the authentication flow. The type of error you see depends on which protocol your Enterprise Connection uses:
+
+- **SAML errors** occur when using SAML-based Enterprise Connections (e.g., Azure AD, Google Workspace, Okta). These errors typically relate to SAML assertion validation, attribute mapping, or domain configuration issues.
+- **OAuth errors** occur when using OAuth/OIDC-based Enterprise Connections (e.g., custom OIDC providers, EASIE). These errors typically relate to authorization flows, token exchange, or user information retrieval.
+
+The following sections describe common error codes and how to resolve them.
+
+### `saml_user_attribute_missing`
+
+You will encounter this error when the user's account is missing a required attribute, for example, a `mail` attribute.
+
+**How to fix it:**
+
+Access your identity provider's configuration dashboard, navigate to your application's SAML settings or attribute mapping configuration, and ensure that the 'mail' attribute is properly mapped to the user's email address field.
+
+### `saml_response_relaystate_missing`
+
+You will encounter this error when the `RelayState` parameter is missing from the SAML Response.
+
+**How to fix it:**
+
+Check that your identity provider is correctly returning the RelayState parameter that was sent in the original request.
+
+### `saml_email_address_domain_mismatch`
+
+You will encounter this error when the email address domain of the user's account does not match the domain configured for the connection.
+
+**How to fix it:**
+
+1. Verify that the user is signing in with an email address that matches one of the allowed domains for this connection.
+1. If you need to add additional domains to this connection, go to your Clerk Dashboard → SSO Connections → \[Your Connection] → Settings, and update the allowed domains.
+1. Alternatively, ensure the user is accessing the correct SAML connection that matches their email domain.
+
+### `oauth_access_denied`
+
+You will encounter this error when the user clicks "Cancel" or "Deny" on the OAuth provider's authorization screen, or when the provider rejects the authorization request.
+
+**How to fix it:**
+
+1. Ask the user to try signing in again and ensure they approve the authorization request.
+1. Verify in your Clerk Dashboard → SSO Connections that the OAuth application credentials (Client ID and Client Secret) are correctly configured.
+
+### `oauth_token_exchange_error`
+
+You will encounter this error when Clerk fails to exchange the authorization code for an access token.
+
+**How to fix it:**
+
+1. Verify in your Clerk Dashboard → SSO Connections that your OAuth application's Client ID and Client Secret are correctly configured and match the credentials from your OAuth provider's dashboard.
+1. Ensure that the Redirect URI configured in your OAuth provider matches exactly what Clerk expects (including the protocol, domain, and path).
+
+### `oauth_fetch_user_error`
+
+You will encounter this error when Clerk is unable to retrieve the user's profile information from the OAuth provider.
+
+**How to fix it:**
+
+1. Verify that the OAuth scopes configured in your Clerk Dashboard → SSO Connections include the necessary permissions to read user profile information.
+1. Ensure that the user info endpoint URL is correctly configured.
+
+## Next steps
+
+Now that you've set up Enterprise SSO, you can:
+
+- [Learn more about Enterprise Connections](/docs/guides/configure/auth-strategies/enterprise-connections/overview) for advanced configuration options
+- [Understand JIT provisioning](/docs/guides/configure/auth-strategies/enterprise-connections/jit-provisioning) to customize how users are automatically added to Organizations
+- [Configure Verified Domains](/docs/guides/organizations/add-members/verified-domains) for users who don't use SSO
+- [Invite specific users](/docs/guides/organizations/add-members/invitations) to your Organization
+- [Set up Roles and Permissions](/docs/guides/organizations/control-access/roles-and-permissions) to control what SSO users can access
+- [Configure default roles](/docs/guides/organizations/configure#default-roles) for users joining via SSO

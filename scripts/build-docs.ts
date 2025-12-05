@@ -204,6 +204,7 @@ async function main() {
         'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/vercel.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],

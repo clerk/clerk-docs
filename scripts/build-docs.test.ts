@@ -978,7 +978,7 @@ This is a normal document.`,
     })
   })
 
-  test.only('Should passthrough `topNav` property', async () => {
+  test('Should passthrough `topNav` property', async () => {
     const { tempDir, readFile } = await createTempFiles([
       {
         path: './docs/manifest.json',

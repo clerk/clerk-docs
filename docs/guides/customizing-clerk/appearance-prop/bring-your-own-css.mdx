@@ -1,0 +1,387 @@
+---
+title: Bring your own CSS
+description: Learn how to bring your own CSS to Clerk's prebuilt components.
+---
+
+Clerk supports multiple ways to bring your own CSS and styles to its prebuilt components. You can either style using the `appearance.elements` prop, or target Clerk's stable CSS classes directly in your stylesheet.
+
+## Apply the simple theme
+
+In some cases, customizing the default theme of Clerk's components may require complex overrides to achieve your desired styles. To simplify the process, Clerk offers a `simple` theme that removes advanced styling and provides a clean starting point for further customization. To use the `simple` theme, apply it using the `appearance.theme` prop.
+
+```tsx {{ mark: ['simple'] }}
+<ClerkProvider
+  appearance={{
+    theme: 'simple',
+  }}
+></ClerkProvider>
+```
+
+## Finding the elements to style
+
+If you want full control over the appearance of a Clerk component, you can target the underlying elements by using their CSS classes and then apply your own styles.
+
+First, you need to identify the underlying element of the Clerk component you want to style. You can do this by **inspecting** the HTML of the component.
+
+For example, if you want to style the primary button in a Clerk component, you can right-click on the primary button and select "Inspect" from the menu. This will open the browser's developer tools and highlight the element in the HTML, as shown in the following image:
+
+![The inspect element tab opened with an element selected. It shows a list of classes and a lock icon in between human-readable classnames and randomly generated ones](/docs/images/customization/identifying_elements.png)
+
+When you select an element that is part of a Clerk component, you'll notice a list of classes like so:
+
+```html
+cl-formButtonPrimary cl-button 🔒️ cl-internal-1ta0xpz
+```
+
+Any of the classes listed before the lock icon (🔒️) are safe to rely on, such as `cl-formButtonPrimary` or `cl-button` from the previous example. You'll use these classes to target elements of the Clerk component.
+
+> [!WARNING]
+> Anything after the lock icon (🔒️) are internal classes used for Clerk's internal styling and should not be modified.
+
+Once you have identified the classes of the element you want to target, you can apply your custom styles in your existing stylesheet, or via the `appearance.elements` prop.
+
+## Use a stylesheet
+
+You can style the elements of a Clerk component with CSS in your existing stylesheet.
+
+For this example, say you want to style the primary button in a Clerk component. You inspect the primary button to find the classes that you can use to target the element:
+
+```html
+cl-formButtonPrimary cl-button 🔒️ cl-internal-1ta0xpz
+```
+
+You can then create a CSS file, use the classes you identified to target the primary button, and apply your custom styles. In this case, `cl-formButtonPrimary` is the class you want to use because it's specific to the primary button:
+
+```css {{ filename: 'styles/global.css' }}
+.cl-formButtonPrimary {
+  font-size: 14px;
+  text-transform: none;
+  background-color: #611bbd;
+}
+
+.cl-formButtonPrimary:hover,
+.cl-formButtonPrimary:focus,
+.cl-formButtonPrimary:active {
+  background-color: #49247a;
+}
+```
+
+## Use custom CSS classes
+
+You can pass additional classes to Clerk component elements by using the `elements` property on the `appearance` prop.
+
+For example, an element in a Clerk component will have classes that look something like this:
+
+```html
+cl-formButtonPrimary cl-button 🔒️ cl-internal-1ta0xpz
+```
+
+Remove the `cl-` prefix from a class and use it as the key for a new object in the `elements` property. The value of this object should be the string of classes you want to apply to the element.
+
+The following example shows how to style the primary button in a `<SignIn />` component with custom CSS classes:
+
+<If notSdk={["vue", "nuxt"]}>
+  ```tsx {{ mark: [4] }}
+  <SignIn
+    appearance={{
+      elements: {
+        formButtonPrimary: 'your-org-button org-red-button',
+      },
+    }}
+  />
+  ```
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  ```vue {{ mark: [4, 10] }}
+  <script setup lang="ts">
+  const appearance = {
+    elements: {
+      formButtonPrimary: 'your-org-button org-red-button',
+    },
+  }
+  </script>
+
+  <template>
+    <SignIn :appearance="appearance" />
+  </template>
+  ```
+</If>
+
+## Use Tailwind
+
+To use Tailwind CSS v4, you must set the `cssLayerName` property to ensure that Tailwind's utility styles are applied after Clerk's styles.
+
+<If notSdk={["astro", "js-frontend", "vue", "nuxt"]}>
+  It's recommended to add this to the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) that wraps your app so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
+
+  Use the following tabs to view the code necessary for each file.
+
+  <CodeBlockTabs options={["layout.tsx", "global.css"]}>
+    ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+    <ClerkProvider
+      appearance={{
+        cssLayerName: 'clerk',
+      }}
+    >
+      {/* ... */}
+    </ClerkProvider>
+    ```
+
+    ```css {{ mark: ['clerk'] }}
+    @layer theme, base, clerk, components, utilities;
+    @import 'tailwindcss';
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk="astro">
+  It's recommended to add this to the [`clerk()`](/docs/reference/astro/overview) integration in your `astro.config.mjs` file so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
+
+  Use the following tabs to view the code necessary for each file.
+
+  <CodeBlockTabs options={["astro.config.mjs", "global.css"]}>
+    ```ts {{ mark: ["cssLayerName: 'clerk'"] }}
+    import { defineConfig } from 'astro/config'
+    import node from '@astrojs/node'
+    import clerk from '@clerk/astro'
+    import tailwind from '@tailwindcss/vite'
+
+    export default defineConfig({
+      integrations: [
+        clerk({
+          appearance: {
+            cssLayerName: 'clerk',
+          },
+        }),
+      ],
+      output: 'server',
+      adapter: node({
+        mode: 'standalone',
+      }),
+      vite: {
+        plugins: [tailwind()],
+      },
+    })
+    ```
+
+    ```css {{ mark: ['clerk'] }}
+    @layer theme, base, clerk, components, utilities;
+    @import 'tailwindcss';
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk="js-frontend">
+  It's recommended to add this to the [`clerk.load()`](/docs/reference/javascript/clerk#load) method so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
+
+  Use the following tabs to view the code necessary for each file.
+
+  <CodeBlockTabs options={["index.html", "global.css"]}>
+    ```html {{ mark: ["cssLayerName: 'clerk'"] }}
+    <script>
+      window.addEventListener('load', async function () {
+        await Clerk.load({
+          appearance: {
+            cssLayerName: 'clerk',
+          },
+        })
+      })
+    </script>
+    ```
+
+    ```css {{ mark: ['clerk'] }}
+    @layer theme, base, clerk, components, utilities;
+    @import 'tailwindcss';
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk="vue">
+  It's recommended to add this to the [`clerkPlugin()`](/docs/reference/vue/overview) integration so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
+
+  Use the following tabs to view the code necessary for each file.
+
+  <CodeBlockTabs options={["main.js", "global.css"]}>
+    ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+    import { createApp } from 'vue'
+    import './style.css'
+    import App from './App.vue'
+    import { clerkPlugin } from '@clerk/vue'
+
+    const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!PUBLISHABLE_KEY) {
+      throw new Error('Add your Clerk Publishable Key to the .env file')
+    }
+
+    const app = createApp(App)
+    app.use(clerkPlugin, {
+      appearance: {
+        cssLayerName: 'clerk',
+      },
+      publishableKey: PUBLISHABLE_KEY,
+    })
+    app.mount('#app')
+    ```
+
+    ```css {{ mark: ['clerk'] }}
+    @layer theme, base, clerk, components, utilities;
+    @import 'tailwindcss';
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk="nuxt">
+  It's recommended to add this to the [`defineNuxtConfig()`](/docs/reference/nuxt/clerk-middleware) integration in your `nuxt.config.mjs` file so that it's applied to all Clerk components, as shown in the following example. The example names the layer `clerk` but you can name it anything you want.
+
+  Use the following tabs to view the code necessary for each file.
+
+  <CodeBlockTabs options={["nuxt.config.ts", "global.css"]}>
+    ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+    export default defineNuxtConfig({
+      modules: ['@clerk/nuxt', '@nuxtjs/tailwindcss'],
+      css: ['@/assets/css/global.css'],
+      clerk: {
+        appearance: {
+          cssLayerName: 'clerk',
+        },
+      },
+    })
+    ```
+
+    ```css {{ mark: ['clerk'] }}
+    @layer theme, base, clerk, components, utilities;
+    @import 'tailwindcss';
+    ```
+  </CodeBlockTabs>
+</If>
+
+Then, you can use Tailwind's classes to style the elements of the Clerk component. The following example shows how to use Tailwind classes to style the primary button in a `<SignIn />` component:
+
+<If notSdk={["vue", "nuxt"]}>
+  ```tsx {{ mark: [4] }}
+  <SignIn
+    appearance={{
+      elements: {
+        formButtonPrimary: 'bg-slate-500 hover:bg-slate-400 text-sm',
+      },
+    }}
+  />
+  ```
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  ```vue {{ mark: [4, 10] }}
+  <script setup lang="ts">
+  const appearance = {
+    elements: {
+      formButtonPrimary: 'bg-slate-500 hover:bg-slate-400 text-sm',
+    },
+  }
+  </script>
+
+  <template>
+    <SignIn :appearance="appearance" />
+  </template>
+  ```
+</If>
+
+#### Use CSS modules to style Clerk components
+
+CSS modules are a great way to scope your CSS to a specific component.
+
+Create your module file and add the CSS you want to apply, as shown in the following example for the `<SignIn />` component:
+
+```css {{ filename: 'styles/SignIn.module.css' }}
+.primaryColor {
+  background-color: bisque;
+  color: black;
+}
+```
+
+Then you can apply this by importing the file and using the classes whenever required:
+
+<If notSdk={["vue", "nuxt"]}>
+  ```tsx {{ mark: [1, 8] }}
+  import styles from '../styles/SignIn.module.css'
+
+  export default function CustomSignIn() {
+    return (
+      <SignIn
+        appearance={{
+          elements: {
+            formButtonPrimary: styles.primaryColor,
+          },
+        }}
+      />
+    )
+  }
+  ```
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  ```vue {{ mark: [2, 6, 12] }}
+  <script setup lang="ts">
+  import styles from '../styles/SignIn.module.css'
+
+  const appearance = {
+    elements: {
+      formButtonPrimary: styles.primaryColor,
+    },
+  }
+  </script>
+
+  <template>
+    <SignIn :appearance="appearance" />
+  </template>
+  ```
+</If>
+
+## Use inline CSS objects
+
+You can style the elements of a Clerk component with inline CSS objects.
+
+The following example shows how to style the primary button in a `<SignIn />` component with an inline CSS object:
+
+<If notSdk={["vue", "nuxt"]}>
+  ```tsx {{ mark: [[4, 11]] }}
+  <SignIn
+    appearance={{
+      elements: {
+        formButtonPrimary: {
+          fontSize: 14,
+          textTransform: 'none',
+          backgroundColor: '#611BBD',
+          '&:hover, &:focus, &:active': {
+            backgroundColor: '#49247A',
+          },
+        },
+      },
+    }}
+  />
+  ```
+</If>
+
+<If sdk={["vue", "nuxt"]}>
+  ```vue {{ mark: [[4, 11], 17] }}
+  <script setup lang="ts">
+  const appearance = {
+    elements: {
+      formButtonPrimary: {
+        fontSize: '14px',
+        textTransform: 'none',
+        backgroundColor: '#611BBD',
+        '&:hover, &:focus, &:active': {
+          backgroundColor: '#49247A',
+        },
+      },
+    },
+  }
+  </script>
+
+  <template>
+    <SignIn :appearance="appearance" />
+  </template>
+  ```
+</If>

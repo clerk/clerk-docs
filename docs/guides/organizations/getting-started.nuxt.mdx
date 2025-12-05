@@ -1,0 +1,242 @@
+---
+title: Get started with Organizations and Nuxt
+description: Create and manage organizations in your Nuxt app in this guided tutorial.
+sdk: nuxt
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk + Nuxt application",
+      link: "/docs/nuxt/getting-started/quickstart",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+Organizations let you group users with Roles and Permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts. This tutorial will demonstrate how to add Organizations, create and switch Organizations, and protect routes by Organization and Roles.
+
+<Steps>
+  ## Add `<OrganizationSwitcher/>` to your Nuxt app
+
+  The `<OrganizationSwitcher />` component is the easiest way to let users create, switch between, and manage Organizations. It's recommended to place it in your app's header or navigation so it's always accessible to your users. For example:
+
+  ```vue {{ filename: 'app/layouts/default.vue' }}
+    <template>
+      <header>
+  +     <OrganizationSwitcher />
+        <SignedOut>
+          <SignInButton />
+        </SignedOut>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </header>
+
+      <main>
+        <NuxtPage />
+      </main>
+    </template>
+  ```
+
+  ## Access Organization data
+
+  <Tabs items={['Client-side', 'Server-side']}>
+    <Tab>
+      Use the [`useOrganization()`](/docs/nuxt/reference/composables/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useAuth()`](/docs/nuxt/reference/composables/use-auth) composable to access authentication information about the current user, such as their Role in the Active Organization.
+
+      ```vue {{ filename: 'app/pages/index.vue' }}
+      <script setup>
+      import { useAuth, useOrganization } from '@clerk/vue'
+
+      const { organization } = useOrganization()
+      const { orgRole } = useAuth()
+      </script>
+
+      <template>
+        <SignedIn>
+          <div class="p-8">
+            <h1 class="text-2xl font-bold mb-4">
+              Welcome to the <strong>{{ organization?.name }}</strong> Organization
+            </h1>
+            <p class="mb-6">
+              Your Role in this Organization:
+              <strong>{{ orgRole }}</strong>
+            </p>
+          </div>
+        </SignedIn>
+      </template>
+      ```
+    </Tab>
+
+    <Tab>
+      To access information about the currently [Active Organization](!active-organization) on the server-side, use `clerkClient()` to call the [`getOrganization()`](/docs/reference/backend/organization/get-organization) method, which returns the Backend [`Organization`](/docs/reference/backend/types/backend-organization) object. You'll need to pass an `orgId`, which you can access from the [`Auth`](/docs/reference/backend/types/auth-object) object.
+
+      ```ts {{ filename: 'server/api/organization.ts' }}
+      import { clerkClient } from '@clerk/nuxt/server'
+
+      export default defineEventHandler(async (event) => {
+        // Use `event.context.auth()` to access the `Auth` object
+        // https://clerk.com/docs/reference/backend/types/auth-object
+        const { isAuthenticated, orgId } = event.context.auth()
+
+        // Check if the user is authenticated
+        if (!isAuthenticated) {
+          throw createError({
+            statusCode: 401,
+            statusMessage: 'Unauthorized: No user ID provided',
+          })
+        }
+
+        // Check if there is an Active Organization
+        if (!orgId) {
+          throw createError({
+            statusCode: 404,
+            statusMessage: 'Set an Active Organization to access this page.',
+          })
+        }
+
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await clerkClient(event).organizations.getOrganization({
+          organizationId: orgId,
+        })
+
+        return organization
+      })
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Visit your app
+
+  Run your project with the following command:
+
+  ```npm
+  npm run dev
+  ```
+
+  Visit your app locally at [`localhost:3000`](http://localhost:3000).
+
+  ### Enable organizations
+
+  When prompted, select **Enable Organizations**.
+
+  ### Create first user and Organization
+
+  You must sign in to use Organizations. When prompted, select **Sign in to continue**. Then, authenticate to create your first user.
+
+  Since you selected disabled Personal Accounts when you enabled Organizations, every user must be in at least one Organization. [Clerk will prompt you](!choose-organization) to create an Organization for your user.
+
+  ## Create and switch Organizations
+
+  At this point, Clerk should have redirected you to a page with the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component. This component allows you to create, switch between, and manage Organizations.
+
+  1. Select the `<OrganizationSwitcher />` component, then **Create an organization**.
+  1. Enter `Acme Corp` as the Organization name.
+  1. Invite users to your Organization and select their Role.
+
+  ## Protect routes by Organization and Roles
+
+  You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
+
+  In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` Role, and users that are not in the `Acme Corp` Organization. It uses the [`has()`](/docs/reference/backend/types/auth-object#has) helper to perform the authorization check for the `org:admin` Role.
+
+  <Tabs items={['Client-side', 'Server-side']}>
+    <Tab>
+      ```vue {{ filename: 'app/pages/index.vue', collapsible: true }}
+      <script setup lang="ts">
+      // Composables are auto-imported from @clerk/nuxt
+      const { isSignedIn, has } = useAuth()
+      const { organization } = useOrganization()
+
+      const requiredOrgName = 'Acme Corp'
+      </script>
+
+      <template>
+        <!-- Check if the user is authenticated -->
+        <div v-if="!isSignedIn">
+          <p>You must be signed in to access this page.</p>
+        </div>
+
+        <!-- Check if there is an Active Organization -->
+        <div v-else-if="!organization">
+          <p>Set an Active Organization to access this page.</p>
+        </div>
+
+        <!-- Check if the user has the `org:admin` Role -->
+        <div v-else-if="!has?.({ role: 'org:admin' })">
+          <p>You must be an admin to access this page.</p>
+        </div>
+
+        <!-- Check if Organization name matches (e.g., "Acme Corp") -->
+        <div v-else-if="organization.name !== requiredOrgName">
+          <p>
+            This page is only accessible in the <strong>{{ requiredOrgName }}</strong> organization.
+            Switch to the <strong>{{ requiredOrgName }}</strong> organization to access this page.
+          </p>
+        </div>
+
+        <!-- Success: User is admin in Acme Corp -->
+        <div v-else>
+          <p>
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{{ organization.name }}</strong> organization.
+          </p>
+        </div>
+      </template>
+      ```
+    </Tab>
+
+    <Tab>
+      ```ts {{ filename: 'server/api/organization.ts' }}
+      import { clerkClient } from '@clerk/nuxt/server'
+
+      export default defineEventHandler(async (event) => {
+        const { isAuthenticated, orgId } = event.context.auth()
+        const requiredOrgName = 'Acme Corp'
+
+        // Check if the user is authenticated
+        if (!isAuthenticated) {
+          throw createError({
+            statusCode: 401,
+            statusMessage: 'Unauthorized: No user ID provided',
+          })
+        }
+
+        // Check if there is an Active Organization
+        if (!orgId) {
+          throw createError({
+            statusCode: 404,
+            statusMessage: 'Set an Active Organization to access this page.',
+          })
+        }
+
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await clerkClient(event).organizations.getOrganization({
+          organizationId: orgId,
+        })
+
+        // Check if Organization name matches (e.g., "Acme Corp")
+        if (organization.name !== requiredOrgName) {
+          throw createError({
+            statusCode: 403,
+            statusMessage: `This route is only accessible in the ${requiredOrgName} Organization.`,
+          })
+        }
+
+        return {
+          organization,
+        }
+      })
+      ```
+    </Tab>
+  </Tabs>
+
+  Navigate to [`localhost:3000/protected`](localhost:3000/protected). You should see a green message confirming you are an admin in `Acme Corp`. Use the `<OrganizationSwitcher/>` to switch Organizations or rename the Organization to show the red message.
+
+  Learn more about protecting routes and checking Organization Roles in the [authorization guide](/docs/guides/organizations/control-access/roles-and-permissions).
+
+  ## It's time to build your B2B SaaS!
+
+  <Include src="_partials/organization-get-started-next-steps" />
+</Steps>

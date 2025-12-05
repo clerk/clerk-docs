@@ -1,0 +1,253 @@
+---
+title: Get started with Organizations and React
+description: Create and manage organizations in your React app in this guided tutorial.
+sdk: react
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk + React application",
+      link: "/docs/react/getting-started/quickstart",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+Organizations let you group users with roles and permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts. This tutorial will demonstrate how to add Organizations, create and switch Organizations, and protect routes by Organization and Roles.
+
+<Steps>
+  ## Add `<OrganizationSwitcher/>` to your app
+
+  The `<OrganizationSwitcher />` component is the easiest way to let users create, switch between, and manage Organizations. It's recommended to place it in your app's header or navigation so it's always accessible to your users. For example:
+
+  ```tsx {{ filename: 'src/App.tsx' }}
+    import './App.css'
+    import {
+      SignedIn,
+      SignedOut,
+      SignInButton,
+      UserButton,
+  +   OrganizationSwitcher,
+    } from '@clerk/clerk-react'
+
+    function App() {
+      return (
+        <>
+          <header>
+  +         <OrganizationSwitcher />
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+        </>
+      )
+    }
+
+    export default App
+  ```
+
+  ## Access Organization data
+
+  Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+
+  ```tsx {{ filename: 'src/App.tsx' }}
+  import './App.css'
+  import {
+    SignedIn,
+    SignedOut,
+    SignInButton,
+    UserButton,
+    OrganizationSwitcher,
+    useOrganization,
+    useOrganizationList,
+  } from '@clerk/clerk-react'
+
+  function App() {
+    const { organization } = useOrganization()
+    const { userMemberships } = useOrganizationList({
+      userMemberships: true,
+    })
+
+    return (
+      <>
+        <header>
+          <OrganizationSwitcher />
+          <SignedOut>
+            <SignInButton />
+          </SignedOut>
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
+        </header>
+        <main className="p-8">
+          <SignedIn>
+            <div>
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> organization
+              </h1>
+              <p className="mb-6">
+                Your role in this organization:{' '}
+                <strong>
+                  {
+                    userMemberships?.data?.find(
+                      (membership) => membership.organization.id === organization?.id,
+                    )?.role
+                  }
+                </strong>
+              </p>
+            </div>
+          </SignedIn>
+        </main>
+      </>
+    )
+  }
+
+  export default App
+  ```
+
+  ## Visit your app
+
+  Run your project with the following command:
+
+  ```npm
+  npm run dev
+  ```
+
+  Visit your app locally at [`localhost:5173`](http://localhost:5173).
+
+  ### Enable Organizations
+
+  When prompted, select **Enable Organizations**.
+
+  ### Create first user and Organization
+
+  You must sign in to use Organizations. When prompted, select **Sign in to continue**. Then, authenticate to create your first user.
+
+  Since you selected disabled Personal Accounts when you enabled Organizations, every user must be in at least one Organization. [Clerk will prompt you](!choose-organization) to create an Organization for your user.
+
+  ## Create and switch Organizations
+
+  At this point, Clerk should have redirected you to a page with the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component. This component allows you to create, switch between, and manage Organizations.
+
+  1. Select the `<OrganizationSwitcher />` component, then **Create an organization**.
+  1. Enter `Acme Corp` as the Organization name.
+  1. Invite users to your Organization and select their Role.
+
+  ## Protect routes by Organization and Roles
+
+  You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
+
+  In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` Role, and users that are not in the `Acme Corp` Organization. It uses the [`has()`](/docs/reference/backend/types/auth-object#has) helper to perform the authorization check for the `org:admin` Role.
+
+  ```tsx {{ filename: 'src/Protected.tsx', collapsible: true }}
+  import { useAuth, useOrganization } from '@clerk/clerk-react'
+
+  export default function Protected() {
+    const { isSignedIn, has } = useAuth()
+    const { organization } = useOrganization()
+
+    // Check if the user is authenticated
+    if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+    // Check if there is an Active Organization
+    if (!organization) <p>Set an Active Organization to access this page.</p>
+
+    // Check if the user has the `org:admin` Role
+    if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+    // Check if Organization name matches (e.g. 'Acme Corp')
+    const requiredOrgName = 'Acme Corp'
+    if (organization.name !== requiredOrgName) {
+      return (
+        <>
+          <p>
+            This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
+            Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
+          </p>
+        </>
+      )
+    }
+
+    return (
+      <p>
+        You are currently signed in as an <strong>admin</strong> in the{' '}
+        <strong>{organization.name}</strong> Organization.
+      </p>
+    )
+  }
+  ```
+
+  Update your main `<App />` component to show the `<Protected />` component when you navigate to `/protected`.
+
+  ```tsx {{ filename: 'src/App.tsx', mark: [[31, 33]], collapsible: true }}
+  import './App.css'
+  import {
+    SignedIn,
+    SignedOut,
+    SignInButton,
+    UserButton,
+    OrganizationSwitcher,
+    useOrganization,
+    useOrganizationList,
+  } from '@clerk/clerk-react'
+  import Protected from './Protected'
+
+  function App() {
+    const { organization } = useOrganization()
+    const { userMemberships } = useOrganizationList({
+      userMemberships: true,
+    })
+
+    return (
+      <>
+        <header>
+          <OrganizationSwitcher />
+          <SignedOut>
+            <SignInButton />
+          </SignedOut>
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
+        </header>
+        <main className="p-8">
+          {window.location.pathname === '/protected' ? (
+            <Protected />
+          ) : (
+            <SignedIn>
+              <div>
+                <h1 className="text-2xl font-bold mb-4">
+                  Welcome to the <strong>{organization?.name}</strong> Organization
+                </h1>
+                <p className="mb-6">
+                  Your role in this Organization:{' '}
+                  <strong>
+                    {
+                      userMemberships?.data?.find(
+                        (membership) => membership.organization.id === organization?.id,
+                      )?.role
+                    }
+                  </strong>
+                </p>
+              </div>
+            </SignedIn>
+          )}
+        </main>
+      </>
+    )
+  }
+
+  export default App
+  ```
+
+  Navigate to [`localhost:5173/protected`](localhost:5173/protected). You should see a green message confirming you are an admin in `Acme Corp`. Use the `<OrganizationSwitcher/>` to switch Organizations or rename the Organization to show the red message.
+
+  Learn more about protecting routes and checking Organization Roles in the [authorization guide](/docs/guides/organizations/control-access/roles-and-permissions).
+
+  ## It's time to build your B2B SaaS!
+
+  <Include src="_partials/organization-get-started-next-steps" />
+</Steps>

@@ -1,0 +1,400 @@
+---
+title: Get started with Organizations and React Router
+description: Create and manage organizations in your React Router app in this guided tutorial.
+sdk: react-router
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk + React Router application",
+      link: "/docs/react-router/getting-started/quickstart",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+Organizations let you group users with Roles and Permissions, enabling you to build multi-tenant B2B apps like Slack (workspaces), Linear (teams), or Vercel (projects) where users can switch between different team contexts. This tutorial will demonstrate how to add Organizations, create and switch Organizations, and protect routes by Organization and Roles.
+
+<Steps>
+  ## Add `<OrganizationSwitcher/>` to your app
+
+  The `<OrganizationSwitcher />` component is the easiest way to let users create, switch between, and manage Organizations. It's recommended to place it in your app's header or navigation so it's always accessible to your users. For example:
+
+  ```tsx {{ filename: 'app/root.tsx', fold: [[11, 50], [71, 97]], collapsible: true }}
+    import {
+      ClerkProvider,
+      SignedIn,
+      SignedOut,
+      UserButton,
+      SignInButton,
+  +   OrganizationSwitcher,
+    } from '@clerk/react-router'
+    import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
+    import { clerkMiddleware, rootAuthLoader } from '@clerk/react-router/server'
+
+    import type { Route } from './+types/root'
+    import stylesheet from './app.css?url'
+
+    export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()]
+
+    export const loader = (args: Route.LoaderArgs) => rootAuthLoader(args)
+
+    export const links: Route.LinksFunction = () => [
+      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap',
+      },
+      { rel: 'stylesheet', href: stylesheet },
+    ]
+
+    export function Layout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <head>
+            <meta charSet="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <Meta />
+            <Links />
+          </head>
+          <body>
+            {children}
+            <ScrollRestoration />
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+
+    // Pull in the `loaderData` from the `rootAuthLoader()` function
+    export default function App({ loaderData }: Route.ComponentProps) {
+      return (
+        // Pass the `loaderData` to the `<ClerkProvider>` component
+        <ClerkProvider loaderData={loaderData}>
+          <header className="flex items-center justify-center py-8 px-4">
+  +         <OrganizationSwitcher />
+            {/* Show the sign-in button when the user is signed out */}
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            {/* Show the user button when the user is signed in */}
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <Outlet />
+        </ClerkProvider>
+      )
+    }
+
+    export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+      let message = 'Oops!'
+      let details = 'An unexpected error occurred.'
+      let stack: string | undefined
+
+      if (isRouteErrorResponse(error)) {
+        message = error.status === 404 ? '404' : 'Error'
+        details =
+          error.status === 404 ? 'The requested page could not be found.' : error.statusText || details
+      } else if (import.meta.env.DEV && error && error instanceof Error) {
+        details = error.message
+        stack = error.stack
+      }
+
+      return (
+        <main className="pt-16 p-4 container mx-auto">
+          <h1>{message}</h1>
+          <p>{details}</p>
+          {stack && (
+            <pre className="w-full p-4 overflow-x-auto">
+              <code>{stack}</code>
+            </pre>
+          )}
+        </main>
+      )
+    }
+  ```
+
+  ## Access Organization data
+
+  <Tabs items={['Client-side', 'Server-side']}>
+    <Tab>
+      Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+
+      ```tsx {{ filename: 'src/welcome/welcome.tsx' }}
+      import { useOrganization, useOrganizationList } from '@clerk/react-router'
+
+      export function Welcome() {
+        const { organization } = useOrganization()
+        const { userMemberships } = useOrganizationList({
+          userMemberships: true,
+        })
+
+        return (
+          <div className="p-8">
+            <h1 className="text-2xl font-bold mb-4">
+              Welcome to the <strong>{organization?.name}</strong> organization
+            </h1>
+            <p className="mb-6">
+              Your role in this organization:{' '}
+              <strong>
+                {
+                  userMemberships?.data?.find(
+                    (membership) => membership.organization.id === organization?.id,
+                  )?.role
+                }
+              </strong>
+            </p>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      To access information about the currently [Active Organization](!active-organization) on the server-side, use [`clerkClient()`](/docs/reference/react-router/overview#clerk-client) to call the [`getOrganization()`](/docs/reference/backend/organization/get-organization) method, which returns the Backend [`Organization`](/docs/reference/backend/types/backend-organization) object. You'll need to pass an `orgId`, which you can access from the [`Auth`](/docs/reference/backend/types/auth-object) object.
+
+      In the following example, the loader runs on the server before the `<Welcome />` component renders. This allows you to perform authentication checks before sending any data to the client, so all necessary data is available when the component is rendered.
+
+      ```tsx {{ filename: 'app/routes/home.tsx', collapsible: true }}
+      import { redirect } from 'react-router'
+      import { clerkClient, getAuth } from '@clerk/react-router/server'
+      import type { Organization } from '@clerk/backend'
+      import type { Route } from './+types/home'
+      import { Welcome } from '../welcome/welcome'
+
+      export function meta({}: Route.MetaArgs) {
+        return [
+          { title: 'New React Router App' },
+          { name: 'description', content: 'Welcome to React Router!' },
+        ]
+      }
+
+      export async function loader(args: Route.LoaderArgs) {
+        // Use the `getAuth()` helper to access the `Auth` object
+        // https://clerk.com/docs/reference/backend/types/auth-object
+        const { isAuthenticated, orgId, orgRole } = await getAuth(args)
+
+        // Check if the user is authenticated
+        if (!isAuthenticated) {
+          return redirect('/sign-in?redirect_url=' + args.request.url)
+        }
+
+        // Check if there is an Active Organization
+        if (!orgId) {
+          return { organization: null, orgRole: null, hasOrganization: false }
+        }
+
+        // Initialize the JS Backend SDK
+        // This varies depending on the SDK you're using
+        // https://clerk.com/docs/js-backend/getting-started/quickstart
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await clerkClient(args).organizations.getOrganization({
+          organizationId: orgId,
+        })
+
+        return { organization, orgRole }
+      }
+
+      export default function Home({ loaderData }: Route.ComponentProps) {
+        return (
+          <Welcome
+            loaderData={
+              loaderData as {
+                organization: Organization
+                orgRole: string | undefined
+                hasOrganization?: undefined
+              }
+            }
+          />
+        )
+      }
+      ```
+
+      Update the `<Welcome />` component to display information about the user's Active Organization.
+
+      ```tsx {{ filename: 'app/welcome/welcome.tsx' }}
+      type LoaderData = Awaited<ReturnType<typeof import('../routes/home').loader>>
+
+      interface WelcomeProps {
+        loaderData: LoaderData
+      }
+
+      export function Welcome({ loaderData }: WelcomeProps) {
+        if (!loaderData || loaderData instanceof Response) return null
+
+        return (
+          <div>
+            <h1>Welcome to the {loaderData.organization?.name} Organization</h1>
+            <p>Your role in this organization: {loaderData.orgRole}</p>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Visit your app
+
+  Run your project with the following command:
+
+  ```npm
+  npm run dev
+  ```
+
+  Visit your app locally at [`localhost:5173`](http://localhost:5173).
+
+  ### Enable Organizations
+
+  When prompted, select **Enable Organizations**.
+
+  ### Create first user and Organization
+
+  You must sign in to use Organizations. When prompted, select **Sign in to continue**. Then, authenticate to create your first user.
+
+  Since you selected disabled personal accounts when you enabled Organizations, every user must be in at least one Organization. [Clerk will prompt you](!choose-organization) to create an Organization for your user.
+
+  ## Create and switch Organizations
+
+  At this point, Clerk should have redirected you to a page with the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component. This component allows you to create, switch between, and manage Organizations.
+
+  1. Select the `<OrganizationSwitcher />` component, then **Create an organization**.
+  1. Enter `Acme Corp` as the Organization name.
+  1. Invite users to your Organization and select their Role.
+
+  ## Protect routes by Organization and Roles
+
+  You can protect content and even entire routes based on Organization membership, Roles, and Permissions by performing [authorization checks](!authorization-check).
+
+  In the following example, the page is protected from unauthenticated users, users that don't have the `org:admin` Role, and users that are not in the `Acme Corp` Organization. It uses the [`has()`](/docs/reference/backend/types/auth-object#has) helper to perform the authorization check for the `org:admin` Role.
+
+  <Tabs items={['Client-side', 'Server-side']}>
+    <Tab>
+      ```tsx {{ filename: 'app/routes/protected.tsx', collapsible: true }}
+      import type { Route } from './+types/protected'
+      import { useAuth, useOrganization } from '@clerk/react-router'
+
+      export function meta({}: Route.MetaArgs) {
+        return [
+          { title: 'Protected Page' },
+          { name: 'description', content: 'A protected page requiring admin access' },
+        ]
+      }
+
+      export default function Protected() {
+        const { isSignedIn, has } = useAuth()
+        const { organization } = useOrganization()
+
+        // Check if the user is authenticated
+        if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+        // Check if there is an Active Organization
+        if (!organization) return <p>Set an Active Organization to access this page.</p>
+
+        // Check if the user has the `org:admin` Role
+        if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+        // Check if Organization name matches (e.g., "Acme Corp")
+        const requiredOrgName = 'Acme Corp'
+        if (organization.name !== requiredOrgName)
+          return (
+            <p>
+              This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+              to the <strong>{requiredOrgName}</strong> Organization to access this page.
+            </p>
+          )
+
+        return (
+          <p>
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{organization.name}</strong> Organization.
+          </p>
+        )
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx {{ filename: 'app/routes/protected.tsx', collapsible: true }}
+      import { clerkClient, getAuth } from '@clerk/react-router/server'
+      import { redirect } from 'react-router'
+      import type { Route } from '../+types/protected'
+
+      export function meta({}: Route.MetaArgs) {
+        return [
+          { title: 'Protected Page' },
+          { name: 'description', content: 'A protected page requiring admin access' },
+        ]
+      }
+
+      export async function loader(args: Route.LoaderArgs) {
+        // Use the `getAuth()` helper to access the `Auth` object
+        // https://clerk.com/docs/reference/backend/types/auth-object
+        const { isAuthenticated, orgId, has } = await getAuth(args)
+
+        // Check if the user is authenticated
+        if (!isAuthenticated) {
+          return redirect('/sign-in?redirect_url=' + args.request.url)
+        }
+
+        // Check if there is an Active Organization
+        if (!orgId) return { error: 'Set an Active Organization to access this page.' }
+
+        // Check if the user has the `org:admin` Role
+        if (!has({ role: 'org:admin' })) return { error: 'You must be an admin to access this page.' }
+
+        // Initialize the JS Backend SDK
+        // This varies depending on the SDK you're using
+        // https://clerk.com/docs/js-backend/getting-started/quickstart
+        // Use the `getOrganization()` method to get the Backend `Organization` object
+        const organization = await clerkClient(args).organizations.getOrganization({
+          organizationId: orgId,
+        })
+
+        // Check if Organization name matches (e.g. 'Acme Corp')
+        const requiredOrgName = 'Acme Corp'
+        if (organization.name !== requiredOrgName)
+          return {
+            error: `This page is only accessible in the ${requiredOrgName} Organization. Switch to the ${requiredOrgName} Organization to access this page.`,
+          }
+
+        return { organization }
+      }
+
+      export default function Protected({ loaderData }: Route.ComponentProps) {
+        return (
+          <p>
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{loaderData?.organization?.name}</strong> Organization.
+          </p>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  Update your routes configuration to show the `<Protected />` component when you navigate to `/protected`.
+
+  ```tsx {{ filename: 'app/routes.ts', mark: [5] }}
+  import { type RouteConfig, index, route } from '@react-router/dev/routes'
+
+  export default [
+    index('routes/home.tsx'),
+    route('protected', 'routes/protected.tsx'),
+  ] satisfies RouteConfig
+  ```
+
+  Navigate to [`localhost:5173/protected`](localhost:5173/protected). You should see a green message confirming you are an admin in `Acme Corp`. Use the `<OrganizationSwitcher/>` to switch Organizations or rename the Organization to show the red message.
+
+  Learn more about protecting routes and checking Organization Roles in the [authorization guide](/docs/guides/organizations/control-access/roles-and-permissions).
+
+  ## It's time to build your B2B SaaS!
+
+  <Include src="_partials/organization-get-started-next-steps" />
+</Steps>

@@ -1,0 +1,100 @@
+---
+title: Verified Domains
+description: Build Organization-specific or tenant-isolated authentication flows that only authorized users with matching domains can join, using Verified Domains within Clerk Organizations.
+metadata:
+  title: Verified Domains within Clerk Organizations
+---
+
+Clerk's **Verified Domains** feature is useful for Organizations that want to restrict membership to users with specific email domains, and automatically invite or suggest users with that domain to join an Organization. For example, if the domain `@clerk.com` is verified, any user with an email address ending in `@clerk.com` can be automatically invited or be suggested to join an Organization with that domain. Clerk assigns users the [**Default** Role](/docs/guides/organizations/control-access/roles-and-permissions#the-default-role-for-members) set in the Organization settings page.
+
+A Verified Domain cannot be a disposable domain or common email provider. For example, you cannot create a Verified Domain for `@gmail.com`.
+
+> [!WARNING]
+> A Verified Domain can't be added if it's already in use for the [Organization's Enterprise SSO](/docs/guides/organizations/add-members/sso).
+
+The easiest way to add and verify domains, and manage all settings related to Verified Domains is to use Clerk's [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component.
+
+## When to use Verified Domains
+
+Verified Domains work well when you want to streamline enrollment for users with company email addresses. This approach fits scenarios where:
+
+- Company-wide rollouts need automatic or suggested membership.
+- Reducing onboarding friction for employees with approved email domains.
+- Enrollment can happen based on email domain without manual approval.
+
+If you need precise control over specific people and their Roles, use [invitations](/docs/guides/organizations/add-members/invitations). If customers require authentication through their Identity Provider, use [Enterprise SSO](/docs/guides/organizations/add-members/sso).
+
+## Enable Verified Domains
+
+Enabling Verified Domains applies to all Organizations and cannot currently be managed on a per-Organization basis.
+
+In order to enable this feature:
+
+1. In the Clerk Dashboard, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/~/organizations-settings) page.
+1. In the **Organization options** section, toggle on **Enable verified domains**.
+1. The following enrollment modes will appear that can be enabled for verified domains:
+
+   - [**Automatic invitation**](#automatic-invitations) - Clerk automatically invites users to join the Organization when they sign up and they can join anytime.
+   - [**Automatic suggestion**](#automatic-suggestions) - Users receive a suggestion to request to join, but must be approved by an admin before they are able to join the Organization.
+
+   When a user with the `org:sys_domains:manage` Permission has added and verified a domain, they can enable an enrollment mode. **Only one enrollment mode can be enabled for a Verified Domain at a time.**
+
+### Automatic invitations
+
+After sign-up, a user will receive an **invitation** for the Organization if their email's domain matches the Verified Domain. If your app uses the `<OrganizationSwitcher />` component, the user will see a notification on the component and also receive an email prompting them to accept the invitation.
+
+When they open the component, they will see a **Join** button next to the organization they were invited to. Selecting the button will accept the invitation and the user will instantly be added as a member of the Organization.
+
+### Automatic suggestions
+
+After sign-up, a user will receive a **suggestion** for the Organization if their email's domain matches the Verified Domain. If your app uses the `<OrganizationSwitcher />` component, the user will see a **Request to join** button next to the Organization. Selecting the button will send a [Membership Request](#membership-requests) to the Organization.
+
+### Membership Requests
+
+Membership Requests are requests from users who saw an Organization Suggestion and requested to join an Organization. Membership Requests are only available for Organizations that have the **Verified Domains** and **Automatic Suggestion** features enabled in both the Dashboard and for the specific domain.
+
+When a user sends an Organization Membership request, users with the `org:sys_memberships:manage` Permission (by default, admins) are notified through both:
+
+- A notification badge on the `<OrganizationSwitcher />` component.
+- An email alert.
+
+Regardless of how they are notified, membership requests can only be reviewed and managed through the `<OrganizationSwitcher />` component. Selecting the notification badge will open the Organization management page, where the request appears under `Members > Requests`. A request must be approved before the user is added to the Organization.
+
+## Add and verify domains
+
+Any user with the `org:sys_domains:manage` Permission can add and verify domains under an Organization. By default, admins have this Permission. To add and verify domains in the [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) component, select the **General** tab. There will be a **Verified domains** section.
+
+Domains can be verified through an email verification code sent to an email that matches the domain. If the user adding the domain already has a verified email using that domain in their account, Clerk will automatically verify the domain.
+
+An application instance may only have one Verified Domain of the same name, and an Organization may only have one domain of the same name (verified or unverified).
+
+You can create up to 10 domains per Organization to meet your needs. If you need more than 10 domains, [contact support](/contact/support){{ target: '_blank' }}.
+
+### Custom flow
+
+If Clerk's [`<OrganizationSwitcher />`](/docs/reference/components/organization/organization-switcher) does not meet your specific needs or if you require more control over the logic, you can use the Clerk API to add and verify a domain and update the domain's enrollment mode. Here's an example of how you can do this:
+
+```tsx
+const { organization, domains } = useOrganization()
+
+// create domain
+const domain = await organization.createDomain('example.com')
+
+// prepare email verification
+domain.prepareAffiliationVerification({ affiliationEmailAddress: 'foo@example.com' })
+
+// attempt email verification
+domain.attemptAffiliationVerification({ code: '123456' })
+
+// update domain enrollment mode
+domain.updateEnrollmentMode({ enrollmentMode: 'automatic_invitation' })
+```
+
+## Next steps
+
+Now that you've configured Verified Domains, you can:
+
+- [Set up Enterprise SSO](/docs/guides/organizations/add-members/sso) for centralized authentication through an Identity Provider
+- [Invite specific users](/docs/guides/organizations/add-members/invitations) who don't match your Verified Domain
+- [Set up Roles and Permissions](/docs/guides/organizations/control-access/roles-and-permissions) to control what auto-enrolled users can access
+- [Configure default Roles](/docs/guides/organizations/configure#default-roles) for users joining via Verified Domains

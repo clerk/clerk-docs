@@ -1,0 +1,178 @@
+---
+title: Sign in with Google
+description: Learn how to use Clerk to natively Sign in with Google in your Expo app.
+sdk: expo
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "A Clerk application is required.",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "A Google Developer account is required.",
+      link: "https://console.developers.google.com/",
+      icon: "user-circle",
+    },
+    {
+      title: "Follow the Expo quickstart",
+      link: "/docs/expo/getting-started/quickstart",
+      icon: "expo",
+    },
+  ]}
+/>
+
+This guide will teach you how to add native [Sign in with Google](https://support.google.com/accounts/answer/12849458?hl=en) to your Clerk Expo application. This is different from Google OAuth - if you want to use Google OAuth, see the [dedicated guide](/docs/guides/configure/auth-strategies/social-connections/google).
+
+To make the setup process easier, it's recommended to keep two browser tabs open - one for the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/sso-connections) and one for your [Google Cloud Console](https://console.cloud.google.com/).
+
+<Steps>
+  ## Enable Google as a social connection
+
+  <Include src="_partials/authentication/social-connections/enable-google-social-connection.mdx" />
+
+  ## Configure Google Cloud Console
+
+  Before you can use Google Sign-In in your app, you need to create OAuth 2.0 credentials in the Google Cloud Console.
+
+  ### Create a Google Cloud Project
+
+  1. Navigate to the [Google Cloud Console](https://console.cloud.google.com/).
+  1. Select an existing project or [create a new one](https://console.cloud.google.com/projectcreate). You'll be redirected to your project's **Dashboard** page.
+  1. Enable the [**Google+ API**](https://console.cloud.google.com/apis/library/plus.googleapis.com?project=expo-testing-480017) for your project.
+
+  ### Create OAuth 2.0 Credentials
+
+  You'll need to create **three sets of credentials**:
+
+  #### iOS Client ID
+
+  1. Navigate to **APIs & Services**. Then, select **Credentials**.
+  1. Next to **Credentials**, select **Create Credentials**. Then, select **OAuth client ID**. You might need to [configure your OAuth consent screen](https://support.google.com/cloud/answer/6158849#userconsent). Otherwise, you'll be redirected to the **Create OAuth client ID** page.
+  1. For the **Application type**, select **iOS**.
+  1. Add your iOS **Bundle ID**.
+  1. Select **Create**. A modal will open with your **Client ID**.
+  1. Copy ans save the **Client ID** - you'll need this for `EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID`.
+
+  #### Android Client ID
+
+  1. In the same project, create another client. Next to **Credentials**, select **Create Credentials**. Then, select **OAuth client ID**.
+  1. For the **Application type**, select **Android**.
+  1. Complete the required fields:
+     - **Package name**: Your package name is in your `app.json` or `app.config.ts`.
+     - **SHA-1 certificate fingerprint**: To get your SHA-1, run the following command in your terminal:
+
+       ```sh {{ filename: 'terminal' }}
+       $ keytool -keystore path-to-debug-or-production-keystore -list -v
+       ```
+
+       > [!NOTE]
+       > Replace `path-to-debug-or-production-keystore` with the path to your debug or production keystore. By default, the debug keystore is located in `~/.android/debug.keystore`. It may ask for a keystore password, which is `android`. **Please note that Java is required to run the `keytool` command.**
+  1. Select **Create**. A modal will open with your **Client ID**.
+  1. Copy and save the **Client ID** - you'll need this for `EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID`.
+
+  #### Web Client ID (for token verification)
+
+  1. In the same project, create another client. Next to **Credentials**, select **Create Credentials**. Then, select **OAuth client ID**.
+  1. For the **Application type**, select **Web application**.
+  1. Add a name (e.g., "Web client for token verification").
+  1. Under **Authorized redirect URIs**, select **Add URI** and paste the **Authorized Redirect URI** you saved from the Clerk Dashboard.
+  1. Select **Create**. A modal will open with your **Client ID** and **Client Secret**. Save these values somewhere secure. You'll need these for the following steps.
+
+  ## Set the Client ID and Client Secret in the Clerk Dashboard (from your web client)
+
+  <Include src="_partials/authentication/social-connections/set-client-id-secret" />
+
+  ## Add your iOS application to Clerk
+
+  Add your iOS application to the [**Native Applications**](https://dashboard.clerk.com/~/native-applications) page in the Clerk Dashboard. You will need your iOS app's **App ID Prefix** (Team ID) and **Bundle ID**.
+
+  ## Add your Android application to Clerk
+
+  Add your Android application to the [**Native Applications**](https://dashboard.clerk.com/~/native-applications) page in the Clerk Dashboard. You will need your Android app's **package name**.
+
+  ## Configure environment variables
+
+  Add the Google OAuth client IDs to your `.env` file:
+
+  ```bash {{ filename: '.env' }}
+  EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID=your-ios-client-id.apps.googleusercontent.com
+  EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID=your-android-client-id.apps.googleusercontent.com
+
+  # iOS only: URL scheme for Google Sign-In callback
+  # Format: com.googleusercontent.apps.{IOS_CLIENT_ID_PREFIX}
+  # IOS_CLIENT_ID_PREFIX is the part of your iOS Client ID before ".apps.googleusercontent.com"
+  EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME=com.googleusercontent.apps.your-ios-client-id
+  ```
+
+  ## Configure the Clerk Expo plugin (iOS only)
+
+  > [!NOTE]
+  > The `@clerk/clerk-expo` config plugin is **optional** and only required if you're using native Google Sign-In on iOS. It configures the URL scheme needed for Google's authentication callback. Android does not require this configuration.
+
+  Add the `@clerk/clerk-expo` plugin to your `app.json` or `app.config.ts`:
+
+  <CodeBlockTabs options={["app.json", "app.config.ts"]}>
+    ```json {{ filename: 'app.json' }}
+    {
+      "expo": {
+        "plugins": ["@clerk/clerk-expo"],
+        "extra": {
+          "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.your-ios-client-id"
+        }
+      }
+    }
+    ```
+
+    ```ts {{ filename: 'app.config.ts' }}
+    export default {
+      expo: {
+        plugins: ['@clerk/clerk-expo'],
+        extra: {
+          EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
+        },
+      },
+    }
+    ```
+  </CodeBlockTabs>
+
+  The plugin resolves the `EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME` value from either of the following:
+
+  1. An environment variable (recommended for EAS builds, configured in `eas.json`).
+  1. The `config.extra` field in your app config.
+
+  For EAS builds, add the environment variable to your build profile in `eas.json`:
+
+  ```json {{ filename: 'eas.json' }}
+  {
+    "build": {
+      "development": {
+        "env": {
+          "EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.your-ios-client-id"
+        }
+      }
+    }
+  }
+  ```
+
+  ## Build your authentication flow
+
+  <Include src="_partials/expo/use-sign-in-with-google-example" />
+
+  ## Create a native build
+
+  Create a native build with EAS Build or a local prebuild, since Google Authentication is not supported in Expo Go.
+
+  ```bash {{ filename: 'terminal' }}
+  # Using EAS Build
+  eas build --platform ios
+  eas build --platform android
+
+  # Or using local prebuild
+  npx expo prebuild && npx expo run:ios --device
+  npx expo prebuild && npx expo run:android --device
+  ```
+</Steps>

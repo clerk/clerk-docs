@@ -35,6 +35,7 @@ type BuildConfigOptions = {
     static: {
       inputPath: string
       outputPath: string
+      outputBloomFilterPath?: string
     }
     dynamic: {
       inputPath: string
@@ -139,6 +140,9 @@ export async function createConfig(config: BuildConfigOptions) {
             static: {
               inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
               outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+              outputBloomFilterPath: config.redirects.static.outputBloomFilterPath
+                ? resolve(path.join(tempDist, config.redirects.static.outputBloomFilterPath))
+                : undefined,
             },
             dynamic: {
               inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),

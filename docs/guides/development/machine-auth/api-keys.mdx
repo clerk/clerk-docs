@@ -7,18 +7,27 @@ description: Learn how to use Clerk's API keys feature to let your application's
 
 Clerk's API keys feature allows your application's users to create API keys that can delegate access to your application's API on their behalf. API keys are typically long-lived tokens associated with a user or organization that provide access to a set of API endpoints for third-party services.
 
-For example, if you're building an application like ChatGPT, you might want to allow developers on your platform to create API keys that grant them access to pull their recent chats. In this case, the API key would be scoped to a specific user and only allow access to that user's chats. API keys can also be scoped to organizations or have granular scopes like "can read chats but can't write new chats".
+For example, imagine you're building an application like ChatGPT and you want developers on your platform to retrieve their recent conversations. You could let them generate API keys that are tied to their individual user accounts, giving them access only to their own chats. In this case, the API key would be scoped to a specific user. API keys can also be scoped to organizations or have granular scopes, such as allowing a key to read chats but not create new ones.
 
 This guide demonstrates how to create API keys, list them, use them to authenticate requests, and revoke them when needed.
 
 > [!NOTE]
 > If you find that the use case being described does not fit what you are looking to accomplish with machine authentication, check out the [machine authentication overview](/docs/guides/development/machine-auth/overview) for more information on the different types of machine authentication that Clerk supports and what features are available for each type.
 
+## Pricing
+
+Before getting started, it's important to note that API keys will be a paid feature. They are currently free to use while in beta, but will be charged based on usage after the beta period comes to an end. The pricing will be as follows:
+
+- `$0.001` per key creation.
+- `$0.0001` per key verification.
+
+There will be usage stats and monitoring available in the Clerk Dashboard before the beta period comes to an end to make it easy to understand your usage and what you're being charged.
+
 ## Prerequisites
 
 Before you can use API keys in your application, you must enable them in the Clerk Dashboard:
 
-1. In the Clerk Dashboard, navigate to [**Configure > API keys**](https://dashboard.clerk.com/~/platform/api-keys).
+1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys) page. 
 1. Enable API keys for users, organizations, or both, depending on your use case.
 
 > [!NOTE]
@@ -26,11 +35,11 @@ Before you can use API keys in your application, you must enable them in the Cle
 
 ## Enabling your users to create API keys via Clerk's UI components
 
-Clerk provides UI components that you can drop into your application to support your users in generating and managing API keys. You can integrate these components into your application's interface, or create your own custom logic for API key management using the [backend SDK methods described below](#using-api-keys-via-clerks-sdks).
+Clerk provides UI components that you can drop into your application to support your users in generating and managing API keys. You can integrate these components into your application's interface, or create your own custom logic for API key management using [JS Backend SDK methods](#using-api-keys-via-clerks-sdks).
 
-If you are using Clerk's [`<UserProfile />`](/docs/reference/components/user/user-profile) component, or [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile) component, and you have enabled API keys in the Clerk Dashboard, you will automatically see an **API Keys** tab appear in the user or organization profile components. This tab will allow your users to create, list, and revoke API keys, without writing any additional custom code.
+If you're using Clerk's [`<UserProfile />`](/docs/reference/components/user/user-profile) or [`<OrganizationProfile />`](/docs/reference/components/organization/organization-profile) components and have enabled API keys in the Clerk Dashboard, an **API Keys** tab will automatically appear in those profile components. This tab will allow your users to create, view, and revoke API keys, without writing any additional custom code on your end.
 
-If you would like to prevent the API Keys tab from appearing in the user or organization profile components, you can pass a prop to the component to hide it as such:
+If you'd prefer to hide the **API Keys** tab in the user or organization profile components, you can do so by passing a prop to the component, as such:
 
 ```tsx
 <UserProfile apiKeysProps={{ hide: true }} />
@@ -44,10 +53,10 @@ If you would like to prevent the API Keys tab from appearing in the user or orga
 <UserButton userProfileProps={{ apiKeysProps: { hide: true } }} />
 ```
 
-It's also possible to render the [`<APIKeys />` component](/docs/reference/components/api-keys) directly if you'd like to embed the API key management UI directly into your application's user interface.
+It's also possible to render the [`<APIKeys />`](/docs/reference/components/api-keys) component directly if you want to embed the API key management UI within your own application's interface.
 
 > [!TIP]
-> Hiding the UI doesn't prevent users from creating API keys — they can still call Clerk's Frontend API directly. If you want to ensure only backend-issued API keys are valid, use the `scopes` or `claims` parameters (available only via the [Backend SDK](#creating-api-keys)) when creating keys. Your verification logic can then reject any keys missing the required scopes or claims, making user-created keys ineffective.
+> Hiding the UI doesn't prevent users from creating API keys - they can still generate them through Clerk's Frontend API. If you want to ensure only backend-issued API keys are valid, include the `scopes` or `claims` parameters when [creating your keys](#creating-api-keys). Your verification logic can then reject any keys missing the required scopes or claims, making user-generated keys unusable.
 
 ## Using API keys in requests
 
@@ -63,11 +72,11 @@ await fetch('https://your-api.com/users', {
 })
 ```
 
-On your backend, you can verify the API key using Clerk's SDKs. See the [verifying API keys guide](/docs/guides/development/verifying-api-keys) for framework-specific examples.
+On your backend, you can verify the API key using Clerk's SDKs. See the [verifying API keys](/docs/guides/development/verifying-api-keys) guide for framework-specific examples.
 
 ## Using API keys via Clerk's SDKs
 
-If you would like to create, list, and revoke API keys programmatically on the server side, you can use Clerk's backend SDKs. In this guide, we will use the [JavaScript Backend SDK](/docs/js-backend/getting-started/quickstart) to demonstrate usage, but please note that the API keys feature is available in all of Clerk's backend SDKs.
+If you would like to create, list, and revoke API keys programmatically on the server side, you can use Clerk's Backend SDKs. This guide uses the [JS Backend SDK](/docs/js-backend/getting-started/quickstart) to demonstrate usage, but **please note that the API keys feature is available in all of Clerk's Backend SDKs**.
 
 ### Creating API keys
 
@@ -109,16 +118,16 @@ The method returns an object containing the API key details, including the `secr
 
 #### Required parameters
 
-- `name` - A descriptive name for the API key (e.g., "Production API Key", "Development Key")
-- `subject` - The user ID (`user_xxx`) or organization ID (`org_xxx`) to associate the API key with
+- `name` - A descriptive name for the API key (e.g., "Production API Key", "Development Key").
+- `subject` - The user ID (`user_xxx`) or organization ID (`org_xxx`) to associate the API key with.
 
 #### Optional parameters
 
-- `description` - A longer description of what the API key is used for
-- `scopes` - An array of scope strings that define what the API key can access
-- `claims` - A JavaScript object that can be used to store additional information about the API key
-- `createdBy` - The user ID of the user creating the API key (for audit purposes)
-- `secondsUntilExpiration` - The number of seconds until the API key will expire. By default, the API key will not expire. API keys are typically long-lived tokens that don't expire, as expiring API keys would cause third-party services using them to break unexpectedly. Instead, API keys can be instantly revoked if there's a security issue, which is possible because they use opaque tokens rather than JWTs.
+- `description` - A longer description of what the API key is used for.
+- `scopes` - An array of scope strings that define what the API key can access.
+- `claims` - A JavaScript object that can be used to store additional information about the API key.
+- `createdBy` - The user ID of the user creating the API key (for audit purposes).
+- `secondsUntilExpiration` - The number of seconds until the API key expires. By default, API keys never expire. They are typically long-lived tokens since automatic expiration could cause third-party services using them to break unexpectedly. Instead, API keys can be instantly revoked if there is a security issue - this is possible because they are opaque tokens rather than [JSON Web Tokens (JWTs)](https://en.wikipedia.org/wiki/JSON_Web_Token).
 
 ### Listing API keys
 
@@ -155,7 +164,7 @@ The method returns a paginated response with API key objects (without secrets):
 
 ### Verifying API keys
 
-To verify an API key secret, you can use the [`verify()`](/docs/reference/backend/api-keys/verify) method:
+To verify an API key secret, call the [`verify()`](/docs/reference/backend/api-keys/verify) method:
 
 ```ts
 const apiKey = await clerkClient.apiKeys.verify(secret)
@@ -184,6 +193,9 @@ try {
 
 ### Revoking API keys
 
+> [!IMPORTANT]
+> When you revoke an API key, it is immediately invalidated. Any requests using that API key will be rejected. Make sure to notify users or update your systems before revoking API keys that are in active use.
+
 To revoke an API key, call the [`revoke()`](/docs/reference/backend/api-keys/revoke) method:
 
 ```ts
@@ -194,15 +206,3 @@ await clerkClient.apiKeys.revoke({
 ```
 
 This will revoke the API key and prevent it from being used to authenticate any future requests. The API key will remain in your list but will be marked as revoked.
-
-> [!IMPORTANT]
-> When you revoke an API key, it is immediately invalidated. Any requests using that API key will be rejected. Make sure to notify users or update your systems before revoking API keys that are in active use.
-
-## Pricing
-
-API keys are **free to use during the beta period**. After general availability, they'll move to a simple usage-based pricing model:
-
-- `$0.001` per key creation
-- `$0.0001` per key verification
-
-Billing isn't live yet — we'll provide at least **30 days' notice** before billing begins. We'll also provide usage stats and monitoring in the Dashboard before then, so you'll have complete visibility over your usage and costs.

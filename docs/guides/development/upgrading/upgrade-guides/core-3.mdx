@@ -29,21 +29,24 @@ Core 3 brings several breaking code changes. We expect upgrades to take less tha
 
     <Tabs items={['npm', 'pnpm', 'yarn']}>
       <Tab>
-        ```bash
-        npx @clerk/upgrade@latest
-        ```
+
+```bash
+npx @clerk/upgrade@latest
+```
       </Tab>
 
       <Tab>
-        ```bash
-        pnpm dlx @clerk/upgrade@latest
-        ```
+
+```bash
+pnpm dlx @clerk/upgrade@latest
+```
       </Tab>
 
       <Tab>
-        ```bash
-        yarn dlx @clerk/upgrade@latest
-        ```
+
+```bash
+yarn dlx @clerk/upgrade@latest
+```
       </Tab>
     </Tabs>
 
@@ -55,65 +58,334 @@ Core 3 brings several breaking code changes. We expect upgrades to take less tha
 
     <Tabs items={['npm', 'pnpm', 'yarn']}>
       <Tab>
-        ```bash
-        npm install @clerk/nextjs@latest
-        ```
+
+```bash
+npm install @clerk/nextjs@latest
+```
       </Tab>
 
       <Tab>
-        ```bash
-        pnpm add @clerk/nextjs@latest
-        ```
+
+```bash
+pnpm add @clerk/nextjs@latest
+```
       </Tab>
 
       <Tab>
-        ```bash
-        yarn add @clerk/nextjs@latest
-        ```
+
+```bash
+yarn add @clerk/nextjs@latest
+```
       </Tab>
     </Tabs>
 
     #### Breaking changes
 
-    **Authorization components**
+    ##### `appearance.layout` renamed to `appearance.options`
 
-    - `<Protect>`, `<SignedIn>`, and `<SignedOut>` have been removed. Use `<Show when={...}>` instead.
-    - `<Show>` works in both Client and Server Components. For sign-in state, use `when="signedIn"` / `when="signedOut"`.
+    The `appearance.layout` property has been renamed to `appearance.options`. Update all instances in your codebase:
 
-    Example migration:
-
-    ```tsx
-    'use client'
-
-    import { Show } from '@clerk/nextjs'
-
-    export default function DashboardGate({ children }) {
-      return (
-        <Show fallback={<p>Unauthorized</p>} when={{ role: 'org:admin' }}>
-          {children}
-        </Show>
-      )
+```diff
+<ClerkProvider
+  appearance={{
+-   layout: {
++   options: {
+      socialButtonsPlacement: 'bottom',
+      socialButtonsVariant: 'iconButton',
     }
-    ```
+  }}
+>
+```
 
-    For server-side enforcement (for example, in Server Components, Route Handlers, Server Actions, and Middleware), use `auth().protect()` or `clerkMiddleware()`.
+    ##### `useCheckout` and `Clerk.checkout()` return value changed
 
-    **Middleware encryption key**
+    The return values of the `useCheckout` hook and `Clerk.checkout()` have been updated.
 
-    When you pass `secretKey` to `clerkMiddleware` at runtime you must also provide `CLERK_ENCRYPTION_KEY` in the environment. Missing keys now throw an error during startup.
+    ###### React Hook
 
-    **Removed deprecated props and helpers**
+```diff
+- const { id, plan, status, start, confirm, paymentSource } = useCheckout({ planId: "xxx", planPeriod: "annual" });
++ const { checkout, errors, fetchStatus } = useCheckout({ planId: "xxx", planPeriod: "annual" });
++ // Access properties via checkout object
++ checkout.plan
++ checkout.status
++ checkout.start()
++ checkout.confirm()
+```
 
-    Core 3 removes the redirect and UI props that were deprecated in Core 2:
+    ###### Vanilla JS
 
-    - `afterSignInUrl`, `afterSignUpUrl`, and `redirectUrl` props are removed. Use the Core 2 redirect options (for example `signInFallbackRedirectUrl` or `signInForceRedirectUrl`) or handle redirects in Middleware.
-    - `UserButton` sign-out override props are removed. Use the redirect options instead.
-    - Organization `hideSlug` flags and `OrganizationSwitcher` `afterSwitchOrganizationUrl` are removed; rely on the default UI or navigate in an `onOrganizationSwitched` handler.
-    - `Client.activeSessions`, `setActive({ beforeEmit })`, and the `ClerkMiddlewareAuthObject` type alias are no longer exported.
+```diff
+- const { getState, subscribe, confirm, start, clear, finalize } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
+- getState().isStarting
+- getState().checkout
++ const { checkout, errors, fetchStatus } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
++ checkout.plan
++ checkout.status
++ checkout.start()
++ checkout.confirm()
+```
 
-    **Internal API prefix changes**
+    ##### `@clerk/clerk-react` renamed to `@clerk/react`
 
-    Experimental and unstable APIs were renamed for consistency. For Next.js, rename `__unstable_invokeMiddlewareOnAuthStateChange` to `__internal_invokeMiddlewareOnAuthStateChange`. Other `__unstable*` and `experimental*` exports in `@clerk/*` packages now use the `__internal` or `__experimental` prefixes.
+    The `@clerk/clerk-react` package has been renamed to `@clerk/react`.
+
+    Update your imports:
+
+```diff
+- import { ClerkProvider, useUser } from '@clerk/clerk-react';
++ import { ClerkProvider, useUser } from '@clerk/react';
+```
+
+    And update your package.json:
+
+```diff
+- "@clerk/clerk-react": "^5.0.0",
++ "@clerk/react": "^7.0.0",
+```
+
+    ##### `colorRing` and `colorModalBackdrop` now render at full opacity
+
+    The `colorRing` and `colorModalBackdrop` CSS variables now render at full opacity when modified via the appearance prop or CSS variables. Previously, provided colors were rendered at 15% opacity.
+
+    If you were relying on the previous behavior, you may need to adjust your color values to include the desired opacity:
+
+```diff
+appearance={{
+  variables: {
+-   colorRing: '#6366f1',
++   colorRing: 'rgba(99, 102, 241, 0.15)',
+  }
+}}
+```
+
+    ##### Experimental method prefix standardized to `__experimental_`
+
+    All experimental methods now use the `__experimental_` prefix consistently. Update any references:
+
+```diff
+- experimental__someMethod
++ __experimental_someMethod
+
+- experimental_someMethod
++ __experimental_someMethod
+```
+
+    ##### UI themes moved to `@clerk/ui/themes/experimental`
+
+    The `createTheme` theme utility has been moved to a new export path. Update your imports:
+
+```diff
+- import { __experimental_createTheme } from '@clerk/ui';
++ import { createTheme } from '@clerk/ui/themes/experimental';
+```
+
+    Note: The `__experimental_` prefix has been removed from the method since they're now in the `/themes/experimental` subpath.
+
+    ##### `__unstable_*` methods renamed to `__internal_*`
+
+    All `__unstable_*` methods have been renamed to `__internal_*`. These are internal APIs not intended for public use.
+
+    ###### @clerk/clerk-js
+
+    - `__unstable__environment` → `__internal_environment`
+    - `__unstable__updateProps` → `__internal_updateProps`
+    - `__unstable__setEnvironment` → `__internal_setEnvironment`
+    - `__unstable__onBeforeRequest` → `__internal_onBeforeRequest`
+    - `__unstable__onAfterResponse` → `__internal_onAfterResponse`
+    - `__unstable__onBeforeSetActive` → `__internal_onBeforeSetActive`
+    - `__unstable__onAfterSetActive` → `__internal_onAfterSetActive`
+
+    ###### @clerk/nextjs
+
+    - `__unstable_invokeMiddlewareOnAuthStateChange` → `__internal_invokeMiddlewareOnAuthStateChange`
+
+    ###### @clerk/chrome-extension
+
+    - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
+
+    #### Deprecation removals
+
+    ##### `afterSwitchOrganizationUrl` removed from `OrganizationSwitcher`
+
+    The `afterSwitchOrganizationUrl` prop has been removed from `OrganizationSwitcher`. Use `afterSelectOrganizationUrl` instead:
+
+```diff
+<OrganizationSwitcher
+- afterSwitchOrganizationUrl="/org-dashboard"
++ afterSelectOrganizationUrl="/org-dashboard"
+/>
+```
+
+    ##### Unstable billing props removed
+
+    The following unstable properties have been removed. If you were relying on these, please reach out to support.
+
+    - `__unstable_manageBillingUrl`
+    - `__unstable_manageBillingLabel`
+    - `__unstable_manageBillingMembersLimit`
+
+    ##### `Client.activeSessions` removed
+
+    The `activeSessions` property has been removed from the `Client` object. Use `sessions` instead:
+
+```diff
+- const sessions = client.activeSessions;
++ const sessions = client.sessions;
+```
+
+    ##### Legacy redirect props removed
+
+    The legacy redirect props `afterSignInUrl`, `afterSignUpUrl`, and `redirectUrl` have been removed from components. Use the newer redirect options:
+
+```diff
+<SignIn
+- afterSignInUrl="/dashboard"
+- afterSignUpUrl="/onboarding"
++ fallbackRedirectUrl="/dashboard"
++ signUpFallbackRedirectUrl="/onboarding"
+/>
+```
+
+    For forced redirects that ignore the `redirect_url` query parameter:
+
+```diff
+<SignIn
++ forceRedirectUrl="/dashboard"
++ signUpForceRedirectUrl="/onboarding"
+/>
+```
+
+    ##### `hideSlug` prop removed
+
+    The `hideSlug` prop has been removed. Organization slugs are now managed through the Clerk Dashboard under Organization Settings.
+
+```diff
+<OrganizationProfile
+- hideSlug={true}
+/>
+```
+
+    To hide organization slugs, update your settings in the Clerk Dashboard → Organization Settings → Slug.
+
+    ##### `samlAccount` renamed to `enterpriseAccount`
+
+    The `samlAccount` property has been renamed to `enterpriseAccount`. Update your code:
+
+```diff
+- user.samlAccounts
++ user.enterpriseAccounts
+
+- verification.samlAccount
++ verification.enterpriseAccount
+```
+
+    ##### `saml` strategy renamed to `enterprise_sso`
+
+    The `saml` authentication strategy has been renamed to `enterprise_sso`. Update any references in your code:
+
+```diff
+- strategy: 'saml'
++ strategy: 'enterprise_sso'
+```
+
+    ##### `setActive({ beforeEmit })` changed to `setActive({ navigate })`
+
+    The `beforeEmit` callback in `setActive()` has been replaced with `navigate`. The callback signature has also changed:
+
+```diff
+await setActive({
+  session: sessionId,
+- beforeEmit: () => {
+-   // Called before session is set
+- }
++ navigate: ({ session }) => {
++   // Called with the session object
++   return '/dashboard';
++ }
+});
+```
+
+    The `navigate` callback receives an object with the `session` property and should return the URL to navigate to.
+
+    ##### `UserSettings.saml` renamed to `enterpriseSSO`
+
+    The `saml` property on `UserSettings` has been renamed to `enterpriseSSO`:
+
+```diff
+- userSettings.saml
++ userSettings.enterpriseSSO
+```
+
+##### `UserButton` sign-out redirect props removed
+
+The `UserButton` component no longer accepts sign-out redirect override props. Configure sign-out redirects using one of these methods:
+
+**Global configuration:**
+
+```jsx
+<ClerkProvider afterSignOutUrl="/signed-out">
+```
+
+**Per-button with SignOutButton:**
+
+```jsx
+<SignOutButton redirectUrl='/goodbye'>Sign Out</SignOutButton>
+```
+
+**Programmatic:**
+
+```js
+clerk.signOut({ redirectUrl: '/signed-out' });
+```
+
+#### Deprecations
+
+##### `@clerk/types` deprecated in favor of `@clerk/shared/types`
+
+The `@clerk/types` package is deprecated. All type definitions have been consolidated into `@clerk/shared/types`.
+
+Update your imports:
+
+```diff
+- import type { ClerkResource, UserResource } from '@clerk/types';
++ import type { ClerkResource, UserResource } from '@clerk/shared/types';
+```
+
+The `@clerk/types` package will continue to re-export types from `@clerk/shared/types` for backward compatibility, but new types will only be added to `@clerk/shared/types`.
+
+#### Version
+
+##### Upgrade Node.js to v20.9.0 or higher
+
+All Clerk packages now require Node.js 20.9.0 or later. Update your Node.js version and ensure your `package.json` engines field reflects this requirement.
+
+```diff
+{
+  "engines": {
+-   "node": ">=18.0.0"
++   "node": ">=20.9.0"
+  }
+}
+```
+
+#### Behavior change
+
+##### `showOptionalFields` now defaults to `false`
+
+The default value of `appearance.layout.showOptionalFields` (now `appearance.options.showOptionalFields`) has changed from `true` to `false`. Optional fields are now hidden by default during sign up.
+
+To restore the previous behavior, explicitly set the option:
+
+```jsx
+<ClerkProvider
+  appearance={{
+    options: {
+      showOptionalFields: true,
+    }
+  }}
+>
+```
   </Tab>
 </Tabs>
 

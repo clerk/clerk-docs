@@ -118,7 +118,7 @@ Before returning any Clerk + React (Vite) solution, you **must** verify:
 
 When asked about Clerk + React (Vite) integration, your response **MUST**:
 
-1. Link to Clerk's React Quickstart at https://clerk.com/docs/quickstarts/react
+1. Link to Clerk's React Quickstart at https://clerk.com/docs/react/getting-started/quickstart
 2. Show the current recommended `publishableKey` approach with `.env.local`.
 3. Demonstrate how to wrap with `<ClerkProvider>` in `main.*`.
 4. Illustrate a simple usage example of `<SignedIn>`, `<SignedOut>`, etc.

@@ -805,7 +805,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
-          collapse: group.collapse,
+          topNav: group.topNav,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,

@@ -6,7 +6,7 @@ sdk: nextjs
 
 Onboarding is a crucial part of many authentication flows. Sometimes you need to make sure certain criteria is met and collected before allowing access to parts of your application. With Clerk, you can leverage customizable session tokens, public metadata, and Middleware to create a custom onboarding experience.
 
-This guide demonstrates how to create a custom onboarding flow that requires users to complete a form before they can access the application. After a user authenticates using the [Account Portal](/docs/guides/customizing-clerk/account-portal), the user is prompted to fill out a form with an application name and type. Once the user has completed the form, they are redirected to the application's homepage.
+This guide demonstrates how to create a custom onboarding flow that requires users to complete a form before they can access the application. After a user authenticates using the [Account Portal](/docs/guides/account-portal/overview), the user is prompted to fill out a form with an application name and type. Once the user has completed the form, they are redirected to the application's homepage.
 
 In this guide, you will learn how to:
 
@@ -27,7 +27,7 @@ For this guide, you will use an `onboardingComplete` property in the user's publ
 
 To edit the session token:
 
-1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/last-active?path=sessions) page.
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
 1. Under **Customize session token**, in the **Claims** editor, add any claim you need to your session token. For this guide, add the following:
 
    ```json
@@ -66,7 +66,9 @@ The following example demonstrates how to use `clerkMiddleware()` to redirect us
 
 Note that the following example protects all routes except one. This is so that any user visiting your application is forced to authenticate, and then forced to onboard. You can customize the array in the `createRouteMatcher()` function assigned to `isPublicRoute` to include any routes that should be accessible to all users, even unauthenticated ones.
 
-```tsx {{ filename: 'src/middleware.ts' }}
+<Include src="_partials/nextjs/nextjs-15-callout" />
+
+```tsx {{ filename: 'src/proxy.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -150,6 +152,13 @@ To collect the user's onboarding information, create a form that will be display
 1. In your `/onboarding` directory, create a `page.tsx` file.
 1. Add the following code to the file.
 
+> [!QUIZ]
+> Why is `user.reload()` called in this form?
+>
+> ---
+>
+> You configured your app to track the user's onboarding status in their public metadata, which you stored as a session claim in the session token. When user data (such as metadata) is updated through the Clerk Backend API or a server action, the client may temporarily display stale values because the session token only refreshes automatically every \~60 seconds. This form calls `user.reload()` to force a token refresh so the client gets the updated information immediately instead of waiting for the next automatic refresh cycle. [Learn more about forcing a token refresh](/docs/guides/sessions/force-token-refresh#user-reload).
+
 ```tsx
 'use client'
 
@@ -166,7 +175,7 @@ export default function OnboardingComponent() {
   const handleSubmit = async (formData: FormData) => {
     const res = await completeOnboarding(formData)
     if (res?.message) {
-      // Reloads the user's data from the Clerk API
+      // Forces a token refresh and refreshes the `User` object
       await user?.reload()
       router.push('/')
     }

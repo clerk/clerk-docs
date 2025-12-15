@@ -1,10 +1,12 @@
 ---
-title: Read session and user data in your Next.js app with Clerk
-description: Learn how to use Clerk's hooks and helpers to access the active session and user data in your Next.js application.
+title: Protect content and read user data
+description: Learn how to use Clerk's hooks and helpers to protect content and read user data in your Next.js application.
+metadata:
+  title: Read session and user data in your Next.js app with Clerk
 sdk: nextjs
 ---
 
-Clerk provides a set of [hooks and helpers](/docs/reference/nextjs/overview#client-side-helpers) that you can use to access the active session and user data in your Next.js application. Here are examples of how to use these helpers in both the client and server-side to get you started.
+Clerk provides a set of [hooks and helpers](/docs/reference/nextjs/overview#client-side-helpers) that you can use to protect content and read user data in your Next.js application. Here are examples of how to use these helpers in both the client and server-side to get you started.
 
 ## Server-side
 
@@ -17,7 +19,7 @@ Clerk provides a set of [hooks and helpers](/docs/reference/nextjs/overview#clie
 
 The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth) helper to validate an authenticated user and the `currentUser()` helper to access the `Backend User` object for the authenticated user.
 
-> [!NOTE]
+> [!TIP]
 > Any requests from a Client Component to a Route Handler will read the session from cookies and will not need the token sent as a Bearer token.
 
 <Tabs items={["Server components and actions", "Route Handler"]}>
@@ -34,7 +36,7 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
         return <div>Sign in to view this page</div>
       }
 
-      // Get the Backend API User object when you need access to the user's information
+      // Get the Backend User object when you need access to the user's information
       const user = await currentUser()
 
       // Use `user` to render user details or create UI elements
@@ -44,6 +46,9 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
   </Tab>
 
   <Tab>
+    > [!WARNING]
+    > The [`Backend User`](/docs/reference/backend/types/backend-user) object includes a `privateMetadata` field that should not be exposed to the frontend. Avoid passing the full user object returned by `currentUser()` to the frontend. Instead, pass only the specified fields you need.
+
     ```tsx {{ filename: 'app/api/user/route.ts' }}
     import { NextResponse } from 'next/server'
     import { currentUser, auth } from '@clerk/nextjs/server'
@@ -57,12 +62,15 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
         return new NextResponse('Unauthorized', { status: 401 })
       }
 
-      // Use `currentUser()` to get the Backend API User object
+      // Use `currentUser()` to get the Backend User object
       const user = await currentUser()
 
       // Add your Route Handler's logic with the returned `user` object
 
-      return NextResponse.json({ user: user }, { status: 200 })
+      return NextResponse.json(
+        { userId: user.id, email: user.emailAddresses[0].emailAddress },
+        { status: 200 },
+      )
     }
     ```
   </Tab>
@@ -70,13 +78,13 @@ The following example uses the [`auth()`](/docs/reference/nextjs/app-router/auth
 
 ### Pages Router
 
-For Next.js applications using the Pages Router, the [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) helper will return the [`Auth`](/docs/reference/backend/types/auth-object) object of the currently active user, which contains important information like the current user's session ID, user ID, and organization ID, as well as the `isAuthenticated` property which can be used to protect your API routes.
+For Next.js applications using the Pages Router, the [`getAuth()`](/docs/reference/nextjs/pages-router/get-auth) helper will return the [`Auth`](/docs/reference/backend/types/auth-object) object of the currently active user, which contains important information like the current user's session ID, user ID, and Organization ID, as well as the `isAuthenticated` property which can be used to protect your API routes.
 
 In some cases, you may need the full [`Backend User`](/docs/reference/backend/types/backend-user) object of the currently active user. This is helpful if you want to render information, like their first and last name, directly from the server.
 
-The `clerkClient()` helper returns an instance of the [JS Backend SDK](/docs/js-backend/getting-started/quickstart), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object.
+The `clerkClient()` helper returns an instance of the [JS Backend SDK](/docs/js-backend/getting-started/quickstart), which exposes Clerk's Backend API resources through methods such as the [`getUser()`](/docs/reference/backend/user/get-user){{ target: '_blank' }} method. This method returns the full `Backend User` object. **It does count towards the [Backend API request rate limit](/docs/guides/how-clerk-works/system-limits)** so it's recommended to use the [`useUser()`](/docs/reference/hooks/use-user) hook on the client side when possible and only use `getUser()` when you specifically need user data in a server context.
 
-In the following example, the `userId` is passed to the Backend SDK's `getUser()` method to get the user's full `Backend User` object.
+In the following example, the `userId` is passed to the JS Backend SDK's `getUser()` method to get the user's full `Backend User` object.
 
 <Tabs items={["API Route", "getServerSideProps"]}>
   <Tab>

@@ -88,6 +88,7 @@ import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
 import {
+  createRedirectsBloomFilter,
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
   transformRedirectsToObject,
@@ -114,7 +115,7 @@ async function main() {
     docsPath: '../docs',
     baseDocsLink: '/docs/',
     manifestPath: '../docs/manifest.json',
-    partialsPath: '../docs/_partials',
+    partialsFolderName: '_partials',
     distPath: '../dist',
     typedocPath: '../clerk-typedoc',
     localTypedocOverridePath: '../local-clerk-typedoc',
@@ -123,6 +124,7 @@ async function main() {
       static: {
         inputPath: '../redirects/static/docs.json',
         outputPath: '_redirects/static.json',
+        outputBloomFilterPath: '_redirects/static-bloom-filter.json',
       },
       dynamic: {
         inputPath: '../redirects/dynamic/docs.jsonc',
@@ -204,6 +206,7 @@ async function main() {
         'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/vercel.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],
@@ -278,6 +281,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   abortSignal?.throwIfAborted()
 
   let staticRedirects: Record<string, Redirect> | null = null
+  let staticBloomFilter: unknown | null = null
   let dynamicRedirects: Redirect[] | null = null
 
   if (config.redirects) {
@@ -287,6 +291,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
 
     staticRedirects = transformedStaticRedirects
+    staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
@@ -605,8 +610,6 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   const validatedPartials = await Promise.all(
     partials.map(async (partial) => {
-      const partialPath = `${config.partialsRelativePath}/${partial.path}`
-
       try {
         let node: Node | null = null
         const links: Set<string> = new Set()
@@ -615,14 +618,14 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, partialPath, 'partials', (linkInPartial) => {
+            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
               links.add(linkInPartial)
             }),
           )
-          .use(() => (tree, vfile) => {
+          .use(() => (tree) => {
             node = tree
           })
-          .process(partial.vfile)
+          .process({ path: partial.vfile.path, value: partial.content })
 
         if (node === null) {
           throw new Error(errorMessages['partial-parse-error'](partial.path))
@@ -630,8 +633,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
         return {
           ...partial,
-          node: node as Node,
-          vfile,
+          node: partial.node, // Use the embedded node (with nested includes)
+          vfile, // Use the vfile from validation
           links,
         }
       } catch (error) {
@@ -881,7 +884,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             insertFrontmatter({
               lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
               sdkScoped: 'false',
-              canonical: doc.file.href,
+              canonical: doc.file.href.replace('/index', ''),
+              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
             }),
           )
           .process(doc.vfile),
@@ -962,7 +966,7 @@ ${yaml.stringify({
   availableSdks: sdks.join(','),
   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
   search: { exclude: true },
-  canonical: canonical,
+  canonical: canonical.replace('/index', ''),
 })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
@@ -993,22 +997,32 @@ ${yaml.stringify({
           if (doc.file.filePathInDocsFolder.endsWith(`.${targetSdk}.mdx`)) return null
 
           // if the doc has distinct version, we want to use those instead of the "generic" sdk scoped version
-          const fileContent = (() => {
+          const { fileContent, sourceFile } = (() => {
             if (doc.distinctSDKVariants?.includes(targetSdk)) {
               const distinctSDKVariant = docsMap.get(`${doc.file.href}.${targetSdk}`)
 
-              if (distinctSDKVariant === undefined) return doc.fileContent
-
-              return distinctSDKVariant.fileContent
+              if (distinctSDKVariant !== undefined) {
+                return {
+                  fileContent: distinctSDKVariant.fileContent,
+                  sourceFile: `/docs/${distinctSDKVariant.file.filePathInDocsFolder}`,
+                }
+              }
             }
-            return doc.fileContent
+            return {
+              fileContent: doc.fileContent,
+              sourceFile: `/docs/${doc.file.filePathInDocsFolder}`,
+            }
           })()
-
           const sdks = [...(doc.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
 
           const hrefSegments = doc.file.href.split('/')
           const hrefAlreadyContainsSdk = sdks.some((sdk) => hrefSegments.includes(sdk))
           const isSingleSdkDocument = sdks.length === 1
+
+          const canonical =
+            hrefAlreadyContainsSdk || isSingleSdkDocument
+              ? doc.file.href
+              : scopeHrefToSDK(config)(doc.file.href, ':sdk:')
 
           const vfile = await scopedDocCache(targetSdk, doc.file.filePath, async () =>
             remark()
@@ -1025,15 +1039,13 @@ ${yaml.stringify({
               .use(
                 insertFrontmatter({
                   sdkScoped: 'true',
-                  canonical:
-                    hrefAlreadyContainsSdk || isSingleSdkDocument
-                      ? doc.file.href
-                      : scopeHrefToSDK(config)(doc.file.href, ':sdk:'),
+                  canonical: canonical.replace('/index', ''),
                   lastUpdated: (await getCommitDate(doc.file.fullFilePath))?.toISOString() ?? undefined,
                   sdk: sdks.join(', '),
                   availableSdks: sdks?.join(','),
                   notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
                   activeSdk: targetSdk,
+                  sourceFile: sourceFile,
                 }),
               )
               .process({
@@ -1075,7 +1087,7 @@ ${yaml.stringify({
   const headingValidationVFiles: VFile[] = []
 
   for (const doc of docsWithOnlyIfComponents) {
-    // Extract all SDK values from <If /> all components
+    // Extract all SDK values from <If /> components
     const availableSDKs = new Set<SDK>()
 
     mdastVisit(doc.node, (node) => {
@@ -1146,7 +1158,7 @@ ${yaml.stringify({
   })
   const mdxFilePaths = mdxFiles
     .map((entry) => entry.path.replace(/\\/g, '/')) // Replace backslashes with forward slashes
-    .filter((filePath) => !filePath.startsWith(config.partialsRelativePath)) // Exclude partials
+    .filter((filePath) => !filePath.includes(config.partialsFolderName)) // Exclude partials
     .map((path) => ({
       path,
       url: `${config.baseDocsLink}${removeMdxSuffix(path)
@@ -1161,7 +1173,7 @@ ${yaml.stringify({
   abortSignal?.throwIfAborted()
 
   if (staticRedirects !== null && dynamicRedirects !== null) {
-    await writeRedirects(config, staticRedirects, dynamicRedirects)
+    await writeRedirects(config, staticRedirects, dynamicRedirects, staticBloomFilter)
     console.info('✓ Wrote redirects to disk')
   }
 

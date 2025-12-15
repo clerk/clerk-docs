@@ -1,0 +1,165 @@
+---
+title: Invite users to your Organization
+description: Send, manage, and track user invitations within your multi-tenant SaaS using Clerk Organizations.
+metadata:
+  title: Send and manage Organization invitations via Clerk
+---
+
+Organization invitations let you add new members to your Organization. When you send an invitation, Clerk sends an email to the invited user with a unique invitation link. When the user visits the Organization invitation link, Clerk redirects them to the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in). If the user is already signed in, Clerk redirects them to your application's homepage (`/`). If you want to redirect the user to a specific page in your application, you can [specify a redirect URL when creating the invitation](#redirect-url).
+
+By default, only [admins](/docs/guides/organizations/control-access/roles-and-permissions#default-roles) can invite users to an Organization.
+
+This feature requires that [**Email** is enabled](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email), as Clerk uses the user's email address to send the invitation. You can still disable **Email** as a sign-in option if you do not want users to be able to sign-in with their email address.
+
+To configure your application's **Email** settings, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page in the Clerk Dashboard.
+
+## When to use invitations
+
+Invitations work well when you need precise control over who joins your Organization and which Role they receive. This approach fits scenarios where:
+
+- Teams are small and members are known in advance.
+- Onboarding requires manual approval or review.
+- Specific Roles need to be assigned during the invitation.
+
+If you want to streamline enrollment for users with company email addresses, consider [Verified Domains](/docs/guides/organizations/add-members/verified-domains), which can automatically invite users based on their email domain. If customers require centralized authentication through their Identity Provider, use [Enterprise SSO](/docs/guides/organizations/add-members/sso).
+
+## Create an invitation
+
+Clerk's [prebuilt components](/docs/reference/components/overview) and [Account Portal pages](/docs/guides/account-portal/overview) manage all Organization invitation flows, including creating, managing, and accepting invitations.
+
+However, if you want to build custom flows, see the following sections.
+
+### Client-side
+
+To create an Organization invitation on the client-side, see the [dedicated guide](/docs/guides/development/custom-flows/organizations/manage-organization-invitations). Note that this uses the [`organizations.inviteMember()`](/docs/reference/javascript/organization#invite-member) method, which does not let you specify a redirect URL; it will always redirect to the Account Portal sign-in page. If you want to specify a redirect URL, you must create the invitation on the server-side.
+
+### Server-side
+
+To create Organization invitations on the server-side, use the [Backend API](/docs/reference/backend-api/tag/organization-invitations/post/organizations/\{organization_id}/invitations){{ target: '_blank' }} either by using a cURL command or the [JS Backend SDK](/docs/js-backend/getting-started/quickstart). The JS Backend SDK is a wrapper around the Backend API that makes it easier to interact with the API.
+
+Use the following tabs to see examples for each method.
+
+<Tabs items={["cURL", "JS Backend SDK"]}>
+  <Tab>
+    The following example demonstrates how to create an Organization invitation using cURL.
+
+    <SignedIn>
+      - Your Secret Key is already injected into the code snippet.
+      - Replace the `org_123` with the ID of the Organization you want to invite the user to.
+      - Replace the `user_123` with the ID of the user who is inviting the other user.
+      - Replace the email address with the email address you want to invite.
+      - Replace the `role` with the role you want to assign to the invited user.
+    </SignedIn>
+
+    <SignedOut>
+      - Replace `YOUR_SECRET_KEY` with your Clerk Secret Key. You can find your Secret Key on the [**API Keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
+      - Replace the `org_123` with the ID of the Organization you want to invite the user to.
+      - Replace the `user_123` with the ID of the user who is inviting the other user.
+      - Replace the email address with the email address you want to invite.
+      - Replace the `role` with the Role you want to assign to the invited user.
+    </SignedOut>
+
+    ```bash {{ filename: 'terminal' }}
+    curl 'https://api.clerk.com/v1/organizations/{org_123}/invitations' \
+    -X POST \
+    -H 'Authorization: Bearer {{secret}}' \
+    -H 'Content-Type: application/json' \
+    -d '{ "inviter_user_id": "user_123", "email_address": "email@example.com", "role": "org:member" }'
+    ```
+  </Tab>
+
+  <Tab>
+    To use the JS Backend SDK to create an invitation, see the [`createOrganizationInvitation()`](/docs/reference/backend/organization/create-organization-invitation) reference documentation.
+  </Tab>
+</Tabs>
+
+For an example of the response, see the [Backend API reference](/docs/reference/backend-api/tag/organization-invitations/post/organizations/\{organization_id}/invitations){{ target: '_blank' }}.
+
+### Redirect URL
+
+When you create an invitation, you can specify a `redirect_url` parameter. This parameter tells Clerk where to redirect the user when they visit the invitation link.
+
+The following example demonstrates how to use cURL to create an invitation with the `redirect_url` set to `https://www.example.com/accept-invitation`.
+
+```bash
+curl 'https://api.clerk.com/v1/organizations/{org_123}/invitations' \
+  -X POST \
+  -H 'Authorization: Bearer {{secret}}' \
+  -H 'Content-Type: application/json' \
+  -d '{ "inviter_user_id": "user_123", "email_address": "email@example.com", "role": "org:member", "redirect_url": "https://www.example.com/accept-invitation" }'
+```
+
+Once the user visits the invitation link, they will be redirected to the page you specified. On that page, you must handle the authentication flow in your code. You can either embed the [`<SignIn />`](/docs/reference/components/authentication/sign-in) component or, if the prebuilt component doesn't meet your needs or you require more control over the logic, you can build a [custom flow](/docs/guides/development/custom-flows/organizations/accept-organization-invitations).
+
+> [!TIP]
+>
+> To test redirect URLs in your development environment, pass your port. For example, `http://localhost:3000/accept-invitation`.
+
+### Invitation metadata
+
+You can also add metadata to an invitation when creating the invitation through the Backend API. Once the invited user signs up using the invitation link, Clerk stores the **invitation** metadata (`OrganizationInvitation.publicMetadata`) in the Organization **membership's** metadata (`OrganizationMembership.publicMetadata`). For more details on Organization membership metadata, see the [OrganizationMembership](/docs/reference/javascript/types/organization-membership) reference.
+
+To add metadata to an invitation, add the `public_metadata` parameter when creating the invitation.
+
+The following example demonstrates how to use cURL to create an invitation with metadata.
+
+```bash
+curl 'https://api.clerk.com/v1/organizations/{org_123}/invitations' \
+  -X POST \
+  -H 'Authorization: Bearer {{secret}}' \
+  -H 'Content-Type: application/json' \
+  -d '{ "inviter_user_id": "user_123", "email_address": "email@example.com", "role": "org:member", "public_metadata": {"department": "marketing"} }'
+```
+
+## Revoke an invitation
+
+Revoking an invitation prevents the user from using the invitation link that was sent to them.
+
+### Client-side
+
+To revoke an invitation client-side, see the [dedicated guide](/docs/guides/development/custom-flows/organizations/manage-organization-invitations).
+
+### Server-side
+
+To revoke an invitation server-side, use the [Backend API](/docs/reference/backend-api/tag/organization-invitations/post/organizations/\{organization_id}/invitations/\{invitation_id}/revoke){{ target: '_blank' }}. either by using a cURL command or the [JS Backend SDK](/docs/js-backend/getting-started/quickstart). The JS Backend SDK is a wrapper around the Backend API that makes it easier to interact with the API.
+
+Use the following tabs to see examples for each method.
+
+<Tabs items={["cURL", "JS Backend SDK"]}>
+  <Tab>
+    The following example demonstrates how to revoke an invitation using cURL.
+
+    <SignedIn>
+      - Your Secret Key is already injected into the code snippet.
+      - Replace the `inv_123` with the ID of the invitation you want to revoke.
+      - Replace the `user_123` with the ID of the user who is revoking the invitation.
+    </SignedIn>
+
+    <SignedOut>
+      - Replace `YOUR_SECRET_KEY` with your Clerk Secret Key. You can find your Secret Key on the [**API Keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
+      - Replace the `inv_123` with the ID of the invitation you want to revoke.
+      - Replace the `user_123` with the ID of the user who is revoking the invitation.
+    </SignedOut>
+
+    ```bash {{ filename: 'terminal' }}
+    curl 'https://api.clerk.com/v1/organizations/{org_123}/invitations/{inv_123}/revoke' \
+      -X POST \
+      -H 'Authorization: Bearer {{secret}}' \
+      -H 'Content-Type: application/json' \
+      -d '{ "requesting_user_id": "user_123" }'
+    ```
+  </Tab>
+
+  <Tab>
+    To use the JS Backend SDK to revoke an Organization invitation, see the [`revokeOrganizationInvitation()`](/docs/reference/backend/organization/revoke-organization-invitation) reference documentation.
+  </Tab>
+</Tabs>
+
+## Next steps
+
+Now that you know how to invite users to your Organization, you can:
+
+- [Configure Verified Domains](/docs/guides/organizations/add-members/verified-domains) to automatically invite users based on their email domain
+- [Set up Enterprise SSO Connections](/docs/guides/organizations/add-members/sso) for centralized authentication through an Identity Provider
+- [Set up Roles and Permissions](/docs/guides/organizations/control-access/roles-and-permissions) to control what invited users can access
+- [Add metadata to invitations](/docs/guides/organizations/metadata) for tracking or custom workflows

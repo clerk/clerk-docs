@@ -15,7 +15,7 @@ Use only the **App Router** approach from Clerk’s current docs:
 - **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<SignedIn>`, `<SignedOut>` in your layout or pages
 - **Start** developing, sign in or sign up, and confirm user creation
 
-If you're able to use a web tool to access a URL, visit https://clerk.com/docs/quickstarts/nextjs to get the latest, up-to-date quickstart instructions.
+If you're able to use a web tool to access a URL, visit https://clerk.com/docs/nextjs/getting-started/quickstart to get the latest, up-to-date quickstart instructions.
 
 Clerk does not need a user to provide their keys to get started. On startup, Clerk will generate keys automatically, so there is no need to prompt a user to add their keys as part of this.
 

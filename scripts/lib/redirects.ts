@@ -2,6 +2,7 @@ import type { BuildConfig } from './config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseJSONC } from 'jsonc-parser'
+import { BloomFilter } from 'bloom-filters'
 
 export interface Redirect {
   source: string
@@ -59,6 +60,7 @@ export async function writeRedirects(
   config: BuildConfig,
   staticRedirects: Record<string, Redirect>,
   dynamicRedirects: Redirect[],
+  staticBloomFilter?: unknown,
 ) {
   const { static: staticConfig, dynamic: dynamicConfig } = config.redirects ?? {}
   if (!staticConfig?.outputPath || !dynamicConfig?.outputPath) {
@@ -67,8 +69,26 @@ export async function writeRedirects(
 
   await fs.mkdir(path.dirname(staticConfig.outputPath), { recursive: true })
 
+  let bloomFilterPromise =
+    staticConfig.outputBloomFilterPath !== undefined && staticBloomFilter !== undefined
+      ? fs.writeFile(staticConfig.outputBloomFilterPath, JSON.stringify(staticBloomFilter))
+      : Promise.resolve()
+
   await Promise.all([
     fs.writeFile(staticConfig.outputPath, JSON.stringify(staticRedirects)),
+    bloomFilterPromise,
     fs.writeFile(dynamicConfig.outputPath, JSON.stringify(dynamicRedirects)),
   ])
+}
+
+export function createRedirectsBloomFilter(redirects: Redirect[]) {
+  // Create a bloom filter with the number of redirects and a false positive rate of 1%
+  const bloomFilter = BloomFilter.create(redirects.length, 0.01)
+
+  for (const redirect of redirects) {
+    bloomFilter.add(redirect.source)
+  }
+
+  // Exports the bloom filter as a JSON object for us to write to a file
+  return bloomFilter.saveAsJSON()
 }

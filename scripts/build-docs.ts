@@ -91,6 +91,7 @@ import {
   createRedirectsBloomFilter,
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
+  transformRedirectsToCompactObject,
   transformRedirectsToObject,
   writeRedirects,
   type Redirect,
@@ -124,6 +125,7 @@ async function main() {
       static: {
         inputPath: '../redirects/static/docs.json',
         outputPath: '_redirects/static.json',
+        outputCompactPath: '_redirects/static-compact.json',
         outputBloomFilterPath: '_redirects/static-bloom-filter.json',
       },
       dynamic: {
@@ -282,16 +284,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   let staticRedirects: Record<string, Redirect> | null = null
   let staticBloomFilter: unknown | null = null
+  let staticCompactRedirects: Record<string, string> | null = null
   let dynamicRedirects: Redirect[] | null = null
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
 
     const optimizedStaticRedirects = optimizeRedirects(redirects.staticRedirects)
-    const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
 
-    staticRedirects = transformedStaticRedirects
+    staticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
     staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
+    staticCompactRedirects = transformRedirectsToCompactObject(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
@@ -1173,7 +1176,7 @@ ${yaml.stringify({
   abortSignal?.throwIfAborted()
 
   if (staticRedirects !== null && dynamicRedirects !== null) {
-    await writeRedirects(config, staticRedirects, dynamicRedirects, staticBloomFilter)
+    await writeRedirects(config, staticRedirects, staticCompactRedirects, dynamicRedirects, staticBloomFilter)
     console.info('✓ Wrote redirects to disk')
   }
 

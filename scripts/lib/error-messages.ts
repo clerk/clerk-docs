@@ -32,6 +32,8 @@ export const errorMessages = {
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+  'if-component-sdk-and-not-sdk-props-cannot-be-used-together': (): string =>
+    `Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.`,
   'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
     `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
   'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>

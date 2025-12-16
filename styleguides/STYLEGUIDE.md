@@ -114,10 +114,10 @@ When learners are performing an order of operations, it helps for them to start 
 Use active verbs that put the reader in the first person instead of passive verbs; "be" verbs that describe the learners actions as a state of being, like "is/was/to be".
 
 > ❌
-> The `middleware.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
+> The `proxy.ts` file should be created in the root folder of your application or inside `src/` if that is how you set up your app.
 
 > ✅
-> Create the `middleware.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
+> Create the `proxy.ts` file in the root folder of your application or inside the `src/` if that is how your app is set up.
 
 > ❌
 > User session and data

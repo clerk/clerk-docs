@@ -7,11 +7,18 @@ import { BloomFilter } from 'bloom-filters'
 export interface Redirect {
   source: string
   destination: string
+}
+
+export interface RedirectOutput extends Redirect {
   permanent: boolean
 }
 
-export function transformRedirectsToObject(redirects: Redirect[]) {
-  return Object.fromEntries(redirects.map((item) => [item.source, item]))
+export function transformRedirectsToObject(redirects: Redirect[]): Record<string, RedirectOutput> {
+  return Object.fromEntries(redirects.map((item) => [item.source, { ...item, permanent: true }]))
+}
+
+export function transformRedirectsToCompactObject(redirects: Redirect[]) {
+  return Object.fromEntries(redirects.map((item) => [item.source, item.destination]))
 }
 
 export async function readRedirects(config: BuildConfig) {
@@ -36,7 +43,7 @@ export function analyzeAndFixRedirects(redirects: Redirect[]): Redirect[] {
   const finalDestinations = new Map<string, string>()
 
   // Find final destinations for each redirect
-  for (const { source, destination, permanent } of redirects) {
+  for (const { source, destination } of redirects) {
     let current = destination
     const visited = new Set([source])
 
@@ -49,18 +56,20 @@ export function analyzeAndFixRedirects(redirects: Redirect[]): Redirect[] {
   }
 
   // Create new redirects pointing to final destinations
-  return redirects.map(({ source, permanent }) => ({
+  return redirects.map(({ source }) => ({
     source,
     destination: finalDestinations.get(source)!,
-    permanent,
   }))
 }
 
 export async function writeRedirects(
   config: BuildConfig,
-  staticRedirects: Record<string, Redirect>,
-  dynamicRedirects: Redirect[],
-  staticBloomFilter?: unknown,
+  files: {
+    staticRedirects: Record<string, RedirectOutput>
+    staticCompactRedirects?: Record<string, string>
+    dynamicRedirects: Redirect[]
+    staticBloomFilter?: unknown
+  },
 ) {
   const { static: staticConfig, dynamic: dynamicConfig } = config.redirects ?? {}
   if (!staticConfig?.outputPath || !dynamicConfig?.outputPath) {
@@ -70,14 +79,20 @@ export async function writeRedirects(
   await fs.mkdir(path.dirname(staticConfig.outputPath), { recursive: true })
 
   let bloomFilterPromise =
-    staticConfig.outputBloomFilterPath !== undefined && staticBloomFilter !== undefined
-      ? fs.writeFile(staticConfig.outputBloomFilterPath, JSON.stringify(staticBloomFilter))
+    staticConfig.outputBloomFilterPath !== undefined && files.staticBloomFilter !== undefined
+      ? fs.writeFile(staticConfig.outputBloomFilterPath, JSON.stringify(files.staticBloomFilter))
+      : Promise.resolve()
+
+  let compactRedirectsPromise =
+    staticConfig.outputCompactPath !== undefined && files.staticCompactRedirects !== undefined
+      ? fs.writeFile(staticConfig.outputCompactPath, JSON.stringify(files.staticCompactRedirects))
       : Promise.resolve()
 
   await Promise.all([
-    fs.writeFile(staticConfig.outputPath, JSON.stringify(staticRedirects)),
+    fs.writeFile(staticConfig.outputPath, JSON.stringify(files.staticRedirects)),
     bloomFilterPromise,
-    fs.writeFile(dynamicConfig.outputPath, JSON.stringify(dynamicRedirects)),
+    compactRedirectsPromise,
+    fs.writeFile(dynamicConfig.outputPath, JSON.stringify(files.dynamicRedirects)),
   ])
 }
 

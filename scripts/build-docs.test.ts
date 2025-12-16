@@ -327,12 +327,10 @@ title: MDX Doc
           {
             source: '/docs/page-1',
             destination: '/docs/page-2',
-            permanent: true,
           },
           {
             source: '/docs/page-2',
             destination: '/docs/page-3',
-            permanent: true,
           },
         ]),
       },
@@ -976,6 +974,30 @@ This is a normal document.`,
         ],
       ],
     })
+  })
+
+  test('Should passthrough `topNav` property', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [[{ title: 'API Doc', topNav: true, items: [] }]],
+        }),
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: [],
+      }),
+    )
+
+    expect(output).toBe('')
+    expect(JSON.parse(await readFile('./docs/manifest.json')).navigation).toEqual([
+      [{ title: 'API Doc', topNav: true, items: [] }],
+    ])
   })
 })
 

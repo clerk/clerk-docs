@@ -6,113 +6,19 @@ sdk: nextjs, react
 
 <Include src="_partials/billing/billing-experimental" />
 
-The `usePaymentMethods()` hook provides access to the payment methods associated with a user or organization. It returns a paginated list of payment methods and includes methods for managing them.
+The `usePaymentMethods()` hook provides access to the payment methods associated with a user or Organization. It returns a paginated list of payment methods and includes methods for managing them.
 
 ## Parameters
 
-`usePaymentMethods()` accepts a single object with the following properties:
+`usePaymentMethods()` accepts a single optional object with the following properties:
 
-<Properties>
-  - `for?`
-  - `'user' | 'organization'`
-
-  Specifies whether to fetch payment methods for the current user or organization. Defaults to `'user'`.
-
-  ---
-
-  - `pageSize?`
-  - `number`
-
-  The number of payment methods to fetch per page. Defaults to `10`.
-
-  ---
-
-  - `initialPage?`
-  - `number`
-
-  The page number to start fetching from. Defaults to `1`.
-
-  ---
-
-  - `infinite?`
-  - `boolean`
-
-  When `true`, enables infinite pagination mode where new pages are appended to existing data. When `false`, each page replaces the previous data. Defaults to `false`.
-
-  ---
-
-  - `keepPreviousData?`
-  - `boolean`
-
-  When `true`, the previous data will be kept while loading the next page. This helps prevent layout shifts. Defaults to `false`.
-</Properties>
+<Typedoc src="shared/hook-params" />
 
 ## Returns
 
 `usePaymentMethods()` returns an object with the following properties:
 
-<Properties>
-  - `data`
-  - <code>[BillingPaymentMethodResource](/docs/reference/javascript/types/billing-payment-method-resource)\[] | null</code>
-
-  An array of [payment methods](/docs/reference/javascript/types/billing-payment-method-resource), or `null` if the data hasn't been loaded yet.
-
-  ---
-
-  - `isLoading`
-  - `boolean`
-
-  A boolean that indicates whether the initial data is still being fetched.
-
-  ---
-
-  - `isFetching`
-  - `boolean`
-
-  A boolean that indicates whether any request is still in flight, including background updates.
-
-  ---
-
-  - `hasNextPage`
-  - `boolean`
-
-  A boolean that indicates whether there are more pages available to load.
-
-  ---
-
-  - `hasPreviousPage`
-  - `boolean`
-
-  A boolean that indicates whether there are previous pages available to load.
-
-  ---
-
-  - `fetchNext`
-  - `() => Promise<void>`
-
-  A function to fetch the next page of payment methods.
-
-  ---
-
-  - `fetchPrevious`
-  - `() => Promise<void>`
-
-  A function to fetch the previous page of payment methods.
-
-  ---
-
-  - `pageCount`
-  - `number`
-
-  The total number of available pages.
-
-  ---
-
-  - `count`
-  - `number`
-
-  The total number of payment methods available.
-</Properties>
+<Typedoc src="shared/use-payment-methods-return" />
 
 ## Examples
 
@@ -120,127 +26,257 @@ The `usePaymentMethods()` hook provides access to the payment methods associated
 
 The following example demonstrates how to fetch and display a user's payment methods.
 
-```tsx
-import { usePaymentMethods } from '@clerk/nextjs/experimental'
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/billing/payment-methods/page.tsx' }}
+  'use client'
 
-function PaymentMethodsList() {
-  const { data, isLoading } = usePaymentMethods({
-    for: 'user',
-    pageSize: 10,
-  })
+  import { usePaymentMethods } from '@clerk/nextjs/experimental'
 
-  if (isLoading) {
-    return <div>Loading payment methods...</div>
+  export default function PaymentMethodsList() {
+    const { data, isLoading } = usePaymentMethods({
+      for: 'user',
+      pageSize: 10,
+    })
+
+    if (isLoading) {
+      return <div>Loading payment methods...</div>
+    }
+
+    if (!data || data.length === 0) {
+      // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
+      return <div>No payment methods found. Please add a payment method to your account.</div>
+    }
+
+    return (
+      <ul>
+        {data?.map((method) => (
+          <li key={method.id}>
+            {method.cardType} **** {method.last4}
+            {method.isDefault ? ' (Default)' : null}
+          </li>
+        ))}
+      </ul>
+    )
   }
+  ```
+</If>
 
-  if (!data || data.length === 0) {
-    // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
-    return <div>No payment methods found. Please add a payment method to your account.</div>
+<If sdk="react">
+  ```tsx {{ filename: 'src/pages/billing/PaymentMethodsList.tsx' }}
+  import { usePaymentMethods } from '@clerk/clerk-react/experimental'
+
+  export default function PaymentMethodsList() {
+    const { data, isLoading } = usePaymentMethods({
+      for: 'user',
+      pageSize: 10,
+    })
+
+    if (isLoading) {
+      return <div>Loading payment methods...</div>
+    }
+
+    if (!data || data.length === 0) {
+      // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
+      return <div>No payment methods found. Please add a payment method to your account.</div>
+    }
+
+    return (
+      <ul>
+        {data?.map((method) => (
+          <li key={method.id}>
+            {method.cardType} **** {method.last4}
+            {method.isDefault ? ' (Default)' : null}
+          </li>
+        ))}
+      </ul>
+    )
   }
-
-  return (
-    <ul>
-      {data?.map((method) => (
-        <li key={method.id}>
-          {method.cardType} **** {method.last4}
-          {method.isDefault ? ' (Default)' : null}
-        </li>
-      ))}
-    </ul>
-  )
-}
-```
+  ```
+</If>
 
 ### Infinite pagination
 
 The following example demonstrates how to implement infinite scrolling with payment methods.
 
-```tsx
-import { usePaymentMethods } from '@clerk/nextjs/experimental'
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/billing/payment-methods/page.tsx' }}
+  'use client'
 
-function InfinitePaymentMethods() {
-  const { data, isLoading, hasNextPage, fetchNext } = usePaymentMethods({
-    for: 'user',
-    infinite: true,
-    pageSize: 20,
-  })
+  import { usePaymentMethods } from '@clerk/nextjs/experimental'
 
-  if (isLoading) {
-    return <div>Loading...</div>
+  export default function InfinitePaymentMethods() {
+    const { data, isLoading, hasNextPage, fetchNext } = usePaymentMethods({
+      for: 'user',
+      infinite: true,
+      pageSize: 20,
+    })
+
+    if (isLoading) {
+      return <div>Loading...</div>
+    }
+
+    if (!data || data.length === 0) {
+      // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
+      return <div>No payment methods found. Please add a payment method to your account.</div>
+    }
+
+    return (
+      <div>
+        <ul>
+          {data?.map((method) => (
+            <li key={method.id}>
+              {method.cardType} ending in {method.last4}
+              {method.status === 'expired' ? ' (Expired)' : null}
+              {method.status === 'disconnected' ? ' (Disconnected)' : null}
+            </li>
+          ))}
+        </ul>
+
+        {hasNextPage && <button onClick={() => fetchNext()}>Load more payment methods</button>}
+      </div>
+    )
   }
+  ```
+</If>
 
-  if (!data || data.length === 0) {
-    // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
-    return <div>No payment methods found. Please add a payment method to your account.</div>
+<If sdk="react">
+  ```tsx {{ filename: 'src/pages/billing/PaymentMethodsList.tsx' }}
+  import { usePaymentMethods } from '@clerk/clerk-react/experimental'
+
+  export default function InfinitePaymentMethods() {
+    const { data, isLoading, hasNextPage, fetchNext } = usePaymentMethods({
+      for: 'user',
+      infinite: true,
+      pageSize: 20,
+    })
+
+    if (isLoading) {
+      return <div>Loading...</div>
+    }
+
+    if (!data || data.length === 0) {
+      // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/add-new-payment-method
+      return <div>No payment methods found. Please add a payment method to your account.</div>
+    }
+
+    return (
+      <div>
+        <ul>
+          {data?.map((method) => (
+            <li key={method.id}>
+              {method.cardType} ending in {method.last4}
+              {method.status === 'expired' ? ' (Expired)' : null}
+              {method.status === 'disconnected' ? ' (Disconnected)' : null}
+            </li>
+          ))}
+        </ul>
+
+        {hasNextPage && <button onClick={() => fetchNext()}>Load more payment methods</button>}
+      </div>
+    )
   }
-
-  return (
-    <div>
-      <ul>
-        {data?.map((method) => (
-          <li key={method.id}>
-            {method.cardType} ending in {method.last4}
-            {method.status === 'expired' ? ' (Expired)' : null}
-            {method.status === 'disconnected' ? ' (Disconnected)' : null}
-          </li>
-        ))}
-      </ul>
-
-      {hasNextPage && <button onClick={() => fetchNext()}>Load more payment methods</button>}
-    </div>
-  )
-}
-```
+  ```
+</If>
 
 ### With checkout flow
 
 The following example demonstrates how to use `usePaymentMethods()` in a checkout flow to select an existing payment method. For more information on how to build a checkout flow with an existing payment method, see [Build a custom checkout flow](/docs/guides/development/custom-flows/billing/checkout-new-payment-method).
 
-```tsx
-import { usePaymentMethods, useCheckout } from '@clerk/nextjs/experimental'
-import { useRouter } from 'next/navigation'
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/billing/checkout/page.tsx' }}
+  'use client'
 
-function CheckoutPaymentSelection() {
-  const { data, isLoading } = usePaymentMethods({ for: 'user' })
-  const { checkout } = useCheckout()
-  const { confirm, finalize } = checkout
+  import { usePaymentMethods, useCheckout } from '@clerk/nextjs/experimental'
+  import { useRouter } from 'next/navigation'
 
-  const router = useRouter()
+  export default function CheckoutPaymentSelection() {
+    const { data, isLoading } = usePaymentMethods({ for: 'user' })
+    const { checkout } = useCheckout()
+    const { confirm, finalize } = checkout
+    const router = useRouter()
 
-  const handlePaymentSubmit = async (paymentMethodId: string) => {
-    try {
-      // Confirm checkout with selected payment method
-      await confirm({ paymentSourceId: paymentMethodId })
-      // Complete checkout and redirect
-      await finalize({
-        navigate: () => router.push('/dashboard'),
-      })
-    } catch (error) {
-      console.error('Payment failed:', error)
+    const handlePaymentSubmit = async (paymentMethodId: string) => {
+      try {
+        // Confirm checkout with selected payment method
+        await confirm({ paymentSourceId: paymentMethodId })
+        // Complete checkout and redirect
+        await finalize({
+          navigate: () => router.push('/dashboard'),
+        })
+      } catch (error) {
+        console.error('Payment failed:', error)
+      }
+
+      if (isLoading) {
+        return <div>Loading payment methods...</div>
+      }
+
+      if (!data || data.length === 0) {
+        // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/checkout-new-payment-method
+        return <div>No payment methods found. Please add a payment method to your account.</div>
+      }
+
+      return (
+        <div>
+          <h3>Select a payment method</h3>
+          {data?.map((method) => (
+            <button key={method.id} onClick={() => handlePaymentSubmit(method.id)}>
+              Pay with {method.cardType} ending in {method.last4}
+            </button>
+          ))}
+        </div>
+      )
     }
   }
+  ```
+</If>
 
-  if (isLoading) {
-    return <div>Loading payment methods...</div>
+<If sdk="react">
+  ```tsx {{ filename: 'src/pages/billing/CheckoutPaymentSelection.tsx' }}
+  import { usePaymentMethods, useCheckout } from '@clerk/clerk-react/experimental'
+  import { useNavigate } from 'react-router-dom'
+
+  export default function CheckoutPaymentSelection() {
+    const { data, isLoading } = usePaymentMethods({ for: 'user' })
+    const { checkout } = useCheckout()
+    const { confirm, finalize } = checkout
+    const navigate = useNavigate()
+
+    const handlePaymentSubmit = async (paymentMethodId: string) => {
+      try {
+        // Confirm checkout with selected payment method
+        await confirm({ paymentSourceId: paymentMethodId })
+        // Complete checkout and redirect
+        await finalize({
+          navigate: () => navigate('/dashboard'),
+        })
+      } catch (error) {
+        console.error('Payment failed:', error)
+      }
+    }
+
+    if (isLoading) {
+      return <div>Loading payment methods...</div>
+    }
+
+    if (!data || data.length === 0) {
+      // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/checkout-new-payment-method
+      return <div>No payment methods found. Please add a payment method to your account.</div>
+    }
+
+    return (
+      <div>
+        <h3>Select a payment method</h3>
+        {data?.map((method) => (
+          <button key={method.id} onClick={() => handlePaymentSubmit(method.id)}>
+            Pay with {method.cardType} ending in {method.last4}
+          </button>
+        ))}
+      </div>
+    )
   }
-
-  if (!data || data.length === 0) {
-    // Code for how to add a new payment method: https://clerk.com/docs/guides/development/custom-flows/billing/checkout-new-payment-method
-    return <div>No payment methods found. Please add a payment method to your account.</div>
-  }
-
-  return (
-    <div>
-      <h3>Select a payment method</h3>
-      {data?.map((method) => (
-        <button key={method.id} onClick={() => handlePaymentSubmit(method.id)}>
-          Pay with {method.cardType} ending in {method.last4}
-        </button>
-      ))}
-    </div>
-  )
-}
-```
+  ```
+</If>
 
 ## Related guides
 

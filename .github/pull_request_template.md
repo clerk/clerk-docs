@@ -1,16 +1,24 @@
 ### 🔎 Previews:
 
+<!-- Please use these bullet points to add the Vercel preview link for pages that you've updated -->
+
 -
 
 ### What does this solve?
 
-- <!--- Describe your changes in detail. Why does this change need to happen? Include any links to Slack discussions, Linear comments, etc. -->
+<!-- Why does this change need to happen? Include any links to Slack discussions, Linear comments, etc. -->
+
+-
 
 ### What changed?
 
-- <!--- How does this PR solve the problem? -->
+<!-- How does this PR solve that problem you mentioned above? Describe your changes. -->
 
-### Checklist
+-
 
-- [ ] I have clicked on "Files changed" and performed a thorough self-review
-- [ ] All existing checks pass
+<!--
+### Deadline
+
+When do you need this PR reviewed/shipped by?
+Optional - uncomment if needed. If not provided, we will prioritize it ourselves.
+-->

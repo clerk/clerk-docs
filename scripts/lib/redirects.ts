@@ -18,9 +18,7 @@ export function transformRedirectsToObject(redirects: Redirect[]): Record<string
 }
 
 export function transformRedirectsToCompactObject(redirects: Redirect[]) {
-  return Object.fromEntries(
-    redirects.map((item) => [item.source.replace('/docs/', '/'), item.destination.replace('/docs/', '/')]),
-  )
+  return Object.fromEntries(redirects.map((item) => [item.source, item.destination]))
 }
 
 export async function readRedirects(config: BuildConfig) {

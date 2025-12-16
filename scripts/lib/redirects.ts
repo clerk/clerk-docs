@@ -7,11 +7,14 @@ import { BloomFilter } from 'bloom-filters'
 export interface Redirect {
   source: string
   destination: string
+}
+
+export interface RedirectOutput extends Redirect {
   permanent: boolean
 }
 
 export function transformRedirectsToObject(redirects: Redirect[]) {
-  return Object.fromEntries(redirects.map((item) => [item.source, item]))
+  return Object.fromEntries(redirects.map((item) => [item.source, { ...item, permanent: true }]))
 }
 
 export function transformRedirectsToCompactObject(redirects: Redirect[]) {
@@ -42,7 +45,7 @@ export function analyzeAndFixRedirects(redirects: Redirect[]): Redirect[] {
   const finalDestinations = new Map<string, string>()
 
   // Find final destinations for each redirect
-  for (const { source, destination, permanent } of redirects) {
+  for (const { source, destination } of redirects) {
     let current = destination
     const visited = new Set([source])
 
@@ -55,16 +58,15 @@ export function analyzeAndFixRedirects(redirects: Redirect[]): Redirect[] {
   }
 
   // Create new redirects pointing to final destinations
-  return redirects.map(({ source, permanent }) => ({
+  return redirects.map(({ source }) => ({
     source,
     destination: finalDestinations.get(source)!,
-    permanent,
   }))
 }
 
 export async function writeRedirects(
   config: BuildConfig,
-  staticRedirects: Record<string, Redirect>,
+  staticRedirects: Record<string, RedirectOutput>,
   staticCompactRedirects: Record<string, string> | null,
   dynamicRedirects: Redirect[],
   staticBloomFilter?: unknown,

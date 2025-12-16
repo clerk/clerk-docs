@@ -327,12 +327,10 @@ title: MDX Doc
           {
             source: '/docs/page-1',
             destination: '/docs/page-2',
-            permanent: true,
           },
           {
             source: '/docs/page-2',
             destination: '/docs/page-3',
-            permanent: true,
           },
         ]),
       },

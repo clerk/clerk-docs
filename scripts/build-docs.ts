@@ -95,6 +95,7 @@ import {
   transformRedirectsToObject,
   writeRedirects,
   type Redirect,
+  type RedirectOutput,
 } from './lib/redirects'
 import { checkTooltips } from './lib/plugins/checkTooltips'
 import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
@@ -282,10 +283,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  let staticRedirects: Record<string, Redirect> | null = null
-  let staticBloomFilter: unknown | null = null
-  let staticCompactRedirects: Record<string, string> | null = null
-  let dynamicRedirects: Redirect[] | null = null
+  let staticRedirects: Record<string, RedirectOutput> | undefined = undefined
+  let staticBloomFilter: unknown | undefined = undefined
+  let staticCompactRedirects: Record<string, string> | undefined = undefined
+  let dynamicRedirects: Redirect[] | undefined = undefined
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
@@ -1175,8 +1176,8 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  if (staticRedirects !== null && dynamicRedirects !== null) {
-    await writeRedirects(config, staticRedirects, staticCompactRedirects, dynamicRedirects, staticBloomFilter)
+  if (staticRedirects !== undefined && dynamicRedirects !== undefined) {
+    await writeRedirects(config, { staticRedirects, staticCompactRedirects, dynamicRedirects, staticBloomFilter })
     console.info('✓ Wrote redirects to disk')
   }
 

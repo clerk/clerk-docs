@@ -13,7 +13,7 @@ export interface RedirectOutput extends Redirect {
   permanent: boolean
 }
 
-export function transformRedirectsToObject(redirects: Redirect[]) {
+export function transformRedirectsToObject(redirects: Redirect[]): Record<string, RedirectOutput> {
   return Object.fromEntries(redirects.map((item) => [item.source, { ...item, permanent: true }]))
 }
 
@@ -66,10 +66,12 @@ export function analyzeAndFixRedirects(redirects: Redirect[]): Redirect[] {
 
 export async function writeRedirects(
   config: BuildConfig,
-  staticRedirects: Record<string, RedirectOutput>,
-  staticCompactRedirects: Record<string, string> | null,
-  dynamicRedirects: Redirect[],
-  staticBloomFilter?: unknown,
+  files: {
+    staticRedirects: Record<string, RedirectOutput>
+    staticCompactRedirects?: Record<string, string>
+    dynamicRedirects: Redirect[]
+    staticBloomFilter?: unknown
+  },
 ) {
   const { static: staticConfig, dynamic: dynamicConfig } = config.redirects ?? {}
   if (!staticConfig?.outputPath || !dynamicConfig?.outputPath) {
@@ -79,20 +81,20 @@ export async function writeRedirects(
   await fs.mkdir(path.dirname(staticConfig.outputPath), { recursive: true })
 
   let bloomFilterPromise =
-    staticConfig.outputBloomFilterPath !== undefined && staticBloomFilter !== undefined
-      ? fs.writeFile(staticConfig.outputBloomFilterPath, JSON.stringify(staticBloomFilter))
+    staticConfig.outputBloomFilterPath !== undefined && files.staticBloomFilter !== undefined
+      ? fs.writeFile(staticConfig.outputBloomFilterPath, JSON.stringify(files.staticBloomFilter))
       : Promise.resolve()
 
   let compactRedirectsPromise =
-    staticConfig.outputCompactPath !== undefined && staticCompactRedirects !== null
-      ? fs.writeFile(staticConfig.outputCompactPath, JSON.stringify(staticCompactRedirects))
+    staticConfig.outputCompactPath !== undefined && files.staticCompactRedirects !== undefined
+      ? fs.writeFile(staticConfig.outputCompactPath, JSON.stringify(files.staticCompactRedirects))
       : Promise.resolve()
 
   await Promise.all([
-    fs.writeFile(staticConfig.outputPath, JSON.stringify(staticRedirects)),
+    fs.writeFile(staticConfig.outputPath, JSON.stringify(files.staticRedirects)),
     bloomFilterPromise,
     compactRedirectsPromise,
-    fs.writeFile(dynamicConfig.outputPath, JSON.stringify(dynamicRedirects)),
+    fs.writeFile(dynamicConfig.outputPath, JSON.stringify(files.dynamicRedirects)),
   ])
 }
 

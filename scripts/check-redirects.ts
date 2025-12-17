@@ -281,6 +281,32 @@ async function checkRedirects(): Promise<void> {
   console.log(`✅ No protected route violations found`)
   console.log()
 
+  // Check for redirects that shadow existing pages
+  console.log('📄 Checking for redirects that shadow existing pages...')
+  const shadowedPages: Array<{ source: string; destination: string }> = []
+
+  for (const [source, redirect] of Object.entries(staticRedirects)) {
+    if (validUrls.has(source)) {
+      shadowedPages.push({ source, destination: redirect.destination })
+    }
+  }
+
+  if (shadowedPages.length > 0) {
+    console.log(`❌ Found ${shadowedPages.length} redirect(s) that shadow existing pages:`)
+    console.log()
+    for (const { source, destination } of shadowedPages) {
+      console.log(`   Source: ${source}`)
+      console.log(`   Destination: ${destination}`)
+      console.log(`   Problem: A page already exists at this URL`)
+      console.log()
+    }
+    process.exitCode = 1
+    return
+  }
+
+  console.log('✅ No redirects shadow existing pages')
+  console.log()
+
   const results: RedirectCheckResult[] = []
   let invalidCount = 0
   let externalCount = 0

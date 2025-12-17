@@ -1,0 +1,345 @@
+---
+title: "Upgrading to Clerk Core 3"
+description: "Find SDK-specific guides for upgrading to Clerk Core 3."
+---
+
+## Overview
+
+Core 3 focuses on consistency and cleanup across Clerk's SDKs while keeping upgrade time short (usually under 30 minutes with the CLI).
+
+- Naming consistency: `__unstable_*` APIs move to `__internal_*`, and experimental methods share the `__experimental_` prefix.
+- Package renaming: `@clerk/clerk-react` becomes `@clerk/react`, theming utilities move to `@clerk/ui/themes/experimental`, and types consolidate under `@clerk/shared/types`.
+- Appearance updates: `appearance.layout` is now `appearance.options`, `showOptionalFields` defaults to `false`, and color variables apply at full opacity.
+- Behavior alignment: redirect props and legacy billing flags are removed in favor of the newer patterns.
+- Platform requirements: Node.js 20.9.0+ is required across the updated packages.
+
+Use `npx @clerk/upgrade` to scan your project and speed up the migration.
+
+## SDK Guides
+
+<Tabs items={['Next.js']}>
+  <Tab>
+## Breaking Changes
+
+<Accordion
+  titles={[
+    "`__unstable_*` methods renamed to `__internal_*`",
+    "`@clerk/clerk-react` renamed to `@clerk/react`",
+    "`appearance.layout` renamed to `appearance.options`",
+    "`colorRing` and `colorModalBackdrop` now render at full opacity",
+    "`useCheckout` and `Clerk.checkout()` return value changed",
+    "Experimental method prefix standardized to `__experimental_`",
+    "UI themes moved to `@clerk/ui/themes/experimental`",
+  ]}
+>
+  <AccordionPanel>
+    All `__unstable_*` methods have been renamed to `__internal_*`. These are internal APIs not intended for public use.
+
+    ### @clerk/clerk-js
+
+    - `__unstable__environment` → `__internal_environment`
+    - `__unstable__updateProps` → `__internal_updateProps`
+    - `__unstable__setEnvironment` → `__internal_setEnvironment`
+    - `__unstable__onBeforeRequest` → `__internal_onBeforeRequest`
+    - `__unstable__onAfterResponse` → `__internal_onAfterResponse`
+    - `__unstable__onBeforeSetActive` → `__internal_onBeforeSetActive`
+    - `__unstable__onAfterSetActive` → `__internal_onAfterSetActive`
+
+    ### @clerk/nextjs
+
+    - `__unstable_invokeMiddlewareOnAuthStateChange` → `__internal_invokeMiddlewareOnAuthStateChange`
+
+    ### @clerk/chrome-extension
+
+    - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `@clerk/clerk-react` package has been renamed to `@clerk/react`.
+
+    Update your imports:
+
+    ```diff
+    - import { ClerkProvider, useUser } from '@clerk/clerk-react';
+    + import { ClerkProvider, useUser } from '@clerk/react';
+    ```
+
+    And update your package.json:
+
+    ```diff
+    - "@clerk/clerk-react": "^5.0.0",
+    + "@clerk/react": "^7.0.0",
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `appearance.layout` property has been renamed to `appearance.options`. Update all instances in your codebase:
+
+    ```diff
+    <ClerkProvider
+      appearance={{
+    -   layout: {
+    +   options: {
+          socialButtonsPlacement: 'bottom',
+          socialButtonsVariant: 'iconButton',
+        }
+      }}
+    >
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `colorRing` and `colorModalBackdrop` CSS variables now render at full opacity when modified via the appearance prop or CSS variables. Previously, provided colors were rendered at 15% opacity.
+
+    If you were relying on the previous behavior, you may need to adjust your color values to include the desired opacity:
+
+    ```diff
+    appearance={{
+      variables: {
+    -   colorRing: '#6366f1',
+    +   colorRing: 'rgba(99, 102, 241, 0.15)',
+      }
+    }}
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The return values of `useCheckout` hook and `Clerk.checkout()` have been updated.
+
+    ### React Hook
+
+    ```diff
+    - const { id, plan, status, start, confirm, paymentSource } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+    + const { checkout, errors, fetchStatus } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+    + // Access properties via checkout object
+    + checkout.plan
+    + checkout.status
+    + checkout.start()
+    + checkout.confirm()
+    ```
+
+    ### Vanilla JS
+
+    ```diff
+    - const { getState, subscribe, confirm, start, clear, finalize } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
+    - getState().isStarting
+    - getState().checkout
+    + const { checkout, errors, fetchStatus } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
+    + checkout.plan
+    + checkout.status
+    + checkout.start()
+    + checkout.confirm()
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    All experimental methods now use the `__experimental_` prefix consistently. Update any references:
+
+    ```diff
+    - experimental__someMethod
+    + __experimental_someMethod
+
+    - experimental_someMethod
+    + __experimental_someMethod
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `createTheme` theme utility has been moved to a new export path. Update your imports:
+
+    ```diff
+    - import { __experimental_createTheme } from '@clerk/ui';
+    + import { createTheme } from '@clerk/ui/themes/experimental';
+    ```
+
+    Note: The `__experimental_` prefix has been removed from the method since they're now in the `/themes/experimental` subpath.
+  </AccordionPanel>
+</Accordion>
+
+## Deprecation Removals
+
+### `afterSwitchOrganizationUrl` removed from `OrganizationSwitcher`
+
+The `afterSwitchOrganizationUrl` prop has been removed from `OrganizationSwitcher`. Use `afterSelectOrganizationUrl` instead:
+
+```diff
+<OrganizationSwitcher
+- afterSwitchOrganizationUrl="/org-dashboard"
++ afterSelectOrganizationUrl="/org-dashboard"
+/>
+```
+
+### `Client.activeSessions` removed
+
+The `activeSessions` property has been removed from the `Client` object. Use `sessions` instead:
+
+```diff
+- const sessions = client.activeSessions;
++ const sessions = client.sessions;
+```
+
+### `hideSlug` prop removed
+
+The `hideSlug` prop has been removed. Organization slugs are now managed through the Clerk Dashboard under Organization Settings.
+
+```diff
+<OrganizationProfile
+- hideSlug={true}
+/>
+```
+
+To hide organization slugs, update your settings in the Clerk Dashboard → Organization Settings → Slug.
+
+### `saml` strategy renamed to `enterprise_sso`
+
+The `saml` authentication strategy has been renamed to `enterprise_sso`. Update any references in your code:
+
+```diff
+- strategy: 'saml'
++ strategy: 'enterprise_sso'
+```
+
+### `samlAccount` renamed to `enterpriseAccount`
+
+The `samlAccount` property has been renamed to `enterpriseAccount`. Update your code:
+
+```diff
+- user.samlAccounts
++ user.enterpriseAccounts
+
+- verification.samlAccount
++ verification.enterpriseAccount
+```
+
+### `setActive({ beforeEmit })` changed to `setActive({ navigate })`
+
+The `beforeEmit` callback in `setActive()` has been replaced with `navigate`. The callback signature has also changed:
+
+```diff
+await setActive({
+  session: sessionId,
+- beforeEmit: () => {
+-   // Called before session is set
+- }
++ navigate: ({ session }) => {
++   // Called with the session object
++   return '/dashboard';
++ }
+});
+```
+
+The `navigate` callback receives an object with the `session` property and should return the URL to navigate to.
+
+### `UserButton` sign-out redirect props removed
+
+The `UserButton` component no longer accepts sign-out redirect override props. Configure sign-out redirects using one of these methods:
+
+**Global configuration:**
+
+```jsx
+<ClerkProvider afterSignOutUrl="/signed-out">
+```
+
+**Per-button with SignOutButton:**
+
+```jsx
+<SignOutButton redirectUrl='/goodbye'>Sign Out</SignOutButton>
+```
+
+**Programmatic:**
+
+```js
+clerk.signOut({ redirectUrl: '/signed-out' });
+```
+
+### `UserSettings.saml` renamed to `enterpriseSSO`
+
+The `saml` property on `UserSettings` has been renamed to `enterpriseSSO`:
+
+```diff
+- userSettings.saml
++ userSettings.enterpriseSSO
+```
+
+### Legacy redirect props removed
+
+The legacy redirect props `afterSignInUrl`, `afterSignUpUrl`, and `redirectUrl` have been removed from components. Use the newer redirect options:
+
+```diff
+<SignIn
+- afterSignInUrl="/dashboard"
+- afterSignUpUrl="/onboarding"
++ fallbackRedirectUrl="/dashboard"
++ signUpFallbackRedirectUrl="/onboarding"
+/>
+```
+
+For forced redirects that ignore the `redirect_url` query parameter:
+
+```diff
+<SignIn
++ forceRedirectUrl="/dashboard"
++ signUpForceRedirectUrl="/onboarding"
+/>
+```
+
+### Unstable billing props removed
+
+The following unstable properties have been removed. If you were relying on these, please reach out to support.
+
+- `__unstable_manageBillingUrl`
+- `__unstable_manageBillingLabel`
+- `__unstable_manageBillingMembersLimit`
+
+## Deprecations
+
+### `@clerk/types` deprecated in favor of `@clerk/shared/types`
+
+The `@clerk/types` package is deprecated. All type definitions have been consolidated into `@clerk/shared/types`.
+
+Update your imports:
+
+```diff
+- import type { ClerkResource, UserResource } from '@clerk/types';
++ import type { ClerkResource, UserResource } from '@clerk/shared/types';
+```
+
+The `@clerk/types` package will continue to re-export types from `@clerk/shared/types` for backward compatibility, but new types will only be added to `@clerk/shared/types`.
+
+## Version
+
+### Upgrade Node.js to v20.9.0 or higher
+
+All Clerk packages now require Node.js 20.9.0 or later. Update your Node.js version and ensure your `package.json` engines field reflects this requirement.
+
+```diff
+{
+  "engines": {
+-   "node": ">=18.0.0"
++   "node": ">=20.9.0"
+  }
+}
+```
+
+## Behavior Change
+
+### `showOptionalFields` now defaults to `false`
+
+The default value of `appearance.layout.showOptionalFields` (now `appearance.options.showOptionalFields`) has changed from `true` to `false`. Optional fields are now hidden by default during sign up.
+
+To restore the previous behavior, explicitly set the option:
+
+```jsx
+<ClerkProvider
+  appearance={{
+    options: {
+      showOptionalFields: true,
+    }
+  }}
+>
+```
+  </Tab>
+</Tabs>
+
+> [!NOTE]
+> Additional Core 3 SDK guides will be added here as they become available.

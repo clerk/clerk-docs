@@ -88,11 +88,14 @@ import { validateIfComponents } from './lib/plugins/validateIfComponents'
 import { validateUniqueHeadings } from './lib/plugins/validateUniqueHeadings'
 import { checkPrompts, readPrompts, writePrompts, type Prompt } from './lib/prompts'
 import {
+  createRedirectsBloomFilter,
   analyzeAndFixRedirects as optimizeRedirects,
   readRedirects,
+  transformRedirectsToCompactObject,
   transformRedirectsToObject,
   writeRedirects,
   type Redirect,
+  type RedirectOutput,
 } from './lib/redirects'
 import { checkTooltips } from './lib/plugins/checkTooltips'
 import { readTooltipsFolder, readTooltipsMarkdown } from './lib/tooltips'
@@ -123,6 +126,8 @@ async function main() {
       static: {
         inputPath: '../redirects/static/docs.json',
         outputPath: '_redirects/static.json',
+        outputCompactPath: '_redirects/static-compact.json',
+        outputBloomFilterPath: '_redirects/static-bloom-filter.json',
       },
       dynamic: {
         inputPath: '../redirects/dynamic/docs.jsonc',
@@ -204,6 +209,7 @@ async function main() {
         'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
         'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/vercel.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],
@@ -277,16 +283,19 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  let staticRedirects: Record<string, Redirect> | null = null
-  let dynamicRedirects: Redirect[] | null = null
+  let staticRedirects: Record<string, RedirectOutput> | undefined = undefined
+  let staticBloomFilter: unknown | undefined = undefined
+  let staticCompactRedirects: Record<string, string> | undefined = undefined
+  let dynamicRedirects: Redirect[] | undefined = undefined
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
 
     const optimizedStaticRedirects = optimizeRedirects(redirects.staticRedirects)
-    const transformedStaticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
 
-    staticRedirects = transformedStaticRedirects
+    staticRedirects = transformRedirectsToObject(optimizedStaticRedirects)
+    staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
+    staticCompactRedirects = transformRedirectsToCompactObject(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
@@ -800,7 +809,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         // @ts-expect-error - This traverseTree function might just be the death of me
         async (group) => ({
           title: group.title,
-          collapse: group.collapse,
+          topNav: group.topNav,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
@@ -1082,7 +1091,7 @@ ${yaml.stringify({
   const headingValidationVFiles: VFile[] = []
 
   for (const doc of docsWithOnlyIfComponents) {
-    // Extract all SDK values from <If /> all components
+    // Extract all SDK values from <If /> components
     const availableSDKs = new Set<SDK>()
 
     mdastVisit(doc.node, (node) => {
@@ -1167,8 +1176,8 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
-  if (staticRedirects !== null && dynamicRedirects !== null) {
-    await writeRedirects(config, staticRedirects, dynamicRedirects)
+  if (staticRedirects !== undefined && dynamicRedirects !== undefined) {
+    await writeRedirects(config, { staticRedirects, staticCompactRedirects, dynamicRedirects, staticBloomFilter })
     console.info('✓ Wrote redirects to disk')
   }
 

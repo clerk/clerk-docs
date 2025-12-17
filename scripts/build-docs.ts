@@ -965,6 +965,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             doc.file.filePathInDocsFolder,
             `---
 ${yaml.stringify({
+  title: doc.frontmatter.title,
+  description: doc.frontmatter.description,
   template: 'wide',
   redirectPage: 'true',
   availableSdks: sdks.join(','),

@@ -21,7 +21,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
 
 The following example expects the user to be signing up with a password and also demonstrates how to collect additional user information for the sign-up, like a first and last name. You can keep, remove, or adjust these fields to fit your application, but either way, **you will need to have these settings [properly configured in the Clerk Dashboard](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)**.
 
-<Tabs items={["Next.js", "JavaScript"]}>
+<Tabs items={["Next.js", "JavaScript", "Expo"]}>
   <Tab>
     ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
     'use client'
@@ -252,5 +252,127 @@ The following example expects the user to be signing up with a password and also
       }
       ```
     </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
+    import * as React from 'react'
+    import { Text, TextInput, Button, View } from 'react-native'
+    import { useSignUp, useUser } from '@clerk/clerk-expo'
+    import { useLocalSearchParams, useRouter } from 'expo-router'
+
+    export default function Page() {
+      const { isSignedIn } = useUser()
+      const router = useRouter()
+      const { isLoaded, signUp, setActive } = useSignUp()
+
+      const [password, setPassword] = React.useState('')
+      // Optionally, collect additional fields that your app requires
+      const [firstName, setFirstName] = React.useState('')
+      const [lastName, setLastName] = React.useState('')
+
+      // Handle signed-in users visiting this page
+      // This will also redirect the user once they finish the sign-up process
+      React.useEffect(() => {
+        if (isSignedIn) {
+          router.push('/')
+        }
+      }, [isSignedIn])
+
+      // Get the token from the query params
+      const token = useLocalSearchParams()['__clerk_ticket'] as string
+
+      // If there is no invitation token, restrict access to this page
+      if (!token) {
+        return (
+          <View>
+            <Text>No invitation token found.</Text>
+          </View>
+        )
+      }
+
+      // Handle submission of the sign-up form
+      const handleSubmit = async () => {
+        if (!isLoaded) return
+
+        try {
+          if (!token) return null
+
+          // Create a new sign-up with the supplied invitation token.
+          // Make sure you're also passing the ticket strategy.
+          // After the below call, the user's email address will be
+          // automatically verified because of the invitation token.
+          const signUpAttempt = await signUp.create({
+            strategy: 'ticket',
+            ticket: token,
+            firstName,
+            lastName,
+            password,
+          })
+
+          // If the sign-up was completed, set the session to active
+          if (signUpAttempt.status === 'complete') {
+            await setActive({
+              session: signUpAttempt.createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for session tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If the sign-up status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(signUpAttempt, null, 2))
+          }
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      return (
+        <View>
+          <Text>Sign up</Text>
+          <View>
+            <Text>Enter first name</Text>
+            <TextInput
+              value={firstName}
+              placeholder="Enter first name"
+              placeholderTextColor="#666666"
+              onChangeText={(text) => setFirstName(text)}
+            />
+          </View>
+          <View>
+            <Text>Enter last name</Text>
+            <TextInput
+              value={lastName}
+              placeholder="Enter last name"
+              placeholderTextColor="#666666"
+              onChangeText={(text) => setLastName(text)}
+            />
+          </View>
+          <View>
+            <Text>Enter password</Text>
+            <TextInput
+              value={password}
+              placeholder="Enter password"
+              placeholderTextColor="#666666"
+              secureTextEntry={true}
+              onChangeText={(text) => setPassword(text)}
+            />
+          </View>
+          <View id="clerk-captcha" />
+          <View>
+            <Button title="Next" onPress={handleSubmit} />
+          </View>
+        </View>
+      )
+    }
+    ```
   </Tab>
 </Tabs>

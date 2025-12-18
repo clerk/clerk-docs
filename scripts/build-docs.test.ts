@@ -1365,6 +1365,9 @@ This document is available for React and Next.js.`,
     // Verify landing page content
     expect(await readFile(pathJoin('./dist/sdk-document.mdx'))).toBe(
       `---
+metadata:
+  title: SDK Document
+description: This document is available for React and Next.js.
 template: wide
 redirectPage: "true"
 availableSdks: react,nextjs
@@ -7001,6 +7004,9 @@ Documentation specific to React.js
 `)
 
     expect(await readFile('./dist/api-doc.mdx')).toBe(`---
+metadata:
+  title: API Documentation
+description: x
 template: wide
 redirectPage: "true"
 availableSdks: nextjs,remix,react
@@ -7099,6 +7105,8 @@ Documentation specific to React
 `)
 
     expect(await readFile('./dist/test.mdx')).toBe(`---
+metadata:
+  title: Documentation
 template: wide
 redirectPage: "true"
 availableSdks: react,nextjs

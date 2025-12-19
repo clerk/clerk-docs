@@ -668,7 +668,7 @@ npm i @clerk/nextjs
 
 #### Highlighting
 
-You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
+You can highlight specific lines in a code block using the `mark` prop. For example, to highlight line `2` and lines `5-7`:
 
 ````mdx
 ```tsx {{ mark: [2, [5, 7]] }}
@@ -683,6 +683,18 @@ export function Layout() {
 ````
 
 ![](/.github/media/code-block-mark.png)
+
+You can also highlight specific words using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
+
+````mdx
+```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+<ClerkProvider
+  appearance={{
+    cssLayerName: 'clerk',
+  }}
+>
+```
+````
 
 The `ins` (insert) and `del` (delete) props work in the same way as the `mark` prop but apply "diff" style highlighting with prepended `+` and `-` signs.
 

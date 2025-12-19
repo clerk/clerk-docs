@@ -684,7 +684,7 @@ export function Layout() {
 
 ![](/.github/media/code-block-mark.png)
 
-You can also highlight specific words using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
+You can also highlight specific strings using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
 
 ````mdx
 ```tsx {{ mark: ["cssLayerName: 'clerk'"] }}

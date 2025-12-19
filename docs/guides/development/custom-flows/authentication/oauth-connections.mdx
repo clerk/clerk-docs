@@ -1,0 +1,478 @@
+---
+title: Build a custom flow for authenticating with OAuth connections
+description: Learn how to use the Clerk API to build a custom sign-up and sign-in flow that supports OAuth connections.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+## Before you start
+
+You must configure your application instance through the Clerk Dashboard for the social connection(s) that you want to use. Visit [the appropriate guide for your platform](/docs/guides/configure/auth-strategies/social-connections/all-providers) to learn how to configure your instance.
+
+## Create the sign-up and sign-in flow
+
+<Tabs items={["Next.js", "Expo", "iOS", "Android"]}>
+  <Tab>
+    First, in your `.env` file, set the `NEXT_PUBLIC_CLERK_SIGN_IN_URL` environment variable to tell Clerk where the sign-in page is being hosted. Otherwise, your app may default to using the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in) instead. This guide uses the `/sign-in` route.
+
+    ```env {{ filename: '.env' }}
+    NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+    ```
+
+    <Include src="_partials/custom-flows/sso-connections" />
+
+    <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
+      ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+      'use client'
+
+      import * as React from 'react'
+      import { OAuthStrategy } from '@clerk/types'
+      import { useSignIn } from '@clerk/nextjs'
+
+      export default function Page() {
+        const { signIn } = useSignIn()
+
+        if (!signIn) return null
+
+        const signInWith = (strategy: OAuthStrategy) => {
+          return signIn
+            .authenticateWithRedirect({
+              strategy,
+              redirectUrl: '/sign-in/sso-callback',
+              redirectUrlComplete: '/sign-in/tasks', // Learn more about session tasks at https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+            })
+            .then((res) => {
+              console.log(res)
+            })
+            .catch((err: any) => {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              console.log(err.errors)
+              console.error(err, null, 2)
+            })
+        }
+
+        // Render a button for each supported OAuth provider
+        // you want to add to your app. This example uses only Google.
+        return (
+          <div>
+            <button onClick={() => signInWith('oauth_google')}>Sign in with Google</button>
+          </div>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: 'app/sign-in/sso-callback/page.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
+
+      export default function Page() {
+        // Handle the redirect flow by calling the Clerk.handleRedirectCallback() method
+        // or rendering the prebuilt <AuthenticateWithRedirectCallback/> component.
+        return (
+          <>
+            <AuthenticateWithRedirectCallback />
+
+            {/* Required for sign-up flows
+            Clerk's bot sign-up protection is enabled by default */}
+            <div id="clerk-captcha" />
+          </>
+        )
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The following example **will both sign up _and_ sign in users**, eliminating the need for a separate sign-up page.
+
+    The following example:
+
+    1. Uses the [`useSSO()`](/docs/reference/expo/use-sso) hook to access the `startSSOFlow()` method.
+    1. Calls the `startSSOFlow()` method with the `strategy` param set to `oauth_google`, but you can use any of the [supported OAuth strategies](/docs/reference/javascript/types/sso#o-auth-strategy). The optional `redirect_url` param is also set in order to redirect the user once they finish the authentication flow.
+       - If authentication is successful, the `setActive()` method is called to set the active session with the new `createdSessionId`.
+       - If authentication is not successful, you can [handle the missing requirements](#handle-missing-requirements), such as MFA, using the [`signIn`](/docs/reference/javascript/sign-in) or [`signUp`](/docs/reference/javascript/sign-up) object returned from `startSSOFlow()`, depending on if the user is signing in or signing up. These objects include properties, like `status`, that can be used to determine the next steps. See the respective linked references for more information.
+
+    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+    import React, { useCallback, useEffect } from 'react'
+    import * as WebBrowser from 'expo-web-browser'
+    import * as AuthSession from 'expo-auth-session'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button, Platform } from 'react-native'
+
+    // Preloads the browser for Android devices to reduce authentication load time
+    // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+    export const useWarmUpBrowser = () => {
+      useEffect(() => {
+        if (Platform.OS !== 'android') return
+        void WebBrowser.warmUpAsync()
+        return () => {
+          // Cleanup: closes browser when component unmounts
+          void WebBrowser.coolDownAsync()
+        }
+      }, [])
+    }
+
+    // Handle any pending authentication sessions
+    WebBrowser.maybeCompleteAuthSession()
+
+    export default function Page() {
+      useWarmUpBrowser()
+
+      // Use the `useSSO()` hook to access the `startSSOFlow()` method
+      const { startSSOFlow } = useSSO()
+
+      const onPress = useCallback(async () => {
+        try {
+          // Start the authentication process by calling `startSSOFlow()`
+          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+            strategy: 'oauth_google',
+            // For web, defaults to current path
+            // For native, you must pass a scheme, like AuthSession.makeRedirectUri({ scheme, path })
+            // For more info, see https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions
+            redirectUrl: AuthSession.makeRedirectUri(),
+          })
+
+          // If sign in was successful, set the active session
+          if (createdSessionId) {
+            setActive!({
+              session: createdSessionId,
+              // Check for session tasks and navigate to custom UI to help users resolve them
+              // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  console.log(session?.currentTask)
+                  router.push('/sign-in/tasks')
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If there is no `createdSessionId`,
+            // there are missing requirements, such as MFA
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/oauth-connections#handle-missing-requirements
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }, [])
+
+      return (
+        <View>
+          <Button title="Sign in with Google" onPress={onPress} />
+        </View>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
+    import SwiftUI
+    import Clerk
+
+    struct OAuthView: View {
+      var body: some View {
+        // Render a button for each supported OAuth provider
+        // you want to add to your app. This example uses only Google.
+        Button("Sign In with Google") {
+          Task { await signInWithOAuth(provider: .google) }
+        }
+      }
+    }
+
+    extension OAuthView {
+
+      func signInWithOAuth(provider: OAuthProvider) async {
+        do {
+          // Start the sign-in process using the selected OAuth provider.
+          let result = try await SignIn.authenticateWithRedirect(strategy: .oauth(provider: provider))
+
+          // It is common for users who are authenticating with OAuth to use
+          // a sign-in button when they mean to sign-up, and vice versa.
+          // Clerk will handle this transfer for you if possible.
+          // Therefore, a TransferFlowResult can be either a SignIn or SignUp.
+
+          switch result {
+          case .signIn(let signIn):
+            switch signIn.status {
+            case .complete:
+              // If sign-in process is complete, navigate the user as needed.
+              dump(Clerk.shared.session)
+            default:
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              dump(signIn.status)
+            }
+          case .signUp(let signUp):
+            switch signUp.status {
+            case .complete:
+              // If sign-up process is complete, navigate the user as needed.
+              dump(Clerk.shared.session)
+            default:
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              dump(signUp.status)
+            }
+          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```kotlin {{ filename: 'OAuthViewModel.kt', collapsible: true }}
+    import android.util.Log
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.api.Clerk
+    import com.clerk.api.network.serialization.errorMessage
+    import com.clerk.api.network.serialization.onFailure
+    import com.clerk.api.network.serialization.onSuccess
+    import com.clerk.api.signin.SignIn
+    import com.clerk.api.signup.SignUp
+    import com.clerk.api.sso.OAuthProvider
+    import com.clerk.api.sso.ResultType
+    import kotlinx.coroutines.flow.MutableStateFlow
+    import kotlinx.coroutines.flow.asStateFlow
+    import kotlinx.coroutines.flow.combine
+    import kotlinx.coroutines.flow.launchIn
+    import kotlinx.coroutines.launch
+
+    class OAuthViewModel : ViewModel() {
+        private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+        val uiState = _uiState.asStateFlow()
+
+        init {
+            combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+                _uiState.value = when {
+                    !isInitialized -> UiState.Loading
+                    user != null -> UiState.Authenticated
+                    else -> UiState.SignedOut
+                }
+            }.launchIn(viewModelScope)
+        }
+
+        fun signInWithOAuth(provider: OAuthProvider) {
+            viewModelScope.launch {
+                SignIn.authenticateWithRedirect(SignIn.AuthenticateWithRedirectParams.OAuth(provider)).onSuccess {
+                    when(it.resultType) {
+                        ResultType.SIGN_IN -> {
+                            // The OAuth flow resulted in a sign in
+                            if (it.signIn?.status == SignIn.Status.COMPLETE) {
+                                _uiState.value = UiState.Authenticated
+                            } else {
+                              // If the status is not complete, check why. User may need to
+                              // complete further steps.
+                            }
+                        }
+                        ResultType.SIGN_UP -> {
+                            // The OAuth flow resulted in a sign up
+                            if (it.signUp?.status == SignUp.Status.COMPLETE) {
+                                _uiState.value = UiState.Authenticated
+                            } else {
+                              // If the status is not complete, check why. User may need to
+                              // complete further steps.
+                            }
+                        }
+                    }
+                }.onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                    Log.e("OAuthViewModel", it.errorMessage, it.throwable)
+                }
+            }
+        }
+
+        sealed interface UiState {
+            data object Loading : UiState
+
+            data object SignedOut : UiState
+
+            data object Authenticated : UiState
+        }
+    }
+    ```
+
+    ```kotlin {{ filename: 'OAuthActivity.kt', collapsible: true }}
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.material3.Button
+    import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Text
+    import androidx.compose.runtime.getValue
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+    import com.clerk.api.sso.OAuthProvider
+
+    class OAuthActivity : ComponentActivity() {
+        val viewModel: OAuthViewModel by viewModels()
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    when(state) {
+                        OAuthViewModel.UiState.Authenticated -> Text("Authenticated")
+                        OAuthViewModel.UiState.Loading -> CircularProgressIndicator()
+                        OAuthViewModel.UiState.SignedOut -> {
+                            val provider = OAuthProvider.GOOGLE // Or .GITHUB, .SLACK etc.
+                            Button(onClick = {
+                                viewModel.signInWithOAuth(provider)
+                            }) {
+                                Text("Sign in with ${provider.name}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Handle missing requirements
+
+Depending on your instance settings, users might need to provide extra information before their sign-up can be completed, such as when a username or accepting legal terms is required. In these cases, the `SignUp` object returns a status of `"missing_requirements"` along with a `missingFields` array. You can create a "Continue" page to collect these missing fields and complete the sign-up flow. Handling the missing requirements will depend on your instance settings. For example, if your instance settings require a phone number, you will need to [handle verifying the phone number](/docs/guides/development/custom-flows/authentication/email-sms-otp#sign-up-flow).
+
+With OAuth flows, it's common for users to try to _sign in_ with an OAuth provider, but they don't have a Clerk account for your app yet. Clerk automatically transfers the flow from the `SignIn` object to the `SignUp` object, which returns the `"missing_requirements"` status and `missingFields` array needed to handle the missing requirements flow. This is why the "Continue" page uses the [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook and treats the missing requirements flow as a sign-up flow.
+
+<Tabs items={["Next.js"]}>
+  <Tab>
+    <CodeBlockTabs options={["Continue page", "SSO callback page"]}>
+      ```tsx {{ filename: 'app/sign-in/continue/page.tsx' }}
+      'use client'
+
+      import { useState } from 'react'
+      import { useSignUp } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
+
+      export default function Page() {
+        const router = useRouter()
+        // Use `useSignUp()` hook to access the `SignUp` object
+        // `missing_requirements` and `missingFields` are only available on the `SignUp` object
+        const { isLoaded, signUp, setActive } = useSignUp()
+        const [formData, setFormData] = useState<Record<string, string>>({})
+
+        if (!isLoaded) return <div>Loading…</div>
+
+        // Protect the page from users who are not in the sign-up flow
+        // such as users who visited this route directly
+        if (!signUp.id) router.push('/sign-in')
+
+        const status = signUp?.status
+        const missingFields = signUp?.missingFields ?? []
+
+        const handleChange = (field: string, value: string) => {
+          setFormData((prev) => ({ ...prev, [field]: value }))
+        }
+
+        const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault()
+          try {
+            // Update the `SignUp` object with the missing fields
+            // The logic that goes here will depend on your instance settings
+            // E.g. if your app requires a phone number, you will need to collect and verify it here
+            const res = await signUp?.update(formData)
+            if (res?.status === 'complete') {
+              await setActive({
+                session: res.createdSessionId,
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // Check for tasks and navigate to custom UI to help users resolve them
+                    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                    console.log(session?.currentTask)
+                    router.push('/sign-in/tasks')
+                    return
+                  }
+
+                  router.push('/')
+                },
+              })
+            }
+          } catch (err) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          }
+        }
+
+        if (status === 'missing_requirements') {
+          // For simplicity, all missing fields in this example are text inputs.
+          // In a real app, you might want to handle them differently:
+          // - legal_accepted: checkbox
+          // - username: text with validation
+          // - phone_number: phone input, etc.
+          return (
+            <div>
+              <h1>Continue sign-up</h1>
+              <form onSubmit={handleSubmit}>
+                {missingFields.map((field) => (
+                  <div key={field}>
+                    <label>
+                      {field}:
+                      <input
+                        type="text"
+                        value={formData[field] || ''}
+                        onChange={(e) => handleChange(field, e.target.value)}
+                      />
+                    </label>
+                  </div>
+                ))}
+
+                {/* Required for sign-up flows
+                Clerk's bot sign-up protection is enabled by default */}
+                <div id="clerk-captcha" />
+
+                <button type="submit">Submit</button>
+              </form>
+            </div>
+          )
+        }
+
+        // Handle other statuses if needed
+        return (
+          <>
+            {/* Required for sign-up flows
+            Clerk's bot sign-up protection is enabled by default */}
+            <div id="clerk-captcha" />
+          </>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: 'app/sign-in/sso-callback/page.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
+
+      export default function Page() {
+        // Set the `continueSignUpUrl` to the route of your "Continue" page
+        // Once a user authenticates with the OAuth provider, they will be redirected to that route
+        return (
+          <>
+            <AuthenticateWithRedirectCallback continueSignUpUrl="/sign-in/continue" />
+
+            {/* Required for sign-up flows
+            Clerk's bot sign-up protection is enabled by default */}
+            <div id="clerk-captcha" />
+          </>
+        )
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+</Tabs>

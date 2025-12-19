@@ -1,0 +1,138 @@
+---
+title: Sinatra integration
+description: The Clerk Ruby SDK provides a Sinatra extension to integrate Clerk into your Sinatra app.
+sdk: ruby
+---
+
+The Clerk Ruby SDK provides a seamless integration with Sinatra through a dedicated extension that gives you access to authentication, user management, and Organization management features.
+
+<Steps>
+  ## Install `clerk-sdk-ruby`
+
+  <Include src="_partials/ruby/installation" />
+
+  ## Configuration
+
+  <Include src="_partials/ruby/configuration" />
+
+  ## Add Clerk's Sinatra extension
+
+  The `clerk` object provides access to the [Ruby SDK's available methods](/docs/reference/ruby/overview#available-methods). To get access to the `clerk` object, you must `register` the `Sinatra::Clerk` extension.
+
+  The following example demonstrates how to register the `Sinatra::Clerk` extension and access the user's [`User`](https://github.com/clerk/clerk-http-client-ruby/blob/main/.generated/docs/User.md) object.
+
+  ```ruby {{ filename: 'app.rb' }}
+  require "clerk/sinatra"
+  require "sinatra/base"
+
+  class App < Sinatra::Base
+    register Sinatra::Clerk
+
+    # Access the user's `User` object
+    get "/" do
+      @user = clerk.user
+      erb :index, format: :html5
+    end
+
+    run! if app_file == $0
+  end
+  ```
+</Steps>
+
+## Example: Protect routes
+
+The `auth` filter can be added to any route to protect it from unauthenticated users. If a user is not authenticated, by default, `auth` will redirect them to the sign-in page.
+
+```ruby
+require "clerk/sinatra"
+require "sinatra/base"
+
+class App < Sinatra::Base
+  register Sinatra::Clerk
+
+  get "/" do
+    erb :index, format: :html5
+  end
+
+  # Protect the "/admin" route with the `auth` filter
+  # If the user is not authenticated, they will be redirected to the sign-in page
+  get "/admin", auth: true do
+    @user = clerk.user
+    erb :admin, format: :html5
+  end
+
+  run! if app_file == $0
+end
+```
+
+### Override the default behavior of the `auth` filter
+
+By default, the `auth` filter will redirect to the sign-in page if the user is not authenticated. You can override this behavior by using `set(:auth)`.
+
+In the following example, the `auth` filter is overridden to redirect to the homepage if the user is not authenticated.
+
+```ruby {{ filename: 'app.rb' }}
+require "clerk/sinatra"
+require "sinatra/base"
+
+class App < Sinatra::Base
+  register Sinatra::Clerk
+
+  # Set `auth` to perform custom behavior
+  set(:auth) do |active|
+    condition do
+      # If the user is not authenticated, redirect to the homepage
+      if active && !clerk.session
+        puts "User is not authenticated, redirecting to the homepage"
+        redirect '/'
+      end
+    end
+  end
+
+  get "/" do
+    erb :index, format: :html5
+  end
+
+  # Protect the "/admin" route with the `auth` filter
+  # which will perform the custom behavior set in `set(:auth)`
+  get "/admin", auth: true do
+    @user = clerk.user
+    erb :admin, format: :html5
+  end
+
+  run! if app_file == $0
+end
+```
+
+## Example: Reverification
+
+For actions requiring additional security, Clerk provides a `reverify` filter that prompts users to re-authenticate. This filter accepts an optional [preset](/docs/reference/ruby/overview#reverification) parameter to customize the reverification requirements.
+
+In the following example, the `/super-secret-admin` or `/chill-admin` routes will be protected from unauthenticated users. If the user is authenticated, they will be required to reverify their session, depending on when they last verified their session.
+
+```ruby
+require "clerk/sinatra"
+require "sinatra/base"
+
+class App < Sinatra::Base
+  register Sinatra::Clerk
+
+  get "/" do
+    erb :index, format: :html5
+  end
+
+  # Protect the "/super-secret-admin" route with the `auth` and `reverify` filters
+  # Reverification preset defaults to `STRICT`
+  post "/super-secret-admin", auth: true, reverify: true do
+    {message: clerk.user? ? "Valid session" : "Not logged in"}.to_json
+  end
+
+  # Protect the "/chill-admin" route with the `auth` and `reverify` filters
+  # Reverification preset is set to `LAX`
+  post "/chill-admin", auth: true, reverify: Clerk::StepUp::Preset::LAX do
+    {message: clerk.user? ? "Valid session" : "Not logged in"}.to_json
+  end
+
+  run! if app_file == $0
+end
+```

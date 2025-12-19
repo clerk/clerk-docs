@@ -1,0 +1,171 @@
+---
+title: Build a custom checkout flow with a new payment method
+description: Learn how to use the Clerk API to build a custom checkout flow that allows users to add a new payment method during checkout.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+<Include src="_partials/billing/billing-experimental" />
+
+This guide will walk you through how to build a custom user interface for a checkout flow that allows users to **add a new payment method during checkout**.
+
+For the custom flow that allows users to checkout **with an existing payment** method, see the [dedicated guide](/docs/guides/development/custom-flows/billing/checkout-existing-payment-method).
+
+For the custom flow that allows users to add a new payment method to their account, **outside of a checkout flow**, see the [dedicated guide](/docs/guides/development/custom-flows/billing/add-new-payment-method).
+
+<Steps>
+  ## Enable Billing Features
+
+  To use Billing Features, you first need to ensure they are enabled for your application. Follow the [Billing documentation](/docs/guides/billing/overview) to enable them and setup your Plans.
+
+  ## Checkout flow
+
+  To create a checkout session with a new payment card, you must:
+
+  1. Set up the checkout provider with Plan details.
+  1. Initialize the checkout session when the user is ready.
+  1. Render the payment form for card collection.
+  1. Confirm the payment with the collected payment method.
+  1. Complete the checkout process and redirect the user.
+
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      The following example:
+
+      1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to get to initiate and manage the checkout session.
+      1. Uses the [`usePaymentElement()`](/docs/reference/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
+      1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
+         - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans?tab=user).
+         - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans){{ target: '_blank' }}.
+         - Use the new [`usePlans()`](/docs/reference/hooks/use-plans) hook to get the Plan details.
+
+      This example is written for Next.js App Router but can be adapted for any React-based framework.
+
+      ```tsx {{ filename: 'app/checkout/page.tsx' }}
+      'use client'
+      import * as React from 'react'
+      import { SignedIn, ClerkLoaded } from '@clerk/nextjs'
+      import {
+        CheckoutProvider,
+        useCheckout,
+        PaymentElementProvider,
+        PaymentElement,
+        usePaymentElement,
+      } from '@clerk/nextjs/experimental'
+      import { useRouter } from 'next/navigation'
+
+      export default function CheckoutPage() {
+        return (
+          <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+            <ClerkLoaded>
+              <SignedIn>
+                <CustomCheckout />
+              </SignedIn>
+            </ClerkLoaded>
+          </CheckoutProvider>
+        )
+      }
+
+      function CustomCheckout() {
+        const { checkout } = useCheckout()
+        const { status } = checkout
+
+        if (status === 'needs_initialization') {
+          return <CheckoutInitialization />
+        }
+
+        return (
+          <div className="checkout-container">
+            <CheckoutSummary />
+
+            <PaymentElementProvider checkout={checkout}>
+              <PaymentSection />
+            </PaymentElementProvider>
+          </div>
+        )
+      }
+
+      function CheckoutInitialization() {
+        const { checkout } = useCheckout()
+        const { start, status, fetchStatus } = checkout
+
+        if (status !== 'needs_initialization') {
+          return null
+        }
+
+        return (
+          <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+            {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
+          </button>
+        )
+      }
+
+      function PaymentSection() {
+        const { checkout } = useCheckout()
+        const { isConfirming, confirm, finalize, error } = checkout
+
+        const { isFormReady, submit } = usePaymentElement()
+        const [isProcessing, setIsProcessing] = React.useState(false)
+
+        const router = useRouter()
+
+        const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault()
+          if (!isFormReady || isProcessing) return
+          setIsProcessing(true)
+
+          try {
+            // Submit payment form to get payment method
+            const { data, error } = await submit()
+            // Usually a validation error from stripe that you can ignore
+            if (error) {
+              return
+            }
+            // Confirm checkout with payment method
+            await confirm(data)
+            // Complete checkout and redirect
+            await finalize({
+              navigate: () => router.push('/dashboard'),
+            })
+          } catch (error) {
+            console.error('Payment failed:', error)
+          } finally {
+            setIsProcessing(false)
+          }
+        }
+
+        return (
+          <form onSubmit={handleSubmit}>
+            <PaymentElement fallback={<div>Loading payment element...</div>} />
+
+            {error && <div>{error.message}</div>}
+
+            <button type="submit" disabled={!isFormReady || isProcessing || isConfirming}>
+              {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+            </button>
+          </form>
+        )
+      }
+
+      function CheckoutSummary() {
+        const { checkout } = useCheckout()
+        const { plan, totals } = checkout
+
+        if (!plan) {
+          return null
+        }
+
+        return (
+          <div>
+            <h2>Order Summary</h2>
+            <span>{plan.name}</span>
+            <span>
+              {totals.totalDueNow.currencySymbol} {totals.totalDueNow.amountFormatted}
+            </span>
+          </div>
+        )
+      }
+      ```
+    </Tab>
+  </Tabs>
+</Steps>

@@ -1,0 +1,193 @@
+---
+title: Force a session token refresh
+description: Learn how to force a refresh of a user's session token in your Clerk application.
+---
+
+A user's session token is a short-lived JWT that Clerk [refreshes every 60 seconds](/docs/guides/how-clerk-works/overview#token-refresh-mechanism). However, there are some cases where you might want to force a refresh. For example, if you're retrieving information from the session token that has been updated but the token hasn't refreshed yet, the information is still old and you'll need to force the token to refresh.
+
+There are two recommended approaches to force a user's session token to refresh:
+
+- [`getToken({ skipCache: true })`](#get-token-skip-cache-true)
+- [`user.reload()`](#user-reload)
+
+Both perform a network request, but `getToken({ skipCache: true })` will only get a new token, while `user.reload()` will both get a new token and a new `User` object.
+
+## `getToken({ skipCache: true })`
+
+The `getToken()` method retrieves the current user's session token. If `skipCache` is set to `true`, it will force a new token to be minted.
+
+The `skipCache` property is only available on the client-side. To access `getToken()` from the client-side, use the [`useSession()`](/docs/reference/hooks/use-session) or [`useAuth()`](/docs/reference/hooks/use-auth) hooks.
+
+### Example
+
+Say you're building a user profile page and want to allow the user to set their birthday, but Clerk doesn't collect birthdays. To store information about a user that Clerk doesn't collect, you can use [metadata](/docs/guides/users/extending), which will get stored on the user's `User` object.
+
+When using metadata, it's recommended to [store it in the user's session token](/docs/guides/sessions/customize-session-tokens) to avoid making an API request to Clerk's Backend API when retrieving it, as API requests are slower and are subject to rate limits.
+
+However, when retrieving the user's metadata from the session token, because the session token refreshes every 60 seconds, the metadata may not be up to date if the token hasn't refreshed yet. In this case, you'd want to force a session token refresh after updating the metadata to ensure that when the metadata is retrieved, it is the latest version.
+
+**This example requires that the user's birthday has been configured to be stored in the session token** like:
+
+```json
+{
+  "birthday": "{{user.public_metadata.birthday}}"
+}
+```
+
+To do so, follow the [guide on customizing your session token](/docs/guides/sessions/customize-session-tokens).
+
+<Tabs items={["API route", "Client-side page"]}>
+  <Tab>
+    The `/update-user-metadata` API route uses Clerk's [`updateUserMetadata()`](/docs/reference/backend/user/update-user-metadata) method from the [JS Backend SDK](/docs/js-backend/getting-started/quickstart) to update the user's birthday metadata.
+
+    ```ts {{ filename: 'app/api/update-user-metadata/route.ts', collapsible: true }}
+    import { auth, clerkClient } from '@clerk/nextjs/server'
+    import { NextRequest, NextResponse } from 'next/server'
+
+    export async function POST(req: NextRequest) {
+      // Use `req.json()` to parse the request body
+      const { birthday } = await req.json()
+
+      // The `Auth` object gives you access to properties like `isAuthenticated` and `userId`
+      // Accessing the `Auth` object differs depending on the SDK you're using
+      // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
+      const { isAuthenticated, userId } = await auth()
+
+      // Protect the route from unauthenticated users
+      if (!isAuthenticated) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      // Initialize the JS Backend SDK
+      // This varies depending on the SDK you're using
+      // https://clerk.com/docs/js-backend/getting-started/quickstart
+      const client = await clerkClient()
+
+      // Use the JS Backend SDK's `updateUserMetadata()` method to update the user's birthday
+      await client.users.updateUserMetadata(userId, {
+        publicMetadata: {
+          birthday,
+        },
+      })
+
+      return NextResponse.json({ success: true }, { status: 200 })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The `/user-profile` page allows the user to update their birthday. It retrieves the user's birthday from the session token's claims under the `birthday` key. To update the user's birthday, it calls the `/update-user-metadata` API route, which handles the metadata update, and then forces a session token refresh using `getToken({ skipCache: true })`.
+
+    ```tsx {{ filename: 'app/user-profile/page.tsx', collapsible: true }}
+    'use client'
+    import { useState, useEffect } from 'react'
+    import { useAuth } from '@clerk/nextjs'
+
+    export default function Page() {
+      // Use `useAuth()` to access the authentication context,
+      // including the user's session claims
+      const { isLoaded, isSignedIn, sessionClaims, getToken } = useAuth()
+
+      const [birthday, setBirthday] = useState('')
+      const [status, setStatus] = useState<'loading' | 'success' | 'error' | null>(null)
+      const [error, setError] = useState<string | null>(null)
+
+      // Update state once the user's data loads
+      useEffect(() => {
+        // Retrieve the user's birthday from the session token's claims under the `birthday` key
+        setBirthday((sessionClaims?.birthday as string) || '')
+      }, [sessionClaims])
+
+      async function updateUserBirthday(birthday: string) {
+        try {
+          const response = await fetch('/api/update-user-metadata', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ birthday }),
+          })
+
+          const result = await response.json()
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to update birthday')
+          }
+
+          // Force token refresh
+          // so that the token is updated with the new birthday metadata
+          await getToken({ skipCache: true })
+
+          return { success: true }
+        } catch (err: any) {
+          return { error: err.message || 'Failed to update birthday' }
+        }
+      }
+
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setStatus('loading')
+        setError(null)
+
+        // Check if the birthday has been modified
+        if (birthday === (sessionClaims?.birthday || '')) {
+          setError('Please enter a new birthday to update')
+          setStatus('error')
+          return
+        }
+
+        try {
+          const result = await updateUserBirthday(birthday)
+
+          if (result.error) {
+            setError(result.error)
+            setStatus('error')
+          } else {
+            setStatus('success')
+          }
+        } catch (err: any) {
+          setError(err.message || 'Failed to update birthday')
+          setStatus('error')
+        }
+      }
+
+      // Check if Clerk has loaded
+      if (!isLoaded) return <div>Loading...</div>
+
+      // Check if the user is authenticated
+      if (!isSignedIn) return <div>Sign in to view your profile</div>
+
+      return (
+        <div style={{ maxWidth: 400, margin: '2rem auto' }}>
+          <h1>Update Your Birthday</h1>
+
+          <form onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="birthday">Birthday (YYYY-MM-DD):</label>
+              <input
+                id="birthday"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+              />
+            </div>
+
+            <button type="submit" disabled={status === 'loading'}>
+              {status === 'loading' ? 'Updating...' : 'Update Birthday'}
+            </button>
+          </form>
+
+          {status === 'success' && <p style={{ color: 'green' }}>Birthday updated successfully!</p>}
+          {status === 'error' && <p style={{ color: 'red' }}>{error}</p>}
+        </div>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## `user.reload()`
+
+The `user.reload()` method refreshes the current user's `User` object and their session token. It can be accessed from the [`useUser()`](/docs/reference/hooks/use-user) hook.
+
+<Include src="_partials/user-reload" />

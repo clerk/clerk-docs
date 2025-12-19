@@ -1,0 +1,125 @@
+---
+title: useOrganization() | Vue
+description: Access and manage the currently Active Organization in your Vue application with Clerk's useOrganization() composable.
+sdk: vue, nuxt
+---
+
+The `useOrganization()` composable retrieves attributes of the currently [Active Organization](!active-organization).
+
+## Returns
+
+<Properties>
+  - `isLoaded`
+  - `Ref<boolean>`
+
+  A boolean that indicates whether Clerk has completed initialization. Initially `false`, becomes `true` once Clerk loads.
+
+  ---
+
+  - `organization`
+  - <code>Ref\<[Organization](/docs/reference/javascript/organization)></code>
+
+  The currently [Active Organization](!active-organization).
+
+  ---
+
+  - `membership`
+  - <code>Ref\<[OrganizationMembership](/docs/reference/javascript/types/organization-membership)></code>
+
+  The current Organization membership.
+</Properties>
+
+## How to use the `useOrganization()` composable
+
+### Retrieve the current Active Organization
+
+Use `useOrganization()` to access the current active [`Organization`](/docs/reference/javascript/organization) object.
+
+```vue {{ filename: 'OrganizationStatus.vue' }}
+<script setup>
+import { OrganizationSwitcher, useOrganization } from '@clerk/vue'
+
+const { organization, isLoaded } = useOrganization()
+</script>
+
+<template>
+  <div v-if="!organization">
+    <OrganizationSwitcher />
+  </div>
+  <div v-if="isLoaded">
+    <p>This current Organization is {{ organization?.name }}</p>
+  </div>
+
+  <div v-else>
+    <p>Loading...</p>
+  </div>
+</template>
+```
+
+### Paginate Organization memberships
+
+The following example demonstrates how to use `useOrganization()` to access the Organization's memberships. Pagination is implemented by fetching pages of memberships when the "Previous page" or "Next page" buttons are clicked.
+
+```vue {{ filename: 'MembershipList.vue', collapsible: true }}
+<script setup>
+import { ref, watchEffect } from 'vue'
+import { OrganizationSwitcher, useOrganization } from '@clerk/vue'
+
+const memberships = ref([])
+const currentPage = ref(1)
+const { organization, isLoaded } = useOrganization()
+
+const pageSize = 5
+
+async function fetchMemberships() {
+  if (!organization.value) {
+    return
+  }
+
+  // Use the `getMemberships()` method on the `organization` object to fetch the organization's memberships.
+  const { data } = await organization.value.getMemberships({
+    initialPage: currentPage.value,
+    pageSize: pageSize,
+  })
+  memberships.value = data
+}
+
+watchEffect(() => {
+  if (!organization.value) {
+    return
+  }
+
+  fetchMemberships()
+})
+
+const fetchPrevious = () => currentPage.value--
+const fetchNext = () => currentPage.value++
+</script>
+
+<template>
+  <div v-if="!organization">
+    <OrganizationSwitcher />
+  </div>
+
+  <div v-else-if="isLoaded">
+    <h2>Organization members</h2>
+
+    <ul>
+      <li v-for="membership in memberships" :key="membership.id">
+        {{ membership.publicUserData.firstName }} {{ membership.publicUserData.lastName }} &lt;{{
+          membership.publicUserData.identifier
+        }}&gt; :: {{ membership.role }}
+      </li>
+    </ul>
+
+    <div>
+      <button :disabled="currentPage === 1" @click="fetchPrevious">Previous</button>
+      <button :disabled="memberships.length < pageSize" @click="fetchNext">Next</button>
+    </div>
+  </div>
+
+  <div v-else>
+    <p>Loading...</p>
+  </div>
+</template>
+```

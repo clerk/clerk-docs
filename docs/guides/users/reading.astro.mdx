@@ -1,0 +1,97 @@
+---
+title: Protect content and read user data
+description: Learn how to use Clerk's helpers to protect content and read user data in your Astro application.
+metadata:
+  title: Read session and user data in your Astro app with Clerk
+sdk: astro
+---
+
+Clerk provides helpers that you can use to protect content and read user data in your Astro application.
+
+## Server-side
+
+The [`auth()`](/docs/reference/astro/locals) and [`currentUser()`](/docs/reference/astro/locals) locals are Astro-specific helpers that you can use inside of your Astro components and [endpoints](https://docs.astro.build/en/guides/endpoints/#server-endpoints-api-routes).
+
+- The `auth()` local returns the [`Auth`](/docs/reference/backend/types/auth-object) object of the currently active user.
+- The `currentUser()` local returns the [`Backend User`](/docs/reference/backend/types/backend-user) object of the currently active user. This is helpful if you want to render user information, like their first and last name, directly from the server. Under the hood, `currentUser()` uses the [`clerkClient`](/docs/js-backend/getting-started/quickstart) wrapper to make a call to the Backend API. **This does count towards the [Backend API request rate limit](/docs/guides/how-clerk-works/system-limits)**. This also uses `fetch()` so it is automatically deduped per request.
+
+The following example demonstrates how to protect a page from unauthenticated users and access the current user's information.
+
+<CodeBlockTabs options={[".astro component", "API Route"]}>
+  ```astro {{ filename: 'src/pages/me.astro' }}
+  ---
+  // Use `locals.auth()` to access `isAuthenticated` and the user's ID
+  const { isAuthenticated, userId } = Astro.locals.auth()
+
+  // Protect the route by checking if the user is signed in
+  if (!isAuthenticated) {
+    return Astro.redirect('/login')
+  }
+
+  // Get the Backend User object when you need access to the user's information
+  const user = await Astro.locals.currentUser()
+  ---
+
+  <!-- Use `user` to render user details or create UI elements -->
+  <div>Welcome, {user.firstName}!</div>
+  ```
+
+  ```tsx {{ filename: 'src/api/me.ts' }}
+  export async function GET({ locals }) {
+    // Use `locals.auth()` to access `isAuthenticated` and the user's ID
+    const { isAuthenticated, userId } = locals.auth()
+
+    // Protect the route by checking if the user is signed in
+    if (!isAuthenticated) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    // Get the Backend User object when you need access to the user's information
+    const user = await locals.currentUser()
+
+    // Add your Route Handler's logic with the returned `user` object
+
+    return new Response(
+      JSON.stringify({ userId: user.id, email: user.emailAddresses[0].emailAddress }),
+    )
+  }
+  ```
+</CodeBlockTabs>
+
+### Retrieve data from external sources
+
+Clerk provides integrations with a number of popular databases.
+
+To retrieve a token from a [JWT template](/docs/guides/sessions/jwt-templates) and fetch data from an external source, use the [`getToken()`](/docs/reference/backend/types/auth-object#get-token){{ target: '_blank' }} method from the `auth()` local.
+
+```ts {{ filename: 'src/pages/api/route.ts' }}
+export async function GET({ locals }) {
+  // Use `locals.auth()` to access `isAuthenticated`, the user's ID, and the `getToken()` method
+  const { isAuthenticated, userId, getToken } = locals.auth()
+
+  // Protect the route by checking if the user is signed in
+  if (!isAuthenticated) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  // Use `getToken()` to get a token from the JWT template
+  const token = await getToken({ template: 'supabase' })
+
+  // Fetch data from Supabase and return it
+  const data = { supabaseData: 'Hello World' }
+
+  return new Response(JSON.stringify(data))
+}
+```
+
+## Client-side
+
+Clerk Astro provides a set of useful [stores](/docs/reference/astro/overview#client-side-helpers) that give you access to many important objects, such as the `Clerk`, `User`, and `Session` object.
+
+### `$authStore`
+
+<Include src="_partials/astro/auth-store" />
+
+### `$userStore`
+
+<Include src="_partials/astro/user-store" />

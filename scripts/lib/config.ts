@@ -14,7 +14,7 @@ type BuildConfigOptions = {
   docsPath: string
   baseDocsLink: string
   manifestPath: string
-  partialsPath: string
+  partialsFolderName: string
   distPath: string
   typedocPath: string
   localTypedocOverridePath?: string
@@ -29,13 +29,14 @@ type BuildConfigOptions = {
   }
   manifestOptions: {
     wrapDefault: boolean
-    collapseDefault: boolean
     hideTitleDefault: boolean
   }
   redirects?: {
     static: {
       inputPath: string
       outputPath: string
+      outputCompactPath?: string
+      outputBloomFilterPath?: string
     }
     dynamic: {
       inputPath: string
@@ -99,8 +100,7 @@ export async function createConfig(config: BuildConfigOptions) {
       manifestRelativePath: config.manifestPath,
       manifestFilePath: resolve(config.manifestPath),
 
-      partialsRelativePath: config.partialsPath,
-      partialsPath: resolve(config.partialsPath),
+      partialsFolderName: config.partialsFolderName,
 
       dataRelativePath: config.dataPath,
       dataPath: resolve(config.dataPath),
@@ -141,6 +141,12 @@ export async function createConfig(config: BuildConfigOptions) {
             static: {
               inputPath: resolve(path.join(config.basePath, config.redirects.static.inputPath)),
               outputPath: resolve(path.join(tempDist, config.redirects.static.outputPath)),
+              outputCompactPath: config.redirects.static.outputCompactPath
+                ? resolve(path.join(tempDist, config.redirects.static.outputCompactPath))
+                : undefined,
+              outputBloomFilterPath: config.redirects.static.outputBloomFilterPath
+                ? resolve(path.join(tempDist, config.redirects.static.outputBloomFilterPath))
+                : undefined,
             },
             dynamic: {
               inputPath: resolve(path.join(config.basePath, config.redirects.dynamic.inputPath)),

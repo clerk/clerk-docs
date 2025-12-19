@@ -1,0 +1,1148 @@
+---
+title: '`<Protect>`'
+description: The Protect component protects content or even entire routes based on authentication, and optionally, authorization. It only renders its children when the current user is signed-in, and if performing authorization checks, if the user has been granted a specific type of access control (Role, Permission, Feature, or Plan).
+sdk: astro, chrome-extension, expo, nextjs, nuxt, react, react-router, remix, tanstack-react-start, vue
+---
+
+The [`<Protect />`](/docs/reference/components/control/protect) component protects content or even entire routes based on:
+
+- authentication: whether the user is signed-in or not.
+- authorization: whether the user has been granted a specific type of access control (Role, Permission, Feature, or Plan)
+
+`<Protect />` **always** performs authentication checks. To perform [authorization checks](!authorization-check), you can pass different props, like `role`, `permission`, `feature`, or `plan`.
+
+`<Protect />` accepts a `fallback` prop that will be rendered if the user fails the authentication or authorization checks.
+
+`<Protect />` can be used both client-side and server-side (in Server Components).
+
+> [!CAUTION]
+> This component only **visually hides** its children when the current user is not authorized. The contents of its children remain accessible via the browser's source code even if the user fails the authorization check. Do not use this component to hide sensitive information that should be completely inaccessible to unauthorized users. For truly sensitive data, perform [authorization checks](!authorization-check) on the server before sending the data to the client.
+
+## Usage
+
+### Authentication checks
+
+`<Protect />` always performs authentication checks. It will render its children if the user is signed-in, and its `fallback` prop if the user is signed-out.
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+  import { Protect } from '@clerk/nextjs'
+
+  export default function Page() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```jsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/dashboard.astro' }}
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect>
+    <p slot="fallback">Users that are signed-out can see this.</p>
+    <p>Users that are signed-in can see this.</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```jsx
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Screen() {
+    return (
+      <Protect fallback={<Text>Users that are signed-out can see this.</Text>}>
+        <Text>Users that are signed-in can see this.</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/dashboard.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function DashboardPage() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/dashboard.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function DashboardPage() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/dashboard.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function DashboardPage() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/dashboard.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/dashboard')({
+    component: DashboardPage,
+  })
+
+  function DashboardPage() {
+    return (
+      <Protect fallback={<p>Users that are signed-out can see this.</p>}>
+        <p>Users that are signed-in can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup lang="ts">
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect>
+      <template #fallback>
+        <p>Users that are signed-out can see this.</p>
+      </template>
+      <p>Users that are signed-in can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/dashboard.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect>
+      <template #fallback>
+        <p>Users that are signed-out can see this.</p>
+      </template>
+      <p>Users that are signed-in can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+### Authorization checks
+
+To limit who is able to see the content that `<Protect>` renders, you can pass **one** of the access control props: `permission`, `role`, `feature`, or `plan`. It's recommended to use **Permission-based** authorization over **Role-based** authorization, and **Feature-based** authorization over **Plan-based** authorization, as they are more flexible, easier to manage, and more secure.
+
+If you do not pass any of the access control props, `<Protect>` will render its children if the user is signed in, regardless of their Role or its Permissions.
+
+For more complex authorization logic, [pass conditional logic to the `condition` prop](#render-content-conditionally).
+
+### Render content by Permissions
+
+The following example demonstrates how to use the `<Protect />` component to protect content by checking if the user has the `org:invoices:create` Permission.
+
+<If sdk="nextjs">
+  ```jsx {{ filename: 'app/protected/invoices/page.tsx' }}
+  import { Protect } from '@clerk/nextjs'
+
+  export default function Page() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```jsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/invoices.astro' }}
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect permission="org:invoices:create">
+    <p slot="fallback">You do not have the Permissions to create an invoice.</p>
+    <p>Users with Permission org:invoices:create can see this.</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```jsx
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Screen() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<Text>You do not have the Permissions to create an invoice.</Text>}
+      >
+        <Text>Users with Permission org:invoices:create can see this.</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/invoices.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function InvoicesPage() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/invoices.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function InvoicesPage() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/invoices.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function InvoicesPage() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/invoices.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/invoices')({
+    component: InvoicesPage,
+  })
+
+  function InvoicesPage() {
+    return (
+      <Protect
+        permission="org:invoices:create"
+        fallback={<p>You do not have the Permissions to create an invoice.</p>}
+      >
+        <p>Users with Permission org:invoices:create can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup lang="ts">
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect permission="org:invoices:create">
+      <template #fallback>
+        <p>You do not have the Permissions to create an invoice.</p>
+      </template>
+      <p>Users with Permission org:invoices:create can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/invoices.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect permission="org:invoices:create">
+      <template #fallback>
+        <p>You do not have the Permissions to create an invoice.</p>
+      </template>
+      <p>Users with Permission org:invoices:create can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+### Render content by Role
+
+While authorization by `permission` is **recommended**, for convenience, `<Protect>` allows a `role` prop to be passed.
+
+The following example demonstrates how to use the `<Protect />` component to protect content by checking if the user has the `org:billing` Role.
+
+<If sdk="nextjs">
+  ```jsx {{ filename: 'app/protected/billing/page.tsx' }}
+  import { Protect } from '@clerk/nextjs'
+
+  export default function ProtectPage() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```jsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/billing.astro' }}
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect role="org:billing">
+    <p slot="fallback">Only a member of the Billing department can access this content.</p>
+    <p>Users with Role org:billing can see this.</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```jsx
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Screen() {
+    return (
+      <Protect
+        permission="org:billing"
+        fallback={<Text>Only a member of the Billing department can access this content.</Text>}
+      >
+        <Text>Users with Role org:billing can see this.</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/billing.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function BillingPage() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/billing.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function BillingPage() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/billing.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function BillingPage() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/billing.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/billing')({
+    component: BillingPage,
+  })
+
+  function BillingPage() {
+    return (
+      <Protect
+        role="org:billing"
+        fallback={<p>Only a member of the Billing department can access this content.</p>}
+      >
+        <p>Users with Role org:billing can see this.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup lang="ts">
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect role="org:billing">
+      <template #fallback>
+        <p>Only a member of the Billing department can access this content.</p>
+      </template>
+      <p>Users with Role org:billing can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/billing.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect role="org:billing">
+      <template #fallback>
+        <p>Only a member of the Billing department can access this content.</p>
+      </template>
+      <p>Users with Role org:billing can see this.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+### Render content by Plan
+
+The following example demonstrates how to use `<Protect />` to protect content by checking if the user has a Plan.
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/protected/bronze/page.tsx' }}
+  import { Protect } from '@clerk/nextjs'
+
+  export default function ProtectPage() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/bronze.astro' }}
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect plan="bronze">
+    <p slot="fallback">Sorry, only subscribers to the Bronze plan can access this content.</p>
+    <p>Welcome, Bronze subscriber!</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(billing)/bronze.tsx' }}
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Page() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<Text>Sorry, only subscribers to the Bronze plan can access this content.</Text>}
+      >
+        <Text>Welcome, Bronze subscriber!</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/bronze.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function BronzePage() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/bronze.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function BronzePage() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/bronze.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function BronzePage() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/bronze.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/bronze')({
+    component: BronzePage,
+  })
+
+  function BronzePage() {
+    return (
+      <Protect
+        plan="bronze"
+        fallback={<p>Sorry, only subscribers to the Bronze plan can access this content.</p>}
+      >
+        <p>Welcome, Bronze subscriber!</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup lang="ts">
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect plan="bronze">
+      <template #fallback>
+        <p>Sorry, only subscribers to the Bronze plan can access this content.</p>
+      </template>
+      <p>Welcome, Bronze subscriber!</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/bronze.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect plan="bronze">
+      <template #fallback>
+        <p>Sorry, only subscribers to the Bronze plan can access this content.</p>
+      </template>
+      <p>Welcome, Bronze subscriber!</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+### Render content by Feature
+
+The following example demonstrates how to use `<Protect />` to protect content by checking if the user has a Feature.
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/protected/premium-access/page.tsx' }}
+  import { Protect } from '@clerk/nextjs'
+
+  export default function Page() {
+    return (
+      <Protect
+        feature="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect
+        feature="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/premium-access.astro' }}
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect feature="premium_access">
+    <p slot="fallback">
+      Sorry, only subscribers with the Premium Access feature can access this content.
+    </p>
+    <p>Congratulations! You have access to the Premium Access feature.</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(billing)/premium-access.tsx' }}
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Page() {
+    return (
+      <Protect
+        feature="premium_access"
+        fallback={
+          <Text>
+            Sorry, only subscribers with the Premium Access feature can access this content.
+          </Text>
+        }
+      >
+        <Text>Congratulations! You have access to the Premium Access feature.</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/premium-access.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function PremiumAccessPage() {
+    return (
+      <Protect
+        feature="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/premium-access.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function PremiumAccessPage() {
+    return (
+      <Protect
+        feature="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/premium-access.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function PremiumAccessPage() {
+    return (
+      <Protect
+        plan="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/premium-access.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/premium-access')({
+    component: PremiumAccessPage,
+  })
+
+  function PremiumAccessPage() {
+    return (
+      <Protect
+        plan="premium_access"
+        fallback={
+          <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+        }
+      >
+        <p>Congratulations! You have access to the Premium Access feature.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup lang="ts">
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect feature="premium_access">
+      <template #fallback>
+        <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+      </template>
+      <p>Congratulations! You have access to the Premium Access feature.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/premium-access.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect feature="premium_access">
+      <template #fallback>
+        <p>Sorry, only subscribers with the Premium Access feature can access this content.</p>
+      </template>
+      <p>Congratulations! You have access to the Premium Access feature.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+### Render content conditionally
+
+The following example uses `<Protect>`'s `condition` prop to conditionally render its children if the user has the correct Role.
+
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/dashboard/settings/page.tsx' }}
+  import type { PropsWithChildren } from 'react'
+  import { Protect } from '@clerk/nextjs'
+
+  export default function Page() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/App.tsx' }}
+  import { Protect } from '@clerk/clerk-react'
+
+  function App() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro
+  ---
+  import { Protect } from '@clerk/astro/components'
+  ---
+
+  <Protect condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}>
+    <p slot="fallback">Only an Admin or Billing Manager can access this content.</p>
+    <p>The settings page.</p>
+  </Protect>
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/dashboard/settings/page.tsx' }}
+  import { Protect } from '@clerk/clerk-expo'
+  import { Text } from 'react-native'
+
+  export default function Page() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<Text>Only an Admin or Billing Manager can access this content.</Text>}
+      >
+        <Text>The settings page.</Text>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="chrome-extension">
+  ```jsx {{ filename: 'src/routes/settings.tsx' }}
+  import { Protect } from '@clerk/chrome-extension'
+
+  export default function SettingsPage() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="remix">
+  ```tsx {{ filename: 'app/routes/settings.tsx' }}
+  import { Protect } from '@clerk/remix'
+
+  export default function SettingsPage() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/settings.tsx' }}
+  import { Protect } from '@clerk/react-router'
+
+  export default function SettingsPage() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="tanstack-react-start">
+  ```tsx {{ filename: 'app/routes/settings.tsx' }}
+  import { Protect } from '@clerk/tanstack-react-start'
+  import { createFileRoute } from '@tanstack/react-router'
+
+  export const Route = createFileRoute('/settings')({
+    component: SettingsPage,
+  })
+
+  function SettingsPage() {
+    return (
+      <Protect
+        condition={(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })}
+        fallback={<p>Only an Admin or Billing Manager can access this content.</p>}
+      >
+        <p>The settings page.</p>
+      </Protect>
+    )
+  }
+  ```
+</If>
+
+<If sdk="vue">
+  ```vue
+  <script setup>
+  import { Protect } from '@clerk/vue'
+  </script>
+
+  <template>
+    <Protect :condition="(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })">
+      <template #fallback>
+        <p>Only an Admin or Billing Manager can access this content.</p>
+      </template>
+      <p>The settings page.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```vue {{ filename: 'pages/settings.vue' }}
+  <script setup lang="ts">
+  // Components are automatically imported
+  </script>
+
+  <template>
+    <Protect :condition="(has) => has({ role: 'org:admin' }) || has({ role: 'org:billing_manager' })">
+      <template #fallback>
+        <p>Only an Admin or Billing Manager can access this content.</p>
+      </template>
+      <p>The settings page.</p>
+    </Protect>
+  </template>
+  ```
+</If>
+
+## Properties
+
+<Properties>
+  - `condition?`
+  - `has => boolean`
+
+  Optional conditional logic that renders the children if it returns `true`.
+
+  ---
+
+  - `fallback?`
+  - `JSX`
+
+  Optional UI to show when a user doesn't have the correct type of access control to access the protected content.
+
+  ---
+
+  - `feature?`
+  - `string`
+
+  Optional string corresponding to a [Feature](/docs/guides/billing/overview).
+
+  ---
+
+  - `plan?`
+  - `string`
+
+  Optional string corresponding to a [Plan](/docs/guides/billing/overview).
+
+  ---
+
+  - `permission?`
+  - `string`
+
+  Optional string corresponding to a [Permission](/docs/guides/organizations/control-access/roles-and-permissions) in the format `org:<feature>:<permission>`
+
+  ---
+
+  - `role?`
+  - `string`
+
+  Optional string corresponding to a [Role](/docs/guides/organizations/control-access/roles-and-permissions) in the format `org:<role>`
+
+  ---
+
+  - `treatPendingAsSignedOut?`
+  - `boolean`
+
+  A boolean that indicates whether to treat [pending sessions](/docs/reference/javascript/types/session-status#properties) as signed out. Defaults to `true`.
+</Properties>

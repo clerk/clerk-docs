@@ -1,0 +1,88 @@
+---
+title: Next.js rendering modes and Clerk
+description: Learn how Clerk's SDK interacts with Next.js's different rendering modes.
+sdk: nextjs
+---
+
+By default, Next.js attempts to optimize your application by statically generating pages at build-time that do not depend on data from the request. However, authentication data is inherently dynamic and depends on the request, meaning that it is not available at build-time.
+
+> [!TIP]
+> Read more about static and dynamic rendering in the [Next.js documentation](https://nextjs.org/learn/dashboard-app/static-and-dynamic-rendering).
+
+To facilitate Next.js's default behavior, Clerk provides an opt-in approach to accessing authentication data so that you can opt-in specific routes to dynamic rendering, while still using statically rendered pages for others.
+
+The following options are available for accessing authentication data:
+
+- The `auth()` helper can only be used in Server Components, but the data can be passed to Client Components if desired. It opts your entire route into dynamic rendering.
+- The `useAuth()` hook can only be used in Client Components. Due to Next.js's default behavior, these components will be statically rendered. However, you can wrap them with `<ClerkProvider dynamic>` to opt them into dynamic rendering.
+
+> [!NOTE]
+> The upcoming [Partial Prerendering (PPR)](https://nextjs.org/docs/app/building-your-application/rendering/partial-prerendering) feature in Next.js gives more control over static and dynamic rendering. Wrapping components that access auth data with `<Suspense>` allows pages to be prerendered up to the `<Suspense>` boundaries.
+
+## Access auth data with `auth()`
+
+The [`auth()`](/docs/reference/nextjs/app-router/auth) helper returns the user's authentication state in Server Components. The data can be passed to Client Components if desired. This is a dynamic API that relies on request-time data so using `auth()` will opt your entire route into dynamic rendering.
+
+```tsx
+import { auth } from '@clerk/nextjs/server'
+
+// This page will be dynamically rendered at request time
+export default async function Page() {
+  const { userId } = await auth()
+
+  // This will be immediately available on first render
+  console.log(userId)
+
+  return <p>Hello, {userId}</p>
+}
+```
+
+## Access auth data with `useAuth()`
+
+`useAuth()` provides authentication data in Client Components. Due to Next.js's default behavior, these components will be statically rendered. If that's fine with you, see the [reference docs](/docs/reference/hooks/use-auth) for more information, like code examples.
+
+However, if you'd like the components that use `useAuth()` to be dynamically rendered, you can wrap them with `<ClerkProvider dynamic>`. If you're using [PPR](https://nextjs.org/docs/app/building-your-application/rendering/partial-prerendering), consider wrapping `<ClerkProvider dynamic>` in `<Suspense>` so that the boundary fallback is included in the prerendered HTML.
+
+> [!WARNING]
+> It is not recommended and not optimal to wrap your entire application with `<ClerkProvider dynamic>` as this opts all routes into dynamic rendering, when some routes may be better suited for static rendering. If you're not sure if a route is better suited for static or dynamic rendering, see the [Next.js guide on static and dynamic rendering](https://nextjs.org/learn/dashboard-app/static-and-dynamic-rendering).
+
+The following example demonstrates how to use `<ClerkProvider dynamic>` in a page's layout in order to opt it into dynamic rendering. In this case, the [root layout](/docs/nextjs/getting-started/quickstart#add-clerk-provider-and-clerk-components-to-your-app) would still be wrapped with `<ClerkProvider>` to provide the authentication context to the entire app, but without the `dynamic` prop being passed as to not opt your entire app into dynamic rendering.
+
+<CodeBlockTabs options={["Layout", "Page"]}>
+  ```tsx {{ filename: 'app/example/layout.tsx' }}
+  import { ClerkProvider } from '@clerk/nextjs'
+  import { Suspense } from 'react'
+
+  export default function Layout({ children }: { children: React.ReactNode }) {
+    return (
+      <Suspense fallback={<Skeleton />}>
+        <ClerkProvider dynamic>{children}</ClerkProvider>
+      </Suspense>
+    )
+  }
+
+  function Skeleton() {
+    return <div>Loading...</div>
+  }
+  ```
+
+  ```tsx {{ filename: 'app/example/page.tsx' }}
+  'use client'
+
+  import { useAuth } from '@clerk/nextjs'
+
+  export default function Page() {
+    const { userId, sessionId, isSignedIn } = useAuth()
+
+    // All of these will be immediately available on first render
+    console.log(userId, sessionId, isSignedIn)
+
+    return (
+      <div>
+        <h1>Test Page</h1>
+        <p>User ID: {userId}</p>
+      </div>
+    )
+  }
+  ```
+</CodeBlockTabs>

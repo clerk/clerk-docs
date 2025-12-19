@@ -1,0 +1,170 @@
+---
+title: Build a custom flow for authenticating with enterprise connections
+description: Learn how to use the Clerk API to build a custom sign-up and sign-in flow that supports enterprise connections.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+## Before you start
+
+You must configure your application instance through the Clerk Dashboard for the enterprise connection(s) that you want to use. Visit [the appropriate guide for your platform](/docs/guides/configure/auth-strategies/enterprise-connections/overview) to learn how to configure your instance.
+
+## Create the sign-up and sign-in flow
+
+<Tabs items={["Next.js", "Expo"]}>
+  <Tab>
+    <Include src="_partials/custom-flows/sso-connections" />
+
+    <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
+      ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+      'use client'
+
+      import * as React from 'react'
+      import { useSignIn } from '@clerk/nextjs'
+
+      export default function Page() {
+        const { signIn, isLoaded } = useSignIn()
+
+        const signInWithEnterpriseSSO = (e: React.FormEvent) => {
+          e.preventDefault()
+
+          if (!isLoaded) return null
+
+          const email = (e.target as HTMLFormElement).email.value
+
+          signIn
+            .authenticateWithRedirect({
+              identifier: email,
+              strategy: 'enterprise_sso',
+              redirectUrl: '/sign-in/sso-callback',
+              redirectUrlComplete: '/',
+            })
+            .then((res) => {
+              console.log(res)
+            })
+            .catch((err: any) => {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              console.log(err.errors)
+              console.error(err, null, 2)
+            })
+        }
+
+        return (
+          <form onSubmit={(e) => signInWithEnterpriseSSO(e)}>
+            <input id="email" type="email" name="email" placeholder="Enter email address" />
+            <button>Sign in with Enterprise SSO</button>
+          </form>
+        )
+      }
+      ```
+
+      ```jsx {{ filename: 'app/sign-in/sso-callback/page.tsx' }}
+      import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
+
+      export default function Page() {
+        // Handle the redirect flow by calling the Clerk.handleRedirectCallback() method
+        // or rendering the prebuilt <AuthenticateWithRedirectCallback/> component.
+        // This is the final step in the custom Enterprise SSO flow.
+        return <AuthenticateWithRedirectCallback />
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The following example **will both sign up _and_ sign in users**, eliminating the need for a separate sign-up page.
+
+    The following example:
+
+    1. Uses the [`useSSO()`](/docs/reference/expo/use-sso) hook to access the `startSSOFlow()` method.
+    1. Calls the `startSSOFlow()` method with the `strategy` param set to `enterprise_sso` and the `identifier` param set to the user's email address that they provided. The optional `redirect_url` param is also set in order to redirect the user once they finish the authentication flow.
+       - If authentication is successful, the `setActive()` method is called to set the active session with the new `createdSessionId`. You may need to check for [session tasks](!session-tasks) that are required for the user to complete after signing up.
+       - If authentication is not successful, you can handle the missing requirements, such as MFA, using the [`signIn`](/docs/reference/javascript/sign-in) or [`signUp`](/docs/reference/javascript/sign-up) object returned from `startSSOFlow()`, depending on if the user is signing in or signing up. These objects include properties, like `status`, that can be used to determine the next steps. See the respective linked references for more information.
+
+    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+    import React, { useEffect, useState } from 'react'
+    import * as WebBrowser from 'expo-web-browser'
+    import * as AuthSession from 'expo-auth-session'
+    import { useSSO } from '@clerk/clerk-expo'
+    import { View, Button, TextInput, Platform } from 'react-native'
+
+    export const useWarmUpBrowser = () => {
+      useEffect(() => {
+        // Preloads the browser for Android devices to reduce authentication load time
+        // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+        if (Platform.OS !== 'android') return
+        void WebBrowser.warmUpAsync()
+        return () => {
+          // Cleanup: closes browser when component unmounts
+          void WebBrowser.coolDownAsync()
+        }
+      }, [])
+    }
+
+    // Handle any pending authentication sessions
+    WebBrowser.maybeCompleteAuthSession()
+
+    export default function Page() {
+      useWarmUpBrowser()
+
+      const [email, setEmail] = useState('')
+
+      // Use the `useSSO()` hook to access the `startSSOFlow()` method
+      const { startSSOFlow } = useSSO()
+
+      const onPress = async () => {
+        try {
+          // Start the authentication process by calling `startSSOFlow()`
+          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+            strategy: 'enterprise_sso',
+            identifier: email,
+            // For web, defaults to current path
+            // For native, you must pass a scheme, like AuthSession.makeRedirectUri({ scheme, path })
+            // For more info, see https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions
+            redirectUrl: AuthSession.makeRedirectUri(),
+          })
+
+          // If sign in was successful, set the active session
+          if (createdSessionId) {
+            setActive!({
+              session: createdSessionId,
+              navigate: async ({ session }) => {
+                if (session?.currentTask) {
+                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                router.push('/')
+              },
+            })
+          } else {
+            // If there is no `createdSessionId`,
+            // there are missing requirements, such as MFA
+            // Use the `signIn` or `signUp` returned from `startSSOFlow`
+            // to handle next steps
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      return (
+        <View>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter email"
+            placeholderTextColor="#666666"
+          />
+          <Button title="Sign in with SAML" onPress={onPress} />
+        </View>
+      )
+    }
+    ```
+  </Tab>
+</Tabs>

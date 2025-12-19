@@ -1,0 +1,112 @@
+---
+title: Instances / Environments
+description: An overview of the differences between development and production instances.
+---
+
+When creating a new application within Clerk, you are provided with two instances: `Development` and `Production`.  These instances vary slightly and should only be used appropriately.
+
+## Development instance
+
+A `Development` instance is Clerk's default instance type and has characteristics that allow it to be more useful for local development. To facilitate development and local authentication, `Development` instances have a more relaxed security posture and are not suitable for production workloads.
+
+Some notable examples of `Development`-only characteristics in a Clerk application are:
+
+- A `Development` banner is shown prominently in the Clerk Dashboard to make clear you're managing or configuring non-production data.
+- Email and SMS templates are prefixed with the environment type to prevent against using `Development` instances for production purposes.
+- Some social connections use shared credentials by default.
+- [The Account Portal](/docs/guides/account-portal/overview) will use a Clerk development domain that ends with `accounts.dev` instead of your app's production domain.
+- OAuth consent screens will show the development domain that ends with `accounts.dev` instead of your production domain.
+- Search engines will not be able to crawl and index your application.
+- Development instances are capped at 100 users, and user data can not be transferred between instances.
+- The architecture of Clerk's sessions management is different in development environments compared to production environments, due to the need to communicate cross-domain between `localhost` and `<slug>.accounts.dev`. The `__clerk_db_jwt` object is _only_ used in development environments. For more specific details on the differences between Clerk's session management architecture in development and production environments, see the [technical breakdown below](#session-architecture-differences).
+
+> [!NOTE]
+> All paid functionality is available in a `Development` instance. However, when you deploy your application to `Production`, you will be asked to upgrade to a `Pro` account if you are using paid features. See [our pricing page](/pricing) for full details.
+
+## Production instance
+
+A `Production` instance is the more robust option of Clerk's instance types. `Production` instances are meant to support high volumes of traffic and by default, have a more strict security posture.
+
+Some notable differences between `Production` and `Development` instances in a Clerk application are:
+
+- You must associate a production domain within the Clerk Dashboard
+- You are required to provision your own SSO credentials
+
+When deploying to production, you must first activate your `Production` environment. See the [Deploying to Production](/docs/guides/development/deployment/production) guide to learn about the process and avoid common pitfalls.
+
+## Staging environments
+
+Staging environments enable you to internally test and demo changes to your application or website before deploying them to production. Currently, Clerk only offers **Development** and **Production** instances. Official support for **Staging** instances is still on the [roadmap](https://feedback.clerk.com/roadmap/de417dd1-fa2e-4997-868f-4c9248027e7d). However, you can set up a "staging environment" by creating a separate Clerk application with a separate domain.
+
+Creating a separate Clerk application will prevent you from using live production environment data in your staging environment. If you are on a Pro, Enterprise, or Startup plan, **Clerk will fully upgrade your staging application for free.**
+
+It is important to note that when you use a separate Clerk application for your staging environment, changes to this application will not be automatically mirrored in your main application for your production environment. You must manually make these changes yourself if you want them to be reflected in both applications.
+
+### Set up a staging Clerk application
+
+The following steps will help you set up a new Clerk application with a staging-specific domain:
+
+1. **Set up a subdomain** - This will be your staging domain. For example, if your domain is `my-site.com`, you could use `staging.my-site.com`.
+1. **Create a new Clerk app** - Your staging environment will connect to this app instead of your main one. See [the Clerk quickstart guide](/docs/getting-started/quickstart/setup-clerk) to learn how to create a Clerk app.
+1. **Deploy and configure your staging app's production instance** - Using production API keys will make your staging app more secure. Follow the [Deploy to production](/docs/guides/development/deployment/production) guide to do so.
+1. **Contact Clerk support to upgrade your staging app for free** - If you are on a Pro, Enterprise, or Startup plan, Clerk will fully upgrade your staging app for free.
+
+### Alternatives
+
+#### Preview environments
+
+While staging environments are typically long-lived, preview environments are typically generated on-demand for specific pull requests. See [the section on using Clerk in a preview environment](/docs/guides/development/managing-environments#preview-environments-2) to learn about your options.
+
+#### Shared production credentials
+
+If you would like to share settings and data between your production and staging environments, see [the dedicated guide](/docs/guides/development/deployment/staging-alternatives). This is not recommended because you will be sharing a user table between your production and staging environments.
+
+## Preview environments
+
+Some popular hosting providers like Vercel and Netlify offer preview deployments, which enable you to view changes to your site in a live environment before merging and deploying them to production.
+
+There are two high-level approaches to using Clerk in a preview environment:
+
+1. Sharing production settings and user data
+1. Using independent settings and user data
+
+### Sharing production settings and user data
+
+To share production settings and user data with your preview environment, your preview environment must be hosted on the same root domain (but a separate subdomain) as your production application. The preview environment must also be configured to use the same API keys as your production environment.
+
+Generally, hosts have a special feature to host the preview environment on a subdomain of your root domain, for example:
+
+- **Vercel:** use the [Preview Deployment Suffix](https://vercel.com/docs/concepts/deployments/generated-urls#preview-deployment-suffix) feature. This feature is only available on Vercel's Pro and Enterprise plans.
+- **Netlify:** use the [Automatic Deploy Subdomain](https://docs.netlify.com/domains-https/custom-domains/automatic-deploy-subdomains/) feature.
+
+### Using independent settings and user data
+
+There are two approaches to creating a preview environment with independent settings and user data:
+
+1. **Easiest:** Use your host's provided preview domain, like \*.vercel.app or \*.netlify.app, with development API keys from Clerk.
+1. Acquire an additional root domain for your preview environment, completely separate from your production application's root domain.
+
+#### Use your host's provided preview domain
+
+Configure the preview environment to use development API keys from Clerk. It is currently not possible to use Clerk production API keys with your host's provided preview domain.
+
+#### Acquire an additional root domain
+
+> [!WARNING]
+> To use an independent environment, it is critical that you acquire an additional domain. An independent environment will not work if it is configured on the same domain as your production application, even if it is on a separate subdomain.
+
+To use an additional root domain, you must first configure your host to deploy preview environments to that domain:
+
+- **Vercel:** use the [Preview Deployment Suffix](https://vercel.com/docs/concepts/deployments/generated-urls#preview-deployment-suffix) feature. This feature is only available on Vercel's Pro and Enterprise plans.
+- **Netlify:** use the [Automatic Deploy Subdomain](https://docs.netlify.com/domains-https/custom-domains/automatic-deploy-subdomains/) feature.
+
+You can configure this environment with either your development API keys (recommended) or you can create an additional production instance and use those production API keys.
+
+## Session architecture differences
+
+> [!TIP]
+> In order to understand this section, it's recommended to have a solid understanding of how Clerk's session management architecture works. For more information on this topic, check out the guide on [how Clerk works](/docs/guides/how-clerk-works/overview).
+
+Clerk manages session state differently in production and development environments.
+
+<Include src="_partials/clerkdbjwt-vs-client-cookie" />

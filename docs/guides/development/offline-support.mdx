@@ -1,0 +1,99 @@
+---
+title: Enable offline support in your Expo app
+description: Learn how to enable offline support in your Expo app with Clerk.
+sdk: expo
+---
+
+> [!WARNING]
+> **This is an experimental API.**
+>
+> The `__experimental_resourceCache` property introduced in this guide is an experimental feature. It is subject to change in future updates, so use it cautiously in production environments. Ensure thorough testing and stay informed through [the package's changelog](https://github.com/clerk/javascript/blob/main/packages/expo/CHANGELOG.md).
+
+The Clerk Expo SDK provides enhanced offline support to improve reliability and user experience. This update enables your app to bootstrap offline using cached Clerk resources, ensuring quick initialization without requiring an internet connection.
+
+It offers the following benefits:
+
+- Initialization of the Clerk SDK is now more resilient to network failures.
+- Faster resolution of the `isLoaded` property and the [`<ClerkLoaded>`](/docs/reference/components/control/clerk-loaded) control component with only a single network fetch attempt. If the fetch fails, it gracefully falls back to cached resources.
+- Network errors are no longer muted, allowing developers to catch and handle them effectively in their [custom flows](!custom-flow).
+- The [`getToken()`](/docs/reference/javascript/session#get-token) function in the `useAuth()` hook now supports returning cached tokens, minimizing disruptions caused by network failures.
+
+## How to enable offline support
+
+To enable offline support in your Expo app, follow these steps:
+
+<Steps>
+  ### Install the necessary peer dependencies
+
+  The `expo-secure-store` package is required to use the offline support feature.
+
+  ```npm
+  npm install expo-secure-store
+  ```
+
+  ### Use the `__experimental_resourceCache` property on `ClerkProvider`
+
+  On [`<ClerkProvider>`](/docs/reference/components/clerk-provider), pass the `resourceCache` object to the `__experimental_resourceCache` property, as shown in the following example:
+
+  ```tsx {{ filename: 'app/_layout.tsx', mark: [4, 8] }}
+  import { ClerkProvider } from '@clerk/clerk-expo'
+  import { Slot } from 'expo-router'
+  import { tokenCache } from '@clerk/clerk-expo/token-cache'
+  import { resourceCache } from '@clerk/clerk-expo/resource-cache'
+
+  export default function RootLayout() {
+    return (
+      <ClerkProvider tokenCache={tokenCache} __experimental_resourceCache={resourceCache}>
+        <Slot />
+      </ClerkProvider>
+    )
+  }
+  ```
+</Steps>
+
+## How to handle network errors
+
+When there is no internet connection, Clerk's [custom flows](!custom-flow) (e.g., `signIn.create()`) will throw a network error.
+
+To handle network errors in your Expo app, you can use the `isClerkRuntimeError()` function to check if the error is a Clerk-related error. Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/reference/javascript/types/clerk-api-error) objects. These errors contain a `code` property that you can use to identify the specific error. See the following example.
+
+```tsx {{ mark: [1, [22, 30]] }}
+import { useSignIn, isClerkRuntimeError } from '@clerk/clerk-expo'
+import { Link, useRouter } from 'expo-router'
+import { Text, TextInput, Button, View } from 'react-native'
+import React from 'react'
+
+export default function SignInPage() {
+  const { signIn, setActive, isLoaded } = useSignIn()
+  const router = useRouter()
+
+  const [emailAddress, setEmailAddress] = React.useState('')
+  const [password, setPassword] = React.useState('')
+
+  const onSignInPress = React.useCallback(async () => {
+    if (!isLoaded) return
+    try {
+      const signInAttempt = await signIn.create({
+        identifier: emailAddress,
+        password,
+      })
+
+      // The rest of your custom flow logic
+    } catch (err) {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      if (isClerkRuntimeError(err) && err.code === 'network_error') {
+        console.error('Network error occurred!')
+      }
+
+      console.error(JSON.stringify(err, null, 2))
+    }
+  }, [isLoaded, emailAddress, password])
+
+  return (
+    <View>
+      <Button title="Sign in" onPress={onSignInPress} />
+    </View>
+  )
+}
+```

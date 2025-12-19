@@ -1,0 +1,407 @@
+---
+title: clerkMiddleware() | Next.js
+description: The clerkMiddleware() function allows you to protect your Next.js application using Middleware.
+sdk: nextjs
+---
+
+The `clerkMiddleware()` helper integrates Clerk authentication into your Next.js application through Middleware. `clerkMiddleware()` is compatible with both the App and Pages routers.
+
+## Configure `clerkMiddleware()`
+
+<Include src="_partials/nextjs/nextjs-15-callout" />
+
+Create a `proxy.ts` file at the root of your project, or in your `src/` directory if you have one.
+
+> [!NOTE]
+> For more information about Middleware in Next.js, see the [Next.js documentation](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware()
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+By default, `clerkMiddleware` will not protect any routes. All routes are public and you must opt-in to protection for routes.
+
+## `createRouteMatcher()`
+
+`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it. The paths provided to this helper can be in the same format as the paths provided to the Next Middleware matcher.
+
+The `createRouteMatcher()` helper returns a function that, if called with the `req` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
+
+In the following example, `createRouteMatcher()` sets all `/dashboard` and `/forum` routes as protected routes.
+
+```tsx
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+```
+
+## Protect routes
+
+You can protect routes using either or both of the following:
+
+- [Authentication-based protection](#protect-routes-based-on-authentication-status): Verify if the user is signed in.
+- [Authorization-based protection](#protect-routes-based-on-authorization-status): Verify if the user has the required Organization Roles or Custom Permissions.
+
+<Include src="_partials/nextjs/link-prefetch-callout" />
+
+### Protect routes based on authentication status
+
+You can protect routes based on a user's authentication status by checking if the user is signed in.
+
+There are two methods that you can use:
+
+- Use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) if you want to redirect unauthenticated users to the sign-in route automatically.
+- Use [`auth().isAuthenticated`](/docs/reference/nextjs/app-router/auth#protect-pages-and-routes) if you want more control over what your app does based on user authentication status.
+
+<CodeBlockTabs options={["auth.protect()", "auth().isAuthenticated()"]}>
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    if (isProtectedRoute(req)) await auth.protect()
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+
+  ```tsx {{ filename: 'proxy.ts' }}
+  import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+  const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+  export default clerkMiddleware(async (auth, req) => {
+    const { isAuthenticated, redirectToSignIn } = await auth()
+
+    if (!isAuthenticated && isProtectedRoute(req)) {
+      // Add custom logic to run before redirecting
+
+      return redirectToSignIn()
+    }
+  })
+
+  export const config = {
+    matcher: [
+      // Skip Next.js internals and all static files, unless found in search params
+      '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+      // Always run for API routes
+      '/(api|trpc)(.*)',
+    ],
+  }
+  ```
+</CodeBlockTabs>
+
+### Protect routes based on authorization status
+
+You can protect routes based on a user's authorization status by checking if the user has the required Roles or Permissions.
+
+There are two methods that you can use:
+
+- Use [`auth.protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) if you want Clerk to return a `404` if the user does not have the Role or Permission.
+- Use [`auth().has()`](/docs/reference/backend/types/auth-object#has) if you want more control over what your app does based on the authorization status.
+
+<Tabs items={["auth.protect()", "auth().has()"]}>
+  <Tab>
+    ```tsx {{ filename: 'proxy.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+    const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+
+    export default clerkMiddleware(async (auth, req) => {
+      // Restrict admin routes to users with specific Permissions
+      if (isProtectedRoute(req)) {
+        await auth.protect((has) => {
+          return has({ permission: 'org:admin:example1' }) || has({ permission: 'org:admin:example2' })
+        })
+      }
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    <Include src="_partials/has-warning" />
+
+    ```tsx {{ filename: 'proxy.ts' }}
+    import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+    const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+
+    export default clerkMiddleware(async (auth, req) => {
+      const { has, redirectToSignIn } = await auth()
+      // Restrict admin routes to users with specific Permissions
+      if (
+        (isProtectedRoute(req) && !has({ permission: 'org:admin:example1' })) ||
+        !has({ permission: 'org:admin:example2' })
+      ) {
+        // Add logic to run if the user does not have the required Permissions
+
+        return redirectToSignIn()
+      }
+    })
+
+    export const config = {
+      matcher: [
+        // Skip Next.js internals and all static files, unless found in search params
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        // Always run for API routes
+        '/(api|trpc)(.*)',
+      ],
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Protect multiple groups of routes
+
+You can use more than one `createRouteMatcher()` in your application if you have two or more groups of routes.
+
+The following example uses the [`has()`](/docs/reference/backend/types/auth-object#has) method from the `auth()` helper.
+
+<Include src="_partials/nextjs/link-prefetch-callout" />
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isTenantRoute = createRouteMatcher(['/organization-selector(.*)', '/orgid/(.*)'])
+
+const isTenantAdminRoute = createRouteMatcher(['/orgId/(.*)/memberships', '/orgId/(.*)/domain'])
+
+export default clerkMiddleware(async (auth, req) => {
+  // Restrict admin routes to users with specific Permissions
+  if (isTenantAdminRoute(req)) {
+    await auth.protect((has) => {
+      return has({ permission: 'org:admin:example1' }) || has({ permission: 'org:admin:example2' })
+    })
+  }
+  // Restrict Organization routes to signed in users
+  if (isTenantRoute(req)) await auth.protect()
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+## Protect all routes
+
+To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
+
+<Include src="_partials/nextjs/link-prefetch-callout" />
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (!isPublicRoute(req)) {
+    await auth.protect()
+  }
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+## Protect routes based on token types
+
+You can protect routes based on token types by checking if the request includes the required token (e.g. OAuth token, API key, machine token or session token). This ensures that only requests with the appropriate token type can access the route.
+
+The following example uses the [`protect()`](/docs/reference/nextjs/app-router/auth#auth-protect) method from the `auth()` helper. Requests without the required token will return an appropriate error:
+
+- A `404` error for unauthenticated requests with a session token type.
+- A `401` error for unauthenticated requests with machine token types.
+
+```tsx {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+// Create route matchers to identify which token type each route should require
+const isOAuthAccessible = createRouteMatcher(['/oauth(.*)'])
+const isApiKeyAccessible = createRouteMatcher(['/api(.*)'])
+const isMachineTokenAccessible = createRouteMatcher(['/m2m(.*)'])
+const isUserAccessible = createRouteMatcher(['/user(.*)'])
+const isAccessibleToAnyValidToken = createRouteMatcher(['/any(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  // Check if the request matches each route and enforce the corresponding token type
+  if (isOAuthAccessible(req)) await auth.protect({ token: 'oauth_token' })
+  if (isApiKeyAccessible(req)) await auth.protect({ token: 'api_key' })
+  if (isMachineTokenAccessible(req)) await auth.protect({ token: 'm2m_token' })
+  if (isUserAccessible(req)) await auth.protect({ token: 'session_token' })
+
+  if (isAccessibleToAnyValidToken(req)) await auth.protect({ token: 'any' })
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+## Debug your Middleware
+
+If you are having issues getting your Middleware dialed in, or are trying to narrow down auth-related issues, you can use the debugging feature in `clerkMiddleware()`. Add `{ debug: true }` to `clerkMiddleware()` and you will get debug logs in your terminal.
+
+```tsx {{ filename: 'proxy.ts', mark: [[4, 7]] }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  { debug: true },
+)
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+If you would like to set up debugging for your development environment only, you can use the `process.env.NODE_ENV` variable to conditionally enable debugging. For example, `{ debug: process.env.NODE_ENV === 'development' }`.
+
+## Combine Middleware
+
+You can combine other Middleware with Clerk's Middleware by returning the second Middleware from `clerkMiddleware()`.
+
+```js {{ filename: 'proxy.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import createMiddleware from 'next-intl/middleware'
+
+import { AppConfig } from './utils/AppConfig'
+
+const intlMiddleware = createMiddleware({
+  locales: AppConfig.locales,
+  localePrefix: AppConfig.localePrefix,
+  defaultLocale: AppConfig.defaultLocale,
+})
+
+const isProtectedRoute = createRouteMatcher(['dashboard/(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) await auth.protect()
+
+  return intlMiddleware(req)
+})
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+}
+```
+
+## `clerkMiddleware()` options
+
+<Include src="_partials/clerk-middleware-options" />
+
+It's also possible to dynamically set options based on the incoming request:
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => ({
+    // Provide `domain` based on the request host
+    domain: req.nextUrl.host,
+  }),
+)
+```
+
+### Dynamic keys
+
+> [!NOTE]
+> Dynamic keys are not accessible on the client-side.
+
+The following options, known as "Dynamic Keys," are shared to the Next.js application server through `clerkMiddleware`, enabling access by server-side helpers like [`auth()`](/docs/reference/nextjs/app-router/auth):
+
+- `signUpUrl`
+- `signInUrl`
+- `secretKey`
+- `publishableKey`
+
+Dynamic keys are encrypted and shared during request time using a [AES encryption algorithm](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard). When providing a `secretKey`, the `CLERK_ENCRYPTION_KEY` environment variable is mandatory and used as the encryption key. If no `secretKey` is provided to `clerkMiddleware`, the encryption key defaults to `CLERK_SECRET_KEY`.
+
+When providing `CLERK_ENCRYPTION_KEY`, it is recommended to use a 32-byte (256-bit), pseudorandom value. You can use `openssl` to generate a key:
+
+```sh {{ filename: 'terminal' }}
+openssl rand --hex 32
+```
+
+For multi-tenant applications, you can dynamically define Clerk keys depending on the incoming request. Here's an example:
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+// You would typically fetch these keys from a external store or environment variables.
+const tenantKeys = {
+  tenant1: { publishableKey: 'pk_tenant1...', secretKey: 'sk_tenant1...' },
+  tenant2: { publishableKey: 'pk_tenant2...', secretKey: 'sk_tenant2...' },
+}
+
+export default clerkMiddleware(
+  (auth, req) => {
+    // Add your middleware checks
+  },
+  (req) => {
+    // Resolve tenant based on the request
+    const tenant = getTenant(req)
+    return tenantKeys[tenant]
+  },
+)
+```
+
+### `OrganizationSyncOptions`
+
+<Include src="_partials/organization-sync-options" />

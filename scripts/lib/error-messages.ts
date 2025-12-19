@@ -32,6 +32,8 @@ export const errorMessages = {
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the docs frontmatter ["${docSdk.join('", "')}"], if this is a mistake please remove it from the <If /> otherwise update the frontmatter to include "${sdk}"`,
   'if-component-sdk-not-in-manifest': (sdk: SDK, href: string): string =>
     `<If /> component is attempting to filter to sdk "${sdk}" but it is not available in the manifest.json for ${href}, if this is a mistake please remove it from the <If /> otherwise update the manifest.json to include "${sdk}"`,
+  'if-component-sdk-and-not-sdk-props-cannot-be-used-together': (): string =>
+    `Cannot pass both "sdk" and "notSdk" props to <If /> component, you must choose one or the other.`,
   'doc-sdk-filtered-by-parent': (title: string, docSDK: SDK[], parentSDK: SDK[]): string =>
     `Doc "${title}" is attempting to use ${JSON.stringify(docSDK)} But its being filtered down to ${JSON.stringify(parentSDK)} in the manifest.json`,
   'group-sdk-filtered-by-parent': (title: string, groupSDK: SDK[], parentSDK: SDK[]): string =>
@@ -54,7 +56,8 @@ export const errorMessages = {
     `Doc "${href}" contains a duplicate heading id "${id}", please ensure all heading ids are unique`,
 
   // Include component errors
-  'include-src-not-partials': (): string => `<Include /> prop "src" must start with "_partials/"`,
+  'include-src-not-partials': (): string =>
+    `<Include /> prop "src" must start with "_partials/" (global) or "./_partials/" or "../_partials/" (relative)`,
   'partial-not-found': (src: string): string => `Partial /docs/${src}.mdx not found`,
   'partials-inside-partials': (): string =>
     'Partials inside of partials is not yet supported (this is a bug with the build script, please report)',
@@ -67,6 +70,8 @@ export const errorMessages = {
   'link-doc-not-found': (url: string, file: string): string =>
     `Matching file not found for path: ${url}. Expected file to exist at ${file}`,
   'link-hash-not-found': (hash: string, url: string): string => `Hash "${hash}" not found in ${url}`,
+  'doc-link-must-start-with-a-slash': (url: string): string =>
+    `Doc link must start with a slash (/docs/...). Fix url: ${url}`,
 
   // File reading errors
   'file-read-error': (filePath: string): string => `Failed to read in ${filePath}`,
@@ -77,6 +82,7 @@ export const errorMessages = {
   // Tooltip errors
   'tooltip-read-error': (path: string): string => `Failed to read in ${path} from tooltips file`,
   'tooltip-parse-error': (path: string): string => `Failed to parse the content of ${path}`,
+  'tooltip-not-found': (src: string): string => `Tooltip ${src} not found`,
 
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>
@@ -97,13 +103,14 @@ export const shouldIgnoreWarning = (
   warningCode: WarningCode,
 ): boolean => {
   const replacements = {
-    docs: config.baseDocsLink,
-    partials: config.partialsRelativePath + '/',
-    typedoc: config.typedocRelativePath + '/',
+    docs: (filePath: string) => filePath.replace(config.baseDocsLink, ''),
+    typedoc: (filePath: string) => filePath.replace(config.typedocRelativePath + '/', ''),
+    partials: (filePath: string) => filePath,
+    tooltips: (filePath: string) =>
+      config.tooltips ? filePath.replace(config.tooltips.inputPathRelative + '/', '') : filePath,
   }
 
-  const relativeFilePath = filePath.replace(replacements[section], '')
-
+  const relativeFilePath = replacements[section](filePath)
   const ignoreList = config.ignoreWarnings[section][relativeFilePath]
 
   if (!ignoreList) {

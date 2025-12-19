@@ -1,0 +1,92 @@
+---
+title: '`clerkMiddleware()`'
+description: The clerkMiddleware() function checks the request's cookies and headers for a session JWT and if found, attaches the Auth object to the request object under the auth key.
+sdk: expressjs
+---
+
+The `clerkMiddleware()` function checks the request's cookies and headers for a session JWT and if found, attaches the [`Auth`](/docs/reference/backend/types/auth-object) object to the `request` object under the `auth` key. **It must be set before any other middleware.**
+
+> [!TIP]
+> Even if you are using [`requireAuth()`](/docs/reference/express/require-auth) middleware, you should still use `clerkMiddleware()` as it will provide authentication state to routes that don't use `requireAuth()`. See the [example](#example-use-clerk-middleware-require-auth-and-get-auth-together).
+
+```js
+import { clerkMiddleware } from '@clerk/express'
+
+const app = express()
+
+// Pass no parameters
+app.use(clerkMiddleware())
+
+// Pass options
+app.use(clerkMiddleware(options))
+```
+
+## Example: Use `clerkMiddleware()`, `requireAuth()`, and `getAuth()` together
+
+The following example demonstrates how to use `clerkMiddleware()`, [`requireAuth()`](/docs/reference/express/require-auth), and [`getAuth()`](/docs/reference/express/get-auth) together. `clerkMiddleware()` will provide authentication state to routes that don't use `requireAuth()`, `requireAuth()` will provide authentication state to a route and also protect the route based on authentication status, and `getAuth()` can be used in a number of ways. In this example, `getAuth()` is used to protect the route based on authorization status.
+
+```js
+import { clerkMiddleware, getAuth, requireAuth } from '@clerk/express'
+import express from 'express'
+
+const app = express()
+const PORT = 3000
+
+// Apply `clerkMiddleware()` to all routes
+app.use(clerkMiddleware())
+
+// Use `getAuth()` to protect a route based on authorization status
+const hasPermission = (req, res, next) => {
+  const auth = getAuth(req)
+
+  // Handle if the user is not authorized
+  if (!auth.has({ permission: 'org:admin:example' })) {
+    return res.status(403).send('Forbidden')
+  }
+
+  return next()
+}
+
+// Use `requireAuth()` to protect a route based on authentication status
+// If user is not authenticated, requireAuth() will redirect back to the homepage
+// Then, use the `hasPermission` function created above to protect the route based on authorization status
+app.get('/path', requireAuth(), hasPermission, (req, res) => res.json(req.auth))
+
+// This route is not protected but it will have authentication state
+// attached to the request object because `clerkMiddleware()` was applied to all routes
+app.get('/path2', (req, res) => res.json(req.auth))
+
+// Start the server and listen on the specified port
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`)
+})
+```
+
+### `clerkMiddleware()` options
+
+<Include src="_partials/clerk-middleware-options" />
+
+<Properties>
+  - `clerkClient`
+  - [`ClerkClient`](/docs/js-backend/getting-started/quickstart#create-clerk-client-options)
+
+  An instance of the `ClerkClient` class. This is used to interact with the Clerk API.
+
+  ---
+
+  - `debug`
+  - `boolean`
+
+  A flag to enable debug mode. When set to `true`, the middleware will log debug information to the console. Defaults to `false`.
+
+  ---
+
+  - `enableHandshake`
+  - `boolean`
+
+  A flag to enable Clerk's handshake flow, which helps verify the session state when a session JWT has expired. It issues a `307` redirect to refresh the session JWT if the user is still logged in. Defaults to `true`.
+</Properties>
+
+#### `OrganizationSyncOptions`
+
+<Include src="_partials/organization-sync-options" />

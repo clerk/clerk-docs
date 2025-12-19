@@ -1,0 +1,459 @@
+---
+title: Build a custom flow for handling user impersonation
+description: Learn how to build a custom flow using the Clerk API that handles user impersonation.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+[Clerk's user impersonation feature](/docs/guides/users/impersonation) allows you to sign in to your application as one of your users, enabling you to directly reproduce and remedy any issues they're experiencing. It's a helpful feature for customer support and debugging.
+
+This guide will walk you through how to build a custom flow that handles user impersonation.
+
+<Include src="_partials/feature-not-free-callout" />
+
+<Tabs items={["Next.js", "Expo"]}>
+  <Tab>
+    The following example builds a dashboard that is only accessible to users with the `org:admin:impersonate` permission. To use this example, you must first [create the custom `org:admin:impersonate` permission](/docs/guides/organizations/control-access/roles-and-permissions#custom-permissions). Or you can modify the [authorization checks](!authorization-check) to fit your use case.
+
+    In the dashboard, the user will see a list of the application's users. When the user chooses to impersonate a user, they will be signed in as that user and redirected to the homepage.
+
+    Use the following tabs to view the code for:
+
+    - The main page that gets the list of the application's users using the [JS Backend SDK](/docs/reference/backend/user/get-user-list)
+    - The Client Component that has the UI for displaying the users and the ability to impersonate them
+    - The Server Action that generates the actor token using the [Backend API](/docs/reference/backend-api/tag/actor-tokens/post/actor_tokens){{ target: '_blank' }}
+
+    <CodeBlockTabs options={["Main page", "Client Component", "Server Action"]}>
+      ```tsx {{ filename: 'app/dashboard/page.tsx' }}
+      import { auth, clerkClient } from '@clerk/nextjs/server'
+      import ImpersonateUsers from './_components'
+
+      export default async function AccountPage() {
+        const { has } = await auth()
+
+        // Protect the page
+        if (!has({ permission: 'org:admin:impersonate' })) {
+          return <p>You do not have permission to access this page.</p>
+        }
+
+        const client = await clerkClient()
+
+        // Fetch list of application's users using Clerk's JS Backend SDK
+        const users = await client.users.getUserList()
+
+        // This page needs to be a server component to use clerkClient.users.getUserList()
+        // You must pass the list of users to the client for the rest of the logic
+        // But you cannot pass the entire User object to the client,
+        // because its too complex. So grab the data you need, like so:
+        const parsedUsers = []
+        for (const user of users.data) {
+          parsedUsers.push({
+            id: user.id,
+            email: user.primaryEmailAddress?.emailAddress,
+          })
+        }
+
+        // Pass the parsed users to the Client Component
+        return <ImpersonateUsers users={parsedUsers} />
+      }
+      ```
+
+      ```tsx {{ filename: 'app/dashboard/_components.tsx' }}
+      'use client'
+
+      import React from 'react'
+      import { useUser, useSignIn } from '@clerk/nextjs'
+      import { generateActorToken } from './_actions'
+      import { useRouter } from 'next/navigation'
+
+      type ParsedUser = {
+        id: string
+        email: string | undefined
+      }
+
+      export type Actor = {
+        object: string
+        id: string
+        status: 'pending' | 'accepted' | 'revoked'
+        user_id: string
+        actor: object
+        token: string | null
+        url: string | null
+        created_at: Number
+        updated_at: Number
+      }
+
+      // Create an actor token for the impersonation
+      async function createActorToken(actorId: string, userId: string) {
+        const res = await generateActorToken(actorId, userId) // The Server Action to generate the actor token
+
+        if (!res.ok) console.log('Error', res.message)
+
+        return res.token
+      }
+
+      export default function ImpersonateUsers({ users }: { users: ParsedUser[] }) {
+        const { isLoaded, signIn, setActive } = useSignIn()
+        const router = useRouter()
+        const { isSignedIn, user } = useUser()
+
+        if (!isSignedIn) {
+          // Handle signed out state
+          return null
+        }
+
+        // Handle "Impersonate" button click
+        async function impersonateUser(actorId: string, userId: string) {
+          if (!isLoaded) return
+
+          const actorToken = await createActorToken(actorId, userId)
+
+          // Sign in as the impersonated user
+          if (actorToken) {
+            try {
+              const { createdSessionId } = await signIn.create({
+                strategy: 'ticket',
+                ticket: actorToken,
+              })
+
+              await setActive({ session: createdSessionId })
+
+              router.push('/')
+            } catch (err) {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2))
+            }
+          }
+        }
+
+        return (
+          <>
+            <p>Hello {user?.primaryEmailAddress?.emailAddress}</p>
+
+            <h1>Users</h1>
+            <ul>
+              {users?.map((userFromUserList) => {
+                return (
+                  <li key={userFromUserList.id} style={{ display: 'flex', gap: '4px' }}>
+                    <p>{userFromUserList?.email ? userFromUserList.email : userFromUserList.id}</p>
+                    <button onClick={async () => await impersonateUser(user.id, userFromUserList.id)}>
+                      Impersonate
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )
+      }
+      ```
+
+      ```tsx {{ filename: 'app/dashboard/_actions.ts' }}
+      'use server'
+
+      import { auth } from '@clerk/nextjs/server'
+
+      export async function generateActorToken(actorId: string, userId: string) {
+        // Check if the user has the Permission to impersonate
+        if (!auth().has({ permission: 'org:admin:impersonate' })) {
+          return {
+            ok: false,
+            message: 'You do not have permission to access this page.',
+          }
+        }
+
+        const params = JSON.stringify({
+          user_id: userId,
+          actor: {
+            sub: actorId,
+          },
+        })
+
+        // Create an actor token using Clerk's Backend API
+        const res = await fetch('https://api.clerk.com/v1/actor_tokens', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+            'Content-type': 'application/json',
+          },
+          body: params,
+        })
+
+        if (!res.ok) {
+          return { ok: false, message: 'Failed to generate actor token' }
+        }
+        const data = await res.json()
+
+        return { ok: true, token: data.token }
+      }
+      ```
+    </CodeBlockTabs>
+  </Tab>
+
+  <Tab>
+    The following example creates a basic dashboard for impersonating users.
+
+    <Steps>
+      ### Protect the dashboard route
+
+      > [!WARNING]
+      > It is **recommended** that you build impersonation into a dashboard that **only authorized users** can access.
+
+      1. Create the `dashboard/` directory.
+      1. In the `dashboard/` directory, create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to access the user's authentication state. If the user is already signed in, they'll be redirected to the home page. The [`<Protect>`](/docs/reference/components/control/protect) component is used to ensure that only users with the `org:dashboard:access` Permission can access it. You can modify the `permission` attribute to fit your use case.
+
+      ```tsx {{ filename: 'app/dashboard/_layout.tsx' }}
+      import { Redirect, Stack } from 'expo-router'
+      import { Protect, useAuth } from '@clerk/clerk-expo'
+      import { Text } from 'react-native'
+
+      export default function GuestLayout() {
+        const { isSignedIn } = useAuth()
+
+        if (!isSignedIn) {
+          return <Redirect href={'/'} />
+        }
+
+        return (
+          <Protect
+            permission="org:dashboard:access"
+            fallback={<Text>You don't have the permissions to access the dashboard.</Text>}
+          >
+            <Stack />
+          </Protect>
+        )
+      }
+      ```
+
+      ### Create an API route to generate actor tokens
+
+      To sign in as a different user, you must supply an actor token when creating a session.
+
+      Create the `generateActorToken+api.tsx` file with the following code. This creates an API route that will call Clerk's Backend API [`/actor_tokens`](/docs/reference/backend-api/tag/actor-tokens/post/actor_tokens){{ target: '_blank' }} endpoint to create an actor token.
+
+      ```tsx {{ filename: 'app/generateActorToken+api.tsx', collapsible: true }}
+      export async function POST(req: Request) {
+        const { actorId, userId } = await req.json()
+
+        try {
+          // Create an actor token using Clerk's Backend API
+          const res = await fetch('https://api.clerk.com/v1/actor_tokens', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+              'Content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              actor: {
+                sub: actorId,
+              },
+            }),
+          })
+
+          const data = await res.json()
+
+          return Response.json(data)
+        } catch (err) {
+          return Response.json({ error: 'Failed to generate actor token' }, { status: 500 })
+        }
+      }
+      ```
+
+      ### Create a hook to get users
+
+      To impersonate a user, you need a list of your application's users to be able to select one for impersonation.
+
+      1. Create the `hooks/` directory.
+      1. In the `hooks/` directory, create the `useUsers.tsx` file with the following code. This creates a hook that will fetch the list of your application's users.
+
+      ```tsx {{ filename: 'app/hooks/useUsers.tsx', collapsible: true }}
+      import { UserJSON } from '@clerk/types'
+      import { useEffect, useState } from 'react'
+
+      type UseUsersReturn = {
+        users: UserJSON[] | null
+        isLoading: boolean
+        error: Error | null
+      }
+
+      /**
+       * Returns a list of users for the application.
+       *
+       * Until the users are fetched, `isLoading` will be set to `true`.
+       *
+       * @example
+       *
+       * import { useUsers } from '@/app/hooks/useUsers';
+       *
+       * function Hello() {
+       *   const { users, isLoading, error } = useUsers();
+       *   if(isLoading) {
+       *     return <div>Loading...</div>;
+       *   }
+       *   return <div>Users: {users?.map((user) => user.firstName).join(', ')}</div>
+       * }
+       */
+      export default function useUsers(): UseUsersReturn {
+        const [users, setUsers] = useState<UserJSON[] | null>(null)
+        const [isLoading, setIsLoading] = useState(true)
+        const [error, setError] = useState<Error | null>(null)
+
+        useEffect(() => {
+          const getUsers = async () => {
+            try {
+              const res = await fetch('/getUsers')
+              if (!res.ok) {
+                throw new Error('Failed to fetch users')
+              }
+              const data = await res.json()
+              setUsers(data)
+            } catch (err) {
+              setError(err instanceof Error ? err : new Error('Unknown error'))
+            } finally {
+              setIsLoading(false)
+            }
+          }
+
+          getUsers()
+        }, []) // Remove users from dependency array to prevent infinite loop
+
+        return { users, isLoading, error }
+      }
+      ```
+
+      ### Create the dashboard UI
+
+      1. In the `dashboard/` directory, create the `index.tsx` file with the following code. This creates the UI for the dashboard, which displays a list of users and allows you to impersonate one.
+
+      ```tsx {{ filename: 'app/dashboard/index.tsx', collapsible: true }}
+      import React, { useState } from 'react'
+      import { Button, Text, View } from 'react-native'
+      import { useRouter } from 'expo-router'
+      import { useUser, useSignIn } from '@clerk/clerk-expo'
+      import useUsers from '../hooks/useUsers'
+
+      export default function Dashboard() {
+        const [error, setError] = useState<string | null>(null)
+
+        const { isLoaded, signIn, setActive } = useSignIn()
+        const { isSignedIn, user } = useUser()
+        const router = useRouter()
+        const { users, isLoading } = useUsers()
+
+        if (!isSignedIn) {
+          // Handle signed out state
+          return null
+        }
+
+        // Create an actor token for the impersonation
+        async function createActorToken(actorId: string, userId: string) {
+          setError(null)
+
+          try {
+            const res = await fetch('/generateActorToken', {
+              method: 'POST',
+              body: JSON.stringify({
+                actorId,
+                userId,
+              }),
+            })
+
+            const data = await res.json()
+
+            if (data.errors) {
+              setError(data.errors[0].long_message)
+              return null
+            }
+
+            return data.token
+          } catch (err) {
+            setError('Failed to generate actor token')
+            return null
+          }
+        }
+
+        // Handle "Impersonate" button click
+        async function impersonateUser(actorId: string, userId: string) {
+          setError(null)
+          if (!isLoaded) return
+
+          // Calls your /generateActorToken API route
+          const actorToken = await createActorToken(actorId, userId)
+
+          // Sign in as the impersonated user
+          if (actorToken) {
+            try {
+              const { createdSessionId } = await signIn.create({
+                strategy: 'ticket',
+                ticket: actorToken,
+              })
+
+              await setActive({ session: createdSessionId })
+
+              router.push('/')
+            } catch (err) {
+              setError('Failed to impersonate user')
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              console.error(JSON.stringify(err, null, 2))
+            }
+          }
+        }
+
+        return (
+          <View>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', padding: 10 }}>
+              Welcome to the dashboard, {user?.firstName}!
+            </Text>
+            <Text style={{ fontSize: 16, padding: 10 }}>Your user ID is {user?.id}</Text>
+
+            {isLoading && <Text>Loading your users...</Text>}
+
+            {!isLoading && users && (
+              <View style={{ padding: 10 }}>
+                <View style={{ flexDirection: 'row', padding: 5, borderBottomWidth: 1 }}>
+                  <Text style={{ flex: 1, fontWeight: 'bold' }}>User ID</Text>
+                  <Text style={{ flex: 1, fontWeight: 'bold' }}>Email ID</Text>
+                  <Text style={{ flex: 1, fontWeight: 'bold' }}>First Name</Text>
+                  <Text style={{ flex: 1, fontWeight: 'bold' }}>Actions</Text>
+                </View>
+                {users.map((userFromList) => {
+                  const primaryEmail = userFromList.email_addresses?.find(
+                    (email) => email.id === userFromList.primary_email_address_id,
+                  )
+                  return (
+                    <View key={userFromList.id} style={{ flexDirection: 'row', padding: 5 }}>
+                      <Text style={{ flex: 1 }}>{userFromList.id}</Text>
+                      <Text style={{ flex: 1 }}>{primaryEmail?.id || 'N/A'}</Text>
+                      <Text style={{ flex: 1 }}>{userFromList.first_name || 'N/A'}</Text>
+                      <View style={{ flex: 1 }}>
+                        {/* Don't allow impersonation of yourself */}
+                        {userFromList.id !== user.id ? (
+                          <Button
+                            title="Impersonate"
+                            onPress={async () => await impersonateUser(user.id, userFromList.id)}
+                          />
+                        ) : (
+                          <Text>You cannot impersonate yourself</Text>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })}
+              </View>
+            )}
+
+            {error && (
+              <View style={{ padding: 10, backgroundColor: '#ffebee' }}>
+                <Text style={{ color: '#c62828' }}>{error}</Text>
+              </View>
+            )}
+          </View>
+        )
+      }
+      ```
+    </Steps>
+  </Tab>
+</Tabs>

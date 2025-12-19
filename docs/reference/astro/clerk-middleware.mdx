@@ -1,0 +1,105 @@
+---
+title: '`clerkMiddleware()` | Astro'
+description: The `clerkMiddleware()` function allows you to protect your Astro application using Middleware.
+sdk: astro
+---
+
+The `clerkMiddleware()` helper integrates Clerk authentication into your Astro application through middleware.
+
+## Configure `clerkMiddleware()`
+
+Create a `middleware.ts` file inside your `src/` directory.
+
+```ts {{ filename: 'src/middleware.ts' }}
+import { clerkMiddleware } from '@clerk/astro/server'
+
+export const onRequest = clerkMiddleware()
+```
+
+## `createRouteMatcher()`
+
+`createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes. `createRouteMatcher()` accepts an array of routes and checks if the route the user is trying to visit matches one of the routes passed to it.
+
+The `createRouteMatcher()` helper returns a function that, if called with the `context.request` object from the Middleware, will return `true` if the user is trying to access a route that matches one of the routes passed to `createRouteMatcher()`.
+
+In the following example, `createRouteMatcher()` sets all `/dashboard` and `/forum` routes as protected routes.
+
+```ts
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+```
+
+## Protect routes
+
+You can protect routes by checking either or both of the following:
+
+- [User authentication status](#protect-routes-based-on-user-authentication-status) -- user is signed in or out
+- [User authorization status](#protect-routes-based-on-user-authorization-status) -- user has the required Role or Permission
+
+### Protect routes based on user authentication status
+
+To protect routes based on user authentication status, use [`auth().isAuthenticated`](/docs/reference/backend/types/auth-object){{ target: '_blank' }} to check if `isAuthenticated` is true. If it's not, the user is not authenticated, and you can redirect them to the sign-in page.
+
+```tsx {{ filename: 'src/middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+export const onRequest = clerkMiddleware((auth, context) => {
+  const { isAuthenticated, redirectToSignIn } = auth()
+
+  if (!isAuthenticated && isProtectedRoute(context.request)) {
+    // Add custom logic to run before redirecting
+
+    return redirectToSignIn()
+  }
+})
+```
+
+### Protect routes based on user authorization status
+
+To protect routes based on user authorization status, use [`auth().has()`](/docs/reference/backend/types/auth-object#has){{ target: '_blank' }} to check if the user has the required Roles or Custom Permissions.
+
+```tsx {{ filename: 'src/middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+
+const isProtectedRoute = createRouteMatcher(['/admin(.*)'])
+
+export const onRequest = clerkMiddleware((auth, context) => {
+  const { has, redirectToSignIn } = auth()
+
+  // Restrict admin routes to users with specific Permissions
+  if (
+    (isProtectedRoute(context.request) && !has({ permission: 'org:admin:example1' })) ||
+    !has({ permission: 'org:admin:example2' })
+  ) {
+    // Add logic to run if the user does not have the required Permissions; for example, redirecting to the sign-in page
+    return redirectToSignIn()
+  }
+})
+```
+
+## Protect all routes
+
+To protect all routes in your application and define specific routes as public, you can use any of the above methods and simply invert the `if` condition.
+
+```tsx
+import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
+export const onRequest = clerkMiddleware((auth, context) => {
+  const { isAuthenticated, redirectToSignIn, userId } = auth()
+
+  if (!isPublicRoute(context.request) && !isAuthenticated) {
+    return redirectToSignIn()
+  }
+})
+```
+
+## `clerkMiddleware()` options
+
+<Include src="_partials/clerk-middleware-options" />
+
+### `OrganizationSyncOptions`
+
+<Include src="_partials/organization-sync-options" />

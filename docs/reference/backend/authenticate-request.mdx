@@ -1,0 +1,239 @@
+---
+title: '`authenticateRequest()`'
+description: Use Clerk's JS Backend SDK to verify a token passed from the frontend.
+sdk: js-backend
+---
+
+{/* clerk/javascript file: https://github.com/clerk/javascript/blob/main/packages/backend/src/tokens/request.ts#L62 */}
+
+Authenticates a token passed from the frontend. Networkless if the `jwtKey` is provided. Otherwise, performs a network call to retrieve the JWKS from the [Backend API](/docs/reference/backend-api/tag/jwks/get/jwks){{ target: '_blank' }}.
+
+```ts
+function authenticateRequest(
+  request: Request,
+  options: AuthenticateRequestOptions,
+): Promise<RequestState>
+```
+
+## Parameters
+
+<Properties>
+  - `request`
+  - `Request`
+
+  `Request` object
+
+  ---
+
+  - `options?`
+  - [`AuthenticateRequestOptions`](#authenticate-request-options)
+
+  Optional options to configure the authentication.
+</Properties>
+
+## `AuthenticateRequestOptions`
+
+It is recommended to set these options as [environment variables](/docs/guides/development/clerk-environment-variables#api-and-sdk-configuration) where possible, and then pass them to the function. For example, you can set the `secretKey` option using the `CLERK_SECRET_KEY` environment variable, and then pass it to the function like this: `createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })`.
+
+> [!WARNING]
+> You must provide either `jwtKey` or `secretKey`.
+>
+> For better security, it's highly recommended to explicitly set the `authorizedParties` option when authorizing requests. The value should be a list of domains that are allowed to make requests to your application. Not setting this value can open your application to [CSRF attacks](https://owasp.org/www-community/attacks/csrf).
+
+<Typedoc src="backend/authenticate-request-options" />
+
+## Returns
+
+<Properties>
+  - `isAuthenticated`
+  - `boolean`
+
+  A boolean that indicates whether the incoming request is authenticated. Initially `false`, becomes `true` once the request is authenticated.
+
+  ---
+
+  - `isSignedIn` (deprecated)
+  - `boolean`
+
+  **Deprecated. Use `isAuthenticated` instead.** Indicates whether the incoming request is authenticated.
+
+  ---
+
+  - `status`
+  - `'signed-in' | 'signed-out' | 'handshake'`
+
+  The authentication state.
+
+  ---
+
+  - `reason`
+  - `string | null`
+
+  The error code or reason for the current state. When there is a signed-in user, the value will be `null`.
+
+  ---
+
+  - `message`
+  - `string | null`
+
+  The full error message or additional context. When there is a signed-in user, the value will be `null`.
+
+  ---
+
+  - `tokenType`
+  - `'session_token' | 'oauth_token' | 'm2m_token' | 'api_key'`
+
+  The type of token.
+
+  ---
+
+  - `token`
+  - `string`
+
+  The value of the token.
+
+  ---
+
+  - `headers`
+  - [Headers](https://developer.mozilla.org/en-US/docs/Web/API/Headers)
+
+  A `Headers` object containing debug or status headers.
+
+  ---
+
+  - `toAuth()`
+  - `function`
+
+  A function that returns the `Auth` object. This JavaScript object contains important information like the current user's session ID, user ID, and Organization ID. Learn more about the [`Auth` object](/docs/reference/backend/types/auth-object){{ target: '_blank' }}.
+</Properties>
+
+## Examples
+
+<Tabs items={["JS Backend SDK", "With other Clerk SDKs"]}>
+  <Tab>
+    If you are using the [JS Backend SDK](/docs/js-backend/getting-started/quickstart) on its own, you need to provide the `secretKey` and `publishableKey` to `createClerkClient()` so that it is passed to `authenticateRequest()`. You can set these values as [environment variables](/docs/guides/development/clerk-environment-variables#clerk-publishable-and-secret-keys) and then pass them to the function.
+
+    ```tsx
+    import { createClerkClient } from '@clerk/backend'
+
+    export async function GET(req: Request) {
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY,
+        publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      })
+
+      const { isAuthenticated } = await clerkClient.authenticateRequest(req, {
+        authorizedParties: ['https://example.com'],
+      })
+
+      if (!isAuthenticated) {
+        return Response.json({ status: 401 })
+      }
+
+      // Add logic to perform protected actions
+
+      return Response.json({ message: 'This is a reply' })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    `authenticateRequest()` requires `publishableKey` to be set. If you are importing `clerkClient` from a higher-level SDK, such as Next.js, then `clerkClient` infers the `publishableKey` from your [environment variables](/docs/guides/development/clerk-environment-variables#clerk-publishable-and-secret-keys). **The following example uses Next.js, but you can use the comments in the example to help you adapt it to other SDKs.**
+
+    ```tsx
+    import { clerkClient } from '@clerk/nextjs/server'
+
+    // Initialize the JS Backend SDK
+    // This varies depending on the SDK you're using
+    // https://clerk.com/docs/js-backend/getting-started/quickstart
+    const client = await clerkClient()
+
+    export async function GET(req: Request) {
+      // Use the `authenticateRequest()` method to verify the token
+      const { isAuthenticated } = await client.authenticateRequest(req, {
+        authorizedParties: ['https://example.com'],
+      })
+
+      // Protect the route from unauthenticated users
+      if (!isAuthenticated) {
+        return Response.json({ status: 401 })
+      }
+
+      // Add logic to perform protected actions
+
+      return Response.json({ message: 'This is a reply' })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Machine authentication
+
+By default, `authenticateRequest()` will authenticate a session request. To authenticate a machine request, you need to set the `acceptsToken` option to a machine token type, such as `'api_key'`, `'oauth_token'` or `'m2m_token'`.
+
+<Tabs items={["JS Backend SDK", "With other Clerk SDKs"]}>
+  <Tab>
+    ```tsx
+    import { createClerkClient } from '@clerk/backend'
+
+    export async function GET(request: Request) {
+      // Initialize the JS Backend SDK
+      // This varies depending on the SDK you're using
+      // https://clerk.com/docs/js-backend/getting-started/quickstart
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY,
+        publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      })
+
+      // Use the `authenticateRequest()` method to verify the token
+      const { isAuthenticated } = await clerkClient.authenticateRequest(request, {
+        acceptsToken: 'oauth_token',
+      })
+
+      // Protect the route from unauthenticated users
+      if (!isAuthenticated) {
+        return Response.json({ status: 401 })
+      }
+
+      // Add logic to perform protected actions
+
+      return Response.json({ message: 'This is a machine-to-machine reply' })
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    **This example uses Next.js, but you can use the comments in the example to help you adapt it to other SDKs.**
+
+    ```tsx
+    import { clerkClient } from '@clerk/nextjs/server'
+
+    // Initialize the JS Backend SDK
+    // This varies depending on the SDK you're using
+    // https://clerk.com/docs/js-backend/getting-started/quickstart
+    const client = await clerkClient()
+
+    export async function GET(req: Request) {
+      // Use the `authenticateRequest()` method to verify the token
+      const { isAuthenticated } = await client.authenticateRequest(request, {
+        acceptsToken: 'oauth_token',
+      })
+
+      // Protect the route from unauthenticated users
+      if (!isAuthenticated) {
+        return Response.json({ status: 401 })
+      }
+
+      // Add logic to perform protected actions
+
+      return Response.json({ message: 'This is a machine-to-machine reply' })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Networkless token verification
+
+The following example uses the `authenticateRequest()` method with the [JS Backend SDK](/docs/js-backend/getting-started/quickstart) to verify the token passed by the frontend, and performs a networkless authentication by passing `jwtKey`. This will verify if the user is signed into the application or not.
+
+<Include src="_partials/authenticate-req" />

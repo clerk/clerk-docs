@@ -1,0 +1,171 @@
+---
+title: Force multi-factor authentication (MFA) for all users
+description: Learn how to force multi-factor authentication (MFA) for all users in your Clerk application.
+---
+
+By default, Clerk does not enforce [multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) for all users. This guide demonstrates how to force MFA for all users by using `clerkMiddleware()` to intercept all requests and check whether a user has MFA enabled. If the user does not have MFA enabled, `clerkMiddleware()` redirects them to the `/mfa` page where they can set up MFA.
+
+<Steps>
+  ## Enable MFA in the Clerk Dashboard
+
+  If you haven't already, enable MFA for your users.
+
+  1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
+  1. Toggle on the MFA strategies you would like to enable.
+
+  ## Customize the session token to include the `two_factor_enabled` property
+
+  Every `User` object has a `two_factor_enabled` property that indicates whether the user has MFA enabled. Store this property in the session token so that you can check it in your `clerkMiddleware()`.
+
+  1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+  1. Under **Customize session token**, in the **Claims** editor, enter the following JSON and select **Save**. The key can be any string, but the value must be the `user.two_factor_enabled` property, as shown in the following example. If you have already customized your session token, you may need to merge this with what you currently have.
+
+  ```json
+  {
+    "isMfa": "{{user.two_factor_enabled}}"
+  }
+  ```
+
+  ## Update `clerkMiddleware()`
+
+  Update your `clerkMiddleware()` to check if the user has MFA enabled.
+
+  <Tabs items={['Next.js', 'Astro', 'Nuxt']}>
+    <Tab>
+      <Include src="_partials/nextjs/nextjs-15-callout" />
+
+      ```tsx {{ filename: 'proxy.ts', collapsible: true }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+      import { NextResponse } from 'next/server'
+
+      const isMFARoute = createRouteMatcher(['/account/manage-mfa/add(.*)'])
+      const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+
+      export default clerkMiddleware(async (auth, req) => {
+        const { userId, sessionClaims } = await auth()
+
+        // Redirect to homepage if the user is signed in and on the sign-in page
+        if (userId !== null && isSignInRoute(req)) {
+          return NextResponse.redirect(new URL('/', req.url))
+        }
+
+        // Redirect to MFA setup page if MFA is not enabled
+        if (userId !== null && !isMFARoute(req)) {
+          if (sessionClaims.isMfa === undefined) {
+            console.error('You need to add the `isMfa` claim to your session token.')
+          }
+          if (sessionClaims.isMfa === false) {
+            return NextResponse.redirect(new URL('/account/manage-mfa/add', req.url))
+          }
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      ```tsx {{ filename: 'src/middleware.ts', collapsible: true }}
+      import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+
+      const isMFARoute = createRouteMatcher(['/account/manage-mfa/add(.*)'])
+      const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+
+      export const onRequest = clerkMiddleware((auth, context) => {
+        const { userId, sessionClaims } = auth()
+
+        // Redirect to homepage if the user is signed in and on the sign-in page
+        if (userId !== null && isSignInRoute(context.request)) {
+          return Response.redirect(new URL('/', context.request.url))
+        }
+
+        // Redirect to MFA setup page if MFA is not enabled
+        if (userId !== null && !isMFARoute(context.request)) {
+          if (sessionClaims.isMfa === undefined) {
+            console.error('You need to add the `isMfa` claim to your session token.')
+          }
+          if (sessionClaims.isMfa === false) {
+            return Response.redirect(new URL('/account/manage-mfa/add', context.request.url))
+          }
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
+    </Tab>
+
+    <Tab>
+      By default, the Nuxt SDK automatically adds [the `clerkMiddleware()` helper](/docs/reference/nuxt/clerk-middleware) to your Nuxt application. To manually configure the middleware, in your `nuxt.config.ts` file, under the `clerk` property, set `skipServerMiddleware: true`.
+
+      ```tsx {{ filename: 'nuxt.config.ts', mark: [[3, 5]] }}
+      export default defineNuxtConfig({
+        modules: ['@clerk/nuxt'],
+        clerk: {
+          skipServerMiddleware: true,
+        },
+      })
+      ```
+
+      Then, in your `server/middleware/clerk.ts` file, add the following code:
+
+      ```tsx {{ filename: 'server/middleware/clerk.ts', collapsible: true }}
+      import { clerkMiddleware } from '@clerk/nuxt/server'
+
+      export default clerkMiddleware(async (event) => {
+        const isMFARoute = event.path.startsWith('/account/manage-mfa/add')
+        const isSignInRoute = event.path.startsWith('/sign-in')
+
+        const { userId, sessionClaims } = event.context.auth()
+
+        // Redirect to homepage if the user is signed in and on the sign-in page
+        if (userId !== null && isSignInRoute) {
+          throw createError({
+            statusMessage: 'You are already signed in.',
+          })
+        }
+
+        // Redirect to MFA setup page if MFA is not enabled
+        if (userId !== null && !isMFARoute) {
+          if (sessionClaims.isMfa === undefined) {
+            throw createError({
+              statusMessage: 'You need to add the `isMfa` claim to your session token.',
+            })
+          }
+          if (sessionClaims.isMfa === false) {
+            throw createError({
+              statusMessage: 'You need to enable MFA for your account.',
+            })
+          }
+        }
+      })
+
+      export const config = {
+        matcher: [
+          // Skip Next.js internals and all static files, unless found in search params
+          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+          // Always run for API routes
+          '/(api|trpc)(.*)',
+        ],
+      }
+      ```
+    </Tab>
+  </Tabs>
+
+  ## Build your MFA setup page
+
+  Follow the [custom flow guide](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) to build the `/account/manage-mfa/add` page.
+</Steps>

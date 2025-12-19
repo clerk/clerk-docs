@@ -1,0 +1,60 @@
+---
+title: Verify OAuth access tokens in your React Router application with Clerk
+description: Learn how to use Clerk's helpers to verify OAuth access tokens in your React Router application.
+sdk: react-router
+---
+
+When building a resource server that needs to accept and verify [OAuth access tokens](!oauth-access-token) issued by Clerk, it's crucial to verify these tokens on your backend to ensure the request is coming from an authenticated client.
+
+<Include src="_partials/machine-token-pricing-callout" />
+
+Clerk provides a built-in [`getAuth()`](/docs/reference/react-router/get-auth) function that supports token validation via the `acceptsToken` parameter. This lets you specify which type(s) of token your API route should accept in your React Router app.
+
+By default, `acceptsToken` is set to `session_token`, which means OAuth tokens will **not** be accepted unless explicitly configured. You can pass either a **single token type** or an **array of token types** to `acceptsToken`. To learn more about the supported token types, see the [`getAuth()` parameters documentation](/docs/reference/react-router/get-auth#parameters).
+
+## Example 1: Accepting a single token type
+
+In the following example, the `acceptsToken` parameter is set to only accept `oauth_token`s.
+
+- If the token is invalid or missing, `auth()` will return `null` for `subject` and other properties, and the request will be rejected with a `401` response.
+- If the token is valid, it returns the authenticated user's subject and their associated scopes for use in the application logic.
+
+```tsx
+import { getAuth } from '@clerk/react-router/server'
+import type { Route } from './+types/profile'
+
+export async function loader(args: Route.LoaderArgs) {
+  const { subject, scopes } = await getAuth(args, { acceptsToken: 'oauth_token' })
+
+  // If getAuth() returns null, the token is invalid
+  if (!subject) {
+    throw new Response('OAuth access token is invalid', { status: 401 })
+  }
+
+  return { subject, scopes }
+}
+```
+
+## Example 2: Accepting any token type
+
+In the following example, the `acceptsToken` parameter is set to accept any token type.
+
+- If the token is a `session_token`, it logs that the request is from a user session.
+- Otherwise, it logs that the request uses a machine token and specifies its type.
+
+```tsx
+import { getAuth } from '@clerk/react-router/server'
+import type { Route } from './+types/profile'
+
+export async function loader(args: Route.LoaderArgs) {
+  const { tokenType } = await getAuth(args, { acceptsToken: 'any' })
+
+  if (tokenType === 'session_token') {
+    console.log('This is a session token from a user')
+  } else {
+    console.log(`This is a ${tokenType} token`)
+  }
+
+  return { tokenType }
+}
+```

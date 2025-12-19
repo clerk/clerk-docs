@@ -1,0 +1,141 @@
+---
+title: Session options
+description: Clerk provides session management options for fine-tuning user visits to your application.
+---
+
+Clerk provides session management options for fine-tuning user visits to your application, including options for session lifetime, multi-session handling, and session token customization.
+
+## Session lifetime
+
+Depending on the business domain of an application, there might be different requirements for how long users should remain signed in. Criteria to base this decision upon typically revolve around user activity on the application and how long it has been since the user first signed in.
+
+Ultimately, picking the ideal session lifetime is a trade-off between security and user experience. Longer sessions are generally better for UX but worse for security; and vice-versa.
+
+Fortunately, with Clerk, you have the ability to fully control the lifetime of your users' sessions. There are two settings for doing so and you can set them via your instance settings in the [Clerk Dashboard](https://dashboard.clerk.com/): Inactivity timeout and Maximum lifetime.
+
+> [!NOTE]
+> Note that either one or both must be enabled at all times. For security reasons, you are not allowed to disable both settings.
+
+### Inactivity timeout
+
+<Include src="_partials/feature-not-free-callout" />
+
+Inactivity timeout is the duration after which a session will expire and the user will have to sign in again, if they haven't been active on your site.
+
+A user is considered inactive when the application is closed, or when the app stops refreshing the token.
+
+By default, this setting is disabled. You can enable it and configure a custom inactivity timeout by following these steps:
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Toggle on **Inactivity timeout**.
+1. Set your desired duration.
+
+> [!NOTE]
+> You should be aware of [browser limitations](#browser-limitations-on-cookies), which may cause users to be signed out before the configured inactivity timeout.
+
+### Maximum lifetime
+
+Maximum lifetime is the duration after which a session will expire and the user will have to sign in again, regardless of their activity on your site.
+
+By default, this setting is enabled with a default value of 7 days for all newly created instances. Setting a custom maximum lifetime requires a [paid plan](/pricing){{ target: '_blank' }} for production use, but it's available in development mode so that you can try out what works for you. To find this setting and change the value:
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Toggle on **Maximum lifetime**.
+1. Set your desired duration.
+
+> [!NOTE]
+> You should be aware of [browser limitations](#browser-limitations-on-cookies), which may cause users to be signed out before the configured maximum lifetime.
+
+## Browser limitations on cookies
+
+Regardless of how [session lifetimes](#session-lifetime) are configured, there are certain browser limitations & behaviors which may clear Clerk's session cookie. This will cause users to be signed out, even if your session lifetimes are set to a longer duration. As a result, it is impossible to achieve a setup where your users are never signed out.
+
+### User behaviors
+
+In the event that a user manually clears their cookies, Clerk's session cookie will be lost. Similarly, if a user signs in via an incognito window and they then close all incognito windows, Clerk's session cookie will be lost. Both of these scenarios will cause the user to have to sign in again.
+
+### Google Chrome
+
+Cookies set in Google Chrome have a `Max-Age` upper limit of [400 days](https://developer.chrome.com/blog/cookie-max-age-expires). Users who are using Google Chrome will be signed out within 400 days, even if session lifetime is set to a longer duration. There is no workaround for this.
+
+This is per the [HTTP Working Group Specification](https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html#section-5.5) which is likely to get implemented by other browsers in the near future.
+
+## Multi-session applications
+
+A multi-session application is an application that allows multiple accounts to be signed in from the same browser at the same time. The user can switch from one account to another seamlessly. Each account is independent from the rest and has access to different resources.
+
+To enable multi-session in your application, you need to configure it in the Clerk Dashboard.
+
+1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
+1. Toggle on **Multi-session handling**.
+1. Select **Save**.
+
+### Add multi-session support to your app
+
+There are two main ways to add the multi-session feature to your application:
+
+- Use the [`<UserButton />`](/docs/reference/components/user/user-button) component if you want to use a prebuilt UI.
+- [Build a custom flow](/docs/guides/development/custom-flows/authentication/multi-session-applications) if you want to rebuild the existing Clerk flow using the Clerk API.
+
+It's highly recommended to wrap your application with the following `<MultisessionAppSupport />` component. The fragment's `key` is set to the session ID. Every time the session ID changes, the `key` changes, forcing React to recreate the entire component tree under the fragment and guaranteeing a full rerendering cycle.
+
+```tsx
+function MultisessionAppSupport({ children }: { children: React.ReactNode }) {
+  const { session } = useSession()
+
+  return <React.Fragment key={session ? session.id : 'no-users'}>{children}</React.Fragment>
+}
+```
+
+The following example demonstrates adding multi-session support to a Next.js App Router application. It requires creating the `<MultisessionAppSupport />` as a client component, and then using it in the `app/layout.tsx` file to wrap the entire application. This ensures the `layout.tsx` remains a server component.
+
+<CodeBlockTabs options={["app/layout.tsx", "MultisessionAppSupport.tsx"]}>
+  ```tsx {{ filename: 'app/layout.tsx' }}
+  import React from 'react'
+  import { ClerkProvider } from '@clerk/nextjs'
+  import { MultisessionAppSupport } from './components/MultisessionAppSupport'
+
+  export default function RootLayout({ children }: { children: React.ReactNode }) {
+    return (
+      <html lang="en">
+        <ClerkProvider afterMultiSessionSingleSignOutUrl="/">
+          <MultisessionAppSupport>
+            <body>{children}</body>
+          </MultisessionAppSupport>
+        </ClerkProvider>
+      </html>
+    )
+  }
+  ```
+
+  ```tsx {{ filename: 'app/components/MultisessionAppSupport.tsx' }}
+  'use client'
+
+  import React from 'react'
+  import { useSession } from '@clerk/nextjs'
+
+  export default function MultisessionAppSupport({ children }: { children: React.ReactNode }) {
+    const { session } = useSession()
+
+    return <React.Fragment key={session ? session.id : 'no-users'}>{children}</React.Fragment>
+  }
+  ```
+</CodeBlockTabs>
+
+### Sign out behavior
+
+By default, signing out from a currently active account in a multi-session app will navigate to the sign-in page's `/choose` route.
+
+If a sign-in URL is not set, signing out will navigate to Clerk's Account Portal `/sign-in/choose` page, allowing the user to choose which account to switch into.
+
+If a sign-in URL is set, either through the [`signInUrl`](/docs/reference/components/clerk-provider) prop on `<ClerkProvider>` or the [`CLERK_SIGN_IN_URL` environment variable](/docs/guides/development/clerk-environment-variables#sign-in-and-sign-up-redirects), signing out will navigate to that URL's `/choose` route. For example, if `signInUrl` or `CLERK_SIGN_IN_URL` is set to `https://example.com/sign-in`, signing out of a multi-session app will navigate to `https://example.com/sign-in/choose`.
+
+<If sdk={["nextjs", "react", "expo", "react-router", "tanstack-react-start"]}>
+  To redirect to a custom route, pass the [`afterMultiSessionSingleSignOutUrl`](/docs/reference/components/clerk-provider#properties) property to `<ClerkProvider>`.
+</If>
+
+## Customize session token
+
+Session tokens are JWTs that contain a set of [default claims](/docs/guides/sessions/session-tokens) required by Clerk. You can customize these tokens by providing additional claims of your own.
+
+To learn how to customize session tokens, see the [dedicated guide](/docs/guides/sessions/customize-session-tokens).

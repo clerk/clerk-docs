@@ -1,0 +1,82 @@
+---
+title: Clerk Nuxt SDK
+description: The Clerk Nuxt SDK gives you access to prebuilt components, composables, and helpers to make user authentication easier.
+sdk: nuxt
+---
+
+The Clerk Nuxt SDK gives you access to prebuilt components, composables, and helpers to make user authentication easier. Refer to the [quickstart guide](/docs/nuxt/getting-started/quickstart) to get started.
+
+## Integration
+
+To configure Clerk with Nuxt, you must pass the `@clerk/nuxt` module to your Nuxt config in your `nuxt.config.ts` file. See the [reference](/docs/reference/nuxt/integration) for more information on configuring the module, including setting Clerk options like `signInForceRedirectUrl`.
+
+## Client-side helpers
+
+Because the Nuxt SDK is built on top of the Clerk Vue SDK, you can use the composables that the Vue SDK provides. These composables include access to the [`Clerk`](/docs/reference/javascript/clerk) object, [`User` object](/docs/reference/javascript/user), [`Organization` object](/docs/reference/javascript/organization), and a set of useful helper methods for signing in and signing up. Learn more in the [Vue SDK reference](/docs/reference/vue/overview).
+
+<Include src="_partials/vue-nuxt/composables" />
+
+## `Auth` object
+
+The `Auth` object is available at `event.context.auth()` in your [event handlers](https://h3.unjs.io/guide/event-handler). This JavaScript object contains important information like session data, your user's ID, as well as their Organization ID. [Learn more](/docs/reference/backend/types/auth-object).
+
+### `event.context.auth()` options
+
+<Properties>
+  - `opts?`
+  - `{acceptsToken: TokenType, treatPendingAsSignedOut: boolean }`
+
+  An optional object that can be used to configure the behavior of the `event.context.auth()` function. It accepts the following properties:
+
+  <Include src="_partials/machine-auth/accepts-token-explanation" />
+
+  - `treatPendingAsSignedOut?`: A boolean that indicates whether to treat [`pending` session status](/docs/reference/javascript/types/session-status#properties) as signed out. Defaults to `true`.
+</Properties>
+
+### Example: Protect a route based on token type
+
+The following example uses `event.context.auth()` to protect the route based on token type:
+
+- It accepts any token type `(acceptsToken: 'any')` from the request.
+- If the token is a `session_token`, it logs that the request is from a user session.
+- Otherwise, it logs that the request uses a machine token and specifies its type.
+
+```ts
+export default eventHandler((event) => {
+  // Use `event.context.auth()` to protect a route based on token type
+  const authObject = event.context.auth({ acceptsToken: 'any' })
+
+  if (authObject.tokenType === 'session_token') {
+    console.log('This is a session token from a user')
+  } else {
+    console.log(`This is a ${authObject.tokenType} token`)
+  }
+
+  return {}
+})
+```
+
+## `clerkMiddleware()`
+
+The `clerkMiddleware()` helper integrates Clerk authentication and authorization into your Nuxt application through middleware. [Learn more](/docs/reference/nuxt/clerk-middleware).
+
+## `clerkClient()`
+
+[Clerk's JS Backend SDK](/docs/js-backend/getting-started/quickstart) is a wrapper around the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} that makes it easier to interact with the API. For example, to retrieve a list of all users in your application, you can use the `users.getUserList()` method from the JS Backend SDK instead of manually making a fetch request to the `https://api.clerk.com/v1/users` endpoint.
+
+To access a resource, you must first instantiate a `clerkClient` instance. See the [reference documentation](/docs/js-backend/getting-started/quickstart) for more information.
+
+[Learn more](/docs/nuxt/guides/users/reading).
+
+## Protect pages and API routes
+
+To protect pages, use the `useAuth()` helper to protect a single page, or use it with `defineNuxtRouteMiddleware()` alongside the `createRouteMatcher()` helper to protect multiple pages. [Learn more](/docs/guides/secure/protect-pages).
+
+To protect API routes (`/api/**`), use the `clerkMiddleware()` helper. [Learn more](/docs/reference/nuxt/clerk-middleware).
+
+> [!QUIZ]
+> When protecting pages/routes using middleware, what is the difference between using `defineNuxtRouteMiddleware()` and `clerkMiddleware()`? Why not use one or the other?
+>
+> ---
+>
+> `defineNuxtRouteMiddleware()` is used to protect pages only and cannot protect API routes. `clerkMiddleware()` is used to protect API routes. It can protect pages, **but on initial page reload only**. On subsequent navigations, it won't be triggered because client-side navigation will bypass the middleware.

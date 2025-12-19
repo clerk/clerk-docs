@@ -1,0 +1,83 @@
+---
+title: Protect content and read user data
+description: Learn how to use Clerk's hooks and helpers to protect content and read user data in your Remix application.
+metadata: 
+  title: Read session and user data in your Remix app with Clerk
+sdk: remix
+---
+
+<Include src="_partials/remix/maintenance-mode" />
+
+Clerk provides a set of [hooks and helpers](/docs/reference/remix/overview) that you can use to protect content and read user data in your Remix application. Here are examples of how to use these helpers in both the client and server-side to get you started.
+
+## Server-side
+
+### `getAuth()`
+
+The [`getAuth()`](/docs/reference/remix/overview#get-auth) helper allows you to access the [`Auth` object](/docs/reference/backend/types/auth-object), which includes the current user's `userId` and the `isAuthenticated` property, which can be used to protect your routes.
+
+In the following example, the `userId` is passed to the JS Backend SDK's [`getUser()`](/docs/reference/backend/user/get-user) method to get the user's full `User` object. For information on how to use the JS Backend SDK, see the [reference documentation](/docs/js-backend/getting-started/quickstart).
+
+<Tabs items={["Loader Function", "Action Function"]}>
+  <Tab>
+    ```tsx {{ filename: 'routes/profile.tsx' }}
+    import { LoaderFunction, redirect } from '@remix-run/node'
+    import { getAuth } from '@clerk/remix/ssr.server'
+    import { createClerkClient } from '@clerk/remix/api.server'
+
+    export const loader: LoaderFunction = async (args) => {
+      // Use `getAuth()` to access `isAuthenticated` and the user's ID
+      const { isAuthenticated, userId } = await getAuth(args)
+
+      // Protect the route by checking if the user is signed in
+      if (!isAuthenticated) {
+        return redirect('/sign-in?redirect_url=' + args.request.url)
+      }
+
+      // Initialize the JS Backend SDK and get the user's full `Backend User` object
+      const user = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY }).users.getUser(
+        userId,
+      )
+
+      // Return the retrieved user data
+      return { serialisedUser: JSON.stringify(user) }
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    ```tsx {{ filename: 'routes/profile.tsx' }}
+    import { ActionFunction, redirect } from '@remix-run/node'
+    import { getAuth } from '@clerk/remix/ssr.server'
+    import { createClerkClient } from '@clerk/remix/api.server'
+
+    export const action: ActionFunction = async (args) => {
+      // Use `getAuth()` to access `isAuthenticated` and the user's ID
+      const { isAuthenticated, userId } = await getAuth(args)
+
+      // Protect the route by checking if the user is signed in
+      if (!isAuthenticated) {
+        return redirect('/sign-in?redirect_url=' + args.request.url)
+      }
+
+      // Initialize the JS Backend SDK and get the user's full `Backend User` object
+      const updatedUser = await createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY,
+      }).users.getUser(userId)
+
+      // Return the retrieved user data
+      return { serialisedUser: JSON.stringify(updatedUser) }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Client Side
+
+### `useAuth()`
+
+<Include src="_partials/hooks/use-auth" />
+
+### `useUser()`
+
+<Include src="_partials/hooks/use-user" />

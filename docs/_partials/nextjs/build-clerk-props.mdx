@@ -1,0 +1,30 @@
+The `buildClerkProps()` function is used in your Next.js application's `getServerSideProps` to pass authentication state from the server to the client. It returns props that get spread into the `<ClerkProvider>` component. This enables Clerk's client-side helpers, such as `useAuth()`, to correctly determine the user's authentication status during server-side rendering.
+
+```tsx {{ filename: 'pages/example.tsx' }}
+import { getAuth, buildClerkProps } from '@clerk/nextjs/server'
+import { GetServerSideProps } from 'next'
+
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  // Use `getAuth()` to access `isAuthenticated` and the user's ID
+  const { isAuthenticated, userId } = getAuth(ctx.req)
+
+  // Protect the route by checking if the user is signed in
+  if (!isAuthenticated) {
+    return {
+      redirect: {
+        destination: '/sign-in',
+        permanent: false,
+      },
+    }
+  }
+
+  // Initialize the JS Backend SDK
+  const client = await clerkClient()
+
+  // Get the user's full `Backend User` object
+  const user = await client.users.getUser(userId)
+
+  // Pass the `user` object to buildClerkProps()
+  return { props: { ...buildClerkProps(ctx.req, { user }) } }
+}
+```

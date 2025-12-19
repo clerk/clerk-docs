@@ -1,0 +1,237 @@
+---
+title: '`$organizationStore`'
+description: Clerk's $organizationStore store retrieves the currently active Organization.
+sdk: astro
+---
+
+The `$organizationStore` store is used to retrieve attributes of the currently [Active Organization](!active-organization).
+
+## How to use the `$organizationStore` store
+
+The following example demonstrates how to use the `$organizationStore` store to access the [`Organization`](/docs/reference/javascript/organization) object, which allows you to access the current [Active Organization](!active-organization).
+
+<CodeBlockTabs options={['React', 'Vue', 'Svelte']}>
+  ```tsx {{ filename: 'components/Home.tsx' }}
+  import { useStore } from '@nanostores/react'
+  import { $organizationStore } from '@clerk/astro/client'
+
+  export default function Home() {
+    const organization = useStore($organizationStore)
+
+    // Add logic to handle loading state
+    if (organization === undefined) return <p>Loading...</p>
+
+    // Add logic to handle no Active Organization state
+    if (organization === null) return <p>Set an Active Organization to access this page.</p>
+
+    return <p>This current Organization is {organization.name}</p>
+  }
+  ```
+
+  ```vue {{ filename: 'organization.vue' }}
+  <script setup>
+  import { useStore } from '@nanostores/vue'
+  import { $organizationStore } from '@clerk/astro/client'
+
+  const organization = useStore($organizationStore)
+  </script>
+
+  <template>
+    <div v-if="organization === undefined">
+      <!-- Add logic to handle loading state -->
+    </div>
+    <div v-else-if="organization === null">
+      <!-- Add logic to handle no Active Organization state -->
+    </div>
+    <div v-else>
+      <p>This current Organization is {{ organization.name }}</p>
+    </div>
+  </template>
+  ```
+
+  ```svelte {{ filename: 'organization.svelte' }}
+  <script>
+    // The $ prefix is reserved in Svelte for its own reactivity system.
+    // Alias the imports to avoid conflicts.
+    import { $organizationStore as organization } from '@clerk/astro/client'
+  </script>
+
+  {#if $organization === undefined}
+    <!-- Add logic to handle loading state -->
+  {:else if $organization === null}
+    <!-- Add logic to handle no Active Organization state -->
+  {:else}
+    <p>This current Organization is {$organization.name}</p>
+  {/if}
+  ```
+</CodeBlockTabs>
+
+## Paginating data
+
+The following example demonstrates how to implement pagination for Organization memberships. The `memberships` state will be populated with the first page of the Organization's memberships. When the "Previous page" or "Next page" button is clicked, the `fetchMemberships` function will be called to fetch the previous or next page of memberships.
+
+You can implement this pattern to any Clerk function that returns a [`ClerkPaginatedResponse`](/docs/reference/javascript/types/clerk-paginated-response) object.
+
+<CodeBlockTabs options={['React', 'Vue', 'Svelte']}>
+  ```tsx {{ filename: 'members.tsx' }}
+  import { useState, useEffect } from 'react'
+  import { $organizationStore } from '@clerk/astro/client'
+  import { useStore } from '@nanostores/react'
+
+  export default function OrganizationMembers() {
+    const [memberships, setMemberships] = useState([])
+    const [currentPage, setCurrentPage] = useState(1)
+    const organization = useStore($organizationStore)
+
+    const pageSize = 10
+
+    useEffect(() => {
+      fetchMemberships()
+    }, [currentPage, organization])
+
+    const fetchMemberships = async () => {
+      if (!organization) return
+
+      const { data } = await organization.getMemberships({
+        initialPage: currentPage,
+        pageSize: 5,
+      })
+      setMemberships(data)
+    }
+
+    const fetchPrevious = () => setCurrentPage(currentPage - 1)
+    const fetchNext = () => setCurrentPage(currentPage + 1)
+
+    // Add logic to handle loading state
+    if (organization === undefined) return <p>Loading...</p>
+
+    // Add logic to handle no Active Organization state
+    if (organization === null) return <p>Set an Active Organization to access this page.</p>
+
+    return (
+      <div>
+        <h2>Organization members</h2>
+        <ul>
+          {memberships.map((membership) => (
+            <li key={membership.id}>
+              {membership.publicUserData.firstName} {membership.publicUserData.lastName} &lt;
+              {membership.publicUserData.identifier}&gt; :: {membership.role}
+            </li>
+          ))}
+        </ul>
+        <div>
+          <button onClick={fetchPrevious} disabled={currentPage === 1}>
+            Previous
+          </button>
+          <button onClick={fetchNext}>Next</button>
+        </div>
+      </div>
+    )
+  }
+  ```
+
+  ```vue {{ filename: 'members.vue' }}
+  <script setup>
+  import { useStore } from '@nanostores/vue'
+  import { $organization } from '@clerk/astro/client'
+  import { ref, watchEffect } from 'vue'
+
+  const memberships = ref([])
+  const currentPage = ref(1)
+  const organization = useStore($organizationStore)
+
+  const pageSize = 10
+
+  const fetchMemberships = async () => {
+    if (!organization.value) return
+
+    const { data } = await organization.value.getMemberships({
+      initialPage: currentPage.value,
+      pageSize: 5,
+    })
+    memberships.value = data
+  }
+
+  watchEffect(() => {
+    if (!organization.value) return
+
+    fetchMemberships()
+  })
+
+  const fetchPrevious = () => currentPage.value--
+  const fetchNext = () => currentPage.value++
+  </script>
+
+  <template>
+    <div v-if="organization === undefined">
+      <!-- Add logic to handle loading state -->
+    </div>
+    <div v-else-if="organization === null">
+      <!-- Add logic to handle no Active Organization state -->
+    </div>
+    <div v-else>
+      <h2>Organization members</h2>
+      <ul>
+        <li v-for="membership in memberships" :key="membership.id">
+          {{ membership.publicUserData.firstName }} {{ membership.publicUserData.lastName }} &lt;{{
+            membership.publicUserData.identifier
+          }}&gt; :: {{ membership.role }}
+        </li>
+      </ul>
+      <div>
+        <button @click="fetchPrevious" :disabled="currentPage === 1">Previous</button>
+        <button @click="fetchNext">Next</button>
+      </div>
+    </div>
+  </template>
+  ```
+
+  ```svelte {{ filename: 'members.svelte' }}
+  <script>
+    // The $ prefix is reserved in Svelte for its own reactivity system.
+    // Alias the imports to avoid conflicts.
+    import { $organizationStore as organization } from '@clerk/astro/client'
+
+    let memberships = []
+    let currentPage = 1
+
+    async function fetchMemberships() {
+      if (!$organization) return
+
+      const { data } = await $organization.getMemberships({
+        initialPage: currentPage,
+        pageSize: 5,
+      })
+      memberships = data
+    }
+
+    $: fetchMemberships()
+
+    const fetchPrevious = () => currentPage.value--
+    const fetchNext = () => currentPage.value++
+  </script>
+
+  {#if organization === undefined}
+    <!-- Add logic to handle loading state -->
+  {:else if organization === null}
+    <!-- Add logic to handle no Active Organization state -->
+  {:else}
+    <div>
+      <h2>Organization members</h2>
+      <ul>
+        {#each memberships as membership (membership.id)}
+          <li>
+            {membership.publicUserData.firstName}
+            {membership.publicUserData.lastName} &lt;
+            {membership.publicUserData.identifier}&gt; :: {membership.role}
+          </li>
+        {/each}
+      </ul>
+      <div>
+        <button on:click={fetchPrevious} disabled={currentPage === 1}>Previous</button>
+        <button on:click={fetchNext}>Next</button>
+      </div>
+    </div>
+  {/if}
+  ```
+</CodeBlockTabs>

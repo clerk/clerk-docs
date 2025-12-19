@@ -1,0 +1,45 @@
+---
+title: Protect pages in your Nuxt app with Clerk
+description: Learn how to protect the pages in your Clerk + Nuxt application.
+sdk: nuxt
+---
+
+This guide demonstrates how to protect pages in your Nuxt application.
+
+> [!TIP]
+> To learn how to protect API routes, see the [dedicated guide](/docs/reference/nuxt/clerk-middleware#protect-api-routes).
+
+## Protect a single page
+
+The `useAuth()` composable provides access to the current user's authentication state and methods to manage the active session. It also includes the `isSignedIn` property to check if the active user is signed in, which is helpful for protecting a page.
+
+<Include src="_partials/vue-nuxt/use-auth" />
+
+## Protect multiple pages
+
+The `createRouteMatcher()` is a Clerk helper function that allows you to protect multiple routes in your Nuxt application. It accepts an array of route patterns and checks if the route the user is trying to visit matches one of the patterns passed to it.
+
+The `createRouteMatcher()` helper returns a function that, when called with the `to` route object from Nuxt's [`defineNuxtRouteMiddleware()`](https://nuxt.com/docs/4.x/api/utils/define-nuxt-route-middleware), will return `true` if the user is trying to access a route that matches one of the patterns provided.
+
+### Example
+
+In your `middleware/` directory, create a file named `auth.global.ts` with the following code. This middleware:
+
+- Uses the `isSignedIn` property returned by the [`useAuth()`](/docs/reference/composables/use-auth) composable to check if the user is signed in.
+- Uses the `createRouteMatcher()` helper to check if the user is trying to access a protected route. If they are but they aren't signed in, they are redirected to the sign-in page.
+
+```ts {{ filename: 'app/middleware/auth.global.ts' }}
+// Define the routes you want to protect with `createRouteMatcher()`
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
+
+export default defineNuxtRouteMiddleware((to) => {
+  // Use the `useAuth()` composable to access the `isSignedIn` property
+  const { isSignedIn } = useAuth()
+
+  // Check if the user is not signed in and is trying to access a protected route
+  // If so, redirect them to the sign-in page
+  if (!isSignedIn.value && isProtectedRoute(to)) {
+    return navigateTo('/sign-in')
+  }
+})
+```

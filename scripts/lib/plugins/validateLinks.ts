@@ -28,11 +28,23 @@ export const validateLinks =
       if (node.type !== 'link') return node
       if (!('url' in node)) return node
       if (typeof node.url !== 'string') return node
-      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
-      if (!('children' in node)) return node
 
       // we are overwriting the url with the mdx suffix removed
       node.url = removeMdxSuffix(node.url)
+
+      if (node.url.startsWith('docs/')) {
+        safeMessage(
+          config,
+          vfile,
+          filePath,
+          section,
+          'doc-link-must-start-with-a-slash',
+          [node.url as string],
+          node.position,
+        )
+      }
+      if (!node.url.startsWith(config.baseDocsLink) && (!node.url.startsWith('#') || href === undefined)) return node
+      if (!('children' in node)) return node
 
       let [url, hash] = (node.url as string).split('#')
 
@@ -62,7 +74,21 @@ export const validateLinks =
       foundLink?.(linkedDoc.file.filePath)
 
       if (hash !== undefined) {
-        const hasHash = linkedDoc.headingsHashes.has(hash)
+        const combinedHeadingHashes = new Set(linkedDoc.headingsHashes)
+
+        if (linkedDoc.distinctSDKVariants) {
+          linkedDoc.distinctSDKVariants.forEach((sdk) => {
+            const distinctSDKVariant = docsMap.get(`${url}.${sdk}`)
+
+            if (distinctSDKVariant === undefined) return
+
+            distinctSDKVariant.headingsHashes.forEach((headingHash) => {
+              combinedHeadingHashes.add(headingHash)
+            })
+          })
+        }
+
+        const hasHash = combinedHeadingHashes.has(hash)
 
         if (hasHash === false) {
           safeMessage(config, vfile, filePath, section, 'link-hash-not-found', [hash, url], node.position)

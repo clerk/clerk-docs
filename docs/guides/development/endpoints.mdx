@@ -1,0 +1,93 @@
+---
+title: Endpoints
+description: Learn how to use Clerk's Astro SDK in your Astro endpoints.
+sdk: astro
+---
+
+Clerk provides helpers that allow you to protect your [Astro endpoints](https://docs.astro.build/en/guides/endpoints/#server-endpoints-api-routes), fetch the current user, and interact with the Clerk Backend API.
+
+## Protect your endpoints
+
+If you aren't protecting your endpoints using [`clerkMiddleware()`](/docs/reference/astro/clerk-middleware), you can use the [`auth()` local](/docs/reference/astro/locals) and check for the `isAuthenticated` value, as shown in the following example:
+
+```ts {{ filename: 'src/pages/api/route.ts' }}
+export async function GET({ locals }) {
+  const { isAuthenticated, userId } = locals.auth()
+
+  if (!isAuthenticated) {
+    return new Response('Error: No signed in user', { status: 401 })
+  }
+
+  // Add your Endpoint logic here
+
+  return new Response(JSON.stringify({ userId }))
+}
+```
+
+## Retrieve data from external sources
+
+Clerk provides integrations with a number of popular databases.
+
+To retrieve a token from a JWT template and fetch data from an external source, use the [`getToken()`](/docs/reference/backend/types/auth-object#get-token){{ target: '_blank' }} method from the [`auth()` local](/docs/reference/astro/locals), as shown in the following example:
+
+```ts {{ filename: 'src/pages/api/route.ts' }}
+export async function GET({ locals }) {
+  const { isAuthenticated, userId, getToken } = locals.auth()
+
+  if (!isAuthenticated) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  const token = await getToken({ template: 'supabase' })
+
+  // Fetch data from Supabase and return it.
+  const data = { supabaseData: 'Hello World' }
+
+  return new Response(JSON.stringify(data))
+}
+```
+
+## Retrieve the current user
+
+In some cases, you might need the current user in your endpoint. Use the asynchronous [`currentUser()` local](/docs/reference/astro/locals#locals-current-user) to retrieve the current [`Backend User`](/docs/reference/backend/types/backend-user){{ target: '_blank' }} object, as shown in the following example:
+
+> [!WARNING]
+> The [`Backend User`](/docs/reference/backend/types/backend-user) object includes a `privateMetadata` field that should not be exposed to the frontend. Avoid passing the full user object returned by `currentUser()` to the frontend. Instead, pass only the specified fields you need.
+
+```ts {{ filename: 'src/pages/api/route.ts' }}
+export async function GET({ locals }) {
+  const user = await locals.currentUser()
+
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  return new Response(
+    JSON.stringify({ userId: user.id, email: user.emailAddresses[0].emailAddress }),
+  )
+}
+```
+
+## Interact with Clerk's Backend API
+
+The [JS Backend SDK](/docs/js-backend/getting-started/quickstart) exposes the [Backend API](/docs/reference/backend-api){{ target: '_blank' }} resources and low-level authentication utilities for JavaScript environments.
+
+`clerkClient` exposes an instance of the JS Backend SDK for use in server environments. Use this instance to interact with the Clerk Backend API, as shown in the following example:
+
+```ts {{ filename: 'src/pages/api/route.ts' }}
+import { clerkClient } from '@clerk/astro/server'
+
+export async function POST(context) {
+  const { isAuthenticated, userId } = context.locals.auth()
+
+  if (!isAuthenticated) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  const params = { firstName: 'Clerk', lastName: 'Cookie' }
+
+  const user = await clerkClient(context).users.updateUser(userId, params)
+
+  return new Response(JSON.stringify({ user }))
+}
+```

@@ -1,0 +1,414 @@
+---
+title: '`useCheckout()`'
+description: Clerk's useCheckout() hook provides state and methods to manage a Subscription checkout flow.
+sdk: nextjs, react
+---
+
+<Include src="_partials/billing/billing-experimental" />
+
+The `useCheckout()` hook is used to create, manage, and confirm a checkout session for a user or an Organization's Subscription Plan. It provides the state of the current checkout process, such as its status and any errors, along with methods to initiate and complete the checkout.
+
+There are two ways to use `useCheckout()`:
+
+1. In conjunction with [`<CheckoutProvider />`](#checkout-provider) to create a shared checkout context. All child components inside the provider can then use `useCheckout()` to access or update the same checkout state.
+1. On its own by passing configuration options directly to it. This is ideal for self-contained components that handle their own checkout flow without needing a shared context.
+
+<Typedoc src="clerk-react/experimental_use-checkout-params" />
+
+### `UseCheckoutOptions`
+
+<Typedoc src="shared/use-checkout-options" />
+
+## Returns
+
+`useCheckout()` returns a `{ checkout }` object. The `checkout` object contains the following properties. They are `null` until the checkout process is started by calling the `start()` method.
+
+<Typedoc src="shared/use-checkout-return" />
+
+## `<CheckoutProvider />`
+
+The `<CheckoutProvider />` component is a wrapper that provides a checkout context to its children, allowing checkout state to be shared across multiple components. Child components can access the checkout context by calling `useCheckout()`.
+
+### Properties
+
+The `<CheckoutProvider />` component accepts the following props:
+
+<Typedoc src="shared/use-checkout-options" />
+
+## Usage
+
+For the best user experience and to prevent potential errors, always wrap components using `useCheckout()` with both `<ClerkLoaded>` and `<SignedIn>` components. This ensures that the user is properly authenticated and Clerk is fully initialized before accessing checkout functionality.
+
+```tsx
+function CheckoutPage() {
+  return (
+    <ClerkLoaded>
+      <SignedIn>
+        <YourCheckoutComponent />
+      </SignedIn>
+    </ClerkLoaded>
+  )
+}
+```
+
+### Examples
+
+The `useCheckout()` hook can be used with a context provider for managing state across multiple components or as a standalone hook for more isolated use cases.
+
+<Tabs items={["With <CheckoutProvider />", "Standalone Hook"]}>
+  <Tab>
+    The following example shows the basic structure for a checkout flow. A parent component, `<SubscriptionPage />`, sets up the `<CheckoutProvider />` and renders the checkout flow. A child component, `<CheckoutFlow />`, uses the `useCheckout()` hook to access the checkout state.
+
+    <Tabs items={["<SubscriptionPage />", "<CheckoutFlow />"]}>
+      <Tab>
+        <If sdk="nextjs">
+          ```tsx {{ filename: 'src/components/SubscriptionPage.tsx', collapsible: true }}
+          import { CheckoutProvider } from '@clerk/nextjs/experimental'
+          import { ClerkLoaded } from '@clerk/nextjs'
+          import { CheckoutFlow } from './CheckoutFlow'
+
+          export default function SubscriptionPage() {
+            // `<CheckoutProvider />` sets the context for the checkout flow.
+            // Any child component can now call `useCheckout()` to access this context.
+            return (
+              <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+                <div>
+                  <h1>Upgrade Your Plan</h1>
+                  <p>You are about to subscribe to our monthly plan</p>
+                  <ClerkLoaded>
+                    <CheckoutFlow />
+                  </ClerkLoaded>
+                </div>
+              </CheckoutProvider>
+            )
+          }
+          ```
+        </If>
+
+        <If sdk="react">
+          ```tsx {{ filename: 'src/components/SubscriptionPage.tsx', collapsible: true }}
+          import { CheckoutProvider } from '@clerk/clerk-react/experimental'
+          import { ClerkLoaded } from '@clerk/clerk-react'
+          import { CheckoutFlow } from './CheckoutFlow'
+
+          export default function SubscriptionPage() {
+            // `<CheckoutProvider />` sets the context for the checkout flow.
+            // Any child component can now call `useCheckout()` to access this context.
+            return (
+              <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+                <div>
+                  <h1>Upgrade Your Plan</h1>
+                  <p>You are about to subscribe to our monthly plan</p>
+                  <ClerkLoaded>
+                    <CheckoutFlow />
+                  </ClerkLoaded>
+                </div>
+              </CheckoutProvider>
+            )
+          }
+          ```
+        </If>
+      </Tab>
+
+      <Tab>
+        <If sdk="nextjs">
+          ```tsx {{ filename: 'src/components/CheckoutFlow.tsx', collapsible: true }}
+          'use client'
+
+          import { useCheckout } from '@clerk/nextjs/experimental'
+          import { useState } from 'react'
+          import { useRouter } from 'next/navigation'
+
+          export function CheckoutFlow() {
+            const { checkout } = useCheckout()
+            const { status } = checkout
+
+            if (status === 'needs_initialization') {
+              return <CheckoutInitialization />
+            }
+
+            return (
+              <div className="checkout-container">
+                <CheckoutSummary />
+                <PaymentSection />
+              </div>
+            )
+          }
+
+          function CheckoutInitialization() {
+            const { checkout } = useCheckout()
+            const { start, fetchStatus } = checkout
+
+            return (
+              <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+                {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
+              </button>
+            )
+          }
+
+          function PaymentSection() {
+            const { checkout } = useCheckout()
+
+            const { isConfirming, confirm, finalize, error } = checkout
+
+            const [isProcessing, setIsProcessing] = useState(false)
+            const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
+            const router = useRouter()
+
+            const submitSelectedMethod = async () => {
+              if (isProcessing || !paymentMethodId) return
+              setIsProcessing(true)
+
+              try {
+                // Confirm checkout with payment method
+                await confirm({
+                  paymentSourceId: paymentMethodId,
+                })
+                // Calling `.finalize` enables you to sync the client-side state with the server-side state of your users.
+                // It revalidates all authorization checks computed within server components.
+                await finalize({
+                  navigate: () => router.push('/dashboard'),
+                })
+              } catch (error) {
+                console.error('Payment failed:', error)
+              } finally {
+                setIsProcessing(false)
+              }
+            }
+
+            return (
+              <>
+                {/* A component that lists a user's payment methods and allows them to select one. See an example: https://clerk.com/docs/reference/hooks/use-payment-methods#examples */}
+                <PaymentMethods onChange={setPaymentMethodId} />
+
+                {error && <div>{error.message}</div>}
+
+                <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
+                  {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+                </button>
+              </>
+            )
+          }
+
+          function CheckoutSummary() {
+            const { checkout } = useCheckout()
+            const { plan, totals } = checkout
+
+            return (
+              <div>
+                <h2>Order Summary</h2>
+                <span>{plan?.name}</span>
+                <span>
+                  {totals?.totalDueNow.currencySymbol}
+                  {totals?.totalDueNow.amountFormatted}
+                </span>
+              </div>
+            )
+          }
+          ```
+        </If>
+
+        <If sdk="react">
+          ```tsx {{ filename: 'src/components/CheckoutFlow.tsx', collapsible: true }}
+          import { useCheckout } from '@clerk/clerk-react/experimental'
+          import { useState } from 'react'
+          import { useNavigate } from 'react-router-dom'
+
+          export function CheckoutFlow() {
+            const { checkout } = useCheckout()
+            const { status } = checkout
+
+            if (status === 'needs_initialization') {
+              return <CheckoutInitialization />
+            }
+
+            return (
+              <div className="checkout-container">
+                <CheckoutSummary />
+                <PaymentSection />
+              </div>
+            )
+          }
+
+          function CheckoutInitialization() {
+            const { checkout } = useCheckout()
+            const { start, fetchStatus } = checkout
+
+            return (
+              <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+                {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
+              </button>
+            )
+          }
+
+          function PaymentSection() {
+            const { checkout } = useCheckout()
+
+            const { isConfirming, confirm, finalize, error } = checkout
+
+            const [isProcessing, setIsProcessing] = useState(false)
+            const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
+            const navigate = useNavigate()
+
+            const submitSelectedMethod = async () => {
+              if (isProcessing || !paymentMethodId) return
+              setIsProcessing(true)
+
+              try {
+                // Confirm checkout with payment method
+                await confirm({
+                  paymentSourceId: paymentMethodId,
+                })
+                // Calling `.finalize` enables you to sync the client-side state with the server-side state of your users.
+                // It revalidates all authorization checks computed within server components.
+                await finalize({
+                  navigate: () => navigate('/dashboard'),
+                })
+              } catch (error) {
+                console.error('Payment failed:', error)
+              } finally {
+                setIsProcessing(false)
+              }
+            }
+
+            return (
+              <>
+                {/* A component that lists a user's payment methods and allows them to select one. See an example: https://clerk.com/docs/reference/hooks/use-payment-methods#examples */}
+                <PaymentMethods onChange={setPaymentMethodId} />
+
+                {error && <div>{error.message}</div>}
+
+                <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
+                  {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+                </button>
+              </>
+            )
+          }
+
+          function CheckoutSummary() {
+            const { checkout } = useCheckout()
+            const { plan, totals } = checkout
+
+            return (
+              <div>
+                <h2>Order Summary</h2>
+                <span>{plan?.name}</span>
+                <span>
+                  {totals?.totalDueNow.currencySymbol}
+                  {totals?.totalDueNow.amountFormatted}
+                </span>
+              </div>
+            )
+          }
+          ```
+        </If>
+      </Tab>
+    </Tabs>
+  </Tab>
+
+  <Tab>
+    For simple, self-contained components, you can use `useCheckout()` by passing the configuration options directly to the hook. This avoids the need to wrap the component in a provider.
+
+    The following example shows an `<UpgradeButton />` component that manages its own checkout flow.
+
+    <If sdk="nextjs">
+      ```tsx {{ filename: 'src/components/UpgradeButton.tsx' }}
+      'use client'
+
+      import { useCheckout } from '@clerk/nextjs/experimental'
+
+      export function UpgradeButton({
+        planId,
+        planPeriod,
+      }: {
+        planId: string
+        planPeriod: 'month' | 'annual'
+      }) {
+        // Pass options directly to the hook when not using a provider.
+        const { checkout } = useCheckout({
+          planId,
+          planPeriod,
+          for: 'user',
+        })
+
+        const { start, status, isStarting, error } = checkout
+
+        const handleStartCheckout = async () => {
+          try {
+            await start()
+            // In a real app, you would now use the `externalClientSecret`
+            // from the checkout object to render a payment form.
+            console.log('Checkout started! Status:', checkout.status)
+          } catch (e) {
+            console.error('Error starting checkout:', e)
+          }
+        }
+
+        return (
+          <div>
+            <button onClick={handleStartCheckout} disabled={isStarting}>
+              {isStarting ? 'Initializing...' : `Upgrade to ${planPeriod} plan`}
+            </button>
+            {error && <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>}
+          </div>
+        )
+      }
+      ```
+    </If>
+
+    <If sdk="react">
+      ```tsx {{ filename: 'src/components/UpgradeButton.tsx' }}
+      import { useCheckout } from '@clerk/clerk-react/experimental'
+
+      export function UpgradeButton({
+        planId,
+        planPeriod,
+      }: {
+        planId: string
+        planPeriod: 'month' | 'annual'
+      }) {
+        // Pass options directly to the hook when not using a provider.
+        const { checkout } = useCheckout({
+          planId,
+          planPeriod,
+          for: 'user',
+        })
+
+        const { start, status, isStarting, error } = checkout
+
+        const handleStartCheckout = async () => {
+          try {
+            await start()
+            // In a real app, you would now use the `externalClientSecret`
+            // from the checkout object to render a payment form.
+            console.log('Checkout started! Status:', checkout.status)
+          } catch (e) {
+            console.error('Error starting checkout:', e)
+          }
+        }
+
+        return (
+          <div>
+            <button onClick={handleStartCheckout} disabled={isStarting}>
+              {isStarting ? 'Initializing...' : `Upgrade to ${planPeriod} plan`}
+            </button>
+            {error && <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>}
+          </div>
+        )
+      }
+      ```
+    </If>
+  </Tab>
+</Tabs>
+
+## Related guides
+
+<Cards>
+  - [Checkout flow with a new payment method](/docs/guides/development/custom-flows/billing/checkout-new-payment-method)
+  - Prompt users to add a new payment method during checkout
+
+  ---
+
+  - [Checkout flow for returning users](/docs/guides/development/custom-flows/billing/checkout-existing-payment-method)
+  - Prompt users to select an existing payment method during checkout
+</Cards>

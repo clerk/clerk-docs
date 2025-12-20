@@ -253,11 +253,11 @@ type SubNavItem = {
    */
   wrap?: boolean
   /**
-   * Whether to collapse the sub-nav
+   * Whether the nav item is in the top part of the sidebar navigation
    *
    * @default false
    */
-  collapse?: boolean
+  topNav?: boolean
 
   /**
    * Limit this group to only show when the user has one of the specified sdks active
@@ -273,7 +273,7 @@ type SubNavItem = {
 <details>
 <summary>Visual representation of the manifest TypeScript types</summary>
 
-![](/public/images/styleguide/manifest.png)
+![](/.github/media/manifest.png)
 
 </details>
 

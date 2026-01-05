@@ -1052,7 +1052,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [title](href)
 - description
-- {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 </Cards>
 ```
@@ -1098,13 +1098,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 </Cards>
 ```
@@ -1121,13 +1121,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 </Cards>
 ```
@@ -1167,13 +1167,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Join our Discord](/discord 'Join Discord')
 - Join our official Discord server to chat with us directly and become a part of the Clerk community.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 ---
 
 - [Need help?](/support 'Get help')
 - Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
 
 </Cards>
 ```

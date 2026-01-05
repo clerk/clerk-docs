@@ -1052,7 +1052,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [title](href)
 - description
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1098,13 +1098,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1121,13 +1121,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1167,13 +1167,13 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [Join our Discord](/discord 'Join Discord')
 - Join our official Discord server to chat with us directly and become a part of the Clerk community.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [Need help?](/support 'Get help')
 - Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```

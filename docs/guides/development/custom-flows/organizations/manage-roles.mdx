@@ -110,19 +110,19 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
     type SelectRoleProps = {
       fieldName?: string
-      isDisabled?: boolean
       onChange?: ChangeEventHandler<HTMLSelectElement>
       defaultRole?: string
     }
 
     const SelectRole = (props: SelectRoleProps) => {
-      const { fieldName, isDisabled = false, onChange, defaultRole } = props
+      const { fieldName, onChange, defaultRole } = props
       const { organization } = useOrganization()
-      const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([])
+      const [rolesResponse, setRolesResponse] = useState<ReturnType<NonNullable<typeof organization>['getRoles']>>[0]>([])
       const isPopulated = useRef(false)
 
       useEffect(() => {
         if (isPopulated.current) return
+        setIsLoading(true)
         organization
           ?.getRoles({
             pageSize: 20,
@@ -130,11 +130,16 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
           })
           .then((res) => {
             isPopulated.current = true
-            setRoles(res.data.map((roles) => roles.key as OrganizationCustomRoleKey))
+            setRolesResponse(res)
           })
       }, [organization?.id])
 
-      if (fetchedRoles.length === 0) return null
+      if (rolesResponse.data?.length === 0) return null
+
+      // When `has_role_set_migration` is `true`, updating organization membership roles is not allowed.
+      const isDisabled = !!rolesResponse.has_role_set_migration
+
+      const roleKeys = rolesResponse.data.map(role => role.key)
 
       return (
         <select
@@ -144,7 +149,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
           onChange={onChange}
           defaultValue={defaultRole}
         >
-          {fetchedRoles?.map((roleKey) => (
+          {roleKeys?.map((roleKey) => (
             <option key={roleKey} value={roleKey}>
               {roleKey}
             </option>

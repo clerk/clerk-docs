@@ -195,20 +195,28 @@ Usage:
 
 Options:
   --dry-run     Preview changes without modifying files
+  --check       Check for unoptimized SVGs (exits with code 1 if found)
   --verbose     Show before/after of each transformation
   --help, -h    Show this help message
 
 Examples:
   npm run optimize-svgs              # Optimize all SVGs
   npm run optimize-svgs -- --dry-run # Preview all changes
+  npm run optimize-svgs -- --check   # CI check for unoptimized SVGs
 `)
     return
   }
 
   const dryRun = args.includes('--dry-run')
+  const checkMode = args.includes('--check')
   const verbose = args.includes('--verbose')
 
-  if (dryRun) {
+  // In check mode, we act like dry-run but track if there are unoptimized files
+  const effectiveDryRun = dryRun || checkMode
+
+  if (checkMode) {
+    console.log('CHECK MODE - Checking for unoptimized SVGs\n')
+  } else if (dryRun) {
     console.log('DRY RUN MODE - No files will be modified\n')
   }
 
@@ -216,6 +224,9 @@ Examples:
   const projectRoot = path.join(__dirname, '..')
   const imagesDir = path.join(projectRoot, 'public', 'images')
   const docsDir = path.join(projectRoot, 'docs')
+
+  let filesOptimized = 0
+  let filesModified = 0
 
   // Optimize SVG files
   {
@@ -227,18 +238,17 @@ Examples:
     })
 
     let totalSaved = 0
-    let filesOptimized = 0
 
     for (const file of svgFiles) {
       const filePath = path.join(imagesDir, file.path)
-      const { saved, percent, before, after } = await optimizeSvgFile(filePath, dryRun, verbose)
+      const { saved, percent, before, after } = await optimizeSvgFile(filePath, effectiveDryRun, verbose)
 
       if (saved > 0) {
         filesOptimized++
         totalSaved += saved
-        const prefix = dryRun ? '  → ' : '  ✓ '
+        const prefix = checkMode ? '  ✗ ' : effectiveDryRun ? '  → ' : '  ✓ '
         console.log(
-          `${prefix}${file.path} (${dryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
+          `${prefix}${file.path} (${effectiveDryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
         )
         if (verbose && before && after) {
           console.log('\n    Before:')
@@ -264,20 +274,23 @@ Examples:
     })
 
     let totalInlineSvgs = 0
-    let filesModified = 0
     let totalInlineSaved = 0
 
     for (const file of mdxFiles) {
       const filePath = path.join(docsDir, file.path)
-      const { modified, count, savedBytes, transformations } = await processInlineSvgs(filePath, dryRun, verbose)
+      const { modified, count, savedBytes, transformations } = await processInlineSvgs(
+        filePath,
+        effectiveDryRun,
+        verbose,
+      )
 
       if (modified) {
         filesModified++
         totalInlineSvgs += count
         totalInlineSaved += savedBytes
-        const prefix = dryRun ? '  → ' : '  ✓ '
+        const prefix = checkMode ? '  ✗ ' : effectiveDryRun ? '  → ' : '  ✓ '
         console.log(
-          `${prefix}${file.path} (${count} SVG${count > 1 ? 's' : ''} ${dryRun ? 'would be' : ''} transformed)`,
+          `${prefix}${file.path} (${count} SVG${count > 1 ? 's' : ''} ${effectiveDryRun ? 'would be' : ''} transformed)`,
         )
         if (verbose && transformations.length > 0) {
           for (const { before, after } of transformations) {
@@ -296,7 +309,18 @@ Examples:
     console.log(`Total saved: ${formatBytes(totalInlineSaved)}\n`)
   }
 
-  console.log('SVG optimization complete!')
+  // In check mode, exit with error if any unoptimized SVGs were found
+  if (checkMode) {
+    const hasUnoptimized = filesOptimized > 0 || filesModified > 0
+    if (hasUnoptimized) {
+      console.log('✗ Found unoptimized SVGs. Run `npm run optimize-svgs` to fix.\n')
+      process.exit(1)
+    } else {
+      console.log('✓ All SVGs are optimized.\n')
+    }
+  } else {
+    console.log('SVG optimization complete!')
+  }
 }
 
 main().catch((error) => {

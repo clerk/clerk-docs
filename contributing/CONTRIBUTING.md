@@ -273,7 +273,7 @@ type SubNavItem = {
 <details>
 <summary>Visual representation of the manifest TypeScript types</summary>
 
-![](/.github/media/manifest.png)
+![Visual representation of the manifest TypeScript types](/.github/media/manifest.png)
 
 </details>
 
@@ -682,7 +682,7 @@ export function Layout() {
 ```
 ````
 
-![](/.github/media/code-block-mark.png)
+![Code block with marked lines screenshot](/.github/media/code-block-mark.png)
 
 The `ins` (insert) and `del` (delete) props work in the same way as the `mark` prop but apply "diff" style highlighting with prepended `+` and `-` signs.
 
@@ -701,7 +701,7 @@ export function Layout() {
 ```
 ````
 
-![](/.github/media/code-block-diff.png)
+![Code block with diff lines screenshot](/.github/media/code-block-diff.png)
 
 </details>
 
@@ -758,7 +758,7 @@ You can also truncate a code block by using the `collapsible` prop. This will re
 <details>
 <summary>Collapsible example</summary>
 
-![](/.github/media/code-block-collapsible.png)
+![Code block with collapsible lines screenshot](/.github/media/code-block-collapsible.png)
 
 </details>
 
@@ -1052,7 +1052,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [title](href)
 - description
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1070,7 +1070,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant</summary>
 
-![](/.github/media/cards-default.png)
+![Cards default variant screenshot](/.github/media/cards-default.png)
 
 ```mdx
 <Cards>
@@ -1091,20 +1091,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant with icons</summary>
 
-![](/.github/media/cards-default-icons.png)
+![Cards default variant with icons screenshot](/.github/media/cards-default-icons.png)
 
 ```mdx
 <Cards>
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1114,20 +1114,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>plain</code> variant with icons</summary>
 
-![](/.github/media/cards-plain-icons.png)
+![Cards plain variant with icons screenshot](/.github/media/cards-plain-icons.png)
 
 ```mdx
 <Cards variant="plain">
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1137,20 +1137,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>image</code> variant</summary>
 
-![](/.github/media/cards-image.png)
+![Cards image variant screenshot](/.github/media/cards-image.png)
 
 ```mdx
 <Cards variant="image">
 
 - [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
-- ![](/what-is-clerk.png)
+- ![alt text](/what-is-clerk.png)
 
 ---
 
 - [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
-- ![](/user-object.png)
+- ![alt text](/user-object.png)
 
 </Cards>
 ```
@@ -1160,20 +1160,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>cta</code> variant</summary>
 
-![](/.github/media/cards-cta.png)
+![Cards cta variant screenshot](/.github/media/cards-cta.png)
 
 ```mdx
 <Cards variant="cta">
 
 - [Join our Discord](/discord 'Join Discord')
 - Join our official Discord server to chat with us directly and become a part of the Clerk community.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [Need help?](/support 'Get help')
 - Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
-- ![](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
+- ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1211,7 +1211,7 @@ description continued…
 <details>
 <summary>Example</summary>
 
-![](/.github/media/properties.png)
+![Properties screenshot](/.github/media/properties.png)
 
 ```mdx
 <Properties>
@@ -1407,7 +1407,7 @@ Images and static assets should be placed in the `public/` folder. To reference 
 
 When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
 
-Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![](/docs/images/sign-in.png 'Clerk SignIn component.')`
+Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![alt text](/docs/images/sign-in.png 'Clerk SignIn component.')`
 
 #### Image props
 
@@ -1446,7 +1446,7 @@ https://nextjs.org/docs/app/api-reference/components/image#quality
 The `width` and `height` props can now be used to specify the (max) display size of an image in pixels.
 
 ```mdx
-![](/docs/images/my-image.png){{ width: 345 }}
+![alt text](/docs/images/my-image.png){{ width: 345 }}
 ```
 
 | Without `width`                                                                        | With `width`                                                                        |

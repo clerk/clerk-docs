@@ -17,7 +17,6 @@ import path from 'node:path'
 interface Redirect {
   source: string
   destination: string
-  permanent: boolean
 }
 
 function validateNoDuplicateSources(redirects: Redirect[]): boolean {

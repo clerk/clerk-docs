@@ -649,7 +649,16 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
-If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
+### Doc variants
+
+A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same.
+
+> [!NOTE]
+> When creating doc variants, there will be a base doc that is used as the reference for the variants. Take the example from before, `quickstart.mdx` would be the base doc. Base docs should always be written for Next.js as it's our most popular and maintained SDK.
+
+**When would I use a doc variant?**
+
+Say you have a doc where you want to support multiple SDKs, but it'd require changing a majority of the content for each SDK. Instead of using a bunch of `<Tabs />` or `<If />` components, which would bloat the doc and make it harder to maintain, you can create a doc variant.
 
 ### Headings
 
@@ -711,7 +720,7 @@ npm i @clerk/nextjs
 
 #### Highlighting
 
-You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
+You can highlight specific lines in a code block using the `mark` prop. For example, to highlight line `2` and lines `5-7`:
 
 ````mdx
 ```tsx {{ mark: [2, [5, 7]] }}
@@ -726,6 +735,18 @@ export function Layout() {
 ````
 
 ![](/.github/media/code-block-mark.png)
+
+You can also highlight specific strings using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
+
+````mdx
+```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+<ClerkProvider
+  appearance={{
+    cssLayerName: 'clerk',
+  }}
+>
+```
+````
 
 The `ins` (insert) and `del` (delete) props work in the same way as the `mark` prop but apply "diff" style highlighting with prepended `+` and `-` signs.
 
@@ -1343,6 +1364,8 @@ For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-t
 ### `<If />`
 
 The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
+
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to create a [doc variant](#doc-variant).
 
 > [!IMPORTANT]
 > This component cannot be used within code blocks.

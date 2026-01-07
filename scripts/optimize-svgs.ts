@@ -90,7 +90,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
-function optimizeSVG(svg: string): string {
+function runSVGO(svg: string): string {
   // Skip if SVG has no kebab-case attributes (already Reactified).
   // SVGO would treat camelCase as unknown attributes and remove them.
   if (!hasKebabCaseAttributes(svg)) {
@@ -103,14 +103,7 @@ function optimizeSVG(svg: string): string {
   return svg
 }
 
-function transformInlineSvg(svg: string): string {
-  let transformed = optimizeSVG(svg)
-  transformed = camelCaseAttributes(transformed)
-  transformed = replaceColorsWithCurrentColor(transformed)
-  return transformed
-}
-
-async function processInlineSvgs(
+async function processInline(
   filePath: string,
   dryRun: boolean,
   verbose: boolean,
@@ -137,7 +130,9 @@ async function processInlineSvgs(
     if (!svgMatch) return match
 
     const originalSvg = svgMatch[0]
-    const transformedSvg = transformInlineSvg(originalSvg)
+    let transformedSvg = runSVGO(originalSvg)
+    transformedSvg = camelCaseAttributes(transformedSvg)
+    transformedSvg = replaceColorsWithCurrentColor(transformedSvg)
 
     if (transformedSvg !== originalSvg) {
       modified = true
@@ -160,13 +155,13 @@ async function processInlineSvgs(
   return { modified, count, savedBytes, transformations }
 }
 
-async function optimizeSvgFile(
+async function processFile(
   filePath: string,
   dryRun: boolean,
   verbose: boolean,
 ): Promise<{ saved: number; percent: number; before?: string; after?: string }> {
   const before = await fs.readFile(filePath, 'utf-8')
-  const after = optimizeSVG(before)
+  const after = runSVGO(before)
   const beforeSize = byteLength(before)
   const saved = beforeSize - byteLength(after)
 
@@ -182,12 +177,97 @@ async function optimizeSvgFile(
   }
 }
 
-async function main() {
-  const args = process.argv.slice(2)
-  const helpFlag = args.includes('--help') || args.includes('-h')
+async function optimizeFiles(
+  imagesDir: string,
+  dryRun: boolean,
+  verbose: boolean,
+  checkMode: boolean,
+): Promise<number> {
+  console.log('Optimizing SVG files in `public/images`...\n')
 
-  if (helpFlag) {
-    console.log(`
+  const svgFiles = await readdirp.promise(imagesDir, {
+    fileFilter: '*.svg',
+    type: 'files',
+  })
+
+  let totalSaved = 0
+  let filesOptimized = 0
+
+  for (const file of svgFiles) {
+    const filePath = path.join(imagesDir, file.path)
+    const { saved, percent, before, after } = await processFile(filePath, dryRun, verbose)
+
+    if (saved > 0) {
+      filesOptimized++
+      totalSaved += saved
+      const prefix = checkMode ? '  ✗ ' : dryRun ? '  → ' : '  ✓ '
+      console.log(
+        `${prefix}${file.path} (${dryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
+      )
+      if (verbose && before && after) {
+        console.log('\n    Before:')
+        console.log(`    ${before}`)
+        console.log('\n    After:')
+        console.log(`    ${after}`)
+        console.log('')
+      }
+    }
+  }
+
+  console.log(`\nFiles: ${svgFiles.length} processed, ${filesOptimized} optimized`)
+  console.log(`Total saved: ${formatBytes(totalSaved)}\n`)
+
+  return filesOptimized
+}
+
+async function optimizeInlines(
+  docsDir: string,
+  dryRun: boolean,
+  verbose: boolean,
+  checkMode: boolean,
+): Promise<number> {
+  console.log('Transforming inline SVGs in `docs`...\n')
+
+  const mdxFiles = await readdirp.promise(docsDir, {
+    fileFilter: '*.mdx',
+    type: 'files',
+  })
+
+  let totalInlineSvgs = 0
+  let filesModified = 0
+  let totalInlineSaved = 0
+
+  for (const file of mdxFiles) {
+    const filePath = path.join(docsDir, file.path)
+    const { modified, count, savedBytes, transformations } = await processInline(filePath, dryRun, verbose)
+
+    if (modified) {
+      filesModified++
+      totalInlineSvgs += count
+      totalInlineSaved += savedBytes
+      const prefix = checkMode ? '  ✗ ' : dryRun ? '  → ' : '  ✓ '
+      console.log(`${prefix}${file.path} (${count} SVG${count > 1 ? 's' : ''} ${dryRun ? 'would be' : ''} transformed)`)
+      if (verbose && transformations.length > 0) {
+        for (const { before, after } of transformations) {
+          console.log('\n    Before:')
+          console.log(`    ${before}`)
+          console.log('\n    After:')
+          console.log(`    ${after}`)
+          console.log('')
+        }
+      }
+    }
+  }
+
+  console.log(`\nFiles: ${mdxFiles.length} scanned, ${filesModified} modified`)
+  console.log(`Inline SVGs transformed: ${totalInlineSvgs}`)
+  console.log(`Total saved: ${formatBytes(totalInlineSaved)}\n`)
+
+  return filesModified
+}
+
+function showHelp(): void {
+  console.log(`
 SVG Optimization Script
 
 Usage:
@@ -204,6 +284,13 @@ Examples:
   npm run optimize-svgs -- --dry-run # Preview all changes
   npm run optimize-svgs -- --check   # CI check for unoptimized SVGs
 `)
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+
+  if (args.includes('--help') || args.includes('-h')) {
+    showHelp()
     return
   }
 
@@ -212,7 +299,7 @@ Examples:
   const verbose = args.includes('--verbose')
 
   // In check mode, we act like dry-run but track if there are unoptimized files
-  const effectiveDryRun = dryRun || checkMode
+  const dryRunLike = dryRun || checkMode
 
   if (checkMode) {
     console.log('CHECK MODE - Checking for unoptimized SVGs\n')
@@ -225,89 +312,8 @@ Examples:
   const imagesDir = path.join(projectRoot, 'public', 'images')
   const docsDir = path.join(projectRoot, 'docs')
 
-  let filesOptimized = 0
-  let filesModified = 0
-
-  // Optimize SVG files
-  {
-    console.log('Optimizing SVG files in `public/images`...\n')
-
-    const svgFiles = await readdirp.promise(imagesDir, {
-      fileFilter: '*.svg',
-      type: 'files',
-    })
-
-    let totalSaved = 0
-
-    for (const file of svgFiles) {
-      const filePath = path.join(imagesDir, file.path)
-      const { saved, percent, before, after } = await optimizeSvgFile(filePath, effectiveDryRun, verbose)
-
-      if (saved > 0) {
-        filesOptimized++
-        totalSaved += saved
-        const prefix = checkMode ? '  ✗ ' : effectiveDryRun ? '  → ' : '  ✓ '
-        console.log(
-          `${prefix}${file.path} (${effectiveDryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
-        )
-        if (verbose && before && after) {
-          console.log('\n    Before:')
-          console.log(`    ${before}`)
-          console.log('\n    After:')
-          console.log(`    ${after}`)
-          console.log('')
-        }
-      }
-    }
-
-    console.log(`\nFiles: ${svgFiles.length} processed, ${filesOptimized} optimized`)
-    console.log(`Total saved: ${formatBytes(totalSaved)}\n`)
-  }
-
-  // Transform inline SVGs
-  {
-    console.log('Transforming inline SVGs in `docs`...\n')
-
-    const mdxFiles = await readdirp.promise(docsDir, {
-      fileFilter: '*.mdx',
-      type: 'files',
-    })
-
-    let totalInlineSvgs = 0
-    let totalInlineSaved = 0
-
-    for (const file of mdxFiles) {
-      const filePath = path.join(docsDir, file.path)
-      const { modified, count, savedBytes, transformations } = await processInlineSvgs(
-        filePath,
-        effectiveDryRun,
-        verbose,
-      )
-
-      if (modified) {
-        filesModified++
-        totalInlineSvgs += count
-        totalInlineSaved += savedBytes
-        const prefix = checkMode ? '  ✗ ' : effectiveDryRun ? '  → ' : '  ✓ '
-        console.log(
-          `${prefix}${file.path} (${count} SVG${count > 1 ? 's' : ''} ${effectiveDryRun ? 'would be' : ''} transformed)`,
-        )
-        if (verbose && transformations.length > 0) {
-          for (const { before, after } of transformations) {
-            console.log('\n    Before:')
-            console.log(`    ${before}`)
-            console.log('\n    After:')
-            console.log(`    ${after}`)
-            console.log('')
-          }
-        }
-      }
-    }
-
-    console.log(`\nFiles: ${mdxFiles.length} scanned, ${filesModified} modified`)
-    console.log(`Inline SVGs transformed: ${totalInlineSvgs}`)
-    console.log(`Total saved: ${formatBytes(totalInlineSaved)}\n`)
-  }
+  const filesOptimized = await optimizeFiles(imagesDir, dryRunLike, verbose, checkMode)
+  const filesModified = await optimizeInlines(docsDir, dryRunLike, verbose, checkMode)
 
   // In check mode, exit with error if any unoptimized SVGs were found
   if (checkMode) {

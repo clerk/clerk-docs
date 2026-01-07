@@ -93,7 +93,7 @@ The following steps outline the sign-up process:
   - `web3Wallet`
   - `string | null`
 
-  The Web3 wallet address, made up of 0x + 40 hexadecimal characters. Only supported if [Web3 authentication](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#web3-authentication) is enabled in the instance settings.
+  The Web3 wallet address, made up of 0x + 40 hexadecimal characters or a `base58` encoded `ed25519` public key (for Solana wallets). Only supported if [Web3 authentication](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#web3-authentication) is enabled in the instance settings.
 
   ---
 
@@ -203,7 +203,7 @@ function attemptVerification(params: AttemptVerificationParams): Promise<SignUp>
 
 <Properties>
   - `strategy`
-  - `'phone_code' | 'email_code' | 'web3_base_signature' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature'`
+  - `'phone_code' | 'email_code' | 'web3_base_signature' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'web3_solana_signature'`
 
   The verification strategy to complete the user's sign-up request against. The following strategies are supported:
 
@@ -213,6 +213,7 @@ function attemptVerification(params: AttemptVerificationParams): Promise<SignUp>
   - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
   - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
   - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_solana_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via their [Solana wallet provider](https://solana.com/solana-wallets). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
 
   ---
 
@@ -226,7 +227,7 @@ function attemptVerification(params: AttemptVerificationParams): Promise<SignUp>
   - `signature`
   - `string`
 
-  **Required** if `strategy` is set to `'web3_base_signature'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, or `'web3_okx_wallet_signature'`. The signature that was sent to the user via the Web3 verification strategy.
+  **Required** if `strategy` is set to `'web3_base_signature'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, `'web3_okx_wallet_signature'`, or `'web3_solana_signature'`. The signature that was sent to the user via the Web3 verification strategy.
 </Properties>
 
 ### `attemptWeb3WalletVerification()`
@@ -311,6 +312,45 @@ function authenticateWithOKXWallet(
 
 ```js
 const signUp = await clerk.signUp.authenticateWithOKXWallet()
+```
+
+### `authenticateWithSolana()`
+
+<Include src="_partials/authentication/web3/solana-private-beta-callout" />
+
+Initiates an authentication flow using the user's Solana wallet provider, allowing users to authenticate via their Solana wallet address. This method prompts the user to connect their Solana wallet and sign a message to verify ownership of the wallet address. The `walletName` parameter specifies which Solana wallet provider to use for the authentication process, which is required to initiate the connection and signature request.
+
+```typescript
+function authenticateWithSolana(params: SignUpAuthenticateWithSolanaParams): Promise<SignUpResource>
+```
+
+#### `SignUpAuthenticateWithSolanaParams`
+
+<Properties>
+  - `walletName`
+  - `string`
+
+  The name of the wallet provider to use for generating the signature.
+
+  ---
+
+  - `legalAccepted?`
+  - `boolean`
+
+  A boolean indicating whether the user has agreed to the [legal compliance](/docs/guides/secure/legal-compliance) documents.
+
+  ---
+
+  - `unsafeMetadata?`
+  - `SignUpUnsafeMetadata`
+
+  Optional metadata to attach to the sign-in attempt. See [`SignUpUnsafeMetadata`](/docs/reference/javascript/types/metadata#sign-up-unsafe-metadata) for more information.
+</Properties>
+
+#### Example
+
+```js
+const signUp = await clerk.signUp.authenticateWithSolana({ walletName: 'Phantom' })
 ```
 
 ### `authenticateWithRedirect()`
@@ -415,6 +455,9 @@ await clerk.signUp.authenticateWithPopup({
 
 Initiates a Web3 authentication flow by verifying the user's ownership of a blockchain wallet address through cryptographic signature verification. This method enables decentralized authentication without requiring traditional credentials.
 
+> [!NOTE]
+> When the `strategy` is `web3_solana_signature`, the `walletName` parameter must be specified to indicate which Solana wallet provider to use for the authentication process.
+
 ```typescript
 function authenticateWithWeb3(params: AuthenticateWithWeb3Params): Promise<SignUpResource>
 ```
@@ -454,6 +497,13 @@ function authenticateWithWeb3(params: AuthenticateWithWeb3Params): Promise<SignU
   - [`SignUpUnsafeMetadata`](/docs/reference/javascript/types/metadata#sign-up-unsafe-metadata)
 
   Metadata that can be read and set from the frontend. Once the sign-up is complete, the value of this field will be automatically copied to the newly created user's unsafe metadata. One common use case for this attribute is to use it to implement custom fields that can be collected during sign-up and will automatically be attached to the created `User` object.
+
+  ---
+
+  - `walletName?`
+  - `string`
+
+  The name of the wallet provider to use for generating the signature. This parameter is _**required**_ when using `web3_solana_signature` as the `strategy`.
 </Properties>
 
 #### `GenerateSignatureParams`
@@ -473,10 +523,10 @@ function authenticateWithWeb3(params: AuthenticateWithWeb3Params): Promise<SignU
 
   ---
 
-  - `provider?`
+  - `provider`
   - `Web3Provider`
 
-  The Web3 provider to generate the signature with.
+  The Web3 provider to generate the signature with. See [`Web3Provider`](/docs/reference/javascript/types/web3-wallet#web3-provider) for more information.
 
   ---
 
@@ -484,6 +534,13 @@ function authenticateWithWeb3(params: AuthenticateWithWeb3Params): Promise<SignU
   - `boolean`
 
   A boolean indicating whether the user has agreed to the [legal compliance](/docs/guides/secure/legal-compliance) documents.
+
+  ---
+
+  - `walletName?`
+  - `string`
+
+  The name of the wallet provider to use for generating the signature. This parameter is _**required**_ when using `solana` as the `provider`.
 </Properties>
 
 #### Example
@@ -563,7 +620,7 @@ function create(params: SignUpCreateParams): Promise<SignUpResource>
   - `web3Wallet`
   - `string | null`
 
-  **Required** if [Web3 authentication](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#web3-authentication) is enabled. The Web3 wallet address, made up of 0x + 40 hexadecimal characters.
+  **Required** if [Web3 authentication](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#web3-authentication) is enabled. The Web3 wallet address, made up of 0x + 40 hexadecimal characters or a `base58` encoded `ed25519` public key (for Solana wallets).
 
   ---
 
@@ -739,7 +796,7 @@ function prepareVerification(params: PrepareVerificationParams): Promise<SignUpR
 
 <Properties>
   - `strategy`
-  - `'phone_code' | 'email_code' | 'email_link' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'web3_base_signature' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature'`
+  - `'phone_code' | 'email_code' | 'email_link' | 'oauth_<provider>' | 'saml' | 'enterprise_sso' | 'web3_base_signature' | 'web3_metamask_signature' | 'web3_coinbase_wallet_signature' | 'web3_okx_wallet_signature' | 'web3_solana_signature'`
 
   The verification strategy to validate the user's sign-up request. The following strategies are supported:
 
@@ -753,6 +810,7 @@ function prepareVerification(params: PrepareVerificationParams): Promise<SignUpR
   - `'web3_metamask_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Metamask](https://metamask.io/). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
   - `'web3_coinbase_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [Coinbase Wallet](https://www.coinbase.com/wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
   - `'web3_okx_wallet_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via [OKX Wallet](https://www.okx.com/help/section/faq-web3-wallet). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
+  - `'web3_solana_signature'`: The verification will attempt to be completed using the user's Web3 wallet address via their [Solana wallet provider](https://solana.com/solana-wallets). The `web3_wallet_id` parameter can also be specified to select which of the user's known Web3 wallets will be used.
 
   ---
 
@@ -801,7 +859,7 @@ function prepareWeb3WalletVerification(
 
 <Properties>
   - `strategy`
-  - `'web3_base_signature'` | `'web3_metamask_signature'` | `'web3_coinbase_wallet_signature'` | `'web3_okx_wallet_signature'`
+  - `'web3_base_signature'` | `'web3_metamask_signature'` | `'web3_coinbase_wallet_signature'` | `'web3_okx_wallet_signature' | 'web3_solana_signature'`
 
   The verification strategy to validate the user's sign-up request. The following strategies are supported:
 
@@ -809,6 +867,7 @@ function prepareWeb3WalletVerification(
   - `'web3_metamask_signature'`: User will need to sign a message and generate a signature using MetaMask browser extension.
   - `'web3_coinbase_wallet_signature'`: User will need to sign a message and generate a signature using Coinbase Wallet.
   - `'web3_okx_wallet_signature'`: User will need to sign a message and generate a signature using OKX Wallet.
+  - `'web3_solana_signature'`: User will need to sign a message and generate a signature using their Solana wallet provider.
 </Properties>
 
 ### `update()`

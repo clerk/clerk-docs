@@ -42,7 +42,11 @@ const svgoConfig: Config = {
     'removeDesc',
     'sortAttrs',
     'sortDefsChildren',
-    // Disabled: removeXMLNS, convertStyleToAttrs, removeRasterImages, reusePaths
+    // Purposefully disabled:
+    // removeXMLNS,
+    // convertStyleToAttrs,
+    // removeRasterImages,
+    // reusePaths,
   ],
 }
 

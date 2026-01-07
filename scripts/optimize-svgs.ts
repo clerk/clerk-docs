@@ -1,8 +1,7 @@
-import fs from 'node:fs/promises'
+import fs, { glob } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { optimize, Config } from 'svgo'
-import readdirp from 'readdirp'
 
 const svgoConfig: Config = {
   multipass: true,
@@ -185,16 +184,13 @@ async function optimizeFiles(
 ): Promise<number> {
   console.log('Optimizing SVG files in `public/images`...\n')
 
-  const svgFiles = await readdirp.promise(imagesDir, {
-    fileFilter: '*.svg',
-    type: 'files',
-  })
+  const svgFiles = await Array.fromAsync(glob(path.join(imagesDir, '**/*.svg')))
 
   let totalSaved = 0
   let filesOptimized = 0
 
-  for (const file of svgFiles) {
-    const filePath = path.join(imagesDir, file.path)
+  for (const filePath of svgFiles) {
+    const relativePath = path.relative(imagesDir, filePath)
     const { saved, percent, before, after } = await processFile(filePath, dryRun, verbose)
 
     if (saved > 0) {
@@ -202,7 +198,7 @@ async function optimizeFiles(
       totalSaved += saved
       const prefix = checkMode ? '  ✗ ' : dryRun ? '  → ' : '  ✓ '
       console.log(
-        `${prefix}${file.path} (${dryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
+        `${prefix}${relativePath} (${dryRun ? 'would save' : 'saved'} ${formatBytes(saved)}, ${percent.toFixed(1)}%)`,
       )
       if (verbose && before && after) {
         console.log('\n    Before:')
@@ -228,17 +224,14 @@ async function optimizeInlines(
 ): Promise<number> {
   console.log('Transforming inline SVGs in `docs`...\n')
 
-  const mdxFiles = await readdirp.promise(docsDir, {
-    fileFilter: '*.mdx',
-    type: 'files',
-  })
+  const mdxFiles = await Array.fromAsync(glob(path.join(docsDir, '**/*.mdx')))
 
   let totalInlineSvgs = 0
   let filesModified = 0
   let totalInlineSaved = 0
 
-  for (const file of mdxFiles) {
-    const filePath = path.join(docsDir, file.path)
+  for (const filePath of mdxFiles) {
+    const relativePath = path.relative(docsDir, filePath)
     const { modified, count, savedBytes, transformations } = await processInline(filePath, dryRun, verbose)
 
     if (modified) {
@@ -246,7 +239,9 @@ async function optimizeInlines(
       totalInlineSvgs += count
       totalInlineSaved += savedBytes
       const prefix = checkMode ? '  ✗ ' : dryRun ? '  → ' : '  ✓ '
-      console.log(`${prefix}${file.path} (${count} SVG${count > 1 ? 's' : ''} ${dryRun ? 'would be' : ''} transformed)`)
+      console.log(
+        `${prefix}${relativePath} (${count} SVG${count > 1 ? 's' : ''} ${dryRun ? 'would be' : ''} transformed)`,
+      )
       if (verbose && transformations.length > 0) {
         for (const { before, after } of transformations) {
           console.log('\n    Before:')

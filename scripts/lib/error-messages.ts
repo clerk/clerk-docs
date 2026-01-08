@@ -86,7 +86,7 @@ export const errorMessages = {
 
   // Typedoc errors
   'typedoc-folder-not-found': (path: string): string =>
-    `Typedoc folder ${path} not found, run "npm run typedoc:download"`,
+    `Typedoc folder ${path} not found, run "pnpm run typedoc:download"`,
   'typedoc-read-error': (filePath: string): string => `Failed to read in ${filePath} from typedoc file`,
   'typedoc-parse-error': (filePath: string): string => `Failed to parse ${filePath} from typedoc file`,
   'typedoc-not-found': (filePath: string): string => `Typedoc ${filePath} not found`,

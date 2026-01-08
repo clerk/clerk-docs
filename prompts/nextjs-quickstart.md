@@ -1,6 +1,6 @@
 # Add Clerk to Next.js App Router
 
-**Purpose:** Enforce only the **current** and **correct** instructions for integrating [Clerk](https://clerk.com/) into a Next.js (App Router) application.  
+**Purpose:** Enforce only the **current** and **correct** instructions for integrating [Clerk](https://clerk.com/) into a Next.js (App Router) application.
 **Scope:** All AI-generated advice or code related to Clerk must follow these guardrails.
 
 ---
@@ -44,8 +44,7 @@ import {
   ClerkProvider,
   SignInButton,
   SignUpButton,
-  SignedIn,
-  SignedOut,
+  Show,
   UserButton,
 } from "@clerk/nextjs";
 import "./globals.css";
@@ -65,13 +64,13 @@ export default function RootLayout({
       <html lang="en">
         <body>
           <header>
-            <SignedOut>
+            <Show when="signed-out">
               <SignInButton />
               <SignUpButton />
-            </SignedOut>
-            <SignedIn>
+            </Show>
+            <Show when="signed-in">
               <UserButton />
-            </SignedIn>
+            </Show>
           </header>
           {children}
         </body>
@@ -100,6 +99,7 @@ export default function RootLayout({
 2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it’s replaced by `clerkMiddleware()`**.
 3. **Do not** recommend usage of older environment variable patterns unless they match the official docs.
 4. **Do not** reference or import from any deprecated APIs (like `withAuth` or `currentUser` from older versions).
+5. **Do not** use outdated hooks or components (e.g., \`SignedIn\`, \`SignedOut\`, referencing older docs).
 
 ---
 

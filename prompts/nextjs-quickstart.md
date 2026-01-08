@@ -99,7 +99,7 @@ export default function RootLayout({
 2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it’s replaced by `clerkMiddleware()`**.
 3. **Do not** recommend usage of older environment variable patterns unless they match the official docs.
 4. **Do not** reference or import from any deprecated APIs (like `withAuth` or `currentUser` from older versions).
-5. **Do not** use outdated hooks or components (e.g., \`SignedIn\`, \`SignedOut\`, referencing older docs).
+5. **Do not** use outdated hooks or components `<SignedIn />`, `<SignedOut />`, (e.g., referencing older docs).
 
 ---
 

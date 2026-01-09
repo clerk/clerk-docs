@@ -1,0 +1,199 @@
+---
+title: Embeddable email links with sign-in tokens
+description: Learn how to build custom embeddable email link sign-in flows to increase user engagement and reduce drop off in transactional emails, SMS's, and more.
+---
+
+<If sdk="expo">
+  > [!WARNING]
+  > Expo does not support email links. You can request this feature on [Clerk's roadmap](https://feedback.clerk.com/).
+</If>
+
+An "email link" is a link that, when visited, will automatically authenticate your user so that they can perform some action on your site with less friction than if they had to sign in manually. You can create email links with Clerk by generating a sign-in token.
+
+Common use cases include:
+
+- Welcome emails when users are added off a waitlist
+- Promotional emails for users
+- Recovering abandoned carts
+- Surveys or questionnaires
+
+This guide will demonstrate how to generate a sign-in token and use it to sign in a user.
+
+<Steps>
+  ## Generate a sign-in token
+
+  [Sign-in tokens](/docs/reference/backend-api/tag/sign-in-tokens/post/sign_in_tokens){{ target: '_blank' }} are JWTs that can be used to sign in to an application without specifying any credentials. A sign-in token can be used **once**, and can be consumed from the Frontend API using the [`ticket`](/docs/reference/javascript/sign-in#sign-in-create-params) strategy, which is demonstrated in the following example.
+
+  > [!NOTE]
+  > By default, sign-in tokens expire in 30 days. You can optionally specify a different duration in seconds using the `expires_in_seconds` property.
+
+  The following example demonstrates a cURL request that creates a valid sign-in token:
+
+  ```bash
+  curl 'https://api.clerk.com/v1/sign_in_tokens' \
+    -X POST \
+    -H 'Authorization: Bearer {{secret}}' \
+    -H 'Content-Type: application/json' \
+    -d '{ "user_id": "user_123" }'
+  ```
+
+  This will return a `url` property, which can be used as your email link. Keep in mind that this link will use the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in) to sign in the user.
+
+  If you would rather use your own sign-in page, you can use the `token` property that is returned. Add the `token` as a query param in any link, such as the following example:
+
+  `https://your-site.com/accept-token?token=<INSERT_TOKEN_HERE>`
+
+  Then, you can embed this link anywhere, such as an email.
+
+  ## Build a custom flow for signing in with a sign-in token
+
+  To handle email links with sign-in tokens, you must set up a page in your frontend that detects the token, signs the user in, and performs any additional actions you need.
+
+  The following example demonstrates basic code that detects a token in the URL query params and uses it to initiate a sign-in with Clerk:
+
+  <Tabs items={["Next.js"]}>
+    <Tab>
+      <CodeBlockTabs options={["App Router", "Pages Router"]}>
+        ```tsx {{ filename: 'app/accept-token/page.tsx' }}
+        'use client'
+        import { useUser, useSignIn } from '@clerk/nextjs'
+        import { useEffect, useState } from 'react'
+        import { useSearchParams } from 'next/navigation'
+
+        export default function Page() {
+          const [loading, setLoading] = useState<boolean>(false)
+          const { signIn, setActive } = useSignIn()
+          const { isSignedIn, user } = useUser()
+
+          // Get the token from the query params
+          const signInToken = useSearchParams().get('token')
+
+          useEffect(() => {
+            if (!signIn || !setActive || !signInToken || user || loading) {
+              return
+            }
+
+            const createSignIn = async () => {
+              setLoading(true)
+              try {
+                // Create the `SignIn` with the token
+                const signInAttempt = await signIn.create({
+                  strategy: 'ticket',
+                  ticket: signInToken as string,
+                })
+
+                // If the sign-in was successful, set the session to active
+                if (signInAttempt.status === 'complete') {
+                  setActive({
+                    session: signInAttempt.createdSessionId,
+                  })
+                } else {
+                  // If the sign-in attempt is not complete, check why.
+                  // User may need to complete further steps.
+                  console.error(JSON.stringify(signInAttempt, null, 2))
+                }
+              } catch (err) {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling
+                console.error('Error:', JSON.stringify(err, null, 2))
+              } finally {
+                setLoading(false)
+              }
+            }
+
+            createSignIn()
+          }, [signIn, setActive, signInToken, user, loading])
+
+          if (!signInToken) {
+            return <div>No token provided.</div>
+          }
+
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
+          }
+
+          if (loading) {
+            return <div>Signing you in...</div>
+          }
+
+          return <div>Signed in as {user.id}</div>
+        }
+        ```
+
+        ```tsx {{ filename: 'pages/accept-token.tsx' }}
+        import { InferGetServerSidePropsType, GetServerSideProps } from 'next'
+        import { useUser, useSignIn } from '@clerk/nextjs'
+        import { useEffect, useState } from 'react'
+
+        // Get the token from the query param server-side, and pass through props
+        export const getServerSideProps: GetServerSideProps = async (context) => {
+          return {
+            props: { signInToken: context.query.token ? context.query.token : null },
+          }
+        }
+
+        export default function AcceptTokenPage({
+          signInToken,
+        }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+          const [loading, setLoading] = useState<boolean>(false)
+          const { signIn, setActive } = useSignIn()
+          const { isSignedIn, user } = useUser()
+
+          useEffect(() => {
+            if (!signIn || !setActive || !signInToken || user || loading) {
+              return
+            }
+
+            const createSignIn = async () => {
+              setLoading(true)
+              try {
+                // Create the `SignIn` with the token
+                const signInAttempt = await signIn.create({
+                  strategy: 'ticket',
+                  ticket: signInToken as string,
+                })
+
+                // If the sign-in was successful, set the session to active
+                if (signInAttempt.status === 'complete') {
+                  setActive({
+                    session: signInAttempt.createdSessionId,
+                  })
+                } else {
+                  // If the sign-in attempt is not complete, check why.
+                  // User may need to complete further steps.
+                  console.error(JSON.stringify(signInAttempt, null, 2))
+                }
+              } catch (err) {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling
+                console.error('Error:', JSON.stringify(err, null, 2))
+                setLoading(true)
+              } finally {
+                setLoading(false)
+              }
+            }
+
+            createSignIn()
+          }, [signIn, setActive, signInToken, user, loading])
+
+          if (!signInToken) {
+            return <div>No token provided.</div>
+          }
+
+          if (loading) {
+            return <div>Loading...</div>
+          }
+
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
+          }
+
+          return <div>Signed in as {user.id}</div>
+        }
+        ```
+      </CodeBlockTabs>
+    </Tab>
+  </Tabs>
+</Steps>

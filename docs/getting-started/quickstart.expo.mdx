@@ -33,7 +33,6 @@ sdk: expo
   npx create-expo-app@latest clerk-expo
   cd clerk-expo
   npm install
-  npm run dev
   ```
 
   ## Install `@clerk/clerk-expo`
@@ -71,16 +70,34 @@ sdk: expo
   Add the component to your root layout as shown in the following example:
 
   ```tsx {{ filename: 'app/_layout.tsx', mark: [1, 6, 8] }}
-  import { ClerkProvider } from '@clerk/clerk-expo'
-  import { Slot } from 'expo-router'
+    import { useColorScheme } from '@/hooks/use-color-scheme'
+  + import { ClerkProvider } from '@clerk/clerk-expo'
+    import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
+    import { Stack } from 'expo-router'
+    import { StatusBar } from 'expo-status-bar'
+    import 'react-native-reanimated'
 
-  export default function RootLayout() {
-    return (
-      <ClerkProvider>
-        <Slot />
-      </ClerkProvider>
-    )
-  }
+    export const unstable_settings = {
+      anchor: '(tabs)',
+    }
+
+    export default function RootLayout() {
+      const colorScheme = useColorScheme()
+
+      return (
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+  +       <ClerkProvider>
+            <Stack>
+              <Stack.Screen name="(home)" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            </Stack>
+            <StatusBar style="auto" />
+  +       </ClerkProvider>
+        </ThemeProvider>
+      )
+    }
   ```
 
   ## Configure the token cache
@@ -97,17 +114,33 @@ sdk: expo
 
   1. Update your root layout to use the secure token cache:
      ```tsx {{ filename: 'app/_layout.tsx', mark: [2, 7] }}
-     import { ClerkProvider } from '@clerk/clerk-expo'
-     import { tokenCache } from '@clerk/clerk-expo/token-cache'
-     import { Slot } from 'expo-router'
+       import { useColorScheme } from '@/hooks/use-color-scheme'
+       import { ClerkProvider } from '@clerk/clerk-expo'
+     + import { tokenCache } from '@clerk/clerk-expo/token-cache'
+       import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
+       import { Stack } from 'expo-router'
+       import { StatusBar } from 'expo-status-bar'
+       import 'react-native-reanimated'
 
-     export default function RootLayout() {
-       return (
-         <ClerkProvider tokenCache={tokenCache}>
-           <Slot />
-         </ClerkProvider>
-       )
-     }
+       export const unstable_settings = {
+         anchor: '(tabs)',
+       }
+
+       export default function RootLayout() {
+         const colorScheme = useColorScheme()
+
+         return (
+           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+     +       <ClerkProvider tokenCache={tokenCache}>
+               <Stack>
+                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+               </Stack>
+               <StatusBar style="auto" />
+             </ClerkProvider>
+           </ThemeProvider>
+         )
+       }
      ```
 
   > [!TIP]
@@ -141,198 +174,49 @@ sdk: expo
 
   ### Sign-up page
 
-  In the `(auth)` group, create a `sign-up.tsx` file with the following code. The [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook is used to create a sign-up flow. The user can sign up using their email and password and will receive an email verification code to confirm their email.
-
-  ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
-  import * as React from 'react'
-  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
-  import { useSignUp } from '@clerk/clerk-expo'
-  import { Link, useRouter } from 'expo-router'
-
-  export default function SignUpScreen() {
-    const { isLoaded, signUp, setActive } = useSignUp()
-    const router = useRouter()
-
-    const [emailAddress, setEmailAddress] = React.useState('')
-    const [password, setPassword] = React.useState('')
-    const [pendingVerification, setPendingVerification] = React.useState(false)
-    const [code, setCode] = React.useState('')
-
-    // Handle submission of sign-up form
-    const onSignUpPress = async () => {
-      if (!isLoaded) return
-
-      console.log(emailAddress, password)
-
-      // Start sign-up process using email and password provided
-      try {
-        await signUp.create({
-          emailAddress,
-          password,
-        })
-
-        // Send user an email with verification code
-        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-
-        // Set 'pendingVerification' to true to display second form
-        // and capture code
-        setPendingVerification(true)
-      } catch (err) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
-      }
-    }
-
-    // Handle submission of verification form
-    const onVerifyPress = async () => {
-      if (!isLoaded) return
-
-      try {
-        // Use the code the user provided to attempt verification
-        const signUpAttempt = await signUp.attemptEmailAddressVerification({
-          code,
-        })
-
-        // If verification was completed, set the session to active
-        // and redirect the user
-        if (signUpAttempt.status === 'complete') {
-          await setActive({ session: signUpAttempt.createdSessionId })
-          router.replace('/')
-        } else {
-          // If the status is not complete, check why. User may need to
-          // complete further steps.
-          console.error(JSON.stringify(signUpAttempt, null, 2))
-        }
-      } catch (err) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
-      }
-    }
-
-    if (pendingVerification) {
-      return (
-        <>
-          <Text>Verify your email</Text>
-          <TextInput
-            value={code}
-            placeholder="Enter your verification code"
-            onChangeText={(code) => setCode(code)}
-          />
-          <TouchableOpacity onPress={onVerifyPress}>
-            <Text>Verify</Text>
-          </TouchableOpacity>
-        </>
-      )
-    }
-
-    return (
-      <View>
-        <>
-          <Text>Sign up</Text>
-          <TextInput
-            autoCapitalize="none"
-            value={emailAddress}
-            placeholder="Enter email"
-            onChangeText={(email) => setEmailAddress(email)}
-          />
-          <TextInput
-            value={password}
-            placeholder="Enter password"
-            secureTextEntry={true}
-            onChangeText={(password) => setPassword(password)}
-          />
-          <TouchableOpacity onPress={onSignUpPress}>
-            <Text>Continue</Text>
-          </TouchableOpacity>
-          <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
-            <Text>Already have an account?</Text>
-            <Link href="/sign-in">
-              <Text>Sign in</Text>
-            </Link>
-          </View>
-        </>
-      </View>
-    )
-  }
-  ```
+  <Include src="_partials/expo/email-pass-sign-up" />
 
   ### Sign-in page
 
-  In the `(auth)` group, create a `sign-in.tsx` file with the following code. The [`useSignIn()`](/docs/reference/hooks/use-sign-in) hook is used to create a sign-in flow. The user can sign in using email address and password, or navigate to the sign-up page.
-
-  ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
-  import { useSignIn } from '@clerk/clerk-expo'
-  import { Link, useRouter } from 'expo-router'
-  import { Text, TextInput, TouchableOpacity, View } from 'react-native'
-  import React from 'react'
-
-  export default function Page() {
-    const { signIn, setActive, isLoaded } = useSignIn()
-    const router = useRouter()
-
-    const [emailAddress, setEmailAddress] = React.useState('')
-    const [password, setPassword] = React.useState('')
-
-    // Handle the submission of the sign-in form
-    const onSignInPress = async () => {
-      if (!isLoaded) return
-
-      // Start the sign-in process using the email and password provided
-      try {
-        const signInAttempt = await signIn.create({
-          identifier: emailAddress,
-          password,
-        })
-
-        // If sign-in process is complete, set the created session as active
-        // and redirect the user
-        if (signInAttempt.status === 'complete') {
-          await setActive({ session: signInAttempt.createdSessionId })
-          router.replace('/')
-        } else {
-          // If the status isn't complete, check why. User might need to
-          // complete further steps.
-          console.error(JSON.stringify(signInAttempt, null, 2))
-        }
-      } catch (err) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
-      }
-    }
-
-    return (
-      <View>
-        <Text>Sign in</Text>
-        <TextInput
-          autoCapitalize="none"
-          value={emailAddress}
-          placeholder="Enter email"
-          onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
-        />
-        <TextInput
-          value={password}
-          placeholder="Enter password"
-          secureTextEntry={true}
-          onChangeText={(password) => setPassword(password)}
-        />
-        <TouchableOpacity onPress={onSignInPress}>
-          <Text>Continue</Text>
-        </TouchableOpacity>
-        <View style={{ display: 'flex', flexDirection: 'row', gap: 3 }}>
-          <Text>Don't have an account?</Text>
-          <Link href="/sign-up">
-            <Text>Sign up</Text>
-          </Link>
-        </View>
-      </View>
-    )
-  }
-  ```
+  <Include src="_partials/expo/email-pass-sign-in" />
 
   For more information about building these [custom flows](!custom-flow), including guided comments in the code examples, see the [Build a custom email/password authentication flow](/docs/guides/development/custom-flows/authentication/email-password) guide.
+
+  ## Add the new routes to your stack
+
+  In `app/_layout.tsx`, add the `(home)` and `(auth)` routes to the `<Stack />` so they're accessible from the home screen.
+
+  ```tsx {{ filename: 'app/_layout.tsx' }}
+    import { useColorScheme } from '@/hooks/use-color-scheme'
+    import { ClerkProvider } from '@clerk/clerk-expo'
+    import { tokenCache } from '@clerk/clerk-expo/token-cache'
+    import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
+    import { Stack } from 'expo-router'
+    import { StatusBar } from 'expo-status-bar'
+    import 'react-native-reanimated'
+
+    export const unstable_settings = {
+      anchor: '(tabs)',
+    }
+
+    export default function RootLayout() {
+      const colorScheme = useColorScheme()
+
+      return (
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <ClerkProvider tokenCache={tokenCache}>
+            <Stack>
+  +           <Stack.Screen name="(home)" options={{ headerShown: false }} />
+  +           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ClerkProvider>
+        </ThemeProvider>
+      )
+    }
+  ```
 
   ## Add a sign-out button
 
@@ -365,31 +249,48 @@ sdk: expo
   Then, in the same folder, create an `index.tsx` file with the following code. If the user is signed in, it displays their email and a sign-out button. If they're not signed in, it displays sign-in and sign-up links.
 
   ```tsx {{ filename: 'app/(home)/index.tsx' }}
-  import { SignedIn, SignedOut, useUser } from '@clerk/clerk-expo'
+  import { SignOutButton } from '@/components/sign-out-button'
+  import { ThemedText } from '@/components/themed-text'
+  import { ThemedView } from '@/components/themed-view'
+  import { SignedIn, SignedOut, useSession, useUser } from '@clerk/clerk-expo'
   import { Link } from 'expo-router'
-  import { Text, View } from 'react-native'
-  import { SignOutButton } from '@/app/components/SignOutButton'
+  import { StyleSheet } from 'react-native'
 
   export default function Page() {
     const { user } = useUser()
 
+    // If your user isn't appearing as signed in,
+    // it's possible they have session tasks to complete.
+    // Learn more: https://clerk.com/docs/guides/configure/session-tasks
+    const { session } = useSession()
+    console.log(session?.tasks)
+
     return (
-      <View>
+      <ThemedView style={styles.container}>
+        <ThemedText type="title">Welcome!</ThemedText>
         <SignedIn>
-          <Text>Hello {user?.emailAddresses[0].emailAddress}</Text>
+          <ThemedText>Hello {user?.emailAddresses[0].emailAddress}</ThemedText>
           <SignOutButton />
         </SignedIn>
         <SignedOut>
           <Link href="/(auth)/sign-in">
-            <Text>Sign in</Text>
+            <ThemedText>Sign in</ThemedText>
           </Link>
           <Link href="/(auth)/sign-up">
-            <Text>Sign up</Text>
+            <ThemedText>Sign up</ThemedText>
           </Link>
         </SignedOut>
-      </View>
+      </ThemedView>
     )
   }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      gap: 16,
+    },
+  })
   ```
 
   ## Create your first user

@@ -21,55 +21,204 @@ To create a sign-up flow using the invitation token, you need to extract the tok
 
 The following example expects the user to be signing up with a password and also demonstrates how to collect additional user information for the sign-up, like a first and last name. You can keep, remove, or adjust these fields to fit your application, but either way, **you will need to have these settings [properly configured in the Clerk Dashboard](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)**.
 
-<Tabs items={["Next.js", "JavaScript", "Expo"]}>
-  <Tab>
-    ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
-    'use client'
+{/* TODO: Add iOS, Android, Nuxt examples. */}
 
-    import * as React from 'react'
-    import { useSignUp, useUser } from '@clerk/nextjs'
-    import { useSearchParams, useRouter } from 'next/navigation'
+<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
 
-    export default function Page() {
-      const { isSignedIn, user } = useUser()
-      const router = useRouter()
-      const { isLoaded, signUp, setActive } = useSignUp()
+  ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
+  'use client'
 
-      const [password, setPassword] = React.useState('')
-      // Optionally, collect additional fields that your app requires
-      const [firstName, setFirstName] = React.useState('')
-      const [lastName, setLastName] = React.useState('')
+  import * as React from 'react'
+  import { useSignUp, useUser } from '@clerk/nextjs'
+  import { useSearchParams, useRouter } from 'next/navigation'
 
-      // Handle signed-in users visiting this page
-      // This will also redirect the user once they finish the sign-up process
-      React.useEffect(() => {
-        if (isSignedIn) {
-          router.push('/')
-        }
-      }, [isSignedIn])
+  export default function Page() {
+    const { isSignedIn, user } = useUser()
+    const router = useRouter()
+    const { isLoaded, signUp, setActive } = useSignUp()
 
-      // Get the token from the query params
-      const token = useSearchParams().get('__clerk_ticket')
+    const [password, setPassword] = React.useState('')
+    // Optionally, collect additional fields that your app requires
+    const [firstName, setFirstName] = React.useState('')
+    const [lastName, setLastName] = React.useState('')
 
-      // If there is no invitation token, restrict access to this page
-      if (!token) {
-        return <p>No invitation token found.</p>
+    // Handle signed-in users visiting this page
+    // This will also redirect the user once they finish the sign-up process
+    React.useEffect(() => {
+      if (isSignedIn) {
+        router.push('/')
       }
+    }, [isSignedIn])
 
-      // Handle submission of the sign-up form
-      const handleSubmit = async (e: React.FormEvent) => {
+    // Get the token from the query params
+    const token = useSearchParams().get('__clerk_ticket')
+
+    // If there is no invitation token, restrict access to this page
+    if (!token) {
+      return <p>No invitation token found.</p>
+    }
+
+    // Handle submission of the sign-up form
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      if (!isLoaded) return
+
+      try {
+        if (!token) return null
+
+        // Create a new sign-up with the supplied invitation token.
+        // Make sure you're also passing the ticket strategy.
+        // After the below call, the user's email address will be
+        // automatically verified because of the invitation token.
+        const signUpAttempt = await signUp.create({
+          strategy: 'ticket',
+          ticket: token,
+          firstName,
+          lastName,
+          password,
+        })
+
+        // If the sign-up was completed, set the session to active
+        if (signUpAttempt.status === 'complete') {
+          await setActive({ session: signUpAttempt.createdSessionId })
+        } else {
+          // If the sign-up status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signUpAttempt, null, 2))
+        }
+      } catch (err) {
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    return (
+      <>
+        <h1>Sign up</h1>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="firstName">Enter first name</label>
+            <input
+              id="firstName"
+              type="text"
+              name="firstName"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="lastName">Enter last name</label>
+            <input
+              id="lastName"
+              type="text"
+              name="lastName"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="password">Enter password</label>
+            <input
+              id="password"
+              type="password"
+              name="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <div id="clerk-captcha" />
+          <div>
+            <button type="submit">Next</button>
+          </div>
+        </form>
+      </>
+    )
+  }
+  ```
+</If>
+
+<If sdk="js-frontend">
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html', collapsible: true }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="signed-in"></div>
+
+        <div id="task"></div>
+
+        <div id="sign-up">
+          <h2>Sign up</h2>
+          <form id="sign-up-form">
+            <label for="firstName">Enter first name</label>
+            <input name="firstName" id="firstName" />
+            <label for="lastName">Enter last name</label>
+            <input name="lastName" id="lastName" />
+            <label for="password">Enter password</label>
+            <input name="password" id="password" />
+            <button type="submit">Continue</button>
+          </form>
+        </div>
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js', collapsible: true }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    const clerk = new Clerk(pubKey)
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      // Mount user button component
+      document.getElementById('signed-in').innerHTML = `
+        <div id="user-button"></div>
+      `
+
+      const userbuttonDiv = document.getElementById('user-button')
+
+      clerk.mountUserButton(userbuttonDiv)
+    } else if (clerk.session.currentTask) {
+      // Check for pending tasks and display custom UI to help users resolve them
+      // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+      switch (clerk.session.currentTask.key) {
+        case 'choose-organization': {
+          document.getElementById('app').innerHTML = `
+                  <div id="task"></div>
+                `
+
+          const taskDiv = document.getElementById('task')
+
+          clerk.mountTaskChooseOrganization(taskDiv)
+        }
+      }
+    } else {
+      // Get the token from the query parameter
+      const param = '__clerk_ticket'
+      const token = new URL(window.location.href).searchParams.get(param)
+
+      // Handle the sign-up form
+      document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
         e.preventDefault()
 
-        if (!isLoaded) return
+        const formData = new FormData(e.target)
+        const firstName = formData.get('firstName')
+        const lastName = formData.get('lastName')
+        const password = formData.get('password')
 
         try {
-          if (!token) return null
-
-          // Create a new sign-up with the supplied invitation token.
-          // Make sure you're also passing the ticket strategy.
-          // After the below call, the user's email address will be
-          // automatically verified because of the invitation token.
-          const signUpAttempt = await signUp.create({
+          // Start the sign-up process using the ticket method
+          const signUpAttempt = await clerk.client.signUp.create({
             strategy: 'ticket',
             ticket: token,
             firstName,
@@ -77,302 +226,155 @@ The following example expects the user to be signing up with a password and also
             password,
           })
 
-          // If the sign-up was completed, set the session to active
+          // If sign-up was successful, set the session to active
           if (signUpAttempt.status === 'complete') {
-            await setActive({ session: signUpAttempt.createdSessionId })
-          } else {
-            // If the sign-up status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signUpAttempt, null, 2))
-          }
-        } catch (err) {
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      return (
-        <>
-          <h1>Sign up</h1>
-          <form onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="firstName">Enter first name</label>
-              <input
-                id="firstName"
-                type="text"
-                name="firstName"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="lastName">Enter last name</label>
-              <input
-                id="lastName"
-                type="text"
-                name="lastName"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input
-                id="password"
-                type="password"
-                name="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <div id="clerk-captcha" />
-            <div>
-              <button type="submit">Next</button>
-            </div>
-          </form>
-        </>
-      )
-    }
-    ```
-  </Tab>
-
-  <Tab>
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
-
-          <div id="task"></div>
-
-          <div id="sign-up">
-            <h2>Sign up</h2>
-            <form id="sign-up-form">
-              <label for="firstName">Enter first name</label>
-              <input name="firstName" id="firstName" />
-              <label for="lastName">Enter last name</label>
-              <input name="lastName" id="lastName" />
-              <label for="password">Enter password</label>
-              <input name="password" id="password" />
-              <button type="submit">Continue</button>
-            </form>
-          </div>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-          <div id="user-button"></div>
-        `
-
-        const userbuttonDiv = document.getElementById('user-button')
-
-        clerk.mountUserButton(userbuttonDiv)
-      } else if (clerk.session.currentTask) {
-        // Check for pending tasks and display custom UI to help users resolve them
-        // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-        switch (clerk.session.currentTask.key) {
-          case 'choose-organization': {
-            document.getElementById('app').innerHTML = `
-                    <div id="task"></div>
-                  `
-
-            const taskDiv = document.getElementById('task')
-
-            clerk.mountTaskChooseOrganization(taskDiv)
-          }
-        }
-      } else {
-        // Get the token from the query parameter
-        const param = '__clerk_ticket'
-        const token = new URL(window.location.href).searchParams.get(param)
-
-        // Handle the sign-up form
-        document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
-
-          const formData = new FormData(e.target)
-          const firstName = formData.get('firstName')
-          const lastName = formData.get('lastName')
-          const password = formData.get('password')
-
-          try {
-            // Start the sign-up process using the ticket method
-            const signUpAttempt = await clerk.client.signUp.create({
-              strategy: 'ticket',
-              ticket: token,
-              firstName,
-              lastName,
-              password,
-            })
-
-            // If sign-up was successful, set the session to active
-            if (signUpAttempt.status === 'complete') {
-              await clerk.setActive({
-                session: signUpAttempt.createdSessionId,
-                navigate: async ({ session }) => {
-                  if (session?.currentTask) {
-                    // Check for tasks and navigate to custom UI to help users resolve them
-                    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                    console.log(session?.currentTask)
-                    return
-                  }
-
-                  await router.push('/')
-                },
-              })
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(JSON.stringify(signUpAttempt, null, 2))
-            }
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-
-  <Tab>
-    ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
-    import * as React from 'react'
-    import { Text, TextInput, Button, View } from 'react-native'
-    import { useSignUp, useUser } from '@clerk/clerk-expo'
-    import { useLocalSearchParams, useRouter } from 'expo-router'
-
-    export default function Page() {
-      const { isSignedIn } = useUser()
-      const router = useRouter()
-      const { isLoaded, signUp, setActive } = useSignUp()
-
-      const [password, setPassword] = React.useState('')
-      // Optionally, collect additional fields that your app requires
-      const [firstName, setFirstName] = React.useState('')
-      const [lastName, setLastName] = React.useState('')
-
-      // Handle signed-in users visiting this page
-      // This will also redirect the user once they finish the sign-up process
-      React.useEffect(() => {
-        if (isSignedIn) {
-          router.push('/')
-        }
-      }, [isSignedIn])
-
-      // Get the token from the query params
-      const token = useLocalSearchParams()['__clerk_ticket'] as string
-
-      // If there is no invitation token, restrict access to this page
-      if (!token) {
-        return (
-          <View>
-            <Text>No invitation token found.</Text>
-          </View>
-        )
-      }
-
-      // Handle submission of the sign-up form
-      const handleSubmit = async () => {
-        if (!isLoaded) return
-
-        try {
-          if (!token) return null
-
-          // Create a new sign-up with the supplied invitation token.
-          // Make sure you're also passing the ticket strategy.
-          // After the below call, the user's email address will be
-          // automatically verified because of the invitation token.
-          const signUpAttempt = await signUp.create({
-            strategy: 'ticket',
-            ticket: token,
-            firstName,
-            lastName,
-            password,
-          })
-
-          // If the sign-up was completed, set the session to active
-          if (signUpAttempt.status === 'complete') {
-            await setActive({
+            await clerk.setActive({
               session: signUpAttempt.createdSessionId,
               navigate: async ({ session }) => {
                 if (session?.currentTask) {
-                  // Check for session tasks and navigate to custom UI to help users resolve them
+                  // Check for tasks and navigate to custom UI to help users resolve them
                   // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
                   console.log(session?.currentTask)
                   return
                 }
 
-                router.push('/')
+                await router.push('/')
               },
             })
           } else {
-            // If the sign-up status is not complete, check why. User may need to
+            // If the status is not complete, check why. User may need to
             // complete further steps.
             console.error(JSON.stringify(signUpAttempt, null, 2))
           }
         } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
           console.error(JSON.stringify(err, null, 2))
         }
-      }
+      })
+    }
+    ```
+  </CodeBlockTabs>
+</If>
 
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(auth)/accept-invitation.tsx', collapsible: true }}
+  import * as React from 'react'
+  import { Text, TextInput, Button, View } from 'react-native'
+  import { useSignUp, useUser } from '@clerk/clerk-expo'
+  import { useLocalSearchParams, useRouter } from 'expo-router'
+
+  export default function Page() {
+    const { isSignedIn } = useUser()
+    const router = useRouter()
+    const { isLoaded, signUp, setActive } = useSignUp()
+
+    const [password, setPassword] = React.useState('')
+    // Optionally, collect additional fields that your app requires
+    const [firstName, setFirstName] = React.useState('')
+    const [lastName, setLastName] = React.useState('')
+
+    // Handle signed-in users visiting this page
+    // This will also redirect the user once they finish the sign-up process
+    React.useEffect(() => {
+      if (isSignedIn) {
+        router.push('/')
+      }
+    }, [isSignedIn])
+
+    // Get the token from the query params
+    const token = useLocalSearchParams()['__clerk_ticket'] as string
+
+    // If there is no invitation token, restrict access to this page
+    if (!token) {
       return (
         <View>
-          <Text>Sign up</Text>
-          <View>
-            <Text>Enter first name</Text>
-            <TextInput
-              value={firstName}
-              placeholder="Enter first name"
-              placeholderTextColor="#666666"
-              onChangeText={(text) => setFirstName(text)}
-            />
-          </View>
-          <View>
-            <Text>Enter last name</Text>
-            <TextInput
-              value={lastName}
-              placeholder="Enter last name"
-              placeholderTextColor="#666666"
-              onChangeText={(text) => setLastName(text)}
-            />
-          </View>
-          <View>
-            <Text>Enter password</Text>
-            <TextInput
-              value={password}
-              placeholder="Enter password"
-              placeholderTextColor="#666666"
-              secureTextEntry={true}
-              onChangeText={(text) => setPassword(text)}
-            />
-          </View>
-          <View id="clerk-captcha" />
-          <View>
-            <Button title="Next" onPress={handleSubmit} />
-          </View>
+          <Text>No invitation token found.</Text>
         </View>
       )
     }
-    ```
-  </Tab>
-</Tabs>
+
+    // Handle submission of the sign-up form
+    const handleSubmit = async () => {
+      if (!isLoaded) return
+
+      try {
+        if (!token) return null
+
+        // Create a new sign-up with the supplied invitation token.
+        // Make sure you're also passing the ticket strategy.
+        // After the below call, the user's email address will be
+        // automatically verified because of the invitation token.
+        const signUpAttempt = await signUp.create({
+          strategy: 'ticket',
+          ticket: token,
+          firstName,
+          lastName,
+          password,
+        })
+
+        // If the sign-up was completed, set the session to active
+        if (signUpAttempt.status === 'complete') {
+          await setActive({
+            session: signUpAttempt.createdSessionId,
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                // Check for session tasks and navigate to custom UI to help users resolve them
+                // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
+          })
+        } else {
+          // If the sign-up status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signUpAttempt, null, 2))
+        }
+      } catch (err) {
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    return (
+      <View>
+        <Text>Sign up</Text>
+        <View>
+          <Text>Enter first name</Text>
+          <TextInput
+            value={firstName}
+            placeholder="Enter first name"
+            placeholderTextColor="#666666"
+            onChangeText={(text) => setFirstName(text)}
+          />
+        </View>
+        <View>
+          <Text>Enter last name</Text>
+          <TextInput
+            value={lastName}
+            placeholder="Enter last name"
+            placeholderTextColor="#666666"
+            onChangeText={(text) => setLastName(text)}
+          />
+        </View>
+        <View>
+          <Text>Enter password</Text>
+          <TextInput
+            value={password}
+            placeholder="Enter password"
+            placeholderTextColor="#666666"
+            secureTextEntry={true}
+            onChangeText={(text) => setPassword(text)}
+          />
+        </View>
+        <View id="clerk-captcha" />
+        <View>
+          <Button title="Next" onPress={handleSubmit} />
+        </View>
+      </View>
+    )
+  }
+  ```
+</If>

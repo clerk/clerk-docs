@@ -14,9 +14,9 @@ This guide demonstrates how to build a custom user interface that allows users t
 To use phone number verification, you first need to enable it for your application.
 
 1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-1. Select the **Phone** tab and enable **Add phone to account**.
+1. Select the **Phone** tab and enable either **Sign-up with phone** or **Sign-in with phone** or both, depending on your application's needs.
 
-## Phone number code verification
+## Build the custom flow
 
 1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `phoneNumbers` property that contains all the phone numbers associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
 1. The [`User.createPhoneNumber()`](/docs/reference/javascript/user#create-phone-number) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add a phone number to their account.
@@ -26,218 +26,222 @@ To use phone number verification, you first need to enable it for your applicati
 
 <Include src="_partials/custom-flows/phone-number" />
 
-<Tabs items={["Next.js", "iOS", "Android"]}>
-  <Tab>
-    ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
-    'use client'
+{/* TODO: Add JavaScript, Expo, Nuxt examples */}
 
-    import * as React from 'react'
-    import { useUser, useReverification } from '@clerk/nextjs'
-    import { PhoneNumberResource } from '@clerk/types'
+<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
 
-    export default function Page() {
-      const { isLoaded, isSignedIn, user } = useUser()
-      const [phone, setPhone] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const [isVerifying, setIsVerifying] = React.useState(false)
-      const [successful, setSuccessful] = React.useState(false)
-      const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
-      const createPhoneNumber = useReverification((phone: string) =>
-        user?.createPhoneNumber({ phoneNumber: phone }),
-      )
+  ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
+  'use client'
 
-      if (!isLoaded) {
-        // Handle loading state
-        return null
+  import * as React from 'react'
+  import { useUser, useReverification } from '@clerk/nextjs'
+  import { PhoneNumberResource } from '@clerk/types'
+
+  export default function Page() {
+    const { isLoaded, isSignedIn, user } = useUser()
+    const [phone, setPhone] = React.useState('')
+    const [code, setCode] = React.useState('')
+    const [isVerifying, setIsVerifying] = React.useState(false)
+    const [successful, setSuccessful] = React.useState(false)
+    const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
+    const createPhoneNumber = useReverification((phone: string) =>
+      user?.createPhoneNumber({ phoneNumber: phone }),
+    )
+
+    if (!isLoaded) {
+      // Handle loading state
+      return null
+    }
+
+    if (!isSignedIn) {
+      // Handle signed out state
+      return <p>You must be logged in to access this page</p>
+    }
+
+    // Handle addition of the phone number
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      try {
+        // Add unverified phone number to user
+        const res = await createPhoneNumber(phone)
+        // Reload user to get updated User object
+        await user.reload()
+
+        // Create a reference to the new phone number to use related methods
+        const phoneNumber = user.phoneNumbers.find((a) => a.id === res?.id)
+        setPhoneObj(phoneNumber)
+
+        // Send the user an SMS with the verification code
+        phoneNumber?.prepareVerification()
+
+        // Set to true to display second form
+        // and capture the code
+        setIsVerifying(true)
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
       }
+    }
 
-      if (!isSignedIn) {
-        // Handle signed out state
-        return <p>You must be logged in to access this page</p>
-      }
+    // Handle the submission of the verification form
+    const verifyCode = async (e: React.FormEvent) => {
+      e.preventDefault()
+      try {
+        // Verify that the provided code matches the code sent to the user
+        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
 
-      // Handle addition of the phone number
-      const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        try {
-          // Add unverified phone number to user
-          const res = await createPhoneNumber(phone)
-          // Reload user to get updated User object
-          await user.reload()
-
-          // Create a reference to the new phone number to use related methods
-          const phoneNumber = user.phoneNumbers.find((a) => a.id === res?.id)
-          setPhoneObj(phoneNumber)
-
-          // Send the user an SMS with the verification code
-          phoneNumber?.prepareVerification()
-
-          // Set to true to display second form
-          // and capture the code
-          setIsVerifying(true)
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
+        if (phoneVerifyAttempt?.verification.status === 'verified') {
+          setSuccessful(true)
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
         }
+      } catch (err) {
+        console.error(JSON.stringify(err, null, 2))
       }
+    }
 
-      // Handle the submission of the verification form
-      const verifyCode = async (e: React.FormEvent) => {
-        e.preventDefault()
-        try {
-          // Verify that the provided code matches the code sent to the user
-          const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
-
-          if (phoneVerifyAttempt?.verification.status === 'verified') {
-            setSuccessful(true)
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
-          }
-        } catch (err) {
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      // Display a success message if the phone number was added successfully
-      if (successful) {
-        return (
-          <>
-            <h1>Phone added</h1>
-          </>
-        )
-      }
-
-      // Display the verification form to capture the code
-      if (isVerifying) {
-        return (
-          <>
-            <h1>Verify phone</h1>
-            <div>
-              <form onSubmit={(e) => verifyCode(e)}>
-                <div>
-                  <label htmlFor="code">Enter code</label>
-                  <input
-                    onChange={(e) => setCode(e.target.value)}
-                    id="code"
-                    name="code"
-                    type="text"
-                    value={code}
-                  />
-                </div>
-                <div>
-                  <button type="submit">Verify</button>
-                </div>
-              </form>
-            </div>
-          </>
-        )
-      }
-
-      // Display the initial form to capture the phone number
+    // Display a success message if the phone number was added successfully
+    if (successful) {
       return (
         <>
-          <h1>Add phone</h1>
+          <h1>Phone added</h1>
+        </>
+      )
+    }
+
+    // Display the verification form to capture the code
+    if (isVerifying) {
+      return (
+        <>
+          <h1>Verify phone</h1>
           <div>
-            <form onSubmit={(e) => handleSubmit(e)}>
+            <form onSubmit={(e) => verifyCode(e)}>
               <div>
-                <label htmlFor="phone">Enter phone number</label>
+                <label htmlFor="code">Enter code</label>
                 <input
-                  onChange={(e) => setPhone(e.target.value)}
-                  id="phone"
-                  name="phone"
-                  type="phone"
-                  value={phone}
+                  onChange={(e) => setCode(e.target.value)}
+                  id="code"
+                  name="code"
+                  type="text"
+                  value={code}
                 />
               </div>
               <div>
-                <button type="submit">Continue</button>
+                <button type="submit">Verify</button>
               </div>
             </form>
           </div>
         </>
       )
     }
-    ```
-  </Tab>
 
-  <Tab>
-    ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
-    import SwiftUI
-    import Clerk
+    // Display the initial form to capture the phone number
+    return (
+      <>
+        <h1>Add phone</h1>
+        <div>
+          <form onSubmit={(e) => handleSubmit(e)}>
+            <div>
+              <label htmlFor="phone">Enter phone number</label>
+              <input
+                onChange={(e) => setPhone(e.target.value)}
+                id="phone"
+                name="phone"
+                type="phone"
+                value={phone}
+              />
+            </div>
+            <div>
+              <button type="submit">Continue</button>
+            </div>
+          </form>
+        </div>
+      </>
+    )
+  }
+  ```
+</If>
 
-    struct AddPhoneView: View {
-      @State private var phone = ""
-      @State private var code = ""
-      @State private var isVerifying = false
-      // Create a reference to the phone number that we'll be creating
-      @State private var newPhoneNumber: PhoneNumber?
+<If sdk="ios">
+  ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
+  import SwiftUI
+  import Clerk
 
-      var body: some View {
-        if newPhoneNumber?.verification?.status == .verified {
-          Text("Phone added!")
+  struct AddPhoneView: View {
+    @State private var phone = ""
+    @State private var code = ""
+    @State private var isVerifying = false
+    // Create a reference to the phone number that we'll be creating
+    @State private var newPhoneNumber: PhoneNumber?
+
+    var body: some View {
+      if newPhoneNumber?.verification?.status == .verified {
+        Text("Phone added!")
+      }
+
+      if isVerifying {
+        TextField("Enter code", text: $code)
+        Button("Verify") {
+          Task { await verifyCode(code) }
         }
-
-        if isVerifying {
-          TextField("Enter code", text: $code)
-          Button("Verify") {
-            Task { await verifyCode(code) }
-          }
-        } else {
-          TextField("Enter phone number", text: $phone)
-          Button("Continue") {
-            Task { await createPhone(phone) }
-          }
+      } else {
+        TextField("Enter phone number", text: $phone)
+        Button("Continue") {
+          Task { await createPhone(phone) }
         }
       }
     }
+  }
 
-    extension AddPhoneView {
+  extension AddPhoneView {
 
-      func createPhone(_ phone: String) async {
-        do {
-          guard let user = Clerk.shared.user else { return }
+    func createPhone(_ phone: String) async {
+      do {
+        guard let user = Clerk.shared.user else { return }
 
-          // Add an unverified phone number to user,
-          // then send the user an sms message with the verification code
-          self.newPhoneNumber = try await user
-            .createPhoneNumber(phone)
-            .prepareVerification()
+        // Add an unverified phone number to user,
+        // then send the user an sms message with the verification code
+        self.newPhoneNumber = try await user
+          .createPhoneNumber(phone)
+          .prepareVerification()
 
-          // Set to true to display second form
-          // and capture the code
-          isVerifying = true
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
-      }
-
-      func verifyCode(_ code: String) async {
-        do {
-          guard let newPhoneNumber else { return }
-
-          // Verify that the code entered matches the code sent to the user
-          self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
-
-          // If the status is not complete, check why. User may need to
-          // complete further steps.
-          dump(self.newPhoneNumber?.verification?.status)
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
+        // Set to true to display second form
+        // and capture the code
+        isVerifying = true
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
       }
     }
-    ```
-  </Tab>
 
-  <Tab>
+    func verifyCode(_ code: String) async {
+      do {
+        guard let newPhoneNumber else { return }
+
+        // Verify that the code entered matches the code sent to the user
+        self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
+
+        // If the status is not complete, check why. User may need to
+        // complete further steps.
+        dump(self.newPhoneNumber?.verification?.status)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  <CodeBlockTabs options={["AddPhoneViewModel.kt", "AddPhoneActivity.kt"]}>
     ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
     import android.util.Log
     import androidx.lifecycle.ViewModel
@@ -407,5 +411,5 @@ To use phone number verification, you first need to enable it for your applicati
       }
     }
     ```
-  </Tab>
-</Tabs>
+  </CodeBlockTabs>
+</If>

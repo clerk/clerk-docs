@@ -80,6 +80,7 @@ const PROTECTED_ROUTES = [
   '/docs/raw/[[...slug]]',
   '/docs/reference/backend-api/[[...slug]]',
   '/docs/reference/frontend-api/[[...slug]]',
+  '/docs/reference/platform-api/[[...slug]]',
   '/docs/reference/spec/[api]/[version]',
   '/docs/reference/spec/invalidate',
   '/docs/revalidate',

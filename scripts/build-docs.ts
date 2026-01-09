@@ -151,6 +151,7 @@ async function main() {
       '/docs/core-1',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
+      '/docs/reference/platform-api',
       '/pricing',
       '/support',
       '/discord',

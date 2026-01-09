@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import type { PushTaskRecords } from 'algoliasearch'
 import fs from 'node:fs'
 
@@ -31,43 +32,9 @@ function chunkRecords(records: PushTaskRecords[]): PushTaskRecords[][] {
 }
 
 // use the region matching your applicationID
-// const client = algoliasearch('P5U1EX6QM6', 'fa5f6039577ae27d97558fb3499cce45').initIngestion({ region: 'us' })
-const client = algoliasearch('P5U1EX6QM6', 'fa5f6039577ae27d97558fb3499cce45').initIngestion({ region: 'eu' })
+const client = algoliasearch(process.env.ALGOLIA_APP_ID!, process.env.ALGOLIA_API_KEY!).initIngestion({ region: 'eu' })
 
 try {
-  //   const authentication = await client.createAuthentication({
-  //     name: 'Test Authentication',
-  //     type: 'algolia',
-  //     input: {
-  //       appID: 'P5U1EX6QM6',
-  //       apiKey: 'fa5f6039577ae27d97558fb3499cce45',
-  //     },
-  //   })
-
-  //   const source = await client.createSource({
-  //     name: 'Test Source',
-  //     type: 'push',
-  //     authenticationID: authentication.authenticationID,
-  //   })
-  //   console.log('Source created:', source)
-
-  //   const destination = await client.createDestination({
-  //     name: 'Test Destination',
-  //     type: 'search',
-  //     authenticationID: authentication.authenticationID,
-  //     input: {
-  //       indexName: 'test-docs-2',
-  //     },
-  //   })
-  //   console.log('Destination created:', destination)
-
-  //   const task = await client.createTask({
-  //     action: 'replace',
-  //     sourceID: source.sourceID,
-  //     destinationID: destination.destinationID,
-  //   })
-  //   console.log('Task created:', task)
-
   const records = JSON.parse(fs.readFileSync('./dist/_search/records.json', 'utf8')) as PushTaskRecords[]
   const chunks = chunkRecords(records)
 
@@ -81,7 +48,6 @@ try {
     )
 
     const resp = await client.pushTask({
-      //   taskID: task.taskID,
       taskID: 'ed95ccce-8fd0-4166-b858-14adc853ba16',
       pushTaskPayload: { action: 'updateObject', records: chunk },
       watch: true,

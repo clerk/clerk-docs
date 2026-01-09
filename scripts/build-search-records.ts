@@ -10,6 +10,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
@@ -21,12 +22,34 @@ import yaml from 'yaml'
 import readdirp from 'readdirp'
 
 // ============================================================================
+// Git Helpers
+// ============================================================================
+
+function getGitBranch(): string {
+  try {
+    // Try to get branch from environment (CI systems often set this)
+    const envBranch = process.env.VERCEL_GIT_COMMIT_REF 
+      || process.env.GITHUB_REF_NAME 
+      || process.env.CI_COMMIT_BRANCH
+      || process.env.BRANCH
+    
+    if (envBranch) return envBranch
+
+    // Fall back to git command
+    return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
 interface SearchRecord {
   version: string
   tags: string[]
+  branch: string
   objectID: string
   url: string
   url_without_variables: string
@@ -194,7 +217,7 @@ function filePathToUrl(filePath: string, distPath: string): string {
 /**
  * Generates search records from a processed document
  */
-function generateRecordsFromDoc(doc: ProcessedDoc): SearchRecord[] {
+function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRecord[] {
   const records: SearchRecord[] = []
   const slugify = slugifyWithCounter()
 
@@ -223,10 +246,10 @@ function generateRecordsFromDoc(doc: ProcessedDoc): SearchRecord[] {
   const sdk = activeSdk ? [activeSdk] : []
   const canonical = doc.frontmatter.canonical || null
 
-  // Create tags
-  const tags = ['docs']
+  // Create _tags for Algolia filtering
+  const _tags = ['docs']
   if (baseUrl.includes('/core-1')) {
-    tags.push('core_1')
+    _tags.push('core_1')
   }
 
   // Helper to create a record
@@ -245,6 +268,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc): SearchRecord[] {
     return {
       version: '',
       tags: [],
+      branch: gitBranch,
       objectID,
       url,
       url_without_variables: url,
@@ -256,7 +280,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc): SearchRecord[] {
       language: 'en',
       type,
       no_variables: false,
-      _tags: tags,
+      _tags,
       keywords: [],
       sdk,
       availableSDKs: availableSdksList,
@@ -341,7 +365,8 @@ function generateRecordsFromDoc(doc: ProcessedDoc): SearchRecord[] {
 // ============================================================================
 
 async function main() {
-  console.log('Building search records from dist/...')
+  const gitBranch = getGitBranch()
+  console.log(`Building search records from dist/... (branch: ${gitBranch})`)
 
   // Find all MDX files in dist
   const mdxFiles = await readdirp.promise(DIST_PATH, {
@@ -421,7 +446,7 @@ async function main() {
       node,
     }
 
-    const records = generateRecordsFromDoc(doc)
+    const records = generateRecordsFromDoc(doc, gitBranch)
     allRecords.push(...records)
     processed++
   }

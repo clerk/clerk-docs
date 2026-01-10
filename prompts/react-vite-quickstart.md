@@ -6,7 +6,7 @@
 ## **1. OFFICIAL CLERK + REACT (VITE) SETUP**
 
 1. Create a React + Vite project.
-2. Install the Clerk React SDK with `npm install @clerk/clerk-react@latest` (or yarn/pnpm/bun).
+2. Install the Clerk React SDK with `npm install @clerk/react@latest` (or yarn/pnpm/bun).
 3. Set `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local` or `.env`. Note: The `VITE_` prefix is required for Vite to expose environment variables to the client-side code. `.env.local` is preferred for local development secrets.
 4. Wrap the app in `<ClerkProvider publishableKey={...}>` within `main.tsx` or `main.jsx`.
 5. Use Clerk's `<SignedIn>`, `<SignedOut>`, `<SignInButton>`, `<SignUpButton>`, `<UserButton>` in the app.
@@ -21,7 +21,7 @@ npm install
 npm run dev
 
 # 2. Install the Clerk React SDK
-npm install @clerk/clerk-react@latest
+npm install @clerk/react@latest
 
 # 3. In .env.local (or .env):
 VITE_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
@@ -33,7 +33,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import { ClerkProvider } from "@clerk/clerk-react";
+import { ClerkProvider } from "@clerk/react";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!PUBLISHABLE_KEY) {
@@ -57,7 +57,7 @@ import {
   SignInButton,
   SignUpButton,
   UserButton,
-} from "@clerk/clerk-react";
+} from "@clerk/react";
 
 export default function App() {
   return (
@@ -83,7 +83,7 @@ export default function App() {
 ### **2.1 – ALWAYS DO THE FOLLOWING**
 
 1. **Show** relevant code examples for each step.
-2. **Use** `@clerk/clerk-react@latest` (not any other Clerk package).
+2. **Use** `@clerk/react@latest` (not any other Clerk package).
 3. **Reference** the environment variable as `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local` or `.env`.
 4. **Wrap** the entire app in `<ClerkProvider>` within `main.tsx` or `main.jsx`.
 5. **Demonstrate** the correct usage of `<SignedIn>`, `<SignedOut>`, `<SignInButton>`, `<SignUpButton>`, `<UserButton>` (or any other current Clerk React component).

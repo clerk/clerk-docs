@@ -7,7 +7,7 @@ description: Learn how to use the Clerk API to build a custom flow for managing 
 
 This guide will demonstrate how to use the Clerk API to build a custom flow for managing [Organization membership requests](/docs/guides/organizations/add-members/verified-domains#membership-requests).
 
-{/* TODO: Add Expo, iOS, Android, Nuxt examples. */}
+{/* TODO: Add iOS, Android, Nuxt examples. */}
 
 <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
   **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
@@ -205,4 +205,190 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
     }
     ```
   </CodeBlockTabs>
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/components/manage-membership-requests.tsx', collapsible: true }}
+  import { useOrganization } from '@clerk/clerk-expo'
+  import * as React from 'react'
+  import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+  import { ThemedText } from './themed-text'
+  import { ThemedView } from './themed-view'
+
+  export const MembershipRequestsParams = {
+    membershipRequests: {
+      pageSize: 5,
+      keepPreviousData: true,
+    },
+  }
+
+  // List of organization membership requests.
+  export const MembershipRequests = () => {
+    const { isLoaded, membershipRequests } = useOrganization(MembershipRequestsParams)
+
+    if (!isLoaded) {
+      return (
+        <ThemedView style={styles.center}>
+          <ActivityIndicator size="large" />
+          <ThemedText>Loading</ThemedText>
+        </ThemedView>
+      )
+    }
+
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText type="title" style={styles.title}>
+          Membership requests
+        </ThemedText>
+        {membershipRequests?.data && membershipRequests.data.length > 0 ? (
+          <>
+            <ScrollView style={styles.scrollView}>
+              {membershipRequests?.data?.map((mem) => (
+                <View key={mem.id} style={styles.card}>
+                  <ThemedText style={styles.label}>User:</ThemedText>
+                  <ThemedText style={styles.value}>
+                    {mem.publicUserData?.identifier || 'N/A'}
+                  </ThemedText>
+
+                  <ThemedText style={styles.label}>Date requested:</ThemedText>
+                  <ThemedText style={styles.value}>{mem.createdAt.toLocaleDateString()}</ThemedText>
+
+                  <View style={styles.buttonRow}>
+                    <Pressable
+                      style={({ pressed }) => [styles.acceptButton, pressed && styles.buttonPressed]}
+                      onPress={async () => {
+                        await mem.accept()
+                      }}
+                    >
+                      <ThemedText style={styles.buttonText}>Accept</ThemedText>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [styles.rejectButton, pressed && styles.buttonPressed]}
+                      onPress={async () => {
+                        await mem.reject()
+                      }}
+                    >
+                      <ThemedText style={styles.buttonText}>Reject</ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.pagination}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.paginationButton,
+                  (!membershipRequests?.hasPreviousPage || membershipRequests?.isFetching) &&
+                    styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
+                ]}
+                disabled={!membershipRequests?.hasPreviousPage || membershipRequests?.isFetching}
+                onPress={() => membershipRequests?.fetchPrevious?.()}
+              >
+                <ThemedText style={styles.buttonText}>Previous</ThemedText>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.paginationButton,
+                  (!membershipRequests?.hasNextPage || membershipRequests?.isFetching) &&
+                    styles.buttonDisabled,
+                  pressed && styles.buttonPressed,
+                ]}
+                disabled={!membershipRequests?.hasNextPage || membershipRequests?.isFetching}
+                onPress={() => membershipRequests?.fetchNext?.()}
+              >
+                <ThemedText style={styles.buttonText}>Next</ThemedText>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <ThemedText>No membership requests</ThemedText>
+        )}
+      </ThemedView>
+    )
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      gap: 12,
+    },
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 16,
+    },
+    title: {
+      marginBottom: 20,
+    },
+    label: {
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    value: {
+      fontSize: 16,
+      marginBottom: 8,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    card: {
+      backgroundColor: 'rgba(128, 128, 128, 0.1)',
+      borderRadius: 8,
+      padding: 16,
+      marginBottom: 12,
+      gap: 8,
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 8,
+    },
+    acceptButton: {
+      flex: 1,
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    rejectButton: {
+      flex: 1,
+      backgroundColor: '#dc3545',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    buttonPressed: {
+      opacity: 0.7,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+    pagination: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 20,
+      gap: 12,
+    },
+    paginationButton: {
+      flex: 1,
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+  })
+  ```
 </If>

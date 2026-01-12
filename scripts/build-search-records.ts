@@ -28,11 +28,12 @@ import readdirp from 'readdirp'
 function getGitBranch(): string {
   try {
     // Try to get branch from environment (CI systems often set this)
-    const envBranch = process.env.VERCEL_GIT_COMMIT_REF 
-      || process.env.GITHUB_REF_NAME 
-      || process.env.CI_COMMIT_BRANCH
-      || process.env.BRANCH
-    
+    const envBranch =
+      process.env.VERCEL_GIT_COMMIT_REF ||
+      process.env.GITHUB_REF_NAME ||
+      process.env.CI_COMMIT_BRANCH ||
+      process.env.BRANCH
+
     if (envBranch) return envBranch
 
     // Fall back to git command
@@ -135,19 +136,13 @@ const HEADING_WEIGHTS: Record<string, number> = {
 function extractHeadingId(node: Node): string | undefined {
   if (!('children' in node) || !Array.isArray(node.children)) return undefined
 
-  const mdxExpression = node.children.find(
-    (child: any) => child?.type === 'mdxTextExpression'
-  ) as any
+  const mdxExpression = node.children.find((child: any) => child?.type === 'mdxTextExpression') as any
 
   if (!mdxExpression?.data?.estree?.body) return undefined
 
-  const expressionStatement = mdxExpression.data.estree.body.find(
-    (child: any) => child?.type === 'ExpressionStatement'
-  )
+  const expressionStatement = mdxExpression.data.estree.body.find((child: any) => child?.type === 'ExpressionStatement')
 
-  const idProp = expressionStatement?.expression?.properties?.find(
-    (prop: any) => prop?.key?.name === 'id'
-  )
+  const idProp = expressionStatement?.expression?.properties?.find((prop: any) => prop?.key?.name === 'id')
 
   return idProp?.value?.value
 }
@@ -181,20 +176,6 @@ function hasNestedBlockElements(node: Node): boolean {
     }
   }
   return false
-}
-
-/**
- * Extracts frontmatter from MDX content
- */
-function extractFrontmatter(content: string): Frontmatter | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!match) return null
-
-  try {
-    return yaml.parse(match[1]) as Frontmatter
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -253,11 +234,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRec
   }
 
   // Helper to create a record
-  const createRecord = (
-    type: SearchRecord['type'],
-    content: string | null,
-    anchor: string,
-  ): SearchRecord => {
+  const createRecord = (type: SearchRecord['type'], content: string | null, anchor: string): SearchRecord => {
     const url = anchor !== 'main' ? `${baseUrl}#${anchor}` : baseUrl
     const objectID = `${position}-${baseUrl}#${anchor}`
 
@@ -389,7 +366,35 @@ async function main() {
     const content = await fs.readFile(filePath, 'utf-8')
 
     // Extract frontmatter
-    const frontmatter = extractFrontmatter(content)
+    let frontmatter: Frontmatter | undefined = undefined
+
+    // Parse MDX to AST
+    let node: Node | null = null
+    try {
+      await remark()
+        .use(remarkFrontmatter)
+        .use(remarkMdx)
+        .use(() => (tree) => {
+          node = tree
+        })
+        .use(() => (tree, vfile) => {
+          mdastVisit(
+            tree,
+            (node) => node.type === 'yaml' && 'value' in node,
+            (node) => {
+              if (!('value' in node)) return
+              if (typeof node.value !== 'string') return
+
+              frontmatter = yaml.parse(node.value)
+            },
+          )
+        })
+        .process(content)
+    } catch (error) {
+      console.warn(`Skipping ${file.path}: Parse error`)
+      skipped++
+      continue
+    }
 
     if (!frontmatter) {
       console.warn(`Skipping ${file.path}: No frontmatter`)
@@ -397,14 +402,18 @@ async function main() {
       continue
     }
 
+    frontmatter = frontmatter as Frontmatter
+
     // Skip redirect pages
     if (frontmatter.redirectPage === 'true') {
+      // console.warn(`Skipping ${file.path}: Redirect page`)
       skipped++
       continue
     }
 
     // Skip if search.exclude is true
     if (frontmatter.search?.exclude) {
+      console.warn(`Skipping ${file.path}: Search excluded`)
       skipped++
       continue
     }
@@ -416,23 +425,8 @@ async function main() {
       continue
     }
 
-    // Parse MDX to AST
-    let node: Node | null = null
-    try {
-      await remark()
-        .use(remarkFrontmatter)
-        .use(remarkMdx)
-        .use(() => (tree) => {
-          node = tree
-        })
-        .process(content)
-    } catch (error) {
-      console.warn(`Skipping ${file.path}: Parse error`)
-      skipped++
-      continue
-    }
-
     if (!node) {
+      console.warn(`Skipping ${file.path}: No node`)
       skipped++
       continue
     }
@@ -464,4 +458,3 @@ main().catch((error) => {
   console.error('Error:', error)
   process.exit(1)
 })
-

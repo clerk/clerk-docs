@@ -21,6 +21,27 @@ You must configure your application instance through the Clerk Dashboard for the
 
     <Include src="_partials/custom-flows/sso-connections" />
 
+    ### Understanding redirect URLs
+
+    When calling `authenticateWithRedirect()`, you must provide two redirect URLs:
+
+    - **`redirectUrl`**: The URL the OAuth provider redirects back to after authentication. This is your SSO callback page (e.g., `/sign-in/sso-callback`). This URL should include any redirect parameters that need to be preserved through the OAuth flow.
+    - **`redirectUrlComplete`**: The final destination URL after the entire OAuth flow completes successfully.
+
+    #### Preserving redirect parameters
+
+    When users are redirected to your sign-in page, they may arrive with query parameters like `redirect_url` (e.g., from an [OAuth App integration flow](/docs/guides/configure/auth-strategies/oauth/scoped-access)),
+    or `sign_in_fallback_redirect_url`.
+    These parameters specify where the user should be redirected after authentication.
+
+    To properly handle these scenarios, you must:
+
+    1. Read any redirect parameters from the current URL
+    1. Include them in the `redirectUrl` (SSO callback URL) so they survive the OAuth round-trip
+    1. Use them to determine the `redirectUrlComplete`
+
+    The SSO callback URL acts as an intermediate stop—when the OAuth provider redirects back to this URL, Clerk's callback handler reads the preserved parameters and uses them to complete the navigation.
+
     <CodeBlockTabs options={["Sign in page", "SSO callback page"]}>
       ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
       'use client'
@@ -28,27 +49,69 @@ You must configure your application instance through the Clerk Dashboard for the
       import * as React from 'react'
       import { OAuthStrategy } from '@clerk/types'
       import { useSignIn } from '@clerk/nextjs'
-      import { useSearchParams } from "next/navigation";
+      import { useSearchParams } from 'next/navigation'
+
+      // Redirect parameter keys that should be preserved through the OAuth flow
+      const PRESERVED_REDIRECT_PARAMS = [
+        'redirect_url',
+        'sign_in_fallback_redirect_url',
+        'sign_in_force_redirect_url',
+        'sign_up_fallback_redirect_url',
+        'sign_up_force_redirect_url',
+        'after_sign_in_url',
+        'after_sign_up_url',
+      ] as const
 
       export default function Page() {
         const { signIn } = useSignIn()
+        const searchParams = useSearchParams()
 
         if (!signIn) return null
 
-        const searchParams = useSearchParams();
-        const redirectUrl = searchParams.get("redirect_url");
-        const redirectUrlComplete =
-          // If a redirect URL is provided it should be handled to e.g. enable OAuth App integration flows
-          redirectUrl || 
-          // Learn more about session tasks at https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-          '/sign-in/tasks',
+        // Build the SSO callback URL with preserved redirect parameters
+        // This ensures redirect information survives the OAuth round-trip
+        const buildSSOCallbackURL = (): string => {
+          const callbackUrl = new URL('/sign-in/sso-callback', window.location.origin)
+
+          // Preserve any redirect parameters from the current URL
+          for (const param of PRESERVED_REDIRECT_PARAMS) {
+            const value = searchParams.get(param)
+            if (value) {
+              callbackUrl.searchParams.set(param, value)
+            }
+          }
+
+          return callbackUrl.toString()
+        }
+
+        // Determine where to navigate after OAuth completes
+        // Priority: redirect_url > sign_in_force_redirect_url > sign_in_fallback_redirect_url > default
+        const getRedirectUrlComplete = (): string => {
+          // redirect_url takes highest priority (e.g., from OAuth App integration flows)
+          const redirectUrl = searchParams.get('redirect_url')
+          if (redirectUrl) return redirectUrl
+
+          // Force redirect URL always wins when set
+          const forceRedirect = searchParams.get('sign_in_force_redirect_url')
+          if (forceRedirect) return forceRedirect
+
+          // Fallback redirect URL is used when no higher-priority redirect is set
+          const fallbackRedirect = searchParams.get('sign_in_fallback_redirect_url')
+          if (fallbackRedirect) return fallbackRedirect
+
+          // Default: navigate to session tasks page to handle any pending tasks
+          // Learn more: https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+          return '/sign-in/tasks'
+        }
 
         const signInWith = (strategy: OAuthStrategy) => {
           return signIn
             .authenticateWithRedirect({
               strategy,
-              redirectUrl: '/sign-in/sso-callback',
-              redirectUrlComplete
+              // The SSO callback URL with preserved redirect parameters
+              redirectUrl: buildSSOCallbackURL(),
+              // Where to navigate after the OAuth flow completes
+              redirectUrlComplete: getRedirectUrlComplete(),
             })
             .then((res) => {
               console.log(res)
@@ -77,6 +140,8 @@ You must configure your application instance through the Clerk Dashboard for the
       export default function Page() {
         // Handle the redirect flow by calling the Clerk.handleRedirectCallback() method
         // or rendering the prebuilt <AuthenticateWithRedirectCallback/> component.
+        // The component reads the preserved redirect parameters from the URL and
+        // handles navigation to the final destination.
         return (
           <>
             <AuthenticateWithRedirectCallback />
@@ -369,10 +434,11 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
 
       import { useState } from 'react'
       import { useSignUp } from '@clerk/nextjs'
-      import { useRouter } from 'next/navigation'
+      import { useRouter, useSearchParams } from 'next/navigation'
 
       export default function Page() {
         const router = useRouter()
+        const searchParams = useSearchParams()
         // Use `useSignUp()` hook to access the `SignUp` object
         // `missing_requirements` and `missingFields` are only available on the `SignUp` object
         const { isLoaded, signUp, setActive } = useSignUp()
@@ -386,6 +452,25 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
 
         const status = signUp?.status
         const missingFields = signUp?.missingFields ?? []
+
+        // Determine where to navigate after sign-up completes
+        // Priority: redirect_url > sign_up_force_redirect_url > sign_up_fallback_redirect_url > default
+        const getRedirectUrlComplete = (): string => {
+          // redirect_url takes highest priority (e.g., from OAuth App integration flows)
+          const redirectUrl = searchParams.get('redirect_url')
+          if (redirectUrl) return redirectUrl
+
+          // Force redirect URL always wins when set
+          const forceRedirect = searchParams.get('sign_up_force_redirect_url')
+          if (forceRedirect) return forceRedirect
+
+          // Fallback redirect URL is used when no higher-priority redirect is set
+          const fallbackRedirect = searchParams.get('sign_up_fallback_redirect_url')
+          if (fallbackRedirect) return fallbackRedirect
+
+          // Default destination
+          return '/'
+        }
 
         const handleChange = (field: string, value: string) => {
           setFormData((prev) => ({ ...prev, [field]: value }))
@@ -410,7 +495,8 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
                     return
                   }
 
-                  router.push('/')
+                  // Navigate to the appropriate redirect URL
+                  router.push(getRedirectUrlComplete())
                 },
               })
             }
@@ -466,14 +552,46 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
       ```
 
       ```tsx {{ filename: 'app/sign-in/sso-callback/page.tsx' }}
+      'use client'
+
       import { AuthenticateWithRedirectCallback } from '@clerk/nextjs'
+      import { useSearchParams } from 'next/navigation'
+
+      // Redirect parameter keys that should be preserved when navigating to the continue page
+      const PRESERVED_REDIRECT_PARAMS = [
+        'redirect_url',
+        'sign_in_fallback_redirect_url',
+        'sign_in_force_redirect_url',
+        'sign_up_fallback_redirect_url',
+        'sign_up_force_redirect_url',
+      ] as const
 
       export default function Page() {
+        const searchParams = useSearchParams()
+
+        // Build the continue URL with preserved redirect parameters
+        // This ensures redirect information is available on the continue page
+        const buildContinueSignUpUrl = (): string => {
+          const continueUrl = new URL('/sign-in/continue', window.location.origin)
+
+          // Preserve any redirect parameters from the current URL
+          for (const param of PRESERVED_REDIRECT_PARAMS) {
+            const value = searchParams.get(param)
+            if (value) {
+              continueUrl.searchParams.set(param, value)
+            }
+          }
+
+          return continueUrl.pathname + continueUrl.search
+        }
+
         // Set the `continueSignUpUrl` to the route of your "Continue" page
         // Once a user authenticates with the OAuth provider, they will be redirected to that route
+        // The URL includes preserved redirect parameters so the continue page knows where to
+        // navigate after the sign-up is complete
         return (
           <>
-            <AuthenticateWithRedirectCallback continueSignUpUrl="/sign-in/continue" />
+            <AuthenticateWithRedirectCallback continueSignUpUrl={buildContinueSignUpUrl()} />
 
             {/* Required for sign-up flows
             Clerk's bot sign-up protection is enabled by default */}

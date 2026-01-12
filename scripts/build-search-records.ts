@@ -203,20 +203,6 @@ function hasNestedBlockElements(node: Node): boolean {
 }
 
 /**
- * Extracts frontmatter from MDX content
- */
-function extractFrontmatter(content: string): Frontmatter | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return null;
-
-  try {
-    return yaml.parse(match[1]) as Frontmatter;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Converts file path to URL
  */
 function filePathToUrl(filePath: string, distPath: string): string {
@@ -423,7 +409,35 @@ async function main() {
     const content = await fs.readFile(filePath, "utf-8");
 
     // Extract frontmatter
-    const frontmatter = extractFrontmatter(content);
+    let frontmatter: Frontmatter | undefined = undefined;
+
+    // Parse MDX to AST
+    let node: Node | null = null;
+    try {
+      await remark()
+        .use(remarkFrontmatter)
+        .use(remarkMdx)
+        .use(() => (tree) => {
+          node = tree;
+        })
+        .use(() => (tree, vfile) => {
+          mdastVisit(
+            tree,
+            (node) => node.type === "yaml" && "value" in node,
+            (node) => {
+              if (!("value" in node)) return;
+              if (typeof node.value !== "string") return;
+
+              frontmatter = yaml.parse(node.value);
+            }
+          );
+        })
+        .process(content);
+    } catch (error) {
+      console.warn(`Skipping ${file.path}: Parse error`);
+      skipped++;
+      continue;
+    }
 
     if (!frontmatter) {
       console.warn(`Skipping ${file.path}: No frontmatter`);
@@ -431,14 +445,18 @@ async function main() {
       continue;
     }
 
+    frontmatter = frontmatter as Frontmatter;
+
     // Skip redirect pages
     if (frontmatter.redirectPage === "true") {
+      // console.warn(`Skipping ${file.path}: Redirect page`)
       skipped++;
       continue;
     }
 
     // Skip if search.exclude is true
     if (frontmatter.search?.exclude) {
+      console.warn(`Skipping ${file.path}: Search excluded`);
       skipped++;
       continue;
     }
@@ -450,23 +468,8 @@ async function main() {
       continue;
     }
 
-    // Parse MDX to AST
-    let node: Node | null = null;
-    try {
-      await remark()
-        .use(remarkFrontmatter)
-        .use(remarkMdx)
-        .use(() => (tree) => {
-          node = tree;
-        })
-        .process(content);
-    } catch (error) {
-      console.warn(`Skipping ${file.path}: Parse error`);
-      skipped++;
-      continue;
-    }
-
     if (!node) {
+      console.warn(`Skipping ${file.path}: No node`);
       skipped++;
       continue;
     }

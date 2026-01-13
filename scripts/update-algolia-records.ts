@@ -12,6 +12,7 @@ import 'dotenv/config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
@@ -86,6 +87,7 @@ interface SearchRecord {
   }
   recordVersion: string
   distinct_group: string
+  record_batch: string
 }
 
 interface Frontmatter {
@@ -116,6 +118,7 @@ interface ProcessedDoc {
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
 const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB in bytes
+const ALGOLIA_INDEX_NAME = 'test-docs-1'
 
 // Heading weights match Algolia DocSearch crawler configuration
 const HEADING_WEIGHTS: Record<string, number> = {
@@ -229,7 +232,7 @@ function chunkRecords(records: PushTaskRecords[]): PushTaskRecords[][] {
 /**
  * Generates search records from a processed document
  */
-function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRecord[] {
+function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatch: string): SearchRecord[] {
   const records: SearchRecord[] = []
   const slugify = slugifyWithCounter()
 
@@ -301,6 +304,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRec
       hierarchy: { ...hierarchy },
       recordVersion: 'v3',
       distinct_group,
+      record_batch: recordBatch,
     }
   }
 
@@ -381,7 +385,8 @@ async function main() {
   }
 
   const gitBranch = getGitBranch()
-  console.log(`Building search records from dist/... (branch: ${gitBranch})`)
+  const recordBatch = randomUUID()
+  console.log(`Building search records from dist/... (branch: ${gitBranch}, batch: ${recordBatch})`)
 
   // Find all MDX files in dist
   const mdxFiles = await readdirp.promise(DIST_PATH, {
@@ -477,7 +482,7 @@ async function main() {
       node,
     }
 
-    const records = generateRecordsFromDoc(doc, gitBranch)
+    const records = generateRecordsFromDoc(doc, gitBranch, recordBatch)
     allRecords.push(...records)
     processed++
   }
@@ -510,6 +515,52 @@ async function main() {
   }
 
   console.log('\n✓ All records pushed successfully!')
+
+  // Clean up stale records
+  console.log('\nCleaning up stale records...')
+
+  const searchClient = algoliasearch(process.env.ALGOLIA_APP_ID, process.env.ALGOLIA_API_KEY)
+
+  // Browse all records and find stale ones (different batch or branch)
+  const staleObjectIDs: string[] = []
+
+  await searchClient.browseObjects({
+    indexName: ALGOLIA_INDEX_NAME,
+    browseParams: {
+      // We want records that are of the branch we are updating, but not the current batch
+      facetFilters: [`record_batch:-${recordBatch}`, `branch:${gitBranch}`],
+      attributesToRetrieve: ['objectID'],
+    },
+    aggregator: (response) => {
+      for (const hit of response.hits) {
+        staleObjectIDs.push(hit.objectID)
+      }
+    },
+  })
+
+  if (staleObjectIDs.length === 0) {
+    console.log('✓ No stale records found')
+  } else {
+    console.log(`Found ${staleObjectIDs.length} stale records to delete`)
+
+    // Delete in batches of 1000 (Algolia limit)
+    const BATCH_SIZE = 1000
+    for (let i = 0; i < staleObjectIDs.length; i += BATCH_SIZE) {
+      const batch = staleObjectIDs.slice(i, i + BATCH_SIZE)
+      console.log(
+        `Deleting batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(staleObjectIDs.length / BATCH_SIZE)} (${batch.length} records)...`,
+      )
+
+      await searchClient.deleteObjects({
+        indexName: ALGOLIA_INDEX_NAME,
+        objectIDs: batch,
+      })
+    }
+
+    console.log(`✓ Deleted ${staleObjectIDs.length} stale records`)
+  }
+
+  console.log('\n✓ Update complete!')
 }
 
 main().catch((error) => {

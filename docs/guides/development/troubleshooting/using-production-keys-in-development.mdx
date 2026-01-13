@@ -1,0 +1,135 @@
+---
+title: Using production keys in local development
+description: Learn how to use your production Clerk instance locally for debugging.
+---
+
+> [!CAUTION]
+> This approach is strongly discouraged and not officially supported. Only use it when you need to debug production-specific issues that can't be reproduced in a development environment.
+
+In rare cases, you may need to debug issues that only occur in your production environment. This guide explains how to configure your local development environment to use production Clerk keys.
+
+## Prerequisites
+
+- Access to your production Clerk API keys
+- A production domain already configured in your Clerk Dashboard
+- The ability to run your local server with HTTPS on port 443
+
+## Why this works
+
+Clerk enforces origin validation in production to protect your users. Production keys (`pk_live_` and `sk_live_`) only work with your configured production domain. This means `localhost` won't work with production keys. You'll see an error like:
+
+```
+Clerk: Production Keys are only allowed for domain "your-domain.com".
+```
+
+However, [authentication across subdomains works by default](/docs/guides/development/deployment/production#authentication-across-subdomains) in Clerk production instances. By mapping a subdomain of your production domain to your local machine, you can use production keys locally.
+
+## Map a subdomain to localhost
+
+Configure your machine to resolve a subdomain of your production domain to `127.0.0.1`. The simplest approach is to edit your hosts file.
+
+<Tabs items={["macOS / Linux", "Windows"]}>
+  <Tab>
+    Edit `/etc/hosts` and add a line mapping your subdomain to localhost:
+
+    ```txt {{ filename: '/etc/hosts' }}
+    127.0.0.1 local.your-domain.com
+    ```
+
+    You may need `sudo` to edit this file.
+  </Tab>
+
+  <Tab>
+    Edit `C:\Windows\System32\drivers\etc\hosts` as Administrator and add:
+
+    ```txt {{ filename: 'hosts' }}
+    127.0.0.1 local.your-domain.com
+    ```
+  </Tab>
+</Tabs>
+
+Replace `your-domain.com` with your actual production domain. Changes take effect immediately, no restart required.
+
+## Configure environment variables
+
+Update your `.env` file to use your production Clerk keys. Production keys start with `pk_live_` and `sk_live_` instead of `pk_test_` and `sk_test_`.
+
+```env {{ filename: '.env' }}
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx
+CLERK_SECRET_KEY=sk_live_xxxxx
+```
+
+Replace `pk_live_xxxxx` and `sk_live_xxxxx` with your actual production keys from the **[API keys](https://dashboard.clerk.com/~/api-keys)** page in the Clerk Dashboard.
+
+## Run your server with HTTPS on port 443
+
+> [!IMPORTANT]
+> You must run your server on port 443 (the standard HTTPS port). When browsers send requests from non-standard ports like `3000`, they include the port in the `Origin` header (e.g., `https://local.your-domain.com:3000`). Clerk's origin validation fails when the port is included.
+
+Production Clerk requires HTTPS on port 443. Running on port 443 requires elevated privileges on most systems.
+
+<Tabs items={["Next.js", "mkcert (any framework)"]}>
+  <Tab>
+    Next.js 13.5+ can automatically generate a locally-trusted certificate. You'll also need to configure Next.js to allow requests from your subdomain.
+
+    Add the following to your Next.js configuration:
+
+    ```js {{ filename: 'next.config.js' }}
+    const nextConfig = {
+      allowedDevOrigins: ["local.your-domain.com"],
+      // Other options...
+    };
+    
+    export default nextConfig;
+    ```
+
+    Then start your server on port 443:
+
+    ```sh {{ filename: 'terminal' }}
+    sudo npx next dev --experimental-https -p 443
+    ```
+
+    > [!NOTE]
+    > The `--experimental-https` flag generates a certificate for `localhost`, not your subdomain. Your browser will show a certificate warning when accessing the subdomain. You can safely proceed past this warning for local debugging, or use mkcert to generate a proper certificate.
+  </Tab>
+
+  <Tab>
+    Use [mkcert](https://github.com/FiloSottile/mkcert) to create locally-trusted certificates that match your subdomain:
+
+    ```sh {{ filename: 'terminal' }}
+    # Install mkcert (macOS)
+    brew install mkcert
+
+    # Create a local CA and install it in the system trust store
+    mkcert -install
+
+    # Generate certificates for your subdomain
+    mkcert local.your-domain.com
+    ```
+
+    This creates `local.your-domain.com.pem` and `local.your-domain.com-key.pem` files. Configure your development server to use these certificates and run on port 443. The exact configuration depends on your framework.
+  </Tab>
+</Tabs>
+
+## Test the configuration
+
+1. Open your browser and navigate to your local subdomain: `https://local.your-domain.com`
+1. If you see a certificate warning, select **Advanced** and proceed to the site.
+1. Verify that Clerk loads and you can sign in.
+
+If you navigate to `https://localhost` instead, you should see the origin validation error, which confirms that production keys are correctly restricted.
+
+## Limitations
+
+- **OAuth won't work** - Social sign-in providers (Google, GitHub, etc.) have their own redirect URL restrictions. Your local subdomain won't be in their allowed list unless you add it to each provider's configuration.
+- **Webhooks won't reach localhost** - Clerk webhooks can't reach your local machine. Use a tool like [Pinggy](https://pinggy.io) or [ngrok](https://ngrok.com/) if you need to test webhooks.
+- **Session behavior differs** - Production and development instances have [different session architectures](/docs/guides/development/managing-environments#session-architecture-differences). Some issues may still not reproduce locally.
+
+## Clean up
+
+After debugging:
+
+1. Revert your `.env` file to use development keys (`pk_test_xxxxx` and `sk_test_xxxxx`).
+1. Remove the `allowedDevOrigins` configuration from `next.config.js` (if applicable).
+1. Remove the entry from your hosts file.
+1. Restart your development server.

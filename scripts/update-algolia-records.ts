@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// Generates Algolia search records from the built docs in dist/
-// Run after build-docs.ts: bun ./scripts/build-search-records.ts
+// Generates Algolia search records from the built docs in dist/ and pushes them directly
+// Run after build-docs.ts: bun ./scripts/update-algolia-records.ts
 //
 // This script reads the final processed MDX files from dist/ which have:
 // - All partials embedded
@@ -8,6 +8,7 @@
 // - SDK-specific content already filtered
 // - Final URLs and frontmatter
 
+import 'dotenv/config'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
@@ -20,6 +21,8 @@ import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import yaml from 'yaml'
 import readdirp from 'readdirp'
+import { algoliasearch } from 'algoliasearch'
+import type { PushTaskRecords } from 'algoliasearch'
 
 // ============================================================================
 // Git Helpers
@@ -111,8 +114,8 @@ interface ProcessedDoc {
 // ============================================================================
 
 const DIST_PATH = path.join(__dirname, '../dist')
-const OUTPUT_PATH = path.join(DIST_PATH, '_search/records.json')
 const BASE_DOCS_URL = '/docs'
+const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB in bytes
 
 // Heading weights match Algolia DocSearch crawler configuration
 const HEADING_WEIGHTS: Record<string, number> = {
@@ -189,6 +192,34 @@ function filePathToUrl(filePath: string, distPath: string): string {
     .replace(/\/index$/, '')
 
   return `${BASE_DOCS_URL}/${urlPath}`.replace(/\/+/g, '/')
+}
+
+/**
+ * Chunks records into batches that fit within Algolia's size limits
+ */
+function chunkRecords(records: PushTaskRecords[]): PushTaskRecords[][] {
+  const chunks: PushTaskRecords[][] = []
+  let currentChunk: PushTaskRecords[] = []
+  let currentSize = 0
+
+  for (const record of records) {
+    const recordSize = Buffer.byteLength(JSON.stringify(record), 'utf8')
+
+    if (currentSize + recordSize > MAX_CHUNK_SIZE && currentChunk.length > 0) {
+      chunks.push(currentChunk)
+      currentChunk = []
+      currentSize = 0
+    }
+
+    currentChunk.push(record)
+    currentSize += recordSize
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk)
+  }
+
+  return chunks
 }
 
 // ============================================================================
@@ -300,7 +331,8 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRec
 
       // Clear hierarchy levels below this one
       for (let i = depth + 1; i <= 6; i++) {
-        hierarchy[`lvl${i}` as keyof typeof hierarchy] = null
+        const key = `lvl${i}` as 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6'
+        hierarchy[key] = null
       }
 
       // Set current level
@@ -342,6 +374,12 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string): SearchRec
 // ============================================================================
 
 async function main() {
+  // Validate environment variables
+  if (!process.env.ALGOLIA_APP_ID || !process.env.ALGOLIA_API_KEY) {
+    console.error('Error: ALGOLIA_APP_ID and ALGOLIA_API_KEY environment variables are required')
+    process.exit(1)
+  }
+
   const gitBranch = getGitBranch()
   console.log(`Building search records from dist/... (branch: ${gitBranch})`)
 
@@ -406,7 +444,6 @@ async function main() {
 
     // Skip redirect pages
     if (frontmatter.redirectPage === 'true') {
-      // console.warn(`Skipping ${file.path}: Redirect page`)
       skipped++
       continue
     }
@@ -445,13 +482,34 @@ async function main() {
     processed++
   }
 
-  // Write records to file
-  await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true })
-  await fs.writeFile(OUTPUT_PATH, JSON.stringify(allRecords, null, 2))
-
   console.log(`✓ Processed ${processed} files, skipped ${skipped}`)
   console.log(`✓ Generated ${allRecords.length} search records`)
-  console.log(`✓ Output: ${OUTPUT_PATH}`)
+
+  // Push to Algolia
+  console.log('\nPushing records to Algolia...')
+
+  const client = algoliasearch(process.env.ALGOLIA_APP_ID, process.env.ALGOLIA_API_KEY).initIngestion({ region: 'eu' })
+
+  const chunks = chunkRecords(allRecords as PushTaskRecords[])
+  console.log(`Pushing ${allRecords.length} records in ${chunks.length} chunks...`)
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]
+    const chunkSize = Buffer.byteLength(JSON.stringify(chunk), 'utf8')
+    console.log(
+      `Pushing chunk ${i + 1}/${chunks.length} (${chunk.length} records, ${(chunkSize / 1024 / 1024).toFixed(2)}MB)...`,
+    )
+
+    const resp = await client.pushTask({
+      taskID: 'ed95ccce-8fd0-4166-b858-14adc853ba16',
+      pushTaskPayload: { action: 'updateObject', records: chunk },
+      watch: true,
+    })
+
+    console.log(`Chunk ${i + 1} complete:`, resp)
+  }
+
+  console.log('\n✓ All records pushed successfully!')
 }
 
 main().catch((error) => {

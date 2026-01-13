@@ -24,6 +24,7 @@ import yaml from 'yaml'
 import readdirp from 'readdirp'
 import { algoliasearch } from 'algoliasearch'
 import type { PushTaskRecords } from 'algoliasearch'
+import { z } from 'zod'
 
 // ============================================================================
 // Git Helpers
@@ -118,7 +119,15 @@ interface ProcessedDoc {
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
 const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB in bytes
-const ALGOLIA_INDEX_NAME = 'test-docs-1'
+
+const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME, ALGOLIA_PUSH_TASK_ID } = z
+  .object({
+    ALGOLIA_API_KEY: z.string(),
+    ALGOLIA_APP_ID: z.string(),
+    ALGOLIA_INDEX_NAME: z.string(),
+    ALGOLIA_PUSH_TASK_ID: z.string(),
+  })
+  .parse(process.env)
 
 // Heading weights match Algolia DocSearch crawler configuration
 const HEADING_WEIGHTS: Record<string, number> = {
@@ -261,12 +270,6 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
   const sdk = activeSdk ? [activeSdk] : []
   const canonical = doc.frontmatter.canonical || null
 
-  // Create _tags for Algolia filtering
-  const _tags = ['docs']
-  if (baseUrl.includes('/core-1')) {
-    _tags.push('core_1')
-  }
-
   // Helper to create a record
   const createRecord = (type: SearchRecord['type'], content: string | null, anchor: string): SearchRecord => {
     const url = anchor !== 'main' ? `${baseUrl}#${anchor}` : baseUrl
@@ -291,7 +294,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
       language: 'en',
       type,
       no_variables: false,
-      _tags,
+      _tags: ['docs'],
       keywords: [],
       sdk,
       availableSDKs: availableSdksList,
@@ -378,12 +381,6 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
 // ============================================================================
 
 async function main() {
-  // Validate environment variables
-  if (!process.env.ALGOLIA_APP_ID || !process.env.ALGOLIA_API_KEY) {
-    console.error('Error: ALGOLIA_APP_ID and ALGOLIA_API_KEY environment variables are required')
-    process.exit(1)
-  }
-
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
   console.log(`Building search records from dist/... (branch: ${gitBranch}, batch: ${recordBatch})`)
@@ -493,7 +490,7 @@ async function main() {
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 
-  const client = algoliasearch(process.env.ALGOLIA_APP_ID, process.env.ALGOLIA_API_KEY).initIngestion({ region: 'eu' })
+  const client = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY).initIngestion({ region: 'eu' })
 
   const chunks = chunkRecords(allRecords as PushTaskRecords[])
   console.log(`Pushing ${allRecords.length} records in ${chunks.length} chunks...`)
@@ -506,7 +503,7 @@ async function main() {
     )
 
     const resp = await client.pushTask({
-      taskID: 'ed95ccce-8fd0-4166-b858-14adc853ba16',
+      taskID: ALGOLIA_PUSH_TASK_ID,
       pushTaskPayload: { action: 'updateObject', records: chunk },
       watch: true,
     })
@@ -519,7 +516,7 @@ async function main() {
   // Clean up stale records
   console.log('\nCleaning up stale records...')
 
-  const searchClient = algoliasearch(process.env.ALGOLIA_APP_ID, process.env.ALGOLIA_API_KEY)
+  const searchClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
   // Browse all records and find stale ones (different batch or branch)
   const staleObjectIDs: string[] = []

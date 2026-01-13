@@ -24,124 +24,117 @@ Clerk: Production Keys are only allowed for domain "your-domain.com".
 
 However, [authentication across subdomains works by default](/docs/guides/development/deployment/production#authentication-across-subdomains) in Clerk production instances. By mapping a subdomain of your production domain to your local machine, you can use production keys locally.
 
-## Map a subdomain to localhost
+<Steps>
+  ## Map a subdomain to localhost
 
-Configure your machine to resolve a subdomain of your production domain to `127.0.0.1` by editing your hosts file.
+  Configure your machine to resolve a subdomain of your production domain to `127.0.0.1` by editing your hosts file.
 
-<Tabs items={["macOS", "Windows", "Linux"]}>
-  <Tab>
-    Run the following command in Terminal, replacing `your-domain.com` with your actual production domain:
+  Replace `your-domain.com` with your actual production domain. Changes take effect immediately, no restart required.
 
-    ```sh {{ filename: 'terminal' }}
-    echo "127.0.0.1 local.your-domain.com" | sudo tee -a /etc/hosts
-    ```
+  <Tabs items={["macOS", "Windows", "Linux"]}>
+    <Tab>
+      Run the following command in Terminal:
 
-    Enter your password if prompted. The line will be added to your hosts file.
-  </Tab>
+      ```sh {{ filename: 'terminal' }}
+      echo "127.0.0.1 local.your-domain.com" | sudo tee -a /etc/hosts
+      ```
 
-  <Tab>
-    1. Search for **Notepad** in the Start menu.
+      Enter your password if prompted. The line will be added to your hosts file.
+    </Tab>
 
-    1. Right-click and select **Run as administrator**.
+    <Tab>
+      1. Search for **Notepad** in the Start menu.
+      1. Right-click and select **Run as administrator**.
+      1. In Notepad, select **File > Open** and navigate to `C:\Windows\System32\drivers\etc\hosts`. You may need to change the file filter from "Text Documents" to "All Files" to see it.
+      1. Add the following line at the end of the file:
+         ```txt {{ filename: 'hosts' }}
+         127.0.0.1 local.your-domain.com
+         ```
+      1. Save the file.
+    </Tab>
 
-    1. In Notepad, select **File > Open** and navigate to `C:\Windows\System32\drivers\etc\hosts`. You may need to change the file filter from "Text Documents" to "All Files" to see it.
+    <Tab>
+      1. Open the hosts file in your preferred text editor with elevated privileges:
+         ```sh {{ filename: 'terminal' }}
+         sudo nano /etc/hosts
+         ```
+      1. Add the following line at the end of the file:
+         ```txt {{ filename: '/etc/hosts' }}
+         127.0.0.1 local.your-domain.com
+         ```
+      1. Save and exit (in nano, press `Ctrl+O` to save, then `Ctrl+X` to exit).
+    </Tab>
+  </Tabs>
 
-    1. Add the following line at the end of the file:
+  ## Configure environment variables
 
-       ```txt {{ filename: 'hosts' }}
-       127.0.0.1 local.your-domain.com
-       ```
+  Update your `.env` file to use your production Clerk keys. Production keys start with `pk_live_` and `sk_live_` instead of `pk_test_` and `sk_test_`.
 
-    1. Save the file.
-  </Tab>
+  ```env {{ filename: '.env' }}
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx
+  CLERK_SECRET_KEY=sk_live_xxxxx
+  ```
 
-  <Tab>
-    1. Open the hosts file in your preferred text editor with elevated privileges:
+  Replace `pk_live_xxxxx` and `sk_live_xxxxx` with your actual production keys from the **[API keys](https://dashboard.clerk.com/~/api-keys)** page in the Clerk Dashboard.
 
-       ```sh {{ filename: 'terminal' }}
-       sudo nano /etc/hosts
-       ```
+  ## Run your server with HTTPS on port 443
 
-    1. Add the following line at the end of the file:
+  > [!IMPORTANT]
+  > You must run your server on port 443 (the standard HTTPS port). When browsers send requests from non-standard ports like `3000`, they include the port in the `Origin` header (e.g., `https://local.your-domain.com:3000`). Clerk's origin validation fails when the port is included.
 
-       ```txt {{ filename: '/etc/hosts' }}
-       127.0.0.1 local.your-domain.com
-       ```
+  Production Clerk requires HTTPS on port 443. Running on port 443 requires elevated privileges on most systems.
 
-    1. Save and exit (in nano, press `Ctrl+O` to save, then `Ctrl+X` to exit).
-  </Tab>
-</Tabs>
+  <Tabs items={["Next.js", "mkcert (any framework)"]}>
+    <Tab>
+      Next.js 13.5+ can automatically generate a locally-trusted certificate. You'll also need to configure Next.js to allow requests from your subdomain.
 
-Replace `your-domain.com` with your actual production domain. Changes take effect immediately, no restart required.
+      Add the following to your Next.js configuration:
 
-## Configure environment variables
+      ```js {{ filename: 'next.config.js' }}
+      const nextConfig = {
+        allowedDevOrigins: ['local.your-domain.com'],
+        // Other options...
+      }
 
-Update your `.env` file to use your production Clerk keys. Production keys start with `pk_live_` and `sk_live_` instead of `pk_test_` and `sk_test_`.
+      export default nextConfig
+      ```
 
-```env {{ filename: '.env' }}
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxx
-CLERK_SECRET_KEY=sk_live_xxxxx
-```
+      Then start your server on port 443:
 
-Replace `pk_live_xxxxx` and `sk_live_xxxxx` with your actual production keys from the **[API keys](https://dashboard.clerk.com/~/api-keys)** page in the Clerk Dashboard.
+      ```sh {{ filename: 'terminal' }}
+      sudo npx next dev --experimental-https -p 443
+      ```
 
-## Run your server with HTTPS on port 443
+      > [!NOTE]
+      > The `--experimental-https` flag generates a certificate for `localhost`, not your subdomain. Your browser will show a certificate warning when accessing the subdomain. You can safely proceed past this warning for local debugging, or use mkcert to generate a proper certificate.
+    </Tab>
 
-> [!IMPORTANT]
-> You must run your server on port 443 (the standard HTTPS port). When browsers send requests from non-standard ports like `3000`, they include the port in the `Origin` header (e.g., `https://local.your-domain.com:3000`). Clerk's origin validation fails when the port is included.
+    <Tab>
+      Use [mkcert](https://github.com/FiloSottile/mkcert) to create locally-trusted certificates that match your subdomain:
 
-Production Clerk requires HTTPS on port 443. Running on port 443 requires elevated privileges on most systems.
+      ```sh {{ filename: 'terminal' }}
+      # Install mkcert (macOS)
+      brew install mkcert
 
-<Tabs items={["Next.js", "mkcert (any framework)"]}>
-  <Tab>
-    Next.js 13.5+ can automatically generate a locally-trusted certificate. You'll also need to configure Next.js to allow requests from your subdomain.
+      # Create a local CA and install it in the system trust store
+      mkcert -install
 
-    Add the following to your Next.js configuration:
+      # Generate certificates for your subdomain
+      mkcert local.your-domain.com
+      ```
 
-    ```js {{ filename: 'next.config.js' }}
-    const nextConfig = {
-      allowedDevOrigins: ['local.your-domain.com'],
-      // Other options...
-    }
+      This creates `local.your-domain.com.pem` and `local.your-domain.com-key.pem` files. Configure your development server to use these certificates and run on port 443. The exact configuration depends on your framework.
+    </Tab>
+  </Tabs>
 
-    export default nextConfig
-    ```
+  ## Test the configuration
 
-    Then start your server on port 443:
+  1. Open your browser and navigate to your local subdomain: `https://local.your-domain.com`
+  1. If you see a certificate warning, select **Advanced** and proceed to the site.
+  1. Verify that Clerk loads and you can sign in.
 
-    ```sh {{ filename: 'terminal' }}
-    sudo npx next dev --experimental-https -p 443
-    ```
-
-    > [!NOTE]
-    > The `--experimental-https` flag generates a certificate for `localhost`, not your subdomain. Your browser will show a certificate warning when accessing the subdomain. You can safely proceed past this warning for local debugging, or use mkcert to generate a proper certificate.
-  </Tab>
-
-  <Tab>
-    Use [mkcert](https://github.com/FiloSottile/mkcert) to create locally-trusted certificates that match your subdomain:
-
-    ```sh {{ filename: 'terminal' }}
-    # Install mkcert (macOS)
-    brew install mkcert
-
-    # Create a local CA and install it in the system trust store
-    mkcert -install
-
-    # Generate certificates for your subdomain
-    mkcert local.your-domain.com
-    ```
-
-    This creates `local.your-domain.com.pem` and `local.your-domain.com-key.pem` files. Configure your development server to use these certificates and run on port 443. The exact configuration depends on your framework.
-  </Tab>
-</Tabs>
-
-## Test the configuration
-
-1. Open your browser and navigate to your local subdomain: `https://local.your-domain.com`
-1. If you see a certificate warning, select **Advanced** and proceed to the site.
-1. Verify that Clerk loads and you can sign in.
-
-If you navigate to `https://localhost` instead, you should see the origin validation error, which confirms that production keys are correctly restricted.
+  If you navigate to `https://localhost` instead, you should see the origin validation error, which confirms that production keys are correctly restricted.
+</Steps>
 
 ## Limitations
 
@@ -154,37 +147,31 @@ If you navigate to `https://localhost` instead, you should see the origin valida
 After debugging:
 
 1. Revert your `.env` file to use development keys (`pk_test_xxxxx` and `sk_test_xxxxx`).
-
 1. Remove the `allowedDevOrigins` configuration from `next.config.js` (if applicable).
-
 1. Remove the entry from your hosts file:
 
-   <Tabs items={["macOS", "Windows", "Linux"]}>
-     <Tab>
-       Run the following command in Terminal, replacing `your-domain.com` with your actual production domain:
+<Tabs items={["macOS", "Windows", "Linux"]}>
+  <Tab>
+    Run the following command in Terminal, replacing `your-domain.com` with your actual production domain:
 
-       ```sh {{ filename: 'terminal' }}
-       sudo sed -i '' '/local\.your-domain\.com/d' /etc/hosts
-       ```
+    ```sh {{ filename: 'terminal' }}
+    sudo sed -i '' '/local\.your-domain\.com/d' /etc/hosts
+    ```
 
-       Enter your password if prompted. The line will be removed from your hosts file.
-     </Tab>
+    Enter your password if prompted. The line will be removed from your hosts file.
+  </Tab>
 
-     <Tab>
-       1. Search for **Notepad** in the Start menu.
-       1. Right-click and select **Run as administrator**.
-       1. In Notepad, select **File > Open** and navigate to `C:\Windows\System32\drivers\etc\hosts`.
-       1. Delete the line containing `local.your-domain.com`.
-       1. Save the file.
-     </Tab>
+  <Tab>
+    1. Search for **Notepad** in the Start menu. 1. Right-click and select **Run as administrator**.
+    1. In Notepad, select **File > Open** and navigate to `C:\Windows\System32\drivers\etc\hosts`.
+    1. Delete the line containing `local.your-domain.com`. 1. Save the file.
+  </Tab>
 
-     <Tab>
-       Run the following command, replacing `your-domain.com` with your actual production domain:
+  <Tab>
+    Run the following command, replacing `your-domain.com` with your actual production domain:
 
-       ```sh {{ filename: 'terminal' }}
-       sudo sed -i '/local\.your-domain\.com/d' /etc/hosts
-       ```
-     </Tab>
-   </Tabs>
-
-1. Restart your development server.
+    ```sh {{ filename: 'terminal' }}
+    sudo sed -i '/local\.your-domain\.com/d' /etc/hosts
+    ```
+  </Tab>
+</Tabs>

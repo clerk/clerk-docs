@@ -189,7 +189,6 @@ function generateRecordsFromDoc(
   const slugify = slugifyWithCounter()
 
   const baseUrl = doc.url
-  const urlWithoutAnchor = baseUrl
 
   // Initialize hierarchy
   const hierarchy: SearchRecord['hierarchy'] = {
@@ -209,8 +208,6 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
-  const activeSdk = doc.frontmatter.activeSdk
-  const sdk = activeSdk ? [activeSdk] : []
   const canonical = doc.frontmatter.canonical || null
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
@@ -420,9 +417,9 @@ async function main() {
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 
-  const searchClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
+  const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
-  const result = await searchClient.chunkedBatch({
+  await algolia.chunkedBatch({
     indexName: ALGOLIA_INDEX_NAME,
     action: 'updateObject',
     waitForTasks: true,
@@ -438,9 +435,10 @@ async function main() {
   console.log('\nCleaning up stale records...')
 
   // Browse all records and find stale ones (different batch or branch)
+
   const staleObjectIDs: string[] = []
 
-  await searchClient.browseObjects({
+  await algolia.browseObjects({
     indexName: ALGOLIA_INDEX_NAME,
     browseParams: {
       // We want records that are of the branch we are updating, but not the current batch
@@ -459,21 +457,16 @@ async function main() {
   } else {
     console.log(`Found ${staleObjectIDs.length} stale records to delete`)
 
-    // Delete in batches of 1000 (Algolia limit)
-    const BATCH_SIZE = 1000
-    for (let i = 0; i < staleObjectIDs.length; i += BATCH_SIZE) {
-      const batch = staleObjectIDs.slice(i, i + BATCH_SIZE)
-      console.log(
-        `Deleting batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(staleObjectIDs.length / BATCH_SIZE)} (${batch.length} records)...`,
-      )
+    const deletedRecordsBatches = await algolia.chunkedBatch({
+      indexName: ALGOLIA_INDEX_NAME,
+      action: 'deleteObject',
+      waitForTasks: true,
+      objects: staleObjectIDs.map((objectID) => ({ objectID })),
+    })
 
-      await searchClient.deleteObjects({
-        indexName: ALGOLIA_INDEX_NAME,
-        objectIDs: batch,
-      })
-    }
+    const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
 
-    console.log(`✓ Deleted ${staleObjectIDs.length} stale records`)
+    console.log(`✓ Deleted ${deletedRecords} stale records`)
   }
 
   console.log('\n✓ Update complete!')

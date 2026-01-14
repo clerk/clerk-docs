@@ -111,6 +111,13 @@ function getGitBranch(): string {
 }
 
 /**
+ * Strips backticks from a string (used for cleaning titles in search results)
+ */
+function stripBackticks(str: string): string {
+  return str.replace(/`/g, '')
+}
+
+/**
  * Extracts custom heading ID from MDX annotation syntax
  * e.g., ## Heading {{ id: 'custom-id' }}
  */
@@ -193,7 +200,7 @@ function generateRecordsFromDoc(
   // Initialize hierarchy
   const hierarchy: SearchRecord['hierarchy'] = {
     lvl0: 'Documentation',
-    lvl1: doc.frontmatter.title || null,
+    lvl1: doc.frontmatter.title ? stripBackticks(doc.frontmatter.title) : null,
     lvl2: null,
     lvl3: null,
     lvl4: null,
@@ -273,7 +280,7 @@ function generateRecordsFromDoc(
 
       // Set current level
       const levelKey = `lvl${depth}` as keyof typeof hierarchy
-      hierarchy[levelKey] = headingText
+      hierarchy[levelKey] = stripBackticks(headingText)
       currentAnchor = anchor
 
       // Create heading record

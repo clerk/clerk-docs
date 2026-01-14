@@ -120,12 +120,11 @@ const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
 const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB in bytes
 
-const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME, ALGOLIA_PUSH_TASK_ID } = z
+const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME } = z
   .object({
     ALGOLIA_API_KEY: z.string(),
     ALGOLIA_APP_ID: z.string(),
     ALGOLIA_INDEX_NAME: z.string(),
-    ALGOLIA_PUSH_TASK_ID: z.string(),
   })
   .parse(process.env)
 
@@ -204,34 +203,6 @@ function filePathToUrl(filePath: string, distPath: string): string {
     .replace(/\/index$/, '')
 
   return `${BASE_DOCS_URL}/${urlPath}`.replace(/\/+/g, '/')
-}
-
-/**
- * Chunks records into batches that fit within Algolia's size limits
- */
-function chunkRecords(records: PushTaskRecords[]): PushTaskRecords[][] {
-  const chunks: PushTaskRecords[][] = []
-  let currentChunk: PushTaskRecords[] = []
-  let currentSize = 0
-
-  for (const record of records) {
-    const recordSize = Buffer.byteLength(JSON.stringify(record), 'utf8')
-
-    if (currentSize + recordSize > MAX_CHUNK_SIZE && currentChunk.length > 0) {
-      chunks.push(currentChunk)
-      currentChunk = []
-      currentSize = 0
-    }
-
-    currentChunk.push(record)
-    currentSize += recordSize
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk)
-  }
-
-  return chunks
 }
 
 // ============================================================================
@@ -490,33 +461,22 @@ async function main() {
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 
-  const client = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY).initIngestion({ region: 'eu' })
+  const searchClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
-  const chunks = chunkRecords(allRecords as PushTaskRecords[])
-  console.log(`Pushing ${allRecords.length} records in ${chunks.length} chunks...`)
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    const chunkSize = Buffer.byteLength(JSON.stringify(chunk), 'utf8')
-    console.log(
-      `Pushing chunk ${i + 1}/${chunks.length} (${chunk.length} records, ${(chunkSize / 1024 / 1024).toFixed(2)}MB)...`,
-    )
-
-    const resp = await client.pushTask({
-      taskID: ALGOLIA_PUSH_TASK_ID,
-      pushTaskPayload: { action: 'updateObject', records: chunk },
-      watch: true,
-    })
-
-    console.log(`Chunk ${i + 1} complete:`, resp)
-  }
+  const result = await searchClient.chunkedBatch({
+    indexName: ALGOLIA_INDEX_NAME,
+    action: 'updateObject',
+    waitForTasks: true,
+    objects: allRecords.map((record) => ({
+      ...record,
+      objectID: record.objectID,
+    })),
+  })
 
   console.log('\n✓ All records pushed successfully!')
 
   // Clean up stale records
   console.log('\nCleaning up stale records...')
-
-  const searchClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
 
   // Browse all records and find stale ones (different batch or branch)
   const staleObjectIDs: string[] = []

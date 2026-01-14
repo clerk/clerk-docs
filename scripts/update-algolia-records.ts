@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 // Generates Algolia search records from the built docs in dist/ and pushes them directly
 // Run after build-docs.ts: bun ./scripts/update-algolia-records.ts
 //
@@ -8,71 +9,32 @@
 // - SDK-specific content already filtered
 // - Final URLs and frontmatter
 
+import { slugifyWithCounter } from '@sindresorhus/slugify'
+import { algoliasearch } from 'algoliasearch'
 import 'dotenv/config'
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import readdirp from 'readdirp'
 import { remark } from 'remark'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdx from 'remark-mdx'
-import { slugifyWithCounter } from '@sindresorhus/slugify'
-import { toString } from 'mdast-util-to-string'
 import { Node } from 'unist'
 import { visit as mdastVisit } from 'unist-util-visit'
 import yaml from 'yaml'
-import readdirp from 'readdirp'
-import { algoliasearch } from 'algoliasearch'
-import type { PushTaskRecords } from 'algoliasearch'
 import { z } from 'zod'
-
-// ============================================================================
-// Git Helpers
-// ============================================================================
-
-function getGitBranch(): string {
-  return 'main'
-  // try {
-  //   // Try to get branch from environment (CI systems often set this)
-  //   const envBranch =
-  //     process.env.VERCEL_GIT_COMMIT_REF ||
-  //     process.env.GITHUB_REF_NAME ||
-  //     process.env.CI_COMMIT_BRANCH ||
-  //     process.env.BRANCH
-
-  //   if (envBranch) return envBranch
-
-  //   // Fall back to git command
-  //   return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
-  // } catch {
-  //   return 'unknown'
-  // }
-}
-
-// ============================================================================
-// Types
-// ============================================================================
 
 type RecordType = 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content'
 
-interface SearchRecord {
-  // version: string
-  // tags: string[]
-  branch: string
+type SearchRecord = {
   objectID: string
-  // url: string
-  // url_without_variables: string
-  // url_without_anchor: string
+  branch: string
   anchor: string
   content: string | null
-  // content_camel: string | null
-  // lang: string
-  // language: string
-  type: 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content'
-  // no_variables: boolean
+  type: RecordType
   _tags: string[]
   keywords: string[]
-  // sdk: string[]
   availableSDKs: string[]
   canonical: string | null
   weight: {
@@ -89,12 +51,11 @@ interface SearchRecord {
     lvl5: string | null
     lvl6: string | null
   }
-  // recordVersion: string
   distinct_group: string
   record_batch: string
 }
 
-interface Frontmatter {
+type Frontmatter = {
   title?: string
   description?: string
   sdk?: string
@@ -109,20 +70,8 @@ interface Frontmatter {
   pageRank?: number
 }
 
-interface ProcessedDoc {
-  filePath: string
-  url: string
-  frontmatter: Frontmatter
-  node: Node
-}
-
-// ============================================================================
-// Constants
-// ============================================================================
-
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
-const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB in bytes
 
 const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME } = z
   .object({
@@ -143,9 +92,23 @@ const HEADING_WEIGHTS: Record<string, number> = {
   content: 0,
 }
 
-// ============================================================================
-// Utility Functions
-// ============================================================================
+function getGitBranch(): string {
+  try {
+    // Try to get branch from environment (CI systems often set this)
+    const envBranch =
+      process.env.VERCEL_GIT_COMMIT_REF ||
+      process.env.GITHUB_REF_NAME ||
+      process.env.CI_COMMIT_BRANCH ||
+      process.env.BRANCH
+
+    if (envBranch) return envBranch
+
+    // Fall back to git command
+    return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 /**
  * Extracts custom heading ID from MDX annotation syntax
@@ -209,14 +172,19 @@ function filePathToUrl(filePath: string, distPath: string): string {
   return `${BASE_DOCS_URL}/${urlPath}`.replace(/\/+/g, '/')
 }
 
-// ============================================================================
-// Record Generation
-// ============================================================================
-
 /**
  * Generates search records from a processed document
  */
-function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatch: string): SearchRecord[] {
+function generateRecordsFromDoc(
+  doc: {
+    filePath: string
+    url: string
+    frontmatter: Frontmatter
+    node: Node
+  },
+  gitBranch: string,
+  recordBatch: string,
+): SearchRecord[] {
   const records: SearchRecord[] = []
   const slugify = slugifyWithCounter()
 
@@ -248,7 +216,6 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
 
   // Helper to create a record
   const createRecord = (type: RecordType, content: string | null, anchor: string): SearchRecord => {
-    const url = anchor !== 'main' ? `${baseUrl}#${anchor}` : baseUrl
     const objectID = `${gitBranch}-${position}-${baseUrl}#${anchor}`
 
     // distinct_group uses canonical URL (with :sdk: placeholder) + anchor for deduplication
@@ -256,23 +223,13 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
     const distinct_group = `${distinctBase}#${anchor}`
 
     return {
-      // version: '',
-      // tags: [],
-      branch: gitBranch,
       objectID,
-      // url,
-      // url_without_variables: url,
-      // url_without_anchor: urlWithoutAnchor,
+      branch: gitBranch,
       anchor,
       content,
-      // content_camel: content,
-      // lang: 'en',
-      // language: 'en',
       type,
-      // no_variables: false,
       _tags: ['docs'],
       keywords,
-      // sdk,
       availableSDKs: availableSdksList,
       canonical,
       weight: {
@@ -281,7 +238,6 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
         position: position++,
       },
       hierarchy: { ...hierarchy },
-      // recordVersion: 'v3',
       distinct_group,
       record_batch: recordBatch,
     }
@@ -351,10 +307,6 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
 
   return records
 }
-
-// ============================================================================
-// Main Script
-// ============================================================================
 
 async function main() {
   const gitBranch = getGitBranch()
@@ -448,14 +400,16 @@ async function main() {
 
     const url = filePathToUrl(filePath, DIST_PATH)
 
-    const doc: ProcessedDoc = {
-      filePath,
-      url,
-      frontmatter,
-      node,
-    }
-
-    const records = generateRecordsFromDoc(doc, gitBranch, recordBatch)
+    const records = generateRecordsFromDoc(
+      {
+        filePath,
+        url,
+        frontmatter,
+        node,
+      },
+      gitBranch,
+      recordBatch,
+    )
     allRecords.push(...records)
     processed++
   }
@@ -525,7 +479,4 @@ async function main() {
   console.log('\n✓ Update complete!')
 }
 
-main().catch((error) => {
-  console.error('Error:', error)
-  process.exit(1)
-})
+main()

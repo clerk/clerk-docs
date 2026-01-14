@@ -33,7 +33,6 @@ type SearchRecord = {
   anchor: string
   content: string | null
   type: RecordType
-  _tags: string[]
   keywords: string[]
   availableSDKs: string[]
   canonical: string | null
@@ -93,6 +92,7 @@ const HEADING_WEIGHTS: Record<string, number> = {
 }
 
 function getGitBranch(): string {
+  return 'main'
   try {
     // Try to get branch from environment (CI systems often set this)
     const envBranch =
@@ -232,7 +232,6 @@ function generateRecordsFromDoc(
       anchor,
       content,
       type,
-      _tags: ['docs'],
       keywords,
       availableSDKs: availableSdksList,
       canonical,

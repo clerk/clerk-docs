@@ -31,45 +31,48 @@ import { z } from 'zod'
 // ============================================================================
 
 function getGitBranch(): string {
-  try {
-    // Try to get branch from environment (CI systems often set this)
-    const envBranch =
-      process.env.VERCEL_GIT_COMMIT_REF ||
-      process.env.GITHUB_REF_NAME ||
-      process.env.CI_COMMIT_BRANCH ||
-      process.env.BRANCH
+  return 'main'
+  // try {
+  //   // Try to get branch from environment (CI systems often set this)
+  //   const envBranch =
+  //     process.env.VERCEL_GIT_COMMIT_REF ||
+  //     process.env.GITHUB_REF_NAME ||
+  //     process.env.CI_COMMIT_BRANCH ||
+  //     process.env.BRANCH
 
-    if (envBranch) return envBranch
+  //   if (envBranch) return envBranch
 
-    // Fall back to git command
-    return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
-  } catch {
-    return 'unknown'
-  }
+  //   // Fall back to git command
+  //   return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim()
+  // } catch {
+  //   return 'unknown'
+  // }
 }
 
 // ============================================================================
 // Types
 // ============================================================================
 
+type RecordType = 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content'
+
 interface SearchRecord {
-  version: string
-  tags: string[]
+  // version: string
+  // tags: string[]
   branch: string
   objectID: string
-  url: string
-  url_without_variables: string
-  url_without_anchor: string
+  // url: string
+  // url_without_variables: string
+  // url_without_anchor: string
   anchor: string
   content: string | null
-  content_camel: string | null
-  lang: string
-  language: string
+  // content_camel: string | null
+  // lang: string
+  // language: string
   type: 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content'
-  no_variables: boolean
+  // no_variables: boolean
   _tags: string[]
   keywords: string[]
-  sdk: string[]
+  // sdk: string[]
   availableSDKs: string[]
   canonical: string | null
   weight: {
@@ -86,7 +89,7 @@ interface SearchRecord {
     lvl5: string | null
     lvl6: string | null
   }
-  recordVersion: string
+  // recordVersion: string
   distinct_group: string
   record_batch: string
 }
@@ -100,6 +103,7 @@ interface Frontmatter {
   redirectPage?: string
   search?: {
     exclude?: boolean
+    keywords?: string[]
   }
   canonical?: string
   pageRank?: number
@@ -240,34 +244,35 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
   const activeSdk = doc.frontmatter.activeSdk
   const sdk = activeSdk ? [activeSdk] : []
   const canonical = doc.frontmatter.canonical || null
+  const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
   // Helper to create a record
-  const createRecord = (type: SearchRecord['type'], content: string | null, anchor: string): SearchRecord => {
+  const createRecord = (type: RecordType, content: string | null, anchor: string): SearchRecord => {
     const url = anchor !== 'main' ? `${baseUrl}#${anchor}` : baseUrl
-    const objectID = `${position}-${baseUrl}#${anchor}`
+    const objectID = `${gitBranch}-${position}-${baseUrl}#${anchor}`
 
     // distinct_group uses canonical URL (with :sdk: placeholder) + anchor for deduplication
     const distinctBase = canonical || baseUrl
     const distinct_group = `${distinctBase}#${anchor}`
 
     return {
-      version: '',
-      tags: [],
+      // version: '',
+      // tags: [],
       branch: gitBranch,
       objectID,
-      url,
-      url_without_variables: url,
-      url_without_anchor: urlWithoutAnchor,
+      // url,
+      // url_without_variables: url,
+      // url_without_anchor: urlWithoutAnchor,
       anchor,
       content,
-      content_camel: content,
-      lang: 'en',
-      language: 'en',
+      // content_camel: content,
+      // lang: 'en',
+      // language: 'en',
       type,
-      no_variables: false,
+      // no_variables: false,
       _tags: ['docs'],
-      keywords: [],
-      sdk,
+      keywords,
+      // sdk,
       availableSDKs: availableSdksList,
       canonical,
       weight: {
@@ -276,7 +281,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
         position: position++,
       },
       hierarchy: { ...hierarchy },
-      recordVersion: 'v3',
+      // recordVersion: 'v3',
       distinct_group,
       record_batch: recordBatch,
     }
@@ -301,7 +306,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
     // Handle headings
     if (node.type === 'heading' && 'depth' in node) {
       const depth = node.depth as number
-      const headingText = toString(node).trim()
+      const headingText = extractTextContent(node)
 
       // Check for custom ID or generate slug
       const customId = extractHeadingId(node)
@@ -319,7 +324,7 @@ function generateRecordsFromDoc(doc: ProcessedDoc, gitBranch: string, recordBatc
       currentAnchor = anchor
 
       // Create heading record
-      records.push(createRecord(`lvl${depth}` as SearchRecord['type'], null, anchor))
+      records.push(createRecord(`lvl${depth}` as RecordType, null, anchor))
       return
     }
 

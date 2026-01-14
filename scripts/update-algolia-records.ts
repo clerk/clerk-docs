@@ -65,9 +65,9 @@ type Frontmatter = {
   search?: {
     exclude?: boolean
     keywords?: string[]
+    rank?: number
   }
   canonical?: string
-  pageRank?: number
 }
 
 const DIST_PATH = path.join(__dirname, '../dist')
@@ -237,7 +237,7 @@ function generateRecordsFromDoc(
       availableSDKs: availableSdksList,
       canonical,
       weight: {
-        pageRank: doc.frontmatter.pageRank ?? 0,
+        pageRank: doc.frontmatter.search?.rank ?? 0,
         level: HEADING_WEIGHTS[type] ?? 0,
         position: position++,
       },

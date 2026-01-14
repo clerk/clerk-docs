@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 
 // Generates Algolia search records from the built docs in dist/ and pushes them directly
-// Run after build-docs.ts: bun ./scripts/update-algolia-records.ts
+// Run `npm run build && npm run search:update`
+//
+// Options:
+//   --dry-run  Run everything except actually pushing/updating the Algolia index
 //
 // This script reads the final processed MDX files from dist/ which have:
 // - All partials embedded
@@ -71,6 +74,11 @@ type Frontmatter = {
 
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
+const ALGOLIA_OUTPUT_DIR = path.join(__dirname, '../.algolia')
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const DRY_RUN = args.includes('--dry-run')
 
 const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME } = z
   .object({
@@ -314,6 +322,11 @@ function generateRecordsFromDoc(
 async function main() {
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
+
+  if (DRY_RUN) {
+    console.log('⚠︎ DRY RUN MODE - No changes will be made to Algolia\n')
+  }
+
   console.log(`Building search records from dist/... (branch: ${gitBranch}, batch: ${recordBatch})`)
 
   // Find all MDX files in dist
@@ -420,28 +433,33 @@ async function main() {
   console.log(`✓ Processed ${processed} files, skipped ${skipped}`)
   console.log(`✓ Generated ${allRecords.length} search records`)
 
+  const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
+
   // Push to Algolia
   console.log('\nPushing records to Algolia...')
 
-  const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY)
+  if (DRY_RUN) {
+    await fs.mkdir(ALGOLIA_OUTPUT_DIR, { recursive: true })
+    await fs.writeFile(path.join(ALGOLIA_OUTPUT_DIR, 'records.json'), JSON.stringify(allRecords, null, 2))
+    console.log(`⚠︎ DRY RUN: Wrote ${allRecords.length} records to .algolia/records.json`)
+  } else {
+    await algolia.chunkedBatch({
+      indexName: ALGOLIA_INDEX_NAME,
+      action: 'updateObject',
+      waitForTasks: true,
+      objects: allRecords.map((record) => ({
+        ...record,
+        objectID: record.objectID,
+      })),
+    })
 
-  await algolia.chunkedBatch({
-    indexName: ALGOLIA_INDEX_NAME,
-    action: 'updateObject',
-    waitForTasks: true,
-    objects: allRecords.map((record) => ({
-      ...record,
-      objectID: record.objectID,
-    })),
-  })
-
-  console.log('\n✓ All records pushed successfully!')
+    console.log('✓ All records pushed successfully!')
+  }
 
   // Clean up stale records
   console.log('\nCleaning up stale records...')
 
   // Browse all records and find stale ones (different batch or branch)
-
   const staleObjectIDs: string[] = []
 
   await algolia.browseObjects({
@@ -463,16 +481,21 @@ async function main() {
   } else {
     console.log(`Found ${staleObjectIDs.length} stale records to delete`)
 
-    const deletedRecordsBatches = await algolia.chunkedBatch({
-      indexName: ALGOLIA_INDEX_NAME,
-      action: 'deleteObject',
-      waitForTasks: true,
-      objects: staleObjectIDs.map((objectID) => ({ objectID })),
-    })
+    if (DRY_RUN) {
+      await fs.writeFile(path.join(ALGOLIA_OUTPUT_DIR, 'stale.json'), JSON.stringify(staleObjectIDs, null, 2))
+      console.log(`⚠︎ DRY RUN: Wrote ${staleObjectIDs.length} stale record IDs to .algolia/stale.json`)
+    } else {
+      const deletedRecordsBatches = await algolia.chunkedBatch({
+        indexName: ALGOLIA_INDEX_NAME,
+        action: 'deleteObject',
+        waitForTasks: true,
+        objects: staleObjectIDs.map((objectID) => ({ objectID })),
+      })
 
-    const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
+      const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
 
-    console.log(`✓ Deleted ${deletedRecords} stale records`)
+      console.log(`✓ Deleted ${deletedRecords} stale records`)
+    }
   }
 
   console.log('\n✓ Update complete!')

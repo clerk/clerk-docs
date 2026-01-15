@@ -164,11 +164,21 @@ function extractHeadingId(node: Node): string | undefined {
 
 /**
  * Extracts text content from an MDX AST node
+ * Skips TooltipContent elements (hover-only content) but includes TooltipTrigger text
  */
 function extractTextContent(node: Node): string {
   const parts: string[] = []
 
   mdastVisit(node, (child) => {
+    // Skip TooltipContent - it's hover-only content that shouldn't be in search
+    if (
+      (child.type === 'mdxJsxTextElement' || child.type === 'mdxJsxFlowElement') &&
+      'name' in child &&
+      child.name === 'TooltipContent'
+    ) {
+      return 'skip'
+    }
+
     if (child.type === 'text' && 'value' in child && typeof child.value === 'string') {
       parts.push(child.value)
     } else if (child.type === 'inlineCode' && 'value' in child && typeof child.value === 'string') {

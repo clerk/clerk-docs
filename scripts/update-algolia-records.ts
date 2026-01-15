@@ -324,6 +324,81 @@ function generateRecordsFromDoc(
       return
     }
 
+    // Handle Properties component - combine each property into a single record
+    if (
+      (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') &&
+      'name' in node &&
+      node.name === 'Properties' &&
+      'children' in node &&
+      Array.isArray(node.children)
+    ) {
+      // Group children by thematic breaks (***) - each group is one property
+      const propertyGroups: Node[][] = []
+      let currentGroup: Node[] = []
+
+      for (const child of node.children as Node[]) {
+        if (child.type === 'thematicBreak') {
+          if (currentGroup.length > 0) {
+            propertyGroups.push(currentGroup)
+            currentGroup = []
+          }
+        } else {
+          currentGroup.push(child)
+        }
+      }
+      // Don't forget the last group
+      if (currentGroup.length > 0) {
+        propertyGroups.push(currentGroup)
+      }
+
+      // Process each property group
+      for (const group of propertyGroups) {
+        const parts: string[] = []
+        let propertyName: string | null = null
+        let propertyType: string | null = null
+
+        for (const child of group) {
+          // List items contain property name and type (first two list items)
+          if (child.type === 'list' && 'children' in child && Array.isArray(child.children)) {
+            for (const listItem of child.children) {
+              const text = extractTextContent(listItem as Node)
+              if (text) {
+                if (!propertyName) {
+                  propertyName = text
+                } else if (!propertyType) {
+                  propertyType = text
+                }
+              }
+            }
+          }
+          // Paragraphs contain description and CSS variable
+          if (child.type === 'paragraph') {
+            const text = extractTextContent(child)
+            if (text) {
+              parts.push(text)
+            }
+          }
+        }
+
+        // Combine into a single record: "propertyName (type) - description"
+        if (propertyName) {
+          let content = propertyName
+          if (propertyType) {
+            content += ` (${propertyType})`
+          }
+          if (parts.length > 0) {
+            content += ' - ' + parts.join(' ')
+          }
+
+          if (content.length > 0 && content.length < 5000) {
+            records.push(createRecord('content', content, currentAnchor ?? 'main'))
+          }
+        }
+      }
+
+      return 'skip' // Don't process children again
+    }
+
     // Handle blockquotes (callouts) - check for custom anchor in callout syntax
     if (node.type === 'blockquote' && 'children' in node && Array.isArray(node.children)) {
       // Check if first child is a paragraph with callout syntax that has an anchor

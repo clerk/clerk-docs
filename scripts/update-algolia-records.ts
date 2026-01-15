@@ -442,19 +442,21 @@ async function main() {
     await fs.mkdir(ALGOLIA_OUTPUT_DIR, { recursive: true })
     await fs.writeFile(path.join(ALGOLIA_OUTPUT_DIR, 'records.json'), JSON.stringify(allRecords, null, 2))
     console.log(`⚠︎ DRY RUN: Wrote ${allRecords.length} records to .algolia/records.json`)
-  } else {
-    await algolia.chunkedBatch({
-      indexName: ALGOLIA_INDEX_NAME,
-      action: 'updateObject',
-      waitForTasks: true,
-      objects: allRecords.map((record) => ({
-        ...record,
-        objectID: record.objectID,
-      })),
-    })
-
-    console.log('✓ All records pushed successfully!')
+    return
   }
+
+
+  await algolia.chunkedBatch({
+    indexName: ALGOLIA_INDEX_NAME,
+    action: 'updateObject',
+    waitForTasks: true,
+    objects: allRecords.map((record) => ({
+      ...record,
+      objectID: record.objectID,
+    })),
+  })
+
+  console.log('✓ All records pushed successfully!')
 
   // Clean up stale records
   console.log('\nCleaning up stale records...')
@@ -481,21 +483,16 @@ async function main() {
   } else {
     console.log(`Found ${staleObjectIDs.length} stale records to delete`)
 
-    if (DRY_RUN) {
-      await fs.writeFile(path.join(ALGOLIA_OUTPUT_DIR, 'stale.json'), JSON.stringify(staleObjectIDs, null, 2))
-      console.log(`⚠︎ DRY RUN: Wrote ${staleObjectIDs.length} stale record IDs to .algolia/stale.json`)
-    } else {
-      const deletedRecordsBatches = await algolia.chunkedBatch({
-        indexName: ALGOLIA_INDEX_NAME,
-        action: 'deleteObject',
-        waitForTasks: true,
-        objects: staleObjectIDs.map((objectID) => ({ objectID })),
-      })
+    const deletedRecordsBatches = await algolia.chunkedBatch({
+      indexName: ALGOLIA_INDEX_NAME,
+      action: 'deleteObject',
+      waitForTasks: true,
+      objects: staleObjectIDs.map((objectID) => ({ objectID })),
+    })
 
-      const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
+    const deletedRecords = deletedRecordsBatches.reduce((acc, batch) => acc + batch.objectIDs.length, 0)
 
-      console.log(`✓ Deleted ${deletedRecords} stale records`)
-    }
+    console.log(`✓ Deleted ${deletedRecords} stale records`)
   }
 
   console.log('\n✓ Update complete!')

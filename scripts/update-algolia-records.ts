@@ -28,7 +28,7 @@ import { visit as mdastVisit } from 'unist-util-visit'
 import yaml from 'yaml'
 import { z } from 'zod'
 
-type RecordType = 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content'
+type RecordType = 'lvl0' | 'lvl1' | 'lvl2' | 'lvl3' | 'lvl4' | 'lvl5' | 'lvl6' | 'content' | 'property'
 
 type SearchRecord = {
   objectID: string
@@ -97,6 +97,7 @@ const HEADING_WEIGHTS: Record<string, number> = {
   lvl5: 50,
   lvl6: 40,
   content: 0,
+  property: -10, // De-prioritize API property definitions
 }
 
 function getGitBranch(): string {
@@ -390,8 +391,12 @@ function generateRecordsFromDoc(
             content += ' - ' + parts.join(' ')
           }
 
-          if (content.length > 0 && content.length < 5000) {
-            records.push(createRecord('content', content, currentAnchor ?? 'main'))
+          if (content.length > 0) {
+            if (content.length >= 5000) {
+              console.warn(`Skipping oversized property (${content.length} chars) in ${doc.url}`)
+            } else {
+              records.push(createRecord('property', content, currentAnchor ?? 'main'))
+            }
           }
         }
       }
@@ -417,8 +422,12 @@ function generateRecordsFromDoc(
       for (const child of node.children) {
         if (child.type === 'paragraph') {
           const text = stripCalloutSyntax(extractTextContent(child))
-          if (text && text.length > 0 && text.length < 5000 && !text.startsWith('|')) {
-            records.push(createRecord('content', text, anchorForCallout))
+          if (text && text.length > 0 && !text.startsWith('|')) {
+            if (text.length >= 5000) {
+              console.warn(`Skipping oversized blockquote content (${text.length} chars) in ${doc.url}`)
+            } else {
+              records.push(createRecord('content', text, anchorForCallout))
+            }
           }
         }
       }
@@ -429,9 +438,13 @@ function generateRecordsFromDoc(
     // Handle paragraphs
     if (node.type === 'paragraph') {
       const text = stripCalloutSyntax(extractTextContent(node))
-      // Skip empty content, table-like content (starts with |), and overly long content
-      if (text && text.length > 0 && text.length < 5000 && !text.startsWith('|')) {
-        records.push(createRecord('content', text, currentAnchor ?? 'main'))
+      // Skip empty content and table-like content (starts with |)
+      if (text && text.length > 0 && !text.startsWith('|')) {
+        if (text.length >= 5000) {
+          console.warn(`Skipping oversized paragraph (${text.length} chars) in ${doc.url}`)
+        } else {
+          records.push(createRecord('content', text, currentAnchor ?? 'main'))
+        }
       }
       return
     }
@@ -439,9 +452,12 @@ function generateRecordsFromDoc(
     // Handle list items (but not those with nested lists)
     if (node.type === 'listItem' && !hasNestedBlockElements(node)) {
       const text = stripCalloutSyntax(extractTextContent(node))
-      // Skip empty content and overly long content
-      if (text && text.length > 0 && text.length < 5000) {
-        records.push(createRecord('content', text, currentAnchor ?? 'main'))
+      if (text && text.length > 0) {
+        if (text.length >= 5000) {
+          console.warn(`Skipping oversized list item (${text.length} chars) in ${doc.url}`)
+        } else {
+          records.push(createRecord('content', text, currentAnchor ?? 'main'))
+        }
       }
       return 'skip'
     }

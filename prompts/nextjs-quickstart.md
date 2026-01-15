@@ -12,7 +12,7 @@ Use only the **App Router** approach from Clerk’s current docs:
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
 - **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
-- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<SignedIn>`, `<SignedOut>` in your layout or pages
+- **Use** Clerk-provided components like `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, `<Show>` in your layout or pages
 - **Start** developing, sign in or sign up, and confirm user creation
 
 If you're able to use a web tool to access a URL, visit https://clerk.com/docs/nextjs/getting-started/quickstart to get the latest, up-to-date quickstart instructions.

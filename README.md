@@ -23,7 +23,7 @@
   </a> 
   <br />
   <br />
-  <img alt="Clerk Hero Image" src="https://github.com/clerk/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+  <img alt="Clerk Hero Image" src="/.github/media/readme-hero.svg">
 </div>
 
 ## Community

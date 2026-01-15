@@ -445,7 +445,6 @@ async function main() {
     return
   }
 
-
   await algolia.chunkedBatch({
     indexName: ALGOLIA_INDEX_NAME,
     action: 'updateObject',

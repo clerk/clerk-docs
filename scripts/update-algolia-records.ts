@@ -126,6 +126,25 @@ function stripBackticks(str: string): string {
 }
 
 /**
+ * Strips callout syntax from content (e.g., [!NOTE], [!WARNING some-anchor], etc.)
+ * These may appear with or without escaped brackets depending on processing stage
+ * Callouts can optionally include an anchor ID after the type: [!NOTE anchor-id]
+ */
+function stripCalloutSyntax(str: string): string {
+  return str.replace(/\\?\[!(NOTE|WARNING|IMPORTANT|TIP|CAUTION|QUIZ)(?:\s+[^\]]+)?\]/g, '').trim()
+}
+
+/**
+ * Extracts the anchor ID from callout syntax if present
+ * e.g., "[!NOTE browser-compatibility]" returns "browser-compatibility"
+ * Returns undefined if no anchor ID is present
+ */
+function extractCalloutAnchor(str: string): string | undefined {
+  const match = str.match(/\\?\[!(NOTE|WARNING|IMPORTANT|TIP|CAUTION|QUIZ)\s+([^\]]+)\]/)
+  return match?.[2]?.trim()
+}
+
+/**
  * Extracts custom heading ID from MDX annotation syntax
  * e.g., ## Heading {{ id: 'custom-id' }}
  */
@@ -295,9 +314,36 @@ function generateRecordsFromDoc(
       return
     }
 
+    // Handle blockquotes (callouts) - check for custom anchor in callout syntax
+    if (node.type === 'blockquote' && 'children' in node && Array.isArray(node.children)) {
+      // Check if first child is a paragraph with callout syntax that has an anchor
+      const firstChild = node.children[0]
+      let calloutAnchor: string | undefined
+
+      if (firstChild?.type === 'paragraph') {
+        const firstText = extractTextContent(firstChild)
+        calloutAnchor = extractCalloutAnchor(firstText)
+      }
+
+      // Use callout anchor if present, otherwise fall back to current anchor
+      const anchorForCallout = calloutAnchor ?? currentAnchor ?? 'main'
+
+      // Process all paragraphs within the blockquote
+      for (const child of node.children) {
+        if (child.type === 'paragraph') {
+          const text = stripCalloutSyntax(extractTextContent(child))
+          if (text && text.length > 0 && text.length < 5000 && !text.startsWith('|')) {
+            records.push(createRecord('content', text, anchorForCallout))
+          }
+        }
+      }
+
+      return 'skip' // Don't process children again
+    }
+
     // Handle paragraphs
     if (node.type === 'paragraph') {
-      const text = extractTextContent(node)
+      const text = stripCalloutSyntax(extractTextContent(node))
       // Skip empty content, table-like content (starts with |), and overly long content
       if (text && text.length > 0 && text.length < 5000 && !text.startsWith('|')) {
         records.push(createRecord('content', text, currentAnchor ?? 'main'))
@@ -307,7 +353,7 @@ function generateRecordsFromDoc(
 
     // Handle list items (but not those with nested lists)
     if (node.type === 'listItem' && !hasNestedBlockElements(node)) {
-      const text = extractTextContent(node)
+      const text = stripCalloutSyntax(extractTextContent(node))
       // Skip empty content and overly long content
       if (text && text.length > 0 && text.length < 5000) {
         records.push(createRecord('content', text, currentAnchor ?? 'main'))

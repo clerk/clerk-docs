@@ -97,7 +97,7 @@ const HEADING_WEIGHTS: Record<string, number> = {
   lvl5: 50,
   lvl6: 40,
   content: 0,
-  property: -10, // De-prioritize API property definitions
+  property: -10, // De-prioritize API property/table definitions
 }
 
 function getGitBranch(): string {
@@ -188,6 +188,46 @@ function extractTextContent(node: Node): string {
   })
 
   return parts.join('').trim()
+}
+
+/**
+ * Parses markdown table content from text
+ * Returns headers and data rows, or null if not a table
+ */
+function parseMarkdownTable(text: string): { headers: string[]; rows: string[][] } | null {
+  // Check if text looks like a markdown table (starts with |)
+  if (!text.trim().startsWith('|')) return null
+
+  // Split into lines
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  if (lines.length < 3) return null // Need at least header, separator, and one data row
+
+  const rows: string[][] = []
+
+  for (const line of lines) {
+    // Skip separator rows (only dashes and pipes)
+    if (/^\|[\s-|]+\|$/.test(line)) continue
+
+    // Split by | and filter empty cells
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean)
+
+    if (cells.length > 0) {
+      rows.push(cells)
+    }
+  }
+
+  if (rows.length < 2) return null // Need at least header and one data row
+
+  const headers = rows[0].map((h) => h.toLowerCase())
+  const dataRows = rows.slice(1)
+
+  return { headers, rows: dataRows }
 }
 
 /**
@@ -294,8 +334,58 @@ function generateRecordsFromDoc(
     // Skip YAML frontmatter
     if (node.type === 'yaml') return
 
-    // Skip tables - they're too large for Algolia and crawler excludes them
-    if (node.type === 'table') return 'skip'
+    // Handle tables - combine each row into a single record
+    if (node.type === 'table' && 'children' in node && Array.isArray(node.children)) {
+      const rows = node.children as Node[]
+
+      // Get header row to understand column structure (first row)
+      const headerRow = rows[0]
+      let headers: string[] = []
+      if (headerRow && 'children' in headerRow && Array.isArray(headerRow.children)) {
+        headers = (headerRow.children as Node[]).map((cell) => extractTextContent(cell).toLowerCase())
+      }
+
+      // Process data rows (skip header row)
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i]
+        if (!row || !('children' in row) || !Array.isArray(row.children)) continue
+
+        const cells = (row.children as Node[]).map((cell) => extractTextContent(cell))
+
+        // Try to format intelligently based on common table structures
+        let content: string
+
+        // Common pattern: Name | Type | Description
+        if (headers.length >= 3 && headers[0]?.includes('name') && headers[2]?.includes('description')) {
+          const name = cells[0] || ''
+          const type = cells[1] || ''
+          const description = cells.slice(2).join(' ').trim()
+          content = type ? `${name} (${type}) - ${description}` : `${name} - ${description}`
+        }
+        // Common pattern: Property | Description or Parameter | Description
+        else if (
+          headers.length === 2 &&
+          (headers[0]?.includes('property') || headers[0]?.includes('parameter') || headers[0]?.includes('name'))
+        ) {
+          content = `${cells[0]} - ${cells[1]}`
+        }
+        // Fallback: join all cells
+        else {
+          content = cells.filter(Boolean).join(' - ')
+        }
+
+        content = content.trim()
+        if (content.length > 0) {
+          if (content.length >= 5000) {
+            console.warn(`Skipping oversized table row (${content.length} chars) in ${doc.url}`)
+          } else {
+            records.push(createRecord('property', content, currentAnchor ?? 'main'))
+          }
+        }
+      }
+
+      return 'skip' // Don't process table children again
+    }
 
     // Skip code blocks - crawler doesn't index code
     if (node.type === 'code') return 'skip'
@@ -438,8 +528,50 @@ function generateRecordsFromDoc(
     // Handle paragraphs
     if (node.type === 'paragraph') {
       const text = stripCalloutSyntax(extractTextContent(node))
-      // Skip empty content and table-like content (starts with |)
-      if (text && text.length > 0 && !text.startsWith('|')) {
+
+      // Try to parse as markdown table (inside JSX components, tables are parsed as paragraphs)
+      if (text.startsWith('|')) {
+        const table = parseMarkdownTable(text)
+        if (table) {
+          const { headers, rows } = table
+
+          for (const cells of rows) {
+            let content: string
+
+            // Common pattern: Name | Type | Description
+            if (headers.length >= 3 && headers[0]?.includes('name') && headers[2]?.includes('description')) {
+              const name = cells[0] || ''
+              const type = cells[1] || ''
+              const description = cells.slice(2).join(' ').trim()
+              content = type ? `${name} (${type}) - ${description}` : `${name} - ${description}`
+            }
+            // Common pattern: Property | Description or Parameter | Description
+            else if (
+              headers.length === 2 &&
+              (headers[0]?.includes('property') || headers[0]?.includes('parameter') || headers[0]?.includes('name'))
+            ) {
+              content = `${cells[0]} - ${cells[1]}`
+            }
+            // Fallback: join all cells
+            else {
+              content = cells.filter(Boolean).join(' - ')
+            }
+
+            content = content.trim()
+            if (content.length > 0) {
+              if (content.length >= 5000) {
+                console.warn(`Skipping oversized table row (${content.length} chars) in ${doc.url}`)
+              } else {
+                records.push(createRecord('property', content, currentAnchor ?? 'main'))
+              }
+            }
+          }
+          return
+        }
+      }
+
+      // Regular paragraph content
+      if (text && text.length > 0) {
         if (text.length >= 5000) {
           console.warn(`Skipping oversized paragraph (${text.length} chars) in ${doc.url}`)
         } else {

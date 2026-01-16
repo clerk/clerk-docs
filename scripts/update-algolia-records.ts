@@ -324,7 +324,6 @@ function generateRecordsFromDoc(
     availableSdksRaw && availableSdksRaw.length > 0
       ? availableSdksRaw
       : ["all"];
-  const canonical = doc.frontmatter.canonical || null;
   const keywords =
     doc.frontmatter.search?.keywords
       ?.map((keyword) => keyword.trim())
@@ -338,8 +337,8 @@ function generateRecordsFromDoc(
   ): SearchRecord => {
     const objectID = `${gitBranch}-${position}-${baseUrl}#${anchor}`;
 
-    // distinct_group uses canonical URL (with :sdk: placeholder) + anchor for deduplication
-    const distinctBase = canonical || baseUrl;
+    // distinct_group uses URL + anchor for deduplication
+    const distinctBase = baseUrl;
     const distinct_group = `${distinctBase}#${anchor}`;
 
     return {
@@ -350,7 +349,7 @@ function generateRecordsFromDoc(
       type,
       keywords,
       availableSDKs: availableSdksList,
-      canonical,
+      canonical: baseUrl,
       weight: {
         pageRank: doc.frontmatter.search?.rank ?? 0,
         level: HEADING_WEIGHTS[type] ?? 0,

@@ -56,7 +56,14 @@ import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
-import { flattenTree, Manifest, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
+import {
+  flattenTree,
+  Manifest,
+  ManifestGroup,
+  readManifest,
+  traverseTree,
+  traverseTreeItemsFirst,
+} from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
@@ -303,12 +310,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const {
-    manifest: userManifest,
-    navigationBySdk,
-    navigationLayoutsBySdk,
-    vfile: manifestVfile,
-  } = await getManifest()
+  const { manifest: userManifest, navigationBySdk, navigationLayoutsBySdk, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
 
   abortSignal?.throwIfAborted()
@@ -608,7 +610,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       ? undefined
       : Object.fromEntries(
           await Promise.all(
-            Object.entries(navigationBySdk).map(async ([sdkKey, manifest]) => [sdkKey, await applySdkScoping(manifest)]),
+            Object.entries(navigationBySdk).map(async ([sdkKey, manifest]) => [
+              sdkKey,
+              await applySdkScoping(manifest),
+            ]),
           ),
         )
 

@@ -89,14 +89,6 @@ const ALGOLIA_OUTPUT_DIR = path.join(__dirname, "../.algolia");
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
 
-const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME } = z
-  .object({
-    ALGOLIA_API_KEY: z.string(),
-    ALGOLIA_APP_ID: z.string(),
-    ALGOLIA_INDEX_NAME: z.string(),
-  })
-  .parse(process.env);
-
 // Heading weights match Algolia DocSearch crawler configuration
 const HEADING_WEIGHTS: Record<string, number> = {
   lvl1: 90,
@@ -110,7 +102,6 @@ const HEADING_WEIGHTS: Record<string, number> = {
 };
 
 function getGitBranch(): string {
-  return "core-1";
   try {
     // Try to get branch from environment (CI systems often set this)
     const envBranch =
@@ -823,11 +814,6 @@ async function main() {
   console.log(`✓ Processed ${processed} files, skipped ${skipped}`);
   console.log(`✓ Generated ${allRecords.length} search records`);
 
-  const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY);
-
-  // Push to Algolia
-  console.log("\nPushing records to Algolia...");
-
   if (DRY_RUN) {
     await fs.mkdir(ALGOLIA_OUTPUT_DIR, { recursive: true });
     await fs.writeFile(
@@ -839,6 +825,19 @@ async function main() {
     );
     return;
   }
+
+  const { ALGOLIA_API_KEY, ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME } = z
+    .object({
+      ALGOLIA_API_KEY: z.string(),
+      ALGOLIA_APP_ID: z.string(),
+      ALGOLIA_INDEX_NAME: z.string(),
+    })
+    .parse(process.env);
+
+  const algolia = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY);
+
+  // Push to Algolia
+  console.log("\nPushing records to Algolia...");
 
   await algolia.chunkedBatch({
     indexName: ALGOLIA_INDEX_NAME,

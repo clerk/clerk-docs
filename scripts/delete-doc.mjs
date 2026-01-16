@@ -252,6 +252,12 @@ const removeFromManifest = async (targetPath) => {
   const updatedManifest = {
     ...manifest,
     navigation: updateNavigation(manifest.navigation),
+    navigationBySdk:
+      manifest.navigationBySdk === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(manifest.navigationBySdk).map(([sdkKey, nav]) => [sdkKey, updateNavigation(nav)]),
+          ),
   }
 
   await writeJsonFile(MANIFEST_FILE, updatedManifest)

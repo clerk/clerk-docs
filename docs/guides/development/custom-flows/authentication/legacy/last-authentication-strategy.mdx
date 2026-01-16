@@ -1,0 +1,144 @@
+---
+title: Build a custom flow for displaying the last authentication method
+description: Learn how to use the Clerk API to build a custom flow for displaying the `lastAuthenticationStrategy` property and highlighting the last used OAuth provider with a badge.
+---
+
+<Include src="_partials/custom-flows-callout" />
+
+The `Client` object includes a `lastAuthenticationStrategy` property that tracks the last authentication method used by the user. This is useful for improving the user experience by showing a "Last used" badge on OAuth buttons, helping returning users quickly identify their preferred sign-in method.
+
+## Access the last authentication strategy
+
+The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/reference/javascript/client) object. You can access it through the `client` property of the [`Clerk`](/docs/reference/javascript/clerk) instance.
+
+<Tabs items={["Next.js", "JavaScript"]}>
+  <Tab>
+    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+
+    The following example demonstrates how to:
+
+    1. Access the `client` object using the [`useClerk()`](/docs/reference/hooks/use-clerk) hook.
+    1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
+    1. Display a badge next to the corresponding OAuth button.
+
+    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
+    'use client'
+
+    import * as React from 'react'
+    import { OAuthStrategy } from '@clerk/types'
+    import { useSignIn, useClerk } from '@clerk/nextjs'
+
+    export default function Page() {
+      const { signIn } = useSignIn()
+      const { client } = useClerk()
+
+      if (!signIn) return null
+
+      const lastStrategy = client?.lastAuthenticationStrategy
+
+      const signInWith = (strategy: OAuthStrategy) => {
+        return signIn.authenticateWithRedirect({
+          strategy,
+          redirectUrl: '/sign-in/sso-callback',
+          redirectUrlComplete: '/',
+        })
+      }
+
+      const providers = [
+        { strategy: 'oauth_google' as const, name: 'Google' },
+        { strategy: 'oauth_github' as const, name: 'GitHub' },
+      ]
+
+      return (
+        <div>
+          <h1>Sign in</h1>
+          {providers.map((provider) => (
+            <button key={provider.strategy} onClick={() => signInWith(provider.strategy)}>
+              Sign in with {provider.name}
+              {lastStrategy === provider.strategy && <span> (Last used)</span>}
+            </button>
+          ))}
+        </div>
+      )
+    }
+    ```
+  </Tab>
+
+  <Tab>
+    The following example demonstrates how to:
+
+    1. Access the `client` object from the `Clerk` instance.
+    1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
+    1. Display a badge next to the corresponding OAuth button.
+
+    ```html {{ filename: 'index.html', collapsible: true }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js', collapsible: true }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    const clerk = new Clerk(pubKey)
+    await clerk.load()
+
+    if (clerk.user) {
+      // User is already signed in
+      document.getElementById('app').innerHTML = `
+        <div id="user-button"></div>
+      `
+      clerk.mountUserButton(document.getElementById('user-button'))
+    } else {
+      const lastStrategy = clerk.client?.lastAuthenticationStrategy
+
+      const providers = [
+        { strategy: 'oauth_google', name: 'Google' },
+        { strategy: 'oauth_github', name: 'GitHub' },
+      ]
+
+      const buttons = providers
+        .map(
+          (provider) => `
+        <button id="${provider.strategy}">
+          Sign in with ${provider.name}
+          ${lastStrategy === provider.strategy ? '<span> (Last used)</span>' : ''}
+        </button>
+      `,
+        )
+        .join('')
+
+      document.getElementById('app').innerHTML = `
+        <h1>Sign in</h1>
+        ${buttons}
+      `
+
+      providers.forEach((provider) => {
+        document.getElementById(provider.strategy)?.addEventListener('click', async () => {
+          try {
+            await clerk.client.signIn.authenticateWithRedirect({
+              strategy: provider.strategy,
+              redirectUrl: '/sso-callback',
+              redirectUrlComplete: '/',
+            })
+          } catch (error) {
+            console.error('Error:', error)
+          }
+        })
+      })
+    }
+    ```
+  </Tab>
+</Tabs>

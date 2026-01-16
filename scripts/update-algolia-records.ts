@@ -93,7 +93,6 @@ const HEADING_WEIGHTS: Record<string, number> = {
 }
 
 function getGitBranch(): string {
-  return 'main'
   try {
     // Try to get branch from environment (CI systems often set this)
     const envBranch =

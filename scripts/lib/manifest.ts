@@ -22,11 +22,19 @@ export const readManifest = (config: BuildConfig) => async () => {
     throw new Error(errorMessages['manifest-parse-error'](error))
   }
 
-  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
+  const manifest = await z
+    .object({
+      navigation: manifestSchema,
+      navigationBySdk: z.record(sdk, manifestSchema).optional(),
+      navigationLayoutsBySdk: z.record(sdk, z.enum(['flat', 'sectioned'])).optional(),
+    })
+    .safeParseAsync(json)
 
   if (manifest.success === true) {
     return {
       manifest: manifest.data.navigation,
+      navigationBySdk: manifest.data.navigationBySdk,
+      navigationLayoutsBySdk: manifest.data.navigationLayoutsBySdk,
       vfile: new VFile({ path: config.manifestRelativePath }),
     }
   }
@@ -47,6 +55,13 @@ export type ManifestItem = {
   shortcut?: boolean
 }
 
+export type ManifestHeader = {
+  title: string
+  header: true
+  href?: string
+  sdk?: SDK[]
+}
+
 export type ManifestGroup = {
   title: string
   items: Manifest
@@ -59,7 +74,7 @@ export type ManifestGroup = {
   skip?: boolean
 }
 
-export type Manifest = (ManifestItem | ManifestGroup)[][]
+export type Manifest = (ManifestItem | ManifestGroup | ManifestHeader)[][]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -73,6 +88,15 @@ const createManifestSchema = (config: BuildConfig) => {
       target: z.enum(['_blank']).optional(),
       sdk: z.array(sdk).optional(),
       shortcut: z.boolean().optional(),
+    })
+    .strict()
+
+  const manifestHeader: z.ZodType<ManifestHeader> = z
+    .object({
+      title: z.string(),
+      header: z.literal(true),
+      href: z.string().optional(),
+      sdk: z.array(sdk).optional(),
     })
     .strict()
 
@@ -90,7 +114,7 @@ const createManifestSchema = (config: BuildConfig) => {
     })
     .strict()
 
-  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup])))
+  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup, manifestHeader])))
 
   return {
     manifestItem,
@@ -105,9 +129,9 @@ export type BlankTree<Item extends object, Group extends { items: BlankTree<Item
 
 export const traverseTree = async <
   Tree extends { items: BlankTree<any, any> },
-  InItem extends Extract<Tree['items'][number][number], { href: string }>,
+  InItem extends Extract<Tree['items'][number][number], { href?: string }>,
   InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
-  OutItem extends { href: string },
+  OutItem extends { href?: string },
   OutGroup extends { items: BlankTree<OutItem, OutGroup> },
   OutTree extends BlankTree<OutItem, OutGroup>,
 >(
@@ -121,7 +145,7 @@ export const traverseTree = async <
       return await Promise.all(
         group.map(async (item) => {
           try {
-            if ('href' in item) {
+            if ('href' in item && item.href !== undefined) {
               return await itemCallback(item, tree)
             }
 
@@ -161,9 +185,9 @@ export const traverseTree = async <
 
 export const traverseTreeItemsFirst = async <
   Tree extends { items: BlankTree<any, any> },
-  InItem extends Extract<Tree['items'][number][number], { href: string }>,
+  InItem extends Extract<Tree['items'][number][number], { href?: string }>,
   InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
-  OutItem extends { href: string },
+  OutItem extends { href?: string },
   OutGroup extends { items: BlankTree<OutItem, OutGroup> },
   OutTree extends BlankTree<OutItem, OutGroup>,
 >(
@@ -177,7 +201,7 @@ export const traverseTreeItemsFirst = async <
       return await Promise.all(
         group.map(async (item) => {
           try {
-            if ('href' in item) {
+            if ('href' in item && item.href !== undefined) {
               return await itemCallback(item, tree)
             }
 
@@ -211,14 +235,14 @@ export const traverseTreeItemsFirst = async <
 
 export function flattenTree<
   Tree extends BlankTree<any, any>,
-  InItem extends Extract<Tree[number][number], { href: string }>,
+  InItem extends Extract<Tree[number][number], { href?: string }>,
   InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>,
 >(tree: Tree): InItem[] {
   const result: InItem[] = []
 
   for (const group of tree) {
     for (const itemOrGroup of group) {
-      if ('href' in itemOrGroup) {
+      if ('href' in itemOrGroup && itemOrGroup.href !== undefined) {
         // It's an item
         result.push(itemOrGroup)
       } else if ('items' in itemOrGroup && Array.isArray(itemOrGroup.items)) {

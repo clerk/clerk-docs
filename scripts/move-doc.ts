@@ -194,7 +194,10 @@ const findRedirectChain = (redirects: Redirect[], targetPath: string): Redirect[
 
 // Updates manifest.json links
 const updateManifestLinks = async (oldPath: string, newPath: string): Promise<void> => {
-  const manifest: { navigation: Manifest } = await readJsonFile(MANIFEST_FILE)
+  const manifest: {
+    navigation: Manifest
+    navigationBySdk?: Record<string, Manifest>
+  } = await readJsonFile(MANIFEST_FILE)
 
   // Update href's in link items
   const updateLinkItem = (item: ManifestItem): ManifestItem => {
@@ -240,6 +243,12 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
   const updatedManifest = {
     ...manifest,
     navigation: updateNavigation(manifest.navigation),
+    navigationBySdk:
+      manifest.navigationBySdk === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(manifest.navigationBySdk).map(([sdkKey, nav]) => [sdkKey, updateNavigation(nav)]),
+          ),
   }
 
   await writeJsonFile(MANIFEST_FILE, updatedManifest)

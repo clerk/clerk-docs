@@ -203,26 +203,32 @@
 
 <If sdk="tanstack-react-start">
   ```tsx {{ filename: 'app/routes/manage-premium-content.tsx' }}
-  import { getAuth } from '@clerk/tanstack-react-start/server'
   import { createFileRoute } from '@tanstack/react-router'
-  import { getWebRequest } from '@tanstack/react-start/server'
+  import { createServerFn } from '@tanstack/react-start'
+  import { auth } from '@clerk/tanstack-react-start/server'
+
+  export const authStateFn = createServerFn().handler(async () => {
+    const { has, userId } = await auth()
+
+    return {
+      userId,
+      hasPremiumAccessManage: has({ permission: 'org:premium_access:manage' }),
+    }
+  })
 
   export const Route = createFileRoute('/manage-premium-content')({
     component: ManagePremiumContentPage,
     beforeLoad: async () => {
-      const request = getWebRequest()
-      if (!request) throw new Error('Request not found')
-      return { auth: await getAuth(request) }
-    },
-    loader: async ({ context }) => {
+      const authObject = await authStateFn()
       return {
-        hasPremiumAccessManage: context.auth.has({ permission: 'org:premium_access:manage' }),
+        userId: authObject.userId,
+        hasPremiumAccessManage: authObject.hasPremiumAccessManage,
       }
     },
   })
 
   function ManagePremiumContentPage() {
-    const { hasPremiumAccessManage } = Route.useLoaderData()
+    const { hasPremiumAccessManage } = Route.useRouteContext()
 
     if (!hasPremiumAccessManage)
       return (

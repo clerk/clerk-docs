@@ -178,24 +178,32 @@
 
 <If sdk="tanstack-react-start">
   ```tsx {{ filename: 'app/routes/bronze-content.tsx' }}
-  import { getAuth } from '@clerk/tanstack-react-start/server'
   import { createFileRoute } from '@tanstack/react-router'
-  import { getWebRequest } from '@tanstack/react-start/server'
+  import { createServerFn } from '@tanstack/react-start'
+  import { auth } from '@clerk/tanstack-react-start/server'
+
+  export const authStateFn = createServerFn().handler(async () => {
+    const { has, userId } = await auth()
+
+    return {
+      userId,
+      hasBronzePlan: has({ plan: 'bronze' }),
+    }
+  })
 
   export const Route = createFileRoute('/bronze-content')({
     component: BronzeContentPage,
     beforeLoad: async () => {
-      const request = getWebRequest()
-      if (!request) throw new Error('Request not found')
-      return { auth: await getAuth(request) }
-    },
-    loader: async ({ context }) => {
-      return { hasBronzePlan: context.auth.has({ plan: 'bronze' }) }
+      const authObject = await authStateFn()
+      return {
+        userId: authObject.userId,
+        hasBronzePlan: authObject.hasBronzePlan,
+      }
     },
   })
 
   function BronzeContentPage() {
-    const { hasBronzePlan } = Route.useLoaderData()
+    const { hasBronzePlan } = Route.useRouteContext()
 
     if (!hasBronzePlan) return <h1>Only subscribers to the Bronze plan can access this content.</h1>
 

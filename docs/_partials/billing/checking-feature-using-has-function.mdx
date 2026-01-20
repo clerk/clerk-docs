@@ -185,24 +185,32 @@
 
 <If sdk="tanstack-react-start">
   ```tsx {{ filename: 'app/routes/premium-content.tsx' }}
-  import { getAuth } from '@clerk/tanstack-react-start/server'
   import { createFileRoute } from '@tanstack/react-router'
-  import { getWebRequest } from '@tanstack/react-start/server'
+  import { createServerFn } from '@tanstack/react-start'
+  import { auth } from '@clerk/tanstack-react-start/server'
+
+  export const authStateFn = createServerFn().handler(async () => {
+    const { has, userId } = await auth()
+
+    return {
+      userId,
+      hasPremiumAccess: has({ feature: 'premium_access' }),
+    }
+  })
 
   export const Route = createFileRoute('/premium-content')({
     component: PremiumContentPage,
     beforeLoad: async () => {
-      const request = getWebRequest()
-      if (!request) throw new Error('Request not found')
-      return { auth: await getAuth(request) }
-    },
-    loader: async ({ context }) => {
-      return { hasPremiumAccess: context.auth.has({ feature: 'premium_access' }) }
+      const authObject = await authStateFn()
+      return {
+        userId: authObject.userId,
+        hasPremiumAccess: authObject.hasPremiumAccess,
+      }
     },
   })
 
   function PremiumContentPage() {
-    const { hasPremiumAccess } = Route.useLoaderData()
+    const { hasPremiumAccess } = Route.useRouteContext()
 
     if (!hasPremiumAccess)
       return <h1>Only subscribers with the Premium Access feature can access this content.</h1>

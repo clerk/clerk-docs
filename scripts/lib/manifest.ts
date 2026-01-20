@@ -47,6 +47,12 @@ export type ManifestItem = {
   shortcut?: boolean
 }
 
+export type ManifestHeading = {
+  title: string
+  heading: true
+  sdk?: SDK[]
+}
+
 export type ManifestGroup = {
   title: string
   items: Manifest
@@ -59,7 +65,7 @@ export type ManifestGroup = {
   skip?: boolean
 }
 
-export type Manifest = (ManifestItem | ManifestGroup)[][]
+export type Manifest = (ManifestItem | ManifestHeading | ManifestGroup)[][]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -73,6 +79,14 @@ const createManifestSchema = (config: BuildConfig) => {
       target: z.enum(['_blank']).optional(),
       sdk: z.array(sdk).optional(),
       shortcut: z.boolean().optional(),
+    })
+    .strict()
+
+  const manifestHeading: z.ZodType<ManifestHeading> = z
+    .object({
+      title: z.string(),
+      heading: z.literal(true),
+      sdk: z.array(sdk).optional(),
     })
     .strict()
 
@@ -90,10 +104,11 @@ const createManifestSchema = (config: BuildConfig) => {
     })
     .strict()
 
-  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestGroup])))
+  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestHeading, manifestGroup])))
 
   return {
     manifestItem,
+    manifestHeading,
     manifestGroup,
     manifestSchema,
   }

@@ -1,0 +1,94 @@
+---
+title: Adding auth skill
+description: Add Clerk authentication to any project with framework detection and templates.
+---
+
+The `adding-auth` skill helps AI agents add Clerk authentication to any project. It detects your framework and provides the appropriate setup.
+
+## Supported frameworks
+
+| Framework | Detection | Template |
+| --- | --- | --- |
+| Next.js | `next` in package.json | Middleware, ClerkProvider, auth pages |
+| Express | `express` in package.json | Middleware setup |
+| Remix | `@remix-run/react` in package.json | Loader patterns |
+| React SPA | `react` without framework | ClerkProvider setup |
+
+## Example prompts
+
+- "Add Clerk auth to my Next.js app"
+- "Set up Clerk middleware in my Express API"
+- "Add authentication to my React app"
+- "Protect the /dashboard route with Clerk"
+
+## Common patterns
+
+### Protect routes with middleware (Next.js)
+
+```ts {{ filename: 'middleware.ts' }}
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+const isProtectedRoute = createRouteMatcher(['/dashboard(.*)'])
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isProtectedRoute(req)) {
+    await auth.protect()
+  }
+})
+
+export const config = {
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+}
+```
+
+### Add ClerkProvider (Next.js)
+
+```tsx {{ filename: 'app/layout.tsx' }}
+import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+
+export default function RootLayout({ children }) {
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <header>
+            <SignedOut>
+              <SignInButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
+  )
+}
+```
+
+## Environment variables
+
+```bash {{ filename: '.env.local' }}
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+```
+
+Get your keys from the [Clerk Dashboard](https://dashboard.clerk.com/last-active?path=api-keys).
+
+## Common pitfalls
+
+- **Always await `auth()`** in Server Components - it returns a Promise
+- **Never expose `CLERK_SECRET_KEY`** on the client
+- **Include matcher in middleware** - without it, middleware doesn't run
+- **Allow public routes** - don't protect `/sign-in` and `/sign-up`
+
+## Related skills
+
+- [customizing-ui](/docs/guides/ai/skills/customizing-ui) - Custom sign-in and sign-up forms
+- [syncing-users](/docs/guides/ai/skills/syncing-users) - Sync users to your database
+- [nextjs-patterns](/docs/guides/ai/skills/nextjs-patterns) - Advanced Next.js patterns
+
+## Source code
+
+View the skill source on [GitHub](https://github.com/clerk/skills/tree/main/skills/adding-auth).

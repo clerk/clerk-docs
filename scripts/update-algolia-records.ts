@@ -38,7 +38,7 @@ type SearchRecord = {
   type: RecordType
   keywords: string[]
   availableSDKs: string[]
-  canonical: string | null
+  canonical: string
   weight: {
     pageRank: number
     level: number
@@ -57,20 +57,24 @@ type SearchRecord = {
   record_batch: string
 }
 
-type Frontmatter = {
-  title?: string
-  description?: string
-  sdk?: string
-  availableSdks?: string
-  activeSdk?: string
-  redirectPage?: string
-  search?: {
-    exclude?: boolean
-    keywords?: string[]
-    rank?: number
-  }
-  canonical?: string
-}
+const frontmatterSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().nullable(),
+  sdk: z.string().optional(),
+  availableSdks: z.string().optional(),
+  activeSdk: z.string().optional(),
+  redirectPage: z.string().optional(),
+  search: z
+    .object({
+      exclude: z.boolean().optional(),
+      keywords: z.array(z.string()).optional(),
+      rank: z.number().optional(),
+    })
+    .optional(),
+  canonical: z.string(),
+})
+
+type Frontmatter = z.infer<typeof frontmatterSchema>
 
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
@@ -284,7 +288,7 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
-  const canonical = doc.frontmatter.canonical || null
+  const canonical = doc.frontmatter.canonical
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
   // Helper to create a record
@@ -656,7 +660,7 @@ async function main() {
       continue
     }
 
-    frontmatter = frontmatter as Frontmatter
+    frontmatter = frontmatterSchema.parse(frontmatter)
 
     // Skip redirect pages
     if (frontmatter.redirectPage === 'true') {

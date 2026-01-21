@@ -1,0 +1,99 @@
+```tsx {{ filename: 'src/Protected.tsx', collapsible: true }}
+import { useAuth, useOrganization } from '@clerk/clerk-react'
+
+export default function Protected() {
+  const { isSignedIn, has } = useAuth()
+  const { organization } = useOrganization()
+
+  // Check if the user is authenticated
+  if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+  // Check if there is an Active Organization
+  if (!organization) <p>Set an Active Organization to access this page.</p>
+
+  // Check if the user has the `org:admin` Role
+  if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+  // Check if Organization name matches (e.g. 'Acme Corp')
+  const requiredOrgName = 'Acme Corp'
+  if (organization.name !== requiredOrgName) {
+    return (
+      <>
+        <p>
+          This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
+          Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
+        </p>
+      </>
+    )
+  }
+
+  return (
+    <p>
+      You are currently signed in as an <strong>admin</strong> in the{' '}
+      <strong>{organization.name}</strong> Organization.
+    </p>
+  )
+}
+```
+
+Update your main `<App />` component to show the `<Protected />` component when you navigate to `/protected`.
+
+```tsx {{ filename: 'src/App.tsx', mark: [[31, 33]], collapsible: true }}
+import './App.css'
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  UserButton,
+  OrganizationSwitcher,
+  useOrganization,
+  useOrganizationList,
+} from '@clerk/clerk-react'
+import Protected from './Protected'
+
+function App() {
+  const { organization } = useOrganization()
+  const { userMemberships } = useOrganizationList({
+    userMemberships: true,
+  })
+
+  return (
+    <>
+      <header>
+        <OrganizationSwitcher />
+        <SignedOut>
+          <SignInButton />
+        </SignedOut>
+        <SignedIn>
+          <UserButton />
+        </SignedIn>
+      </header>
+      <main className="p-8">
+        {window.location.pathname === '/protected' ? (
+          <Protected />
+        ) : (
+          <SignedIn>
+            <div>
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> Organization
+              </h1>
+              <p className="mb-6">
+                Your role in this Organization:{' '}
+                <strong>
+                  {
+                    userMemberships?.data?.find(
+                      (membership) => membership.organization.id === organization?.id,
+                    )?.role
+                  }
+                </strong>
+              </p>
+            </div>
+          </SignedIn>
+        )}
+      </main>
+    </>
+  )
+}
+
+export default App
+```

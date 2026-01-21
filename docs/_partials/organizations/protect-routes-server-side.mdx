@@ -1,0 +1,190 @@
+<If sdk="nextjs">
+  ```tsx {{ filename: 'app/protected/page.tsx' }}
+  import { auth, clerkClient } from '@clerk/nextjs/server'
+  import { OrganizationSwitcher } from '@clerk/nextjs'
+
+  export default async function Page() {
+    const { isAuthenticated, orgId, has } = await auth()
+
+    // Check if the user is authenticated
+    if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
+
+    // Check if there is an Active Organization
+    if (!orgId) return <p>Set an Active Organization to access this page.</p>
+
+    // Check if the user has the `org:admin` Role
+    if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+    // Initialize the JS Backend SDK
+    // This varies depending on the SDK you're using
+    // https://clerk.com/docs/js-backend/getting-started/quickstart
+    const client = await clerkClient()
+
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+    // Check if Organization name matches (e.g. 'Acme Corp')
+    if (organization.name !== requiredOrgName)
+      return (
+        <p>
+          This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+          to the <strong>{requiredOrgName}</strong> Organization to access this page.
+        </p>
+      )
+
+    return (
+      <p>
+        You are currently signed in as an <strong>admin</strong> in the{' '}
+        <strong>{organization.name}</strong> Organization.
+      </p>
+    )
+  }
+  ```
+</If>
+
+<If sdk="react-router">
+  ```tsx {{ filename: 'app/routes/protected.tsx', collapsible: true }}
+  import { clerkClient, getAuth } from '@clerk/react-router/server'
+  import { redirect } from 'react-router'
+  import type { Route } from '../+types/protected'
+
+  export function meta({}: Route.MetaArgs) {
+    return [
+      { title: 'Protected Page' },
+      { name: 'description', content: 'A protected page requiring admin access' },
+    ]
+  }
+
+  export async function loader(args: Route.LoaderArgs) {
+    // Use the `getAuth()` helper to access the `Auth` object
+    // https://clerk.com/docs/reference/backend/types/auth-object
+    const { isAuthenticated, orgId, has } = await getAuth(args)
+
+    // Check if the user is authenticated
+    if (!isAuthenticated) {
+      return redirect('/sign-in?redirect_url=' + args.request.url)
+    }
+
+    // Check if there is an Active Organization
+    if (!orgId) return { error: 'Set an Active Organization to access this page.' }
+
+    // Check if the user has the `org:admin` Role
+    if (!has({ role: 'org:admin' })) return { error: 'You must be an admin to access this page.' }
+
+    // Initialize the JS Backend SDK
+    // This varies depending on the SDK you're using
+    // https://clerk.com/docs/js-backend/getting-started/quickstart
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await clerkClient(args).organizations.getOrganization({
+      organizationId: orgId,
+    })
+
+    // Check if Organization name matches (e.g. 'Acme Corp')
+    const requiredOrgName = 'Acme Corp'
+    if (organization.name !== requiredOrgName)
+      return {
+        error: `This page is only accessible in the ${requiredOrgName} Organization. Switch to the ${requiredOrgName} Organization to access this page.`,
+      }
+
+    return { organization }
+  }
+
+  export default function Protected({ loaderData }: Route.ComponentProps) {
+    return (
+      <p>
+        You are currently signed in as an <strong>admin</strong> in the{' '}
+        <strong>{loaderData?.organization?.name}</strong> Organization.
+      </p>
+    )
+  }
+  ```
+</If>
+
+<If sdk="astro">
+  ```astro {{ filename: 'src/pages/protected.astro' }}
+  ---
+  import Layout from '../layouts/Layout.astro'
+  import { clerkClient } from '@clerk/astro/server'
+
+  const { isAuthenticated, has, orgId, orgRole } = Astro.locals.auth()
+
+  const requiredOrgName = 'Acme Corp'
+
+  let organization = null
+  if (isAuthenticated && orgId) {
+    organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
+  }
+  ---
+
+  <Layout title="Protected Page">
+    <!-- Check if the user is authenticated -->
+    {!isAuthenticated && <p>You must be signed in to access this page.</p>}
+
+    <!-- Check if there is an Active Organization -->
+    {!organization && <p>Set an Active Organization to access this page.</p>}
+
+    <!-- Check if the user has the required Role to access this page -->
+    {!has({ role: 'org:admin' }) && <p>You must be an admin to access this page.</p>}
+
+    <!-- Check if Organization name matches (e.g. 'Acme Corp') -->
+    {
+      organization &&
+        (organization.name !== requiredOrgName ? (
+          <p>
+            This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
+            Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
+          </p>
+        ) : (
+          <p>
+            You are currently signed in as an <strong>admin</strong> in the{' '}
+            <strong>{organization.name}</strong> Organization.
+          </p>
+        ))
+    }
+  </Layout>
+  ```
+</If>
+
+<If sdk="nuxt">
+  ```ts {{ filename: 'server/api/organization.ts' }}
+  import { clerkClient } from '@clerk/nuxt/server'
+
+  export default defineEventHandler(async (event) => {
+    const { isAuthenticated, orgId } = event.context.auth()
+    const requiredOrgName = 'Acme Corp'
+
+    // Check if the user is authenticated
+    if (!isAuthenticated) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Unauthorized: No user ID provided',
+      })
+    }
+
+    // Check if there is an Active Organization
+    if (!orgId) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Set an Active Organization to access this page.',
+      })
+    }
+
+    // Use the `getOrganization()` method to get the Backend `Organization` object
+    const organization = await clerkClient(event).organizations.getOrganization({
+      organizationId: orgId,
+    })
+
+    // Check if Organization name matches (e.g., "Acme Corp")
+    if (organization.name !== requiredOrgName) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: `This route is only accessible in the ${requiredOrgName} Organization.`,
+      })
+    }
+
+    return {
+      organization,
+    }
+  })
+  ```
+</If>

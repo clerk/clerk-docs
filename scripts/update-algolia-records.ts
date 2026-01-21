@@ -64,11 +64,13 @@ const frontmatterSchema = z.object({
   availableSdks: z.string().optional(),
   activeSdk: z.string().optional(),
   redirectPage: z.string().optional(),
-  search: z.object({
-    exclude: z.boolean().optional(),
-    keywords: z.array(z.string()).optional(),
-    rank: z.number().optional(),
-  }).optional(),
+  search: z
+    .object({
+      exclude: z.boolean().optional(),
+      keywords: z.array(z.string()).optional(),
+      rank: z.number().optional(),
+    })
+    .optional(),
   canonical: z.string(),
 })
 

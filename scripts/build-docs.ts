@@ -1217,6 +1217,11 @@ ${yaml.stringify({
   abortSignal?.throwIfAborted()
 
   if (config.flags.watch) {
+    // Copy over the public folder
+    if (config.publicPath) {
+      await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
+    }
+
     // While in dev, we just want to symlink the new dist to the dist folder
     // This removes the issue that fs.cp can't replace a folder
     // We don't need to worry about the public folder because in dev clerk/clerk just looks in the original public folder

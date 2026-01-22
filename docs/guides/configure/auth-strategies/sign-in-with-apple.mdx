@@ -32,52 +32,25 @@ This guide will teach you how to add native [Sign in with Apple](https://develop
   > If you are using Clerk's prebuilt components, you don't need to do anything else and can stop here. The `SignInWithApple` button will appear in your `AuthView` automatically.
   > If you are building a [custom flow](!custom-flow), continue to follow the steps below.
 
-  ## Obtain an Apple ID Credential
-
-  To authenticate with Apple and Clerk, you need to obtain an [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential).
-
-  To obtain an Apple ID Credential, you can do one of the following:
-
-  - Use one of [Apple's built-in Sign in with Apple buttons](https://developer.apple.com/documentation/signinwithapple/displaying-sign-in-with-apple-buttons-in-your-app).
-  - Use Clerk's [`SignInWithAppleHelper`](https://clerk.github.io/clerk-ios/documentation/clerk/signinwithapplehelper) class.
-  - Obtain it manually by following [the Apple docs](https://developer.apple.com/documentation/signinwithapple).
-
-  > [!NOTE]
-  > You must set the nonce property of the `ASAuthorizationAppleIDRequest` when requesting an Apple ID Credential in order to authenticate with Clerk.
-
   ## Build your sign-in flow
 
-  Once you have obtained your [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential), you can use it to authenticate with Clerk by calling [`SignIn.authenticateWithIdToken(provider:idToken:)`](https://clerk.github.io/clerk-ios/documentation/clerk/signin/authenticatewithidtoken\(provider:idtoken:\)) with a provider of `.apple` and the `idToken` you have obtained.
-
-  The following example uses Apple's built-in `SignInWithAppleButton` to obtain an Apple ID Credential and calls `SignIn.authenticateWithIdToken(provider:idToken:)` to authenticate with Clerk.
+  Use `clerk.auth.signInWithApple()` to start the native Sign in with Apple flow.
 
   ```swift {{ filename: 'SignInWithAppleView.swift' }}
+  import ClerkKit
   import SwiftUI
-  import Clerk
-  import AuthenticationServices
 
   struct SignInWithAppleView: View {
+    @Environment(Clerk.self) private var clerk
+
     var body: some View {
-      // Use Apple's built-in SignInWithAppleButton
-      SignInWithAppleButton { request in
-        request.requestedScopes = [.email, .fullName]
-        request.nonce = UUID().uuidString // Setting the nonce is mandatory
-      } onCompletion: { result in
+      Button("Sign in with Apple") {
         Task {
-          // Access the Apple ID Credential
-          guard let credential = try result.get().credential as? ASAuthorizationAppleIDCredential else {
-            dump("Unable to get credential of type ASAuthorizationAppleIDCredential")
-            return
+          do {
+            try await clerk.auth.signInWithApple()
+          } catch {
+            dump(error)
           }
-
-          // Access the necessary identity token on the Apple ID Credential
-          guard let idToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }) else {
-            dump("Unable to get ID token from Apple ID Credential.")
-            return
-          }
-
-          // Authenticate with Clerk
-          let authResult = try await SignIn.authenticateWithIdToken(provider: .apple, idToken: idToken)
         }
       }
     }

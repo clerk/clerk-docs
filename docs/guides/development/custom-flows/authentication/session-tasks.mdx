@@ -3,9 +3,9 @@ title: Session tasks
 description: Learn how to handle session tasks in your custom authentication flow.
 ---
 
-## Overview
+<Include src="_partials/custom-flows-callout" />
 
-[Session tasks](/docs/guides/configure/session-tasks) are pending requirements that users must complete after authentication, such as choosing an Organization. These tasks ensure that users meet all requirements before gaining full access to your application. A user's session will enter a `pending` state until all tasks are completed. By default, `pending` sessions are treated as signed-out across Clerk's authentication context.
+[Session tasks](/docs/guides/configure/session-tasks) are pending requirements that users must complete after authentication, such as choosing an Organization. These tasks ensure that users meet all requirements before gaining full access to your application.
 
 When enabled in the Clerk Dashboard, these tasks are handled automatically within the `<SignIn />` and `<SignUp />` components. If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can opt out of using the `<SignUp />` and `<SignIn />` components and create a [custom flow](!custom-flow) to display tasks.
 
@@ -13,22 +13,54 @@ This guide demonstrates how to use the Clerk API to build a custom user interfac
 
 ## Available tasks
 
-<Include src="_partials/session-task-table" />
+<Include src="_partials/session-tasks-table" />
 
-{/* can handle all session tasks at once (recommended):
-router.push(/session-tasks) and then have session-tasks called redirecttosessiontasks, and then configure clerk integration to handle the urls, then must handle each the UI for each url.
-can handle each session task individually:
-function handleSessionTask(task: string) {
-  switch (task) {
-    case 'choose-organization':
-      router.push('/session-tasks/choose-organization')
-    case 'reset-password':
-      router.push('/session-tasks/reset-password')
-  }
-}
-*/}
+<Steps>
+  ## Detect pending session tasks
 
-## Build the custom flow
+  First, you need to tell your app where to redirect users when they have pending session tasks. You can do this by setting the [`taskUrls` option on your Clerk integration](/docs/guides/configure/session-tasks#using-the-task-urls-option).
 
-```tsx {{ filename: 'app/session-tasks/layout.tsx' }}
+  <Include src="_partials/task-urls" />
+
+  ## Displaying tasks
+
+  Now, the user will be redirected to the URL you've set with the `taskUrls` option. You need to display the appropriate task UI based on the task that the user needs to complete. If you were using the prebuilt components, you would simply [render the appropriate component based on the task](/docs/guides/configure/session-tasks#displaying-tasks). However, since you're building a custom flow, you need to build the UI yourself. You can use the custom flow guide associated with the task to help get you started:
+
+  | Session task | Custom flow guide |
+  | - | - |
+  | `choose-organization` | [Organization switcher guide](/docs/guides/development/custom-flows/organizations/organization-switcher) |
+  | `reset-password` | [Reset password guide](/docs/guides/development/custom-flows/account-updates/forgot-password) |
+
+  ## Protecting routes
+
+  What if your user exits the session task flow before completing their tasks? What if your user tries navigating to a different page before completing their tasks?
+
+  If a user's authentication or session task flow is interrupted and they aren't able to complete the tasks, you can use the [`<RedirectToTasks />`](/docs/reference/components/control/redirect-to-tasks) component to redirect them to the appropriate task page so they can complete the tasks and move their session to an `active` (signed-in) state. This component will redirect users based on the URL's you've set with the `taskUrls` option.
+
+  <Include src="_partials/redirecttotasks-example" />
+</Steps>
+
+## FAQ
+
+### What is the `navigate` parameter in `setActive()` doing?
+
+In the authentication custom flows, such as the [email/password custom flow](/docs/guides/development/custom-flows/authentication/email-password), there's a step where you set the session to active using `setActive()`. If there are pending session tasks, the session won't actually be set as `active`. It will be in a `pending` state until all tasks are completed. By default, `pending` sessions are treated as signed-out across Clerk's authentication context, so the `pending` user won't be able to access protected content or routes. Therefore, this is the step where you should check for pending session tasks and redirect to the appropriate task page.
+
+```tsx
+await setActive({
+  session: signInAttempt.createdSessionId,
+  navigate: async ({ session }) => {
+    if (session?.currentTask) {
+      // Check for tasks and navigate to custom UI to help users resolve them
+      // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+      console.log(session?.currentTask)
+      router.push('/session-tasks')
+      return
+    }
+
+    router.push('/')
+  },
+})
 ```
+
+However, if you've set the [`taskUrls` option on your Clerk integration](/docs/guides/configure/session-tasks#using-the-task-urls-option), it will override the `navigate` behavior and will redirect the user to whatever URL path you've set for the task. It's recommended to rely on the `taskUrls` option so that you can maintain the task URLs in one place (your Clerk integration). However, the `navigate` parameter is still useful and can be used as a fallback.

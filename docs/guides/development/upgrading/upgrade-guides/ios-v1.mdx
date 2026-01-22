@@ -1,0 +1,170 @@
+---
+title: Migrate from Clerk iOS SDK v0 to v1
+description: Update imports, configuration, environment wiring, and sign-in code when moving to v1.
+sdk: ios
+---
+
+<Steps>
+  ## Update your package dependency
+
+  Most apps add Clerk through Xcode's package UI. The easiest way to update is to remove the existing Clerk dependency and re-add it with an **Up to Next Major Version** rule so it resolves to v1, then pick the v1 products you need.
+
+  ### Xcode
+
+  1. Remove the existing `Clerk` package from your project if it's already added.
+  1. Open the **Package Dependencies** tab and click the **+** button.
+  1. Search for `https://github.com/clerk/clerk-ios`.
+  1. Select the `Clerk` package in the results list.
+  1. Set **Dependency Rule** to **Up to Next Major Version**.
+  1. Make sure your app target is selected in **Add to Project**, then click **Add Package**.
+  1. In **Choose Package Products**, select `ClerkKit` (and `ClerkKitUI` only if you want to use Clerk's [prebuilt views](/docs/reference/views/overview)), then click **Add Package**.
+
+  Or, if you manage dependencies in `Package.swift`, use the configuration below:
+
+  ### Package.swift
+
+  ```swift {{ filename: "Package.swift" }}
+  dependencies: [
+    .package(url: "https://github.com/clerk/clerk-ios", from: "1.0.0"),
+  ],
+  targets: [
+    .target(
+      name: "YourApp",
+      dependencies: [
+        .product(name: "ClerkKit", package: "Clerk"),
+        .product(name: "ClerkKitUI", package: "Clerk") // Optional if using ClerkKitUI
+      ]
+    ),
+  ]
+  ```
+
+  ## Update imports
+
+  v1 splits imports by product: use `ClerkKit` for core APIs, or `ClerkKitUI` for [`AuthView`](/docs/reference/views/authentication/auth-view), [`UserProfileView`](/docs/reference/views/user/user-profile-view), and other [prebuilt views](/docs/reference/views/overview).
+
+  ```swift
+  // v0
+  import Clerk
+  ```
+
+  ```swift
+  // v1
+  import ClerkKit // (custom flows)
+  // OR
+  import ClerkKitUI // (includes Clerk UI)
+  ```
+
+  ## Configuration
+
+  v1 configures Clerk once at launch with a static `configure` call and no manual `load()` step.
+  `Clerk.Settings` is now `Clerk.ClerkOptions`. See the [iOS configuration reference](/docs/reference/ios/configuration#configuration-options) for the full list of options.
+
+  ```swift
+  // v0
+  @main
+  struct QuickstartApp: App {
+    @State private var clerk = Clerk.shared
+
+    var body: some Scene {
+      WindowGroup {
+        ContentView()
+          .task {
+            clerk.configure(publishableKey: "YOUR_PUBLISHABLE_KEY")
+            try? await clerk.load()
+          }
+      }
+    }
+  }
+  ```
+
+  ```swift
+  // v1
+  @main
+  struct QuickstartApp: App {
+    init() {
+      Clerk.configure(publishableKey: "YOUR_PUBLISHABLE_KEY")
+    }
+
+    var body: some Scene {
+      WindowGroup {
+        ContentView()
+          .environment(Clerk.shared)
+      }
+    }
+  }
+  ```
+
+  ## Inject Clerk into the SwiftUI environment
+
+  v1 injects the shared instance directly into SwiftUI's environment instead of using the custom v0 environment key.
+
+  ```swift
+  // v0
+  WindowGroup {
+    ContentView()
+      .environment(\.clerk, clerk)
+  }
+  ```
+
+  ```swift
+  // v1
+  WindowGroup {
+    ContentView()
+      .environment(Clerk.shared)
+  }
+  ```
+
+  ## Access Clerk state from the environment
+
+  v1 reads `Clerk` from the typed environment value instead of the v0 key path.
+
+  ```swift
+  // v0
+  struct ContentView: View {
+    @Environment(\.clerk) private var clerk
+  }
+  ```
+
+  ```swift
+  // v1
+  struct ContentView: View {
+    @Environment(Clerk.self) private var clerk
+  }
+  ```
+
+  ## Start an auth flow
+
+  Auth flows now live under `clerk.auth` instead of the static v0 `SignIn.create(...)` entry point.
+
+  ```swift
+  // v0
+  let signIn = try await SignIn.create(
+    strategy: .identifier(
+      "user@email.com",
+      password: "secretpassword"
+    )
+  )
+  ```
+
+  ```swift
+  // v1
+  @Environment(Clerk.self) private var clerk
+
+  let signIn = try await clerk.auth.signInWithPassword(
+    identifier: "user@email.com",
+    password: "secretpassword"
+  )
+  ```
+
+  See [Authentication flows](/docs/reference/ios/auth) for more authentication options and examples.
+
+  ## Migration checklist
+
+  Use this list to confirm you've covered the v1 changes.
+
+  - Update your SPM dependency to `from: "1.0.0"` and add `ClerkKit` / `ClerkKitUI` products.
+  - Replace `import Clerk` with `import ClerkKit` or `import ClerkKitUI`.
+  - Replace `clerk.configure(...)` + `await clerk.load()` with `Clerk.configure(...)`.
+  - Inject the shared instance with `.environment(Clerk.shared)` and read it via `@Environment(Clerk.self)`.
+  - Update auth flows to use `clerk.auth`.
+</Steps>

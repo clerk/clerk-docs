@@ -8,6 +8,19 @@ search:
 
 <Include src="_partials/custom-flows-callout" />
 
+<If sdk={["nextjs", "react", "expo", "js-frontend", "react-router", "tanstack-react-start"]}>
+  > [!IMPORTANT]
+  > This guide applies to the following Clerk SDKs:
+  >
+  > - `@clerk/react` v6 or higher
+  > - `@clerk/nextjs` v7 or higher
+  > - `@clerk/expo` v3 or higher
+  > - `@clerk/react-router` v3 or higher
+  > - `@clerk/tanstack-react-start` v0.26.0 or higher
+  >
+  > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/sign-in-or-up).
+</If>
+
 This guide demonstrates how to build a custom user interface that **allows users to sign up or sign in within a single flow**. It uses email and password authentication, but you can modify this approach according to the needs of your application.
 
 ## Enable email and password authentication
@@ -38,7 +51,7 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
     import type { EmailCodeFactor } from '@clerk/types'
 
     export default function SignInForm() {
-      const { isLoaded, signIn, setActive } = useSignIn()
+      const { signIn, errors: signInErrors } = useSignIn()
       const { signUp } = useSignUp()
       const [email, setEmail] = React.useState('')
       const [password, setPassword] = React.useState('')
@@ -50,74 +63,29 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
       const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        if (!isLoaded) return
-
         // Start the sign-in process using the email and password provided
         // If the user is not signed up yet, this will catch the `form_identifier_not_found` error
-        try {
-          const signInAttempt = await signIn.create({
-            identifier: email,
-            password,
-          })
-
-          // If sign-in process is complete, set the created session as active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
-                if (session?.currentTask) {
-                  // Check for tasks and navigate to custom UI to help users resolve them
-                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                  console.log(session?.currentTask)
-                  return
-                }
-
-                router.push('/')
-              },
-            })
-          } else if (signInAttempt.status === 'needs_second_factor') {
-            // Check if email_code is a valid second factor
-            // This is required when Client Trust is enabled and the user
-            // is signing in from a new device.
-            // See https://clerk.com/docs/guides/secure/client-trust
-            const emailCodeFactor = signInAttempt.supportedSecondFactors?.find(
-              (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
-            )
-
-            if (emailCodeFactor) {
-              await signIn.prepareSecondFactor({
-                strategy: 'email_code',
-                emailAddressId: emailCodeFactor.emailAddressId,
-              })
-
-              // Display second form to capture the verification code
-              setShowEmailCode(true)
-            }
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signInAttempt, null, 2))
-          }
-        } catch (err: any) {
+        const { error } = await signIn.password({
+          identifier: email,
+          password,
+        })
+        if (error) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
+          console.error(JSON.stringify(error, null, 2))
 
           // If the identifier is not found, the user is not signed up yet
           // So this includes the flow for signing up a new user
-          if (err.errors[0].code === 'form_identifier_not_found') {
+          if (error.errors[0].code === 'form_identifier_not_found') {
             // Start the sign-up process using the email and password provided
             try {
-              await signUp?.create({
+              await signUp.password({
                 emailAddress: email,
                 password,
               })
 
               // Send the user an email with the verification code
-              await signUp?.prepareEmailAddressVerification({
-                strategy: 'email_code',
-              })
+              await signUp.verifications.sendEmailCode()
 
               // Display second form to capture the verification code
               setShowEmailCode(true)
@@ -128,63 +96,72 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
             }
           }
         }
+
+        // If sign-in process is complete, set the created session as active
+        // and redirect the user
+        if (signIn.status === 'complete') {
+          await signIn.finalize({
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                // Check for tasks and navigate to custom UI to help users resolve them
+                // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
+          })
+        } else if (signIn.status === 'needs_second_factor') {
+          // Check if email_code is a valid second factor
+          // This is required when Client Trust is enabled and the user
+          // is signing in from a new device.
+          // See https://clerk.com/docs/guides/secure/client-trust
+          const emailCodeFactor = signIn.supportedSecondFactors.find(
+            (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+          )
+
+          if (emailCodeFactor) {
+            await signIn.mfa.sendEmailCode()
+
+            // Display second form to capture the verification code
+            setShowEmailCode(true)
+          }
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
       }
 
       // Handle the submission of the email verification code
       const handleEmailCode = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        if (!isLoaded) return
-
         // Flow for signing up a new user
-        if (signUp) {
-          try {
-            // Use the code the user provided to attempt verification
-            const signUpAttempt = await signUp.attemptEmailAddressVerification({
-              code,
-            })
-
-            // If verification was completed, set the session to active
-            // and redirect the user
-            if (signUpAttempt.status === 'complete') {
-              await setActive({
-                session: signUpAttempt.createdSessionId,
-                navigate: async ({ session }) => {
-                  if (session?.currentTask) {
-                    // Check for session tasks and navigate to custom UI to help users resolve them
-                    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                    console.log(session?.currentTask)
-                    return
-                  }
-
-                  router.push('/')
-                },
-              })
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error('Sign-up attempt not complete:', signUpAttempt)
-              console.error('Sign-up attempt status:', signUpAttempt.status)
-            }
-          } catch (err: any) {
+        if (
+          signUp.status === 'missing_requirements' &&
+          signUp.unverifiedFields.includes('email_address')
+        ) {
+          // Use the code the user provided to attempt verification
+          const { error } = await signUp.verifications.verifyEmailCode({
+            code,
+          })
+          if (error) {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
             console.error(JSON.stringify(err, null, 2))
+            return
           }
-        }
 
-        // Flow for signing in an existing user
-        try {
-          const signInAttempt = await signIn.attemptSecondFactor({
-            strategy: 'email_code',
-            code,
-          })
-
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
+          // If verification was completed, set the session to active
+          // and redirect the user
+          if (signUp.status === 'complete') {
+            await signUp.finalize({
               navigate: async ({ session }) => {
                 if (session?.currentTask) {
+                  // Check for session tasks and navigate to custom UI to help users resolve them
+                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
                   console.log(session?.currentTask)
                   return
                 }
@@ -195,11 +172,38 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
           } else {
             // If the status is not complete, check why. User may need to
             // complete further steps.
-            console.error('Sign-up attempt not complete:', signInAttempt)
-            console.error('Sign-up attempt status:', signInAttempt.status)
+            console.error('Sign-up attempt not complete:', signUpAttempt)
+            console.error('Sign-up attempt status:', signUpAttempt.status)
           }
-        } catch (err: any) {
+        }
+
+        // Flow for signing in an existing user
+        const { error } = await signIn.mfa.verifyEmailCode({
+          code,
+        })
+        if (error) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
           console.error(JSON.stringify(err, null, 2))
+          return
+        }
+
+        if (signIn.status === 'complete') {
+          await signIn.finalize({
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
+          })
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error('Sign-up attempt not complete:', signInAttempt)
+          console.error('Sign-up attempt status:', signInAttempt.status)
         }
       }
 

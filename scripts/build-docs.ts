@@ -1216,6 +1216,13 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
+  // Copy over the public folder
+  if (config.publicPath) {
+    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
+  }
+
+  abortSignal?.throwIfAborted()
+
   if (config.flags.watch) {
     // While in dev, we just want to symlink the new dist to the dist folder
     // This removes the issue that fs.cp can't replace a folder
@@ -1230,9 +1237,6 @@ ${yaml.stringify({
   } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
-    if (config.publicPath) {
-      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
-    }
     // We don't need to worry about temp folders as the ci runner will be destroyed after this anyways
   } else {
     // During a standard build
@@ -1244,10 +1248,6 @@ ${yaml.stringify({
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
     // Remove the temp dist folder
     await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    // Copy over the public folder
-    if (config.publicPath) {
-      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
-    }
   }
 
   abortSignal?.throwIfAborted()

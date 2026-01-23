@@ -110,49 +110,55 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   }
 
   type SelectRoleProps = {
-    fieldName?: string
-    isDisabled?: boolean
-    onChange?: ChangeEventHandler<HTMLSelectElement>
-    defaultRole?: string
-  }
+      fieldName?: string
+      onChange?: ChangeEventHandler<HTMLSelectElement>
+      defaultRole?: string
+    }
 
-  const SelectRole = (props: SelectRoleProps) => {
-    const { fieldName, isDisabled = false, onChange, defaultRole } = props
-    const { organization } = useOrganization()
-    const [fetchedRoles, setRoles] = useState<OrganizationCustomRoleKey[]>([])
-    const isPopulated = useRef(false)
+    const SelectRole = (props: SelectRoleProps) => {
+      const { fieldName, onChange, defaultRole } = props
+      const { organization } = useOrganization()
+      const [rolesResponse, setRolesResponse] =
+        useState < ReturnType < NonNullable < typeof organization > ['getRoles'] >> [0] > []
+      const isPopulated = useRef(false)
 
-    useEffect(() => {
-      if (isPopulated.current) return
-      organization
-        ?.getRoles({
-          pageSize: 20,
-          initialPage: 1,
-        })
-        .then((res) => {
-          isPopulated.current = true
-          setRoles(res.data.map((roles) => roles.key as OrganizationCustomRoleKey))
-        })
-    }, [organization?.id])
+      useEffect(() => {
+        if (isPopulated.current) return
+        setIsLoading(true)
+        organization
+          ?.getRoles({
+            pageSize: 20,
+            initialPage: 1,
+          })
+          .then((res) => {
+            isPopulated.current = true
+            setRolesResponse(res)
+          })
+      }, [organization?.id])
 
-    if (fetchedRoles.length === 0) return null
+      if (rolesResponse.data?.length === 0) return null
 
-    return (
-      <select
-        name={fieldName}
-        disabled={isDisabled}
-        aria-disabled={isDisabled}
-        onChange={onChange}
-        defaultValue={defaultRole}
-      >
-        {fetchedRoles?.map((roleKey) => (
-          <option key={roleKey} value={roleKey}>
-            {roleKey}
-          </option>
-        ))}
-      </select>
-    )
-  }
+      // When `has_role_set_migration` is `true`, updating organization membership roles is not allowed.
+      const isDisabled = !!rolesResponse.has_role_set_migration
+
+      const roleKeys = rolesResponse.data.map((role) => role.key)
+
+      return (
+        <select
+          name={fieldName}
+          disabled={isDisabled}
+          aria-disabled={isDisabled}
+          onChange={onChange}
+          defaultValue={defaultRole}
+        >
+          {roleKeys?.map((roleKey) => (
+            <option key={roleKey} value={roleKey}>
+              {roleKey}
+            </option>
+          ))}
+        </select>
+      )
+    }
   ```
 </If>
 
@@ -241,12 +247,17 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
                   const role = membership.role === 'org:admin' ? 'org:member' : 'org:admin'
 
-                  await organization
-                    .updateMember({ userId, role })
-                    .then((res) => console.log(`updateMember response:`, res))
-                    .catch((error) => console.log('An error occurred:', error))
-                })
-                row.insertCell().appendChild(updateBtn)
+              // When `has_role_set_migration` is `true`, updating organization membership roles is not allowed.
+              const rolesResponse = await organization.getRoles()
+              const isRolesMigrationDisabled = rolesResponse.has_role_set_migration
+
+              memberships.map((membership) => {
+                const membershipTable = document.getElementById('memberships-table-body')
+                const row = membershipTable.insertRow()
+                row.insertCell().textContent = membership.publicUserData.userId
+                row.insertCell().textContent = membership.publicUserData.identifier
+                row.insertCell().textContent = membership.createdAt.toLocaleDateString()
+                row.insertCell().textContent = membership.role
 
                 // Remove a member
                 const removeBtn = document.createElement('button')
@@ -254,16 +265,46 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
                 removeBtn.addEventListener('click', async function (e) {
                   e.preventDefault()
 
-                  await organization
-                    .removeMember(userId)
-                    .then((res) => console.log(`removeMember response:`, res))
-                    .catch((error) => console.log('An error occurred:', error))
-                })
-                row.insertCell().appendChild(removeBtn)
-              }
-            })
-          } catch (error) {
-            console.log('An error occurred:', error)
+                  // Get the user ID of the member
+                  const userId = membership.publicUserData.userId
+
+                  // Update a member's Role
+                  const updateBtn = document.createElement('button')
+                  updateBtn.textContent = 'Change role'
+                  updateBtn.disabled = isRolesMigrationDisabled
+                  updateBtn.addEventListener('click', async function (e) {
+                    e.preventDefault()
+
+                    if (isRolesMigrationDisabled) {
+                      return
+                    }
+
+                    const role = membership.role === 'org:admin' ? 'org:member' : 'org:admin'
+
+                    await organization
+                      .updateMember({ userId, role })
+                      .then((res) => console.log(`updateMember response:`, res))
+                      .catch((error) => console.log('An error occurred:', error))
+                  })
+                  row.insertCell().appendChild(updateBtn)
+
+                  // Remove a member
+                  const removeBtn = document.createElement('button')
+                  removeBtn.textContent = 'Remove'
+                  removeBtn.addEventListener('click', async function (e) {
+                    e.preventDefault()
+
+                    await organization
+                      .removeMember(userId)
+                      .then((res) => console.log(`removeMember response:`, res))
+                      .catch((error) => console.log('An error occurred:', error))
+                  })
+                  row.insertCell().appendChild(removeBtn)
+                }
+              })
+            } catch (error) {
+              console.log('An error occurred:', error)
+            }
           }
         }
 
@@ -433,15 +474,15 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   }
 
   type SelectRoleProps = {
+    onRoleSelect?: (role: OrganizationCustomRoleKey) => void
     defaultRole?: string
-    onRoleSelect: (role: OrganizationCustomRoleKey) => void
-    isDisabled?: boolean
   }
 
   const SelectRole = (props: SelectRoleProps) => {
-    const { defaultRole, onRoleSelect, isDisabled = false } = props
+    const { onRoleSelect, defaultRole } = props
     const { organization } = useOrganization()
-    const [fetchedRoles, setRoles] = React.useState<OrganizationCustomRoleKey[]>([])
+    const [rolesResponse, setRolesResponse] =
+      React.useState<ReturnType<NonNullable<typeof organization>['getRoles']>>[0]>([])
     const [showModal, setShowModal] = React.useState(false)
     const [selectedRole, setSelectedRole] = React.useState<OrganizationCustomRoleKey | undefined>(
       defaultRole as OrganizationCustomRoleKey | undefined,
@@ -457,7 +498,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
         })
         .then((res) => {
           isPopulated.current = true
-          setRoles(res.data.map((roles) => roles.key as OrganizationCustomRoleKey))
+          setRolesResponse(res)
         })
     }, [organization?.id])
 
@@ -465,12 +506,17 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
       setSelectedRole(defaultRole as OrganizationCustomRoleKey | undefined)
     }, [defaultRole])
 
-    if (fetchedRoles.length === 0) return null
+    if (rolesResponse.data?.length === 0) return null
+
+    // When `has_role_set_migration` is `true`, updating organization membership roles is not allowed.
+    const isDisabled = !!rolesResponse.has_role_set_migration
+
+    const roleKeys = rolesResponse.data.map((role) => role.key)
 
     const handleRoleSelect = (role: OrganizationCustomRoleKey) => {
       setSelectedRole(role)
       setShowModal(false)
-      onRoleSelect(role)
+      onRoleSelect?.(role)
     }
 
     return (
@@ -493,7 +539,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
                 Select Role
               </ThemedText>
               <ScrollView>
-                {fetchedRoles?.map((roleKey) => (
+                {roleKeys?.map((roleKey) => (
                   <Pressable
                     key={roleKey}
                     style={({ pressed }) => [

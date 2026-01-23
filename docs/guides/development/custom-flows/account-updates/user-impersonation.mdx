@@ -330,10 +330,12 @@ This example builds a dashboard that is only accessible to users with the `org:a
     1. In the `dashboard/` directory, create the `index.tsx` file with the following code. This creates the UI for the dashboard, which displays a list of users and allows you to impersonate one.
 
     ```tsx {{ filename: 'app/dashboard/index.tsx', collapsible: true }}
-    import React, { useState } from 'react'
-    import { Button, Text, View } from 'react-native'
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useSignIn, useUser } from '@clerk/clerk-expo'
     import { Redirect, useRouter } from 'expo-router'
-    import { useUser, useSignIn } from '@clerk/clerk-expo'
+    import React, { useState } from 'react'
+    import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
     import useUsers from '../hooks/useUsers'
 
     export default function Dashboard() {
@@ -403,56 +405,139 @@ This example builds a dashboard that is only accessible to users with the `org:a
       }
 
       return (
-        <View>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', padding: 10 }}>
-            Welcome to the dashboard, {user?.firstName}!
-          </Text>
-          <Text style={{ fontSize: 16, padding: 10 }}>Your user ID is {user?.id}</Text>
+        <ScrollView>
+          <ThemedView style={styles.container}>
+            <ThemedText type="title" style={styles.welcomeText}>
+              Welcome to the dashboard, {user?.firstName}!
+            </ThemedText>
+            <ThemedText style={styles.userIdText}>Your user ID is {user?.id}</ThemedText>
 
-          {isLoading && <Text>Loading your users...</Text>}
+            {isLoading && <ThemedText style={styles.loadingText}>Loading your users...</ThemedText>}
 
-          {!isLoading && users && (
-            <View style={{ padding: 10 }}>
-              <View style={{ flexDirection: 'row', padding: 5, borderBottomWidth: 1 }}>
-                <Text style={{ flex: 1, fontWeight: 'bold' }}>User ID</Text>
-                <Text style={{ flex: 1, fontWeight: 'bold' }}>Email ID</Text>
-                <Text style={{ flex: 1, fontWeight: 'bold' }}>First Name</Text>
-                <Text style={{ flex: 1, fontWeight: 'bold' }}>Actions</Text>
-              </View>
-              {users.map((userFromList) => {
-                const primaryEmail = userFromList.email_addresses?.find(
-                  (email) => email.id === userFromList.primary_email_address_id,
-                )
-                return (
-                  <View key={userFromList.id} style={{ flexDirection: 'row', padding: 5 }}>
-                    <Text style={{ flex: 1 }}>{userFromList.id}</Text>
-                    <Text style={{ flex: 1 }}>{primaryEmail?.id || 'N/A'}</Text>
-                    <Text style={{ flex: 1 }}>{userFromList.first_name || 'N/A'}</Text>
-                    <View style={{ flex: 1 }}>
-                      {/* Don't allow impersonation of yourself */}
-                      {userFromList.id !== user.id ? (
-                        <Button
-                          title="Impersonate"
-                          onPress={async () => await impersonateUser(user.id, userFromList.id)}
-                        />
-                      ) : (
-                        <Text>You cannot impersonate yourself</Text>
-                      )}
+            {!isLoading && users && (
+              <View style={styles.tableContainer}>
+                <View style={styles.tableHeader}>
+                  <ThemedText style={[styles.tableHeaderText, styles.tableCell]}>User ID</ThemedText>
+                  <ThemedText style={[styles.tableHeaderText, styles.tableCell]}>Email ID</ThemedText>
+                  <ThemedText style={[styles.tableHeaderText, styles.tableCell]}>First Name</ThemedText>
+                  <ThemedText style={[styles.tableHeaderText, styles.tableCell]}>Actions</ThemedText>
+                </View>
+                {users.map((userFromList) => {
+                  const primaryEmail = userFromList.email_addresses?.find(
+                    (email) => email.id === userFromList.primary_email_address_id,
+                  )
+                  return (
+                    <View key={userFromList.id} style={styles.tableRow}>
+                      <ThemedText style={styles.tableCell}>{userFromList.id}</ThemedText>
+                      <ThemedText style={styles.tableCell}>{primaryEmail?.id || 'N/A'}</ThemedText>
+                      <ThemedText style={styles.tableCell}>
+                        {userFromList.first_name || 'N/A'}
+                      </ThemedText>
+                      <View style={styles.tableCell}>
+                        {/* Don't allow impersonation of yourself */}
+                        {userFromList.id !== user.id ? (
+                          <Pressable
+                            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                            onPress={async () => await impersonateUser(user.id, userFromList.id)}
+                          >
+                            <ThemedText style={styles.buttonText}>Impersonate</ThemedText>
+                          </Pressable>
+                        ) : (
+                          <ThemedText style={styles.disabledText}>
+                            Cannot impersonate yourself
+                          </ThemedText>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                )
-              })}
-            </View>
-          )}
+                  )
+                })}
+              </View>
+            )}
 
-          {error && (
-            <View style={{ padding: 10, backgroundColor: '#ffebee' }}>
-              <Text style={{ color: '#c62828' }}>{error}</Text>
-            </View>
-          )}
-        </View>
+            {error && (
+              <View style={styles.errorContainer}>
+                <ThemedText style={styles.errorText}>{error}</ThemedText>
+              </View>
+            )}
+          </ThemedView>
+        </ScrollView>
       )
     }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 16,
+      },
+      welcomeText: {
+        marginBottom: 8,
+      },
+      userIdText: {
+        fontSize: 16,
+        marginBottom: 16,
+      },
+      loadingText: {
+        fontSize: 14,
+        opacity: 0.8,
+      },
+      tableContainer: {
+        marginTop: 16,
+        gap: 4,
+      },
+      tableHeader: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: '#ccc',
+        backgroundColor: '#f5f5f5',
+      },
+      tableHeaderText: {
+        fontWeight: '600',
+      },
+      tableRow: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+      },
+      tableCell: {
+        flex: 1,
+        fontSize: 14,
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        alignItems: 'center',
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 12,
+      },
+      disabledText: {
+        fontSize: 12,
+        opacity: 0.6,
+        fontStyle: 'italic',
+      },
+      errorContainer: {
+        padding: 12,
+        backgroundColor: '#ffebee',
+        borderRadius: 8,
+        marginTop: 16,
+      },
+      errorText: {
+        color: '#c62828',
+        fontWeight: '500',
+      },
+    })
     ```
   </Steps>
 </If>

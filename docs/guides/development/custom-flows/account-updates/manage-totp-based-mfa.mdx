@@ -53,25 +53,21 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           const disableTOTP = useReverification(() => user?.disableTOTP())
 
           return (
-            <div>
-              <p>
-                TOTP via authentication app enabled - <button onClick={() => disableTOTP()}>Remove</button>
-              </p>
-            </div>
+            <p>
+              TOTP via authentication app enabled - <button onClick={() => disableTOTP()}>Remove</button>
+            </p>
           )
         }
 
         // If TOTP is disabled, provide the option to enable it
         const TotpDisabled = () => {
           return (
-            <div>
-              <p>
-                Add TOTP via authentication app -{' '}
-                <Link href="/account/manage-mfa/add">
-                  <button>Add</button>
-                </Link>
-              </p>
-            </div>
+            <p>
+              Add TOTP via authentication app -{' '}
+              <Link href="/account/manage-mfa/add">
+                <button>Add</button>
+              </Link>
+            </p>
           )
         }
 
@@ -84,9 +80,7 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           const [loading, setLoading] = React.useState(false)
 
           React.useEffect(() => {
-            if (backupCodes) {
-              return
-            }
+            if (backupCodes) return
 
             setLoading(true)
             void createBackupCode()
@@ -102,13 +96,10 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
               })
           }, [])
 
-          if (loading) {
-            return <p>Loading...</p>
-          }
+          // Handle loading state
+          if (loading) <p>Loading...</p>
 
-          if (!backupCodes) {
-            return <p>There was a problem generating backup codes</p>
-          }
+          if (!backupCodes) return <p>There was a problem generating backup codes</p>
 
           return (
             <ol>
@@ -123,15 +114,11 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           const { isLoaded, isSignedIn, user } = useUser()
           const [showNewCodes, setShowNewCodes] = React.useState(false)
 
-          if (!isLoaded) {
-            // Handle loading state
-            return null
-          }
+          // Handle loading state
+          if (!isLoaded) <p>Loading...</p>
 
-          if (!isSignedIn) {
-            // Handle signed out state
-            return <p>You must be logged in to access this page</p>
-          }
+          // Handle signed-out state
+          if (!isSignedIn) <p>You must be signed in to access this page</p>
 
           return (
             <>
@@ -142,12 +129,10 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
               {/* Manage backup codes */}
               {user.backupCodeEnabled && user.twoFactorEnabled && (
-                <div>
-                  <p>
-                    Generate new backup codes? -{' '}
-                    <button onClick={() => setShowNewCodes(true)}>Generate</button>
-                  </p>
-                </div>
+                <p>
+                  Generate new backup codes? -{' '}
+                  <button onClick={() => setShowNewCodes(true)}>Generate</button>
+                </p>
               )}
               {showNewCodes && (
                 <>
@@ -287,18 +272,15 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
         }
 
         export default function AddMFaScreen() {
-          const [step, setStep] = React.useState<AddTotpSteps>('add')
           const { isLoaded, isSignedIn, user } = useUser()
 
-          if (!isLoaded) {
-            // Handle loading state
-            return null
-          }
+          const [step, setStep] = React.useState<AddTotpSteps>('add')
 
-          if (!isSignedIn) {
-            // Handle signed out state
-            return <p>You must be logged in to access this page</p>
-          }
+          // Handle loading state
+          if (!isLoaded) <p>Loading...</p>
+
+          // Handle signed out state
+          if (!isSignedIn) <p>You must be signed in to access this page</p>
 
           return (
             <>
@@ -338,10 +320,10 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
     <Tabs items={["Layout", "Account page", "Add TOTP page"]}>
       <Tab>
-        1. Create the `(dashboard)` route group. This groups your account page and the "Add TOTP MFA" page.
+        1. Create the `(account)` route group. This groups your account page and the "Add TOTP MFA" page.
         1. Create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to check if the user is signed in. If the user isn't signed in, they'll be redirected to the sign-in page.
 
-        ```tsx {{ filename: 'app/(dashboard)/_layout.tsx' }}
+        ```tsx {{ filename: 'app/(account)/_layout.tsx' }}
         import { Redirect, Stack } from 'expo-router'
         import { useAuth } from '@clerk/clerk-expo'
 
@@ -358,35 +340,39 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
       </Tab>
 
       <Tab>
-        In the `(dashboard)` group, create an `account.tsx` file with the following code. This page shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
+        In the `(account)` group, create an `index.tsx` file with the following code. This page shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
 
-        ```tsx {{ filename: 'app/(dashboard)/account.tsx', collapsible: true }}
-        import React from 'react'
+        ```tsx {{ filename: 'app/(account)/index.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
         import { useUser } from '@clerk/clerk-expo'
-        import { useRouter } from 'expo-router'
-        import { View, Text, Button, FlatList } from 'react-native'
         import { BackupCodeResource } from '@clerk/types'
+        import { Redirect, useRouter } from 'expo-router'
+        import React from 'react'
+        import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 
         export default function ManageTOTPMfa() {
+          const { isLoaded, isSignedIn, user } = useUser()
           const router = useRouter()
+
           const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
           const [loading, setLoading] = React.useState(false)
 
-          const { isLoaded, isSignedIn, user } = useUser()
-
           if (!isLoaded) {
-            // Handle loading state
-            return null
+            return (
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
+            )
           }
 
           if (!isSignedIn) {
-            // Handle signed out state
-            return <p>You must be signed in to access this page</p>
+            return <Redirect href="/sign-in" />
           }
 
           const generateBackupCodes = () => {
             setLoading(true)
-            void user
+            user
               ?.createBackupCode()
               .then((backupCodes: BackupCodeResource) => {
                 setBackupCodes(backupCodes)
@@ -404,61 +390,172 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
 
           const MFAEnabled = () => {
             return (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text>TOTP via authentication app enabled - </Text>
-                <Button onPress={() => disableTOTP()} title="Remove" />
+              <View style={styles.mfaRow}>
+                <ThemedText style={styles.infoText}>TOTP via authentication app enabled</ThemedText>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.smallButton,
+                    styles.dangerButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => disableTOTP()}
+                >
+                  <ThemedText style={styles.smallButtonText}>Remove</ThemedText>
+                </Pressable>
               </View>
             )
           }
 
           const MFADisabled = () => {
             return (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text>Add TOTP via authentication app - </Text>
-                <Button onPress={() => router.push('/add-mfa')} title="Add" />
+              <View style={styles.mfaRow}>
+                <ThemedText style={styles.infoText}>Add TOTP via authentication app</ThemedText>
+                <Pressable
+                  style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                  onPress={() => router.push('/add-mfa' as any)}
+                >
+                  <ThemedText style={styles.smallButtonText}>Add</ThemedText>
+                </Pressable>
               </View>
             )
           }
 
           return (
-            <>
-              <Text>Current MFA Settings</Text>
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                Current MFA Settings
+              </ThemedText>
 
-              <Text>Authenticator App</Text>
+              <View style={styles.section}>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Authenticator App
+                </ThemedText>
 
-              {user.totpEnabled ? <MFAEnabled /> : <MFADisabled />}
+                {user.totpEnabled ? <MFAEnabled /> : <MFADisabled />}
+              </View>
 
               {user.backupCodeEnabled && (
-                <View>
-                  <Text>Backup Codes</Text>
-                  {loading && <Text>Loading...</Text>}
+                <View style={styles.section}>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>
+                    Backup Codes
+                  </ThemedText>
+
+                  {loading && <ThemedText>Loading...</ThemedText>}
+
                   {backupCodes && !loading && (
-                    <FlatList
-                      data={backupCodes.codes}
-                      renderItem={(code) => <Text>{code.item}</Text>}
-                      keyExtractor={(item) => item}
-                    />
+                    <View style={styles.codeList}>
+                      <FlatList
+                        data={backupCodes.codes}
+                        renderItem={({ item, index }) => (
+                          <ThemedText key={index} style={styles.code}>
+                            {index + 1}. {item}
+                          </ThemedText>
+                        )}
+                        keyExtractor={(item) => item}
+                      />
+                    </View>
                   )}
-                  <Button onPress={() => generateBackupCodes()} title="Regenerate Codes" />
+
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => generateBackupCodes()}
+                  >
+                    <ThemedText style={styles.buttonText}>Regenerate Codes</ThemedText>
+                  </Pressable>
                 </View>
               )}
-            </>
+            </ThemedView>
           )
         }
+
+        const styles = StyleSheet.create({
+          container: {
+            flex: 1,
+            padding: 20,
+            gap: 16,
+          },
+          title: {
+            marginBottom: 8,
+          },
+          section: {
+            gap: 12,
+            marginBottom: 16,
+          },
+          sectionTitle: {
+            fontWeight: '600',
+            fontSize: 16,
+            marginBottom: 8,
+          },
+          mfaRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 12,
+          },
+          infoText: {
+            fontSize: 14,
+            flex: 1,
+          },
+          button: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+            alignItems: 'center',
+            marginTop: 8,
+          },
+          smallButton: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 6,
+            alignItems: 'center',
+          },
+          dangerButton: {
+            backgroundColor: '#c62828',
+          },
+          buttonPressed: {
+            opacity: 0.7,
+          },
+          buttonText: {
+            color: '#fff',
+            fontWeight: '600',
+          },
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          codeList: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
+          },
+          code: {
+            fontFamily: 'monospace',
+            fontSize: 14,
+            paddingVertical: 4,
+          },
+        })
         ```
       </Tab>
 
       <Tab>
-        In the `(dashboard)` group, create an `add-mfa.tsx` file with the following code. This page adds the functionality for generating the QR code and backup codes.
+        In the `(account)` group, create an `manage-mfa.tsx` file with the following code. This page adds the functionality for generating the QR code and backup codes.
 
-        ```tsx {{ filename: 'app/(dashboard)/add-mfa.tsx', collapsible: true }}
-        import React from 'react'
+        ```tsx {{ filename: 'app/(account)/manage-mfa.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
         import { useUser } from '@clerk/clerk-expo'
-        import { Link } from 'expo-router'
-        import { QrCodeSvg } from 'react-native-qr-svg'
-        import { FlatList, Button, Text, TextInput, View } from 'react-native'
-
         import { BackupCodeResource, TOTPResource } from '@clerk/types'
+        import { Redirect, useRouter } from 'expo-router'
+        import React from 'react'
+        import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+        import { QrCodeSvg } from 'react-native-qr-svg'
 
         type AddTotpSteps = 'add' | 'verify' | 'backupcodes' | 'success'
         type DisplayFormat = 'qr' | 'uri'
@@ -469,46 +566,74 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           const { user } = useUser()
 
           React.useEffect(() => {
-            void user
+            user
               ?.createTOTP()
               .then((totp: TOTPResource) => setTotp(totp))
               .catch((err) => console.error(JSON.stringify(err, null, 2)))
           }, [])
 
           return (
-            <View>
-              <Text>Add TOTP MFA</Text>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Add TOTP MFA
+              </ThemedText>
 
               {totp && displayFormat === 'qr' && (
-                <>
-                  <View>
+                <View style={styles.qrContainer}>
+                  <View style={styles.qrCode}>
                     <QrCodeSvg value={totp?.uri || ''} frameSize={200} />
                   </View>
-                  <Button title="Use URI" onPress={() => setDisplayFormat('uri')} />
-                </>
+                  <Pressable
+                    style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                    onPress={() => setDisplayFormat('uri')}
+                  >
+                    <ThemedText style={styles.smallButtonText}>Use URI instead</ThemedText>
+                  </Pressable>
+                </View>
               )}
 
               {totp && displayFormat === 'uri' && (
-                <>
-                  <View>
-                    <Text>{totp.uri}</Text>
+                <View style={styles.uriContainer}>
+                  <View style={styles.uriBox}>
+                    <ThemedText style={styles.uriText}>{totp.uri}</ThemedText>
                   </View>
-                  <Button title="Use QR Code" onPress={() => setDisplayFormat('qr')} />
-                </>
+                  <Pressable
+                    style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                    onPress={() => setDisplayFormat('qr')}
+                  >
+                    <ThemedText style={styles.smallButtonText}>Use QR Code instead</ThemedText>
+                  </Pressable>
+                </View>
               )}
 
-              <Button title="Verify" onPress={() => setStep('verify')} />
-              <Button title="Reset" onPress={() => setStep('add')} />
+              <View style={styles.buttonGroup}>
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                  onPress={() => setStep('verify')}
+                >
+                  <ThemedText style={styles.buttonText}>Verify</ThemedText>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.secondaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => setStep('add')}
+                >
+                  <ThemedText style={styles.secondaryButtonText}>Reset</ThemedText>
+                </Pressable>
+              </View>
             </View>
           )
         }
 
         function VerifyMFA({ setStep }: { setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>> }) {
           const [code, setCode] = React.useState('')
-
           const { user } = useUser()
 
-          const verifyTotp = async (e: any) => {
+          const verifyTotp = async () => {
             await user
               ?.verifyTOTP({ code })
               .then(() => setStep('backupcodes'))
@@ -516,17 +641,46 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           }
 
           return (
-            <>
-              <Text>Verify MFA</Text>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Verify MFA
+              </ThemedText>
+
+              <ThemedText style={styles.label}>Enter the code from your authenticator app</ThemedText>
               <TextInput
+                style={styles.input}
                 value={code}
                 placeholder="Enter code"
                 placeholderTextColor="#666666"
-                onChangeText={(c) => setCode(c)}
+                onChangeText={setCode}
+                keyboardType="numeric"
               />
-              <Button onPress={verifyTotp} title="Verify Code" />
-              <Button onPress={() => setStep('add')} title="Reset" />
-            </>
+
+              <View style={styles.buttonGroup}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    !code && styles.buttonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={verifyTotp}
+                  disabled={!code}
+                >
+                  <ThemedText style={styles.buttonText}>Verify Code</ThemedText>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.secondaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => setStep('add')}
+                >
+                  <ThemedText style={styles.secondaryButtonText}>Reset</ThemedText>
+                </Pressable>
+              </View>
+            </View>
           )
         }
 
@@ -535,65 +689,222 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
           const [backupCode, setBackupCode] = React.useState<BackupCodeResource | undefined>(undefined)
 
           React.useEffect(() => {
-            if (backupCode) {
-              return
-            }
+            if (backupCode) return
 
-            void user
+            user
               ?.createBackupCode()
               .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
               .catch((err) => console.error(JSON.stringify(err, null, 2)))
           }, [])
 
           return (
-            <>
-              <Text>Verification was a success!</Text>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Verification was a success!
+              </ThemedText>
+
               {backupCode && (
-                <View>
-                  <Text>
+                <View style={styles.backupCodesContainer}>
+                  <ThemedText style={styles.description}>
                     Save this list of backup codes somewhere safe in case you need to access your account in
                     an emergency
-                  </Text>
+                  </ThemedText>
 
-                  <FlatList
-                    data={backupCode.codes.map((code) => ({
-                      key: code,
-                    }))}
-                    renderItem={({ item }) => <Text>{item.key}</Text>}
-                  />
+                  <View style={styles.codeList}>
+                    <FlatList
+                      data={backupCode.codes.map((code, index) => ({
+                        key: code,
+                        index: index + 1,
+                      }))}
+                      renderItem={({ item }) => (
+                        <ThemedText style={styles.code}>
+                          {item.index}. {item.key}
+                        </ThemedText>
+                      )}
+                      keyExtractor={(item) => item.key}
+                    />
+                  </View>
 
-                  <Button title="Finish" onPress={() => setStep('success')} />
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setStep('success')}
+                  >
+                    <ThemedText style={styles.buttonText}>Finish</ThemedText>
+                  </Pressable>
                 </View>
               )}
-            </>
+            </View>
           )
         }
 
         function Success() {
+          const router = useRouter()
+
           return (
-            <>
-              <Text>Success</Text>
-              <Text>You successfully added TOTP MFA via an authentication application</Text>
-            </>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Success!
+              </ThemedText>
+
+              <ThemedText style={styles.description}>
+                You successfully added TOTP MFA via an authentication application
+              </ThemedText>
+
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={() => router.push('/account' as any)}
+              >
+                <ThemedText style={styles.buttonText}>Go to Account Settings</ThemedText>
+              </Pressable>
+            </View>
           )
         }
 
-        export default function AddMfaScreen() {
+        export default function ManageTOTPMFA() {
           const [step, setStep] = React.useState<AddTotpSteps>('add')
+          const { isLoaded, isSignedIn } = useUser()
+
+          if (!isLoaded) {
+            return (
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
+            )
+          }
+
+          if (!isSignedIn) {
+            return <Redirect href="/sign-in" />
+          }
 
           return (
-            <>
-              {step === 'add' && <AddTOTPMfa setStep={setStep} />}
-              {step === 'verify' && <VerifyMFA setStep={setStep} />}
-              {step === 'backupcodes' && <BackupCodes setStep={setStep} />}
-              {step === 'success' && <Success />}
-
-              <Link href="/account">
-                <Text>Manage MFA</Text>
-              </Link>
-            </>
+            <ScrollView>
+              <ThemedView style={styles.container}>
+                {step === 'add' && <AddTOTPMfa setStep={setStep} />}
+                {step === 'verify' && <VerifyMFA setStep={setStep} />}
+                {step === 'backupcodes' && <BackupCodes setStep={setStep} />}
+                {step === 'success' && <Success />}
+              </ThemedView>
+            </ScrollView>
           )
         }
+
+        const styles = StyleSheet.create({
+          container: {
+            flex: 1,
+            padding: 20,
+          },
+          section: {
+            gap: 16,
+          },
+          title: {
+            marginBottom: 8,
+          },
+          label: {
+            fontWeight: '600',
+            fontSize: 14,
+            marginBottom: 4,
+          },
+          description: {
+            fontSize: 14,
+            opacity: 0.8,
+            marginBottom: 16,
+          },
+          qrContainer: {
+            alignItems: 'center',
+            gap: 16,
+            marginVertical: 16,
+          },
+          qrCode: {
+            padding: 16,
+            backgroundColor: '#fff',
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+          },
+          uriContainer: {
+            gap: 12,
+            marginVertical: 16,
+          },
+          uriBox: {
+            padding: 16,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#ccc',
+          },
+          uriText: {
+            fontFamily: 'monospace',
+            fontSize: 12,
+          },
+          input: {
+            borderWidth: 1,
+            borderColor: '#ccc',
+            borderRadius: 8,
+            padding: 12,
+            fontSize: 16,
+            backgroundColor: '#fff',
+            marginBottom: 8,
+          },
+          buttonGroup: {
+            gap: 12,
+            marginTop: 8,
+          },
+          button: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+            alignItems: 'center',
+          },
+          smallButton: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 6,
+            alignItems: 'center',
+          },
+          secondaryButton: {
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: '#0a7ea4',
+          },
+          buttonPressed: {
+            opacity: 0.7,
+          },
+          buttonDisabled: {
+            opacity: 0.5,
+          },
+          buttonText: {
+            color: '#fff',
+            fontWeight: '600',
+          },
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          secondaryButtonText: {
+            color: '#0a7ea4',
+            fontWeight: '600',
+          },
+          backupCodesContainer: {
+            gap: 16,
+          },
+          codeList: {
+            padding: 16,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            maxHeight: 300,
+          },
+          code: {
+            fontFamily: 'monospace',
+            fontSize: 14,
+            paddingVertical: 4,
+          },
+        })
         ```
       </Tab>
     </Tabs>

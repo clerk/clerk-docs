@@ -1,86 +1,46 @@
----
-title: Build a custom flow for adding an email to a user's account
-description: Learn how to use the Clerk API to build a custom flow for adding an email to a user's account.
----
-
-<Include src="_partials/custom-flows-callout" />
-
-Users are able to add multiple email addresses to their account. Adding an email address requires the user to verify the email address before it can be added to the user's account.
-
-This guide demonstrates how to build a custom user interface that allows users to add and verify an email address for their account.
-
-## Configure email verification
-
-There are two verification methods available for email addresses:
-
-- **Email verification code**: Users receive an email with an [OTP](!otp) to verify their email address.
-- **Email verification link**: Users receive an email with a **link** to verify their email address.
-
-By default, the verification method that is enabled is **email verification code**. To use email code verification, skip to the [Email code verification](#email-code-verification) section.
-
-To use email links, you must configure the following settings in the Clerk Dashboard:
-
-1. On the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page of the Clerk Dashboard, in the **Email** tab, under the **Sign-in with email** section, enable the **Email verification link** option. By default, **Require the same device and browser** is enabled, which means that email links are required to be verified from the same device and browser on which the sign-up or sign-in was initiated. For this guide, leave this setting enabled.
-1. Disable **Email verification code**.
-1. Save your changes.
-
-Then skip to the [Email link verification](#email-link-verification) section.
-
-## Email code verification
-
-1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
-1. The [`User.createEmailAddress()`](/docs/reference/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
-1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/reference/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
-1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
-1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
-
-{/* TODO: Add JavaScript, Nuxt examples */}
-
 <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
   **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
 
-  ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
+  ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
   'use client'
 
-  import { useReverification, useUser } from '@clerk/nextjs'
-  import { EmailAddressResource } from '@clerk/types'
   import * as React from 'react'
+  import { useUser, useReverification } from '@clerk/nextjs'
+  import { PhoneNumberResource } from '@clerk/types'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
-
-    const [email, setEmail] = React.useState('')
+    const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
-    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
-    const createEmailAddress = useReverification((email: string) =>
-      user?.createEmailAddress({ email }),
+    const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
+    const createPhoneNumber = useReverification((phone: string) =>
+      user?.createPhoneNumber({ phoneNumber: phone }),
     )
 
     // Handle loading state
-    if (!isLoaded) return <p>Loading...</p>
+    if (!isLoaded) <p>Loading...</p>
 
     // Handle signed-out state
-    if (!isSignedIn) return <p>You must be signed in to access this page</p>
+    if (!isSignedIn) <p>You must be signed in to access this page</p>
 
-    // Handle addition of the email address
+    // Handle addition of the phone number
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
 
       try {
-        // Add an unverified email address to user
-        const res = await createEmailAddress(email)
+        // Add unverified phone number to user
+        const res = await createPhoneNumber(phone)
         // Reload user to get updated User object
         await user.reload()
 
-        // Find the email address that was just added
-        const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
-        // Create a reference to the email address that was just added
-        setEmailObj(emailAddress)
+        // Create a reference to the new phone number to use related methods
+        const phoneNumber = user.phoneNumbers.find((a) => a.id === res?.id)
+        setPhoneObj(phoneNumber)
 
-        // Send the user an email with the verification code
-        emailAddress?.prepareVerification({ strategy: 'email_code' })
+        // Send the user an SMS with the verification code
+        phoneNumber?.prepareVerification()
 
         // Set to true to display second form
         // and capture the code
@@ -96,31 +56,31 @@ Then skip to the [Email link verification](#email-link-verification) section.
     const verifyCode = async (e: React.FormEvent) => {
       e.preventDefault()
       try {
-        // Verify that the code entered matches the code sent to the user
-        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
+        // Verify that the provided code matches the code sent to the user
+        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
 
-        if (emailVerifyAttempt?.verification.status === 'verified') {
+        if (phoneVerifyAttempt?.verification.status === 'verified') {
           setSuccessful(true)
         } else {
           // If the status is not complete, check why. User may need to
           // complete further steps.
-          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
         }
       } catch (err) {
         console.error(JSON.stringify(err, null, 2))
       }
     }
 
-    // Display a success message if the email was added successfully
+    // Display a success message if the phone number was added successfully
     if (successful) {
-      return <h1>Email added!</h1>
+      return <h1>Phone added</h1>
     }
 
     // Display the verification form to capture the code
     if (isVerifying) {
       return (
         <>
-          <h1>Verify email</h1>
+          <h1>Verify phone</h1>
           <div>
             <form onSubmit={(e) => verifyCode(e)}>
               <div>
@@ -142,20 +102,20 @@ Then skip to the [Email link verification](#email-link-verification) section.
       )
     }
 
-    // Display the initial form to capture the email address
+    // Display the initial form to capture the phone number
     return (
       <>
-        <h1>Add Email</h1>
+        <h1>Add phone</h1>
         <div>
           <form onSubmit={(e) => handleSubmit(e)}>
             <div>
-              <label htmlFor="email">Enter email address</label>
+              <label htmlFor="phone">Enter phone number</label>
               <input
-                onChange={(e) => setEmail(e.target.value)}
-                id="email"
-                name="email"
-                type="email"
-                value={email}
+                onChange={(e) => setPhone(e.target.value)}
+                id="phone"
+                name="phone"
+                type="phone"
+                value={phone}
               />
             </div>
             <div>
@@ -170,11 +130,11 @@ Then skip to the [Email link verification](#email-link-verification) section.
 </If>
 
 <If sdk="expo">
-  ```tsx {{ filename: 'app/(account)/add-email/page.tsx', collapsible: true }}
+  ```tsx {{ filename: 'app/(account)/add-phone/page.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
   import { useUser } from '@clerk/clerk-expo'
-  import { EmailAddressResource } from '@clerk/types'
+  import { PhoneNumberResource } from '@clerk/types'
   import { Redirect } from 'expo-router'
   import * as React from 'react'
   import { Pressable, StyleSheet, TextInput } from 'react-native'
@@ -182,11 +142,11 @@ Then skip to the [Email link verification](#email-link-verification) section.
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
 
-    const [email, setEmail] = React.useState('')
+    const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
-    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+    const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
 
     // Handle loading state
     if (!isLoaded) {
@@ -198,23 +158,24 @@ Then skip to the [Email link verification](#email-link-verification) section.
     }
 
     // Handle signed-out state
-    if (!isSignedIn) return <Redirect href="/sign-in" />
+    if (!isSignedIn) {
+      return <Redirect href="/sign-in" />
+    }
 
-    // Handle addition of the email address
+    // Handle addition of the phone number
     const handleSubmit = async () => {
       try {
-        // Add an unverified email address to user
-        const res = await user?.createEmailAddress({ email })
+        // Add unverified phone number to user
+        const res = await user?.createPhoneNumber({ phoneNumber: phone })
         // Reload user to get updated User object
         await user?.reload()
 
-        // Find the email address that was just added
-        const emailAddress = user?.emailAddresses.find((a) => a.id === res?.id)
-        // Create a reference to the email address that was just added
-        setEmailObj(emailAddress)
+        // Create a reference to the new phone number to use related methods
+        const phoneNumber = user?.phoneNumbers.find((a) => a.id === res?.id)
+        setPhoneObj(phoneNumber)
 
-        // Send the user an email with the verification code
-        await emailAddress?.prepareVerification({ strategy: 'email_code' })
+        // Send the user an SMS with the verification code
+        await phoneNumber?.prepareVerification()
 
         // Set to true to display second form
         // and capture the code
@@ -229,27 +190,27 @@ Then skip to the [Email link verification](#email-link-verification) section.
     // Handle the submission of the verification form
     const verifyCode = async () => {
       try {
-        // Verify that the code entered matches the code sent to the user
-        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
+        // Verify that the provided code matches the code sent to the user
+        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
 
-        if (emailVerifyAttempt?.verification.status === 'verified') {
+        if (phoneVerifyAttempt?.verification.status === 'verified') {
           setSuccessful(true)
         } else {
           // If the status is not complete, check why. User may need to
           // complete further steps.
-          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
         }
       } catch (err) {
         console.error(JSON.stringify(err, null, 2))
       }
     }
 
-    // Display a success message if the email was added successfully
+    // Display a success message if the phone number was added successfully
     if (successful) {
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
-            Email added!
+            Phone added
           </ThemedText>
         </ThemedView>
       )
@@ -260,7 +221,7 @@ Then skip to the [Email link verification](#email-link-verification) section.
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
-            Verify email
+            Verify phone
           </ThemedText>
           <ThemedText style={styles.label}>Enter code</ThemedText>
           <TextInput
@@ -286,30 +247,29 @@ Then skip to the [Email link verification](#email-link-verification) section.
       )
     }
 
-    // Display the initial form to capture the email address
+    // Display the initial form to capture the phone number
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.title}>
-          Add Email
+          Add phone
         </ThemedText>
-        <ThemedText style={styles.label}>Enter email address</ThemedText>
+        <ThemedText style={styles.label}>Enter phone number</ThemedText>
         <TextInput
           style={styles.input}
-          value={email}
-          placeholder="Enter email"
+          value={phone}
+          placeholder="e.g +1234567890"
           placeholderTextColor="#666666"
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
         />
         <Pressable
           style={({ pressed }) => [
             styles.button,
-            !email && styles.buttonDisabled,
+            !phone && styles.buttonDisabled,
             pressed && styles.buttonPressed,
           ]}
           onPress={handleSubmit}
-          disabled={!email}
+          disabled={!phone}
         >
           <ThemedText style={styles.buttonText}>Continue</ThemedText>
         </Pressable>
@@ -361,20 +321,20 @@ Then skip to the [Email link verification](#email-link-verification) section.
 </If>
 
 <If sdk="ios">
-  ```swift {{ filename: 'AddEmailView.swift', collapsible: true }}
+  ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
   import SwiftUI
   import Clerk
 
-  struct AddEmailView: View {
-    @State private var email = ""
+  struct AddPhoneView: View {
+    @State private var phone = ""
     @State private var code = ""
     @State private var isVerifying = false
-    // Create a reference to the email address that we'll be creating
-    @State private var newEmailAddress: EmailAddress?
+    // Create a reference to the phone number that we'll be creating
+    @State private var newPhoneNumber: PhoneNumber?
 
     var body: some View {
-      if newEmailAddress?.verification?.status == .verified {
-        Text("Email added!")
+      if newPhoneNumber?.verification?.status == .verified {
+        Text("Phone added!")
       }
 
       if isVerifying {
@@ -383,25 +343,25 @@ Then skip to the [Email link verification](#email-link-verification) section.
           Task { await verifyCode(code) }
         }
       } else {
-        TextField("Enter email address", text: $email)
+        TextField("Enter phone number", text: $phone)
         Button("Continue") {
-          Task { await createEmail(email) }
+          Task { await createPhone(phone) }
         }
       }
     }
   }
 
-  extension AddEmailView {
+  extension AddPhoneView {
 
-    func createEmail(_ email: String) async {
+    func createPhone(_ phone: String) async {
       do {
         guard let user = Clerk.shared.user else { return }
 
-        // Add an unverified email address to user,
-        // then send the user an email with the verification code
-        self.newEmailAddress = try await user
-          .createEmailAddress(email)
-          .prepareVerification(strategy: .emailCode)
+        // Add an unverified phone number to user,
+        // then send the user an sms message with the verification code
+        self.newPhoneNumber = try await user
+          .createPhoneNumber(phone)
+          .prepareVerification()
 
         // Set to true to display second form
         // and capture the code
@@ -415,14 +375,14 @@ Then skip to the [Email link verification](#email-link-verification) section.
 
     func verifyCode(_ code: String) async {
       do {
-        guard let newEmailAddress else { return }
+        guard let newPhoneNumber else { return }
 
         // Verify that the code entered matches the code sent to the user
-        self.newEmailAddress = try await newEmailAddress.attemptVerification(strategy: .emailCode(code: code))
+        self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
 
         // If the status is not complete, check why. User may need to
         // complete further steps.
-        dump(self.newEmailAddress?.verification?.status)
+        dump(self.newPhoneNumber?.verification?.status)
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
@@ -434,75 +394,75 @@ Then skip to the [Email link verification](#email-link-verification) section.
 </If>
 
 <If sdk="android">
-  <CodeBlockTabs options={["AddEmailViewModel.kt", "AddEmailActivity.kt"]}>
-    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
+  <CodeBlockTabs options={["AddPhoneViewModel.kt", "AddPhoneActivity.kt"]}>
+    ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
     import android.util.Log
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
-    import com.clerk.api.emailaddress.EmailAddress
-    import com.clerk.api.emailaddress.attemptVerification
-    import com.clerk.api.emailaddress.prepareVerification
     import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.errorMessage
     import com.clerk.api.network.serialization.onFailure
     import com.clerk.api.network.serialization.onSuccess
-    import com.clerk.api.user.createEmailAddress
+    import com.clerk.api.phonenumber.PhoneNumber
+    import com.clerk.api.phonenumber.attemptVerification
+    import com.clerk.api.phonenumber.prepareVerification
+    import com.clerk.api.user.createPhoneNumber
     import kotlinx.coroutines.flow.MutableStateFlow
     import kotlinx.coroutines.flow.asStateFlow
     import kotlinx.coroutines.flow.combine
     import kotlinx.coroutines.flow.launchIn
     import kotlinx.coroutines.launch
 
-    class AddEmailViewModel : ViewModel() {
+    class AddPhoneViewModel : ViewModel() {
       private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
       val uiState = _uiState.asStateFlow()
 
       init {
         combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-          _uiState.value =
-            when {
-              !isInitialized -> UiState.Loading
-              user == null -> UiState.SignedOut
-              else -> UiState.NeedsVerification
-            }
-        }
-        .launchIn(viewModelScope)
+            _uiState.value =
+              when {
+                !isInitialized -> UiState.Loading
+                user == null -> UiState.SignedOut
+                else -> UiState.NeedsVerification
+              }
+          }
+          .launchIn(viewModelScope)
       }
 
-      fun createEmailAddress(emailAddress: String) {
+      fun createPhoneNumber(phoneNumber: String) {
         val user = requireNotNull(Clerk.userFlow.value)
 
-        // Add an unverified email address to the user,
-        // then send the user an email with the verification code
+        // Add an unverified phone number to the user,
+        // then send the user an SMS with the verification code
         viewModelScope.launch {
           user
-            .createEmailAddress(emailAddress)
-            .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
+            .createPhoneNumber(phoneNumber)
+            .flatMap { it.prepareVerification() }
             .onSuccess {
-              // Update the state to show that the email address has been created
-              // and that the user needs to verify the email address
+              // Update the state to show that the phone number has been created
+              // and that the user needs to verify the phone number
               _uiState.value = UiState.Verifying(it)
             }
             .onFailure {
               Log.e(
-                "AddEmailViewModel",
-                "Failed to create email address and prepare verification: ${it.errorMessage}",
+                "AddPhoneViewModel",
+                "Failed to create phone number and prepare verification: ${it.errorMessage}",
               )
             }
         }
       }
 
-      fun verifyCode(code: String, newEmailAddress: EmailAddress) {
+      fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
         viewModelScope.launch {
-          newEmailAddress
+          newPhoneNumber
             .attemptVerification(code)
             .onSuccess {
-              // Update the state to show that the email addresshas been verified
+              // Update the state to show that the phone number has been verified
               _uiState.value = UiState.Verified
             }
             .onFailure {
-              Log.e("AddEmailViewModel", "Failed to verify email address: ${it.errorMessage}")
+              Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
             }
         }
       }
@@ -510,14 +470,14 @@ Then skip to the [Email link verification](#email-link-verification) section.
       sealed interface UiState {
         data object Loading : UiState
         data object NeedsVerification : UiState
-        data class Verifying(val emailAddress: EmailAddress) : UiState
+        data class Verifying(val phoneNumber: PhoneNumber) : UiState
         data object Verified : UiState
         data object SignedOut : UiState
       }
     }
     ```
 
-    ```kotlin {{ filename: 'AddEmailActivity.kt', collapsible: true }}
+    ```kotlin {{ filename: 'AddPhoneActivity.kt', collapsible: true }}
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
@@ -539,18 +499,18 @@ Then skip to the [Email link verification](#email-link-verification) section.
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.unit.dp
     import androidx.lifecycle.compose.collectAsStateWithLifecycle
-    import com.clerk.api.emailaddress.EmailAddress
+    import com.clerk.api.phonenumber.PhoneNumber
 
-    class AddEmailActivity : ComponentActivity() {
-      val viewModel: AddEmailViewModel by viewModels()
+    class AddPhoneActivity : ComponentActivity() {
+      val viewModel: AddPhoneViewModel by viewModels()
 
       override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
           val state by viewModel.uiState.collectAsStateWithLifecycle()
-          AddEmailView(
+          AddPhoneView(
             state = state,
-            onCreateEmailAddress = viewModel::createEmailAddress,
+            onCreatePhoneNumber = viewModel::createPhoneNumber,
             onVerifyCode = viewModel::verifyCode,
           )
         }
@@ -558,29 +518,29 @@ Then skip to the [Email link verification](#email-link-verification) section.
     }
 
     @Composable
-    fun AddEmailView(
-      state: AddEmailViewModel.UiState,
-      onCreateEmailAddress: (String) -> Unit,
-      onVerifyCode: (String, EmailAddress) -> Unit,
+    fun AddPhoneView(
+      state: AddPhoneViewModel.UiState,
+      onCreatePhoneNumber: (String) -> Unit,
+      onVerifyCode: (String, PhoneNumber) -> Unit,
     ) {
       Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
-          AddEmailViewModel.UiState.NeedsVerification -> {
-            InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
-              onCreateEmailAddress(it)
+          AddPhoneViewModel.UiState.NeedsVerification -> {
+            InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
+              onCreatePhoneNumber(it)
             }
           }
 
-          AddEmailViewModel.UiState.Verified -> Text("Verified!")
+          AddPhoneViewModel.UiState.Verified -> Text("Verified!")
 
-          is AddEmailViewModel.UiState.Verifying -> {
+          is AddPhoneViewModel.UiState.Verifying -> {
             InputContentView(buttonText = "Verify", placeholder = "Enter code") {
-              onVerifyCode(it, state.emailAddress)
+              onVerifyCode(it, state.phoneNumber)
             }
           }
 
-          AddEmailViewModel.UiState.Loading -> CircularProgressIndicator()
-          AddEmailViewModel.UiState.SignedOut -> Text("You must be signed in to add an email address.")
+          AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
+          AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
         }
       }
     }
@@ -605,17 +565,4 @@ Then skip to the [Email link verification](#email-link-verification) section.
     }
     ```
   </CodeBlockTabs>
-</If>
-
-## Email link verification
-
-<If sdk="expo">
-  > [!WARNING]
-  > Expo does not support email links. You can request this feature on [Clerk's roadmap](https://feedback.clerk.com/).
-</If>
-
-<If notSdk="expo">
-  {/* TODO: Add JavaScript, iOS, Android, Nuxt examples */}
-
-  <Include src="_partials/custom-flows/email-link-verification" />
 </If>

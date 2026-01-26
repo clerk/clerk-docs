@@ -23,14 +23,14 @@
   </a> 
   <br />
   <br />
-  <img alt="Clerk Hero Image" src="https://github.com/clerk/clerk-docs/blob/df9c607030f351d359c752e2a237664cfb098ba9/public/images/home/docs-hero-light.svg">
+  <img alt="Clerk Hero Image" src="/.github/media/readme-hero.svg">
 </div>
 
 ## Community
 
 Clerk is more than authentication, and we want to convey every feature of Clerk as best as we can to make authentication and user management simpler for everyone. Explaining these concepts can sometimes be tricky, but with the help of a community, we can collaborate, share ideas, find the right words, and achieve greater clarity.
 
-We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./CONTRIBUTING.md).
+We encourage you to contribute to Clerk's documentation! You can get started by following [this guide](./contributing/CONTRIBUTING.md).
 
 > This repository contains the open-source documentation _content_ for [Clerk docs](https://clerk.com/docs). The _source code_ for the docs site is not yet open source, so if you have any questions or suggestions about _non-content_ related matters, please [reach out](https://clerk.com/support).
 

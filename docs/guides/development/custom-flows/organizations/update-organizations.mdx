@@ -9,63 +9,167 @@ Organization members with appropriate [Permissions](/docs/guides/organizations/c
 
 This guide will demonstrate how to use Clerk's API to build a custom flow for updating an Organization.
 
-{/* TODO: Add iOS, Android, Nuxt examples. */}
-
-<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
-
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
   The following example:
 
   1. Uses the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to fetch the active `organization`.
   1. Uses `organization` to call the `update()` method with the desired name to update the Organization. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
 
-  ```tsx {{ filename: 'app/components/UpdateOrganization.tsx', collapsible: true }}
-  'use client'
+  <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack Start.**
 
-  import { useState, useEffect } from 'react'
-  import { useRouter } from 'next/navigation'
-  import { useOrganization } from '@clerk/nextjs'
+    ```tsx {{ filename: 'app/components/UpdateOrganization.tsx', collapsible: true }}
+    'use client'
 
-  export default function UpdateOrganization() {
-    const [name, setName] = useState('')
-    const router = useRouter()
-    const { organization } = useOrganization()
+    import { useState, useEffect } from 'react'
+    import { useRouter } from 'next/navigation'
+    import { useOrganization } from '@clerk/nextjs'
 
-    useEffect(() => {
+    export default function UpdateOrganization() {
+      const [name, setName] = useState('')
+      const router = useRouter()
+      const { organization } = useOrganization()
+
+      useEffect(() => {
+        if (!organization) {
+          return
+        }
+        setName(organization.name)
+      }, [organization])
+
       if (!organization) {
-        return
+        return null
       }
-      setName(organization.name)
-    }, [organization])
 
-    if (!organization) {
-      return null
+      async function submit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+        try {
+          await organization?.update({ name })
+          router.push(`/organizations/${organization?.id}`)
+        } catch (err) {
+          console.error(err)
+        }
+      }
+
+      return (
+        <div>
+          <h1>Update the current organization</h1>
+          <form onSubmit={submit}>
+            <div>
+              <label htmlFor="name">Name</label>
+              <input id="name" name="name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <button>Update</button>
+          </form>
+        </div>
+      )
+    }
+    ```
+  </If>
+
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/update-organization.tsx' }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useOrganization } from '@clerk/clerk-expo'
+    import * as React from 'react'
+    import { Pressable, StyleSheet, TextInput } from 'react-native'
+
+    export const UpdateOrganization = () => {
+      const { organization, isLoaded } = useOrganization()
+
+      const [name, setName] = React.useState('')
+      const [success, setSuccess] = React.useState(false)
+
+      React.useEffect(() => {
+        if (!organization) {
+          return
+        }
+        setName(organization.name)
+      }, [organization])
+
+      if (!isLoaded || !organization) {
+        return null
+      }
+
+      const handleSubmit = async () => {
+        try {
+          setSuccess(false)
+          await organization?.update({ name })
+          setSuccess(true)
+        } catch (err) {
+          console.error(err)
+        }
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Update the current organization
+          </ThemedText>
+          <ThemedText style={styles.label}>Name</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={name}
+            placeholder="Organization name"
+            placeholderTextColor="#666666"
+            onChangeText={(text) => setName(text)}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            onPress={handleSubmit}
+            disabled={!name.trim()}
+          >
+            <ThemedText style={styles.buttonText}>Update</ThemedText>
+          </Pressable>
+          {success && <ThemedText style={styles.success}>Organization updated successfully</ThemedText>}
+        </ThemedView>
+      )
     }
 
-    async function submit(e: React.FormEvent<HTMLFormElement>) {
-      e.preventDefault()
-      try {
-        await organization?.update({ name })
-        router.push(`/organizations/${organization?.id}`)
-      } catch (err) {
-        console.error(err)
-      }
-    }
-
-    return (
-      <div>
-        <h1>Update the current organization</h1>
-        <form onSubmit={submit}>
-          <div>
-            <label htmlFor="name">Name</label>
-            <input id="name" name="name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <button>Update</button>
-        </form>
-      </div>
-    )
-  }
-  ```
+    const styles = StyleSheet.create({
+      container: {
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      success: {
+        color: '#28a745',
+        fontSize: 14,
+        marginTop: 12,
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
 </If>
 
 <If sdk="js-frontend">
@@ -156,106 +260,6 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
   </CodeBlockTabs>
 </If>
 
-<If sdk="expo">
-  ```tsx {{ filename: 'app/components/update-organization.tsx' }}
-  import { ThemedText } from '@/components/themed-text'
-  import { ThemedView } from '@/components/themed-view'
-  import { useOrganization } from '@clerk/clerk-expo'
-  import * as React from 'react'
-  import { Pressable, StyleSheet, TextInput } from 'react-native'
-
-  export const UpdateOrganization = () => {
-    const { organization, isLoaded } = useOrganization()
-
-    const [name, setName] = React.useState('')
-    const [success, setSuccess] = React.useState(false)
-
-    React.useEffect(() => {
-      if (!organization) {
-        return
-      }
-      setName(organization.name)
-    }, [organization])
-
-    if (!isLoaded || !organization) {
-      return null
-    }
-
-    const handleSubmit = async () => {
-      try {
-        setSuccess(false)
-        await organization?.update({ name })
-        setSuccess(true)
-      } catch (err) {
-        console.error(err)
-      }
-    }
-
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.title}>
-          Update the current organization
-        </ThemedText>
-        <ThemedText style={styles.label}>Name</ThemedText>
-        <TextInput
-          style={styles.input}
-          value={name}
-          placeholder="Organization name"
-          placeholderTextColor="#666666"
-          onChangeText={(text) => setName(text)}
-        />
-        <Pressable
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={handleSubmit}
-          disabled={!name.trim()}
-        >
-          <ThemedText style={styles.buttonText}>Update</ThemedText>
-        </Pressable>
-        {success && <ThemedText style={styles.success}>Organization updated successfully</ThemedText>}
-      </ThemedView>
-    )
-  }
-
-  const styles = StyleSheet.create({
-    container: {
-      gap: 12,
-    },
-    title: {
-      marginBottom: 8,
-    },
-    label: {
-      fontWeight: '600',
-      fontSize: 14,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: '#ccc',
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      backgroundColor: '#fff',
-    },
-    button: {
-      backgroundColor: '#0a7ea4',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    buttonPressed: {
-      opacity: 0.7,
-    },
-    buttonText: {
-      color: '#fff',
-      fontWeight: '600',
-    },
-    success: {
-      color: '#28a745',
-      fontSize: 14,
-      marginTop: 12,
-      fontWeight: '600',
-    },
-  })
-  ```
+<If sdk={["ios", "android", "nuxt"]}>
+  Examples for this SDK aren't available yet. For now, try switching to a supported SDK, such as Next.js, and converting the code to fit your SDK.
 </If>

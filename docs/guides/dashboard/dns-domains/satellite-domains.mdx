@@ -21,9 +21,6 @@ description: Learn how to share sessions across different domains by adding sate
 >
 > [Authentication across subdomains](/docs/guides/development/deployment/production#authentication-across-subdomains) with shared sessions works by default with Clerk.
 
-> [!CAUTION]
-> If you are upgrading from Core 2, see the [migration section](#migrating-from-core-2) for behavior changes that may affect your satellite applications.
-
 Clerk supports sharing sessions across different domains by adding one or many satellite domains to an application.
 
 Your "primary" domain is where the authentication state lives, and satellite domains are able to securely read that state from the primary domain, enabling a seamless authentication flow across domains.
@@ -32,16 +29,19 @@ Users must complete both the sign-in and sign-up flows on the primary domain by 
 
 ### How authentication syncing works
 
+> [!CAUTION]
+> If you are upgrading from Core 2, see the [migration section](#migrating-from-core-2) for behavior changes that may affect your satellite applications.
+
 The syncing behavior between satellite and primary domains is controlled by the `satelliteAutoSync` option.
 
-By default (`satelliteAutoSync: false`), satellite domains do not automatically sync authentication state with the primary domain when a user visits the page. This means there is no upfront performance cost for users visiting a satellite domain. Authentication state is only synced when a user initiates a sign-in or sign-up action:
+With `satelliteAutoSync: false` (the default), satellite domains do not automatically sync authentication state with the primary domain when a user visits the page. This means there is no upfront performance cost for users visiting a satellite domain. Authentication state is only synced when a user initiates a sign-in or sign-up action:
 
-1. When a user clicks sign in on the satellite domain, they are redirected to the primary domain.
+1. When a user selects "Sign in" on the satellite domain, they are redirected to the primary domain.
 1. If the user is already signed in on the primary domain, they are immediately redirected back to the satellite domain with the existing auth state — no additional user action is required.
 1. If the user is not signed in on the primary domain, they complete the sign-in (or sign-up) flow there and are then redirected back to the satellite domain.
 1. After the initial sync, signing out from either domain signs out from all domains.
 
-If you set `satelliteAutoSync: true`, the satellite domain will automatically redirect to the primary domain on first load to sync authentication state, even if the user has no session. This is the legacy behavior from Core 2 and is useful if you want users who are already signed in on the primary domain to be automatically recognized on the satellite without needing to click sign in. However, this comes with a performance cost since every first visit triggers a redirect.
+If you set `satelliteAutoSync: true`, the satellite domain will automatically redirect to the primary domain on first load to sync authentication state, even if the user has no session. This matches the original Core 2 behavior and is useful if you want users who are already signed in on the primary domain to be automatically recognized on the satellite without needing to select "Sign in". However, this comes with a performance cost since every first visit triggers a redirect.
 
 ## How to add satellite domains
 
@@ -328,7 +328,7 @@ If you set `satelliteAutoSync: true`, the satellite domain will automatically re
 
           <Include src="_partials/nextjs/nextjs-15-callout" />
 
-          ```ts {{ filename: 'middleware.ts' }}
+          ```ts {{ filename: 'proxy.ts' }}
           import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
           // Set the homepage as a public route
@@ -346,7 +346,8 @@ If you set `satelliteAutoSync: true`, the satellite domain will automatically re
             // Or, in development:
             // domain: 'http://localhost:3001',
 
-            // Set to true to automatically sync auth state on first load (not recommended for performance)
+            // Uncomment to automatically sync auth state on first load.
+            // This will add a redirect on first visit, which comes with a performance cost since every first visit triggers a redirect.
             // satelliteAutoSync: true,
           }
 
@@ -442,14 +443,7 @@ If you set `satelliteAutoSync: true`, the satellite domain will automatically re
 
   Your satellite application should now be able to access the authentication state from your satellite domain!
 
-  You can see it in action by:
-
-  1. Visiting the satellite domain. You will appear as signed out.
-  1. Clicking sign in. You will be redirected to the primary domain.
-  1. Completing sign-in on the primary domain. You will be automatically redirected back to the satellite domain with an active session.
-  1. If you were already signed in on the primary domain, the redirect back happens immediately with no additional user action.
-
-  After the initial sync, signing out from either domain will sign you out from all connected domains.
+  To verify it's working, visit your satellite domain and select "Sign in" — you should be redirected to the primary domain and back with an active session. For details on the sync flow, see [How authentication syncing works](#how-authentication-syncing-works).
 
   You can repeat this process and create as many satellite applications as you need.
 </Steps>
@@ -465,14 +459,14 @@ In Core 3, this behavior is controlled by the `satelliteAutoSync` option, which 
 | | Core 2 | Core 3 (default) |
 |---|---|---|
 | First visit to satellite | Redirects to primary domain to sync state, then back | No redirect, page loads immediately |
-| Sign-in flow | Same as Core 3 | User clicks sign in → redirected to primary → signs in → redirected back |
-| Already signed in on primary | Automatically synced on first visit | Only synced after user clicks sign in (redirect is instant, no user action needed) |
+| Sign-in flow | Same as Core 3 | User selects "Sign in" → redirected to primary → signs in → redirected back |
+| Already signed in on primary | Automatically synced on first visit | Only synced after user selects "Sign in" (redirect is instant, no user action needed) |
 | Sign-out | Signs out from all domains | Signs out from all domains |
 | Performance | Redirect on every first visit | No upfront cost |
 
 ### To preserve Core 2 behavior
 
-If your application relies on users being automatically recognized on the satellite domain without clicking sign in, set `satelliteAutoSync` to `true`:
+If your application relies on users being automatically recognized on the satellite domain without selecting "Sign in", set `satelliteAutoSync` to `true`:
 
 ```ts
 // In your middleware options or ClerkProvider props
@@ -483,9 +477,5 @@ If your application relies on users being automatically recognized on the satell
   satelliteAutoSync: true, // Opt-in to automatic sync on first load
 }
 ```
-
-### Recommended approach
-
-For best performance, keep `satelliteAutoSync` set to `false` (the default). With this setting, satellite domains load instantly without any upfront redirect cost. Users will only be redirected to the primary domain when they initiate a sign-in or sign-up action. If they are already signed in on the primary domain, the redirect back is immediate and requires no user interaction.
 
 If you have any questions about satellite domains, or you're having any trouble setting this up, contact [support@clerk.com](mailto:support@clerk.com)

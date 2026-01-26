@@ -1,6 +1,6 @@
 ---
 title: "Upgrading to Clerk Core 3"
-description: "Find SDK-specific guides for upgrading to Clerk Core 3."
+description: "Learn how to upgrade to Clerk Core 3 across all SDKs."
 ---
 
 ## Overview
@@ -15,43 +15,72 @@ Core 3 focuses on consistency and cleanup across Clerk's SDKs while keeping upgr
 
 Use `npx @clerk/upgrade` to scan your project and speed up the migration.
 
-## SDK Guides
-
-<Tabs items={['Next.js', 'React', 'Expo', 'React Router', 'TanStack Start', 'Astro', 'Nuxt', 'Vue']}>
-  <Tab>
 ## Breaking Changes
+
+The following breaking changes apply to all Clerk SDKs.
 
 <Accordion
   titles={[
-    "`__unstable_*` methods renamed to `__internal_*`",
+    "`Protect`, `SignedIn`, and `SignedOut` replaced by `Show`",
     "`@clerk/clerk-react` renamed to `@clerk/react`",
     "`appearance.layout` renamed to `appearance.options`",
     "`colorRing` and `colorModalBackdrop` now render at full opacity",
     "`useCheckout` and `Clerk.checkout()` return value changed",
     "Experimental method prefix standardized to `__experimental_`",
     "UI themes moved to `@clerk/ui/themes/experimental`",
+    "`__unstable_*` methods renamed to `__internal_*`",
   ]}
 >
   <AccordionPanel>
-    All `__unstable_*` methods have been renamed to `__internal_*`. These are internal APIs not intended for public use.
+    The authorization control components `Protect`, `SignedIn`, and `SignedOut` have been removed in favor of a single component: `Show`.
 
-    ### @clerk/clerk-js
+    ### Signed in / signed out
 
-    - `__unstable__environment` → `__internal_environment`
-    - `__unstable__updateProps` → `__internal_updateProps`
-    - `__unstable__setEnvironment` → `__internal_setEnvironment`
-    - `__unstable__onBeforeRequest` → `__internal_onBeforeRequest`
-    - `__unstable__onAfterResponse` → `__internal_onAfterResponse`
-    - `__unstable__onBeforeSetActive` → `__internal_onBeforeSetActive`
-    - `__unstable__onAfterSetActive` → `__internal_onAfterSetActive`
+    ```diff
+    - import { SignedIn, SignedOut } from '@clerk/nextjs';
+    + import { Show } from '@clerk/nextjs';
 
-    ### @clerk/nextjs
+    - <SignedIn>
+    + <Show when="signed-in">
+        <Dashboard />
+    - </SignedIn>
+    + </Show>
 
-    - `__unstable_invokeMiddlewareOnAuthStateChange` → `__internal_invokeMiddlewareOnAuthStateChange`
+    - <SignedOut>
+    + <Show when="signed-out">
+        <SignInPage />
+    - </SignedOut>
+    + </Show>
+    ```
 
-    ### @clerk/chrome-extension
+    ### Authorization checks (roles/permissions/features/plans)
 
-    - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
+    ```diff
+    - import { Protect } from '@clerk/nextjs';
+    + import { Show } from '@clerk/nextjs';
+
+    - <Protect role="admin" fallback={<p>Unauthorized</p>}>
+    + <Show when={{ role: 'admin' }} fallback={<p>Unauthorized</p>}>
+        <AdminPanel />
+    - </Protect>
+    + </Show>
+
+    - <Protect permission="org:billing:manage">
+    + <Show when={{ permission: 'org:billing:manage' }}>
+        <BillingSettings />
+    - </Protect>
+    + </Show>
+    ```
+
+    If you were using `condition={(has) => ...}` on `Protect`, pass that callback to `when`:
+
+    ```diff
+    - <Protect condition={(has) => has({ role: 'admin' }) && isAllowed}>
+    + <Show when={(has) => has({ role: 'admin' }) && isAllowed}>
+        <AdminPanel />
+    - </Protect>
+    + </Show>
+    ```
   </AccordionPanel>
 
   <AccordionPanel>
@@ -154,9 +183,33 @@ Use `npx @clerk/upgrade` to scan your project and speed up the migration.
 
     Note: The `__experimental_` prefix has been removed from the method since they're now in the `/themes/experimental` subpath.
   </AccordionPanel>
+
+  <AccordionPanel>
+    All `__unstable_*` methods have been renamed to `__internal_*`. These are internal APIs not intended for public use.
+
+    ### @clerk/clerk-js
+
+    - `__unstable__environment` → `__internal_environment`
+    - `__unstable__updateProps` → `__internal_updateProps`
+    - `__unstable__setEnvironment` → `__internal_setEnvironment`
+    - `__unstable__onBeforeRequest` → `__internal_onBeforeRequest`
+    - `__unstable__onAfterResponse` → `__internal_onAfterResponse`
+    - `__unstable__onBeforeSetActive` → `__internal_onBeforeSetActive`
+    - `__unstable__onAfterSetActive` → `__internal_onAfterSetActive`
+
+    ### @clerk/nextjs
+
+    - `__unstable_invokeMiddlewareOnAuthStateChange` → `__internal_invokeMiddlewareOnAuthStateChange`
+
+    ### @clerk/chrome-extension
+
+    - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
+  </AccordionPanel>
 </Accordion>
 
 ## Deprecation Removals
+
+The following deprecated APIs have been removed from all Clerk SDKs.
 
 ### `afterSwitchOrganizationUrl` removed from `OrganizationSwitcher`
 
@@ -306,7 +359,7 @@ Update your imports:
 
 The `@clerk/types` package will continue to re-export types from `@clerk/shared/types` for backward compatibility, but new types will only be added to `@clerk/shared/types`.
 
-## Version
+## Version Requirements
 
 ### Upgrade Node.js to v20.9.0 or higher
 
@@ -321,7 +374,7 @@ All Clerk packages now require Node.js 20.9.0 or later. Update your Node.js vers
 }
 ```
 
-## Behavior Change
+## Behavior Changes
 
 ### `showOptionalFields` now defaults to `false`
 
@@ -338,96 +391,165 @@ To restore the previous behavior, explicitly set the option:
   }}
 >
 ```
+
+### `ClerkAPIError.kind` value updated
+
+`ClerkAPIError.kind` has been updated to match the class name:
+
+```diff
+- static kind = 'ClerkApiError'
++ static kind = 'ClerkAPIError'
+```
+
+Most users should not be affected. If you were checking this string directly (for example, `error.constructor.kind === 'ClerkApiError'`), update the comparison value.
+
+## SDK-Specific Changes
+
+The following changes only apply to specific SDKs. Select your SDK below for additional upgrade steps.
+
+<Tabs items={['Next.js', 'React', 'Expo', 'React Router', 'TanStack Start', 'Astro', 'Nuxt', 'Vue']}>
+  <Tab>
+    {/* Next.js */}
+
+    ### Encryption key required when passing `secretKey` at runtime
+
+    When passing `secretKey` as a runtime option to `clerkMiddleware()`, you must now also provide a `CLERK_ENCRYPTION_KEY` environment variable.
+
+    Add the encryption key to your environment:
+
+    ```env
+    CLERK_ENCRYPTION_KEY=your-encryption-key
+    ```
+
+    More information: [clerkMiddleware documentation](/docs/reference/nextjs/clerk-middleware#dynamic-keys)
+
+    ### ClerkProvider should be inside `<body>` for Next.js 16 cache components
+
+    For Next.js 16 cache components support (`cacheComponents: true`), `ClerkProvider` must be positioned inside `<body>` rather than wrapping `<html>`. This prevents "Uncached data was accessed outside of `<Suspense>`" errors.
+
+    ```diff
+    - <ClerkProvider>
+    -   <html lang="en">
+    -     <body>{children}</body>
+    -   </html>
+    - </ClerkProvider>
+    + <html lang="en">
+    +   <body>
+    +     <ClerkProvider>
+    +       {children}
+    +     </ClerkProvider>
+    +   </body>
+    + </html>
+    ```
+
+    If you're using Next.js 16 with `cacheComponents: true`, you may also need to wrap `ClerkProvider` in a `<Suspense>` boundary.
   </Tab>
 
   <Tab>
     {/* React */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/react` upgrade guide.
+    No additional SDK-specific changes for `@clerk/react`.
 
-    ## Overview
-
-    Upgrading `@clerk/react` from v5 to v7.
-
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    All changes listed in the sections above apply to this SDK. Run `npx @clerk/upgrade` to scan your project for required changes.
   </Tab>
 
   <Tab>
     {/* Expo */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/expo` upgrade guide.
+    ### `@clerk/clerk-expo` renamed to `@clerk/expo`
 
-    ## Overview
+    The `@clerk/clerk-expo` package has been renamed to `@clerk/expo`.
 
-    Upgrading `@clerk/expo` from v2 to v3.
+    Update your imports:
 
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    ```diff
+    - import { ClerkProvider, useUser } from '@clerk/clerk-expo';
+    + import { ClerkProvider, useUser } from '@clerk/expo';
+    ```
+
+    And update your package.json:
+
+    ```diff
+    - "@clerk/clerk-expo": "^2.0.0",
+    + "@clerk/expo": "^3.0.0",
+    ```
+
+    ### `Clerk` export removed
+
+    The `Clerk` export has been removed from `@clerk/expo`. Use `useClerk()` hook instead:
+
+    ```diff
+    - import { Clerk } from '@clerk/expo';
+    + import { useClerk } from '@clerk/expo';
+
+    - Clerk.signOut();
+    + const { signOut } = useClerk();
+    + signOut();
+    ```
+
+    ### Minimum Expo version increased to 53
+
+    `@clerk/expo` v3 requires Expo SDK 53 or later. Update your Expo version if needed.
   </Tab>
 
   <Tab>
     {/* React Router */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/react-router` upgrade guide.
+    No additional SDK-specific changes for `@clerk/react-router`.
 
-    ## Overview
-
-    Upgrading `@clerk/react-router` from v2 to v3.
-
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    All changes listed in the sections above apply to this SDK. Run `npx @clerk/upgrade` to scan your project for required changes.
   </Tab>
 
   <Tab>
     {/* TanStack Start */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/tanstack-react-start` upgrade guide.
+    No additional SDK-specific changes for `@clerk/tanstack-react-start`.
 
-    ## Overview
-
-    Upgrading `@clerk/tanstack-react-start` from v0 to v1.
-
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    All changes listed in the sections above apply to this SDK. Run `npx @clerk/upgrade` to scan your project for required changes.
   </Tab>
 
   <Tab>
     {/* Astro */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/astro` upgrade guide.
+    No additional SDK-specific changes for `@clerk/astro`.
 
-    ## Overview
-
-    Upgrading `@clerk/astro` from v2 to v3.
-
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    All changes listed in the sections above apply to this SDK. Run `npx @clerk/upgrade` to scan your project for required changes.
   </Tab>
 
   <Tab>
     {/* Nuxt */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/nuxt` upgrade guide.
+    ### `getAuth()` helper removed
 
-    ## Overview
+    The `getAuth()` helper has been removed. Use `auth()` instead:
 
-    Upgrading `@clerk/nuxt` from v2 to v3.
+    ```diff
+    - import { getAuth } from '@clerk/nuxt/server';
+    + import { auth } from '@clerk/nuxt/server';
 
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    - const { userId } = getAuth(event);
+    + const { userId } = auth();
+    ```
+
+    ### Routing strategy now defaults to `path`
+
+    The default routing strategy for Nuxt has changed from `hash` to `path`. If you were relying on hash-based routing, explicitly set the strategy:
+
+    ```ts
+    // nuxt.config.ts
+    export default defineNuxtConfig({
+      clerk: {
+        routingStrategy: 'hash', // Restore previous behavior
+      },
+    });
+    ```
   </Tab>
 
   <Tab>
     {/* Vue */}
 
-    > [!CAUTION]
-    > This guide is under construction. Check back soon for the complete `@clerk/vue` upgrade guide.
+    No additional SDK-specific changes for `@clerk/vue`.
 
-    ## Overview
-
-    Upgrading `@clerk/vue` from v2 to v3.
-
-    Run `npx @clerk/upgrade` to scan your project for required changes.
+    All changes listed in the sections above apply to this SDK. Run `npx @clerk/upgrade` to scan your project for required changes.
   </Tab>
 </Tabs>

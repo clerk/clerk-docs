@@ -1,0 +1,378 @@
+<If notSdk="react">
+  <Tabs items={['Server-side', 'Client-side']}>
+    <Tab>
+      To access information about the currently [Active Organization](!active-organization) on the server-side, use [`clerkClient()`](/docs/js-backend/getting-started/quickstart#instantiate-a-default-clerk-client-instance) to call the [`getOrganization()`](/docs/reference/backend/organization/get-organization) method, which returns the Backend [`Organization`](/docs/reference/backend/types/backend-organization) object. You'll need to pass an `orgId`, which you can access from the [`Auth`](/docs/reference/backend/types/auth-object) object.
+
+      <If sdk="nextjs">
+        ```tsx {{ filename: 'app/page.tsx' }}
+        import { auth, clerkClient } from '@clerk/nextjs/server'
+        import { OrganizationSwitcher } from '@clerk/nextjs'
+
+        export default async function Page() {
+          // Use `auth()` to access the `Auth` object
+          // https://clerk.com/docs/reference/backend/types/auth-object
+          const { isAuthenticated, orgId, orgRole } = await auth()
+
+          // Check if user is authenticated
+          if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
+
+          // Check if there is an Active Organization
+          if (!orgId) return <p>Set an Active Organization to access this page.</p>
+
+          // Initialize the JS Backend SDK
+          // This varies depending on the SDK you're using
+          // https://clerk.com/docs/js-backend/getting-started/quickstart
+          const client = await clerkClient()
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+          return (
+            <div class="p-8">
+              <h1 class="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization.name}</strong> organization
+              </h1>
+              <p class="mb-6">
+                Your role in this organization: <strong>{orgRole}</strong>
+              </p>
+            </div>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="react-router">
+        In the following example, the loader runs on the server before the `<Welcome />` component renders. This allows you to perform authentication checks before sending any data to the client, so all necessary data is available when the component is rendered.
+
+        ```tsx {{ filename: 'app/routes/home.tsx', collapsible: true }}
+        import { redirect } from 'react-router'
+        import { clerkClient, getAuth } from '@clerk/react-router/server'
+        import type { Organization } from '@clerk/backend'
+        import type { Route } from './+types/home'
+        import { Welcome } from '../welcome/welcome'
+
+        export function meta({}: Route.MetaArgs) {
+          return [
+            { title: 'New React Router App' },
+            { name: 'description', content: 'Welcome to React Router!' },
+          ]
+        }
+
+        export async function loader(args: Route.LoaderArgs) {
+          // Use the `getAuth()` helper to access the `Auth` object
+          // https://clerk.com/docs/reference/backend/types/auth-object
+          const { isAuthenticated, orgId, orgRole } = await getAuth(args)
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) {
+            return redirect('/sign-in?redirect_url=' + args.request.url)
+          }
+
+          // Check if there is an Active Organization
+          if (!orgId) {
+            return { organization: null, orgRole: null, hasOrganization: false }
+          }
+
+          // Initialize the JS Backend SDK
+          // This varies depending on the SDK you're using
+          // https://clerk.com/docs/js-backend/getting-started/quickstart
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient(args).organizations.getOrganization({
+            organizationId: orgId,
+          })
+
+          return { organization, orgRole }
+        }
+
+        export default function Home({ loaderData }: Route.ComponentProps) {
+          return (
+            <Welcome
+              loaderData={
+                loaderData as {
+                  organization: Organization
+                  orgRole: string | undefined
+                  hasOrganization?: undefined
+                }
+              }
+            />
+          )
+        }
+        ```
+
+        Update the `<Welcome />` component to display information about the user's Active Organization.
+
+        ```tsx {{ filename: 'app/welcome/welcome.tsx' }}
+        type LoaderData = Awaited<ReturnType<typeof import('../routes/home').loader>>
+
+        interface WelcomeProps {
+          loaderData: LoaderData
+        }
+
+        export function Welcome({ loaderData }: WelcomeProps) {
+          if (!loaderData || loaderData instanceof Response) return null
+
+          return (
+            <div>
+              <h1>Welcome to the {loaderData.organization?.name} Organization</h1>
+              <p>Your role in this organization: {loaderData.orgRole}</p>
+            </div>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="astro">
+        ```astro {{ filename: 'src/pages/index.astro', collapsible: true }}
+        ---
+        import Layout from '../layouts/Layout.astro'
+        import { SignedIn, SignedOut } from '@clerk/astro/components'
+        import { clerkClient } from '@clerk/astro/server'
+
+        // Use the `locals.auth()` local to access the `Auth` object
+        // https://clerk.com/docs/reference/backend/types/auth-object
+        const { isAuthenticated, orgId, orgRole } = Astro.locals.auth()
+
+        let organization = null
+        if (isAuthenticated && orgId) {
+          organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
+        }
+        ---
+
+        <Layout title="Clerk + Astro">
+          <SignedOut>
+            <p>Sign in to try Clerk out!</p>
+          </SignedOut>
+          <SignedIn>
+            {
+              organization && (
+                <div class="p-8">
+                  <h1 class="text-2xl font-bold mb-4">
+                    Welcome to the <strong>{organization.name}</strong> organization
+                  </h1>
+                  <p class="mb-6">
+                    Your role in this organization: <strong>{orgRole}</strong>
+                  </p>
+                </div>
+              )
+            }
+          </SignedIn>
+        </Layout>
+        ```
+      </If>
+
+      <If sdk="nuxt">
+        ```ts {{ filename: 'server/api/organization.ts', collapsible: true }}
+        import { clerkClient } from '@clerk/nuxt/server'
+
+        export default defineEventHandler(async (event) => {
+          // Use `event.context.auth()` to access the `Auth` object
+          // https://clerk.com/docs/reference/backend/types/auth-object
+          const { isAuthenticated, orgId } = event.context.auth()
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) {
+            throw createError({
+              statusCode: 401,
+              statusMessage: 'Unauthorized: No user ID provided',
+            })
+          }
+
+          // Check if there is an Active Organization
+          if (!orgId) {
+            throw createError({
+              statusCode: 404,
+              statusMessage: 'Set an Active Organization to access this page.',
+            })
+          }
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient(event).organizations.getOrganization({
+            organizationId: orgId,
+          })
+
+          return organization
+        })
+        ```
+      </If>
+    </Tab>
+
+    <Tab>
+      <If notSdk={["astro", "nuxt"]}>
+        Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+      </If>
+
+      <If sdk="nextjs">
+        ```tsx {{ filename: 'app/page.tsx' }}
+        'use client'
+
+        import { useOrganization, useOrganizationList } from '@clerk/nextjs'
+
+        export default function Page() {
+          const { organization } = useOrganization()
+          const { userMemberships } = useOrganizationList({
+            userMemberships: true,
+          })
+
+          return (
+            <div className="p-8">
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> organization
+              </h1>
+              <p className="mb-6">
+                Your role in this organization:{' '}
+                <strong>
+                  {/* Find the organization membership that matches the
+                       currently active organization and return the role */}
+                  {
+                    userMemberships?.data?.find(
+                      (membership) => membership.organization.id === organization?.id,
+                    )?.role
+                  }
+                </strong>
+              </p>
+            </div>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="react-router">
+        ```tsx {{ filename: 'src/welcome/welcome.tsx' }}
+        import { useOrganization, useOrganizationList } from '@clerk/react-router'
+
+        export function Welcome() {
+          const { organization } = useOrganization()
+          const { userMemberships } = useOrganizationList({
+            userMemberships: true,
+          })
+
+          return (
+            <div className="p-8">
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> organization
+              </h1>
+              <p className="mb-6">
+                Your role in this organization:{' '}
+                <strong>
+                  {
+                    userMemberships?.data?.find(
+                      (membership) => membership.organization.id === organization?.id,
+                    )?.role
+                  }
+                </strong>
+              </p>
+            </div>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="astro">
+        To access information about the currently [Active Organization](!active-organization) on the client-side, use the [`$organizationStore`](/docs/reference/astro/client-side-helpers/organization-store) store, which returns the [`Organization`](/docs/reference/javascript/organization) object. This requires that you've [set up your Astro app to be integrated with React](/docs/reference/astro/react).
+
+        ```tsx {{ filename: 'components/Home.tsx' }}
+        import { useStore } from '@nanostores/react'
+        import { $organizationStore } from '@clerk/astro/client'
+
+        export default function Home() {
+          const organization = useStore($organizationStore)
+
+          // Handle loading state
+          if (organization === undefined) return <p>Loading...</p>
+
+          // Handle no Active Organization state
+          if (organization === null) return <p>Set an Active Organization to access this page.</p>
+
+          return <p>This current Organization is {organization.name}</p>
+        }
+        ```
+      </If>
+
+      <If sdk="nuxt">
+        Use the [`useOrganization()`](/docs/nuxt/reference/composables/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useAuth()`](/docs/nuxt/reference/composables/use-auth) composable to access authentication information about the current user, such as their Role in the Active Organization.
+
+        ```vue {{ filename: 'app/pages/index.vue' }}
+        <script setup>
+        import { useAuth, useOrganization } from '@clerk/vue'
+
+        const { organization } = useOrganization()
+        const { orgRole } = useAuth()
+        </script>
+
+        <template>
+          <SignedIn>
+            <div class="p-8">
+              <h1 class="text-2xl font-bold mb-4">
+                Welcome to the <strong>{{ organization?.name }}</strong> Organization
+              </h1>
+              <p class="mb-6">
+                Your Role in this Organization:
+                <strong>{{ orgRole }}</strong>
+              </p>
+            </div>
+          </SignedIn>
+        </template>
+        ```
+      </If>
+    </Tab>
+  </Tabs>
+</If>
+
+<If sdk="react">
+  Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to access information about the currently [Active Organization](!active-organization). Use the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access information about the current user's Organization memberships.
+
+  ```tsx {{ filename: 'src/App.tsx', collapsible: true }}
+  import './App.css'
+  import {
+    SignedIn,
+    SignedOut,
+    SignInButton,
+    UserButton,
+    OrganizationSwitcher,
+    useOrganization,
+    useOrganizationList,
+  } from '@clerk/clerk-react'
+
+  function App() {
+    const { organization } = useOrganization()
+    const { userMemberships } = useOrganizationList({
+      userMemberships: true,
+    })
+
+    return (
+      <>
+        <header>
+          <OrganizationSwitcher />
+          <SignedOut>
+            <SignInButton />
+          </SignedOut>
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
+        </header>
+        <main className="p-8">
+          <SignedIn>
+            <div>
+              <h1 className="text-2xl font-bold mb-4">
+                Welcome to the <strong>{organization?.name}</strong> organization
+              </h1>
+              <p className="mb-6">
+                Your role in this organization:{' '}
+                <strong>
+                  {
+                    userMemberships?.data?.find(
+                      (membership) => membership.organization.id === organization?.id,
+                    )?.role
+                  }
+                </strong>
+              </p>
+            </div>
+          </SignedIn>
+        </main>
+      </>
+    )
+  }
+
+  export default App
+  ```
+</If>

@@ -43,6 +43,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
     - [`<Properties>`](#properties-1)
+    - [`<ComparisonTable>`](#comparisontable)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)
@@ -1253,6 +1254,83 @@ Fallback markup to render while Clerk is loading. Default: `null`
 ```
 
 </details>
+
+### `<ComparisonTable>`
+
+The `<ComparisonTable>` component is used to create feature comparison tables with styled checkmarks, X marks, and section headers. The table header stays sticky when scrolling the page.
+
+#### Related Components
+
+| Component           | Description                                                          |
+| ------------------- | -------------------------------------------------------------------- |
+| `<ComparisonTable>` | Wrapper component for the comparison table with sticky header        |
+| `<CompareSection>`  | Creates a section header row that spans all columns                  |
+| `<CompareYes />`    | Displays a green checkmark (✓). Use `inline` prop for inline display |
+| `<CompareNo />`     | Displays a red X (✗). Use `inline` prop for inline display           |
+| `<CompareMaybe>`    | Displays orange text. Defaults to "—", accepts custom children       |
+| `<ChangeTag />`     | Displays a colored pill/badge. Types: `added`, `changed`, `removed`  |
+
+#### Example
+
+```mdx
+<ComparisonTable>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Basic</th>
+      <th>Pro</th>
+    </tr>
+  </thead>
+  <tbody>
+    <CompareSection>Authentication</CompareSection>
+    <tr>
+      <td>Email/Password</td>
+      <td>
+        <CompareYes />
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+    <tr>
+      <td>Social Login</td>
+      <td>
+        <CompareNo />
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+    <tr>
+      <td>MFA</td>
+      <td>
+        <CompareMaybe>Limited</CompareMaybe>
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+  </tbody>
+</ComparisonTable>
+```
+
+#### Inline Usage
+
+Use the `inline` prop on `<CompareYes />` and `<CompareNo />` when you need them inline with text:
+
+```mdx
+The feature was removed (was <CompareYes inline />, now <CompareNo inline />).
+```
+
+#### ChangeTag
+
+The `<ChangeTag>` component displays colored pill badges for documenting changes. It's a self-closing component that renders a badge based on the `type` prop:
+
+```mdx
+- <ChangeTag type="added" /> **New feature** - Description of what was added
+- <ChangeTag type="changed" /> **Updated feature** - Description of what changed
+- <ChangeTag type="removed" /> **Deprecated feature** - Description of what was removed
+```
 
 ### `<Include />`
 

@@ -9,7 +9,6 @@ sdk: react-router
     {
       title: "React Router Quickstart Repo",
       link: "https://github.com/clerk/clerk-react-router-quickstart"
-
     }
   ]}
   beforeYouStart={[
@@ -26,20 +25,19 @@ React Router can be used in different modes: **declarative**, **data**, or **fra
 This tutorial assumes that you're using React Router **v7.1.2 or later** in framework mode.
 
 <Steps>
-  ## Create a React app using React Router
+  ## Create a new React app using React Router
 
-  Run the following commands to create a new React app using React Router.
+  If you don't already have a React app using React Router, run the following commands to [create a new one](https://reactrouter.com/start/framework/installation).
 
   ```npm
   npm create react-router@latest clerk-react-router
   cd clerk-react-router
   npm install
-  npm run dev
   ```
 
   ## Install `@clerk/react-router`
 
-  The [Clerk React Router SDK](/docs/reference/react-router/overview) provides prebuilt components, hooks, and helpers to make it easy to integrate authentication and user management in your React Router app.
+  The [Clerk React Router SDK](/docs/reference/react-router/overview) gives you access to prebuilt components, hooks, and helpers to make user authentication easier.
 
   Run the following command to install the SDK:
 
@@ -49,17 +47,7 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
 
   ## Set your Clerk API keys
 
-  <SignedIn>
-    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
-  </SignedIn>
-
-  <SignedOut>
-    1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys) page.
-    1. In the **Quick Copy** section, copy your Clerk [Publishable Key](!publishable-key) and [Secret Key](!secret-key).
-    1. Paste your keys into your `.env` file.
-
-    The final result should resemble the following:
-  </SignedOut>
+  <Include src="_partials/quickstarts/set-clerk-api-keys" />
 
   ```env {{ filename: '.env' }}
   VITE_CLERK_PUBLISHABLE_KEY={{pub_key}}
@@ -68,9 +56,9 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
 
   ## Add `clerkMiddleware()` and `rootAuthLoader()` to your app
 
-  `clerkMiddleware()` grants you access to user authentication state throughout your app.
+  [`clerkMiddleware()`](/docs/reference/react-router/clerk-middleware) grants you access to user authentication state throughout your app. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your app, follow these steps:
 
-  React Router middleware requires opting in via a future flag. Add the following to your `react-router.config.ts` file:
+  1. Since React Router middleware requires opting in via a future flag, add the following to your `react-router.config.ts` file:
 
   ```ts {{ filename: 'react-router.config.ts' }}
     import type { Config } from '@react-router/dev/config'
@@ -83,9 +71,7 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
     } satisfies Config
   ```
 
-  Then, add the following code to your `root.tsx` file to configure the `clerkMiddleware()` and `rootAuthLoader()` functions.
-
-  To load additional data or configure options, see the [`clerkMiddleware()`](/docs/reference/react-router/clerk-middleware) reference.
+  2. Add the following code to your `root.tsx` file to configure the `clerkMiddleware()` and [`rootAuthLoader()`](/docs/reference/react-router/root-auth-loader) functions.
 
   ```tsx {{ filename: 'app/root.tsx', mark: [4, [6, 8]], fold: [[1, 3], [10, 71]], collapsible: true }}
   import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
@@ -161,21 +147,111 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
   }
   ```
 
-  ## Add `<ClerkProvider>` and Clerk components to your app
+  3. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/reference/react-router/clerk-middleware) to learn how to require authentication for specific routes.
+
+  ## Add `<ClerkProvider>` to your app
 
   <Include src="_partials/clerk-provider/explanation" />
 
-  It's required to pass `loaderData` to the `<ClerkProvider>` component. This data is provided by the `rootAuthLoader()` function.
+  Pass `loaderData` to the `<ClerkProvider>` component, as shown in the following example. This data is provided by the `rootAuthLoader()` function.
 
-  The following example adds `<ClerkProvider>` and creates a header using the following Clerk components:
+  ```tsx {{ filename: 'app/root.tsx', mark: [1, 44, 48, 50], fold: [[2, 42], [54, 87]] }}
+  import { ClerkProvider } from '@clerk/react-router'
+  import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
+  import { clerkMiddleware, rootAuthLoader } from '@clerk/react-router/server'
 
-  - [`<SignedIn>`](/docs/reference/components/control/signed-in): Children of this component can only be seen while **signed in**.
-  - [`<SignedOut>`](/docs/reference/components/control/signed-out): Children of this component can only be seen while **signed out**.
-  - [`<UserButton />`](/docs/reference/components/user/user-button): Shows the signed-in user's avatar. Selecting it opens a dropdown menu with account management options.
-  - [`<SignInButton />`](/docs/reference/components/unstyled/sign-in-button): An unstyled component that links to the sign-in page. In this example, since no props or [environment variables](/docs/guides/development/clerk-environment-variables) are set for the sign-in URL, this component links to the [Account Portal sign-in page](/docs/guides/account-portal/overview#sign-in).
+  import type { Route } from './+types/root'
+  import stylesheet from './app.css?url'
 
-  ```tsx {{ filename: 'app/root.tsx', mark: [1, 44, [46, 60]], fold: [[2, 42], [62, 87]] }}
-  import { ClerkProvider, SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/react-router'
+  export const middleware: Route.MiddlewareFunction[] = [clerkMiddleware()]
+
+  export const loader = (args: Route.LoaderArgs) => rootAuthLoader(args)
+
+  export const links: Route.LinksFunction = () => [
+    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    {
+      rel: 'preconnect',
+      href: 'https://fonts.gstatic.com',
+      crossOrigin: 'anonymous',
+    },
+    {
+      rel: 'stylesheet',
+      href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap',
+    },
+    { rel: 'stylesheet', href: stylesheet },
+  ]
+
+  export function Layout({ children }: { children: React.ReactNode }) {
+    return (
+      <html lang="en">
+        <head>
+          <meta charSet="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <Meta />
+          <Links />
+        </head>
+        <body>
+          {children}
+          <ScrollRestoration />
+          <Scripts />
+        </body>
+      </html>
+    )
+  }
+
+  // Pull in the `loaderData` from the `rootAuthLoader()` function
+  export default function App({ loaderData }: Route.ComponentProps) {
+    return (
+      // Pass the `loaderData` to the `<ClerkProvider>` component
+      <ClerkProvider loaderData={loaderData}>
+        <Outlet />
+      </ClerkProvider>
+    )
+  }
+
+  export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+    let message = 'Oops!'
+    let details = 'An unexpected error occurred.'
+    let stack: string | undefined
+
+    if (isRouteErrorResponse(error)) {
+      message = error.status === 404 ? '404' : 'Error'
+      details =
+        error.status === 404 ? 'The requested page could not be found.' : error.statusText || details
+    } else if (import.meta.env.DEV && error && error instanceof Error) {
+      details = error.message
+      stack = error.stack
+    }
+
+    return (
+      <main className="pt-16 p-4 container mx-auto">
+        <h1>{message}</h1>
+        <p>{details}</p>
+        {stack && (
+          <pre className="w-full p-4 overflow-x-auto">
+            <code>{stack}</code>
+          </pre>
+        )}
+      </main>
+    )
+  }
+  ```
+
+  ## Create a header with Clerk components
+
+  You can control which content signed-in and signed-out users can see with the [prebuilt control components](/docs/reference/components/overview#control-components). The following example creates a header using the following components:
+
+  <Include src="_partials/quickstarts/create-header-components-step" />
+
+  ```tsx {{ filename: 'app/root.tsx', mark: [[3, 7], [56, 66]], fold: [[9, 49], [72, 97]] }}
+  import {
+    ClerkProvider,
+    SignedIn,
+    SignedOut,
+    UserButton,
+    SignInButton,
+    SignUpButton,
+  } from '@clerk/react-router'
   import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
   import { clerkMiddleware, rootAuthLoader } from '@clerk/react-router/server'
 
@@ -224,9 +300,10 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
       // Pass the `loaderData` to the `<ClerkProvider>` component
       <ClerkProvider loaderData={loaderData}>
         <header className="flex items-center justify-center py-8 px-4">
-          {/* Show the sign-in button when the user is signed out */}
+          {/* Show the sign-in and sign-up buttons when the user is signed out */}
           <SignedOut>
             <SignInButton />
+            <SignUpButton />
           </SignedOut>
           {/* Show the user button when the user is signed in */}
           <SignedIn>
@@ -266,18 +343,14 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
   }
   ```
 
-  ## Create your first user
+  <Include src="_partials/quickstarts/run-project-step" />
 
-  Run your project with the following command:
-
-  ```npm
-  npm run dev
-  ```
-
-  Visit your app's homepage at [`http://localhost:5173`](http://localhost:5173). Sign up to create your first user.
+  <Include src="_partials/quickstarts/create-first-user-vite-step" />
 </Steps>
 
 ## Next steps
+
+Learn more about Clerk components, client-side hooks, and React Router features to add authentication to your app using the following guides.
 
 <Cards>
   - [Create a custom sign-in-or-up page](/docs/react-router/guides/development/custom-sign-in-or-up-page)
@@ -287,6 +360,11 @@ This tutorial assumes that you're using React Router **v7.1.2 or later** in fram
 
   - [Protect content and read user data](/docs/react-router/guides/users/reading)
   - Learn how to use Clerk's hooks and helpers to protect content and read user data in your React Router app.
+
+  ---
+
+  - [Prebuilt components](/docs/reference/components/overview)
+  - Learn more about Clerk's suite of components that let you quickly add authentication to your app.
 
   ---
 

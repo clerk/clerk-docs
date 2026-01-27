@@ -1,0 +1,486 @@
+<If notSdk="react">
+  <Tabs items={['Server-side', 'Client-side']}>
+    <Tab>
+      <If sdk="nextjs">
+        ```tsx {{ filename: 'app/protected/page.tsx', collapsible: true }}
+        import { auth, clerkClient } from '@clerk/nextjs/server'
+        import { OrganizationSwitcher } from '@clerk/nextjs'
+
+        export default async function Page() {
+          const { isAuthenticated, orgId, has } = await auth()
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) return <p>You must be signed in to access this page.</p>
+
+          // Check if there is an Active Organization
+          if (!orgId) return <p>Set an Active Organization to access this page.</p>
+
+          // Check if the user has the `org:admin` Role
+          if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+          // Initialize the JS Backend SDK
+          // This varies depending on the SDK you're using
+          // https://clerk.com/docs/js-backend/getting-started/quickstart
+          const client = await clerkClient()
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await client.organizations.getOrganization({ organizationId: orgId })
+
+          // Check if Organization name matches (e.g. 'Acme Corp')
+          if (organization.name !== requiredOrgName)
+            return (
+              <p>
+                This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+                to the <strong>{requiredOrgName}</strong> Organization to access this page.
+              </p>
+            )
+
+          return (
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{organization.name}</strong> Organization.
+            </p>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="react-router">
+        ```tsx {{ filename: 'app/routes/protected.tsx', collapsible: true }}
+        import { clerkClient, getAuth } from '@clerk/react-router/server'
+        import { redirect } from 'react-router'
+        import type { Route } from '../+types/protected'
+
+        export function meta({}: Route.MetaArgs) {
+          return [
+            { title: 'Protected Page' },
+            { name: 'description', content: 'A protected page requiring admin access' },
+          ]
+        }
+
+        export async function loader(args: Route.LoaderArgs) {
+          // Use the `getAuth()` helper to access the `Auth` object
+          // https://clerk.com/docs/reference/backend/types/auth-object
+          const { isAuthenticated, orgId, has } = await getAuth(args)
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) {
+            return redirect('/sign-in?redirect_url=' + args.request.url)
+          }
+
+          // Check if there is an Active Organization
+          if (!orgId) return { error: 'Set an Active Organization to access this page.' }
+
+          // Check if the user has the `org:admin` Role
+          if (!has({ role: 'org:admin' })) return { error: 'You must be an admin to access this page.' }
+
+          // Initialize the JS Backend SDK
+          // This varies depending on the SDK you're using
+          // https://clerk.com/docs/js-backend/getting-started/quickstart
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient(args).organizations.getOrganization({
+            organizationId: orgId,
+          })
+
+          // Check if Organization name matches (e.g. 'Acme Corp')
+          const requiredOrgName = 'Acme Corp'
+          if (organization.name !== requiredOrgName)
+            return {
+              error: `This page is only accessible in the ${requiredOrgName} Organization. Switch to the ${requiredOrgName} Organization to access this page.`,
+            }
+
+          return { organization }
+        }
+
+        export default function Protected({ loaderData }: Route.ComponentProps) {
+          return (
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{loaderData?.organization?.name}</strong> Organization.
+            </p>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="astro">
+        ```astro {{ filename: 'src/pages/protected.astro', collapsible: true }}
+        ---
+        import Layout from '../layouts/Layout.astro'
+        import { clerkClient } from '@clerk/astro/server'
+
+        const { isAuthenticated, has, orgId, orgRole } = Astro.locals.auth()
+
+        const requiredOrgName = 'Acme Corp'
+
+        let organization = null
+        if (isAuthenticated && orgId) {
+          organization = await clerkClient(Astro).organizations.getOrganization({ organizationId: orgId })
+        }
+        ---
+
+        <Layout title="Protected Page">
+          <!-- Check if the user is authenticated -->
+          {!isAuthenticated && <p>You must be signed in to access this page.</p>}
+
+          <!-- Check if there is an Active Organization -->
+          {!organization && <p>Set an Active Organization to access this page.</p>}
+
+          <!-- Check if the user has the required Role to access this page -->
+          {!has({ role: 'org:admin' }) && <p>You must be an admin to access this page.</p>}
+
+          <!-- Check if Organization name matches (e.g. 'Acme Corp') -->
+          {
+            organization &&
+              (organization.name !== requiredOrgName ? (
+                <p>
+                  This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
+                  Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
+                </p>
+              ) : (
+                <p>
+                  You are currently signed in as an <strong>admin</strong> in the{' '}
+                  <strong>{organization.name}</strong> Organization.
+                </p>
+              ))
+          }
+        </Layout>
+        ```
+      </If>
+
+      <If sdk="nuxt">
+        ```ts {{ filename: 'server/api/organization.ts', collapsible: true }}
+        import { clerkClient } from '@clerk/nuxt/server'
+
+        export default defineEventHandler(async (event) => {
+          const { isAuthenticated, orgId } = event.context.auth()
+          const requiredOrgName = 'Acme Corp'
+
+          // Check if the user is authenticated
+          if (!isAuthenticated) {
+            throw createError({
+              statusCode: 401,
+              statusMessage: 'Unauthorized: No user ID provided',
+            })
+          }
+
+          // Check if there is an Active Organization
+          if (!orgId) {
+            throw createError({
+              statusCode: 404,
+              statusMessage: 'Set an Active Organization to access this page.',
+            })
+          }
+
+          // Use the `getOrganization()` method to get the Backend `Organization` object
+          const organization = await clerkClient(event).organizations.getOrganization({
+            organizationId: orgId,
+          })
+
+          // Check if Organization name matches (e.g., "Acme Corp")
+          if (organization.name !== requiredOrgName) {
+            throw createError({
+              statusCode: 403,
+              statusMessage: `This route is only accessible in the ${requiredOrgName} Organization.`,
+            })
+          }
+
+          return {
+            organization,
+          }
+        })
+        ```
+      </If>
+    </Tab>
+
+    <Tab>
+      <If sdk="nextjs">
+        ```tsx {{ filename: 'app/protected/page.tsx', collapsible: true }}
+        'use client'
+        import { OrganizationSwitcher, useAuth, useOrganization } from '@clerk/nextjs'
+
+        export default function Page() {
+          // The `useAuth()` hook gives you access to properties like `isSignedIn` and `has()`
+          const { isSignedIn, has } = useAuth()
+          const { organization } = useOrganization()
+          const requiredOrgName = 'Acme Corp'
+
+          // Check if the user is authenticated
+          if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+          // Check if there is an Active Organization
+          if (!organization) return <p>Set an active organization to access this page.</p>
+
+          // Check if the user has the `org:admin` Role
+          if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+          // Check if Organization name matches (e.g. 'Acme Corp')
+          if (organization.name !== requiredOrgName)
+            return (
+              <p>
+                This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+                to the <strong>{requiredOrgName}</strong> Organization to access this page.
+              </p>
+            )
+
+          return (
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{organization.name}</strong> Organization.
+            </p>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="react-router">
+        ```tsx {{ filename: 'app/routes/protected.tsx', collapsible: true }}
+        import type { Route } from './+types/protected'
+        import { useAuth, useOrganization } from '@clerk/react-router'
+
+        export function meta({}: Route.MetaArgs) {
+          return [
+            { title: 'Protected Page' },
+            { name: 'description', content: 'A protected page requiring admin access' },
+          ]
+        }
+
+        export default function Protected() {
+          const { isSignedIn, has } = useAuth()
+          const { organization } = useOrganization()
+
+          // Check if the user is authenticated
+          if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+          // Check if there is an Active Organization
+          if (!organization) return <p>Set an Active Organization to access this page.</p>
+
+          // Check if the user has the `org:admin` Role
+          if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+          // Check if Organization name matches (e.g., "Acme Corp")
+          const requiredOrgName = 'Acme Corp'
+          if (organization.name !== requiredOrgName)
+            return (
+              <p>
+                This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+                to the <strong>{requiredOrgName}</strong> Organization to access this page.
+              </p>
+            )
+
+          return (
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{organization.name}</strong> Organization.
+            </p>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="astro">
+        ```tsx {{ filename: 'components/Home.tsx', collapsible: true }}
+        import { useStore } from '@nanostores/react'
+        import { $organizationStore } from '@clerk/astro/client'
+        import { useAuth } from '@clerk/astro/react'
+
+        export default function Home() {
+          const organization = useStore($organizationStore)
+          const { has, isSignedIn } = useAuth()
+          const requiredOrgName = 'Acme Corp'
+
+          if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+          // Handle loading state
+          if (organization === undefined) return <p>Loading...</p>
+
+          // Handle no Active Organization state
+          if (organization === null) return <p>Set an Active Organization to access this page.</p>
+
+          // Check if user has the required Role to access this page
+          if (!has({ role: 'org:admin' })) {
+            return <p>You must be an admin to access this page.</p>
+          }
+
+          // Check if Organization name matches (e.g. 'Acme Corp')
+          if (organization.name !== requiredOrgName) {
+            return (
+              <p>
+                This page is only accessible in the <strong>{requiredOrgName}</strong> Organization. Switch
+                to the <strong>{requiredOrgName}</strong> Organization to access this page.
+              </p>
+            )
+          }
+
+          return (
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{organization.name}</strong> Organization.
+            </p>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="nuxt">
+        ```vue {{ filename: 'app/pages/index.vue', collapsible: true }}
+        <script setup lang="ts">
+        // Composables are auto-imported from @clerk/nuxt
+        const { isSignedIn, has } = useAuth()
+        const { organization } = useOrganization()
+
+        const requiredOrgName = 'Acme Corp'
+        </script>
+
+        <template>
+          <!-- Check if the user is authenticated -->
+          <div v-if="!isSignedIn">
+            <p>You must be signed in to access this page.</p>
+          </div>
+
+          <!-- Check if there is an Active Organization -->
+          <div v-else-if="!organization">
+            <p>Set an Active Organization to access this page.</p>
+          </div>
+
+          <!-- Check if the user has the `org:admin` Role -->
+          <div v-else-if="!has?.({ role: 'org:admin' })">
+            <p>You must be an admin to access this page.</p>
+          </div>
+
+          <!-- Check if Organization name matches (e.g., "Acme Corp") -->
+          <div v-else-if="organization.name !== requiredOrgName">
+            <p>
+              This page is only accessible in the <strong>{{ requiredOrgName }}</strong> organization.
+              Switch to the <strong>{{ requiredOrgName }}</strong> organization to access this page.
+            </p>
+          </div>
+
+          <!-- Success: User is admin in Acme Corp -->
+          <div v-else>
+            <p>
+              You are currently signed in as an <strong>admin</strong> in the{' '}
+              <strong>{{ organization.name }}</strong> organization.
+            </p>
+          </div>
+        </template>
+        ```
+      </If>
+    </Tab>
+  </Tabs>
+</If>
+
+<If sdk="react">
+  ```tsx {{ filename: 'src/Protected.tsx', collapsible: true }}
+  import { useAuth, useOrganization } from '@clerk/clerk-react'
+
+  export default function Protected() {
+    const { isSignedIn, has } = useAuth()
+    const { organization } = useOrganization()
+
+    // Check if the user is authenticated
+    if (!isSignedIn) return <p>You must be signed in to access this page.</p>
+
+    // Check if there is an Active Organization
+    if (!organization) <p>Set an Active Organization to access this page.</p>
+
+    // Check if the user has the `org:admin` Role
+    if (!has({ role: 'org:admin' })) return <p>You must be an admin to access this page.</p>
+
+    // Check if Organization name matches (e.g. 'Acme Corp')
+    const requiredOrgName = 'Acme Corp'
+    if (organization.name !== requiredOrgName) {
+      return (
+        <>
+          <p>
+            This page is only accessible in the <strong>{requiredOrgName}</strong> Organization.
+            Switch to the <strong>{requiredOrgName}</strong> Organization to access this page.
+          </p>
+        </>
+      )
+    }
+
+    return (
+      <p>
+        You are currently signed in as an <strong>admin</strong> in the{' '}
+        <strong>{organization.name}</strong> Organization.
+      </p>
+    )
+  }
+  ```
+
+  Update your main `<App />` component to show the `<Protected />` component when you navigate to `/protected`.
+
+  ```tsx {{ filename: 'src/App.tsx', mark: [[31, 33]], collapsible: true }}
+  import './App.css'
+  import {
+    SignedIn,
+    SignedOut,
+    SignInButton,
+    UserButton,
+    OrganizationSwitcher,
+    useOrganization,
+    useOrganizationList,
+  } from '@clerk/clerk-react'
+  import Protected from './Protected'
+
+  function App() {
+    const { organization } = useOrganization()
+    const { userMemberships } = useOrganizationList({
+      userMemberships: true,
+    })
+
+    return (
+      <>
+        <header>
+          <OrganizationSwitcher />
+          <SignedOut>
+            <SignInButton />
+          </SignedOut>
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
+        </header>
+        <main className="p-8">
+          {window.location.pathname === '/protected' ? (
+            <Protected />
+          ) : (
+            <SignedIn>
+              <div>
+                <h1 className="text-2xl font-bold mb-4">
+                  Welcome to the <strong>{organization?.name}</strong> Organization
+                </h1>
+                <p className="mb-6">
+                  Your role in this Organization:{' '}
+                  <strong>
+                    {
+                      userMemberships?.data?.find(
+                        (membership) => membership.organization.id === organization?.id,
+                      )?.role
+                    }
+                  </strong>
+                </p>
+              </div>
+            </SignedIn>
+          )}
+        </main>
+      </>
+    )
+  }
+
+  export default App
+  ```
+</If>
+
+<If sdk="react-router">
+  Update your routes configuration to show the `<Protected />` component when you navigate to `/protected`.
+
+  ```tsx {{ filename: 'app/routes.ts', mark: [5] }}
+  import { type RouteConfig, index, route } from '@react-router/dev/routes'
+
+  export default [
+    index('routes/home.tsx'),
+    route('protected', 'routes/protected.tsx'),
+  ] satisfies RouteConfig
+  ```
+</If>

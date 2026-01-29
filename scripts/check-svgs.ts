@@ -116,7 +116,7 @@ function kebabToCamelCase(str: string): string {
 }
 
 function camelCaseAttributes(svg: string): string {
-  // Match and replace kebab-case attributes (e.g., strokeWidth=, fill-opacity=)
+  // Match and replace kebab-case attributes (e.g., stroke-width=, fill-opacity=)
   return svg.replace(/\b([a-z]+(?:-[a-z]+)+)=/g, (_, attr) => `${kebabToCamelCase(attr)}=`)
 }
 

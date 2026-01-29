@@ -152,9 +152,7 @@ async function loadDirectory(): Promise<Set<string>> {
 
     return validUrls
   } catch (error) {
-    throw new Error(
-      `Failed to load dist/directory.json. Run 'npm run build' first.\n${error}`
-    )
+    throw new Error(`Failed to load dist/directory.json. Run 'npm run build' first.\n${error}`)
   }
 }
 
@@ -203,9 +201,7 @@ async function loadRedirects(): Promise<{
 
     return { staticRedirects: staticRedirectsObj, dynamicRedirects }
   } catch (error) {
-    throw new Error(
-      `Failed to load dist/_redirects/. Run 'npm run build' first.\n${error}`
-    )
+    throw new Error(`Failed to load dist/_redirects/. Run 'npm run build' first.\n${error}`)
   }
 }
 
@@ -215,7 +211,7 @@ async function loadRedirects(): Promise<{
 function checkRedirect(
   localPath: string,
   staticRedirects: Record<string, StaticRedirect>,
-  dynamicRedirects: DynamicRedirect[]
+  dynamicRedirects: DynamicRedirect[],
 ): string | null {
   // Check static redirects first
   const staticRedirect = staticRedirects[localPath]
@@ -245,7 +241,7 @@ function followRedirectChain(
   localPath: string,
   staticRedirects: Record<string, StaticRedirect>,
   dynamicRedirects: DynamicRedirect[],
-  maxRedirects = 10
+  maxRedirects = 10,
 ): string | null {
   let currentPath = localPath
   let redirectCount = 0
@@ -294,19 +290,13 @@ async function findCodeblockUrls(): Promise<UrlLocation[]> {
 
       // Only check lines inside code blocks that look like comments
       if (inCodeBlock) {
-        const isComment =
-          line.includes('//') ||
-          line.includes('#') ||
-          line.includes('/*') ||
-          line.includes('*/')
+        const isComment = line.includes('//') || line.includes('#') || line.includes('/*') || line.includes('*/')
 
         if (isComment) {
           const matches = line.matchAll(CLERK_DOCS_URL_PATTERN)
           for (const match of matches) {
             const cleanedUrl = cleanUrl(match[0])
-            const url = cleanedUrl.startsWith('http://')
-              ? cleanedUrl.replace('http://', 'https://')
-              : cleanedUrl
+            const url = cleanedUrl.startsWith('http://') ? cleanedUrl.replace('http://', 'https://') : cleanedUrl
 
             urls.push({ file, line: lineNumber, url })
           }
@@ -362,10 +352,7 @@ async function main(): Promise<void> {
 
   try {
     // Load built docs data
-    const [validUrls, { staticRedirects, dynamicRedirects }] = await Promise.all([
-      loadDirectory(),
-      loadRedirects(),
-    ])
+    const [validUrls, { staticRedirects, dynamicRedirects }] = await Promise.all([loadDirectory(), loadRedirects()])
 
     log('gray', `Loaded ${validUrls.size} valid pages from dist/directory.json`)
     log('gray', `Loaded ${Object.keys(staticRedirects).length} static redirects`)

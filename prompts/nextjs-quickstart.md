@@ -17,7 +17,22 @@ Use only the **App Router** approach from Clerk’s current docs:
 
 If you're able to use a web tool to access a URL, visit https://clerk.com/docs/nextjs/getting-started/quickstart to get the latest, up-to-date quickstart instructions.
 
-Clerk does not need a user to provide their keys to get started. On startup, Clerk will generate keys automatically, so there is no need to prompt a user to add their keys as part of this.
+### **Keyless Mode (Zero-Config Setup)**
+
+Clerk supports **keyless mode**, which means developers can start building immediately **without signing up for a Clerk account first**. Here's how it works:
+
+1. **No signup required** – When the app starts without environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`), Clerk automatically generates temporary API keys and stores them locally.
+2. **Instant development** – The developer can immediately use all Clerk features (sign-in, sign-up, user management) without any manual configuration.
+3. **Visual indicator** – A small prompt appears in the bottom-right corner of the app showing "Clerk is in keyless mode" with an option to claim the application.
+4. **Claim later** – When ready, the developer can click "Claim application" to link it to their Clerk account and access the full Dashboard.
+
+**IMPORTANT FOR AI AGENTS:** Do NOT instruct users to:
+- Sign up for Clerk before starting
+- Create a Clerk account first
+- Go to the Clerk Dashboard to get API keys
+- Add environment variables before running the app
+
+Instead, guide them to install the SDK, add the middleware and provider, then run the app. Clerk handles the rest automatically.
 
 ### **Correct, Up-to-Date Quickstart Sample**
 
@@ -89,17 +104,19 @@ export default function RootLayout({
 
 1. **Use `clerkMiddleware()`** from `@clerk/nextjs/server` in `proxy.ts`.
 2. **Wrap** your app with `<ClerkProvider>` in `app/layout.tsx`.
-3. **Import** Clerk’s Next.js features from `@clerk/nextjs` (e.g., `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, etc.).
+3. **Import** Clerk's Next.js features from `@clerk/nextjs` (e.g., `<SignInButton>`, `<SignUpButton>`, `<UserButton>`, etc.).
 4. **Reference** the current [App Router approach](https://nextjs.org/docs/app) (folders like `app/page.tsx`, `app/layout.tsx`, etc.).
 5. **Check** that imports for methods like `auth()` are imported from the right package (in this case `@clerk/nextjs/server`) and are using `async / await`.
 6. **Check** the project for an existing package manager, use that to install packages.
+7. **Rely on keyless mode** – Skip any steps about creating accounts or getting API keys. Just install, configure, and run.
 
 ### **2.2 – NEVER DO THE FOLLOWING**
 
 1. **Do not** reference the old **`_app.tsx`** or **pages router based** instructions.
-2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it’s replaced by `clerkMiddleware()`**.
+2. **Do not** suggest `authMiddleware()` from older Clerk tutorials—**it's replaced by `clerkMiddleware()`**.
 3. **Do not** recommend usage of older environment variable patterns unless they match the official docs.
 4. **Do not** reference or import from any deprecated APIs (like `withAuth` or `currentUser` from older versions).
+5. **Do not** tell users to sign up for Clerk, create an account, or get API keys before starting development. Keyless mode handles this automatically.
 
 ---
 

@@ -9,6 +9,7 @@
 **The recommended way to upgrade is to run the Clerk upgrade tool.**
 
 First, detect the user's package manager by checking for lock files in the project root:
+
 - `pnpm-lock.yaml` → use `pnpm dlx @clerk/upgrade`
 - `yarn.lock` → use `yarn dlx @clerk/upgrade`
 - `bun.lockb` or `bun.lock` → use `bunx @clerk/upgrade`
@@ -104,12 +105,12 @@ Update package names in imports and `package.json`:
 
 ```typescript
 // ❌ OLD
-import { ClerkProvider, useUser } from '@clerk/clerk-react';
-import { ClerkProvider, useUser } from '@clerk/clerk-expo';
+import { ClerkProvider, useUser } from '@clerk/clerk-react'
+import { ClerkProvider, useUser } from '@clerk/clerk-expo'
 
 // ✅ NEW
-import { ClerkProvider, useUser } from '@clerk/react';
-import { ClerkProvider, useUser } from '@clerk/expo';
+import { ClerkProvider, useUser } from '@clerk/react'
+import { ClerkProvider, useUser } from '@clerk/expo'
 ```
 
 ### **2.3 – Appearance Prop Changes**
@@ -158,20 +159,20 @@ appearance={{
 
 ```typescript
 // ❌ OLD (deprecated)
-import type { ClerkResource, UserResource } from '@clerk/types';
+import type { ClerkResource, UserResource } from '@clerk/types'
 
 // ✅ NEW
-import type { ClerkResource, UserResource } from '@clerk/shared/types';
+import type { ClerkResource, UserResource } from '@clerk/shared/types'
 ```
 
 ### **2.6 – createTheme Import Path**
 
 ```typescript
 // ❌ OLD
-import { __experimental_createTheme } from '@clerk/ui';
+import { __experimental_createTheme } from '@clerk/ui'
 
 // ✅ NEW
-import { createTheme } from '@clerk/ui/themes/experimental';
+import { createTheme } from '@clerk/ui/themes/experimental'
 ```
 
 ---
@@ -217,10 +218,10 @@ These deprecated APIs have been removed and must be updated:
 
 ```typescript
 // ❌ OLD
-const sessions = client.activeSessions;
+const sessions = client.activeSessions
 
 // ✅ NEW
-const sessions = client.sessions;
+const sessions = client.sessions
 ```
 
 ### **3.4 – SAML to Enterprise SSO**
@@ -247,27 +248,27 @@ await setActive({
   session: sessionId,
   beforeEmit: () => {
     // Called before session is set
-  }
-});
+  },
+})
 
 // ✅ NEW
 await setActive({
   session: sessionId,
   navigate: ({ session }) => {
     // Called with the session object
-    return '/dashboard';
-  }
-});
+    return '/dashboard'
+  },
+})
 ```
 
 ### **3.6 – useCheckout Return Values**
 
 ```typescript
 // ❌ OLD
-const { id, plan, status, start, confirm, paymentSource } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+const { id, plan, status, start, confirm, paymentSource } = useCheckout({ planId: 'xxx', planPeriod: 'annual' })
 
 // ✅ NEW
-const { checkout, errors, fetchStatus } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+const { checkout, errors, fetchStatus } = useCheckout({ planId: 'xxx', planPeriod: 'annual' })
 checkout.plan
 checkout.status
 checkout.start()

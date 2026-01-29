@@ -27,6 +27,7 @@ Clerk supports **keyless mode**, which means developers can start building immed
 4. **Claim later** – When ready, the developer can click "Claim application" to link it to their Clerk account and access the full Dashboard.
 
 **IMPORTANT FOR AI AGENTS:** Do NOT instruct users to:
+
 - Sign up for Clerk before starting
 - Create a Clerk account first
 - Go to the Clerk Dashboard to get API keys

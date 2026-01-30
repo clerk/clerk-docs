@@ -1,0 +1,295 @@
+---
+title: '`<TaskSetupMfa />` component'
+description: Clerk's <TaskSetupMfa /> component renders a UI for resolving the `setup-mfa` task.
+sdk: js-frontend, nextjs, react, react-router, tanstack-react-start
+---
+
+The `<TaskSetupMfa />` component renders a UI for resolving the `setup-mfa` [session task](!session-tasks). You can further customize your `<TaskSetupMfa />` component by passing additional [properties](#properties) at the time of rendering.
+
+> [!IMPORTANT]
+> The `<TaskSetupMfa/>` component cannot render when a user doesn't have current session tasks.
+
+## When to use `<TaskSetupMfa />`
+
+Clerk's sign-in flows, such as the [Sign-in Account Portal page](/docs/guides/account-portal/overview#sign-in), [`<SignInButton />`](/docs/reference/components/unstyled/sign-in-button), and [`<SignIn />`](/docs/reference/components/authentication/sign-in) component, automatically handle the `setup-mfa` session task flow for you, including rendering the `<TaskSetupMfa />` component when needed.
+
+If you want to customize the route where the `<TaskSetupMfa />` component is rendered or customize its appearance, you can host it yourself within your application.
+
+<If notSdk="js-frontend">
+  ## Example
+
+  The following example demonstrates how to host the `<TaskSetupMfa />` component on a custom page. You first need to [set the `taskUrls` option on your Clerk integration](/docs/guides/configure/session-tasks#using-the-task-urls-option) so that users are redirected to the page where you host the `<TaskSetupMfa />` component when they have a pending `setup-mfa` session task.
+
+  <If sdk="nextjs">
+    ```tsx {{ filename: 'app/layout.tsx', mark: [7] }}
+    import { ClerkProvider } from '@clerk/nextjs'
+
+    export default function RootLayout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <body>
+            <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+              {children}
+            </ClerkProvider>
+          </body>
+        </html>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'app/onboarding/setup-mfa/page.tsx' }}
+    import { TaskSetupMfa } from '@clerk/nextjs'
+
+    export default function Page() {
+      return <TaskSetupMfa redirectUrlComplete="/dashboard" />
+    }
+    ```
+  </If>
+
+  <If sdk="react">
+    ```tsx {{ filename: 'index.tsx', mark: [17] }}
+    import React from 'react'
+    import ReactDOM from 'react-dom/client'
+    import App from './App.tsx'
+    import { ClerkProvider } from '@clerk/react'
+
+    // Import your Publishable Key
+    const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!PUBLISHABLE_KEY) {
+      throw new Error('Add your Clerk Publishable Key to the .env file')
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <ClerkProvider
+          publishableKey={PUBLISHABLE_KEY}
+          taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}
+        >
+          <App />
+        </ClerkProvider>
+      </React.StrictMode>,
+    )
+    ```
+
+    ```jsx {{ filename: 'src/onboarding/setup-mfa.tsx' }}
+    import { TaskSetupMfa } from '@clerk/react'
+
+    const SetupMfaPage = () => <TaskSetupMfa redirectUrlComplete="/dashboard" />
+
+    export default SetupMfaPage
+    ```
+  </If>
+
+  <If sdk="react-router">
+    > [!NOTE]
+    > To see the full `root.tsx` setup you need for Clerk with React Router, see the [React Router quickstart](/docs/react-router/getting-started/quickstart).
+
+    ```tsx {{ filename: 'app/root.tsx', mark: [6] }}
+    import { ClerkProvider } from '@clerk/react-router'
+    import { Outlet } from 'react-router'
+
+    export default function App() {
+      return (
+        <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+          <Outlet />
+        </ClerkProvider>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'app/routes/onboarding/setup-mfa.tsx' }}
+    import { TaskSetupMfa } from '@clerk/react-router'
+
+    export default function SetupMfaPage() {
+      return <TaskSetupMfa redirectUrlComplete="/dashboard" />
+    }
+    ```
+  </If>
+
+  <If sdk="tanstack-react-start">
+    > [!NOTE]
+    > To see the full `__root.tsx` setup you need for Clerk with TanStack React Start, see the [TanStack React Start quickstart](/docs/tanstack-react-start/getting-started/quickstart).
+
+    ```tsx {{ filename: 'src/routes/__root.tsx', mark: [12] }}
+    import * as React from 'react'
+    import { HeadContent, Scripts } from '@tanstack/react-router'
+    import { ClerkProvider } from '@clerk/tanstack-react-start'
+
+    function RootDocument({ children }: { children: React.ReactNode }) {
+      return (
+        <html>
+          <head>
+            <HeadContent />
+          </head>
+          <body>
+            <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+              {children}
+            </ClerkProvider>
+            <Scripts />
+          </body>
+        </html>
+      )
+    }
+    ```
+
+    ```tsx {{ filename: 'src/routes/onboarding/setup-mfa.tsx' }}
+    import { TaskSetupMfa } from '@clerk/tanstack-react-start'
+    import { createFileRoute } from '@tanstack/react-router'
+
+    export const Route = createFileRoute('/onboarding/setup-mfa')({
+      component: SetupMfaPage,
+    })
+
+    function SetupMfaPage() {
+      return <TaskSetupMfa redirectUrlComplete="/dashboard" />
+    }
+    ```
+  </If>
+</If>
+
+<If sdk="js-frontend">
+  ## Usage with JavaScript
+
+  The following methods available on an instance of the [`Clerk`](/docs/reference/javascript/clerk) class are used to render and control the `<TaskSetupMfa />` component:
+
+  - [`mountTaskSetupMfa()`](#mount-task-setup-mfa)
+  - [`unmountTaskSetupMfa()`](#unmount-task-setup-mfa)
+
+  The following examples assume that you have followed the [quickstart](/docs/js-frontend/getting-started/quickstart) in order to add Clerk to your JavaScript application.
+
+  ### `mountTaskSetupMfa()`
+
+  Render the `<TaskSetupMfa />` component to an HTML `<div>` element.
+
+  ```typescript
+  function mountTaskSetupMfa(node: HTMLDivElement, props?: TaskSetupMfaProps): void
+  ```
+
+  #### `mountTaskSetupMfa()` params
+
+  <Properties>
+    - `node `
+    - [`HTMLDivElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDivElement)
+
+    The `<div>` element used to render in the `<TaskSetupMfa />` component
+
+    ---
+
+    - `props?`
+    - [`TaskSetupMfaProps`](#properties)
+
+    The properties to pass to the `<TaskSetupMfa />` component.
+  </Properties>
+
+  #### `mountTaskSetupMfa()` usage
+
+  ```typescript {{ filename: 'main.ts', mark: [26] }}
+  import { Clerk } from '@clerk/clerk-js'
+
+  const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  const clerk = new Clerk(pubKey)
+  await clerk.load()
+
+  if (clerk.isSignedIn) {
+    // Mount user button component
+    document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+    const userbuttonDiv = document.getElementById('user-button')
+
+    clerk.mountUserButton(userbuttonDiv)
+  } else if (clerk.session?.currentTask) {
+    switch (clerk.session.currentTask.key) {
+      case 'setup-mfa': {
+        document.getElementById('app').innerHTML = `
+                <div id="task-setup-mfa"></div>
+              `
+
+        const taskSetupMfaDiv = document.getElementById('task-setup-mfa')
+
+        clerk.mountTaskSetupMfa(taskSetupMfaDiv)
+      }
+    }
+  }
+  ```
+
+  ### `unmountTaskSetupMfa()`
+
+  Unmount and run cleanup on an existing `<TaskSetupMfa />` component instance.
+
+  ```typescript
+  function unmountTaskSetupMfa(node: HTMLDivElement): void
+  ```
+
+  #### `unmountTaskSetupMfa()` params
+
+  <Properties>
+    - `node `
+    - [`HTMLDivElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDivElement)
+
+    The container `<div>` element with a rendered `<SignUp />` component instance
+  </Properties>
+
+  #### `unmountTaskSetupMfa()` usage
+
+  ```typescript {{ filename: 'main.ts', mark: [30] }}
+  import { Clerk } from '@clerk/clerk-js'
+
+  const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+  const clerk = new Clerk(pubKey)
+  await clerk.load()
+
+  if (clerk.isSignedIn) {
+    // Mount user button component
+    document.getElementById('signed-in').innerHTML = `
+            <div id="user-button"></div>
+          `
+
+    const userbuttonDiv = document.getElementById('user-button')
+
+    clerk.mountUserButton(userbuttonDiv)
+  } else if (clerk.session?.currentTask) {
+    switch (clerk.session.currentTask.key) {
+      case 'setup-mfa': {
+        document.getElementById('app').innerHTML = `
+                <div id="task-setup-mfa"></div>
+              `
+
+        const taskSetupMfaDiv = document.getElementById('task-setup-mfa')
+
+        clerk.mountTaskSetupMfa(taskSetupMfaDiv)
+
+        // ...
+
+        clerk.unmountTaskSetupMfa(taskSetupMfaDiv)
+      }
+    }
+  }
+  ```
+</If>
+
+## Properties
+
+<Properties>
+  - `redirectUrlComplete`
+  - `string`
+
+  The full URL or path to navigate to after successfully completing the task.
+
+  ---
+
+  - `appearance?`
+  - <code>[Appearance](/docs/guides/customizing-clerk/appearance-prop/overview) | undefined</code>
+
+  Optional object to style your components. Will only affect [Clerk components](/docs/reference/components/overview) and not [Account Portal](/docs/guides/account-portal/overview) pages.
+</Properties>
+
+## Customization
+
+To learn about how to customize Clerk components, see the [customization documentation](/docs/guides/customizing-clerk/appearance-prop/overview).
+
+If Clerk's prebuilt components don't meet your specific needs or if you require more control over the logic, you can rebuild the existing Clerk flows using the Clerk API. For more information, see the [custom flow guides](/docs/guides/development/custom-flows/overview).

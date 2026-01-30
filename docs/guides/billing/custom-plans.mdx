@@ -1,0 +1,86 @@
+---
+title: Custom plans and prices
+description: Transition subscriptions between plans and create custom pricing for your customers
+---
+
+<Include src="_partials/billing/billing-experimental" />
+
+Custom plans and prices allow you to transition active subscriptions between different billing plans directly from the Clerk Dashboard or backend API. You can switch a customer's subscription from one price to another while maintaining a smooth billing experience — whether you're upgrading them from free to paid, moving between paid tiers, or applying custom pricing.
+
+## Use cases
+
+This subscription management feature simplifies essential billing workflows:
+
+- **Promotional offers** - Apply special pricing to existing subscribers
+- **Tiered upgrades and downgrades** - Move customers between different paid plans based on their needs or usage
+- **Plan migrations** - Transition customers to new pricing structures as your product evolves
+
+## Update subscription plans or prices
+
+### Using the Dashboard
+
+To change the price or plan of an existing subscription:
+
+1. Navigate to the [**Billing**](https://dashboard.clerk.com/~/billing/subscriptions) page in the Clerk Dashboard.
+1. Select the subscription item you want to update.
+1. Select the **...** menu.
+1. Choose **Change price** or **Change plan** as needed.
+
+If none of the existing pricing options meet your needs, you can create a custom price:
+
+1. When updating a subscription, select **Create new price**.
+1. Configure the pricing details.
+1. Use the new price immediately for your subscription transition.
+
+This is useful for creating one-off pricing arrangements for specific customers.
+
+### Using the Backend API
+
+You can also transition subscriptions programmatically using the Backend API. This is useful for automating plan changes or building custom billing workflows.
+
+For example, to upgrade a customer from a Basic plan to an Enterprise plan:
+
+```bash
+curl 'https://api.clerk.com/v1/billing/subscription_items/{subscription_item_id}/price_transition' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_SECRET_TOKEN' \
+  --data '{
+  "from_price_id": "cprice_123",
+  "to_price_id": "cprice_456"
+}'
+```
+
+For complete API documentation, see the [Create price transition endpoint](https://clerk.com/docs/reference/backend-api/tag/billing/post/billing/subscription_items/\{subscription_item_id}/price_transition).
+
+## How transitions work
+
+When you create a price transition, Clerk handles all the timing and billing logic automatically. The behavior depends on the type of transition:
+
+### Free-to-paid transitions
+
+**New customers with no active subscription**
+
+When transitioning a customer from free to a paid plan with no other active subscription, the paid plan activates immediately and the customer is charged right away.
+
+_Example:_ Moving a customer on the free plan to Pro ($50/month). Pro activates immediately, customer is charged $50.
+
+**Customers with an active subscription**
+
+When transitioning from free to paid but the customer has another active subscription, the paid plan is scheduled as _upcoming_ to avoid billing conflicts.
+
+_Example:_ Customer on free plan with an active Pro subscription through March 20. Switching the free plan to Enterprise sets Enterprise as _upcoming_ until March 20.
+
+### Paid-to-paid transitions
+
+When a customer already has an active paid subscription, the new plan is scheduled to start when their current billing period ends to prevent double-billing.
+
+_Example:_ Upgrading a customer from Basic ($20/month, paid through Feb 15) to Enterprise ($35/month) on Jan 15:
+
+- Basic remains active through Feb 15 (already paid for)
+- Enterprise becomes _upcoming_ and activates Feb 15 (customer is charged then)
+- No double-billing for overlapping periods
+
+### Paid-to-free transitions
+
+When transitioning from paid to free, the free plan is scheduled as _upcoming_, allowing the customer's current paid subscription to run through its paid period before automatically activating the free plan.

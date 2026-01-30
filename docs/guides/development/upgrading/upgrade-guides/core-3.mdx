@@ -1,0 +1,561 @@
+---
+title: "Upgrading to Clerk Core 3"
+description: "Learn how to upgrade to Clerk Core 3 across all SDKs."
+llm:
+  displayText: Use this pre-built prompt to upgrade your project with AI assistance.
+  src: prompts/core-3-upgrade.md
+---
+
+## Overview
+
+Core 3 focuses on consistency and cleanup across Clerk's SDKs while keeping upgrade time short (usually under 30 minutes with the CLI).
+
+- **Naming consistency:** `__unstable_*` APIs move to `__internal_*`, and experimental methods share the `__experimental_` prefix.
+- **Package renaming:** `@clerk/clerk-react` becomes `@clerk/react`, `@clerk/clerk-expo` becomes `@clerk/expo`, `createTheme` moves to `@clerk/ui/themes/experimental`, and types consolidate under `@clerk/shared/types`.
+- **Appearance updates:** `appearance.layout` is now `appearance.options`, `showOptionalFields` defaults to `false`, and color variables apply at full opacity.
+- **Behavior alignment:** redirect props and legacy billing flags are removed in favor of the newer patterns.
+- **Platform requirements:** Node.js 20.9.0+ is required across the updated packages.
+
+Use `npx @clerk/upgrade` to scan your project and speed up the migration.
+
+## Breaking changes
+
+The following breaking changes apply to all Clerk SDKs.
+
+<Accordion
+  titles={[
+    "<code>Protect</code>, <code>SignedIn</code>, and <code>SignedOut</code> replaced by <code>Show</code>",
+    "<code>appearance.layout</code> renamed to <code>appearance.options</code>",
+    "<code>colorRing</code> and <code>colorModalBackdrop</code> now render at full opacity",
+    "<code>useCheckout</code> and <code>Clerk.checkout()</code> return values changed",
+    "Experimental methods prefix standardized to <code>__experimental_</code>",
+    "<code>createTheme</code> moved to <code>@clerk/ui/themes/experimental</code>",
+    "<code>__unstable_*</code> methods renamed to <code>__internal_*</code>",
+  ]}
+>
+  <AccordionPanel>
+    The authorization control components `Protect`, `SignedIn`, and `SignedOut` have been removed in favor of a single component: `Show`.
+
+    ### Signed in / signed out {{ toc: false }}
+
+    ```diff
+    - import { SignedIn, SignedOut } from '@clerk/nextjs';
+    + import { Show } from '@clerk/nextjs';
+
+    - <SignedIn>
+    + <Show when="signed-in">
+        <Dashboard />
+    - </SignedIn>
+    + </Show>
+
+    - <SignedOut>
+    + <Show when="signed-out">
+        <SignInPage />
+    - </SignedOut>
+    + </Show>
+    ```
+
+    ### Authorization checks (roles/permissions/features/plans) {{ toc: false }}
+
+    ```diff
+    - import { Protect } from '@clerk/nextjs';
+    + import { Show } from '@clerk/nextjs';
+
+    - <Protect role="admin" fallback={<p>Unauthorized</p>}>
+    + <Show when={{ role: 'admin' }} fallback={<p>Unauthorized</p>}>
+        <AdminPanel />
+    - </Protect>
+    + </Show>
+
+    - <Protect permission="org:billing:manage">
+    + <Show when={{ permission: 'org:billing:manage' }}>
+        <BillingSettings />
+    - </Protect>
+    + </Show>
+    ```
+
+    If you were using `condition={(has) => ...}` on `Protect`, pass that callback to `when`:
+
+    ```diff
+    - <Protect condition={(has) => has({ role: 'admin' }) && isAllowed}>
+    + <Show when={(has) => has({ role: 'admin' }) && isAllowed}>
+        <AdminPanel />
+    - </Protect>
+    + </Show>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `appearance.layout` property has been renamed to `appearance.options`. Update all instances in your codebase:
+
+    ```diff
+      <ClerkProvider
+        appearance={{
+    -     layout: {
+    +     options: {
+            socialButtonsPlacement: 'bottom',
+            socialButtonsVariant: 'iconButton',
+          }
+        }}
+      >
+        {/* ... */}
+      </ClerkProvider>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `colorRing` and `colorModalBackdrop` CSS variables now render at full opacity when modified via the appearance prop or CSS variables. Previously, provided colors were rendered at 15% opacity.
+
+    If you were relying on the previous behavior, you may need to adjust your color values to include the desired opacity:
+
+    ```diff
+      <ClerkProvider
+        appearance={{
+          variables: {
+    -       colorRing: '#6366f1',
+    +       colorRing: 'rgba(99, 102, 241, 0.15)',
+          }
+        }}
+      >
+        {/* ... */}
+      </ClerkProvider>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The return values of the `useCheckout` hook and the `Clerk.checkout()` method have been updated.
+
+    ### React hook {{ toc: false }}
+
+    ```diff
+    - const { id, plan, status, start, confirm, paymentSource } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+    + const { checkout, errors, fetchStatus } = useCheckout({ planId: "xxx", planPeriod: "annual" });
+    + // Access properties via checkout object
+    + checkout.plan
+    + checkout.status
+    + checkout.start()
+    + checkout.confirm()
+    ```
+
+    ### Vanilla JS {{ toc: false }}
+
+    ```diff
+    - const { getState, subscribe, confirm, start, clear, finalize } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
+    - getState().isStarting
+    - getState().checkout
+    + const { checkout, errors, fetchStatus } = Clerk.checkout({ planId: "xxx", planPeriod: "annual" });
+    + checkout.plan
+    + checkout.status
+    + checkout.start()
+    + checkout.confirm()
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    All experimental methods now use the `__experimental_` prefix consistently. Update any references:
+
+    ```diff
+    - experimental_someMethod
+    + __experimental_someMethod
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `createTheme` theme utility has been moved to a new export path. Update your imports:
+
+    ```diff
+    - import { __experimental_createTheme } from '@clerk/ui';
+    + import { createTheme } from '@clerk/ui/themes/experimental';
+    ```
+
+    > [!NOTE]
+    > The `__experimental_` prefix has been removed from the method since they're now in the `/themes/experimental` subpath.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    All `__unstable_*` methods have been renamed to `__internal_*`. These are internal APIs not intended for public use.
+
+    ### @clerk/clerk-js {{ toc: false }}
+
+    - `__unstable__environment` → `__internal_environment`
+    - `__unstable__updateProps` → `__internal_updateProps`
+    - `__unstable__setEnvironment` → `__internal_setEnvironment`
+    - `__unstable__onBeforeRequest` → `__internal_onBeforeRequest`
+    - `__unstable__onAfterResponse` → `__internal_onAfterResponse`
+    - `__unstable__onBeforeSetActive` → `__internal_onBeforeSetActive`
+    - `__unstable__onAfterSetActive` → `__internal_onAfterSetActive`
+
+    ### @clerk/nextjs {{ toc: false }}
+
+    - `__unstable_invokeMiddlewareOnAuthStateChange` → `__internal_invokeMiddlewareOnAuthStateChange`
+
+    ### @clerk/chrome-extension {{ toc: false }}
+
+    - `__unstable__createClerkClient` → `createClerkClient` (exported from `@clerk/chrome-extension/background`)
+  </AccordionPanel>
+</Accordion>
+
+## Deprecation removals
+
+The following deprecated APIs have been removed from all Clerk SDKs.
+
+<Accordion
+  titles={[
+    "<code>afterSwitchOrganizationUrl</code> removed from <code>OrganizationSwitcher</code>",
+    "<code>Client.activeSessions</code> removed",
+    "<code>hideSlug</code> prop removed",
+    "<code>saml</code> strategy renamed to <code>enterprise_sso</code>",
+    "<code>samlAccount</code> renamed to <code>enterpriseAccount</code>",
+    "<code>setActive({ beforeEmit })</code> changed to <code>setActive({ navigate })</code>",
+    "<code>UserButton</code> sign-out redirect props removed",
+    "<code>UserSettings.saml</code> renamed to <code>enterpriseSSO</code>",
+    "Legacy redirect props removed",
+    "Unstable billing props removed",
+  ]}
+>
+  <AccordionPanel>
+    The `afterSwitchOrganizationUrl` prop has been removed from `OrganizationSwitcher`. Use `afterSelectOrganizationUrl` instead:
+
+    ```diff
+    <OrganizationSwitcher
+    -  afterSwitchOrganizationUrl="/org-dashboard"
+    +  afterSelectOrganizationUrl="/org-dashboard"
+    />
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `activeSessions` property has been removed from the `Client` object. Use `sessions` instead:
+
+    ```diff
+    - const sessions = client.activeSessions;
+    + const sessions = client.sessions;
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `hideSlug` prop has been removed. Organization slugs are now managed through the Clerk Dashboard.
+
+    ```diff
+    <OrganizationProfile
+    -  hideSlug={true}
+    />
+    ```
+
+    To hide organization slugs, navigate to the [**Organizations Settings**](https://dashboard.clerk.com/~/organizations) page in the Clerk Dashboard, and ensure that the **Enable organization slugs** option is enabled.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `saml` authentication strategy has been renamed to `enterprise_sso`. Update any references in your code:
+
+    ```diff
+    - strategy: 'saml'
+    + strategy: 'enterprise_sso'
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `samlAccount` property has been renamed to `enterpriseAccount`. Update your code:
+
+    ```diff
+    - user.samlAccounts
+    + user.enterpriseAccounts
+
+    - verification.samlAccount
+    + verification.enterpriseAccount
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `beforeEmit` callback in `setActive()` has been replaced with `navigate`. The callback signature has also changed:
+
+    ```diff
+    await setActive({
+      session: sessionId,
+    - beforeEmit: () => {
+    -   // Called before session is set
+    - }
+    + navigate: ({ session }) => {
+    +   // Called with the session object
+    +   return '/dashboard';
+    + }
+    });
+    ```
+
+    The `navigate` callback receives an object with the `session` property and should return the URL to navigate to.
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `UserButton` component no longer accepts sign-out redirect override props. Configure sign-out redirects using one of these methods:
+
+    **Global configuration:**
+
+    ```jsx
+    <ClerkProvider afterSignOutUrl="/signed-out"></ClerkProvider>
+    ```
+
+    **Per-button with SignOutButton:**
+
+    ```jsx
+    <SignOutButton redirectUrl="/goodbye">Sign Out</SignOutButton>
+    ```
+
+    **Programmatic:**
+
+    ```js
+    clerk.signOut({ redirectUrl: '/signed-out' })
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The `saml` property on `UserSettings` has been renamed to `enterpriseSSO`. Update your code:
+
+    ```diff
+    - userSettings.saml
+    + userSettings.enterpriseSSO
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The legacy redirect props `afterSignInUrl`, `afterSignUpUrl`, and `redirectUrl` have been removed from components. Use the newer redirect options:
+
+    ```diff
+    <SignIn
+    -  afterSignInUrl="/dashboard"
+    -  afterSignUpUrl="/onboarding"
+    +  fallbackRedirectUrl="/dashboard"
+    +  signUpFallbackRedirectUrl="/onboarding"
+    />
+    ```
+
+    For forced redirects that ignore the `redirect_url` query parameter:
+
+    ```diff
+    <SignIn
+    +  forceRedirectUrl="/dashboard"
+    +  signUpForceRedirectUrl="/onboarding"
+    />
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    The following unstable properties have been removed. If you were relying on these, please reach out to our [support team](https://clerk.com/support).
+
+    - `__unstable_manageBillingUrl`
+    - `__unstable_manageBillingLabel`
+    - `__unstable_manageBillingMembersLimit`
+  </AccordionPanel>
+</Accordion>
+
+## Deprecations
+
+<Accordion
+  titles={[
+    "<code>@clerk/types</code> deprecated in favor of <code>@clerk/shared/types</code>",
+  ]}
+>
+  <AccordionPanel>
+    The `@clerk/types` package is deprecated. All type definitions have been consolidated into `@clerk/shared/types`.
+
+    Update your imports:
+
+    ```diff
+    - import type { ClerkResource, UserResource } from '@clerk/types';
+    + import type { ClerkResource, UserResource } from '@clerk/shared/types';
+    ```
+
+    The `@clerk/types` package will continue to re-export types from `@clerk/shared/types` for backward compatibility, but new types will only be added to `@clerk/shared/types`.
+  </AccordionPanel>
+</Accordion>
+
+## Version requirements
+
+<Accordion
+  titles={[
+    "Upgrade Node.js to v20.9.0 or higher",
+  ]}
+>
+  <AccordionPanel>
+    All Clerk packages now require Node.js 20.9.0 or later. Update your Node.js version and ensure your `package.json` engines field reflects this requirement.
+
+    ```diff
+    {
+      "engines": {
+    -   "node": ">=18.0.0"
+    +   "node": ">=20.9.0"
+      }
+    }
+    ```
+  </AccordionPanel>
+</Accordion>
+
+## Behavior changes
+
+<Accordion
+  titles={[
+    "<code>showOptionalFields</code> now defaults to <code>false</code>",
+    "<code>ClerkAPIError.kind</code> value updated",
+  ]}
+>
+  <AccordionPanel>
+    The default value of `appearance.layout.showOptionalFields` (now `appearance.options.showOptionalFields`) has changed from `true` to `false`. Optional fields are now hidden by default during sign up.
+
+    To restore the previous behavior, explicitly set the option:
+
+    ```jsx
+    <ClerkProvider
+      appearance={{
+        options: {
+          showOptionalFields: true,
+        },
+      }}
+    >
+      {/* ... */}
+    </ClerkProvider>
+    ```
+  </AccordionPanel>
+
+  <AccordionPanel>
+    `ClerkAPIError.kind` has been updated to match the class name:
+
+    ```diff
+    - static kind = 'ClerkApiError'
+    + static kind = 'ClerkAPIError'
+    ```
+
+    Most users should not be affected. If you were checking this string directly (e.g., `error.constructor.kind === 'ClerkApiError'`), update the comparison value.
+  </AccordionPanel>
+</Accordion>
+
+## SDK-specific changes
+
+The following changes only apply to specific SDKs. Select your SDK below for additional upgrade steps.
+
+<Tabs items={['React', 'Next.js', 'Expo', 'Nuxt']}>
+  <Tab>
+    {/* React */}
+
+    ### `@clerk/clerk-react` renamed to `@clerk/react` {{ toc: false }}
+
+    The `@clerk/clerk-react` package has been renamed to `@clerk/react`.
+
+    Update your imports:
+
+    ```diff
+    - import { ClerkProvider, useUser } from '@clerk/clerk-react';
+    + import { ClerkProvider, useUser } from '@clerk/react';
+    ```
+
+    And update your `package.json`:
+
+    ```diff
+    - "@clerk/clerk-react": "^5.0.0",
+    + "@clerk/react": "^7.0.0",
+    ```
+  </Tab>
+
+  <Tab>
+    {/* Next.js */}
+
+    ### Encryption key required when passing `secretKey` at runtime {{ toc: false }}
+
+    When passing `secretKey` as a runtime option to `clerkMiddleware()`, you must now also provide a `CLERK_ENCRYPTION_KEY` environment variable.
+
+    Add the encryption key to your environment:
+
+    ```env
+    CLERK_ENCRYPTION_KEY=your-encryption-key
+    ```
+
+    See the [clerkMiddleware documentation](/docs/reference/nextjs/clerk-middleware#dynamic-keys).
+
+    ### ClerkProvider should be inside `<body>` for Next.js 16 cache components {{ toc: false }}
+
+    For Next.js 16 cache components support (`cacheComponents: true`), `ClerkProvider` must be positioned inside `<body>` rather than wrapping `<html>`. This prevents "Uncached data was accessed outside of `<Suspense>`" errors.
+
+    ```diff
+    - <ClerkProvider>
+    -   <html lang="en">
+    -     <body>{children}</body>
+    -   </html>
+    - </ClerkProvider>
+    + <html lang="en">
+    +   <body>
+    +     <ClerkProvider>
+    +       {children}
+    +     </ClerkProvider>
+    +   </body>
+    + </html>
+    ```
+
+    If you're using Next.js 16 with `cacheComponents: true`, you may also need to wrap `ClerkProvider` in a `<Suspense>` boundary.
+  </Tab>
+
+  <Tab>
+    {/* Expo */}
+
+    ### `@clerk/clerk-expo` renamed to `@clerk/expo` {{ toc: false }}
+
+    The `@clerk/clerk-expo` package has been renamed to `@clerk/expo`.
+
+    Update your imports:
+
+    ```diff
+    - import { ClerkProvider, useUser } from '@clerk/clerk-expo';
+    + import { ClerkProvider, useUser } from '@clerk/expo';
+    ```
+
+    And update your `package.json`:
+
+    ```diff
+    - "@clerk/clerk-expo": "^2.0.0",
+    + "@clerk/expo": "^3.0.0",
+    ```
+
+    ### `Clerk` export removed {{ toc: false }}
+
+    The `Clerk` export has been removed from `@clerk/expo`. Use `useClerk()` hook instead:
+
+    ```diff
+    - import { Clerk } from '@clerk/expo';
+    + import { useClerk } from '@clerk/expo';
+
+    - Clerk.signOut();
+    + const { signOut } = useClerk();
+    + signOut();
+    ```
+
+    ### Minimum Expo version increased to 53 {{ toc: false }}
+
+    `@clerk/expo` v3 requires Expo SDK 53 or later. Update your Expo version if needed.
+  </Tab>
+
+  <Tab>
+    {/* Nuxt */}
+
+    ### `getAuth()` helper removed {{ toc: false }}
+
+    The `getAuth()` helper has been removed. Use `auth()` instead:
+
+    ```diff
+    - import { getAuth } from '@clerk/nuxt/server';
+    + import { auth } from '@clerk/nuxt/server';
+
+    - const { userId } = getAuth(event);
+    + const { userId } = auth();
+    ```
+
+    ### Routing strategy now defaults to `path` {{ toc: false }}
+
+    The default routing strategy for Nuxt has changed from `hash` to `path`. If you were relying on hash-based routing, explicitly set the strategy:
+
+    ```ts
+    // nuxt.config.ts
+    export default defineNuxtConfig({
+      clerk: {
+        routingStrategy: 'hash', // Restore previous behavior
+      },
+    })
+    ```
+  </Tab>
+</Tabs>

@@ -6,32 +6,23 @@ search:
     - session tasks
 ---
 
-**Session tasks** are pending requirements that users must complete after authentication, such as choosing an Organization. When enabled in the Clerk Dashboard, these tasks are handled automatically within the `<SignIn />` and `<SignUp />` components.
+**Session tasks** are pending requirements that users must complete after authentication, such as choosing an Organization. When enabled in the Clerk Dashboard, these tasks are handled automatically within the `<SignIn />` and `<SignUp />` components and Clerk's [Account Portal](/docs/guides/account-portal/overview).
 
 ## Available tasks
 
-Each task is identified by a unique [`SessionTask['key']`](/docs/reference/javascript/types/session-task). You can use these task keys to conditionally handle different requirements in your application logic.
-
-The following table lists the available tasks and their corresponding keys.
-
-| Setting | Key | Description |
-| - | - | - |
-| [Allow Personal Accounts](https://dashboard.clerk.com/~/organizations-settings) | `choose-organization` | Disabled by default when enabling Organizations. When disabled, users are required to choose an Organization after authenticating. When enabled, users can choose a [Personal Account](!personal-account) instead of an Organization. |
-| [Force password reset](/docs/guides/secure/password-protection-and-rules#manually-set-a-password-as-compromised) | `reset-password` | [Enabled by default for instances created after December 8, 2025](!update). When enabled, the user is required to reset their password on their next sign-in if their password is marked as compromised. If your instance is older than December 8, 2025, you will need to update your instance to the **Reset password session task** update. |
+<Include src="_partials/session-tasks-table" />
 
 ## Session states
 
 After authentication, users enter one of three states:
 
 - **Signed-in**: Authentication complete. Can access protected content or routes.
-- **Pending**: Authentication complete, but session tasks incomplete. Can't access protected content or routes.
+- **Pending**: Authentication complete, but session tasks incomplete. By default, treated as signed-out, and therefore can't access protected content or routes.
 - **Signed-out**: Authentication failed or not attempted. Can't access protected content or routes.
-
-When authenticating, sessions remain `pending` until users complete the required tasks. By default, `pending` sessions are treated as signed-out across Clerk's authentication context.
 
 ## Displaying tasks
 
-Once enabled in the Clerk Dashboard, tasks are **embedded by default** within the `<SignUp />` and `<SignIn />` components. For more customization, you can opt out of using the `<SignUp />` and `<SignIn />` components and [create custom pages for tasks](/docs/guides/development/custom-flows/overview#session-tasks).
+Once enabled in the Clerk Dashboard, task components are **embedded by default** within the `<SignUp />` and `<SignIn />` components. However, if you want to customize the route where the task components are rendered or customize their appearance, you can host them within your application.
 
 The following table lists the available tasks and their corresponding components. See the linked reference guide for usage instructions.
 
@@ -40,81 +31,40 @@ The following table lists the available tasks and their corresponding components
 | [Personal Accounts disabled (default)](/docs/guides/organizations/configure#enable-organizations) | [`<TaskChooseOrganization />`](/docs/reference/components/authentication/task-choose-organization) |
 | [Force password reset](/docs/guides/secure/password-protection-and-rules#manually-set-a-password-as-compromised) | [`<TaskResetPassword />`](/docs/reference/components/authentication/task-reset-password) |
 
-> [!IMPORTANT]
-> [Personal Accounts](!personal-account) being disabled by default was released on 08-22-2025. Applications created before this date will not be able to see the **Allow Personal Accounts** setting, because Personal Accounts were enabled by default.
+### No components, no problem
 
-If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can also build your own UI using the `Session.currentTask` property to check if the user has pending session tasks. To access the `Session.currentTask` property, you can use either the `useSession()` hook for React-based applications or `window.Clerk` for other frameworks.
-
-<CodeBlockTabs options={["Hook", "JavaScript"]}>
-  ```jsx
-  const { session } = useSession()
-
-  if (session?.currentTask) {
-    // Check for pending tasks and display custom UI to help users resolve them
-    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-    console.log(session?.currentTask)
-  }
-  ```
-
-  ```js
-  if (window.Clerk.session.currentTask) {
-    // Check for pending tasks and display custom UI to help users resolve them
-    // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-    console.log(window.Clerk.session.currentTask)
-  }
-  ```
-</CodeBlockTabs>
+If the prebuilt components don't meet your specific needs or if you require more control over the logic, you can build [custom flows](!custom-flow) to handle session tasks. See the [dedicated guide](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
 
 ## Redirecting to tasks
 
-When users have pending session tasks, you can redirect them to specific pages or components to complete these requirements. This is useful when you want to handle session tasks outside of the default `<SignIn />` and `<SignUp />` components.
+Your sign-up/sign-in flow should handle session tasks, but if a user's authentication flow is interrupted and they aren't able to complete the tasks, their session will remain in a `pending` (signed-out) state and they won't be able to access protected content. You can use these methods to redirect them to the appropriate task page so they can complete the tasks and move their session to an `active` (signed-in) state. These methods are also helpful when you want to **redirect to custom task pages** instead of using the Clerk Account Portal.
+
+The following methods are available to redirect users to the appropriate task page when they have pending session tasks:
+
+- [The `taskUrls` option](#using-the-task-urls-option): Protect your entire application
+- [Middleware](#using-middleware-based-redirects): Protect your entire application, route groups, or individual routes
+- [The `<RedirectToTasks />` component](#using-the-redirect-to-tasks-control-component): Protect routes
 
 ### Using the `taskUrls` option
 
-The `taskUrls` option allows you to specify custom URL paths where users are redirected after sign-up or sign-in when specific session tasks need to be completed. This allows you to still use `<SignIn />` and `<SignUp />` but have tasks with custom pages.
+<Include src="_partials/task-urls" />
 
-The `taskUrls` option is available wherever you initialize the Clerk integration. For most SDKs, it's `<ClerkProvider>`.
+Then, create a page at that URL path with the UI to handle the task. For example, if you want to handle the `choose-organization` task, you can create a page at `/session-tasks/choose-organization` that uses the [`<TaskChooseOrganization />`](/docs/reference/components/authentication/task-choose-organization) component to handle the task. Or if you don't want to use the prebuilt components, you can build a [custom flow](!custom-flow).
 
-```tsx
-<ClerkProvider
-  taskUrls={{
-    'choose-organization': '/onboarding/choose-organization',
-  }}
->
-  {children}
-</ClerkProvider>
-```
-
-Then, create a page at that URL path that imports the [`<TaskChooseOrganization />`](/docs/reference/components/authentication/task-choose-organization) component to handle the task.
-
-```tsx {{ filename: 'app/onboarding/choose-organization/page.tsx' }}
+```tsx {{ filename: 'app/session-tasks/choose-organization/page.tsx' }}
 export default function Page() {
   return <TaskChooseOrganization redirectUrlComplete="/dashboard" />
 }
 ```
 
-### Using the `<RedirectToTasks />` control component
-
-The `<RedirectToTasks />` control component redirects users to the appropriate task page when they have pending session tasks.
-
-```tsx
-<>
-  {/* Until the user completes their session tasks,
-  Clerk considers them as signed out, by default */}
-  <Show when="signed-out">
-    <RedirectToTasks />
-  </Show>
-</>
-```
-
-### Middleware-based redirects
+### Using middleware-based redirects
 
 <If sdk="nextjs">
-  There are many ways to protect routes using middleware. If you'd like to simply redirect users to the sign-in page if they are signed-out, you can [use `auth.protect()`](#using-auth-protect). If you'd like to have more control over what your app does based on user authentication status, you can [use the `isAuthenticated` property](#using-is-authenticated).
+  If you'd like to simply redirect users to the sign-in page if they are signed-out, you can [use `auth.protect()`](#using-auth-protect). If you'd like to have more control over what your app does based on user authentication status, you can [use the `isAuthenticated` property](#using-is-authenticated).
 </If>
 
 <If sdk="nextjs">
-  ### Using `auth.protect()`
+  #### Using `auth.protect()`
 
   When using `auth.protect()` in middleware to protect routes, it will redirect users to the sign-in page if they are signed-out. In the following example, `pending` users will be redirected to the sign-in page, where the `<SignIn />` component will prompt them to fulfill the session tasks. Once finished, their session will move from `pending` to an `active` (signed-in) state.
 
@@ -142,9 +92,9 @@ The `<RedirectToTasks />` control component redirects users to the appropriate t
   ```
 </If>
 
-### Using `isAuthenticated`
+#### Using `isAuthenticated`
 
-When using the `isAuthenticated` property in middleware to protect routes, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to a custom page to fulfill the session tasks.
+When using the `isAuthenticated` property in middleware to protect routes, it will return `false` if the user has a `pending` session. Then, you can handle how to respond to pending users, such as redirecting them to a custom page to fulfill the session tasks. **This example is written for Next.js, but you can use the comments in the example to help you adapt it to your SDK.**
 
 ```tsx {{ filename: 'proxy.ts' }}
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
@@ -153,13 +103,15 @@ import { NextRequest, NextResponse } from 'next/server'
 const isProtectedRoute = createRouteMatcher(['/dashboard(.*)', '/forum(.*)'])
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
+  // The `Auth` object gives you access to properties like `isAuthenticated`
+  // Accessing the `Auth` object differs depending on the SDK you're using
+  // https://clerk.com/docs/reference/backend/types/auth-object#how-to-access-the-auth-object
   const { isAuthenticated, redirectToSignIn, sessionStatus } = await auth()
 
-  // Send users with pending sessions to the /session-tasks page
+  // Handle pending users
+  // This example redirects pending users to the /session-tasks page
+  // so they can fulfill the session tasks
   if (!isAuthenticated && sessionStatus === 'pending' && isProtectedRoute(req)) {
-    // Add logic to handle pending users
-    // This example redirects pending users to the /session-tasks page
-    // so they can fulfill the session tasks
     const url = req.nextUrl.clone()
     url.pathname = '/session-tasks'
     return NextResponse.redirect(url)
@@ -172,6 +124,10 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   }
 })
 ```
+
+### Using the `<RedirectToTasks />` control component
+
+The [`<RedirectToTasks />`](/docs/reference/components/control/redirect-to-tasks) control component redirects users to the appropriate task page when they have pending session tasks. It can be used in layout files to protect multiple pages or in individual pages to protect a single page.
 
 ## Session handling
 
@@ -250,7 +206,7 @@ The `useAuth()` hook and helpers that access the [`Auth` object](/docs/reference
 
 #### Example: Personal Accounts disabled
 
-When Organizations are enabled, [Personal Accounts are disabled by default](/docs/guides/organizations/configure#personal-accounts) and your users will be required to select or create an Organization after authenticating. Until completed, their session remains `pending`. Pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
+When Organizations are enabled, [Personal Accounts](!personal-account) are disabled by default and your users will be required to select or create an Organization after authenticating. Until completed, their session remains `pending`. Pages that are protected using Clerk's protection utilities will treat the user's session as signed-out.
 
 For `useAuth()`, `isSignedIn` will be `false` and `userId` and `orgId` will be `null` if the user has a `pending` session.
 

@@ -3,223 +3,113 @@ title: Error handling
 description: Provide your users with useful information about the errors being returned from sign-up and sign-in requests.
 ---
 
-Clerk-related errors are returned as an array of [`ClerkAPIError`](/docs/reference/javascript/types/clerk-api-error) objects. These errors contain a `code`, `message`, `longMessage` and `meta` property. These properties can be used to provide your users with useful information about the errors being returned from sign-up and sign-in requests.
+The `useSignIn()`, `useSignUp()`, and `useWaitlist()` hooks return a global [`Errors`](/docs/reference/javascript/types/errors) object that contains the errors that occurred during the last API request. Use this object to display errors to the user in your custom UI. These errors contain a `code`, `message`, `longMessage` and `meta` property. These properties can be used to provide your users with useful information about the errors being returned from sign-up and sign-in requests.
 
 > [!TIP]
 > To see a list of all possible errors, refer to the [Errors](/docs/guides/development/errors/overview) documentation.
+
+The individual methods of [`signIn`](/docs/reference/javascript/sign-in-future) and [`signUp`](/docs/reference/javascript/sign-up-future) can return a [`ClerkError`](/docs/reference/javascript/types/clerk-error) object on the `error` property. This error can be used to take different actions based on the error that occurred. Use this approach when you need to programmatically handle the error rather than just displaying it to the user.
+
+> [!NOTE]
+> Keep in mind that the global `errors` object will also contain the error reported by the `error` property. Prefer using the `errors` object returned by the hooks to render UI, and the `error` property  returned by individual methods to programmatically handle errors.
 
 ## Example
 
 The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process.
 
-<Tabs items={["Next.js", "JavaScript"]}>
-  <Tab>
-    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+This example is written for Next.js App Router but it can be adapted for any React-based framework.
 
-    ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', mark: [[6, 7], 13, [21, 22], [45, 48], [79, 85]] }}
-    'use client'
+```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', mark: [[23, 26], 64, 75, [80, 86]] }}
+'use client'
 
-    import * as React from 'react'
-    import { useSignIn } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
-    import { ClerkAPIError } from '@clerk/types'
-    import { isClerkAPIResponseError } from '@clerk/nextjs/errors'
+import * as React from 'react'
+import { useSignIn } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 
-    export default function SignInForm() {
-      const { isLoaded, signIn, setActive } = useSignIn()
-      const [email, setEmail] = React.useState('')
-      const [password, setPassword] = React.useState('')
-      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
+export default function SignInForm() {
+  const { signIn, errors, fetchStatus } = useSignIn()
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
 
-      const router = useRouter()
+  const router = useRouter()
 
-      // Handle the submission of the sign-in form
-      const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+  // Handle the submission of the sign-in form
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-        // Clear any errors that may have occurred during previous form submission
-        setErrors(undefined)
-
-        if (!isLoaded) {
-          return
-        }
-
-        // Start the sign-in process using the email and password provided
-        try {
-          const signInAttempt = await signIn.create({
-            identifier: email,
-            password,
-          })
-
-          // If sign-in process is complete, set the created session as active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
-                if (session?.currentTask) {
-                  // Check for tasks and navigate to custom UI to help users resolve them
-                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                  console.log(session?.currentTask)
-                  return
-                }
-
-                router.push('/')
-              },
-            })
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signInAttempt, null, 2))
-          }
-        } catch (err) {
-          if (isClerkAPIResponseError(err)) setErrors(err.errors)
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      // Display a form to capture the user's email and password
-      return (
-        <>
-          <h1>Sign in</h1>
-          <form onSubmit={(e) => handleSubmit(e)}>
-            <div>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                onChange={(e) => setEmail(e.target.value)}
-                id="email"
-                name="email"
-                type="email"
-                value={email}
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input
-                onChange={(e) => setPassword(e.target.value)}
-                id="password"
-                name="password"
-                type="password"
-                value={password}
-              />
-            </div>
-            <button type="submit">Sign in</button>
-          </form>
-
-          {errors && (
-            <ul>
-              {errors.map((el, index) => (
-                <li key={index}>{el.longMessage}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )
+    // Start the sign-in process using the email and password provided
+    const { error } = await signIn.create({
+      identifier: email,
+      password,
+    })
+    if (error) {
+      console.error(JSON.stringify(error, null, 2))
+      return
     }
-    ```
-  </Tab>
 
-  <Tab>
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', mark: [22] }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="signed-in"></div>
-
-          <div id="sign-in">
-            <h2>Sign in</h2>
-            <form id="sign-in-form">
-              <label for="email">Enter email address</label>
-              <input name="email" id="sign-in-email" />
-              <label for="password">Enter password</label>
-              <input name="password" id="sign-in-password" />
-              <button type="submit">Continue</button>
-            </form>
-          </div>
-
-          <p id="error"></p>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js', mark: [[43, 49]] }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        // Mount user button component
-        document.getElementById('signed-in').innerHTML = `
-            <div id="user-button"></div>
-          `
-
-        const userbuttonDiv = document.getElementById('user-button')
-
-        clerk.mountUserButton(userbuttonDiv)
-      } else if (clerk.session?.currentTask) {
-        // Check for pending tasks and display custom UI to help users resolve them
-        // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-        switch (clerk.session.currentTask.key) {
-          case 'choose-organization': {
-            document.getElementById('app').innerHTML = `
-                    <div id="task"></div>
-                  `
-
-            const taskDiv = document.getElementById('task')
-
-            clerk.mountTaskChooseOrganization(taskDiv)
+    // If sign-in process is complete, set the created session as active
+    // and redirect the user
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: async ({ session }) => {
+          if (session?.currentTask) {
+            // Check for tasks and navigate to custom UI to help users resolve them
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+            console.log(session?.currentTask)
+            return
           }
-        }
-      } else {
-        // Handle the sign-in form
-        document.getElementById('sign-in-form').addEventListener('submit', async (e) => {
-          e.preventDefault()
 
-          const formData = new FormData(e.target)
-          const emailAddress = formData.get('email')
-          const password = formData.get('password')
+          router.push('/')
+        },
+      })
+    } else {
+      // If the status is not complete, check why. User may need to
+      // complete further steps.
+      console.error(JSON.stringify(signIn, null, 2))
+    }
+  }
 
-          try {
-            // Start the sign-in process
-            const signInAttempt = await clerk.client.signIn.create({
-              identifier: emailAddress,
-              password,
-            })
+  // Display a form to capture the user's email and password
+  return (
+    <>
+      <h1>Sign in</h1>
+      <form onSubmit={(e) => handleSubmit(e)}>
+        <div>
+          <label htmlFor="email">Enter email address</label>
+          <input
+            onChange={(e) => setEmail(e.target.value)}
+            id="email"
+            name="email"
+            type="email"
+            value={email}
+          />
+          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+        </div>
+        <div>
+          <label htmlFor="password">Enter password</label>
+          <input
+            onChange={(e) => setPassword(e.target.value)}
+            id="password"
+            name="password"
+            type="password"
+            value={password}
+          />
+          {errors.fields.password && <p>{errors.fields.password.message}</p>}
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
 
-            // If the sign-in is complete, set the user as active
-            if (signInAttempt.status === 'complete') {
-              await clerk.setActive({ session: signInAttempt.createdSessionId })
-
-              location.reload()
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(JSON.stringify(signInAttempt, null, 2))
-            }
-          } catch (error) {
-            if (isClerkAPIResponseError(err)) {
-              const errors = err.errors
-              document.getElementById('error').textContent = errors[0].longMessage
-            }
-            console.error(JSON.stringify(err, null, 2))
-          }
-        })
-      }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+      {errors.global && (
+        <ul>
+          {errors.global.map((el, index) => (
+            <li key={index}>{el.longMessage}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+```
 
 ## Special error cases
 
@@ -229,16 +119,14 @@ If you have [account lockout](/docs/guides/secure/user-lockout) enabled on your 
 
 ```json
 {
-  "errors": [
-    {
-      "message": "Account locked",
-      "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, contact support.",
-      "code": "user_locked",
-      "meta": {
-        "lockout_expires_in_seconds": 1800
-      }
+  "error": {
+    "message": "Account locked",
+    "long_message": "Your account is locked. You will be able to try again in 30 minutes. For more information, contact support.",
+    "code": "user_locked",
+    "meta": {
+      "lockout_expires_in_seconds": 1800
     }
-  ]
+  }
 }
 ```
 
@@ -255,7 +143,7 @@ For instance, if you wish to inform a user at which absolute time they will be a
 <Tabs items={["Next.js"]}>
   <Tab>
     ```js {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
-    if (errors[0].code === 'user_locked') {
+    if (error?.code === 'user_locked') {
       // Get the current date and time
       let currentDate = new Date()
 
@@ -278,15 +166,13 @@ If you have marked a user's password as compromised and the user has another way
 
 ```json
 {
-  "errors": [
-    {
-      "long_message": "Your password may be compromised. To protect your account, please continue with an alternative sign-in method. You will be required to reset your password after signing in.",
-      "code": "form_password_compromised",
-      "meta": {
-        "name": "param"
-      }
+  "error": {
+    "long_message": "Your password may be compromised. To protect your account, please continue with an alternative sign-in method. You will be required to reset your password after signing in.",
+    "code": "form_password_compromised",
+    "meta": {
+      "name": "param"
     }
-  ]
+  }
 }
 ```
 
@@ -305,138 +191,12 @@ When a user password is marked as compromised, they will not be able to sign in 
     import * as React from 'react'
     import { useSignIn } from '@clerk/nextjs'
     import { useRouter } from 'next/navigation'
-    import { ClerkAPIError, EmailCodeFactor, SignInFirstFactor } from '@clerk/types'
-    import { isClerkAPIResponseError } from '@clerk/nextjs/errors'
-
-    const SignInWithEmailCode = () => {
-      const { isLoaded, signIn, setActive } = useSignIn()
-      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
-      const [verifying, setVerifying] = React.useState(false)
-      const [email, setEmail] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const router = useRouter()
-
-      async function handleSubmit(e: React.FormEvent) {
-        e.preventDefault()
-
-        if (!isLoaded && !signIn) return null
-
-        try {
-          // Start the sign-in process using the email code method
-          const { supportedFirstFactors } = await signIn.create({
-            identifier: email,
-          })
-
-          // Filter the returned array to find the 'email_code' entry
-          const isEmailCodeFactor = (factor: SignInFirstFactor): factor is EmailCodeFactor => {
-            return factor.strategy === 'email_code'
-          }
-          const emailCodeFactor = supportedFirstFactors?.find(isEmailCodeFactor)
-
-          if (emailCodeFactor) {
-            // Grab the emailAddressId
-            const { emailAddressId } = emailCodeFactor
-
-            // Send the OTP code to the user
-            await signIn.prepareFirstFactor({
-              strategy: 'email_code',
-              emailAddressId,
-            })
-
-            // Set verifying to true to display second form
-            // and capture the OTP code
-            setVerifying(true)
-          }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
-        }
-      }
-
-      async function handleVerification(e: React.FormEvent) {
-        e.preventDefault()
-
-        if (!isLoaded && !signIn) return null
-
-        try {
-          // Use the code provided by the user and attempt verification
-          const signInAttempt = await signIn.attemptFirstFactor({
-            strategy: 'email_code',
-            code,
-          })
-
-          // If verification was completed, set the session to active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
-                if (session?.currentTask) {
-                  // Check for tasks and navigate to custom UI to help users resolve them
-                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                  console.log(session?.currentTask)
-                  return
-                }
-
-                router.push('/')
-              },
-            })
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(signInAttempt)
-          }
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error('Error:', JSON.stringify(err, null, 2))
-        }
-      }
-
-      if (verifying) {
-        return (
-          <>
-            <h1>Verify your email address</h1>
-            <form onSubmit={handleVerification}>
-              <label htmlFor="code">Enter your email verification code</label>
-              <input value={code} id="code" name="code" onChange={(e) => setCode(e.target.value)} />
-              <button type="submit">Verify</button>
-            </form>
-          </>
-        )
-      }
-
-      return (
-        <>
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="email">Enter email address</label>
-            <input
-              value={email}
-              id="email"
-              name="email"
-              type="email"
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <button type="submit">Continue</button>
-          </form>
-
-          {errors && (
-            <ul>
-              {errors.map((el, index) => (
-                <li key={index}>{el.longMessage}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )
-    }
 
     export default function SignInForm() {
-      const { isLoaded, signIn, setActive } = useSignIn()
+      const { signIn, errors, fetchStatus } = useSignIn()
       const [email, setEmail] = React.useState('')
       const [password, setPassword] = React.useState('')
-      const [errors, setErrors] = React.useState<ClerkAPIError[]>()
+      const [code, setCode] = React.useState('')
 
       const router = useRouter()
 
@@ -444,58 +204,58 @@ When a user password is marked as compromised, they will not be able to sign in 
       const handleSignInWithPassword = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        // Clear any errors that may have occurred during previous form submission
-        setErrors(undefined)
-
-        if (!isLoaded) {
-          return
-        }
-
         // Start the sign-in process using the email and password provided
-        try {
-          const signInAttempt = await signIn.create({
-            identifier: email,
-            password,
+        const { error } = await signIn.password({
+          identifier: email,
+          password,
+        })
+
+        // If sign-in process is complete, set the created session as active
+        // and redirect the user
+        if (signIn.status === 'complete') {
+          await signIn.finalize({
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                // Check for tasks and navigate to custom UI to help users resolve them
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
           })
-
-          // If sign-in process is complete, set the created session as active
-          // and redirect the user
-          if (signInAttempt.status === 'complete') {
-            await setActive({
-              session: signInAttempt.createdSessionId,
-              navigate: async ({ session }) => {
-                if (session?.currentTask) {
-                  // Check for tasks and navigate to custom UI to help users resolve them
-                  // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-                  console.log(session?.currentTask)
-                  return
-                }
-
-                router.push('/')
-              },
-            })
-          } else {
-            // If the status is not complete, check why. User may need to
-            // complete further steps.
-            console.error(JSON.stringify(signInAttempt, null, 2))
+        } else if (error?.code === 'form_password_compromised') {
+          const { error } = await signIn.emailCode.sendCode()
+          if (error) {
+            console.error(JSON.stringify(error, null, 2))
+            return
           }
-        } catch (err) {
-          if (isClerkAPIResponseError(err)) setErrors(err.errors)
-          console.error(JSON.stringify(err, null, 2))
         }
       }
 
-      if (errors && errors[0].code === 'form_password_compromised') {
+      const handleVerification = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        const { error } = await signIn.emailCode.verifyCode({ code })
+        if (error) {
+          console.error(JSON.stringify(error, null, 2))
+          return
+        }
+      }
+
+      if (signIn.status === 'needs_first_factor') {
         return (
           <>
-            <h1>Sign in</h1>
-
-            <p>
-              Your password appears to have been compromised or it&apos;s no longer trusted and cannot
-              be used. Please use email code to continue.
-            </p>
-
-            <SignInWithEmailCode />
+            <h1>Check your email</h1>
+            <form onSubmit={(e) => handleVerification(e)}>
+              <label htmlFor="code">Enter your verification code</label>
+              <input onChange={(e) => setCode(e.target.value)} id="code" name="code" type="text" />
+              {errors.fields.code && <p>{errors.fields.code.message}</p>}
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Verify
+              </button>
+            </form>
           </>
         )
       }

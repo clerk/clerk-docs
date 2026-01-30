@@ -3,169 +3,189 @@ title: Force multi-factor authentication (MFA) for all users
 description: Learn how to force multi-factor authentication (MFA) for all users in your Clerk application.
 ---
 
-By default, Clerk does not enforce [multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) for all users. This guide demonstrates how to force MFA for all users by using `clerkMiddleware()` to intercept all requests and check whether a user has MFA enabled. If the user does not have MFA enabled, `clerkMiddleware()` redirects them to the `/mfa` page where they can set up MFA.
+Clerk can require all users to set up multi-factor authentication (MFA) after signing in or signing up. This guide demonstrates how to enable this requirement using Clerk's `setup-mfa` [session task](!session-tasks).
 
 <Steps>
-  ## Enable MFA in the Clerk Dashboard
+  ## Enable MFA strategies
 
-  If you haven't already, enable MFA for your users.
+  First, enable the MFA strategies you want to offer to your users.
 
   1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
-  1. Toggle on the MFA strategies you would like to enable.
+  1. Toggle on the MFA strategies you would like to enable:
+     - **Authenticator application (TOTP)**: Users can use apps like Google Authenticator or Authy
+     - **SMS verification code**: Users receive a one-time code via SMS
 
-  ## Customize the session token to include the `two_factor_enabled` property
+  ## Enable MFA requirement
 
-  Every `User` object has a `two_factor_enabled` property that indicates whether the user has MFA enabled. Store this property in the session token so that you can check it in your `clerkMiddleware()`.
+  Once you've enabled at least one MFA strategy, you can require all users to set up MFA.
 
-  1. In the Clerk Dashboard, navigate to the [**Sessions**](https://dashboard.clerk.com/~/sessions) page.
-  1. Under **Customize session token**, in the **Claims** editor, enter the following JSON and select **Save**. The key can be any string, but the value must be the `user.two_factor_enabled` property, as shown in the following example. If you have already customized your session token, you may need to merge this with what you currently have.
+  1. On the same [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page, scroll down to the **Require multi-factor authentication** section.
+  1. Toggle on **Require multi-factor authentication**.
 
-  ```json
-  {
-    "isMfa": "{{user.two_factor_enabled}}"
-  }
-  ```
+  When enabled, Clerk automatically creates a `setup-mfa` session task for:
+  - New users after they sign up
+  - Existing users without MFA on their next sign-in
 
-  ## Update `clerkMiddleware()`
+  ## How it works
 
-  Update your `clerkMiddleware()` to check if the user has MFA enabled.
+  Once the MFA requirement is enabled:
 
-  <Tabs items={['Next.js', 'Astro', 'Nuxt']}>
+  1. Users sign in or sign up successfully
+  1. If they don't have MFA set up, Clerk creates a `setup-mfa` session task
+  1. The user's session enters a `pending` state and they're treated as signed-out
+  1. Clerk's [`<SignIn />`](/docs/reference/components/authentication/sign-in) and [`<SignUp />`](/docs/reference/components/authentication/sign-up) components automatically display the [`<TaskSetupMfa />`](/docs/reference/components/authentication/task-setup-mfa) component
+  1. After the user completes MFA setup, their session becomes `active` and they can access your application
+
+  For more information about session tasks, see the [session tasks guide](/docs/guides/configure/session-tasks).
+
+  ## (Optional) Customize the MFA setup page
+
+  By default, the `<SignIn />` and `<SignUp />` components handle the MFA setup flow automatically. However, if you want to customize the route where the MFA setup page is rendered, you can host the `<TaskSetupMfa />` component on a custom page.
+
+  <Tabs items={['Next.js', 'React', 'React Router', 'TanStack React Start']}>
     <Tab>
-      <Include src="_partials/nextjs/nextjs-15-callout" />
+      First, configure the `taskUrls` option in your `ClerkProvider` to specify where the MFA setup page is located:
 
-      ```tsx {{ filename: 'proxy.ts', collapsible: true }}
-      import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-      import { NextResponse } from 'next/server'
+      ```tsx {{ filename: 'app/layout.tsx', mark: [7] }}
+      import { ClerkProvider } from '@clerk/nextjs'
 
-      const isMFARoute = createRouteMatcher(['/account/manage-mfa/add(.*)'])
-      const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+      export default function RootLayout({ children }: { children: React.ReactNode }) {
+        return (
+          <html lang="en">
+            <body>
+              <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+                {children}
+              </ClerkProvider>
+            </body>
+          </html>
+        )
+      }
+      ```
 
-      export default clerkMiddleware(async (auth, req) => {
-        const { userId, sessionClaims } = await auth()
+      Then, create the page at the specified route:
 
-        // Redirect to homepage if the user is signed in and on the sign-in page
-        if (userId !== null && isSignInRoute(req)) {
-          return NextResponse.redirect(new URL('/', req.url))
-        }
+      ```tsx {{ filename: 'app/onboarding/setup-mfa/page.tsx' }}
+      import { TaskSetupMfa } from '@clerk/nextjs'
 
-        // Redirect to MFA setup page if MFA is not enabled
-        if (userId !== null && !isMFARoute(req)) {
-          if (sessionClaims.isMfa === undefined) {
-            console.error('You need to add the `isMfa` claim to your session token.')
-          }
-          if (sessionClaims.isMfa === false) {
-            return NextResponse.redirect(new URL('/account/manage-mfa/add', req.url))
-          }
-        }
-      })
-
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes
-          '/(api|trpc)(.*)',
-        ],
+      export default function Page() {
+        return <TaskSetupMfa redirectUrlComplete="/dashboard" />
       }
       ```
     </Tab>
 
     <Tab>
-      ```tsx {{ filename: 'src/middleware.ts', collapsible: true }}
-      import { clerkMiddleware, createRouteMatcher } from '@clerk/astro/server'
+      First, configure the `taskUrls` option in your `ClerkProvider`:
 
-      const isMFARoute = createRouteMatcher(['/account/manage-mfa/add(.*)'])
-      const isSignInRoute = createRouteMatcher(['/sign-in(.*)'])
+      ```tsx {{ filename: 'index.tsx', mark: [17] }}
+      import React from 'react'
+      import ReactDOM from 'react-dom/client'
+      import App from './App.tsx'
+      import { ClerkProvider } from '@clerk/react'
 
-      export const onRequest = clerkMiddleware((auth, context) => {
-        const { userId, sessionClaims } = auth()
+      const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-        // Redirect to homepage if the user is signed in and on the sign-in page
-        if (userId !== null && isSignInRoute(context.request)) {
-          return Response.redirect(new URL('/', context.request.url))
-        }
+      if (!PUBLISHABLE_KEY) {
+        throw new Error('Add your Clerk Publishable Key to the .env file')
+      }
 
-        // Redirect to MFA setup page if MFA is not enabled
-        if (userId !== null && !isMFARoute(context.request)) {
-          if (sessionClaims.isMfa === undefined) {
-            console.error('You need to add the `isMfa` claim to your session token.')
-          }
-          if (sessionClaims.isMfa === false) {
-            return Response.redirect(new URL('/account/manage-mfa/add', context.request.url))
-          }
-        }
-      })
+      ReactDOM.createRoot(document.getElementById('root')!).render(
+        <React.StrictMode>
+          <ClerkProvider
+            publishableKey={PUBLISHABLE_KEY}
+            taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}
+          >
+            <App />
+          </ClerkProvider>
+        </React.StrictMode>,
+      )
+      ```
 
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes
-          '/(api|trpc)(.*)',
-        ],
+      Then, create the page component:
+
+      ```jsx {{ filename: 'src/onboarding/setup-mfa.tsx' }}
+      import { TaskSetupMfa } from '@clerk/react'
+
+      const SetupMfaPage = () => <TaskSetupMfa redirectUrlComplete="/dashboard" />
+
+      export default SetupMfaPage
+      ```
+    </Tab>
+
+    <Tab>
+      First, configure the `taskUrls` option in your `ClerkProvider`:
+
+      ```tsx {{ filename: 'app/root.tsx', mark: [6] }}
+      import { ClerkProvider } from '@clerk/react-router'
+      import { Outlet } from 'react-router'
+
+      export default function App() {
+        return (
+          <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+            <Outlet />
+          </ClerkProvider>
+        )
+      }
+      ```
+
+      Then, create the route component:
+
+      ```tsx {{ filename: 'app/routes/onboarding/setup-mfa.tsx' }}
+      import { TaskSetupMfa } from '@clerk/react-router'
+
+      export default function SetupMfaPage() {
+        return <TaskSetupMfa redirectUrlComplete="/dashboard" />
       }
       ```
     </Tab>
 
     <Tab>
-      By default, the Nuxt SDK automatically adds [the `clerkMiddleware()` helper](/docs/reference/nuxt/clerk-middleware) to your Nuxt application. To manually configure the middleware, in your `nuxt.config.ts` file, under the `clerk` property, set `skipServerMiddleware: true`.
+      First, configure the `taskUrls` option in your `ClerkProvider`:
 
-      ```tsx {{ filename: 'nuxt.config.ts', mark: [[3, 5]] }}
-      export default defineNuxtConfig({
-        modules: ['@clerk/nuxt'],
-        clerk: {
-          skipServerMiddleware: true,
-        },
-      })
+      ```tsx {{ filename: 'src/routes/__root.tsx', mark: [12] }}
+      import * as React from 'react'
+      import { HeadContent, Scripts } from '@tanstack/react-router'
+      import { ClerkProvider } from '@clerk/tanstack-react-start'
+
+      function RootDocument({ children }: { children: React.ReactNode }) {
+        return (
+          <html>
+            <head>
+              <HeadContent />
+            </head>
+            <body>
+              <ClerkProvider taskUrls={{ 'setup-mfa': '/onboarding/setup-mfa' }}>
+                {children}
+              </ClerkProvider>
+              <Scripts />
+            </body>
+          </html>
+        )
+      }
       ```
 
-      Then, in your `server/middleware/clerk.ts` file, add the following code:
+      Then, create the route:
 
-      ```tsx {{ filename: 'server/middleware/clerk.ts', collapsible: true }}
-      import { clerkMiddleware } from '@clerk/nuxt/server'
+      ```tsx {{ filename: 'src/routes/onboarding/setup-mfa.tsx' }}
+      import { TaskSetupMfa } from '@clerk/tanstack-react-start'
+      import { createFileRoute } from '@tanstack/react-router'
 
-      export default clerkMiddleware(async (event) => {
-        const isMFARoute = event.path.startsWith('/account/manage-mfa/add')
-        const isSignInRoute = event.path.startsWith('/sign-in')
-
-        const { userId, sessionClaims } = event.context.auth()
-
-        // Redirect to homepage if the user is signed in and on the sign-in page
-        if (userId !== null && isSignInRoute) {
-          throw createError({
-            statusMessage: 'You are already signed in.',
-          })
-        }
-
-        // Redirect to MFA setup page if MFA is not enabled
-        if (userId !== null && !isMFARoute) {
-          if (sessionClaims.isMfa === undefined) {
-            throw createError({
-              statusMessage: 'You need to add the `isMfa` claim to your session token.',
-            })
-          }
-          if (sessionClaims.isMfa === false) {
-            throw createError({
-              statusMessage: 'You need to enable MFA for your account.',
-            })
-          }
-        }
+      export const Route = createFileRoute('/onboarding/setup-mfa')({
+        component: SetupMfaPage,
       })
 
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes
-          '/(api|trpc)(.*)',
-        ],
+      function SetupMfaPage() {
+        return <TaskSetupMfa redirectUrlComplete="/dashboard" />
       }
       ```
     </Tab>
   </Tabs>
 
-  ## Build your MFA setup page
-
-  Follow the [custom flow guide](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) to build the `/account/manage-mfa/add` page.
+  For more information about the `<TaskSetupMfa />` component, see the [component reference](/docs/reference/components/authentication/task-setup-mfa).
 </Steps>
+
+## Additional considerations
+
+- **Existing users**: Users who already have accounts will be prompted to set up MFA on their next sign-in.
+- **Custom flows**: If Clerk's prebuilt components don't meet your needs, you can build a custom MFA setup flow using the Clerk API. See the [custom flow guides](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) for more information.
+  {/* TODO: Update link to setup-mfa custom flow guide once created */}
+- **Session handling**: Users with pending `setup-mfa` tasks are treated as signed-out by default. Learn more about [session tasks](/docs/guides/configure/session-tasks).

@@ -62,14 +62,14 @@ This guide will demonstrate how to generate a sign-in token and use it to sign i
 
         export default function Page() {
           const [loading, setLoading] = useState<boolean>(false)
-          const { signIn, setActive } = useSignIn()
+          const { signIn, errors, fetchStatus } = useSignIn()
           const { isSignedIn, user } = useUser()
 
           // Get the token from the query params
           const signInToken = useSearchParams().get('token')
 
           useEffect(() => {
-            if (!signIn || !setActive || !signInToken || user || loading) {
+            if (!signInToken || user || loading) {
               return
             }
 
@@ -77,20 +77,30 @@ This guide will demonstrate how to generate a sign-in token and use it to sign i
               setLoading(true)
               try {
                 // Create the `SignIn` with the token
-                const signInAttempt = await signIn.create({
-                  strategy: 'ticket',
+                const { error } = await signIn.ticket({
                   ticket: signInToken as string,
                 })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
+                  return
+                }
 
                 // If the sign-in was successful, set the session to active
-                if (signInAttempt.status === 'complete') {
-                  setActive({
-                    session: signInAttempt.createdSessionId,
+                if (signIn.status === 'complete') {
+                  signIn.finalize({
+                    navigate: async ({ session }) => {
+                      if (session?.currentTask) {
+                        console.log(session?.currentTask)
+                        return
+                      }
+
+                      router.push('/')
+                    },
                   })
                 } else {
                   // If the sign-in attempt is not complete, check why.
                   // User may need to complete further steps.
-                  console.error(JSON.stringify(signInAttempt, null, 2))
+                  console.error(JSON.stringify(signIn, null, 2))
                 }
               } catch (err) {
                 // See https://clerk.com/docs/guides/development/custom-flows/error-handling
@@ -137,11 +147,11 @@ This guide will demonstrate how to generate a sign-in token and use it to sign i
           signInToken,
         }: InferGetServerSidePropsType<typeof getServerSideProps>) {
           const [loading, setLoading] = useState<boolean>(false)
-          const { signIn, setActive } = useSignIn()
+          const { signIn, errors, fetchStatus } = useSignIn()
           const { isSignedIn, user } = useUser()
 
           useEffect(() => {
-            if (!signIn || !setActive || !signInToken || user || loading) {
+            if (!signInToken || user || loading) {
               return
             }
 
@@ -149,20 +159,26 @@ This guide will demonstrate how to generate a sign-in token and use it to sign i
               setLoading(true)
               try {
                 // Create the `SignIn` with the token
-                const signInAttempt = await signIn.create({
-                  strategy: 'ticket',
+                const { error } = await signIn.ticket({
                   ticket: signInToken as string,
                 })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
+                  return
+                }
 
                 // If the sign-in was successful, set the session to active
-                if (signInAttempt.status === 'complete') {
-                  setActive({
-                    session: signInAttempt.createdSessionId,
+                if (signIn.status === 'complete') {
+                  signIn.finalize({
+                    navigate: async ({ session }) => {
+                      if (session?.currentTask) {
+                        console.log(session?.currentTask)
+                        return
+                      }
+
+                      router.push('/')
+                    },
                   })
-                } else {
-                  // If the sign-in attempt is not complete, check why.
-                  // User may need to complete further steps.
-                  console.error(JSON.stringify(signInAttempt, null, 2))
                 }
               } catch (err) {
                 // See https://clerk.com/docs/guides/development/custom-flows/error-handling

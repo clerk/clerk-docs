@@ -610,7 +610,9 @@ async function main() {
     if (DEBUG_SEARCH_BRANCH !== undefined) {
       console.log(`⚠︎ DEBUG MODE - Using branch: ${DEBUG_SEARCH_BRANCH}`)
     } else {
-      console.log(`To update the dev algolia search index on a preview deployment, you must set the DEBUG_SEARCH_BRANCH environment variable`)
+      console.log(
+        `To update the dev algolia search index on a preview deployment, you must set the DEBUG_SEARCH_BRANCH environment variable`,
+      )
       process.exit(0)
     }
   }

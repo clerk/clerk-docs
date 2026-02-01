@@ -259,9 +259,10 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
     <Tab>
       ```swift {{ filename: 'SMSOTPSignUpView.swift', collapsible: true }}
       import SwiftUI
-      import Clerk
+      import ClerkKit
 
       struct SMSOTPSignUpView: View {
+        @Environment(Clerk.self) private var clerk
         @State private var phoneNumber = ""
         @State private var code = ""
         @State private var isVerifying = false
@@ -285,45 +286,39 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
 
         func submit(phoneNumber: String) async {
           do {
-            // Start the sign-up process using the phone number method.
-            let signUp = try await SignUp.create(strategy: .standard(phoneNumber: phoneNumber))
+            // Start sign-up with phone number
+            let signUp = try await clerk.auth.signUp(phoneNumber: phoneNumber)
 
-            // Start the verification - a SMS message will be sent to the
-            // number with a one-time code.
-            try await signUp.prepareVerification(strategy: .phoneCode)
+            // Send the user an SMS with the verification code
+            try await signUp.sendPhoneCode()
 
-            // Set isVerifying to true to display second form and capture the OTP code.
             isVerifying = true
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
         }
+      }
 
         func verify(code: String) async {
           do {
-            // Access the in progress sign up stored on the client object.
-            guard let inProgressSignUp = Clerk.shared.client?.signUp else { return }
+            // Verify that the provided code matches the code sent to the user
+            guard var signUp = clerk.auth.currentSignUp else { return }
 
-            // Use the code provided by the user and attempt verification.
-            let signUp = try await inProgressSignUp.attemptVerification(strategy: .phoneCode(code: code))
+            signUp = try await signUp.verifyPhoneCode(code)
 
             switch signUp.status {
             case .complete:
-              // If verification was completed, navigate the user as needed.
-              dump(Clerk.shared.session)
+              dump(clerk.session)
             default:
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
               dump(signUp.status)
             }
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
         }
+      }
       }
       ```
     </Tab>
@@ -748,9 +743,10 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
     <Tab>
       ```swift {{ filename: 'SMSOTPSignInView.swift', collapsible: true }}
       import SwiftUI
-      import Clerk
+      import ClerkKit
 
       struct SMSOTPSignInView: View {
+        @Environment(Clerk.self) private var clerk
         @State private var phoneNumber = ""
         @State private var code = ""
         @State private var isVerifying = false
@@ -774,45 +770,36 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
 
         func submit(phoneNumber: String) async {
           do {
-            // Start the sign-in process using the phone number method.
-            let signIn = try await SignIn.create(strategy: .identifier(phoneNumber))
+            // Start sign-in with phone number.
+            try await clerk.auth.signInWithPhoneCode(phoneNumber: phoneNumber)
 
-            // Send the OTP code to the user.
-            try await signIn.prepareFirstFactor(strategy: .phoneCode())
-
-            // Set isVerifying to true to display second form
-            // and capture the OTP code.
             isVerifying = true
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
         }
+      }
 
         func verify(code: String) async {
           do {
-            // Access the in progress sign in stored on the client object.
-            guard let inProgressSignIn = Clerk.shared.client?.signIn else { return }
+            // Verify the SMS code.
+            guard var signIn = clerk.auth.currentSignIn else { return }
 
-            // Use the code provided by the user and attempt verification.
-            let signIn = try await inProgressSignIn.attemptFirstFactor(strategy: .phoneCode(code: code))
+            signIn = try await signIn.verifyCode(code)
 
             switch signIn.status {
             case .complete:
-              // If verification was completed, navigate the user as needed.
-              dump(Clerk.shared.session)
+              dump(clerk.session)
             default:
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
               dump(signIn.status)
             }
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
         }
+      }
       }
       ```
     </Tab>

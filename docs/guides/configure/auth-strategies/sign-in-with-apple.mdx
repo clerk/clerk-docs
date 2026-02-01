@@ -32,55 +32,25 @@ This guide will teach you how to add native [Sign in with Apple](https://develop
   > If you are using Clerk's prebuilt components, you don't need to do anything else and can stop here. The `SignInWithApple` button will appear in your `AuthView` automatically.
   > If you are building a [custom flow](!custom-flow), continue to follow the steps below.
 
-  ## Obtain an Apple ID Credential
-
-  To authenticate with Apple and Clerk, you need to obtain an [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential).
-
-  To obtain an Apple ID Credential, you can do one of the following:
-
-  - Use one of [Apple's built-in Sign in with Apple buttons](https://developer.apple.com/documentation/signinwithapple/displaying-sign-in-with-apple-buttons-in-your-app).
-  - Use Clerk's [`SignInWithAppleHelper`](https://clerk.github.io/clerk-ios/documentation/clerk/signinwithapplehelper) class.
-  - Obtain it manually by following [the Apple docs](https://developer.apple.com/documentation/signinwithapple).
-
-  > [!NOTE]
-  > You must set the nonce property of the `ASAuthorizationAppleIDRequest` when requesting an Apple ID Credential in order to authenticate with Clerk.
-
   ## Build your sign-in flow
 
-  Once you have obtained your [Apple ID Credential](https://developer.apple.com/documentation/authenticationservices/asauthorizationappleidcredential), you can use it to authenticate with Clerk by calling [`SignIn.authenticateWithIdToken(provider:idToken:)`](https://clerk.github.io/clerk-ios/documentation/clerk/signin/authenticatewithidtoken\(provider:idtoken:\)) with a provider of `.apple` and the `idToken` you have obtained.
+  Use `clerk.auth.signInWithApple()` to start the native Sign in with Apple flow:
 
-  The following example uses Apple's built-in `SignInWithAppleButton` to obtain an Apple ID Credential and calls `SignIn.authenticateWithIdToken(provider:idToken:)` to authenticate with Clerk.
-
-  ```swift {{ filename: 'SignInWithAppleView.swift' }}
-  import SwiftUI
-  import Clerk
-  import AuthenticationServices
-
-  struct SignInWithAppleView: View {
-    var body: some View {
-      // Use Apple's built-in SignInWithAppleButton
-      SignInWithAppleButton { request in
-        request.requestedScopes = [.email, .fullName]
-        request.nonce = UUID().uuidString // Setting the nonce is mandatory
-      } onCompletion: { result in
-        Task {
-          // Access the Apple ID Credential
-          guard let credential = try result.get().credential as? ASAuthorizationAppleIDCredential else {
-            dump("Unable to get credential of type ASAuthorizationAppleIDCredential")
-            return
-          }
-
-          // Access the necessary identity token on the Apple ID Credential
-          guard let idToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }) else {
-            dump("Unable to get ID token from Apple ID Credential.")
-            return
-          }
-
-          // Authenticate with Clerk
-          let authResult = try await SignIn.authenticateWithIdToken(provider: .apple, idToken: idToken)
-        }
-      }
-    }
-  }
+  ```swift
+  try await clerk.auth.signInWithApple()
   ```
 </Steps>
+
+## Troubleshooting
+
+### I’m not receiving the user’s first and last name from Apple
+
+Apple only provides `fullName` the very first time a user authorizes your app with Sign in with Apple. On subsequent sign-ins (or if the user already authorized your app in the past), Apple does not resend the name.
+
+If you expected a name and didn’t receive one, check the following:
+
+- **First-time authorization only:** If this isn’t the user’s first authorization for this app, Apple will not return `fullName`. You should store the name the first time you receive it and treat it as optional after that. Deleting the user from Clerk does not reset this on Apple’s side.
+- **Requested scopes:** Make sure your Sign in with Apple request includes the `fullName` scope (and `email`, if you need it). If `fullName` wasn’t requested, Apple won’t prompt the user to share it.
+- **User denied name sharing:** If the user chooses not to share their name, Apple won’t provide it. Make sure your UI can collect a name as a fallback.
+
+To test the first-time flow again, delete the user from Clerk, revoke the app’s authorization in iOS (Settings → Apple ID → **Sign in with Apple** → your app → **Delete**), and sign in again.

@@ -521,11 +521,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const groupsItemsCombinedSDKs = (() => {
         const sdks = items?.flatMap((item) =>
           item.flatMap((item) => {
-            // For manifest items with hrefs, include distinctSDKVariants from the document
+            // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
             if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
               const doc = docsMap.get(item.href)
               if (doc) {
-                const sdks = [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+                const sdks = [...(item.sdk ?? []), ...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
                 return sdks.length > 0 ? sdks : undefined
               }
             }
@@ -539,7 +539,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return uniqueSDKs
       })()
 
-      // This is the sdk of the group
+      // This is the sdk of the group (explicitly set in the manifest)
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
@@ -550,26 +550,23 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
       }
 
-      // If the group has explicit SDK scoping in the manifest, that takes precedence
-      if (groupSDK !== undefined && groupSDK.length > 0) {
-        return {
-          ...details,
-          sdk: groupSDK,
-          items,
-        } as ManifestGroup
+      // If the group has an explicit SDK restriction, preserve it even if children support more SDKs
+      // This handles cases like "Mobile Navigation" where the folder itself should only appear for ios/android
+      // even though children like "Quickstart" may support other SDKs
+      if (groupSDK !== undefined) {
+        return { ...details, sdk: groupSDK, items } as ManifestGroup
       }
 
-      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      // If all the children items support all SDKs, then we don't need to set the sdk on the group
       if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
         return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
-      const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []
-
+      // Use the computed children SDKs - this takes precedence over any inherited SDK from parent
+      // This ensures folders like "App Router" get SDK scoping based on their children's frontmatter
       return {
         ...details,
-        // If there are children items, then we combine the sdks of the group and the children items sdks
-        sdk: combinedSDKs,
+        sdk: groupsItemsCombinedSDKs,
         items,
       } as ManifestGroup
     },

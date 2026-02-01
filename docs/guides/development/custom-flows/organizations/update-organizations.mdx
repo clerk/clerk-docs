@@ -9,14 +9,14 @@ Organization members with appropriate [Permissions](/docs/guides/organizations/c
 
 This guide will demonstrate how to use Clerk's API to build a custom flow for updating an Organization.
 
-<Tabs items={["Next.js", "JavaScript"]}>
-  <Tab>
-    The following example:
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  The following example:
 
-    1. Uses the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to fetch the active `organization`.
-    1. Uses `organization` to call the `update()` method with the desired name to update the Organization. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
+  1. Uses the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to fetch the active `organization`.
+  1. Uses `organization` to call the `update()` method with the desired name to update the Organization. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
 
-    This example is written for Next.js App Router but can be adapted for any React-based framework.
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
     ```tsx {{ filename: 'app/components/UpdateOrganization.tsx', collapsible: true }}
     'use client'
@@ -65,93 +65,201 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
       )
     }
     ```
-  </Tab>
+  </If>
 
-  <Tab>
-    The following example uses the `organization.update()` method to update the [Active Organization's](!active-organization) name. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/update-organization.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useOrganization } from '@clerk/clerk-expo'
+    import * as React from 'react'
+    import { Pressable, StyleSheet, TextInput } from 'react-native'
 
-    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
+    export const UpdateOrganization = () => {
+      const { organization, isLoaded } = useOrganization()
 
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="app"></div>
+      const [name, setName] = React.useState('')
+      const [success, setSuccess] = React.useState(false)
 
-          <h1>Update the current organization</h1>
-          <form id="update-organization">
-            <label for="name">Name</label>
-            <input id="name" name="name" />
-            <button>Update</button>
-          </form>
+      React.useEffect(() => {
+        if (!organization) {
+          return
+        }
+        setName(organization.name)
+      }, [organization])
 
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      if (!pubKey) {
-        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+      if (!isLoaded || !organization) {
+        return null
       }
 
-      const clerk = new Clerk('{{pub_key}}')
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        // Check for an Active Organization
-        if (clerk.organization) {
-          const form = document.getElementById('update-organization')
-
-          form.addEventListener('submit', function (e) {
-            e.preventDefault()
-
-            const inputEl = document.getElementById('name')
-
-            if (!inputEl) {
-              // ... handle empty input
-              return
-            }
-
-            clerk.organization
-              .update({ name: inputEl.value })
-              .then((res) => console.log(`Updated org:`, res))
-              .catch((error) => console.log('An error occurred:', error))
-          })
-        } else {
-          // If there is no Active Organization,
-          // mount Clerk's <OrganizationSwitcher />
-          // to allow the user to set an organization as active
-          document.getElementById('app').innerHTML = `
-            <h2>Select an organization to set it as active</h2>
-            <div id="org-switcher"></div>
-          `
-
-          const orgSwitcherDiv = document.getElementById('org-switcher')
-
-          clerk.mountOrganizationSwitcher(orgSwitcherDiv)
+      const handleSubmit = async () => {
+        try {
+          setSuccess(false)
+          await organization?.update({ name })
+          setSuccess(true)
+        } catch (err) {
+          console.error(err)
         }
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Update the current organization
+          </ThemedText>
+          <ThemedText style={styles.label}>Name</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={name}
+            placeholder="Organization name"
+            placeholderTextColor="#666666"
+            onChangeText={(text) => setName(text)}
+          />
+          <Pressable
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            onPress={handleSubmit}
+            disabled={!name.trim()}
+          >
+            <ThemedText style={styles.buttonText}>Update</ThemedText>
+          </Pressable>
+          {success && <ThemedText style={styles.success}>Organization updated successfully</ThemedText>}
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      success: {
+        color: '#28a745',
+        fontSize: 14,
+        marginTop: 12,
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk="js-frontend">
+  The following example uses the `organization.update()` method to update the [Active Organization's](!active-organization) name. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
+
+  Use the following tabs to view the code necessary for the `index.html` and `main.js` files.
+
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html', collapsible: true }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h1>Update the current organization</h1>
+        <form id="update-organization">
+          <label for="name">Name</label>
+          <input id="name" name="name" />
+          <button>Update</button>
+        </form>
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js', collapsible: true }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+    }
+
+    const clerk = new Clerk('{{pub_key}}')
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      // Check for an Active Organization
+      if (clerk.organization) {
+        const form = document.getElementById('update-organization')
+
+        form.addEventListener('submit', function (e) {
+          e.preventDefault()
+
+          const inputEl = document.getElementById('name')
+
+          if (!inputEl) {
+            // ... handle empty input
+            return
+          }
+
+          clerk.organization
+            .update({ name: inputEl.value })
+            .then((res) => console.log(`Updated org:`, res))
+            .catch((error) => console.log('An error occurred:', error))
+        })
       } else {
-        // If there is no active user, mount Clerk's <SignIn />
+        // If there is no Active Organization,
+        // mount Clerk's <OrganizationSwitcher />
+        // to allow the user to set an organization as active
         document.getElementById('app').innerHTML = `
-          <div id="sign-in"></div>
+          <h2>Select an organization to set it as active</h2>
+          <div id="org-switcher"></div>
         `
 
-        const signInDiv = document.getElementById('sign-in')
+        const orgSwitcherDiv = document.getElementById('org-switcher')
 
-        clerk.mountSignIn(signInDiv)
+        clerk.mountOrganizationSwitcher(orgSwitcherDiv)
       }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `
+
+      const signInDiv = document.getElementById('sign-in')
+
+      clerk.mountSignIn(signInDiv)
+    }
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk={["ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

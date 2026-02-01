@@ -6,6 +6,11 @@
 // Options:
 //   --dry-run  Run everything except actually pushing/updating the Algolia index
 //
+// Environment variables:
+//   DEBUG_SEARCH_BRANCH  Set to enable search index updates on preview deployments.
+//                        The value is used as the branch name for the records.
+//                        Without this, the script exits early on preview deployments.
+//
 // This script reads the final processed MDX files from dist/ which have:
 // - All partials embedded
 // - All typedocs embedded

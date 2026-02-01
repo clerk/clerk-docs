@@ -80,6 +80,9 @@ const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
 const ALGOLIA_OUTPUT_DIR = path.join(__dirname, '../.algolia')
 
+const DEBUG_SEARCH_BRANCH = process.env.DEBUG_SEARCH_BRANCH
+const VERCEL_ENV = process.env.VERCEL_ENV as 'production' | 'preview' | 'development' | undefined
+
 // Parse command line arguments
 const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
@@ -98,6 +101,10 @@ const HEADING_WEIGHTS: Record<string, number> = {
 
 function getGitBranch(): string {
   try {
+    if (DEBUG_SEARCH_BRANCH !== undefined) {
+      return DEBUG_SEARCH_BRANCH
+    }
+
     // Try to get branch from environment (CI systems often set this)
     const envBranch =
       process.env.VERCEL_GIT_COMMIT_REF ||
@@ -594,6 +601,15 @@ function generateRecordsFromDoc(
 }
 
 async function main() {
+  if (VERCEL_ENV === 'preview') {
+    if (DEBUG_SEARCH_BRANCH !== undefined) {
+      console.log(`⚠︎ DEBUG MODE - Using branch: ${DEBUG_SEARCH_BRANCH}`)
+    } else {
+      console.log(`To update the dev algolia search index on a preview deployment, you must set the DEBUG_SEARCH_BRANCH environment variable`)
+      process.exit(0)
+    }
+  }
+
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
 

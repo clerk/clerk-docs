@@ -151,6 +151,7 @@ async function main() {
       '/docs/core-1',
       '/docs/reference/backend-api',
       '/docs/reference/frontend-api',
+      '/docs/reference/platform-api',
       '/pricing',
       '/support',
       '/discord',
@@ -183,33 +184,7 @@ async function main() {
         'guides/development/ai-prompts.mdx': ['doc-not-in-manifest'],
         'guides/development/migrating/cognito.mdx': ['doc-not-in-manifest'],
         'guides/development/migrating/firebase.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/apple.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/atlassian.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/bitbucket.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/box.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/coinbase.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/discord.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/dropbox.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/facebook.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/github.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/gitlab.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/google.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/hubspot.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/hugging-face.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/line.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/linear.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/linkedin-oidc.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/linkedin.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/microsoft.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/notion.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/slack.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/spotify.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/tiktok.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/twitch.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/twitter.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/x-twitter.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/xero.mdx': ['doc-not-in-manifest'],
-        'guides/configure/auth-strategies/social-connections/vercel.mdx': ['doc-not-in-manifest'],
+        'guides/configure/auth-strategies/social-connections/all-providers.mdx': ['doc-not-in-manifest'],
         'guides/development/upgrading/upgrading-from-v2-to-v3.mdx': ['doc-not-in-manifest'],
         'guides/organizations/create-orgs-for-users.mdx': ['doc-not-in-manifest'],
         'getting-started/quickstart/setup-clerk.mdx': ['doc-not-in-manifest'],
@@ -1241,6 +1216,13 @@ ${yaml.stringify({
 
   abortSignal?.throwIfAborted()
 
+  // Copy over the public folder
+  if (config.publicPath) {
+    await fs.cp(config.publicPath, path.join(config.distTempPath, '_public'), { recursive: true })
+  }
+
+  abortSignal?.throwIfAborted()
+
   if (config.flags.watch) {
     // While in dev, we just want to symlink the new dist to the dist folder
     // This removes the issue that fs.cp can't replace a folder
@@ -1255,9 +1237,6 @@ ${yaml.stringify({
   } else if (process.env.VERCEL === '1') {
     // In vercel ci the temp dir and the final dir will be on separate partitions so fs.rename() will fail
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
-    if (config.publicPath) {
-      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
-    }
     // We don't need to worry about temp folders as the ci runner will be destroyed after this anyways
   } else {
     // During a standard build
@@ -1269,10 +1248,6 @@ ${yaml.stringify({
     await fs.cp(config.distTempPath, config.distFinalPath, { recursive: true })
     // Remove the temp dist folder
     await fs.rm(config.distTempPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    // Copy over the public folder
-    if (config.publicPath) {
-      await fs.cp(config.publicPath, path.join(config.distFinalPath, '_public'), { recursive: true })
-    }
   }
 
   abortSignal?.throwIfAborted()

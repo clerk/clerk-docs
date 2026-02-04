@@ -58,12 +58,12 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 
 Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
 
-MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `npm run format`.
+MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `pnpm run format`.
 
 ## Project setup
 
 1.  Fork or clone the repo.
-2.  Run `npm install` to install dependencies.
+2.  Run `pnpm install` to install dependencies.
 3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
 > Tip: If you forked the repo, keep your `main` branch pointing at the original repository
@@ -123,7 +123,7 @@ Before committing your changes, run our linting checks to validate the changes y
 To run all linting steps:
 
 ```shell
-npm run lint
+pnpm run lint
 ```
 
 ## Getting your contributions reviewed
@@ -253,11 +253,11 @@ type SubNavItem = {
    */
   wrap?: boolean
   /**
-   * Whether to collapse the sub-nav
+   * Whether the nav item is in the top part of the sidebar navigation
    *
    * @default false
    */
-  collapse?: boolean
+  topNav?: boolean
 
   /**
    * Limit this group to only show when the user has one of the specified sdks active
@@ -273,7 +273,7 @@ type SubNavItem = {
 <details>
 <summary>Visual representation of the manifest TypeScript types</summary>
 
-![](/public/images/styleguide/manifest.png)
+![Visual representation of the manifest TypeScript types](/.github/media/manifest.png)
 
 </details>
 
@@ -606,7 +606,16 @@ This does a couple things:
 - Links to this page will be "smart" and direct the user towards the correct variant of the page based on which SDK is active.
 - On the right side of the page, a selector will be shown, allowing the user to switch between the different versions of the page.
 
-If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to use the `.sdk.mdx` file extension. For example, say you had a `docs/setup-clerk.mdx` with `sdk: react, nextjs, expo` in the frontmatter, and you want to add Remix but it'd require changing almost the entire doc. In this case, you could create a `docs/setup-clerk.remix.mdx` file and write out a Remix-specific version of the guide. This will act the same way as above, creating a distinct variant of the guide as`/docs/remix/setup-clerk`.
+### Doc variants
+
+A **doc variant** is a version of a page that is specific to a particular SDK. For example, the `quickstart.react.mdx` page is a variant of the `quickstart.mdx` page that is specific to the React SDK. This is useful when you want to show different content for different SDKs but want to keep the route the same.
+
+> [!NOTE]
+> When creating doc variants, there will be a base doc that is used as the reference for the variants. Take the example from before, `quickstart.mdx` would be the base doc. Base docs should always be written for Next.js as it's our most popular and maintained SDK.
+
+**When would I use a doc variant?**
+
+Say you have a doc where you want to support multiple SDKs, but it'd require changing a majority of the content for each SDK. Instead of using a bunch of `<Tabs />` or `<If />` components, which would bloat the doc and make it harder to maintain, you can create a doc variant.
 
 ### Headings
 
@@ -668,7 +677,7 @@ npm i @clerk/nextjs
 
 #### Highlighting
 
-You can highlight specific lines in a code block using the `mark` prop. For example to highlight line `2` and lines `5-7`:
+You can highlight specific lines in a code block using the `mark` prop. For example, to highlight line `2` and lines `5-7`:
 
 ````mdx
 ```tsx {{ mark: [2, [5, 7]] }}
@@ -682,7 +691,19 @@ export function Layout() {
 ```
 ````
 
-![](/.github/media/code-block-mark.png)
+![Code block with marked lines screenshot](/.github/media/code-block-mark.png)
+
+You can also highlight specific strings using the `mark` prop. For example, to highlight `cssLayerName: 'clerk'`:
+
+````mdx
+```tsx {{ mark: ["cssLayerName: 'clerk'"] }}
+<ClerkProvider
+  appearance={{
+    cssLayerName: 'clerk',
+  }}
+>
+```
+````
 
 The `ins` (insert) and `del` (delete) props work in the same way as the `mark` prop but apply "diff" style highlighting with prepended `+` and `-` signs.
 
@@ -701,7 +722,7 @@ export function Layout() {
 ```
 ````
 
-![](/.github/media/code-block-diff.png)
+![Code block with diff lines screenshot](/.github/media/code-block-diff.png)
 
 </details>
 
@@ -758,7 +779,7 @@ You can also truncate a code block by using the `collapsible` prop. This will re
 <details>
 <summary>Collapsible example</summary>
 
-![](/.github/media/code-block-collapsible.png)
+![Code block with collapsible lines screenshot](/.github/media/code-block-collapsible.png)
 
 </details>
 
@@ -1052,7 +1073,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 
 - [title](href)
 - description
-- {<svg viewBox="0 0 32 32">{/* icon */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1070,7 +1091,7 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant</summary>
 
-![](/.github/media/cards-default.png)
+![Cards default variant screenshot](/.github/media/cards-default.png)
 
 ```mdx
 <Cards>
@@ -1091,20 +1112,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>default</code> variant with icons</summary>
 
-![](/.github/media/cards-default-icons.png)
+![Cards default variant with icons screenshot](/.github/media/cards-default-icons.png)
 
 ```mdx
 <Cards>
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1114,20 +1135,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>plain</code> variant with icons</summary>
 
-![](/.github/media/cards-plain-icons.png)
+![Cards plain variant with icons screenshot](/.github/media/cards-plain-icons.png)
 
 ```mdx
 <Cards variant="plain">
 
 - [Quickstarts & Tutorials](/docs/quickstarts/overview)
 - Explore our end-to-end tutorials and getting started guides for different application stacks using Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [UI Components](/docs/reference/components/overview)
 - Clerk's prebuilt UI components give you a beautiful, fully-functional user management experience in minutes.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1137,20 +1158,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>image</code> variant</summary>
 
-![](/.github/media/cards-image.png)
+![Cards image variant screenshot](/.github/media/cards-image.png)
 
 ```mdx
 <Cards variant="image">
 
 - [What is Clerk authentication?](/docs/guides/configure/auth-strategies/sign-up-sign-in-options)
 - Clerk offers multiple authentication strategies to identify legitimate users of your application, and to allow them to make authenticated requests to your backend.
-- ![](/what-is-clerk.png)
+- ![alt text](/what-is-clerk.png)
 
 ---
 
 - [What is the “User” object?](/docs/guides/users/managing)
 - The User object contains all account information that describes a user of your app in Clerk. Users can authenticate and manage their accounts, update their personal and contact info, or set up security features for their accounts.
-- ![](/user-object.png)
+- ![alt text](/user-object.png)
 
 </Cards>
 ```
@@ -1160,20 +1181,20 @@ The `<Cards>` component can be used to display a grid of cards in various styles
 <details>
 <summary><code>cta</code> variant</summary>
 
-![](/.github/media/cards-cta.png)
+![Cards cta variant screenshot](/.github/media/cards-cta.png)
 
 ```mdx
 <Cards variant="cta">
 
 - [Join our Discord](/discord 'Join Discord')
 - Join our official Discord server to chat with us directly and become a part of the Clerk community.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text](/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 ---
 
 - [Need help?](/support 'Get help')
 - Contact us through Discord, Twitter, or email to receive answers to your questions and learn more about Clerk.
-- {<svg viewBox="0 0 32 32">{/*  */}</svg>}
+- ![alt text(/docs/images/path/to/file.svg) (preferred) or {<svg viewBox="0 0 32 32">{/* icon */}</svg>} or <Icon name="clerk" />
 
 </Cards>
 ```
@@ -1211,7 +1232,7 @@ description continued…
 <details>
 <summary>Example</summary>
 
-![](/.github/media/properties.png)
+![Properties screenshot](/.github/media/properties.png)
 
 ```mdx
 <Properties>
@@ -1300,6 +1321,8 @@ For example, in the `/hooks/use-auth.mdx` file, if you want to render `./clerk-t
 ### `<If />`
 
 The `<If />` component is used for conditional rendering. When the conditions are true, it displays its contents. When the conditions are false, it hides its contents. We commonly use this component to conditionally render content based on the **active SDK**. The **active SDK** is the SDK that is selected in the sidenav.
+
+If you'd like to add support for a new SDK in a guide, but using the `<If />` component in the doc is getting too noisy, another option is to create a [doc variant](#doc-variant).
 
 > [!IMPORTANT]
 > This component cannot be used within code blocks.
@@ -1407,7 +1430,7 @@ Images and static assets should be placed in the `public/` folder. To reference 
 
 When rendering images, make sure that you provide appropriate alternate text. Reference [this decision tree](https://www.w3.org/WAI/tutorials/images/decision-tree/) for help picking a suitable value.
 
-Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![](/docs/images/sign-in.png 'Clerk SignIn component.')`
+Image captions can be added using [standard Markdown "title" syntax](https://www.markdownguide.org/basic-syntax/#images-1). For example, `![alt text](/docs/images/sign-in.png 'Clerk SignIn component.')`
 
 #### Image props
 
@@ -1446,7 +1469,7 @@ https://nextjs.org/docs/app/api-reference/components/image#quality
 The `width` and `height` props can now be used to specify the (max) display size of an image in pixels.
 
 ```mdx
-![](/docs/images/my-image.png){{ width: 345 }}
+![alt text](/docs/images/my-image.png){{ width: 345 }}
 ```
 
 | Without `width`                                                                        | With `width`                                                                        |

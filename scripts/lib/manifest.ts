@@ -49,7 +49,7 @@ export type ManifestItem = {
 
 export type ManifestHeading = {
   title: string
-  heading: true
+  type: 'heading'
   sdk?: SDK[]
 }
 
@@ -85,7 +85,7 @@ const createManifestSchema = (config: BuildConfig) => {
   const manifestHeading: z.ZodType<ManifestHeading> = z
     .object({
       title: z.string(),
-      heading: z.literal(true),
+      type: z.literal('heading'),
       sdk: z.array(sdk).optional(),
     })
     .strict()

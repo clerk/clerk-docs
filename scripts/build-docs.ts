@@ -601,9 +601,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
-              links.add(linkInPartial)
-            }, undefined, redirectsForValidation),
+            validateLinks(
+              config,
+              docsMap,
+              partial.path,
+              'partials',
+              (linkInPartial) => {
+                links.add(linkInPartial)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree) => {
             node = tree
@@ -645,9 +653,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
-              links.add(linkInTooltip)
-            }, undefined, redirectsForValidation),
+            validateLinks(
+              config,
+              docsMap,
+              tooltipPath,
+              'tooltips',
+              (linkInTooltip) => {
+                links.add(linkInTooltip)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -685,9 +701,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-              links.add(linkInTypedoc)
-            }, undefined, redirectsForValidation),
+            validateLinks(
+              config,
+              docsMap,
+              filePath,
+              'typedoc',
+              (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -711,9 +735,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-                links.add(linkInTypedoc)
-              }, undefined, redirectsForValidation),
+              validateLinks(
+                config,
+                docsMap,
+                filePath,
+                'typedoc',
+                (linkInTypedoc) => {
+                  links.add(linkInTypedoc)
+                },
+                undefined,
+                redirectsForValidation,
+              ),
             )
             .use(() => (tree, vfile) => {
               node = tree
@@ -1014,7 +1046,17 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href, redirectsForValidation))
+              .use(
+                validateLinks(
+                  config,
+                  docsMap,
+                  doc.file.filePath,
+                  'docs',
+                  undefined,
+                  doc.file.href,
+                  redirectsForValidation,
+                ),
+              )
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))

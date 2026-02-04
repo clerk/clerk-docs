@@ -231,7 +231,15 @@ function validateCodeBlockUrls(
         if (redirectDest && docsMap.get(redirectDest)) {
           // URL redirects to a valid page - suggest the new URL
           const newUrl = hash ? `${redirectDest}#${hash}` : redirectDest
-          safeMessage(config, vfile, filePath, section, 'link-redirects', [match[0], `https://clerk.com${newUrl}`], position)
+          safeMessage(
+            config,
+            vfile,
+            filePath,
+            section,
+            'link-redirects',
+            [match[0], `https://clerk.com${newUrl}`],
+            position,
+          )
         } else {
           // URL doesn't exist and doesn't redirect to a valid page
           safeMessage(config, vfile, filePath, section, 'link-doc-not-found', [match[0], `${url}.mdx`], position)

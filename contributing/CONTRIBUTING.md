@@ -58,12 +58,12 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 
 Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
 
-MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `npm run format`.
+MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `pnpm run format`.
 
 ## Project setup
 
 1.  Fork or clone the repo.
-2.  Run `npm install` to install dependencies.
+2.  Run `pnpm install` to install dependencies.
 3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
 > Tip: If you forked the repo, keep your `main` branch pointing at the original repository
@@ -123,7 +123,7 @@ Before committing your changes, run our linting checks to validate the changes y
 To run all linting steps:
 
 ```shell
-npm run lint
+pnpm run lint
 ```
 
 ## Getting your contributions reviewed

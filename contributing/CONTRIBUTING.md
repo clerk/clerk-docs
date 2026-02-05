@@ -1271,7 +1271,6 @@ The `<ComparisonTable>` component is used to create feature comparison tables wi
 | `<CompareNo />`          | Displays a red X (✗). Use `inline` prop for inline display           |
 | `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
 | `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
-| `<ChangeTag />`          | Displays a colored pill/badge. Types: `added`, `changed`, `removed`  |
 
 #### Example
 
@@ -1323,16 +1322,6 @@ Use the `inline` prop on `<CompareYes />` and `<CompareNo />` when you need them
 
 ```mdx
 The feature was removed (was <CompareYes inline />, now <CompareNo inline />).
-```
-
-#### ChangeTag
-
-The `<ChangeTag>` component displays colored pill badges for documenting changes. It's a self-closing component that renders a badge based on the `type` prop:
-
-```mdx
-- <ChangeTag type="added" /> **New feature** - Description of what was added
-- <ChangeTag type="changed" /> **Updated feature** - Description of what changed
-- <ChangeTag type="removed" /> **Deprecated feature** - Description of what was removed
 ```
 
 ### `<Include />`

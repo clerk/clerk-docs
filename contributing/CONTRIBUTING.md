@@ -1263,14 +1263,15 @@ The `<ComparisonTable>` component is used to create feature comparison tables wi
 
 #### Related Components
 
-| Component           | Description                                                          |
-| ------------------- | -------------------------------------------------------------------- |
-| `<ComparisonTable>` | Wrapper component for the comparison table with sticky header        |
-| `<CompareSection>`  | Creates a section header row that spans all columns                  |
-| `<CompareYes />`    | Displays a green checkmark (✓). Use `inline` prop for inline display |
-| `<CompareNo />`     | Displays a red X (✗). Use `inline` prop for inline display           |
-| `<CompareMaybe>`    | Displays orange text. Defaults to "—", accepts custom children       |
-| `<ChangeTag />`     | Displays a colored pill/badge. Types: `added`, `changed`, `removed`  |
+| Component                | Description                                                          |
+| ------------------------ | -------------------------------------------------------------------- |
+| `<ComparisonTable>`      | Wrapper component for the comparison table with sticky header        |
+| `<CompareSection>`       | Creates a section header row that spans all columns                  |
+| `<CompareYes />`         | Displays a green checkmark (✓). Use `inline` prop for inline display |
+| `<CompareNo />`          | Displays a red X (✗). Use `inline` prop for inline display           |
+| `<CompareMaybe>`         | Displays orange text. Defaults to "◐", accepts custom children       |
+| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
+| `<ChangeTag />`          | Displays a colored pill/badge. Types: `added`, `changed`, `removed`  |
 
 #### Example
 

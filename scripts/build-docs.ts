@@ -262,8 +262,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   let staticBloomFilter: unknown | undefined = undefined
   let staticCompactRedirects: Record<string, string> | undefined = undefined
   let dynamicRedirects: Redirect[] | undefined = undefined
-  // Keep original redirects for link validation
-  let redirectsForValidation: { static: Redirect[]; dynamic: Redirect[] } | undefined = undefined
+  let allStaticRedirects: Redirect[] | undefined = undefined
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
@@ -274,11 +273,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
     staticCompactRedirects = transformRedirectsToCompactObject(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
-    // Store original redirects for validateLinks to check codeblock URLs
-    redirectsForValidation = { static: redirects.staticRedirects, dynamic: redirects.dynamicRedirects }
+    allStaticRedirects = redirects.staticRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
   }
+
+  // Used by validateLinks to check codeblock URLs against redirects
+  const redirectsForValidation =
+    allStaticRedirects && dynamicRedirects
+      ? { static: allStaticRedirects, dynamic: dynamicRedirects }
+      : undefined
 
   abortSignal?.throwIfAborted()
 

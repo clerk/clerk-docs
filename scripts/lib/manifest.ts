@@ -57,6 +57,7 @@ export type ManifestGroup = {
   title: string
   items: Manifest
   topNav?: boolean
+  flatNav?: boolean
   tag?: Tag
   wrap?: boolean
   icon?: Icon
@@ -95,6 +96,7 @@ const createManifestSchema = (config: BuildConfig) => {
       title: z.string(),
       items: z.lazy(() => manifestSchema),
       topNav: z.boolean().optional(),
+      flatNav: z.boolean().optional(),
       tag: tag.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),

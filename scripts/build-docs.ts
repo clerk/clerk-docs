@@ -782,6 +782,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         async (group) => ({
           title: group.title,
           topNav: group.topNav,
+          flatNav: group.flatNav,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,

@@ -3,55 +3,83 @@ In the `(auth)` group, create a `sign-up.tsx` file with the following code. The 
 ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
-import { useAuth } from '@clerk/expo'
 import { useSignUp } from '@clerk/expo/legacy'
 import { Link, useRouter } from 'expo-router'
-import React from 'react'
+import * as React from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
 export default function Page() {
-  const { signUp } = useSignUp()
-  const { isSignedIn } = useAuth()
+  const { isLoaded, signUp, setActive } = useSignUp()
   const router = useRouter()
 
   const [emailAddress, setEmailAddress] = React.useState('')
   const [password, setPassword] = React.useState('')
+  const [pendingVerification, setPendingVerification] = React.useState(false)
   const [code, setCode] = React.useState('')
 
-  // Handle the submission of the sign-up form
-  const onSignUpPress = React.useCallback(async () => {
-    await signUp.password({
-      emailAddress,
-      password,
-    })
+  // Handle submission of sign-up form
+  const onSignUpPress = async () => {
+    if (!isLoaded) return
 
-    await signUp.verifications.sendEmailCode()
-  }, [signUp, emailAddress, password])
-
-  // Handle the submission of the email verification code
-  const onVerifyPress = React.useCallback(async () => {
-    await signUp.verifications.verifyEmailCode({
-      code,
-    })
-
-    if (signUp.status === 'complete') {
-      await signUp.finalize({
-        navigate: () => {
-          router.push('/')
-        },
+    // Start sign-up process using email and password provided
+    try {
+      await signUp.create({
+        emailAddress,
+        password,
       })
-    }
-  }, [signUp, code, router])
 
-  if (signUp.status === 'complete' || isSignedIn) {
-    return null
+      // Send user an email with verification code
+      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+
+      // Set 'pendingVerification' to true to display second form
+      // and capture code
+      setPendingVerification(true)
+    } catch (err) {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2))
+    }
   }
 
-  // Display email code verification form
-  if (
-    signUp.status === 'missing_requirements' &&
-    signUp.unverifiedFields.includes('email_address')
-  ) {
+  // Handle submission of verification form
+  const onVerifyPress = async () => {
+    if (!isLoaded) return
+
+    try {
+      // Use the code the user provided to attempt verification
+      const signUpAttempt = await signUp.attemptEmailAddressVerification({
+        code,
+      })
+
+      // If verification was completed, set the session to active
+      // and redirect the user
+      if (signUpAttempt.status === 'complete') {
+        await setActive({
+          session: signUpAttempt.createdSessionId,
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              // Check for tasks and navigate to custom UI to help users resolve them
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            router.replace('/')
+          },
+        })
+      } else {
+        // If the status is not complete, check why. User may need to
+        // complete further steps.
+        console.error(JSON.stringify(signUpAttempt, null, 2))
+      }
+    } catch (err) {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2))
+    }
+  }
+
+  if (pendingVerification) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.title}>
@@ -63,7 +91,7 @@ export default function Page() {
         <TextInput
           style={styles.input}
           value={code}
-          placeholder="Enter verification code"
+          placeholder="Enter your verification code"
           placeholderTextColor="#666666"
           onChangeText={(code) => setCode(code)}
           keyboardType="numeric"
@@ -90,7 +118,7 @@ export default function Page() {
         value={emailAddress}
         placeholder="Enter email"
         placeholderTextColor="#666666"
-        onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+        onChangeText={(email) => setEmailAddress(email)}
         keyboardType="email-address"
       />
       <ThemedText style={styles.label}>Password</ThemedText>
@@ -111,10 +139,10 @@ export default function Page() {
         onPress={onSignUpPress}
         disabled={!emailAddress || !password}
       >
-        <ThemedText style={styles.buttonText}>Sign up</ThemedText>
+        <ThemedText style={styles.buttonText}>Continue</ThemedText>
       </Pressable>
       <View style={styles.linkContainer}>
-        <ThemedText>Already have an account? </ThemedText>
+        <ThemedText>Have an account? </ThemedText>
         <Link href="/sign-in">
           <ThemedText type="link">Sign in</ThemedText>
         </Link>

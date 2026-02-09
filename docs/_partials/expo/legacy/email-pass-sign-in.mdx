@@ -3,68 +3,117 @@ In the `(auth)` group, create a `sign-in.tsx` file with the following code. The 
 ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
-import { useAuth } from '@clerk/expo'
 import { useSignIn } from '@clerk/expo/legacy'
+import type { EmailCodeFactor } from '@clerk/types'
 import { Link, useRouter } from 'expo-router'
-import React from 'react'
-import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native'
+import * as React from 'react'
+import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 
 export default function Page() {
-  const { signIn } = useSignIn()
-  const { isSignedIn } = useAuth()
+  const { signIn, setActive, isLoaded } = useSignIn()
   const router = useRouter()
 
   const [emailAddress, setEmailAddress] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [code, setCode] = React.useState('')
-  const [useBackupCode, setUseBackupCode] = React.useState(false)
+  const [showEmailCode, setShowEmailCode] = React.useState(false)
 
   // Handle the submission of the sign-in form
   const onSignInPress = React.useCallback(async () => {
-    await signIn.password({
-      emailAddress,
-      password,
-    })
+    if (!isLoaded) return
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: () => {
-          router.push('/')
-        },
+    // Start the sign-in process using the email and password provided
+    try {
+      const signInAttempt = await signIn.create({
+        identifier: emailAddress,
+        password,
       })
-    }
-  }, [signIn, emailAddress, password, router])
 
-  // Handle the submission of the MFA code
+      // If sign-in process is complete, set the created session as active
+      // and redirect the user
+      if (signInAttempt.status === 'complete') {
+        await setActive({
+          session: signInAttempt.createdSessionId,
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              // Check for tasks and navigate to custom UI to help users resolve them
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            router.replace('/')
+          },
+        })
+      } else if (signInAttempt.status === 'needs_second_factor') {
+        // Check if email_code is a valid second factor
+        // This is required when Client Trust is enabled and the user
+        // is signing in from a new device.
+        // See https://clerk.com/docs/guides/secure/client-trust
+        const emailCodeFactor = signInAttempt.supportedSecondFactors?.find(
+          (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+        )
+
+        if (emailCodeFactor) {
+          await signIn.prepareSecondFactor({
+            strategy: 'email_code',
+            emailAddressId: emailCodeFactor.emailAddressId,
+          })
+          setShowEmailCode(true)
+        }
+      } else {
+        // If the status is not complete, check why. User may need to
+        // complete further steps.
+        console.error(JSON.stringify(signInAttempt, null, 2))
+      }
+    } catch (err) {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      console.error(JSON.stringify(err, null, 2))
+    }
+  }, [isLoaded, signIn, setActive, router, emailAddress, password])
+
+  // Handle the submission of the email verification code
   const onVerifyPress = React.useCallback(async () => {
-    if (useBackupCode) {
-      await signIn.mfa.verifyBackupCode({ code })
-    } else {
-      await signIn.mfa.verifyTOTP({ code })
-    }
+    if (!isLoaded) return
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: () => {
-          router.push('/')
-        },
+    try {
+      const signInAttempt = await signIn.attemptSecondFactor({
+        strategy: 'email_code',
+        code,
       })
+
+      if (signInAttempt.status === 'complete') {
+        await setActive({
+          session: signInAttempt.createdSessionId,
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              // Check for tasks and navigate to custom UI to help users resolve them
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            router.replace('/')
+          },
+        })
+      } else {
+        console.error(JSON.stringify(signInAttempt, null, 2))
+      }
+    } catch (err) {
+      console.error(JSON.stringify(err, null, 2))
     }
-  }, [signIn, code, useBackupCode, router])
+  }, [isLoaded, signIn, setActive, router, code])
 
-  if (signIn.status === 'complete' || isSignedIn) {
-    return null
-  }
-
-  // Display MFA verification form
-  if (signIn.status === 'needs_second_factor') {
+  // Display email code verification form
+  if (showEmailCode) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.title}>
-          Verify your account
+          Verify your email
         </ThemedText>
         <ThemedText style={styles.description}>
-          Enter the verification code from your authenticator app.
+          A verification code has been sent to your email.
         </ThemedText>
         <TextInput
           style={styles.input}
@@ -74,10 +123,6 @@ export default function Page() {
           onChangeText={(code) => setCode(code)}
           keyboardType="numeric"
         />
-        <View style={styles.switchContainer}>
-          <ThemedText style={styles.label}>Use backup code</ThemedText>
-          <Switch value={useBackupCode} onValueChange={setUseBackupCode} />
-        </View>
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           onPress={onVerifyPress}
@@ -176,12 +221,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontWeight: '600',
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 8,
   },
   linkContainer: {
     flexDirection: 'row',

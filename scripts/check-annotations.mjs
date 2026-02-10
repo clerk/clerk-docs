@@ -72,10 +72,7 @@ async function main() {
         const key = bareMatch[1]
         const value = bareMatch[2]
         const pos = offsetToPosition(contents, match.index)
-        vfile.message(
-          `Unquoted annotation value: \`${key}: ${value}\` should be \`${key}: '${value}'\``,
-          pos,
-        )
+        vfile.message(`Unquoted annotation value: \`${key}: ${value}\` should be \`${key}: '${value}'\``, pos)
       }
     }
 

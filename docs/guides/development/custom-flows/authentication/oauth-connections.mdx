@@ -99,8 +99,13 @@ You must configure your application instance through the Clerk Dashboard for the
           // If this was a sign-in, and it's complete, there's nothing else to do.
           if (signIn.status === 'complete') {
             await signIn.finalize({
-              navigate: async () => {
-                navigateToApp()
+              navigate: async ({ decorateUrl }) => {
+                const url = decorateUrl('/protected')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
             return
@@ -111,8 +116,13 @@ You must configure your application instance through the Clerk Dashboard for the
             await signIn.create({ transfer: true })
             if (signIn.status === 'complete') {
               await signIn.finalize({
-                navigate: async () => {
-                  navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -134,8 +144,13 @@ You must configure your application instance through the Clerk Dashboard for the
             await signUp.create({ transfer: true })
             if (signUp.status === 'complete') {
               await signUp.finalize({
-                navigate: async () => {
-                  navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -145,8 +160,13 @@ You must configure your application instance through the Clerk Dashboard for the
 
           if (signUp.status === 'complete') {
             await signUp.finalize({
-              navigate: async () => {
-                navigateToApp()
+              navigate: async ({ decorateUrl }) => {
+                const url = decorateUrl('/protected')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
             return
@@ -166,8 +186,13 @@ You must configure your application instance through the Clerk Dashboard for the
               // Clerk `setActive` API instead of the `finalize` API.
               await clerk.setActive({
                 session: sessionId,
-                navigate: async () => {
-                  return navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -202,6 +227,7 @@ You must configure your application instance through the Clerk Dashboard for the
     import * as WebBrowser from 'expo-web-browser'
     import * as AuthSession from 'expo-auth-session'
     import { useSSO } from '@clerk/expo'
+    import { useRouter } from 'expo-router'
     import { View, Button, Platform } from 'react-native'
 
     // Preloads the browser for Android devices to reduce authentication load time
@@ -225,6 +251,7 @@ You must configure your application instance through the Clerk Dashboard for the
 
       // Use the `useSSO()` hook to access the `startSSOFlow()` method
       const { startSSOFlow } = useSSO()
+      const router = useRouter()
 
       const onPress = useCallback(async () => {
         try {
@@ -241,16 +268,15 @@ You must configure your application instance through the Clerk Dashboard for the
           if (createdSessionId) {
             setActive!({
               session: createdSessionId,
-              // Check for session tasks and navigate to custom UI to help users resolve them
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
-              navigate: async ({ session }) => {
+              // Handle session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              navigate: async ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   console.log(session?.currentTask)
-                  router.push('/sign-in/tasks')
                   return
                 }
 
-                router.push('/')
+                router.push(decorateUrl('/'))
               },
             })
           } else {
@@ -484,16 +510,20 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
         await signUp.update(params)
         if (signUp.status === 'complete') {
           await signUp.finalize({
-            navigate: async ({ session }) => {
+            navigate: async ({ session, decorateUrl }) => {
               if (session?.currentTask) {
-                // Check for tasks and navigate to custom UI to help users resolve them
-                // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
+                // Handle session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
                 console.log(session?.currentTask)
-                router.push('/sign-in/tasks')
                 return
               }
 
-              router.push('/')
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
             },
           })
         }

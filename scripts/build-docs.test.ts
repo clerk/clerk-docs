@@ -1242,6 +1242,7 @@ Testing with a simple page.`,
   })
 
   // TODO(core-3): Temporarily skipped — re-enable when safeFail is restored in validateIfComponents.ts
+  console.warn('⚠️  TEMPORARILY DISABLED FOR CORE 3 DEVELOPMENT: <If> SDK not in frontmatter test skipped')
   test.skip('<If> SDK not in frontmatter fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -1281,6 +1282,7 @@ Testing with a simple page.`,
   })
 
   // TODO(core-3): Temporarily skipped — re-enable when safeFail is restored in validateIfComponents.ts
+  console.warn('⚠️  TEMPORARILY DISABLED FOR CORE 3 DEVELOPMENT: <If> SDK not in manifest test skipped')
   test.skip('<If> SDK not in manifest fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {

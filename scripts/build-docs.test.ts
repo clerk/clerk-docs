@@ -3579,57 +3579,6 @@ title: Core Page
     )
   })
 
-  test('Swap out links for <SDKLink /> when a link points to a sdk manifest filtered page', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              {
-                title: 'nextjs',
-                sdk: ['nextjs'],
-                items: [[{ title: 'SDK Filtered Page', href: '/docs/references/nextjs/sdk-filtered-page' }]],
-              },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/references/nextjs/sdk-filtered-page.mdx',
-        content: `---
-title: SDK Filtered Page
----
-
-SDK filtered page`,
-      },
-      {
-        path: './docs/core-page.mdx',
-        content: `---
-title: Core Page
----
-
-# Core page
-
-[SDK Filtered Page](/docs/references/nextjs/sdk-filtered-page)
-`,
-      },
-    ])
-
-    await build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'nextjs'],
-      }),
-    )
-
-    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
-      `<SDKLink href="/docs/references/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
-    )
-  })
-
   test('Should swap out links for <SDKLink /> in partials', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -4150,12 +4099,8 @@ sourceFile: /docs/doc-2.mdx
               {
                 title: 'Group',
                 sdk: ['react'],
-                items: [
-                  [
-                    { title: 'Page B', href: '/docs/page-b' },
-                  ]
-                ]
-              }
+                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
+              },
             ],
           ],
         }),
@@ -4398,9 +4343,7 @@ description: x
 
     expect(output).toBe('')
 
-    expect(await readFile('./dist/doc-2.mdx')).toContain(
-      `<SDKLink href="/docs/react/doc-1" sdks={["react"]}>Link to specific variant of doc 1</SDKLink>`,
-    )
+    expect(await readFile('./dist/doc-2.mdx')).toContain(`[Link to specific variant of doc 1](/docs/react/doc-1)`)
   })
 
   test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc from within a Cards component', async () => {

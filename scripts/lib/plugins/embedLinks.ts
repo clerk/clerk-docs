@@ -100,10 +100,7 @@ export const embedLinks =
       // Does the linked page support more than one sdk?
       const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
 
-      // Do the linked page and the current page use exactly the same sdk?
-      const usesTheSameSDKs = linkedDocSDKs.every((sdk) => docSDKs.includes(sdk))
-
-      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK || !usesTheSameSDKs
+      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK
 
       // In these cases, we don't need to convert to a SDKLink
       if (!shouldConvertToSDKLink) return node

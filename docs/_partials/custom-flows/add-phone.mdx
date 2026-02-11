@@ -322,74 +322,69 @@
 
 <If sdk="ios">
   ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
-  import SwiftUI
-  import Clerk
+    import SwiftUI
+    import ClerkKit
 
-  struct AddPhoneView: View {
-    @State private var phone = ""
-    @State private var code = ""
-    @State private var isVerifying = false
-    // Create a reference to the phone number that we'll be creating
-    @State private var newPhoneNumber: PhoneNumber?
+    struct AddPhoneView: View {
+      @State private var phone = ""
+      @State private var code = ""
+      @State private var isVerifying = false
+      @State private var newPhoneNumber: PhoneNumber?
 
-    var body: some View {
-      if newPhoneNumber?.verification?.status == .verified {
-        Text("Phone added!")
-      }
-
-      if isVerifying {
-        TextField("Enter code", text: $code)
-        Button("Verify") {
-          Task { await verifyCode(code) }
+      var body: some View {
+        if newPhoneNumber?.verification?.status == .verified {
+          Text("Phone added!")
         }
-      } else {
-        TextField("Enter phone number", text: $phone)
-        Button("Continue") {
-          Task { await createPhone(phone) }
+
+        if isVerifying {
+          TextField("Enter code", text: $code)
+          Button("Verify") {
+            Task { await verifyCode(code) }
+          }
+        } else {
+          TextField("Enter phone number", text: $phone)
+          Button("Continue") {
+            Task { await createPhone(phone) }
+          }
         }
       }
     }
-  }
 
-  extension AddPhoneView {
+    extension AddPhoneView {
 
-    func createPhone(_ phone: String) async {
-      do {
-        guard let user = Clerk.shared.user else { return }
+      func createPhone(_ phone: String) async {
+        do {
+          guard let user = Clerk.shared.user else { return }
 
-        // Add an unverified phone number to user,
-        // then send the user an sms message with the verification code
-        self.newPhoneNumber = try await user
-          .createPhoneNumber(phone)
-          .prepareVerification()
+          // Create the phone number
+          let phoneNumber = try await user.createPhoneNumber(phone)
 
-        // Set to true to display second form
-        // and capture the code
-        isVerifying = true
-      } catch {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        dump(error)
+          // Send the user an SMS with the verification code
+          self.newPhoneNumber = try await phoneNumber.sendCode()
+
+          isVerifying = true
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+
+      func verifyCode(_ code: String) async {
+        do {
+          guard let newPhoneNumber else { return }
+
+          // Verify that the provided code matches the code sent to the user
+          self.newPhoneNumber = try await newPhoneNumber.verifyCode(code)
+
+          dump(self.newPhoneNumber?.verification?.status)
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
       }
     }
-
-    func verifyCode(_ code: String) async {
-      do {
-        guard let newPhoneNumber else { return }
-
-        // Verify that the code entered matches the code sent to the user
-        self.newPhoneNumber = try await newPhoneNumber.attemptVerification(code: code)
-
-        // If the status is not complete, check why. User may need to
-        // complete further steps.
-        dump(self.newPhoneNumber?.verification?.status)
-      } catch {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        dump(error)
-      }
-    }
-  }
   ```
 </If>
 

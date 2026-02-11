@@ -7,141 +7,19 @@ description: Learn how to use the Clerk API to build a custom flow for creating 
 
 This guide demonstrates how to use Clerk's API to build a custom flow for creating Organizations.
 
-<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
-  The following example uses the [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access the `createOrganization()` method. This method is used to create a new Organization with the provided name.
+<If notSdk={["js-frontend", "nuxt", "vue", "ios", "android"]}>
+  The following example uses these hooks:
 
-  If you want to populate the form with suggested organization name and logo, based on your application's [default naming rules](/docs/guides/organizations/configure#default-naming-rules), you can use the [`/v1/me/organization_creation_defaults`](/docs/reference/frontend-api/tag/user/post/v1/me/organization_creation_defaults) endpoint to retrieve the suggested values.
+  - The [`useOrganizationList()`](/docs/reference/hooks/use-organization-list) hook to access the `createOrganization()` method. This method is used to create a new Organization with the provided name.
+  - The [`useOrganizationCreationDefaults()`](/docs/reference/hooks/use-organization-creation-defaults) hook to pre-populate the form with a suggested organization name based on your application's [default naming rules](/docs/guides/organizations/configure#default-naming-rules), and to display a warning if an organization with that name or domain already exists.
 
-  <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
-    ```tsx {{ filename: 'app/components/CreateOrganization.tsx' }}
-    'use client'
-
-    import { useOrganizationList } from '@clerk/nextjs'
-    import { FormEventHandler, useState } from 'react'
-
-    export default function CreateOrganization() {
-      const { isLoaded, createOrganization } = useOrganizationList()
-      const [organizationName, setOrganizationName] = useState('')
-
-      if (!isLoaded) return null
-
-      const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
-        e.preventDefault()
-        createOrganization({ name: organizationName })
-          .then((res) => {
-            console.log(res)
-          })
-          .catch((err) => {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          })
-        setOrganizationName('')
-      }
-
-      return (
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="organizationName"
-            value={organizationName}
-            onChange={(e) => setOrganizationName(e.currentTarget.value)}
-          />
-          <button type="submit">Create organization</button>
-        </form>
-      )
-    }
-    ```
-  </If>
-
-  <If sdk="expo">
-    ```tsx {{ filename: 'app/components/create-organization.tsx' }}
-    import { ThemedText } from '@/components/themed-text'
-    import { ThemedView } from '@/components/themed-view'
-    import { useOrganizationList } from '@clerk/clerk-expo'
-    import * as React from 'react'
-    import { Pressable, StyleSheet, TextInput } from 'react-native'
-
-    export default function CreateOrganization() {
-      const { isLoaded, createOrganization } = useOrganizationList()
-      const [organizationName, setOrganizationName] = React.useState('')
-
-      if (!isLoaded) return null
-
-      const handleSubmit = async () => {
-        try {
-          const res = await createOrganization({ name: organizationName })
-          console.log(res)
-          setOrganizationName('')
-        } catch (err) {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          console.error(JSON.stringify(err, null, 2))
-        }
-      }
-
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText style={styles.label}>Organization name</ThemedText>
-          <TextInput
-            style={styles.input}
-            value={organizationName}
-            placeholder="Organization name"
-            placeholderTextColor="#666666"
-            onChangeText={(text) => setOrganizationName(text)}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-            onPress={handleSubmit}
-            disabled={!organizationName.trim()}
-          >
-            <ThemedText style={styles.buttonText}>Create organization</ThemedText>
-          </Pressable>
-        </ThemedView>
-      )
-    }
-
-    const styles = StyleSheet.create({
-      container: {
-        gap: 12,
-      },
-      label: {
-        fontWeight: '600',
-        fontSize: 14,
-      },
-      input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        backgroundColor: '#fff',
-      },
-      button: {
-        backgroundColor: '#0a7ea4',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 8,
-        alignItems: 'center',
-      },
-      buttonPressed: {
-        opacity: 0.7,
-      },
-      buttonText: {
-        color: '#fff',
-        fontWeight: '600',
-      },
-    })
-    ```
-  </If>
+  <Include src="_partials/custom-flows/create-organizations" />
 </If>
 
 <If sdk="js-frontend">
   The following example uses the [`clerk.createOrganization()`](/docs/reference/javascript/clerk#create-organization) method to create a new Organization with the provided name.
 
-  Use the following tabs to view the code necessary for the `index.html` and `main.js` files.
+  Use the tabs to view the code necessary for the `index.html` and `main.js` files.
 
   <CodeBlockTabs options={["index.html", "main.js"]}>
     ```html {{ filename: 'index.html' }}
@@ -182,7 +60,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for creati
     if (clerk.isSignedIn) {
       const form = document.getElementById('create-organization')
 
-      form.addEventListener('submit', function (e) {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault()
 
         const inputEl = document.getElementById('name')
@@ -192,10 +70,12 @@ This guide demonstrates how to use Clerk's API to build a custom flow for creati
           return
         }
 
-        clerk
-          .createOrganization({ name: inputEl.value })
-          .then((res) => console.log(res))
-          .catch((error) => console.log('An error occurred:', error))
+        try {
+          await clerk.createOrganization({ name: inputEl.value })
+          if (newOrganization) clerk.setActive({ organization: newOrganization.id })
+        } catch (error) {
+          console.log('An error occurred:', error)
+        }
       })
     } else {
       // If there is no active user, mount Clerk's <SignIn />
@@ -211,6 +91,6 @@ This guide demonstrates how to use Clerk's API to build a custom flow for creati
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk={["nuxt", "vue", "ios", "android"]}>
+  **Examples for this SDK aren't available yet. For now, try switching to a supported SDK, such as Next.js, and converting the code to fit your SDK.**
 </If>

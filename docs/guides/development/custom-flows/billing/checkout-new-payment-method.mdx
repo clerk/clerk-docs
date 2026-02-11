@@ -32,7 +32,7 @@ For the custom flow that allows users to add a new payment method to their accou
     <Tab>
       The following example:
 
-      1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to get to initiate and manage the checkout session.
+      1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to initiate and manage the checkout session.
       1. Uses the [`usePaymentElement()`](/docs/reference/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
       1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
          - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans?tab=user).
@@ -68,9 +68,8 @@ For the custom flow that allows users to add a new payment method to their accou
 
       function CustomCheckout() {
         const { checkout } = useCheckout()
-        const { status } = checkout
 
-        if (status === 'needs_initialization') {
+        if (checkout.status === 'needs_initialization') {
           return <CheckoutInitialization />
         }
 
@@ -86,23 +85,21 @@ For the custom flow that allows users to add a new payment method to their accou
       }
 
       function CheckoutInitialization() {
-        const { checkout } = useCheckout()
-        const { start, status, fetchStatus } = checkout
+        const { checkout, fetchStatus } = useCheckout()
 
-        if (status !== 'needs_initialization') {
+        if (checkout.status !== 'needs_initialization') {
           return null
         }
 
         return (
-          <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+          <button onClick={checkout.start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
             {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
           </button>
         )
       }
 
       function PaymentSection() {
-        const { checkout } = useCheckout()
-        const { isConfirming, confirm, finalize, error } = checkout
+        const { checkout, errors, fetchStatus } = useCheckout()
 
         const { isFormReady, submit } = usePaymentElement()
         const [isProcessing, setIsProcessing] = React.useState(false)
@@ -111,7 +108,7 @@ For the custom flow that allows users to add a new payment method to their accou
 
         const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault()
-          if (!isFormReady || isProcessing) return
+          if (!isFormReady || isProcessing || fetchStatus === 'fetching') return
           setIsProcessing(true)
 
           try {
@@ -119,12 +116,17 @@ For the custom flow that allows users to add a new payment method to their accou
             const { data, error } = await submit()
             // Usually a validation error from stripe that you can ignore
             if (error) {
+              console.error(JSON.stringify(error, null, 2))
               return
             }
             // Confirm checkout with payment method
-            await confirm(data)
+            const { error: confirmError } = await checkout.confirm(data)
+            if (confirmError) {
+              console.error(JSON.stringify(confirmError, null, 2))
+              return
+            }
             // Complete checkout and redirect
-            await finalize({
+            await checkout.finalize({
               navigate: ({ decorateUrl }) => {
                 const url = decorateUrl('/dashboard')
                 if (url.startsWith('http')) {
@@ -141,14 +143,22 @@ For the custom flow that allows users to add a new payment method to their accou
           }
         }
 
+        const isSubmitting = isProcessing || fetchStatus === 'fetching'
+
         return (
           <form onSubmit={handleSubmit}>
             <PaymentElement fallback={<div>Loading payment element...</div>} />
 
-            {error && <div>{error.message}</div>}
+            {errors.global && (
+              <ul>
+                {errors.global.map((error, index) => (
+                  <li key={index}>{error.longMessage || error.message}</li>
+                ))}
+              </ul>
+            )}
 
-            <button type="submit" disabled={!isFormReady || isProcessing || isConfirming}>
-              {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+            <button type="submit" disabled={!isFormReady || isSubmitting}>
+              {isSubmitting ? 'Processing...' : 'Complete Purchase'}
             </button>
           </form>
         )
@@ -156,18 +166,17 @@ For the custom flow that allows users to add a new payment method to their accou
 
       function CheckoutSummary() {
         const { checkout } = useCheckout()
-        const { plan, totals } = checkout
 
-        if (!plan) {
+        if (!checkout.plan) {
           return null
         }
 
         return (
           <div>
             <h2>Order Summary</h2>
-            <span>{plan.name}</span>
+            <span>{checkout.plan.name}</span>
             <span>
-              {totals.totalDueNow.currencySymbol} {totals.totalDueNow.amountFormatted}
+              {checkout.totals.totalDueNow.currencySymbol} {checkout.totals.totalDueNow.amountFormatted}
             </span>
           </div>
         )

@@ -21,7 +21,13 @@ There are two ways to use `useCheckout()`:
 
 ## Returns
 
-`useCheckout()` returns a `{ checkout }` object. The `checkout` object contains the following properties. They are `null` until the checkout process is started by calling the `start()` method.
+`useCheckout()` returns an object with `checkout`, `errors`, and `fetchStatus`.
+
+- `checkout` includes the checkout state and methods.
+- `errors` contains any global or raw errors from the latest checkout request.
+- `fetchStatus` indicates whether the checkout request is currently in progress.
+
+Checkout data properties are `null` until the checkout process is started by calling the `start()` method.
 
 <Typedoc src="shared/use-checkout-return" />
 
@@ -121,9 +127,8 @@ The `useCheckout()` hook can be used with a context provider for managing state 
 
           export function CheckoutFlow() {
             const { checkout } = useCheckout()
-            const { status } = checkout
 
-            if (status === 'needs_initialization') {
+            if (checkout.status === 'needs_initialization') {
               return <CheckoutInitialization />
             }
 
@@ -136,37 +141,36 @@ The `useCheckout()` hook can be used with a context provider for managing state 
           }
 
           function CheckoutInitialization() {
-            const { checkout } = useCheckout()
-            const { start, fetchStatus } = checkout
+            const { checkout, fetchStatus } = useCheckout()
 
             return (
-              <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+              <button onClick={checkout.start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
                 {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
               </button>
             )
           }
 
           function PaymentSection() {
-            const { checkout } = useCheckout()
+            const { checkout, errors, fetchStatus } = useCheckout()
 
-            const { isConfirming, confirm, finalize, error } = checkout
-
-            const [isProcessing, setIsProcessing] = useState(false)
             const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
             const router = useRouter()
 
             const submitSelectedMethod = async () => {
-              if (isProcessing || !paymentMethodId) return
-              setIsProcessing(true)
+              if (fetchStatus === 'fetching' || !paymentMethodId) return
 
               try {
                 // Confirm checkout with payment method
-                await confirm({
-                  paymentSourceId: paymentMethodId,
+                const { error } = await checkout.confirm({
+                  paymentMethodId,
                 })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
+                  return
+                }
                 // Calling `.finalize` enables you to sync the client-side state with the server-side state of your users.
                 // It revalidates all authorization checks computed within server components.
-                await finalize({
+                await checkout.finalize({
                   navigate: ({ decorateUrl }) => {
                     const url = decorateUrl('/dashboard')
                     if (url.startsWith('http')) {
@@ -178,8 +182,6 @@ The `useCheckout()` hook can be used with a context provider for managing state 
                 })
               } catch (error) {
                 console.error('Payment failed:', error)
-              } finally {
-                setIsProcessing(false)
               }
             }
 
@@ -188,10 +190,16 @@ The `useCheckout()` hook can be used with a context provider for managing state 
                 {/* A component that lists a user's payment methods and allows them to select one. See an example: https://clerk.com/docs/reference/hooks/use-payment-methods#examples */}
                 <PaymentMethods onChange={setPaymentMethodId} />
 
-                {error && <div>{error.message}</div>}
+                {errors.global && (
+                  <ul>
+                    {errors.global.map((error, index) => (
+                      <li key={index}>{error.longMessage || error.message}</li>
+                    ))}
+                  </ul>
+                )}
 
-                <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
-                  {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+                <button type="button" disabled={fetchStatus === 'fetching'} onClick={submitSelectedMethod}>
+                  {fetchStatus === 'fetching' ? 'Processing...' : 'Complete Purchase'}
                 </button>
               </>
             )
@@ -199,15 +207,14 @@ The `useCheckout()` hook can be used with a context provider for managing state 
 
           function CheckoutSummary() {
             const { checkout } = useCheckout()
-            const { plan, totals } = checkout
 
             return (
               <div>
                 <h2>Order Summary</h2>
-                <span>{plan?.name}</span>
+                <span>{checkout.plan?.name}</span>
                 <span>
-                  {totals?.totalDueNow.currencySymbol}
-                  {totals?.totalDueNow.amountFormatted}
+                  {checkout.totals?.totalDueNow.currencySymbol}
+                  {checkout.totals?.totalDueNow.amountFormatted}
                 </span>
               </div>
             )
@@ -223,9 +230,8 @@ The `useCheckout()` hook can be used with a context provider for managing state 
 
           export function CheckoutFlow() {
             const { checkout } = useCheckout()
-            const { status } = checkout
 
-            if (status === 'needs_initialization') {
+            if (checkout.status === 'needs_initialization') {
               return <CheckoutInitialization />
             }
 
@@ -238,37 +244,36 @@ The `useCheckout()` hook can be used with a context provider for managing state 
           }
 
           function CheckoutInitialization() {
-            const { checkout } = useCheckout()
-            const { start, fetchStatus } = checkout
+            const { checkout, fetchStatus } = useCheckout()
 
             return (
-              <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+              <button onClick={checkout.start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
                 {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
               </button>
             )
           }
 
           function PaymentSection() {
-            const { checkout } = useCheckout()
+            const { checkout, errors, fetchStatus } = useCheckout()
 
-            const { isConfirming, confirm, finalize, error } = checkout
-
-            const [isProcessing, setIsProcessing] = useState(false)
             const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
             const navigate = useNavigate()
 
             const submitSelectedMethod = async () => {
-              if (isProcessing || !paymentMethodId) return
-              setIsProcessing(true)
+              if (fetchStatus === 'fetching' || !paymentMethodId) return
 
               try {
                 // Confirm checkout with payment method
-                await confirm({
-                  paymentSourceId: paymentMethodId,
+                const { error } = await checkout.confirm({
+                  paymentMethodId,
                 })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
+                  return
+                }
                 // Calling `.finalize` enables you to sync the client-side state with the server-side state of your users.
                 // It revalidates all authorization checks computed within server components.
-                await finalize({
+                await checkout.finalize({
                   navigate: ({ decorateUrl }) => {
                     const url = decorateUrl('/dashboard')
                     if (url.startsWith('http')) {
@@ -280,8 +285,6 @@ The `useCheckout()` hook can be used with a context provider for managing state 
                 })
               } catch (error) {
                 console.error('Payment failed:', error)
-              } finally {
-                setIsProcessing(false)
               }
             }
 
@@ -290,10 +293,16 @@ The `useCheckout()` hook can be used with a context provider for managing state 
                 {/* A component that lists a user's payment methods and allows them to select one. See an example: https://clerk.com/docs/reference/hooks/use-payment-methods#examples */}
                 <PaymentMethods onChange={setPaymentMethodId} />
 
-                {error && <div>{error.message}</div>}
+                {errors.global && (
+                  <ul>
+                    {errors.global.map((error, index) => (
+                      <li key={index}>{error.longMessage || error.message}</li>
+                    ))}
+                  </ul>
+                )}
 
-                <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
-                  {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+                <button type="button" disabled={fetchStatus === 'fetching'} onClick={submitSelectedMethod}>
+                  {fetchStatus === 'fetching' ? 'Processing...' : 'Complete Purchase'}
                 </button>
               </>
             )
@@ -301,15 +310,14 @@ The `useCheckout()` hook can be used with a context provider for managing state 
 
           function CheckoutSummary() {
             const { checkout } = useCheckout()
-            const { plan, totals } = checkout
 
             return (
               <div>
                 <h2>Order Summary</h2>
-                <span>{plan?.name}</span>
+                <span>{checkout.plan?.name}</span>
                 <span>
-                  {totals?.totalDueNow.currencySymbol}
-                  {totals?.totalDueNow.amountFormatted}
+                  {checkout.totals?.totalDueNow.currencySymbol}
+                  {checkout.totals?.totalDueNow.amountFormatted}
                 </span>
               </div>
             )
@@ -339,17 +347,21 @@ The `useCheckout()` hook can be used with a context provider for managing state 
         planPeriod: 'month' | 'annual'
       }) {
         // Pass options directly to the hook when not using a provider.
-        const { checkout } = useCheckout({
+        const { checkout, errors, fetchStatus } = useCheckout({
           planId,
           planPeriod,
           for: 'user',
         })
 
-        const { start, status, isStarting, error } = checkout
+        const isStarting = fetchStatus === 'fetching'
 
         const handleStartCheckout = async () => {
           try {
-            await start()
+            const { error } = await checkout.start()
+            if (error) {
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
             // In a real app, you would now use the `externalClientSecret`
             // from the checkout object to render a payment form.
             console.log('Checkout started! Status:', checkout.status)
@@ -363,7 +375,13 @@ The `useCheckout()` hook can be used with a context provider for managing state 
             <button onClick={handleStartCheckout} disabled={isStarting}>
               {isStarting ? 'Initializing...' : `Upgrade to ${planPeriod} plan`}
             </button>
-            {error && <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>}
+            {errors.global && (
+              <ul>
+                {errors.global.map((error, index) => (
+                  <li key={index}>{error.longMessage || error.message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )
       }
@@ -382,17 +400,21 @@ The `useCheckout()` hook can be used with a context provider for managing state 
         planPeriod: 'month' | 'annual'
       }) {
         // Pass options directly to the hook when not using a provider.
-        const { checkout } = useCheckout({
+        const { checkout, errors, fetchStatus } = useCheckout({
           planId,
           planPeriod,
           for: 'user',
         })
 
-        const { start, status, isStarting, error } = checkout
+        const isStarting = fetchStatus === 'fetching'
 
         const handleStartCheckout = async () => {
           try {
-            await start()
+            const { error } = await checkout.start()
+            if (error) {
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
             // In a real app, you would now use the `externalClientSecret`
             // from the checkout object to render a payment form.
             console.log('Checkout started! Status:', checkout.status)
@@ -406,7 +428,13 @@ The `useCheckout()` hook can be used with a context provider for managing state 
             <button onClick={handleStartCheckout} disabled={isStarting}>
               {isStarting ? 'Initializing...' : `Upgrade to ${planPeriod} plan`}
             </button>
-            {error && <p style={{ color: 'red' }}>Error: {error.errors[0].message}</p>}
+            {errors.global && (
+              <ul>
+                {errors.global.map((error, index) => (
+                  <li key={index}>{error.longMessage || error.message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )
       }

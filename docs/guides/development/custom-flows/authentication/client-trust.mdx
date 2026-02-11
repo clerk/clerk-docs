@@ -22,12 +22,204 @@ Client Trust is Clerk's defense against [credential stuffing](https://owasp.org/
 
 When Client Trust is enabled, when a user is signing in with a password on a new client (e.g. device), users will always be challenged for a [second factor](!second-factor). If you have multi-factor authentication (MFA) enabled, users may have already configured a second factor, such as SMS verification code or authenticator app. If you don't have MFA enabled, or if the user has not yet configured one, a one-time email code (default), SMS code, or email link will be used, depending on your application's settings.
 
-This guide will demonstrate how to build a custom sign-in flow that supports the second factor strategies: email code and email link. To support SMS code or authenticator app, see the [MFA custom flow guide](/docs/guides/development/custom-flows/authentication/email-password-mfa).
+This guide will demonstrate how to build a custom sign-in flow that supports the second factor strategies: email code and email link. To support SMS code or authenticator app, see the [MFA custom flow guide](/docs/guides/development/custom-flows/authentication/second-factor).
 
 ## Build the custom flow
 
 When Client Trust requires verification, the sign-in attempt will return a status of `needs_second_factor`.
 
 ### Email code
+
+```tsx
+'use client'
+
+import { useSignIn } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+
+export default function SignInForm() {
+  const { signIn, errors, fetchStatus } = useSignIn()
+  const router = useRouter()
+
+  const [email, setEmail] = useState('')
+
+  const handleSubmit = async (formData: FormData) => {
+    const emailAddress = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    await signIn.password({
+      emailAddress,
+      password,
+    })
+
+    // Client trust
+    if (signIn.status === 'needs_second_factor') {
+      await signIn.mfa.sendEmailCode()
+    }
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: () => {
+          router.push('/')
+        },
+      })
+    }
+  }
+
+  const handleVerify = async (formData: FormData) => {
+    const code = formData.get('code') as string
+
+    await signIn.mfa.verifyEmailCode({ code })
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: () => {
+          router.push('/')
+        },
+      })
+    }
+  }
+
+  if (signIn.status === 'needs_second_factor') {
+    return (
+      <>
+        <h1>Verify your account</h1>
+        <form action={handleVerify}>
+          <input type="text" name="code" placeholder="Enter your verification code" />
+          {errors.fields.code && <p>{errors.fields.code.message}</p>}
+          <button type="submit" disabled={fetchStatus === 'fetching'}>
+            Verify
+          </button>
+        </form>
+        <button onClick={() => signIn.mfa.sendEmailCode()}>I need a new code</button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <h1>Sign in</h1>
+      <form action={handleSubmit}>
+        <div>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+        </div>
+        <div>
+          <label htmlFor="password">Password</label>
+          <input id="password" name="password" type="password" />
+          {errors.fields.password && <p>{errors.fields.password.message}</p>}
+        </div>
+        <button type="submit" disabled={fetchStatus === 'fetching'}>
+          Continue
+        </button>
+      </form>
+    </>
+  )
+}
+```
+
+### SMS code
+
+```tsx
+'use client'
+
+import { useSignIn } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+
+export default function SignInForm() {
+  const { signIn, errors, fetchStatus } = useSignIn()
+  const router = useRouter()
+
+  const [email, setEmail] = useState('')
+
+  const handleSubmit = async (formData: FormData) => {
+    const emailAddress = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    const error = await signIn.password({
+      emailAddress,
+      password,
+    })
+
+    // Client trust
+    if (!error.error && signIn.status === 'needs_second_factor') {
+      await signIn.mfa.sendPhoneCode()
+    }
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: () => {
+          router.push('/')
+        },
+      })
+    }
+  }
+
+  const handleVerify = async (formData: FormData) => {
+    const code = formData.get('code') as string
+
+    await signIn.mfa.verifyPhoneCode({ code })
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: () => {
+          router.push('/')
+        },
+      })
+    }
+  }
+
+  if (signIn.status === 'needs_second_factor') {
+    return (
+      <>
+        <h1>Verify your account</h1>
+        <form action={handleVerify}>
+          <input type="text" name="code" placeholder="Enter your verification code" />
+          {errors.fields.code && <p>{errors.fields.code.message}</p>}
+          <button type="submit" disabled={fetchStatus === 'fetching'}>
+            Verify
+          </button>
+        </form>
+        <button onClick={() => signIn.mfa.sendPhoneCode()}>I need a new code</button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <h1>Sign in</h1>
+      <form action={handleSubmit}>
+        <div>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+        </div>
+        <div>
+          <label htmlFor="password">Password</label>
+          <input id="password" name="password" type="password" />
+          {errors.fields.password && <p>{errors.fields.password.message}</p>}
+        </div>
+        <button type="submit" disabled={fetchStatus === 'fetching'}>
+          Continue
+        </button>
+      </form>
+    </>
+  )
+}
+```
 
 ### Email link

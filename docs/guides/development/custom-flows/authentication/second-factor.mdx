@@ -1,6 +1,6 @@
 ---
-title: Build a custom sign-in flow with multi-factor authentication
-description: Learn how to build a custom email/password sign-in flow that requires multi-factor authentication (MFA).
+title: Build a custom sign-in flow with second factor verification
+description: Learn how to build a custom sign-in flow that requires a second factor verification.
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -18,38 +18,47 @@ description: Learn how to build a custom email/password sign-in flow that requir
   > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-password-mfa).
 </If>
 
-[Multi-factor verification (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options) is an added layer of security that requires users to provide a second verification factor to access an account.
+If you have [Client Trust](/docs/guides/secure/client-trust) or [multi-factor authentication (MFA)](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication) (or both) enabled for your application, **the sign-in attempt will return a status of `needs_second_factor`**. Your custom sign-in flow needs to support handling whichever [second factor](!second-factor) strategy you have enabled in the Clerk Dashboard.
 
-Clerk supports [second factor verification](!second-factor-verification) through **SMS verification code**, **Authenticator application**, and **Backup codes**.
+Clerk allows you to enable the following second factor strategies:
 
-This guide will walk you through how to build a custom email/password sign-in flow that supports the following options as the second factor:
+- MFA:
+  - SMS verification code
+  - Authenticator application
+- Client Trust: If one of the MFA strategies is not enabled, Client Trust will fallback to one of the following strategies, depending on the settings you've configured in the Clerk Dashboard:
+  - Email code (default)
+  - Email link
+  - SMS verification code
 
-- **SMS verification code** and **Backup codes**
-- **Authenticator application** and **Backup codes**
+## Choose your adventure
 
-**This guide uses email and password to sign in, however, you can modify this approach according to the needs of your application.**
+> [!IMPORTANT]
+> **This guide uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.** For example, if you were using phone numbers instead of email addresses, you would add the second factor logic from this guide to your [phone code sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-phone-otp).
 
-## Enable email and password
+If you have MFA enabled, see the [MFA](#mfa) section.
+If you don't have MFA enabled, see the [Client Trust](#client-trust) section.
+
+### MFA
+
+#### Enable email and password
 
 To follow this guide, you first need to ensure email and password are enabled for your application.
 
 1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
 1. Enable **Sign-in with email**.
-1. Select the **Password** tab and enable **Sign-up with password**. Leave **Require a password at sign-up** enabled.
+   - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-phone-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+1. Select the **Password** tab and enable **Sign-up with password**.
 
-<Tabs items={["SMS verification code and backup codes", "Authenticator app and backup codes"]}>
+<Tabs items={["SMS verification code", "Authenticator app"]}>
   <Tab>
-    ## Enable multi-factor authentication
-
-    For your users to be able to enable MFA for their account, you need to enable MFA for your application.
+    #### Enable multi-factor authentication (MFA)
 
     1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
     1. Enable both the **SMS verification code** and **Backup codes** strategies.
+    1. **Require multi-factor authentication** is enabled by default. You will need to handle the `setup-mfa` [session task](!session-task). See the [dedicated custom flow](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
     1. Select **Save**.
 
-    ## Build the custom flow
-
-    Signing in to an MFA-enabled account is identical to the regular sign-in process. However, in the case of an MFA-enabled account, a sign-in won't convert until both [first factors](!first-factor-verification) and [second factors](!second-factor-verification) verifications are completed.
+    #### Build the custom flow
 
     <If notSdk={["ios", "android"]}>
       **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
@@ -59,9 +68,6 @@ To follow this guide, you first need to ensure email and password are enabled fo
       1. Initiate the sign-in process by collecting the user's email address and password with the [`signIn.password()`](/docs/reference/javascript/sign-in-future#password) method.
       1. Collect the TOTP code and verify it with the [`signIn.mfa.verifyTOTP()`](/docs/reference/javascript/sign-in-future#mfa-verify-totp) method.
       1. If the TOTP verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
-
-      > [!TIP]
-      > For this example to work, the user must have MFA enabled on their account. You need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
 
       ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
       // TODO
@@ -89,19 +95,19 @@ To follow this guide, you first need to ensure email and password are enabled fo
   </Tab>
 
   <Tab>
-    ## Enable multi-factor authentication
-
-    For your users to be able to enable MFA for their account, you need to enable MFA for your application.
+    #### Enable multi-factor authentication (MFA)
 
     1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
     1. Enable both the **Authenticator application** and **Backup codes** strategies.
+    1. **Require multi-factor authentication** is enabled by default. You will need to handle the `setup-mfa` [session task](!session-task). See the [dedicated custom flow](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
     1. Select **Save**.
 
     <Include src="_partials/duo-authenticator-app-callout.mdx" />
 
-    ## Build the custom flow
+    > [!TIP]
+    > For this example to work, the user must have MFA enabled on their account. You can either require it for all users or allow users to enable it for their own accounts. Either way, you need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
 
-    Signing in to an MFA-enabled account is identical to the regular sign-in process. However, in the case of an MFA-enabled account, a sign-in won't convert until both [first factors](!first-factor-verification) and [second factors](!second-factor-verification) verifications are completed.
+    #### Build the custom flow
 
     <If notSdk={["ios", "android"]}>
       **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
@@ -111,9 +117,6 @@ To follow this guide, you first need to ensure email and password are enabled fo
       1. Initiate the sign-in process by collecting the user's email address and password with the [`signIn.password()`](/docs/reference/javascript/sign-in-future#password) method.
       1. Collect the TOTP code and verify it with the [`signIn.mfa.verifyTOTP()`](/docs/reference/javascript/sign-in-future#mfa-verify-totp) method.
       1. If the TOTP verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
-
-      > [!TIP]
-      > For this example to work, the user must have MFA enabled on their account. You can either [require it for all users](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#multi-factor-authentication), or allow users to enable it for their own accounts. If you allow users to enable it for their own accounts, you need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
 
       ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
       'use client'
@@ -434,6 +437,48 @@ To follow this guide, you first need to ensure email and password are enabled fo
         ```
       </If>
     </If>
+  </Tab>
+</Tabs>
+
+### Client Trust
+
+{/* What if more than one second factor strategy is enabled? */}
+
+<Tabs items={["Email code", "Email link", "SMS code"]}>
+  <Tab>
+    #### Enable email and password
+
+    To follow this guide, you first need to ensure email and password are enabled for your application.
+
+    1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+    1. Enable **Sign-up with email**. **Verify at sign-up** and **Email verification code** are enabled by default. This is the second factor strategy that will be used for Client Trust.
+    1. Enable **Sign-in with email**.
+       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-phone-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Select the **Password** tab and enable **Sign-up with password**.
+  </Tab>
+
+  <Tab>
+    #### Enable email and password
+
+    To follow this guide, you first need to ensure email and password are enabled for your application.
+
+    1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+    1. Enable **Sign-up with email**. **Verify at sign-up** is enabled by default. Enable **Email verification link**. This is the second factor strategy that will be used for Client Trust.
+    1. Enable **Sign-in with email**.
+       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-phone-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Select the **Password** tab and enable **Sign-up with password**.
+  </Tab>
+
+  <Tab>
+    #### Enable email and password
+
+    To follow this guide, you first need to ensure email and password are enabled for your application.
+
+    1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
+    1. Enable **Sign-in with email**.
+       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-phone-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Select the **Password** tab and enable **Sign-up with password**.
+    1. Select the **Phone** tab. Ensure **Sign-up with phone** and **Verify at sign-up** is enabled. This is the second factor strategy that will be used for Client Trust.
   </Tab>
 </Tabs>
 

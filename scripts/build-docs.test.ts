@@ -4139,6 +4139,61 @@ sourceFile: /docs/doc-2.mdx
 `)
   })
 
+  test('Should not inject SDKLink when non-sdk scoped page links to a manifest sdk-grouped page without sdk frontmatter', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              {
+                title: 'Group',
+                sdk: ['react'],
+                items: [
+                  [
+                    { title: 'Page B', href: '/docs/page-b' },
+                  ]
+                ]
+              }
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: A non-sdk scoped page
+---
+
+[Link to Page B](/docs/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: Another non-sdk scoped page
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const pageBContent = await readFile('./dist/page-a.mdx')
+    expect(pageBContent).not.toContain('<SDKLink')
+    expect(pageBContent).toContain('[Link to Page B](/docs/page-b)')
+  })
+
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {

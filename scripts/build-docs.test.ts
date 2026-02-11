@@ -4139,6 +4139,61 @@ Page B content`,
     expect(pageBContent).toContain('[Link to Page B](/docs/page-b)')
   })
 
+  test('Should not inject SDKLink when linking to a page that only has sdk scoping inherited from a manifest group, not from frontmatter', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Group A',
+                items: [[{ title: 'Page A', href: '/docs/page-a' }]],
+              },
+              {
+                title: 'Group B',
+                sdk: ['react'],
+                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: An sdk scoped page
+sdk: nextjs, react
+---
+
+[Link to Page B](/docs/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: A manifest sdk-grouped page without sdk frontmatter
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    const content = await readFile('./dist/nextjs/page-a.mdx')
+    expect(content).not.toContain('<SDKLink')
+    expect(content).toContain('[Link to Page B](/docs/page-b)')
+  })
+
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -6709,17 +6764,17 @@ sdk: react, nextjs
         }),
       },
       {
-        path: './docs/reference/react/doc-1.mdx',
+        path: './docs/reference/doc-1.mdx',
         content: `---
 title: Doc 1
-sdk: react
+sdk: react, nextjs
 ---
 
 Doc Content`,
       },
       {
         path: './_typedoc/doc.mdx',
-        content: `[Doc 1](/docs/reference/react/doc-1)`,
+        content: `[Doc 1](/docs/reference/doc-1)`,
       },
       {
         path: './docs/doc-2.mdx',
@@ -6752,7 +6807,7 @@ activeSdk: expo
 sourceFile: /docs/doc-2.mdx
 ---
 
-<SDKLink href="/docs/reference/react/doc-1" sdks={["react"]}>Doc 1</SDKLink>
+<SDKLink href="/docs/:sdk:/reference/doc-1" sdks={["react","nextjs"]}>Doc 1</SDKLink>
 `)
   })
 })

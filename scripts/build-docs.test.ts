@@ -3579,57 +3579,6 @@ title: Core Page
     )
   })
 
-  test('Swap out links for <SDKLink /> when a link points to a sdk manifest filtered page', async () => {
-    const { tempDir, pathJoin } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              {
-                title: 'nextjs',
-                sdk: ['nextjs'],
-                items: [[{ title: 'SDK Filtered Page', href: '/docs/references/nextjs/sdk-filtered-page' }]],
-              },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/references/nextjs/sdk-filtered-page.mdx',
-        content: `---
-title: SDK Filtered Page
----
-
-SDK filtered page`,
-      },
-      {
-        path: './docs/core-page.mdx',
-        content: `---
-title: Core Page
----
-
-# Core page
-
-[SDK Filtered Page](/docs/references/nextjs/sdk-filtered-page)
-`,
-      },
-    ])
-
-    await build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'nextjs'],
-      }),
-    )
-
-    expect(await readFile(pathJoin('./dist/core-page.mdx'))).toContain(
-      `<SDKLink href="/docs/references/nextjs/sdk-filtered-page" sdks={["nextjs"]}>SDK Filtered Page</SDKLink>`,
-    )
-  })
-
   test('Should swap out links for <SDKLink /> in partials', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -4139,6 +4088,164 @@ sourceFile: /docs/doc-2.mdx
 `)
   })
 
+  test('Should not inject SDKLink when non-sdk scoped page links to a manifest sdk-grouped page without sdk frontmatter', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              {
+                title: 'Group',
+                sdk: ['react'],
+                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: A non-sdk scoped page
+---
+
+[Link to Page B](/docs/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: Another non-sdk scoped page
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const pageBContent = await readFile('./dist/page-a.mdx')
+    expect(pageBContent).not.toContain('<SDKLink')
+    expect(pageBContent).toContain('[Link to Page B](/docs/page-b)')
+  })
+
+  test('Should not inject SDKLink when linking to a page that only has sdk scoping inherited from a manifest group, not from frontmatter', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'Group A',
+                items: [[{ title: 'Page A', href: '/docs/page-a' }]],
+              },
+              {
+                title: 'Group B',
+                sdk: ['react'],
+                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: An sdk scoped page
+sdk: nextjs, react
+---
+
+[Link to Page B](/docs/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: A manifest sdk-grouped page without sdk frontmatter
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    const content = await readFile('./dist/nextjs/page-a.mdx')
+    expect(content).not.toContain('<SDKLink')
+    expect(content).toContain('[Link to Page B](/docs/page-b)')
+  })
+
+  test('Should not inject SDKLink when linking directly to an sdk path for a page that is only manifest sdk-grouped (no sdk frontmatter)', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              { title: 'Page A', href: '/docs/page-a' },
+              {
+                title: 'Group',
+                sdk: ['react'],
+                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
+              },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: Page linking to an explicit sdk path
+sdk: nextjs, react
+---
+
+[Link to React Page B](/docs/react/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: Manifest sdk-grouped without sdk frontmatter
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile('./dist/react/page-a.mdx')
+    expect(content).not.toContain('<SDKLink')
+    expect(content).toContain('[Link to React Page B](/docs/react/page-b)')
+  })
+
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
     const { tempDir, pathJoin } = await createTempFiles([
       {
@@ -4344,7 +4451,7 @@ description: x
     expect(output).toBe('')
 
     expect(await readFile('./dist/doc-2.mdx')).toContain(
-      `<SDKLink href="/docs/react/doc-1" sdks={["react"]}>Link to specific variant of doc 1</SDKLink>`,
+      `<SDKLink href="/docs/react/doc-1" sdks={["nextjs","react","expo"]}>Link to specific variant of doc 1</SDKLink>`,
     )
   })
 
@@ -6711,17 +6818,17 @@ sdk: react, nextjs
         }),
       },
       {
-        path: './docs/reference/react/doc-1.mdx',
+        path: './docs/reference/doc-1.mdx',
         content: `---
 title: Doc 1
-sdk: react
+sdk: react, nextjs
 ---
 
 Doc Content`,
       },
       {
         path: './_typedoc/doc.mdx',
-        content: `[Doc 1](/docs/reference/react/doc-1)`,
+        content: `[Doc 1](/docs/reference/doc-1)`,
       },
       {
         path: './docs/doc-2.mdx',
@@ -6754,7 +6861,7 @@ activeSdk: expo
 sourceFile: /docs/doc-2.mdx
 ---
 
-<SDKLink href="/docs/reference/react/doc-1" sdks={["react"]}>Doc 1</SDKLink>
+<SDKLink href="/docs/:sdk:/reference/doc-1" sdks={["react","nextjs"]}>Doc 1</SDKLink>
 `)
   })
 })

@@ -1241,7 +1241,8 @@ Testing with a simple page.`,
     expect(output).toContain(`warning sdk \"astro\" in <If /> is not a valid SDK`)
   })
 
-  // TODO(core-3): Temporarily skipped — re-enable when safeFail is restored in validateIfComponents.ts
+  // TODO: Temporarily skipped during large-scale SDK changes — re-enable when safeFail is restored in validateIfComponents.ts
+  console.warn('⚠️  <If> SDK not in frontmatter test skipped (validation temporarily disabled)')
   test.skip('<If> SDK not in frontmatter fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -1280,7 +1281,8 @@ Testing with a simple page.`,
     )
   })
 
-  // TODO(core-3): Temporarily skipped — re-enable when safeFail is restored in validateIfComponents.ts
+  // TODO: Temporarily skipped during large-scale SDK changes — re-enable when safeFail is restored in validateIfComponents.ts
+  console.warn('⚠️  <If> SDK not in manifest test skipped (validation temporarily disabled)')
   test.skip('<If> SDK not in manifest fails the build', async () => {
     const { tempDir } = await createTempFiles([
       {

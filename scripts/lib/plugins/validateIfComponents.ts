@@ -82,9 +82,9 @@ export const validateIfComponents =
           const available = doc.sdk.includes(sdk)
 
           if (available === false) {
-            // TODO(core-3): Temporarily disabled — change back to safeFail when done
+            // TODO: Temporarily disabled during large-scale SDK changes — change back to safeFail when done
             console.warn(
-              `⚠️  TEMPORARILY DISABLED FOR CORE 3 DEVELOPMENT: <If /> sdk "${sdk}" not in frontmatter for ${filePath}`,
+              `⚠️  <If /> sdk "${sdk}" not in frontmatter for ${filePath} (validation temporarily disabled)`,
             )
           }
         })()
@@ -95,9 +95,9 @@ export const validateIfComponents =
           const available = availableSDKs.includes(sdk)
 
           if (available === false) {
-            // TODO(core-3): Temporarily disabled — change back to safeFail when done
+            // TODO: Temporarily disabled during large-scale SDK changes — change back to safeFail when done
             console.warn(
-              `⚠️  TEMPORARILY DISABLED FOR CORE 3 DEVELOPMENT: <If /> sdk "${sdk}" not in manifest for ${doc.file.href}`,
+              `⚠️  <If /> sdk "${sdk}" not in manifest for ${doc.file.href} (validation temporarily disabled)`,
             )
           }
         })()

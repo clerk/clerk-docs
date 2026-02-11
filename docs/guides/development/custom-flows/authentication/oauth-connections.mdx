@@ -99,8 +99,13 @@ You must configure your application instance through the Clerk Dashboard for the
           // If this was a sign-in, and it's complete, there's nothing else to do.
           if (signIn.status === 'complete') {
             await signIn.finalize({
-              navigate: async () => {
-                navigateToApp()
+              navigate: async ({ decorateUrl }) => {
+                const url = decorateUrl('/protected')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
             return
@@ -111,8 +116,13 @@ You must configure your application instance through the Clerk Dashboard for the
             await signIn.create({ transfer: true })
             if (signIn.status === 'complete') {
               await signIn.finalize({
-                navigate: async () => {
-                  navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -134,8 +144,13 @@ You must configure your application instance through the Clerk Dashboard for the
             await signUp.create({ transfer: true })
             if (signUp.status === 'complete') {
               await signUp.finalize({
-                navigate: async () => {
-                  navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -145,8 +160,13 @@ You must configure your application instance through the Clerk Dashboard for the
 
           if (signUp.status === 'complete') {
             await signUp.finalize({
-              navigate: async () => {
-                navigateToApp()
+              navigate: async ({ decorateUrl }) => {
+                const url = decorateUrl('/protected')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
             return
@@ -166,8 +186,13 @@ You must configure your application instance through the Clerk Dashboard for the
               // Clerk `setActive` API instead of the `finalize` API.
               await clerk.setActive({
                 session: sessionId,
-                navigate: async () => {
-                  return navigateToApp()
+                navigate: async ({ decorateUrl }) => {
+                  const url = decorateUrl('/protected')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    router.push(url)
+                  }
                 },
               })
               return
@@ -202,6 +227,7 @@ You must configure your application instance through the Clerk Dashboard for the
     import * as WebBrowser from 'expo-web-browser'
     import * as AuthSession from 'expo-auth-session'
     import { useSSO } from '@clerk/expo'
+    import { useRouter } from 'expo-router'
     import { View, Button, Platform } from 'react-native'
 
     // Preloads the browser for Android devices to reduce authentication load time
@@ -225,6 +251,7 @@ You must configure your application instance through the Clerk Dashboard for the
 
       // Use the `useSSO()` hook to access the `startSSOFlow()` method
       const { startSSOFlow } = useSSO()
+      const router = useRouter()
 
       const onPress = useCallback(async () => {
         try {
@@ -241,16 +268,15 @@ You must configure your application instance through the Clerk Dashboard for the
           if (createdSessionId) {
             setActive!({
               session: createdSessionId,
-              // Check for session tasks and navigate to custom UI to help users resolve them
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
-              navigate: async ({ session }) => {
+              // Handle session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              navigate: async ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
                   console.log(session?.currentTask)
-                  router.push('/sign-in/tasks')
                   return
                 }
 
-                router.push('/')
+                router.push(decorateUrl('/'))
               },
             })
           } else {
@@ -275,14 +301,18 @@ You must configure your application instance through the Clerk Dashboard for the
   </Tab>
 
   <Tab>
+    Sign in using an OAuth provider (e.g., Google, GitHub, see [all providers](/docs/guides/configure/auth-strategies/social-connections/overview#supported-social-providers)):
+
     ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
     import SwiftUI
-    import Clerk
+    import ClerkKit
 
     struct OAuthView: View {
+      @Environment(Clerk.self) private var clerk
+
       var body: some View {
         // Render a button for each supported OAuth provider
-        // you want to add to your app. This example uses only Google.
+        // you want to add to your app. This example uses Google.
         Button("Sign In with Google") {
           Task { await signInWithOAuth(provider: .google) }
         }
@@ -294,19 +324,18 @@ You must configure your application instance through the Clerk Dashboard for the
       func signInWithOAuth(provider: OAuthProvider) async {
         do {
           // Start the sign-in process using the selected OAuth provider.
-          let result = try await SignIn.authenticateWithRedirect(strategy: .oauth(provider: provider))
+          let result = try await clerk.auth.signInWithOAuth(provider: provider)
 
           // It is common for users who are authenticating with OAuth to use
           // a sign-in button when they mean to sign-up, and vice versa.
           // Clerk will handle this transfer for you if possible.
           // Therefore, a TransferFlowResult can be either a SignIn or SignUp.
-
           switch result {
           case .signIn(let signIn):
             switch signIn.status {
             case .complete:
               // If sign-in process is complete, navigate the user as needed.
-              dump(Clerk.shared.session)
+              dump(clerk.session)
             default:
               // If the status is not complete, check why. User may need to
               // complete further steps.
@@ -316,7 +345,7 @@ You must configure your application instance through the Clerk Dashboard for the
             switch signUp.status {
             case .complete:
               // If sign-up process is complete, navigate the user as needed.
-              dump(Clerk.shared.session)
+              dump(clerk.session)
             default:
               // If the status is not complete, check why. User may need to
               // complete further steps.
@@ -484,16 +513,20 @@ With OAuth flows, it's common for users to try to _sign in_ with an OAuth provid
         await signUp.update(params)
         if (signUp.status === 'complete') {
           await signUp.finalize({
-            navigate: async ({ session }) => {
+            navigate: async ({ session, decorateUrl }) => {
               if (session?.currentTask) {
-                // Check for tasks and navigate to custom UI to help users resolve them
-                // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
+                // Handle session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
                 console.log(session?.currentTask)
-                router.push('/sign-in/tasks')
                 return
               }
 
-              router.push('/')
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
             },
           })
         }

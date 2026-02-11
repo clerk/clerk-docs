@@ -226,215 +226,216 @@ To follow this guide, you first need to ensure email and password are enabled fo
       <If sdk="ios">
         ```swift {{ filename: 'MFASignInView.swift', collapsible: true }}
         import SwiftUI
-        import Clerk
+        import ClerkKit
 
         struct MFASignInView: View {
+        @Environment(Clerk.self) private var clerk
         @State private var email = ""
         @State private var password = ""
         @State private var code = ""
-        @State private var displayTOTP = false
+        @State private var displayAuthenticatorCode = false
 
         var body: some View {
-            if displayTOTP {
+          if displayAuthenticatorCode {
             TextField("Code", text: $code)
             Button("Verify") {
-                Task { await verify(code: code) }
+              Task { await verify(code: code) }
             }
-            } else {
+          } else {
             TextField("Email", text: $email)
             SecureField("Password", text: $password)
             Button("Next") {
-                Task { await submit(email: email, password: password) }
+              Task { await submit(email: email, password: password) }
             }
-            }
+          }
         }
         }
 
         extension MFASignInView {
 
         func submit(email: String, password: String) async {
-            do {
-            // Start the sign-in process.
-            let signIn = try await SignIn.create(strategy: .identifier(email, password: password))
+          do {
+            // Start sign-in with email/password
+            let signIn = try await clerk.auth.signInWithPassword(
+              identifier: email,
+              password: password
+            )
 
             switch signIn.status {
+            // Handle user submitting email and password and swapping to TOTP form
             case .needsSecondFactor:
-                // Handle user submitting email and password and swapping to TOTP form.
-                displayTOTP = true
+              displayAuthenticatorCode = true
             default:
-                // If the status is not needsSecondFactor, check why. User may need to
-                // complete different steps.
-                dump(signIn.status)
+              // If the status is not needsSecondFactor, check why. User may need to
+              // complete further steps
+              dump(signIn.status)
             }
-            } catch {
+          } catch {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
             dump(error)
-            }
+          }
         }
 
+        // Verify the authenticator app code
         func verify(code: String) async {
-            do {
-            // Access the in progress sign in stored on the client object.
-            guard let inProgressSignIn = Clerk.shared.client?.signIn else { return }
+          do {
+            guard var signIn = clerk.auth.currentSignIn else { return }
 
-            // Attempt the TOTP or backup code verification.
-            let signIn = try await inProgressSignIn.attemptSecondFactor(strategy: .totp(code: code))
+            signIn = try await signIn.verifyMfaCode(code, type: .totp)
 
             switch signIn.status {
             case .complete:
-                // If sign-in process is complete, navigate the user as needed.
-                dump(Clerk.shared.session)
+              dump(clerk.session)
             default:
-                // If the status is not complete, check why. User may need to
-                // complete further steps.
-                dump(signIn.status)
+              dump(signIn.status)
             }
-            } catch {
+          } catch {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
             dump(error)
-            }
+          }
         }
         }
         ```
       </If>
 
       <If sdk="android">
-        ```kotlin {{ filename: 'MFASignInViewModel.kt', collapsible: true }}
-        import androidx.lifecycle.ViewModel
-        import androidx.lifecycle.viewModelScope
-        import com.clerk.api.Clerk
-        import com.clerk.api.network.serialization.onFailure
-        import com.clerk.api.network.serialization.onSuccess
-        import com.clerk.api.signin.SignIn
-        import com.clerk.api.signin.attemptSecondFactor
-        import kotlinx.coroutines.flow.MutableStateFlow
-        import kotlinx.coroutines.flow.asStateFlow
-        import kotlinx.coroutines.launch
+        <CodeBlockTabs options={["MFASignInViewModel.kt", "MFASignInActivity.kt"]}>
+          ```kotlin {{ filename: 'MFASignInViewModel.kt', collapsible: true }}
+          import androidx.lifecycle.ViewModel
+          import androidx.lifecycle.viewModelScope
+          import com.clerk.api.Clerk
+          import com.clerk.api.network.serialization.onFailure
+          import com.clerk.api.network.serialization.onSuccess
+          import com.clerk.api.signin.SignIn
+          import com.clerk.api.signin.attemptSecondFactor
+          import kotlinx.coroutines.flow.MutableStateFlow
+          import kotlinx.coroutines.flow.asStateFlow
+          import kotlinx.coroutines.launch
 
-        class MFASignInViewModel : ViewModel() {
-            private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
-            val uiState = _uiState.asStateFlow()
+          class MFASignInViewModel : ViewModel() {
+              private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
+              val uiState = _uiState.asStateFlow()
 
-            fun submit(email: String, password: String) {
-            viewModelScope.launch {
-                SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
-                .onSuccess {
-                    if (it.status == SignIn.Status.NEEDS_SECOND_FACTOR) {
-                    // Display TOTP Form
-                    _uiState.value = UiState.NeedsSecondFactor
-                    } else {
-                    // If the status is not needsSecondFactor, check why. User may need to
-                    // complete different steps.
-                    dump(it.status)
-                    }
-                }
-                .onFailure {
-                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                    // for more info on error handling
-                }
-            }
-            }
+              fun submit(email: String, password: String) {
+              viewModelScope.launch {
+                  SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
+                  .onSuccess {
+                      if (it.status == SignIn.Status.NEEDS_SECOND_FACTOR) {
+                      // Display TOTP Form
+                      _uiState.value = UiState.NeedsSecondFactor
+                      } else {
+                      // If the status is not needsSecondFactor, check why. User may need to
+                      // complete different steps.
+                      }
+                  }
+                  .onFailure {
+                      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                      // for more info on error handling
+                  }
+              }
+              }
 
-            fun verify(code: String) {
-            val inProgressSignIn = Clerk.signIn ?: return
-            viewModelScope.launch {
-                inProgressSignIn
-                .attemptSecondFactor(SignIn.AttemptSecondFactorParams.TOTP(code))
-                .onSuccess {
-                    if (it.status == SignIn.Status.COMPLETE) {
-                        // User is now signed in and verified.
-                        // You can navigate to the next screen or perform other actions.
-                    _uiState.value = UiState.Verified
-                    }
-                }
-                .onFailure {
-                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                    // for more info on error handling
-                }
-            }
-            }
+              fun verify(code: String) {
+              val inProgressSignIn = Clerk.signIn ?: return
+              viewModelScope.launch {
+                  inProgressSignIn
+                  .attemptSecondFactor(SignIn.AttemptSecondFactorParams.TOTP(code))
+                  .onSuccess {
+                      if (it.status == SignIn.Status.COMPLETE) {
+                          // User is now signed in and verified.
+                          // You can navigate to the next screen or perform other actions.
+                      _uiState.value = UiState.Verified
+                      }
+                  }
+                  .onFailure {
+                      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                      // for more info on error handling
+                  }
+              }
+              }
 
-            sealed interface UiState {
-            data object Unverified : UiState
-            data object Verified : UiState
-            data object NeedsSecondFactor : UiState
-            }
-        }
-        ```
+              sealed interface UiState {
+              data object Unverified : UiState
+              data object Verified : UiState
+              data object NeedsSecondFactor : UiState
+              }
+          }
+          ```
 
-        ```kotlin {{ filename: 'MFASignInActivity.kt', collapsible: true }}
-        import android.os.Bundle
-        import androidx.activity.ComponentActivity
-        import androidx.activity.compose.setContent
-        import androidx.activity.viewModels
-        import androidx.compose.foundation.layout.Arrangement
-        import androidx.compose.foundation.layout.Column
-        import androidx.compose.foundation.layout.fillMaxSize
-        import androidx.compose.material3.Button
-        import androidx.compose.material3.Text
-        import androidx.compose.material3.TextField
-        import androidx.compose.runtime.Composable
-        import androidx.compose.runtime.getValue
-        import androidx.compose.runtime.mutableStateOf
-        import androidx.compose.runtime.remember
-        import androidx.compose.runtime.setValue
-        import androidx.compose.ui.Alignment
-        import androidx.compose.ui.Modifier
-        import androidx.compose.ui.text.input.PasswordVisualTransformation
-        import androidx.compose.ui.unit.dp
-        import androidx.lifecycle.compose.collectAsStateWithLifecycle
+          ```kotlin {{ filename: 'MFASignInActivity.kt', collapsible: true }}
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.viewModels
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.material3.Button
+          import androidx.compose.material3.Text
+          import androidx.compose.material3.TextField
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.mutableStateOf
+          import androidx.compose.runtime.remember
+          import androidx.compose.runtime.setValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.unit.dp
+          import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-        class MFASignInActivity : ComponentActivity() {
-          val viewModel: MFASignInViewModel by viewModels()
+          class MFASignInActivity : ComponentActivity() {
+            val viewModel: MFASignInViewModel by viewModels()
 
-          override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContent {
-              val state by viewModel.uiState.collectAsStateWithLifecycle()
-              MFASignInView(state = state, onSubmit = viewModel::submit, onVerify = viewModel::verify)
+            override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              setContent {
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                MFASignInView(state = state, onSubmit = viewModel::submit, onVerify = viewModel::verify)
+              }
             }
           }
-        }
 
-        @Composable
-        fun MFASignInView(
-          state: MFASignInViewModel.UiState,
-          onSubmit: (String, String) -> Unit,
-          onVerify: (String) -> Unit,
-        ) {
-          var email by remember { mutableStateOf("") }
-          var password by remember { mutableStateOf("") }
-          var code by remember { mutableStateOf("") }
-
-          Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
+          @Composable
+          fun MFASignInView(
+            state: MFASignInViewModel.UiState,
+            onSubmit: (String, String) -> Unit,
+            onVerify: (String) -> Unit,
           ) {
-            when (state) {
-              MFASignInViewModel.UiState.NeedsSecondFactor -> {
-                TextField(value = code, onValueChange = { code = it }, placeholder = { Text("Code") })
-                Button(onClick = { onVerify(code) }) { Text("Submit") }
-              }
-              MFASignInViewModel.UiState.Unverified -> {
-                TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
-                TextField(
-                  value = password,
-                  onValueChange = { password = it },
-                  placeholder = { Text("Password") },
-                  visualTransformation = PasswordVisualTransformation(),
-                )
-                Button(onClick = { onSubmit(email, password) }) { Text("Next") }
-              }
-              MFASignInViewModel.UiState.Verified -> {
-                Text("Verified")
+            var email by remember { mutableStateOf("") }
+            var password by remember { mutableStateOf("") }
+            var code by remember { mutableStateOf("") }
+
+            Column(
+              modifier = Modifier.fillMaxSize(),
+              verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+              horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+              when (state) {
+                MFASignInViewModel.UiState.NeedsSecondFactor -> {
+                  TextField(value = code, onValueChange = { code = it }, placeholder = { Text("Code") })
+                  Button(onClick = { onVerify(code) }) { Text("Submit") }
+                }
+                MFASignInViewModel.UiState.Unverified -> {
+                  TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
+                  TextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                  )
+                  Button(onClick = { onSubmit(email, password) }) { Text("Next") }
+                }
+                MFASignInViewModel.UiState.Verified -> {
+                  Text("Verified")
+                }
               }
             }
           }
-        }
-        ```
+          ```
+        </CodeBlockTabs>
       </If>
     </If>
   </Tab>

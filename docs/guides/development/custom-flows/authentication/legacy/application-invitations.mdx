@@ -5,6 +5,8 @@ description: Learn how to use the Clerk API to build a custom flow for handling 
 
 <Include src="_partials/custom-flows-callout" />
 
+<Include src="_partials/legacy-usesignin-usesignup" />
+
 When a user visits an [invitation](/docs/guides/users/inviting) link, Clerk first checks whether a custom redirect URL was provided.
 
 **If no redirect URL is specified**, the user will be redirected to the appropriate Account Portal page (either [sign-up](/docs/guides/account-portal/overview#sign-up) or [sign-in](/docs/guides/account-portal/overview#sign-in)), or to the custom sign-up/sign-in pages that you've configured for your application.
@@ -27,7 +29,8 @@ To create a sign-up flow using the invitation token, you need to extract the tok
     'use client'
 
     import * as React from 'react'
-    import { useSignUp, useUser } from '@clerk/nextjs'
+    import { useUser } from '@clerk/nextjs'
+    import { useSignUp } from '@clerk/nextjs/legacy'
     import { useSearchParams, useRouter } from 'next/navigation'
 
     export default function Page() {
@@ -185,7 +188,7 @@ To create a sign-up flow using the invitation token, you need to extract the tok
         clerk.mountUserButton(userbuttonDiv)
       } else if (clerk.session.currentTask) {
         // Check for pending tasks and display custom UI to help users resolve them
-        // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
         switch (clerk.session.currentTask.key) {
           case 'choose-organization': {
             document.getElementById('app').innerHTML = `
@@ -225,15 +228,20 @@ To create a sign-up flow using the invitation token, you need to extract the tok
             if (signUpAttempt.status === 'complete') {
               await clerk.setActive({
                 session: signUpAttempt.createdSessionId,
-                navigate: async ({ session }) => {
+                navigate: async ({ session, decorateUrl }) => {
                   if (session?.currentTask) {
                     // Check for tasks and navigate to custom UI to help users resolve them
-                    // See https://clerk.com/docs/guides/development/custom-flows/authentication#session-tasks
+                    // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
                     console.log(session?.currentTask)
                     return
                   }
 
-                  await router.push('/')
+                  const url = decorateUrl('/')
+                  if (url.startsWith('http')) {
+                    window.location.href = url
+                  } else {
+                    window.location.href = url
+                  }
                 },
               })
             } else {

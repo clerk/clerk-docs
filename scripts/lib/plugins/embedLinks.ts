@@ -91,16 +91,19 @@ export const embedLinks =
         return node
       }
 
-      const linkedDocSDKs = [...(linkedDoc.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
+      const linkedDocSDKs = [...(linkedDoc.frontmatter.sdk ?? []), ...(linkedDoc.distinctSDKVariants ?? [])]
 
       // Is the page we are currently rendering, compatible with the linked page?
       // If no current page sdk is provided, we assume it is compatible
-      const targetSdkSupported = currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true
+      const targetSdkSupported =
+        linkedDocSDKs.length > 0 ? (currentPageSDK ? linkedDocSDKs.includes(currentPageSDK) : true) : true
 
       // Does the linked page support more than one sdk?
       const linkedDocIsMultiSDK = linkedDocSDKs.length > 1
 
-      const shouldConvertToSDKLink = !targetSdkSupported || linkedDocIsMultiSDK
+      const urlContainsSDKScoping = linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
+
+      const shouldConvertToSDKLink = !urlContainsSDKScoping && (!targetSdkSupported || linkedDocIsMultiSDK)
 
       // In these cases, we don't need to convert to a SDKLink
       if (!shouldConvertToSDKLink) return node

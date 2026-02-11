@@ -4398,7 +4398,9 @@ description: x
 
     expect(output).toBe('')
 
-    expect(await readFile('./dist/doc-2.mdx')).toContain(`[Link to specific variant of doc 1](/docs/react/doc-1)`)
+    expect(await readFile('./dist/doc-2.mdx')).toContain(
+      `<SDKLink href="/docs/react/doc-1" sdks={["nextjs","react","expo"]}>Link to specific variant of doc 1</SDKLink>`,
+    )
   })
 
   test('Allow the author to point directly to a specific SDK variant of a sdk scoped doc from within a Cards component', async () => {

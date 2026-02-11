@@ -103,7 +103,7 @@ export const embedLinks =
 
       const urlContainsSDKScoping = linkedDocSDKs.some((sdk) => url.endsWith(`/${sdk}`) || url.includes(`/${sdk}/`))
 
-      const shouldConvertToSDKLink = !urlContainsSDKScoping && (!targetSdkSupported || linkedDocIsMultiSDK)
+      const shouldConvertToSDKLink = urlContainsSDKScoping || !targetSdkSupported || linkedDocIsMultiSDK
 
       // In these cases, we don't need to convert to a SDKLink
       if (!shouldConvertToSDKLink) return node

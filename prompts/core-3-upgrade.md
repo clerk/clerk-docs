@@ -254,9 +254,16 @@ await setActive({
 // ✅ NEW
 await setActive({
   session: sessionId,
-  navigate: ({ session }) => {
+  navigate: ({ session, decorateUrl }) => {
     // Called with the session object
-    return '/dashboard'
+    // and the decorateUrl function must wrap
+    // all destination url's
+    const url = decorateUrl('/dashboard')
+    if (url.startsWith('http')) {
+      window.location.href = url
+    } else {
+      router.push(url)
+    }
   },
 })
 ```

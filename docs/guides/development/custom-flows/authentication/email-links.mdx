@@ -64,11 +64,11 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
         import * as React from 'react'
         import { useSignUp } from '@clerk/nextjs'
 
-        export default function SignInPage() {
+        export default function SignUpPage() {
           const [emailAddress, setEmailAddress] = React.useState('')
           const [verified, setVerified] = React.useState(false)
           const [verifying, setVerifying] = React.useState(false)
-          const { signUp, errors, fetchStatus } = useSignUp()
+          const { signUp, errors } = useSignUp()
 
           async function submit(e: React.FormEvent) {
             e.preventDefault()
@@ -81,6 +81,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
             const { error: createError } = await signUp.create({ emailAddress })
             if (createError) {
               console.error(JSON.stringify(createError, null, 2))
+              setVerifying(false)
               return
             }
 
@@ -96,13 +97,15 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
             })
             if (sendLinkError) {
               console.error(JSON.stringify(sendLinkError, null, 2))
+              setVerifying(false)
               return
             }
 
             const { error: waitForVerificationError } =
-              await signup.verifications.waitForEmailLinkVerification()
+              await signUp.verifications.waitForEmailLinkVerification()
             if (waitForVerificationError) {
               console.error(JSON.stringify(waitForVerificationError, null, 2))
+              setVerifying(false)
               return
             }
 
@@ -110,7 +113,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
             const verification = signUp.verifications.emailAddress
 
             // Handle if user visited the link and completed sign-up from /sign-up/verify
-            if (verification.verifiedFromTheSameClient) {
+            if (verification.verifiedFromTheSameClient()) {
               setVerifying(false)
               setVerified(true)
             }
@@ -169,27 +172,39 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
         import * as React from 'react'
         import { useSignUp } from '@clerk/nextjs'
         import Link from 'next/link'
+        import { useRouter } from 'next/navigation'
 
         export default function VerifyEmailLink() {
-          const { signUp, errors, fetchStatus } = useSignUp()
+          const { signUp } = useSignUp()
+          const router = useRouter()
 
           const verification = signUp.verifications.emailLinkVerification
 
           React.useEffect(() => {
-            ;(async () => {
-              if (signUp.status && verification?.status === 'verified') {
-                if (signUp.status === 'complete') {
-                  signUp.finalize({
-                    navigate: () => {
-                      navigate('/protected')
-                    },
-                  })
-                } else {
-                  navigate('/sign-up')
+            if (verification?.status !== 'verified') {
+              return
+            }
+
+            void (async () => {
+              if (signUp.status === 'complete') {
+                const { error } = await signUp.finalize({
+                  navigate: ({ decorateUrl }) => {
+                    const url = decorateUrl('/protected')
+                    if (url.startsWith('http')) {
+                      window.location.href = url
+                    } else {
+                      router.push(url)
+                    }
+                  },
+                })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
                 }
+              } else {
+                router.push('/sign-up')
               }
             })()
-          }, [signUp.status, verification?.status])
+          }, [router, signUp, signUp.status, verification?.status])
 
           if (!verification) {
             return <div>Loading...</div>
@@ -246,7 +261,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
   ## Sign-in flow
 
   1. Initiate the sign-in process by collecting the user's email address with the [`signIn.emailLink.sendLink()`](/docs/reference/javascript/sign-in-future#email-link-send-link) method. This method requires specifying a `verificationUrl`, which is the destination that the link will redirect the user to.
-  1. On the page that called `signIn.emailLink.sendLink()`, call `signIn.emailLink.waitForEmailLinkVerification()` to await the result of the verification.
+  1. On the page that called `signIn.emailLink.sendLink()`, call `signIn.emailLink.waitForVerification()` to await the result of the verification.
   1. On the `verificationUrl` page, use the `signIn.emailLink.verification` object to access the result of the verification.
 
   <Tabs items={["Next.js"]}>
@@ -257,13 +272,12 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
 
         import * as React from 'react'
         import { useSignIn } from '@clerk/nextjs'
-        import { EmailLinkFactor, SignInFirstFactor } from '@clerk/types'
 
         export default function SignInPage() {
           const [emailAddress, setEmailAddress] = React.useState('')
           const [verified, setVerified] = React.useState(false)
           const [verifying, setVerifying] = React.useState(false)
-          const { signIn, errors, fetchStatus } = useSignIn()
+          const { signIn, errors } = useSignIn()
 
           async function submit(e: React.FormEvent) {
             e.preventDefault()
@@ -289,7 +303,8 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
 
             const { error: waitForVerificationError } = await signIn.emailLink.waitForVerification()
             if (waitForVerificationError) {
-              console.error(JSON.stringify(waitForVerificationError))
+              console.error(JSON.stringify(waitForVerificationError, null, 2))
+              setVerifying(false)
               return
             }
 
@@ -302,7 +317,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
             }
 
             // Handle if user visited the link and completed sign-in from /sign-in/verify
-            if (verification.verifiedFromTheSameClient) {
+            if (verification.verifiedFromTheSameClient()) {
               setVerifying(false)
               setVerified(true)
             }
@@ -361,27 +376,39 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
         import * as React from 'react'
         import { useSignIn } from '@clerk/nextjs'
         import Link from 'next/link'
+        import { useRouter } from 'next/navigation'
 
         export default function VerifyEmailLink() {
-          const { signIn, errors, fetchStatus } = useSignIn()
+          const { signIn } = useSignIn()
+          const router = useRouter()
 
           const verification = signIn.emailLink.verification
 
           React.useEffect(() => {
-            ;(async () => {
-              if (signIn.status && verification?.status === 'verified') {
-                if (signIn.status === 'complete') {
-                  signIn.finalize({
-                    navigate: () => {
-                      navigate('/protected')
-                    },
-                  })
-                } else {
-                  navigate('/sign-in')
+            if (verification?.status !== 'verified') {
+              return
+            }
+
+            void (async () => {
+              if (signIn.status === 'complete') {
+                const { error } = await signIn.finalize({
+                  navigate: ({ decorateUrl }) => {
+                    const url = decorateUrl('/protected')
+                    if (url.startsWith('http')) {
+                      window.location.href = url
+                    } else {
+                      router.push(url)
+                    }
+                  },
+                })
+                if (error) {
+                  console.error(JSON.stringify(error, null, 2))
                 }
+              } else {
+                router.push('/sign-in')
               }
             })()
-          }, [signIn.status, verification?.status])
+          }, [router, signIn, signIn.status, verification?.status])
 
           if (!verification) {
             return <div>Loading...</div>
@@ -415,7 +442,7 @@ This guide demonstrates how to use Clerk's API to build a custom flow for handli
               <div>
                 <h1>Verify your email</h1>
                 <p>
-                  You must complete the email link sign-up on the same device and browser that you started
+                  You must complete the email link sign-in on the same device and browser that you started
                   it on.
                 </p>
                 <Link href="/sign-in">Sign in</Link>

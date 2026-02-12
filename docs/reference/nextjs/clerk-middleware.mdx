@@ -339,6 +339,128 @@ export const config = {
 }
 ```
 
+## Frontend API proxy
+
+The `frontendApiProxy` option enables built-in proxying of Clerk Frontend API requests through your application. This is useful when direct communication with Clerk's API is blocked or needs to go through your application server.
+
+When enabled, requests matching the proxy path (default: `/__clerk`) are intercepted by the middleware and forwarded to Clerk's Frontend API. The `proxyUrl` for authentication handshake is automatically derived from the proxy configuration.
+
+> [!NOTE]
+> You must also [enable proxying](/docs/guides/dashboard/dns-domains/proxy-fapi#enable-proxying) in the Clerk Dashboard and set the client-side `NEXT_PUBLIC_CLERK_PROXY_URL` environment variable so that ClerkJS in the browser routes requests through the proxy.
+
+### Basic usage
+
+> [!IMPORTANT]
+> Ensure your middleware matcher includes the proxy path (default `__clerk`) so proxy requests are handled by the middleware.
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware({
+  frontendApiProxy: {
+    enabled: true,
+  },
+})
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc|__clerk)(.*)',
+  ],
+}
+```
+
+### Multi-domain support
+
+For applications that serve multiple domains (e.g., preview deployments, staging environments), you can pass a function to `enabled` that receives the request URL and returns a boolean:
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware({
+  frontendApiProxy: {
+    // Only proxy on non-production domains
+    enabled: (url) => url.hostname !== 'myapp.com',
+  },
+})
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc|__clerk)(.*)',
+  ],
+}
+```
+
+### Custom proxy path
+
+```ts {{ filename: 'proxy.ts' }}
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
+export default clerkMiddleware({
+  frontendApiProxy: {
+    enabled: true,
+    path: '/custom-clerk-proxy',
+  },
+})
+
+export const config = {
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc|custom-clerk-proxy)(.*)',
+  ],
+}
+```
+
+### `frontendApiProxy` properties
+
+<Properties>
+  - `enabled`
+  - `boolean | ((url: URL) => boolean)`
+
+  Enable proxy handling. Can be `true` to enable for all requests, `false` to disable, or a function that receives the request URL and returns a boolean to conditionally enable proxying.
+
+  ---
+
+  - `path?`
+  - `string`
+
+  The path prefix for proxy requests. Defaults to `'/__clerk'`. Must be unique and not conflict with other routes in your application.
+</Properties>
+
+### App Router route handlers
+
+As an alternative to handling the proxy in middleware, you can use route handlers in the Next.js App Router. This is useful if you prefer to keep proxy logic separate from your middleware.
+
+#### `createFrontendApiProxyHandlers()`
+
+Returns an object with `GET`, `POST`, `PUT`, `DELETE`, and `PATCH` handlers that can be directly exported from a route file.
+
+```ts {{ filename: 'app/api/__clerk/[[...path]]/route.ts' }}
+import { createFrontendApiProxyHandlers } from '@clerk/nextjs/server'
+
+export const { GET, POST, PUT, DELETE, PATCH } = createFrontendApiProxyHandlers()
+```
+
+> [!NOTE]
+> When using route handlers instead of the `frontendApiProxy` middleware option, the `proxyUrl` is **not** auto-derived. You must set the `proxyUrl` option on `clerkMiddleware()` or set the `NEXT_PUBLIC_CLERK_PROXY_URL` environment variable for the authentication handshake to work correctly.
+
+#### `clerkFrontendApiProxy()`
+
+For more control, you can use `clerkFrontendApiProxy()` directly in individual route handlers:
+
+```ts {{ filename: 'app/api/__clerk/[[...path]]/route.ts' }}
+import { clerkFrontendApiProxy } from '@clerk/nextjs/server'
+
+export async function GET(request: Request) {
+  return clerkFrontendApiProxy(request)
+}
+
+export async function POST(request: Request) {
+  return clerkFrontendApiProxy(request)
+}
+```
+
 ## `clerkMiddleware()` options
 
 <Include src="_partials/clerk-middleware-options" />

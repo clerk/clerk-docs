@@ -4132,13 +4132,15 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
       }),
     )
+
+    expect(output).toBe('')
 
     const pageBContent = await readFile('./dist/page-a.mdx')
     expect(pageBContent).not.toContain('<SDKLink')
@@ -4187,13 +4189,15 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['nextjs', 'react'],
       }),
     )
+
+    expect(output).toBe('')
 
     const content = await readFile('./dist/nextjs/page-a.mdx')
     expect(content).not.toContain('<SDKLink')
@@ -4239,13 +4243,15 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
       }),
     )
+
+    expect(output).toBe('')
 
     const content = await readFile('./dist/react/page-a.mdx')
     expect(content).not.toContain('<SDKLink')

@@ -194,7 +194,11 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        // temp ignores until nick fixes :)
+        'clerk-react/use-sign-in.mdx': ['link-hash-not-found'],
+        'clerk-react/use-sign-up.mdx': ['link-hash-not-found'],
+      },
       partials: {},
       tooltips: {},
     },

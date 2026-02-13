@@ -1,50 +1,56 @@
+{/* Adds an email address to a user's account, and verifies it using an email with an OTP. */}
+
 <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
   **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-  ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
+  1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
+  1. The [`User.createEmailAddress()`](/docs/reference/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
+  1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/reference/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
+  1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
+  1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
+
+  ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
   'use client'
 
+  import { useReverification, useUser } from '@clerk/nextjs'
+  import { EmailAddressResource } from '@clerk/types'
   import * as React from 'react'
-  import { useSession, useUser, useReverification } from '@clerk/nextjs'
-  import { PhoneNumberResource } from '@clerk/types'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
-    const { session } = useSession()
-    const createPhoneNumber = useReverification((phone: string) =>
-      user?.createPhoneNumber({ phoneNumber: phone }),
-    )
 
-    const [phone, setPhone] = React.useState('')
+    const [email, setEmail] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
-    const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
+    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+    const createEmailAddress = useReverification((email: string) =>
+      user?.createEmailAddress({ email }),
+    )
 
     // Handle loading state
     if (!isLoaded) return <p>Loading...</p>
 
     // Handle signed-out state
-    // If the user is trying to set up MFA, they should be able to access this page
-    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
-      return <p>You must be signed in to access this page</p>
+    if (!isSignedIn) return <p>You must be signed in to access this page</p>
 
-    // Handle addition of the phone number
+    // Handle addition of the email address
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
 
       try {
-        // Add unverified phone number to user
-        const res = await createPhoneNumber(phone)
+        // Add an unverified email address to user
+        const res = await createEmailAddress(email)
         // Reload user to get updated User object
         await user.reload()
 
-        // Create a reference to the new phone number to use related methods
-        const phoneNumber = user.phoneNumbers.find((a) => a.id === res?.id)
-        setPhoneObj(phoneNumber)
+        // Find the email address that was just added
+        const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
+        // Create a reference to the email address that was just added
+        setEmailObj(emailAddress)
 
-        // Send the user an SMS with the verification code
-        phoneNumber?.prepareVerification()
+        // Send the user an email with the verification code
+        emailAddress?.prepareVerification({ strategy: 'email_code' })
 
         // Set to true to display second form
         // and capture the code
@@ -60,29 +66,31 @@
     const verifyCode = async (e: React.FormEvent) => {
       e.preventDefault()
       try {
-        // Verify that the provided code matches the code sent to the user
-        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
+        // Verify that the code entered matches the code sent to the user
+        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
 
-        if (phoneVerifyAttempt?.verification.status === 'verified') {
+        if (emailVerifyAttempt?.verification.status === 'verified') {
           setSuccessful(true)
         } else {
           // If the status is not complete, check why. User may need to
           // complete further steps.
-          console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
+          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
         }
       } catch (err) {
         console.error(JSON.stringify(err, null, 2))
       }
     }
 
-    // Display a success message if the phone number was added successfully
-    if (successful) return <h1>Phone added</h1>
+    // Display a success message if the email was added successfully
+    if (successful) {
+      return <h1>Email added!</h1>
+    }
 
     // Display the verification form to capture the code
     if (isVerifying) {
       return (
         <>
-          <h1>Verify phone</h1>
+          <h1>Verify email</h1>
           <div>
             <form onSubmit={(e) => verifyCode(e)}>
               <div>
@@ -104,20 +112,20 @@
       )
     }
 
-    // Display the initial form to capture the phone number
+    // Display the initial form to capture the email address
     return (
       <>
-        <h1>Add phone</h1>
+        <h1>Add Email</h1>
         <div>
           <form onSubmit={(e) => handleSubmit(e)}>
             <div>
-              <label htmlFor="phone">Enter phone number</label>
+              <label htmlFor="email">Enter email address</label>
               <input
-                onChange={(e) => setPhone(e.target.value)}
-                id="phone"
-                name="phone"
-                type="phone"
-                value={phone}
+                onChange={(e) => setEmail(e.target.value)}
+                id="email"
+                name="email"
+                type="email"
+                value={email}
               />
             </div>
             <div>
@@ -132,24 +140,23 @@
 </If>
 
 <If sdk="expo">
-  ```tsx {{ filename: 'app/(account)/add-phone.tsx', collapsible: true }}
+  ```tsx {{ filename: 'app/(account)/add-email/page.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useSession, useUser } from '@clerk/expo'
-  import { PhoneNumberResource } from '@clerk/types'
+  import { useUser } from '@clerk/expo'
+  import { EmailAddressResource } from '@clerk/types'
   import { Redirect } from 'expo-router'
   import * as React from 'react'
   import { Pressable, StyleSheet, TextInput } from 'react-native'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
-    const { session } = useSession()
 
-    const [phone, setPhone] = React.useState('')
+    const [email, setEmail] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
-    const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
+    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
 
     // Handle loading state
     if (!isLoaded) {
@@ -161,25 +168,23 @@
     }
 
     // Handle signed-out state
-    // If the user is trying to set up MFA, they should be able to access this page
-    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
-      return <Redirect href="/sign-in" />
-    }
+    if (!isSignedIn) return <Redirect href="/sign-in" />
 
-    // Handle addition of the phone number
+    // Handle addition of the email address
     const handleSubmit = async () => {
       try {
-        // Add unverified phone number to user
-        const res = await user?.createPhoneNumber({ phoneNumber: phone })
+        // Add an unverified email address to user
+        const res = await user?.createEmailAddress({ email })
         // Reload user to get updated User object
         await user?.reload()
 
-        // Create a reference to the new phone number to use related methods
-        const phoneNumber = user?.phoneNumbers.find((a) => a.id === res?.id)
-        setPhoneObj(phoneNumber)
+        // Find the email address that was just added
+        const emailAddress = user?.emailAddresses.find((a) => a.id === res?.id)
+        // Create a reference to the email address that was just added
+        setEmailObj(emailAddress)
 
-        // Send the user an SMS with the verification code
-        await phoneNumber?.prepareVerification()
+        // Send the user an email with the verification code
+        await emailAddress?.prepareVerification({ strategy: 'email_code' })
 
         // Set to true to display second form
         // and capture the code
@@ -194,27 +199,27 @@
     // Handle the submission of the verification form
     const verifyCode = async () => {
       try {
-        // Verify that the provided code matches the code sent to the user
-        const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
+        // Verify that the code entered matches the code sent to the user
+        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
 
-        if (phoneVerifyAttempt?.verification.status === 'verified') {
+        if (emailVerifyAttempt?.verification.status === 'verified') {
           setSuccessful(true)
         } else {
           // If the status is not complete, check why. User may need to
           // complete further steps.
-          console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
+          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
         }
       } catch (err) {
         console.error(JSON.stringify(err, null, 2))
       }
     }
 
-    // Display a success message if the phone number was added successfully
+    // Display a success message if the email was added successfully
     if (successful) {
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
-            Phone added
+            Email added!
           </ThemedText>
         </ThemedView>
       )
@@ -225,7 +230,7 @@
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
-            Verify phone
+            Verify email
           </ThemedText>
           <ThemedText style={styles.label}>Enter code</ThemedText>
           <TextInput
@@ -251,29 +256,30 @@
       )
     }
 
-    // Display the initial form to capture the phone number
+    // Display the initial form to capture the email address
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.title}>
-          Add phone
+          Add Email
         </ThemedText>
-        <ThemedText style={styles.label}>Enter phone number</ThemedText>
+        <ThemedText style={styles.label}>Enter email address</ThemedText>
         <TextInput
           style={styles.input}
-          value={phone}
-          placeholder="e.g +1234567890"
+          value={email}
+          placeholder="Enter email"
           placeholderTextColor="#666666"
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
         />
         <Pressable
           style={({ pressed }) => [
             styles.button,
-            !phone && styles.buttonDisabled,
+            !email && styles.buttonDisabled,
             pressed && styles.buttonPressed,
           ]}
           onPress={handleSubmit}
-          disabled={!phone}
+          disabled={!email}
         >
           <ThemedText style={styles.buttonText}>Continue</ThemedText>
         </Pressable>
@@ -325,19 +331,19 @@
 </If>
 
 <If sdk="ios">
-  ```swift {{ filename: 'AddPhoneView.swift', collapsible: true }}
+  ```swift {{ filename: 'AddEmailView.swift', collapsible: true }}
     import SwiftUI
     import ClerkKit
 
-    struct AddPhoneView: View {
-      @State private var phone = ""
+    struct AddEmailView: View {
+      @State private var email = ""
       @State private var code = ""
       @State private var isVerifying = false
-      @State private var newPhoneNumber: PhoneNumber?
+      @State private var newEmailAddress: EmailAddress?
 
       var body: some View {
-        if newPhoneNumber?.verification?.status == .verified {
-          Text("Phone added!")
+        if newEmailAddress?.verification?.status == .verified {
+          Text("Email added!")
         }
 
         if isVerifying {
@@ -346,25 +352,25 @@
             Task { await verifyCode(code) }
           }
         } else {
-          TextField("Enter phone number", text: $phone)
+          TextField("Enter email address", text: $email)
           Button("Continue") {
-            Task { await createPhone(phone) }
+            Task { await createEmail(email) }
           }
         }
       }
     }
 
-    extension AddPhoneView {
+    extension AddEmailView {
 
-      func createPhone(_ phone: String) async {
+      func createEmail(_ email: String) async {
         do {
           guard let user = Clerk.shared.user else { return }
 
-          // Create the phone number
-          let phoneNumber = try await user.createPhoneNumber(phone)
+          // Create the email address
+          let emailAddress = try await user.createEmailAddress(email)
 
-          // Send the user an SMS with the verification code
-          self.newPhoneNumber = try await phoneNumber.sendCode()
+          // Send the user an email with the verification code
+          self.newEmailAddress = try await emailAddress.sendCode()
 
           isVerifying = true
         } catch {
@@ -376,12 +382,12 @@
 
       func verifyCode(_ code: String) async {
         do {
-          guard let newPhoneNumber else { return }
+          guard let newEmailAddress else { return }
 
           // Verify that the provided code matches the code sent to the user
-          self.newPhoneNumber = try await newPhoneNumber.verifyCode(code)
+          self.newEmailAddress = try await newEmailAddress.verifyCode(code)
 
-          dump(self.newPhoneNumber?.verification?.status)
+          dump(self.newEmailAddress?.verification?.status)
         } catch {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
@@ -395,75 +401,75 @@
 <If sdk="android">
   {/* TODO(Sam): Update for new Android API's */}
 
-  <CodeBlockTabs options={["AddPhoneViewModel.kt", "AddPhoneActivity.kt"]}>
-    ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
+  <CodeBlockTabs options={["AddEmailViewModel.kt", "AddEmailActivity.kt"]}>
+    ```kotlin {{ filename: 'AddEmailViewModel.kt', collapsible: true }}
     import android.util.Log
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
+    import com.clerk.api.emailaddress.EmailAddress
+    import com.clerk.api.emailaddress.attemptVerification
+    import com.clerk.api.emailaddress.prepareVerification
     import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.errorMessage
     import com.clerk.api.network.serialization.onFailure
     import com.clerk.api.network.serialization.onSuccess
-    import com.clerk.api.phonenumber.PhoneNumber
-    import com.clerk.api.phonenumber.attemptVerification
-    import com.clerk.api.phonenumber.prepareVerification
-    import com.clerk.api.user.createPhoneNumber
+    import com.clerk.api.user.createEmailAddress
     import kotlinx.coroutines.flow.MutableStateFlow
     import kotlinx.coroutines.flow.asStateFlow
     import kotlinx.coroutines.flow.combine
     import kotlinx.coroutines.flow.launchIn
     import kotlinx.coroutines.launch
 
-    class AddPhoneViewModel : ViewModel() {
+    class AddEmailViewModel : ViewModel() {
       private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
       val uiState = _uiState.asStateFlow()
 
       init {
         combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-            _uiState.value =
-              when {
-                !isInitialized -> UiState.Loading
-                user == null -> UiState.SignedOut
-                else -> UiState.NeedsVerification
-              }
-          }
-          .launchIn(viewModelScope)
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
       }
 
-      fun createPhoneNumber(phoneNumber: String) {
+      fun createEmailAddress(emailAddress: String) {
         val user = requireNotNull(Clerk.userFlow.value)
 
-        // Add an unverified phone number to the user,
-        // then send the user an SMS with the verification code
+        // Add an unverified email address to the user,
+        // then send the user an email with the verification code
         viewModelScope.launch {
           user
-            .createPhoneNumber(phoneNumber)
-            .flatMap { it.prepareVerification() }
+            .createEmailAddress(emailAddress)
+            .flatMap { it.prepareVerification(EmailAddress.PrepareVerificationParams.EmailCode()) }
             .onSuccess {
-              // Update the state to show that the phone number has been created
-              // and that the user needs to verify the phone number
+              // Update the state to show that the email address has been created
+              // and that the user needs to verify the email address
               _uiState.value = UiState.Verifying(it)
             }
             .onFailure {
               Log.e(
-                "AddPhoneViewModel",
-                "Failed to create phone number and prepare verification: ${it.errorMessage}",
+                "AddEmailViewModel",
+                "Failed to create email address and prepare verification: ${it.errorMessage}",
               )
             }
         }
       }
 
-      fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
+      fun verifyCode(code: String, newEmailAddress: EmailAddress) {
         viewModelScope.launch {
-          newPhoneNumber
+          newEmailAddress
             .attemptVerification(code)
             .onSuccess {
-              // Update the state to show that the phone number has been verified
+              // Update the state to show that the email addresshas been verified
               _uiState.value = UiState.Verified
             }
             .onFailure {
-              Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
+              Log.e("AddEmailViewModel", "Failed to verify email address: ${it.errorMessage}")
             }
         }
       }
@@ -471,14 +477,14 @@
       sealed interface UiState {
         data object Loading : UiState
         data object NeedsVerification : UiState
-        data class Verifying(val phoneNumber: PhoneNumber) : UiState
+        data class Verifying(val emailAddress: EmailAddress) : UiState
         data object Verified : UiState
         data object SignedOut : UiState
       }
     }
     ```
 
-    ```kotlin {{ filename: 'AddPhoneActivity.kt', collapsible: true }}
+    ```kotlin {{ filename: 'AddEmailActivity.kt', collapsible: true }}
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
@@ -500,18 +506,18 @@
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.unit.dp
     import androidx.lifecycle.compose.collectAsStateWithLifecycle
-    import com.clerk.api.phonenumber.PhoneNumber
+    import com.clerk.api.emailaddress.EmailAddress
 
-    class AddPhoneActivity : ComponentActivity() {
-      val viewModel: AddPhoneViewModel by viewModels()
+    class AddEmailActivity : ComponentActivity() {
+      val viewModel: AddEmailViewModel by viewModels()
 
       override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
           val state by viewModel.uiState.collectAsStateWithLifecycle()
-          AddPhoneView(
+          AddEmailView(
             state = state,
-            onCreatePhoneNumber = viewModel::createPhoneNumber,
+            onCreateEmailAddress = viewModel::createEmailAddress,
             onVerifyCode = viewModel::verifyCode,
           )
         }
@@ -519,29 +525,29 @@
     }
 
     @Composable
-    fun AddPhoneView(
-      state: AddPhoneViewModel.UiState,
-      onCreatePhoneNumber: (String) -> Unit,
-      onVerifyCode: (String, PhoneNumber) -> Unit,
+    fun AddEmailView(
+      state: AddEmailViewModel.UiState,
+      onCreateEmailAddress: (String) -> Unit,
+      onVerifyCode: (String, EmailAddress) -> Unit,
     ) {
       Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (state) {
-          AddPhoneViewModel.UiState.NeedsVerification -> {
-            InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
-              onCreatePhoneNumber(it)
+          AddEmailViewModel.UiState.NeedsVerification -> {
+            InputContentView(buttonText = "Continue", placeholder = "Enter email address") {
+              onCreateEmailAddress(it)
             }
           }
 
-          AddPhoneViewModel.UiState.Verified -> Text("Verified!")
+          AddEmailViewModel.UiState.Verified -> Text("Verified!")
 
-          is AddPhoneViewModel.UiState.Verifying -> {
+          is AddEmailViewModel.UiState.Verifying -> {
             InputContentView(buttonText = "Verify", placeholder = "Enter code") {
-              onVerifyCode(it, state.phoneNumber)
+              onVerifyCode(it, state.emailAddress)
             }
           }
 
-          AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
-          AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
+          AddEmailViewModel.UiState.Loading -> CircularProgressIndicator()
+          AddEmailViewModel.UiState.SignedOut -> Text("You must be signed in to add an email address.")
         }
       }
     }

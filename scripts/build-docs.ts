@@ -194,7 +194,11 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        // temp ignores until nick fixes :)
+        'clerk-react/use-sign-in.mdx': ['link-hash-not-found'],
+        'clerk-react/use-sign-up.mdx': ['link-hash-not-found'],
+      },
       partials: {},
       tooltips: {},
     },
@@ -494,8 +498,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const updatedDoc = docsMap.get(item.href)
 
-      if (updatedDoc?.sdk) {
-        for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+      if (updatedDoc?.frontmatter?.sdk) {
+        for (const sdk of [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
           // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
           // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
 

@@ -29,47 +29,137 @@ Because this guide uses email and password authentication, the example uses the 
 
 To blend a sign-up and sign-in flow into a single flow, you must treat it as a sign-in flow, but with the ability to sign up a new user if they don't have an account. You can do this by **checking for the `form_identifier_not_found` error** if the sign-in process fails, and then starting the sign-up process.
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-    ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-    'use client'
+<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-    import * as React from 'react'
-    import { useSignIn, useSignUp } from '@clerk/nextjs/legacy'
-    import { useRouter } from 'next/navigation'
-    import type { EmailCodeFactor } from '@clerk/types'
+  ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+  'use client'
 
-    export default function SignInForm() {
-      const { isLoaded, signIn, setActive } = useSignIn()
-      const { signUp } = useSignUp()
-      const [email, setEmail] = React.useState('')
-      const [password, setPassword] = React.useState('')
-      const [code, setCode] = React.useState('')
-      const [showEmailCode, setShowEmailCode] = React.useState(false)
-      const router = useRouter()
+  import * as React from 'react'
+  import { useSignIn, useSignUp } from '@clerk/nextjs/legacy'
+  import { useRouter } from 'next/navigation'
+  import type { EmailCodeFactor } from '@clerk/types'
 
-      // Handle the submission of the form
-      const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
+  export default function SignInForm() {
+    const { isLoaded, signIn, setActive } = useSignIn()
+    const { signUp } = useSignUp()
+    const [email, setEmail] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [code, setCode] = React.useState('')
+    const [showEmailCode, setShowEmailCode] = React.useState(false)
+    const router = useRouter()
 
-        if (!isLoaded) return
+    // Handle the submission of the form
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
 
-        // Start the sign-in process using the email and password provided
-        // If the user is not signed up yet, this will catch the `form_identifier_not_found` error
+      if (!isLoaded) return
+
+      // Start the sign-in process using the email and password provided
+      // If the user is not signed up yet, this will catch the `form_identifier_not_found` error
+      try {
+        const signInAttempt = await signIn.create({
+          identifier: email,
+          password,
+        })
+
+        // If sign-in process is complete, set the created session as active
+        // and redirect the user
+        if (signInAttempt.status === 'complete') {
+          await setActive({
+            session: signInAttempt.createdSessionId,
+            navigate: async ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else if (signInAttempt.status === 'needs_second_factor') {
+          // Check if email_code is a valid second factor
+          // This is required when Client Trust is enabled and the user
+          // is signing in from a new device.
+          // See https://clerk.com/docs/guides/secure/client-trust
+          const emailCodeFactor = signInAttempt.supportedSecondFactors?.find(
+            (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+          )
+
+          if (emailCodeFactor) {
+            await signIn.prepareSecondFactor({
+              strategy: 'email_code',
+              emailAddressId: emailCodeFactor.emailAddressId,
+            })
+
+            // Display second form to capture the verification code
+            setShowEmailCode(true)
+          }
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err: any) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
+
+        // If the identifier is not found, the user is not signed up yet
+        // So this includes the flow for signing up a new user
+        if (err.errors[0].code === 'form_identifier_not_found') {
+          // Start the sign-up process using the email and password provided
+          try {
+            await signUp?.create({
+              emailAddress: email,
+              password,
+            })
+
+            // Send the user an email with the verification code
+            await signUp?.prepareEmailAddressVerification({
+              strategy: 'email_code',
+            })
+
+            // Display second form to capture the verification code
+            setShowEmailCode(true)
+          } catch (err: any) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          }
+        }
+      }
+    }
+
+    // Handle the submission of the email verification code
+    const handleEmailCode = async (e: React.FormEvent) => {
+      e.preventDefault()
+
+      if (!isLoaded) return
+
+      // Flow for signing up a new user
+      if (signUp) {
         try {
-          const signInAttempt = await signIn.create({
-            identifier: email,
-            password,
+          // Use the code the user provided to attempt verification
+          const signUpAttempt = await signUp.attemptEmailAddressVerification({
+            code,
           })
 
-          // If sign-in process is complete, set the created session as active
+          // If verification was completed, set the session to active
           // and redirect the user
-          if (signInAttempt.status === 'complete') {
+          if (signUpAttempt.status === 'complete') {
             await setActive({
-              session: signInAttempt.createdSessionId,
+              session: signUpAttempt.createdSessionId,
               navigate: async ({ session, decorateUrl }) => {
                 if (session?.currentTask) {
-                  // Check for tasks and navigate to custom UI to help users resolve them
+                  // Handle pending session tasks
                   // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
                   console.log(session?.currentTask)
                   return
@@ -83,120 +173,243 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
                 }
               },
             })
-          } else if (signInAttempt.status === 'needs_second_factor') {
-            // Check if email_code is a valid second factor
-            // This is required when Client Trust is enabled and the user
-            // is signing in from a new device.
-            // See https://clerk.com/docs/guides/secure/client-trust
-            const emailCodeFactor = signInAttempt.supportedSecondFactors?.find(
-              (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
-            )
-
-            if (emailCodeFactor) {
-              await signIn.prepareSecondFactor({
-                strategy: 'email_code',
-                emailAddressId: emailCodeFactor.emailAddressId,
-              })
-
-              // Display second form to capture the verification code
-              setShowEmailCode(true)
-            }
           } else {
             // If the status is not complete, check why. User may need to
             // complete further steps.
-            console.error(JSON.stringify(signInAttempt, null, 2))
+            console.error('Sign-up attempt not complete:', signUpAttempt)
+            console.error('Sign-up attempt status:', signUpAttempt.status)
           }
         } catch (err: any) {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling
           console.error(JSON.stringify(err, null, 2))
-
-          // If the identifier is not found, the user is not signed up yet
-          // So this includes the flow for signing up a new user
-          if (err.errors[0].code === 'form_identifier_not_found') {
-            // Start the sign-up process using the email and password provided
-            try {
-              await signUp?.create({
-                emailAddress: email,
-                password,
-              })
-
-              // Send the user an email with the verification code
-              await signUp?.prepareEmailAddressVerification({
-                strategy: 'email_code',
-              })
-
-              // Display second form to capture the verification code
-              setShowEmailCode(true)
-            } catch (err: any) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
-          }
         }
       }
 
-      // Handle the submission of the email verification code
-      const handleEmailCode = async (e: React.FormEvent) => {
-        e.preventDefault()
+      // Flow for signing in an existing user
+      try {
+        const signInAttempt = await signIn.attemptSecondFactor({
+          strategy: 'email_code',
+          code,
+        })
 
-        if (!isLoaded) return
+        if (signInAttempt.status === 'complete') {
+          await setActive({
+            session: signInAttempt.createdSessionId,
+            navigate: async ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                console.log(session?.currentTask)
+                return
+              }
 
-        // Flow for signing up a new user
-        if (signUp) {
-          try {
-            // Use the code the user provided to attempt verification
-            const signUpAttempt = await signUp.attemptEmailAddressVerification({
-              code,
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error('Sign-up attempt not complete:', signInAttempt)
+          console.error('Sign-up attempt status:', signInAttempt.status)
+        }
+      } catch (err: any) {
+        console.error(JSON.stringify(err, null, 2))
+      }
+    }
+
+    // Display email code verification form
+    if (showEmailCode) {
+      return (
+        <>
+          <h1>Verify your email</h1>
+          <p>A verification code has been sent to your email.</p>
+          <form onSubmit={handleEmailCode}>
+            <div>
+              <label htmlFor="code">Enter verification code</label>
+              <input
+                onChange={(e) => setCode(e.target.value)}
+                id="code"
+                name="code"
+                type="text"
+                inputMode="numeric"
+                value={code}
+              />
+            </div>
+            <button type="submit">Verify</button>
+          </form>
+        </>
+      )
+    }
+
+    // Display a form to capture the user's email and password
+    return (
+      <>
+        <h1>Sign up/sign in</h1>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="email">Enter email address</label>
+            <input
+              onChange={(e) => setEmail(e.target.value)}
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+            />
+          </div>
+          <div>
+            <label htmlFor="password">Enter password</label>
+            <input
+              onChange={(e) => setPassword(e.target.value)}
+              id="password"
+              name="password"
+              type="password"
+              value={password}
+            />
+          </div>
+          <button type="submit">Continue</button>
+        </form>
+
+        {/* Required for sign-up flows
+    Clerk's bot sign-up protection is enabled by default */}
+        <div id="clerk-captcha" />
+      </>
+    )
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+  import { ThemedText } from '@/components/themed-text'
+  import { ThemedView } from '@/components/themed-view'
+  import { useSignIn, useSignUp } from '@clerk/expo/legacy'
+  import type { EmailCodeFactor } from '@clerk/types'
+  import { useRouter } from 'expo-router'
+  import * as React from 'react'
+  import { Pressable, StyleSheet, TextInput } from 'react-native'
+
+  export default function Page() {
+    const { isLoaded, signIn, setActive } = useSignIn()
+    const { signUp } = useSignUp()
+    const router = useRouter()
+
+    const [emailAddress, setEmailAddress] = React.useState('')
+    const [password, setPassword] = React.useState('')
+    const [code, setCode] = React.useState('')
+    const [showEmailCode, setShowEmailCode] = React.useState(false)
+
+    // Handle the submission of the form
+    const onContinuePress = async () => {
+      if (!isLoaded) return
+
+      // Start the sign-in process using the email and password provided
+      // If the user is not signed up yet,
+      // and needs to be transferred to the sign-up flow,
+      // this will catch the `form_identifier_not_found` error
+      try {
+        const signInAttempt = await signIn.create({
+          identifier: emailAddress,
+          password,
+        })
+
+        // If sign-in process is complete, set the created session as active
+        // and redirect the user
+        if (signInAttempt.status === 'complete') {
+          await setActive({
+            session: signInAttempt.createdSessionId,
+            navigate: async ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else if (signInAttempt.status === 'needs_second_factor') {
+          // Check if email_code is a valid second factor
+          // This is required when Client Trust is enabled and the user
+          // is signing in from a new device.
+          // See https://clerk.com/docs/guides/secure/client-trust
+          const emailCodeFactor = signInAttempt.supportedSecondFactors?.find(
+            (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+          )
+
+          if (emailCodeFactor) {
+            await signIn.prepareSecondFactor({
+              strategy: 'email_code',
+              emailAddressId: emailCodeFactor.emailAddressId,
             })
 
-            // If verification was completed, set the session to active
-            // and redirect the user
-            if (signUpAttempt.status === 'complete') {
-              await setActive({
-                session: signUpAttempt.createdSessionId,
-                navigate: async ({ session, decorateUrl }) => {
-                  if (session?.currentTask) {
-                    // Handle session tasks
-                    // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-                    console.log(session?.currentTask)
-                    return
-                  }
+            // Display second form to capture the verification code
+            setShowEmailCode(true)
+          }
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err: any) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error(JSON.stringify(err, null, 2))
 
-                  const url = decorateUrl('/')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error('Sign-up attempt not complete:', signUpAttempt)
-              console.error('Sign-up attempt status:', signUpAttempt.status)
-            }
+        // If the identifier is not found, the user is not signed up yet
+        // So this includes the flow for signing up a new user
+        if (err.errors[0].code === 'form_identifier_not_found') {
+          // Start the sign-up process using the email and password provided
+          try {
+            await signUp?.create({
+              emailAddress: emailAddress,
+              password,
+            })
+
+            // Send the user an email with the verification code
+            await signUp?.prepareEmailAddressVerification({
+              strategy: 'email_code',
+            })
+
+            // Display second form to capture the verification code
+            setShowEmailCode(true)
           } catch (err: any) {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
             console.error(JSON.stringify(err, null, 2))
           }
         }
+      }
+    }
 
-        // Flow for signing in an existing user
+    // Handle the submission of the email verification code
+    const onVerifyPress = async () => {
+      if (!isLoaded) return
+
+      // Flow for signing up a new user
+      if (signUp) {
         try {
-          const signInAttempt = await signIn.attemptSecondFactor({
-            strategy: 'email_code',
+          // Use the code the user provided to attempt verification
+          const signUpAttempt = await signUp.attemptEmailAddressVerification({
             code,
           })
 
-          if (signInAttempt.status === 'complete') {
+          // If verification was completed, set the session to active
+          // and redirect the user
+          if (signUpAttempt.status === 'complete') {
             await setActive({
-              session: signInAttempt.createdSessionId,
+              session: signUpAttempt.createdSessionId,
               navigate: async ({ session, decorateUrl }) => {
-                // Check for tasks and navigate to custom UI to help users resolve them
+                // Handle pending session tasks
                 // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
                 if (session?.currentTask) {
                   console.log(session?.currentTask)
@@ -214,72 +427,169 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
           } else {
             // If the status is not complete, check why. User may need to
             // complete further steps.
-            console.error('Sign-up attempt not complete:', signInAttempt)
-            console.error('Sign-up attempt status:', signInAttempt.status)
+            console.error('Sign-up attempt not complete:', signUpAttempt)
+            console.error('Sign-up attempt status:', signUpAttempt.status)
           }
         } catch (err: any) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
           console.error(JSON.stringify(err, null, 2))
         }
       }
 
-      // Display email code verification form
-      if (showEmailCode) {
-        return (
-          <>
-            <h1>Verify your email</h1>
-            <p>A verification code has been sent to your email.</p>
-            <form onSubmit={handleEmailCode}>
-              <div>
-                <label htmlFor="code">Enter verification code</label>
-                <input
-                  onChange={(e) => setCode(e.target.value)}
-                  id="code"
-                  name="code"
-                  type="text"
-                  inputMode="numeric"
-                  value={code}
-                />
-              </div>
-              <button type="submit">Verify</button>
-            </form>
-          </>
-        )
+      // Flow for signing in an existing user
+      try {
+        const signInAttempt = await signIn.attemptSecondFactor({
+          strategy: 'email_code',
+          code,
+        })
+
+        if (signInAttempt.status === 'complete') {
+          await setActive({
+            session: signInAttempt.createdSessionId,
+            navigate: async ({ session, decorateUrl }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error('Sign-in attempt not complete:', signInAttempt)
+          console.error('Sign-in attempt status:', signInAttempt.status)
+        }
+      } catch (err: any) {
+        console.error(JSON.stringify(err, null, 2))
       }
+    }
 
-      // Display a form to capture the user's email and password
+    // Display email code verification form
+    if (showEmailCode) {
       return (
-        <>
-          <h1>Sign up/sign in</h1>
-          <form onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                onChange={(e) => setEmail(e.target.value)}
-                id="email"
-                name="email"
-                type="email"
-                value={email}
-              />
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input
-                onChange={(e) => setPassword(e.target.value)}
-                id="password"
-                name="password"
-                type="password"
-                value={password}
-              />
-            </div>
-            <button type="submit">Continue</button>
-          </form>
-
-          {/* Required for sign-up flows
-      Clerk's bot sign-up protection is enabled by default */}
-          <div id="clerk-captcha" />
-        </>
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Verify your email
+          </ThemedText>
+          <ThemedText style={styles.description}>
+            A verification code has been sent to your email.
+          </ThemedText>
+          <TextInput
+            style={styles.input}
+            value={code}
+            placeholder="Enter verification code"
+            placeholderTextColor="#666666"
+            onChangeText={(code) => setCode(code)}
+            keyboardType="numeric"
+          />
+          <Pressable
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            onPress={onVerifyPress}
+          >
+            <ThemedText style={styles.buttonText}>Verify</ThemedText>
+          </Pressable>
+        </ThemedView>
       )
     }
-    ```
-  </Tab>
-</Tabs>
+
+    // Display a form to capture the user's email and password
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText type="title" style={styles.title}>
+          Sign up/sign in
+        </ThemedText>
+        <ThemedText style={styles.label}>Email address</ThemedText>
+        <TextInput
+          style={styles.input}
+          autoCapitalize="none"
+          value={emailAddress}
+          placeholder="Enter email address"
+          placeholderTextColor="#666666"
+          onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+          keyboardType="email-address"
+        />
+        <ThemedText style={styles.label}>Password</ThemedText>
+        <TextInput
+          style={styles.input}
+          value={password}
+          placeholder="Enter password"
+          placeholderTextColor="#666666"
+          secureTextEntry={true}
+          onChangeText={(password) => setPassword(password)}
+        />
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            (!emailAddress || !password) && styles.buttonDisabled,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={onContinuePress}
+          disabled={!emailAddress || !password}
+        >
+          <ThemedText style={styles.buttonText}>Continue</ThemedText>
+        </Pressable>
+      </ThemedView>
+    )
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      gap: 12,
+    },
+    title: {
+      marginBottom: 8,
+    },
+    description: {
+      fontSize: 14,
+      marginBottom: 16,
+      opacity: 0.8,
+    },
+    label: {
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: '#ccc',
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      backgroundColor: '#fff',
+    },
+    button: {
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    buttonPressed: {
+      opacity: 0.7,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+  })
+  ```
+</If>
+
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

@@ -1,0 +1,157 @@
+---
+title: '`useSignInWithGoogle()`'
+description: Clerk's useSignInWithGoogle() hook provides native Sign in with Google functionality for iOS and Android devices.
+sdk: expo
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Add native Sign in with Google to your Expo app",
+      link: "/docs/guides/configure/auth-strategies/sign-in-with-google",
+      icon: "clerk",
+    }
+  ]}
+/>
+
+> [!NOTE]
+> This hook is available on iOS and Android devices and requires a native build. It will not work with Expo Go.
+
+The `useSignInWithGoogle()` hook provides native [Sign in with Google](https://support.google.com/accounts/answer/12849458?hl=en) functionality for iOS and Android devices. It handles the ID token exchange with Clerk's backend and automatically manages the [transfer flow](!transfer-flow) between sign-up and sign-in.
+
+## Installation
+
+This hook requires the following peer dependencies:
+
+```bash {{ filename: 'terminal' }}
+npx expo install expo-crypto
+```
+
+## Returns
+
+The `useSignInWithGoogle()` hook returns the `startGoogleAuthenticationFlow()` method, which you can use to initiate the native Google authentication flow.
+
+### `startGoogleAuthenticationFlow()`
+
+`startGoogleAuthenticationFlow()` has the following function signature:
+
+```ts
+function startGoogleAuthenticationFlow(
+  startGoogleAuthenticationFlowParams?: StartGoogleAuthenticationFlowParams,
+): Promise<StartGoogleAuthenticationFlowReturnType>
+```
+
+#### Parameters
+
+`startGoogleAuthenticationFlow()` accepts the following parameters (`StartGoogleAuthenticationFlowParams`):
+
+<Properties>
+  - `unsafeMetadata?`
+  - [`SignUpUnsafeMetadata`](/docs/reference/javascript/types/metadata#sign-up-unsafe-metadata)
+
+  Metadata that can be read and set from the frontend and the backend. Once the authentication process is complete, the value of this field will be automatically copied to the created user's unsafe metadata (`User.unsafeMetadata`). One common use case is to collect custom information about the user during the authentication process and store it in this property. Read more about [unsafe metadata](/docs/guides/users/extending#unsafe-metadata).
+</Properties>
+
+#### Returns
+
+`startGoogleAuthenticationFlow()` returns the following:
+
+<Properties>
+  - `createdSessionId`
+  - `string | null`
+
+  The ID of the session that was created, if authentication is successful.
+
+  ---
+
+  - `setActive?`
+  - `(params: SetActiveParams) => Promise<void>`
+
+  A method used to set the active session and/or organization. Accepts a [`SetActiveParams`](/docs/reference/javascript/types/set-active-params) object.
+
+  ---
+
+  - `signIn?`
+  - <code>[SignIn](/docs/reference/javascript/sign-in) | undefined</code>
+
+  The [`SignIn`](/docs/reference/javascript/sign-in) object that was created, which holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process.
+
+  ---
+
+  - `signUp?`
+  - <code>[SignUp](/docs/reference/javascript/sign-up) | undefined</code>
+
+  The [`SignUp`](/docs/reference/javascript/sign-up) object that was created, which holds the state of the current sign-up and provides helper methods to navigate and complete the sign-up process.
+</Properties>
+
+## Examples
+
+### Reusable component
+
+<Include src="_partials/expo/use-sign-in-with-google-example" />
+
+### With custom metadata
+
+The following example demonstrates how to pass custom metadata that will be saved to the user's [unsafe metadata](/docs/guides/users/extending#unsafe-metadata) during sign-up.
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { useRouter } from 'expo-router'
+import { useSignInWithGoogle } from '@clerk/expo'
+import { Alert, Platform, TouchableOpacity, Text } from 'react-native'
+
+export default function SignInPage() {
+  const { startGoogleAuthenticationFlow } = useSignInWithGoogle()
+  const router = useRouter()
+
+  // Only show on iOS and Android
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return null
+  }
+
+  const onGoogleSignInPress = async () => {
+    try {
+      const { createdSessionId, setActive } = await startGoogleAuthenticationFlow({
+        // Add information about the user to their unsafe metadata
+        unsafeMetadata: {
+          referralSource: 'mobile-app',
+          signupDate: new Date().toISOString(),
+        },
+      })
+
+      if (createdSessionId && setActive) {
+        // Set the created session as the active session
+        await setActive({ session: createdSessionId })
+        // Once the session is set as active,
+        // redirect the user to the home page
+        router.replace('/')
+      }
+    } catch (err: any) {
+      // User canceled the sign-in flow
+      if (err.code === 'SIGN_IN_CANCELLED' || err.code === '-5') {
+        return
+      }
+
+      Alert.alert('Error', err.message || 'An error occurred during Google Sign-In')
+      console.error('Google Sign-In error:', JSON.stringify(err, null, 2))
+    }
+  }
+
+  return (
+    <TouchableOpacity onPress={onGoogleSignInPress}>
+      <Text>Sign in with Google</Text>
+    </TouchableOpacity>
+  )
+}
+```
+
+## Error handling
+
+The `useSignInWithGoogle()` hook may throw errors in the following scenarios:
+
+- **User cancellation**: The user cancels the authentication flow, resulting in an error with code `SIGN_IN_CANCELLED` or `-5`.
+- **Platform error**: The hook is called on an unsupported platform (not iOS or Android).
+- **Authentication failure**: Google authentication fails or the returned ID token is invalid.
+- **Play Services error** (Android only): Google Play Services is not available or outdated on the device.
+
+> [!IMPORTANT]
+> Always wrap calls to `startGoogleAuthenticationFlow()` in a `try/catch` block, and handle the `SIGN_IN_CANCELLED` and `-5` error codes separately.

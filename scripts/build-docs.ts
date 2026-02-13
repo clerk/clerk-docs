@@ -1230,8 +1230,10 @@ ${yaml.stringify({
       // Merge any new unique messages into the existing VFile
       const existingMessages = new Set(existing.messages.map((m) => `${m.message}:${m.line}:${m.column}`))
       for (const msg of vfile.messages) {
-        if (!existingMessages.has(`${msg.message}:${msg.line}:${msg.column}`)) {
+        const key = `${msg.message}:${msg.line}:${msg.column}`
+        if (!existingMessages.has(key)) {
           existing.messages.push(msg)
+          existingMessages.add(key)
         }
       }
     }

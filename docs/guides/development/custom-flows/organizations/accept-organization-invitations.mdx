@@ -396,10 +396,113 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
   ```
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func handleOrganizationInvitation(
+    ticket: String,
+    accountStatus: String,
+    firstName: String = "",
+    lastName: String = "",
+    password: String = "",
+    clerk: Clerk
+  ) async {
+    do {
+      switch accountStatus {
+      case "sign_in":
+        let signIn = try await clerk.auth.signInWithTicket(ticket)
+        if signIn.status == .complete, let sessionId = signIn.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        }
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+      case "sign_up":
+        let signUp = try await clerk.auth.signUpWithTicket(ticket)
+        let updatedSignUp = try await signUp.update(
+          firstName: firstName,
+          lastName: lastName,
+          password: password
+        )
+
+        if updatedSignUp.status == .complete, let sessionId = updatedSignUp.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        }
+
+      default:
+        break
+      }
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.signInWithTicket
+  import com.clerk.api.auth.signUpWithTicket
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signin.SignIn
+  import com.clerk.api.signup.SignUp
+  import com.clerk.api.signup.update
+
+  suspend fun handleOrganizationInvitation(
+    ticket: String,
+    accountStatus: String,
+    firstName: String = "",
+    lastName: String = "",
+    password: String = "",
+  ) {
+    when (accountStatus) {
+      "sign_in" -> {
+        Clerk.auth
+          .signInWithTicket(ticket)
+          .onSuccess { signIn ->
+            if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+              Clerk.auth.setActive(sessionId = signIn.createdSessionId)
+            }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
+      }
+      "sign_up" -> {
+        Clerk.auth
+          .signUpWithTicket(ticket)
+          .onSuccess { signUp ->
+            signUp
+              .update(
+                SignUp.SignUpUpdateParams.Standard(
+                  firstName = firstName,
+                  lastName = lastName,
+                  password = password,
+                ),
+              ).onSuccess { updatedSignUp ->
+                if (
+                  updatedSignUp.status == SignUp.Status.COMPLETE &&
+                    updatedSignUp.createdSessionId != null
+                ) {
+                  Clerk.auth.setActive(sessionId = updatedSignUp.createdSessionId)
+                }
+              }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk={["js-frontend", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

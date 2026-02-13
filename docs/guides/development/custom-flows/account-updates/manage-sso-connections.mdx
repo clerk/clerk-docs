@@ -432,10 +432,88 @@ This guide uses Discord, Google, and GitHub as examples.
   ```
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func addExternalAccount(provider: OAuthProvider, clerk: Clerk) async {
+    guard let user = clerk.user else { return }
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+    do {
+      let account = try await user.createExternalAccount(
+        provider: provider,
+        redirectUrl: "/account/manage-external-accounts"
+      )
+
+      // Redirect the user to complete provider verification if needed.
+      if let urlString = account.verification?.externalVerificationRedirectUrl,
+         let url = URL(string: urlString) {
+        // Present your preferred browser or web auth flow with `url`.
+        print(url)
+      }
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+
+  @MainActor
+  func removeExternalAccount(account: ExternalAccount) async {
+    do {
+      _ = try await account.destroy()
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.externalaccount.ExternalAccount
+  import com.clerk.api.externalaccount.delete
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.sso.OAuthProvider
+  import com.clerk.api.user.User
+  import com.clerk.api.user.createExternalAccount
+
+  suspend fun addExternalAccount(user: User, provider: OAuthProvider) {
+    user
+      .createExternalAccount(
+        User.CreateExternalAccountParams(
+          provider = provider,
+          redirectUrl = "/account/manage-external-accounts",
+        )
+      )
+      .onSuccess { account ->
+        account.verification?.externalVerificationRedirectUrl?.let { redirectUrl ->
+          // Open `redirectUrl` in your browser / web auth flow.
+          println(redirectUrl)
+        }
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+
+  suspend fun removeExternalAccount(account: ExternalAccount) {
+    account
+      .delete()
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
+</If>
+
+<If sdk={["js-frontend", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

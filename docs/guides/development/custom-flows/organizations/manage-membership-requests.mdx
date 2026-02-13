@@ -393,10 +393,91 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func fetchMembershipRequests(clerk: Clerk) async -> [OrganizationMembershipRequest] {
+    guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return [] }
 
-<If sdk={["ios", "android", "nuxt"]}>
+    do {
+      guard
+        let memberships = try await clerk.user?.getOrganizationMemberships().data,
+        let organization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
+      else {
+        return []
+      }
+
+      return try await organization.getMembershipRequests(status: "pending").data
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+      return []
+    }
+  }
+
+  @MainActor
+  func acceptMembershipRequest(_ request: OrganizationMembershipRequest) async {
+    do {
+      _ = try await request.accept()
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+
+  @MainActor
+  func rejectMembershipRequest(_ request: OrganizationMembershipRequest) async {
+    do {
+      _ = try await request.reject()
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.OrganizationMembershipRequest
+  import com.clerk.api.organizations.accept
+  import com.clerk.api.organizations.getMembershipRequests
+  import com.clerk.api.organizations.reject
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchMembershipRequests(): List<OrganizationMembershipRequest> {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return emptyList()
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+
+    if (membershipsResult !is ClerkResult.Success) return emptyList()
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return emptyList()
+
+    return when (val requestsResult = activeOrganization.getMembershipRequests(status = "pending")) {
+      is ClerkResult.Success -> requestsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun acceptMembershipRequest(request: OrganizationMembershipRequest) {
+    request.accept()
+  }
+
+  suspend fun rejectMembershipRequest(request: OrganizationMembershipRequest) {
+    request.reject()
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

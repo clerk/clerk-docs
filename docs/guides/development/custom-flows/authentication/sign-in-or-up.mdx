@@ -558,10 +558,154 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
   ```
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func signInOrSignUp(emailAddress: String, password: String, clerk: Clerk) async {
+    do {
+      let signIn = try await clerk.auth.signInWithPassword(identifier: emailAddress, password: password)
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+      switch signIn.status {
+      case .complete:
+        if let sessionId = signIn.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        }
+      case .needsSecondFactor:
+        _ = try await signIn.sendMfaEmailCode()
+      default:
+        dump(signIn.status)
+      }
+    } catch {
+      // If the identifier doesn't exist yet, create a sign-up and send an email code.
+      if String(describing: error).contains("form_identifier_not_found") {
+        do {
+          var signUp = try await clerk.auth.signUp(emailAddress: emailAddress, password: password)
+          signUp = try await signUp.sendEmailCode()
+          dump(signUp.status)
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      } else {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+
+  @MainActor
+  func verifyEmailCode(code: String, clerk: Clerk) async {
+    do {
+      if let signUp = clerk.auth.currentSignUp {
+        let updatedSignUp = try await signUp.verifyEmailCode(code)
+        if updatedSignUp.status == .complete, let sessionId = updatedSignUp.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+          return
+        }
+      }
+
+      if let signIn = clerk.auth.currentSignIn {
+        let updatedSignIn = try await signIn.verifyMfaCode(code, type: .emailCode)
+        if updatedSignIn.status == .complete, let sessionId = updatedSignIn.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        }
+      }
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.signInWithPassword
+  import com.clerk.api.auth.signUp
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signin.SignIn
+  import com.clerk.api.signin.prepareSecondFactor
+  import com.clerk.api.signin.attemptSecondFactor
+  import com.clerk.api.signup.SignUp
+  import com.clerk.api.signup.sendEmailCode
+  import com.clerk.api.signup.attemptVerification
+
+  suspend fun signInOrSignUp(emailAddress: String, password: String) {
+    when (
+      val signInResult =
+        Clerk.auth.signInWithPassword {
+          identifier = emailAddress
+          this.password = password
+        }
+    ) {
+      is ClerkResult.Success -> {
+        val signIn = signInResult.value
+
+        when (signIn.status) {
+          SignIn.Status.COMPLETE -> {
+            signIn.createdSessionId?.let { sessionId ->
+              Clerk.auth.setActive(sessionId = sessionId)
+            }
+          }
+          SignIn.Status.NEEDS_SECOND_FACTOR -> {
+            signIn.prepareSecondFactor(SignIn.PrepareSecondFactorStrategy.EmailCode())
+          }
+          else -> Unit
+        }
+      }
+      is ClerkResult.Failure -> {
+        val identifierMissing = signInResult.error.errors.firstOrNull()?.code == "form_identifier_not_found"
+        if (!identifierMissing) return
+
+        Clerk.auth
+          .signUp {
+            email = emailAddress
+            this.password = password
+          }
+          .onSuccess { signUp ->
+            signUp.sendEmailCode()
+          }
+      }
+    }
+  }
+
+  suspend fun verifyEmailCode(code: String) {
+    Clerk.auth.currentSignUp?.let { signUp ->
+      signUp
+        .attemptVerification(SignUp.AttemptVerificationParams.EmailCode(code))
+        .onSuccess { updatedSignUp ->
+          if (updatedSignUp.status == SignUp.Status.COMPLETE && updatedSignUp.createdSessionId != null) {
+            Clerk.auth.setActive(sessionId = updatedSignUp.createdSessionId)
+          }
+        }
+      return
+    }
+
+    Clerk.auth.currentSignIn?.let { signIn ->
+      signIn
+        .attemptSecondFactor(SignIn.AttemptSecondFactorParams.EmailCode(code))
+        .onSuccess { updatedSignIn ->
+          if (updatedSignIn.status == SignIn.Status.COMPLETE && updatedSignIn.createdSessionId != null) {
+            Clerk.auth.setActive(sessionId = updatedSignIn.createdSessionId)
+          }
+        }
+        .onFailure {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+        }
+    }
+  }
+  ```
+</If>
+
+<If sdk={["js-frontend", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

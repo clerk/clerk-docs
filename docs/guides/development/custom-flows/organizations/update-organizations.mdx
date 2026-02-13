@@ -260,10 +260,54 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
   </CodeBlockTabs>
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func updateActiveOrganization(name: String, clerk: Clerk) async {
+    guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return }
 
-<If sdk={["ios", "android", "nuxt"]}>
+    do {
+      guard
+        let memberships = try await clerk.user?.getOrganizationMemberships().data,
+        let activeOrganization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
+      else {
+        return
+      }
+
+      _ = try await activeOrganization.update(name: name)
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.update
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun updateActiveOrganization(name: String) {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return
+
+    if (membershipsResult !is ClerkResult.Success) return
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return
+
+    activeOrganization.update(name = name)
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

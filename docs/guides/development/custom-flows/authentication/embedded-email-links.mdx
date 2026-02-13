@@ -125,11 +125,74 @@ description: Learn how to build custom embeddable email link sign-in flows to in
       ```
     </If>
 
-    {/* TODO(Mike): Add iOS example */}
+    <If sdk="ios">
+      ```swift
+      import Clerk
 
-    {/* TODO(Sam): Add Android example */}
+      @MainActor
+      func handleSignInToken(url: URL, clerk: Clerk) async {
+        guard
+          let token = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "token" })?
+            .value
+        else {
+          return
+        }
 
-    <If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+        do {
+          let signIn = try await clerk.auth.signInWithTicket(token)
+
+          if signIn.status == .complete, let sessionId = signIn.createdSessionId {
+            try await clerk.auth.setActive(sessionId: sessionId)
+          } else {
+            dump(signIn.status)
+          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+      ```
+    </If>
+
+    <If sdk="android">
+      ```kotlin
+      import android.net.Uri
+      import com.clerk.api.Clerk
+      import com.clerk.api.network.serialization.onFailure
+      import com.clerk.api.network.serialization.onSuccess
+      import com.clerk.api.signin.SignIn
+      import kotlinx.coroutines.CoroutineScope
+      import kotlinx.coroutines.launch
+
+      fun handleSignInToken(uri: Uri, scope: CoroutineScope) {
+        val token = uri.getQueryParameter("token") ?: return
+
+        scope.launch {
+          Clerk.auth
+            .signInWithTicket(token)
+            .onSuccess { signIn ->
+              if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+                Clerk.auth
+                  .setActive(sessionId = signIn.createdSessionId)
+                  .onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                  }
+              }
+            }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+      ```
+    </If>
+
+    <If sdk={["js-frontend", "nuxt"]}>
       <Include src="_partials/sdk-examples-not-available-callout" />
     </If>
   </Steps>

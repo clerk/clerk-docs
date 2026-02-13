@@ -275,14 +275,15 @@ You must configure your application instance through the Clerk Dashboard for the
 </If>
 
 <If sdk="android">
-  {/* TODO(Sam): Update for new Android API's */}
-
   <CodeBlockTabs options={["OAuthViewModel.kt", "OAuthActivity.kt"]}>
     ```kotlin {{ filename: 'OAuthViewModel.kt', collapsible: true }}
+    package com.clerk.customflows.oauth
+
     import android.util.Log
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
+    import com.clerk.api.log.ClerkLog
     import com.clerk.api.network.serialization.errorMessage
     import com.clerk.api.network.serialization.onFailure
     import com.clerk.api.network.serialization.onSuccess
@@ -297,61 +298,72 @@ You must configure your application instance through the Clerk Dashboard for the
     import kotlinx.coroutines.launch
 
     class OAuthViewModel : ViewModel() {
-        private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
-        val uiState = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+    val uiState = _uiState.asStateFlow()
 
-        init {
-            combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-                _uiState.value = when {
-                    !isInitialized -> UiState.Loading
-                    user != null -> UiState.Authenticated
-                    else -> UiState.SignedOut
-                }
-            }.launchIn(viewModelScope)
-        }
-
-        fun signInWithOAuth(provider: OAuthProvider) {
-            viewModelScope.launch {
-                SignIn.authenticateWithRedirect(SignIn.AuthenticateWithRedirectParams.OAuth(provider)).onSuccess {
-                    when(it.resultType) {
-                        ResultType.SIGN_IN -> {
-                            // The OAuth flow resulted in a sign in
-                            if (it.signIn?.status == SignIn.Status.COMPLETE) {
-                                _uiState.value = UiState.Authenticated
-                            } else {
-                              // If the status is not complete, check why. User may need to
-                              // complete further steps.
-                            }
-                        }
-                        ResultType.SIGN_UP -> {
-                            // The OAuth flow resulted in a sign up
-                            if (it.signUp?.status == SignUp.Status.COMPLETE) {
-                                _uiState.value = UiState.Authenticated
-                            } else {
-                              // If the status is not complete, check why. User may need to
-                              // complete further steps.
-                            }
-                        }
-                    }
-                }.onFailure {
-                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                    // for more info on error handling
-                    Log.e("OAuthViewModel", it.errorMessage, it.throwable)
-                }
+    init {
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user != null -> UiState.Authenticated
+              else -> UiState.SignedOut
             }
         }
+        .launchIn(viewModelScope)
+    }
 
-        sealed interface UiState {
-            data object Loading : UiState
+    fun signInWithOAuth(provider: OAuthProvider) {
+      viewModelScope.launch {
+        Clerk.auth
+          .signInWithOAuth(provider)
+          .onSuccess {
+            when (it.resultType) {
+              ResultType.SIGN_IN -> {
+                // The OAuth flow resulted in a sign in
+                if (it.signIn?.status == SignIn.Status.COMPLETE) {
+                  _uiState.value = UiState.Authenticated
+                } else {
+                  // If the status is not complete, check why. User may need to
+                  // complete further steps.
+                }
+              }
+              ResultType.SIGN_UP -> {
+                // The OAuth flow resulted in a sign up
+                if (it.signUp?.status == SignUp.Status.COMPLETE) {
+                  _uiState.value = UiState.Authenticated
+                } else {
+                  // If the status is not complete, check why. User may need to
+                  // complete further steps.
+                }
+              }
 
-            data object SignedOut : UiState
+              ResultType.UNKNOWN -> {
+                ClerkLog.e("Unknown result type after OAuth redirect")
+              }
+            }
+          }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            Log.e("OAuthViewModel", it.errorMessage, it.throwable)
+          }
+      }
+    }
 
-            data object Authenticated : UiState
-        }
+    sealed interface UiState {
+      data object Loading : UiState
+
+      data object SignedOut : UiState
+
+      data object Authenticated : UiState
+    }
     }
     ```
 
     ```kotlin {{ filename: 'OAuthActivity.kt', collapsible: true }}
+    package com.clerk.customflows.oauth
+
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
@@ -368,28 +380,26 @@ You must configure your application instance through the Clerk Dashboard for the
     import com.clerk.api.sso.OAuthProvider
 
     class OAuthActivity : ComponentActivity() {
-        val viewModel: OAuthViewModel by viewModels()
+    val viewModel: OAuthViewModel by viewModels()
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContent {
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    when(state) {
-                        OAuthViewModel.UiState.Authenticated -> Text("Authenticated")
-                        OAuthViewModel.UiState.Loading -> CircularProgressIndicator()
-                        OAuthViewModel.UiState.SignedOut -> {
-                            val provider = OAuthProvider.GOOGLE // Or .GITHUB, .SLACK etc.
-                            Button(onClick = {
-                                viewModel.signInWithOAuth(provider)
-                            }) {
-                                Text("Sign in with ${provider.name}")
-                            }
-                        }
-                    }
-                }
+    override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          when (state) {
+            OAuthViewModel.UiState.Authenticated -> Text("Authenticated")
+            OAuthViewModel.UiState.Loading -> CircularProgressIndicator()
+            OAuthViewModel.UiState.SignedOut -> {
+              val provider = OAuthProvider.GOOGLE // Or .GITHUB, .SLACK etc.
+              Button(onClick = { viewModel.signInWithOAuth(provider) }) {
+                Text("Sign in with ${provider.name}")
+              }
             }
+          }
         }
+      }
+    }
     }
     ```
   </CodeBlockTabs>
@@ -697,10 +707,6 @@ Depending on your instance settings, users might need to provide extra informati
   })
   ```
 </If>
-
-{/* TODO(Mike): Add iOS example */}
-
-{/* TODO(Sam): Add Android example */}
 
 <If sdk={["js-frontend", "ios", "android", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />

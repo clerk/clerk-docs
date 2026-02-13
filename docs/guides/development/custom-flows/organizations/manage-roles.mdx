@@ -663,10 +663,92 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-{/* TODO(Mike): Add iOS example */}
+<If sdk="ios">
+  ```swift
+  import Clerk
 
-{/* TODO(Sam): Add Android example */}
+  @MainActor
+  func fetchOrganizationMemberships(clerk: Clerk) async -> [OrganizationMembership] {
+    guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return [] }
 
-<If sdk={["ios", "android", "nuxt"]}>
+    do {
+      guard
+        let memberships = try await clerk.user?.getOrganizationMemberships().data,
+        let activeOrganization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
+      else {
+        return []
+      }
+
+      return try await activeOrganization.getMemberships().data
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+      return []
+    }
+  }
+
+  @MainActor
+  func updateMembershipRole(_ membership: OrganizationMembership, role: String) async {
+    do {
+      _ = try await membership.update(role: role)
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+
+  @MainActor
+  func removeMembership(_ membership: OrganizationMembership) async {
+    do {
+      _ = try await membership.destroy()
+    } catch {
+      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+      // for more info on error handling
+      dump(error)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.OrganizationMembership
+  import com.clerk.api.organizations.getOrganizationMemberships
+  import com.clerk.api.organizations.removeMember
+  import com.clerk.api.organizations.updateMembership
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchOrganizationMemberships(): List<OrganizationMembership> {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return emptyList()
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+    if (membershipsResult !is ClerkResult.Success) return emptyList()
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return emptyList()
+
+    return when (val activeMemberships = activeOrganization.getOrganizationMemberships()) {
+      is ClerkResult.Success -> activeMemberships.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun updateMembershipRole(membership: OrganizationMembership, role: String) {
+    val userId = membership.publicUserData?.userId ?: return
+    membership.updateMembership(userId = userId, role = role)
+  }
+
+  suspend fun removeMembership(membership: OrganizationMembership) {
+    val userId = membership.publicUserData?.userId ?: return
+    membership.organization.removeMember(userId)
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

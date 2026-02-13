@@ -528,19 +528,20 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
   </If>
 
   <If sdk="android">
-    {/* TODO(Sam): Update for new Android API's */}
-
     <CodeBlockTabs options={["SMSOTPSignUpViewModel.kt", "SMSOTPSignUpActivity.kt"]}>
       ```kotlin {{ filename: 'SMSOTPSignUpViewModel.kt', collapsible: true }}
+      package com.clerk.customflows.otp.signup
+
       import androidx.lifecycle.ViewModel
       import androidx.lifecycle.viewModelScope
       import com.clerk.api.Clerk
+      import com.clerk.api.auth.types.VerificationType
       import com.clerk.api.network.serialization.flatMap
       import com.clerk.api.network.serialization.onFailure
       import com.clerk.api.network.serialization.onSuccess
       import com.clerk.api.signup.SignUp
-      import com.clerk.api.signup.attemptVerification
-      import com.clerk.api.signup.prepareVerification
+      import com.clerk.api.signup.sendCode
+      import com.clerk.api.signup.verifyCode
       import kotlinx.coroutines.flow.MutableStateFlow
       import kotlinx.coroutines.flow.asStateFlow
       import kotlinx.coroutines.flow.combine
@@ -553,7 +554,7 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
       val uiState = _uiState.asStateFlow()
 
       init {
-        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
           _uiState.value =
             when {
               !isInitialized -> UiState.Loading
@@ -565,22 +566,23 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
       }
 
       fun submit(phoneNumber: String) {
-        viewModelScope.launch {
-        SignUp.create(SignUp.CreateParams.Standard(phoneNumber = phoneNumber))
-          .flatMap { it.prepareVerification(SignUp.PrepareVerificationParams.Strategy.PhoneCode()) }
+      viewModelScope.launch {
+        Clerk.auth
+          .signUp { phone = phoneNumber }
+          .flatMap { it.sendCode { phone = phoneNumber } }
           .onSuccess { _uiState.value = UiState.Verifying }
           .onFailure {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
           }
-        }
+      }
       }
 
       fun verify(code: String) {
-        val inProgressSignUp = Clerk.signUp ?: return
-        viewModelScope.launch {
+      val inProgressSignUp = Clerk.auth.currentSignUp ?: return
+      viewModelScope.launch {
         inProgressSignUp
-          .attemptVerification(SignUp.AttemptVerificationParams.PhoneCode(code))
+          .verifyCode(code, VerificationType.PHONE)
           .onSuccess {
             if (it.status == SignUp.Status.COMPLETE) {
               _uiState.value = UiState.Verified
@@ -592,22 +594,24 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
             // for more info on error handling
           }
-        }
+      }
       }
 
       sealed interface UiState {
-        data object Loading : UiState
+      data object Loading : UiState
 
-        data object Unverified : UiState
+      data object Unverified : UiState
 
-        data object Verifying : UiState
+      data object Verifying : UiState
 
-        data object Verified : UiState
-        }
+      data object Verified : UiState
+      }
       }
       ```
 
       ```kotlin {{ filename: 'SMSOTPSignUpActivity.kt', collapsible: true }}
+      package com.clerk.customflows.otp.signup
+
       import android.os.Bundle
       import androidx.activity.ComponentActivity
       import androidx.activity.compose.setContent
@@ -631,60 +635,60 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
       import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
       class SMSOTPSignUpActivity : ComponentActivity() {
-        val viewModel: SMSOTPSignUpViewModel by viewModels()
+      val viewModel: SMSOTPSignUpViewModel by viewModels()
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          setContent {
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
-            SMSOTPSignUpView(state, viewModel::submit, viewModel::verify)
-          }
-        }
+      override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        SMSOTPSignUpView(state, viewModel::submit, viewModel::verify)
+      }
+      }
       }
 
       @Composable
       fun SMSOTPSignUpView(
-        state: SMSOTPSignUpViewModel.UiState,
-        onSubmit: (String) -> Unit,
-        onVerify: (String) -> Unit,
+      state: SMSOTPSignUpViewModel.UiState,
+      onSubmit: (String) -> Unit,
+      onVerify: (String) -> Unit,
       ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (state) {
-            SMSOTPSignUpViewModel.UiState.Unverified -> {
-              InputContent(
-                placeholder = "Enter your phone number",
-                buttonText = "Continue",
-                onClick = onSubmit,
-              )
-            }
-            SMSOTPSignUpViewModel.UiState.Verified -> {
-              Text("Verified")
-            }
-            SMSOTPSignUpViewModel.UiState.Verifying -> {
-              InputContent(
-                placeholder = "Enter your verification code",
-                buttonText = "Verify",
-                onClick = onVerify,
-              )
-            }
-
-            SMSOTPSignUpViewModel.UiState.Loading -> {
-            CircularProgressIndicator()
-            }
-          }
+      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      when (state) {
+        SMSOTPSignUpViewModel.UiState.Unverified -> {
+          InputContent(
+            placeholder = "Enter your phone number",
+            buttonText = "Continue",
+            onClick = onSubmit,
+          )
         }
+        SMSOTPSignUpViewModel.UiState.Verified -> {
+          Text("Verified")
+        }
+        SMSOTPSignUpViewModel.UiState.Verifying -> {
+          InputContent(
+            placeholder = "Enter your verification code",
+            buttonText = "Verify",
+            onClick = onVerify,
+          )
+        }
+
+        SMSOTPSignUpViewModel.UiState.Loading -> {
+          CircularProgressIndicator()
+        }
+      }
+      }
       }
 
       @Composable
       fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
-        var value by remember { mutableStateOf("") }
-        Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        ) {
-          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
-          Button(onClick = { onClick(value) }) { Text(buttonText) }
-        }
+      var value by remember { mutableStateOf("") }
+      Column(
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+      ) {
+      TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+      Button(onClick = { onClick(value) }) { Text(buttonText) }
+      }
       }
       ```
     </CodeBlockTabs>
@@ -1240,19 +1244,17 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
   </If>
 
   <If sdk="android">
-    {/* TODO(Sam): Update for new Android API's */}
-
     <CodeBlockTabs options={["SMSOTPSignInViewModel.kt", "SMSOTPSignInActivity.kt"]}>
       ```kotlin {{ filename: 'SMSOTPSignInViewModel.kt', collapsible: true }}
+      package com.clerk.customflows.otp.signin
+
       import androidx.lifecycle.ViewModel
       import androidx.lifecycle.viewModelScope
       import com.clerk.api.Clerk
-      import com.clerk.api.network.serialization.flatMap
       import com.clerk.api.network.serialization.onFailure
       import com.clerk.api.network.serialization.onSuccess
       import com.clerk.api.signin.SignIn
-      import com.clerk.api.signin.attemptFirstFactor
-      import com.clerk.api.signin.prepareFirstFactor
+      import com.clerk.api.signin.verifyCode
       import kotlinx.coroutines.flow.MutableStateFlow
       import kotlinx.coroutines.flow.asStateFlow
       import kotlinx.coroutines.flow.combine
@@ -1260,67 +1262,67 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
       import kotlinx.coroutines.launch
 
       class SMSOTPSignInViewModel : ViewModel() {
-        private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
-        val uiState = _uiState.asStateFlow()
+      private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
+      val uiState = _uiState.asStateFlow()
 
-        init {
-          combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-              _uiState.value =
-                when {
-                  !isInitialized -> UiState.Loading
-                  user == null -> UiState.Unverified
-                  else -> UiState.Verified
-                }
+      init {
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.Unverified
+              else -> UiState.Verified
             }
-            .launchIn(viewModelScope)
         }
+        .launchIn(viewModelScope)
+      }
 
-        fun submit(phoneNumber: String) {
-          viewModelScope.launch {
-            SignIn.create(SignIn.CreateParams.Strategy.PhoneCode(phoneNumber)).flatMap {
-              it
-                .prepareFirstFactor(SignIn.PrepareFirstFactorParams.PhoneCode())
-                .onSuccess { _uiState.value = UiState.Verifying }
-                .onFailure {
-                  // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                  // for more info on error handling
-                }
+      fun submit(phoneNumber: String) {
+      viewModelScope.launch {
+        Clerk.auth
+          .signInWithOtp { phone = phoneNumber }
+          .onSuccess { _uiState.value = UiState.Verifying }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
+      }
+      }
+
+      fun verify(code: String) {
+      val inProgressSignIn = Clerk.auth.currentSignIn ?: return
+      viewModelScope.launch {
+        inProgressSignIn
+          .verifyCode(code)
+          .onSuccess {
+            if (it.status == SignIn.Status.COMPLETE) {
+              _uiState.value = UiState.Verified
+            } else {
+              // The user may need to complete further steps
             }
           }
-        }
-
-        fun verify(code: String) {
-          val inProgressSignIn = Clerk.signIn ?: return
-          viewModelScope.launch {
-            inProgressSignIn
-              .attemptFirstFactor(SignIn.AttemptFirstFactorParams.PhoneCode(code))
-              .onSuccess {
-                if (it.status == SignIn.Status.COMPLETE) {
-                  _uiState.value = UiState.Verified
-                } else {
-                  // The user may need to complete further steps
-                }
-              }
-              .onFailure {
-                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                // for more info on error handling
-              }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
           }
-        }
+      }
+      }
 
-        sealed interface UiState {
-          data object Loading : UiState
+      sealed interface UiState {
+      data object Loading : UiState
 
-          data object Unverified : UiState
+      data object Unverified : UiState
 
-          data object Verifying : UiState
+      data object Verifying : UiState
 
-          data object Verified : UiState
-        }
+      data object Verified : UiState
+      }
       }
       ```
 
       ```kotlin {{ filename: 'SMSOTPSignInActivity.kt', collapsible: true }}
+      package com.clerk.customflows.otp.signin
+
       import android.os.Bundle
       import androidx.activity.ComponentActivity
       import androidx.activity.compose.setContent
@@ -1344,60 +1346,60 @@ This guide will walk you through how to build a custom phone OTP sign-up and sig
       import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
       class SMSOTPSignInActivity : ComponentActivity() {
-        val viewModel: SMSOTPSignInViewModel by viewModels()
+      val viewModel: SMSOTPSignInViewModel by viewModels()
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          setContent {
-            val state by viewModel.uiState.collectAsStateWithLifecycle()
-            SMSOTPSignInView(state, viewModel::submit, viewModel::verify)
-          }
-        }
+      override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        SMSOTPSignInView(state, viewModel::submit, viewModel::verify)
+      }
+      }
       }
 
       @Composable
       fun SMSOTPSignInView(
-        state: SMSOTPSignInViewModel.UiState,
-        onSubmit: (String) -> Unit,
-        onVerify: (String) -> Unit,
+      state: SMSOTPSignInViewModel.UiState,
+      onSubmit: (String) -> Unit,
+      onVerify: (String) -> Unit,
       ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          when (state) {
-            SMSOTPSignInViewModel.UiState.Unverified -> {
-              InputContent(
-                placeholder = "Enter your phone number",
-                buttonText = "Continue",
-                onClick = onSubmit,
-              )
-            }
-            SMSOTPSignInViewModel.UiState.Verified -> {
-              Text("Verified")
-            }
-            SMSOTPSignInViewModel.UiState.Verifying -> {
-              InputContent(
-                placeholder = "Enter your verification code",
-                buttonText = "Verify",
-                onClick = onVerify,
-              )
-            }
-
-            SMSOTPSignInViewModel.UiState.Loading -> {
-              CircularProgressIndicator()
-            }
-          }
+      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      when (state) {
+        SMSOTPSignInViewModel.UiState.Unverified -> {
+          InputContent(
+            placeholder = "Enter your phone number",
+            buttonText = "Continue",
+            onClick = onSubmit,
+          )
         }
+        SMSOTPSignInViewModel.UiState.Verified -> {
+          Text("Verified")
+        }
+        SMSOTPSignInViewModel.UiState.Verifying -> {
+          InputContent(
+            placeholder = "Enter your verification code",
+            buttonText = "Verify",
+            onClick = onVerify,
+          )
+        }
+
+        SMSOTPSignInViewModel.UiState.Loading -> {
+          CircularProgressIndicator()
+        }
+      }
+      }
       }
 
       @Composable
       fun InputContent(placeholder: String, buttonText: String, onClick: (String) -> Unit) {
-        var value by remember { mutableStateOf("") }
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        ) {
-          TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
-          Button(onClick = { onClick(value) }) { Text(buttonText) }
-        }
+      var value by remember { mutableStateOf("") }
+      Column(
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+      ) {
+      TextField(placeholder = { Text(placeholder) }, value = value, onValueChange = { value = it })
+      Button(onClick = { onClick(value) }) { Text(buttonText) }
+      }
       }
       ```
     </CodeBlockTabs>

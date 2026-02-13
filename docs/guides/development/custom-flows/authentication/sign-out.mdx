@@ -117,10 +117,10 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
 </If>
 
 <If sdk="android">
-  {/* TODO(Sam): Update for new Android API's */}
-
   <CodeBlockTabs options={["MainViewModel.kt", "MainActivity.kt"]}>
     ```kotlin {{ filename: 'MainViewModel.kt', collapsible: true }}
+    package com.clerk.customflows
+
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
@@ -134,89 +134,180 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
 
     class MainViewModel : ViewModel() {
 
-      private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
-      val uiState = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+    val uiState = _uiState.asStateFlow()
 
-      init {
-        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-            _uiState.value =
-              when {
-                !isInitialized -> UiState.Loading
-                user != null -> UiState.SignedIn
-                else -> UiState.SignedOut
-              }
-          }
-          .launchIn(viewModelScope)
-      }
-
-      fun signOut() {
-        viewModelScope.launch {
-          Clerk.signOut()
-            .onSuccess { _uiState.value = UiState.SignedOut }
-            .onFailure {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
+    init {
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user != null -> UiState.SignedIn
+              else -> UiState.SignedOut
             }
         }
+        .launchIn(viewModelScope)
+    }
+
+    fun signOut() {
+      viewModelScope.launch {
+        Clerk.auth
+          .signOut()
+          .onSuccess { _uiState.value = UiState.SignedOut }
+          .onFailure {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+          }
       }
+    }
 
-      sealed interface UiState {
-        data object SignedIn : UiState
+    sealed interface UiState {
+      data object SignedIn : UiState
 
-        data object SignedOut : UiState
+      data object SignedOut : UiState
 
-        data object Loading : UiState
-      }
+      data object Loading : UiState
+    }
     }
     ```
 
     ```kotlin {{ filename: 'MainActivity.kt', collapsible: true }}
+    package com.clerk.customflows
+
+    import android.content.Intent
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
     import androidx.activity.enableEdgeToEdge
     import androidx.activity.viewModels
+    import androidx.compose.foundation.layout.Arrangement
     import androidx.compose.foundation.layout.Box
+    import androidx.compose.foundation.layout.Column
     import androidx.compose.foundation.layout.fillMaxSize
+    import androidx.compose.foundation.layout.fillMaxWidth
+    import androidx.compose.foundation.layout.height
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.foundation.shape.RoundedCornerShape
     import androidx.compose.material3.Button
+    import androidx.compose.material3.ButtonDefaults
     import androidx.compose.material3.CircularProgressIndicator
+    import androidx.compose.material3.Scaffold
     import androidx.compose.material3.Text
+    import androidx.compose.runtime.Composable
     import androidx.compose.runtime.getValue
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
+    import androidx.compose.ui.graphics.Color
+    import androidx.compose.ui.platform.LocalContext
+    import androidx.compose.ui.res.stringResource
+    import androidx.compose.ui.unit.dp
     import androidx.lifecycle.compose.collectAsStateWithLifecycle
+    import com.clerk.customflows.addemail.AddEmailActivity
+    import com.clerk.customflows.addphone.AddPhoneActivity
+    import com.clerk.customflows.emailpassword.mfa.MFASignInActivity
+    import com.clerk.customflows.emailpassword.signin.EmailPasswordSignInActivity
+    import com.clerk.customflows.emailpassword.signup.EmailPasswordSignUpActivity
+    import com.clerk.customflows.forgotpassword.emailaddress.ForgotPasswordEmailActivity
+    import com.clerk.customflows.forgotpassword.phone.ForgotPasswordPhoneNumberActivity
+    import com.clerk.customflows.oauth.OAuthActivity
+    import com.clerk.customflows.otp.signin.SMSOTPSignInActivity
+    import com.clerk.customflows.otp.signup.SMSOTPSignUpActivity
+    import com.clerk.customflows.ui.theme.ClerkTheme
 
     class MainActivity : ComponentActivity() {
-        val viewModel: MainViewModel by viewModels()
+    val viewModel: MainViewModel by viewModels()
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            enableEdgeToEdge()
-            setContent {
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
+    override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      enableEdgeToEdge()
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        ClerkTheme {
+          Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+              when (state) {
+                MainViewModel.UiState.Loading -> CircularProgressIndicator()
 
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    when (state) {
-                        MainViewModel.UiState.Loading -> {
-                            CircularProgressIndicator()
-                        }
+                MainViewModel.UiState.SignedIn ->
+                  SignedInContent(modifier = Modifier.padding(innerPadding), viewModel::signOut)
 
-                        MainViewModel.UiState.SignedIn -> {
-                            Button(onClick = { viewModel.signOut() }) {
-                                Text("Sign out")
-                            }
-                        }
-
-                        MainViewModel.UiState.SignedOut -> {
-                            // Signed out content
-                        }
-                    }
-                }
+                MainViewModel.UiState.SignedOut ->
+                  SignedOutContent(modifier = Modifier.padding(innerPadding))
+              }
             }
+          }
         }
+      }
+    }
+    }
+
+    @Composable
+    private fun SignedInContent(modifier: Modifier = Modifier, onSignOut: () -> Unit) {
+    val context = LocalContext.current
+    Column(
+      modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).then(modifier),
+      verticalArrangement = Arrangement.spacedBy(24.dp, alignment = Alignment.CenterVertically),
+    ) {
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.add_email_address)) {
+        context.startActivity(Intent(context, AddEmailActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.add_phone_number)) {
+        context.startActivity(Intent(context, AddPhoneActivity::class.java))
+      }
+      Button(
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        onClick = { onSignOut() },
+      ) {
+        Text(stringResource(R.string.sign_out), color = Color.White)
+      }
+    }
+    }
+
+    @Composable
+    private fun SignedOutContent(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    Column(
+      modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).then(modifier),
+      verticalArrangement = Arrangement.spacedBy(24.dp, alignment = Alignment.CenterVertically),
+    ) {
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.email_password_sign_in)) {
+        context.startActivity(Intent(context, EmailPasswordSignInActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.email_password_sign_up)) {
+        context.startActivity(Intent(context, EmailPasswordSignUpActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.email_password_mfa)) {
+        context.startActivity(Intent(context, MFASignInActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.sign_in_with_oauth)) {
+        context.startActivity(Intent(context, OAuthActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.reset_password_phone)) {
+        context.startActivity(Intent(context, ForgotPasswordPhoneNumberActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = stringResource(R.string.reset_password_email)) {
+        context.startActivity(Intent(context, ForgotPasswordEmailActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = "SMS/OTP SignUp") {
+        context.startActivity(Intent(context, SMSOTPSignUpActivity::class.java))
+      }
+      LaunchCustomFlowButton(buttonText = "SMS/OTP Sign In") {
+        context.startActivity(Intent(context, SMSOTPSignInActivity::class.java))
+      }
+    }
+    }
+
+    @Composable
+    fun LaunchCustomFlowButton(modifier: Modifier = Modifier, buttonText: String, onClick: () -> Unit) {
+    Button(
+      shape = RoundedCornerShape(8.dp),
+      modifier = Modifier.fillMaxWidth().height(48.dp).then(modifier),
+      onClick = onClick,
+    ) {
+      Text(buttonText)
+    }
     }
     ```
   </CodeBlockTabs>

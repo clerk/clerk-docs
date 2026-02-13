@@ -395,16 +395,16 @@
 </If>
 
 <If sdk="android">
-  {/* TODO(Sam): Update for new Android API's */}
-
   <CodeBlockTabs options={["AddPhoneViewModel.kt", "AddPhoneActivity.kt"]}>
     ```kotlin {{ filename: 'AddPhoneViewModel.kt', collapsible: true }}
+    package com.clerk.customflows.addphone
+
     import android.util.Log
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
     import com.clerk.api.Clerk
-    import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.errorMessage
+    import com.clerk.api.network.serialization.flatMap
     import com.clerk.api.network.serialization.onFailure
     import com.clerk.api.network.serialization.onSuccess
     import com.clerk.api.phonenumber.PhoneNumber
@@ -418,69 +418,75 @@
     import kotlinx.coroutines.launch
 
     class AddPhoneViewModel : ViewModel() {
-      private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
-      val uiState = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow<UiState>(UiState.NeedsVerification)
+    val uiState = _uiState.asStateFlow()
 
-      init {
-        combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-            _uiState.value =
-              when {
-                !isInitialized -> UiState.Loading
-                user == null -> UiState.SignedOut
-                else -> UiState.NeedsVerification
-              }
+    init {
+      combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+          _uiState.value =
+            when {
+              !isInitialized -> UiState.Loading
+              user == null -> UiState.SignedOut
+              else -> UiState.NeedsVerification
+            }
+        }
+        .launchIn(viewModelScope)
+    }
+
+    fun createPhoneNumber(phoneNumber: String) {
+      val user = requireNotNull(Clerk.userFlow.value)
+
+      // Add an unverified phone number to the user,
+      // then send the user an SMS with the verification code
+      viewModelScope.launch {
+        user
+          .createPhoneNumber(phoneNumber)
+          .flatMap { it.prepareVerification() }
+          .onSuccess {
+            // Update the state to show that the phone number has been created
+            // and that the user needs to verify the phone number
+            _uiState.value = UiState.Verifying(it)
           }
-          .launchIn(viewModelScope)
+          .onFailure {
+            Log.e(
+              "AddPhoneViewModel",
+              "Failed to create phone number and prepare verification: ${it.errorMessage}",
+            )
+          }
       }
+    }
 
-      fun createPhoneNumber(phoneNumber: String) {
-        val user = requireNotNull(Clerk.userFlow.value)
-
-        // Add an unverified phone number to the user,
-        // then send the user an SMS with the verification code
-        viewModelScope.launch {
-          user
-            .createPhoneNumber(phoneNumber)
-            .flatMap { it.prepareVerification() }
-            .onSuccess {
-              // Update the state to show that the phone number has been created
-              // and that the user needs to verify the phone number
-              _uiState.value = UiState.Verifying(it)
-            }
-            .onFailure {
-              Log.e(
-                "AddPhoneViewModel",
-                "Failed to create phone number and prepare verification: ${it.errorMessage}",
-              )
-            }
-        }
+    fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
+      viewModelScope.launch {
+        newPhoneNumber
+          .attemptVerification(code)
+          .onSuccess {
+            // Update the state to show that the phone number has been verified
+            _uiState.value = UiState.Verified
+          }
+          .onFailure {
+            Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
+          }
       }
+    }
 
-      fun verifyCode(code: String, newPhoneNumber: PhoneNumber) {
-        viewModelScope.launch {
-          newPhoneNumber
-            .attemptVerification(code)
-            .onSuccess {
-              // Update the state to show that the phone number has been verified
-              _uiState.value = UiState.Verified
-            }
-            .onFailure {
-              Log.e("AddPhoneViewModel", "Failed to verify phone number: ${it.errorMessage}")
-            }
-        }
-      }
+    sealed interface UiState {
+      data object Loading : UiState
 
-      sealed interface UiState {
-        data object Loading : UiState
-        data object NeedsVerification : UiState
-        data class Verifying(val phoneNumber: PhoneNumber) : UiState
-        data object Verified : UiState
-        data object SignedOut : UiState
-      }
+      data object NeedsVerification : UiState
+
+      data class Verifying(val phoneNumber: PhoneNumber) : UiState
+
+      data object Verified : UiState
+
+      data object SignedOut : UiState
+    }
     }
     ```
 
     ```kotlin {{ filename: 'AddPhoneActivity.kt', collapsible: true }}
+    package com.clerk.customflows.addphone
+
     import android.os.Bundle
     import androidx.activity.ComponentActivity
     import androidx.activity.compose.setContent
@@ -505,66 +511,66 @@
     import com.clerk.api.phonenumber.PhoneNumber
 
     class AddPhoneActivity : ComponentActivity() {
-      val viewModel: AddPhoneViewModel by viewModels()
+    val viewModel: AddPhoneViewModel by viewModels()
 
-      override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-          val state by viewModel.uiState.collectAsStateWithLifecycle()
-          AddPhoneView(
-            state = state,
-            onCreatePhoneNumber = viewModel::createPhoneNumber,
-            onVerifyCode = viewModel::verifyCode,
-          )
-        }
+    override fun onCreate(savedInstanceState: Bundle?) {
+      super.onCreate(savedInstanceState)
+      setContent {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        AddPhoneView(
+          state = state,
+          onCreatePhoneNumber = viewModel::createPhoneNumber,
+          onVerifyCode = viewModel::verifyCode,
+        )
       }
+    }
     }
 
     @Composable
     fun AddPhoneView(
-      state: AddPhoneViewModel.UiState,
-      onCreatePhoneNumber: (String) -> Unit,
-      onVerifyCode: (String, PhoneNumber) -> Unit,
+    state: AddPhoneViewModel.UiState,
+    onCreatePhoneNumber: (String) -> Unit,
+    onVerifyCode: (String, PhoneNumber) -> Unit,
     ) {
-      Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when (state) {
-          AddPhoneViewModel.UiState.NeedsVerification -> {
-            InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
-              onCreatePhoneNumber(it)
-            }
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      when (state) {
+        AddPhoneViewModel.UiState.NeedsVerification -> {
+          InputContentView(buttonText = "Continue", placeholder = "Enter phone number") {
+            onCreatePhoneNumber(it)
           }
-
-          AddPhoneViewModel.UiState.Verified -> Text("Verified!")
-
-          is AddPhoneViewModel.UiState.Verifying -> {
-            InputContentView(buttonText = "Verify", placeholder = "Enter code") {
-              onVerifyCode(it, state.phoneNumber)
-            }
-          }
-
-          AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
-          AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
         }
+
+        AddPhoneViewModel.UiState.Verified -> Text("Verified!")
+
+        is AddPhoneViewModel.UiState.Verifying -> {
+          InputContentView(buttonText = "Verify", placeholder = "Enter code") {
+            onVerifyCode(it, state.phoneNumber)
+          }
+        }
+
+        AddPhoneViewModel.UiState.Loading -> CircularProgressIndicator()
+        AddPhoneViewModel.UiState.SignedOut -> Text("You must be signed in to add a phone number.")
       }
+    }
     }
 
     @Composable
     fun InputContentView(
-      buttonText: String,
-      placeholder: String,
-      modifier: Modifier = Modifier,
-      onClick: (String) -> Unit,
+    buttonText: String,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    onClick: (String) -> Unit,
     ) {
-      var input by remember { mutableStateOf("") }
-      Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        TextField(
-          modifier = Modifier.padding(bottom = 16.dp),
-          value = input,
-          onValueChange = { input = it },
-          placeholder = { Text(placeholder) },
-        )
-        Button(onClick = { onClick(input) }) { Text(buttonText) }
-      }
+    var input by remember { mutableStateOf("") }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+      TextField(
+        modifier = Modifier.padding(bottom = 16.dp),
+        value = input,
+        onValueChange = { input = it },
+        placeholder = { Text(placeholder) },
+      )
+      Button(onClick = { onClick(input) }) { Text(buttonText) }
+    }
     }
     ```
   </CodeBlockTabs>

@@ -56,7 +56,7 @@ import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
-import { flattenTree, ManifestGroup, readManifest, traverseTree, traverseTreeItemsFirst } from './lib/manifest'
+import { flattenTree, readManifest, readSDKManifest, traverseTree, traverseTreeItemsFirst, type ManifestGroup } from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
@@ -308,6 +308,21 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  // Read SDK-specific manifest files (e.g., manifest.ios.json, manifest.android.json)
+  const getSDKManifest = readSDKManifest(config)
+  const sdkManifests = new Map<string, Awaited<ReturnType<typeof getSDKManifest>>>()
+  for (const sdkName of config.validSdks) {
+    const manifestPath = path.join(config.docsPath, `manifest.${sdkName}.json`)
+    if (existsSync(manifestPath)) {
+      sdkManifests.set(sdkName, await getSDKManifest(manifestPath))
+    }
+  }
+  if (sdkManifests.size > 0) {
+    console.info(`✓ Read ${sdkManifests.size} SDK manifest(s): ${Array.from(sdkManifests.keys()).join(', ')}`)
+  }
+
+  abortSignal?.throwIfAborted()
+
   const docsFiles = await getDocsFolder()
   console.info('✓ Read Docs Folder')
 
@@ -344,6 +359,21 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
     return item
   })
+
+  // Also grab docs links from SDK-specific manifests
+  for (const [, sdkItems] of sdkManifests) {
+    await traverseTree({ items: sdkItems }, async (item) => {
+      if (!item.href?.startsWith(config.baseDocsLink)) return item
+      if (item.target !== undefined) return item
+
+      const ignore = config.ignoredPaths(item.href) || config.ignoredLinks(item.href)
+      if (ignore === true) return item
+
+      docsInManifest.add(item.href)
+
+      return item
+    })
+  }
   console.info('✓ Parsed in Manifest')
 
   abortSignal?.throwIfAborted()
@@ -519,19 +549,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     async ({ items, ...details }, tree) => {
       // This takes all the children items, grabs the sdks out of them, and combines that in to a list
       const groupsItemsCombinedSDKs = (() => {
-        const sdks = items?.flatMap((item) =>
-          item.flatMap((item) => {
-            // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
-            if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
-              const doc = docsMap.get(item.href)
-              if (doc) {
-                const sdks = [...(item.sdk ?? []), ...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
-                return sdks.length > 0 ? sdks : undefined
-              }
+        const sdks = items?.flatMap((item) => {
+          // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
+          if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
+            const doc = docsMap.get(item.href)
+            if (doc) {
+              const sdks = [...(item.sdk ?? []), ...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+              return sdks.length > 0 ? sdks : undefined
             }
-            return item.sdk
-          }),
-        )
+          }
+          return item.sdk
+        })
 
         // If the child sdks is undefined then its core so it supports all sdks
         const uniqueSDKs = Array.from(new Set(sdks.flatMap((sdk) => (sdk !== undefined ? sdk : config.validSdks))))
@@ -577,6 +605,28 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     },
   )
   console.info('✓ Applied manifest sdk scoping')
+
+  // Add SDK-scoped docsMap entries for pages in SDK manifests
+  // These pages bypass the main manifest's SDK scoping passes, so we need to
+  // manually add their SDK-scoped variants to docsMap for link validation
+  for (const [sdkName, sdkItems] of sdkManifests) {
+    await traverseTree({ items: sdkItems }, async (item) => {
+      if (!item.href?.startsWith(config.baseDocsLink)) return item
+      const doc = docsMap.get(item.href)
+      if (doc) {
+        const sdkHref = item.href.replace(config.baseDocsLink, `${config.baseDocsLink}${sdkName}/`)
+        if (!docsMap.has(sdkHref)) {
+          const existingDoc = docsMap.get(
+            doc.distinctSDKVariants?.includes(sdkName) ? `${item.href}.${sdkName}` : item.href,
+          )
+          if (existingDoc) {
+            docsMap.set(sdkHref, { ...existingDoc, sdk: [sdkName] })
+          }
+        }
+      }
+      return item
+    })
+  }
 
   abortSignal?.throwIfAborted()
 
@@ -734,63 +784,124 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
+  const processedManifest = await traverseTree(
+    { items: sdkScopedManifest },
+    async (item) => {
+      const doc = docsMap.get(item.href)
+
+      const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
+
+      const injectSDK =
+        sdks.length >= 1 &&
+        !item.href.endsWith(`/${sdks[0]}`) &&
+        !item.href.includes(`/${sdks[0]}/`) &&
+        // Don't inject SDK scoping for documents that only support one SDK
+        sdks.length > 1
+
+      if (injectSDK) {
+        return {
+          title: item.title,
+          href: scopeHref(item.href, ':sdk:'),
+          tag: item.tag,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          // @ts-expect-error - It exists, up on line 481
+          sdk: item.itemSDK ?? sdks,
+          shortcut: item.shortcut,
+        }
+      }
+
+      return {
+        title: item.title,
+        href: item.href,
+        tag: item.tag,
+        wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+        icon: item.icon,
+        target: item.target,
+        sdk: item.sdk,
+        shortcut: item.shortcut,
+      }
+    },
+    // @ts-expect-error - This traverseTree function might just be the death of me
+    async (group) => ({
+      title: group.title,
+      topNav: group.topNav,
+      tag: group.tag,
+      wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+      icon: group.icon,
+      hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
+      sdk: group.sdk,
+      items: group.items,
+    }),
+  )
+
+  // Build the navigation output with explicit sections and SDK overrides
+  const buildSections = (items: typeof processedManifest) => {
+    return items
+      .filter((item): item is Extract<typeof item, { items: any }> => 'items' in item && 'topNav' in item && item.topNav === true)
+      .map((item) => {
+        const hasNestedTopNav = item.items.some(
+          (child: any) => 'items' in child && 'topNav' in child && child.topNav === true,
+        )
+        return {
+          title: item.title,
+          icon: item.icon,
+          sdk: item.sdk,
+          sections: hasNestedTopNav ? buildSections(item.items) : undefined,
+          items: item.items.filter((child: any) => !('topNav' in child && child.topNav === true)),
+        }
+      })
+  }
+
+  // Process SDK override manifests through the same item processing (link validation, SDK href injection, etc.)
+  const processedOverrides: Record<string, any> = {}
+  for (const [sdkName, sdkItems] of sdkManifests) {
+    const processed = await traverseTree(
+      { items: sdkItems },
+      async (item) => {
+        const doc = docsMap.get(item.href)
+        const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
+        const injectSDK =
+          sdks.length >= 1 &&
+          !item.href.endsWith(`/${sdks[0]}`) &&
+          !item.href.includes(`/${sdks[0]}/`) &&
+          sdks.length > 1
+
+        return {
+          title: item.title,
+          href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
+          tag: item.tag,
+          wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
+          icon: item.icon,
+          target: item.target,
+          sdk: injectSDK ? (item.sdk ?? sdks) : item.sdk,
+          shortcut: item.shortcut,
+        }
+      },
+      // @ts-expect-error - This traverseTree function might just be the death of me
+      async (group) => ({
+        title: group.title,
+        tag: group.tag,
+        wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
+        icon: group.icon,
+        sdk: group.sdk,
+        items: group.items,
+      }),
+    )
+    processedOverrides[sdkName] = processed
+  }
+
   await writeFile(
     'manifest.json',
     JSON.stringify({
       flags: siteFlags,
-      navigation: await traverseTree(
-        { items: sdkScopedManifest },
-        async (item) => {
-          const doc = docsMap.get(item.href)
-
-          const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
-
-          const injectSDK =
-            sdks.length >= 1 &&
-            !item.href.endsWith(`/${sdks[0]}`) &&
-            !item.href.includes(`/${sdks[0]}/`) &&
-            // Don't inject SDK scoping for documents that only support one SDK
-            sdks.length > 1
-
-          if (injectSDK) {
-            return {
-              title: item.title,
-              href: scopeHref(item.href, ':sdk:'),
-              tag: item.tag,
-              wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-              icon: item.icon,
-              target: item.target,
-              // @ts-expect-error - It exists, up on line 481
-              sdk: item.itemSDK ?? sdks,
-              shortcut: item.shortcut,
-            }
-          }
-
-          return {
-            title: item.title,
-            // href: item.href,
-            href: injectSDK ? scopeHref(item.href, ':sdk:') : item.href,
-            tag: item.tag,
-            wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
-            icon: item.icon,
-            target: item.target,
-            sdk: item.sdk,
-            shortcut: item.shortcut,
-          }
+      navigation: {
+        default: {
+          sections: buildSections(processedManifest),
         },
-        // @ts-expect-error - This traverseTree function might just be the death of me
-        async (group) => ({
-          title: group.title,
-          topNav: group.topNav,
-          flatNav: group.flatNav,
-          tag: group.tag,
-          wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
-          icon: group.icon,
-          hideTitle: group.hideTitle === config.manifestOptions.hideTitleDefault ? undefined : group.hideTitle,
-          sdk: group.sdk,
-          items: group.items,
-        }),
-      ),
+        ...(Object.keys(processedOverrides).length > 0 ? { overrides: processedOverrides } : {}),
+      },
     }),
   )
 

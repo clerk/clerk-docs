@@ -1,5 +1,4 @@
 // parsing and traversing the manifest.json file
-// main thing here is that the tree uses double arrays
 
 import fs from 'node:fs/promises'
 import { z } from 'zod'
@@ -57,7 +56,6 @@ export type ManifestGroup = {
   title: string
   items: Manifest
   topNav?: boolean
-  flatNav?: boolean
   tag?: Tag
   wrap?: boolean
   icon?: Icon
@@ -66,7 +64,7 @@ export type ManifestGroup = {
   skip?: boolean
 }
 
-export type Manifest = (ManifestItem | ManifestHeading | ManifestGroup)[][]
+export type Manifest = (ManifestItem | ManifestHeading | ManifestGroup)[]
 
 // Create manifest schema based on config
 const createManifestSchema = (config: BuildConfig) => {
@@ -96,7 +94,6 @@ const createManifestSchema = (config: BuildConfig) => {
       title: z.string(),
       items: z.lazy(() => manifestSchema),
       topNav: z.boolean().optional(),
-      flatNav: z.boolean().optional(),
       tag: tag.optional(),
       wrap: z.boolean().default(config.manifestOptions.wrapDefault),
       icon: icon.optional(),
@@ -106,7 +103,7 @@ const createManifestSchema = (config: BuildConfig) => {
     })
     .strict()
 
-  const manifestSchema: z.ZodType<Manifest> = z.array(z.array(z.union([manifestItem, manifestHeading, manifestGroup])))
+  const manifestSchema: z.ZodType<Manifest> = z.array(z.union([manifestItem, manifestHeading, manifestGroup]))
 
   return {
     manifestItem,
@@ -118,12 +115,12 @@ const createManifestSchema = (config: BuildConfig) => {
 
 // helper functions for traversing the manifest tree
 
-export type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Array<Item | Group>>
+export type BlankTree<Item extends object, Group extends { items: BlankTree<Item, Group> }> = Array<Item | Group>
 
 export const traverseTree = async <
   Tree extends { items: BlankTree<any, any> },
-  InItem extends Extract<Tree['items'][number][number], { href: string }>,
-  InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
+  InItem extends Extract<Tree['items'][number], { href: string }>,
+  InGroup extends Extract<Tree['items'][number], { items: BlankTree<InItem, InGroup> }>,
   OutItem extends { href: string },
   OutGroup extends { items: BlankTree<OutItem, OutGroup> },
   OutTree extends BlankTree<OutItem, OutGroup>,
@@ -134,52 +131,44 @@ export const traverseTree = async <
   errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
 ): Promise<OutTree> => {
   const result = await Promise.all(
-    tree.items.map(async (group) => {
-      return await Promise.all(
-        group.map(async (item) => {
-          try {
-            if ('href' in item) {
-              return await itemCallback(item, tree)
-            }
+    tree.items.map(async (item) => {
+      try {
+        if ('href' in item) {
+          return await itemCallback(item, tree)
+        }
 
-            if ('items' in item && Array.isArray(item.items)) {
-              const newGroup = await groupCallback(item, tree)
+        if ('items' in item && Array.isArray(item.items)) {
+          const newGroup = await groupCallback(item, tree)
 
-              if (newGroup === null) return null
+          if (newGroup === null) return null
 
-              // @ts-expect-error - OutGroup should always contain "items" property, so this is safe
-              const newItems = (await traverseTree(newGroup, itemCallback, groupCallback, errorCallback)).map((group) =>
-                group.filter((item): item is NonNullable<typeof item> => item !== null),
-              )
+          // @ts-expect-error - OutGroup should always contain "items" property, so this is safe
+          const newItems = await traverseTree(newGroup, itemCallback, groupCallback, errorCallback)
 
-              return {
-                ...newGroup,
-                items: newItems,
-              }
-            }
-
-            return item as OutItem
-          } catch (error) {
-            if (error instanceof Error && errorCallback !== undefined) {
-              errorCallback(item, error)
-            } else {
-              throw error
-            }
+          return {
+            ...newGroup,
+            items: newItems,
           }
-        }),
-      )
+        }
+
+        return item as OutItem
+      } catch (error) {
+        if (error instanceof Error && errorCallback !== undefined) {
+          errorCallback(item, error)
+        } else {
+          throw error
+        }
+      }
     }),
   )
 
-  return result.map((group) =>
-    group.filter((item): item is NonNullable<typeof item> => item !== null),
-  ) as unknown as OutTree
+  return result.filter((item): item is NonNullable<typeof item> => item !== null) as unknown as OutTree
 }
 
 export const traverseTreeItemsFirst = async <
   Tree extends { items: BlankTree<any, any> },
-  InItem extends Extract<Tree['items'][number][number], { href: string }>,
-  InGroup extends Extract<Tree['items'][number][number], { items: BlankTree<InItem, InGroup> }>,
+  InItem extends Extract<Tree['items'][number], { href: string }>,
+  InGroup extends Extract<Tree['items'][number], { items: BlankTree<InItem, InGroup> }>,
   OutItem extends { href: string },
   OutGroup extends { items: BlankTree<OutItem, OutGroup> },
   OutTree extends BlankTree<OutItem, OutGroup>,
@@ -190,60 +179,75 @@ export const traverseTreeItemsFirst = async <
   errorCallback?: (item: InItem | InGroup, error: Error) => void | Promise<void>,
 ): Promise<OutTree> => {
   const result = await Promise.all(
-    tree.items.map(async (group) => {
-      return await Promise.all(
-        group.map(async (item) => {
-          try {
-            if ('href' in item) {
-              return await itemCallback(item, tree)
-            }
+    tree.items.map(async (item) => {
+      try {
+        if ('href' in item) {
+          return await itemCallback(item, tree)
+        }
 
-            if ('items' in item && Array.isArray(item.items)) {
-              const newItems = (await traverseTreeItemsFirst(item, itemCallback, groupCallback, errorCallback)).map(
-                (group) => group.filter((item): item is NonNullable<typeof item> => item !== null),
-              )
+        if ('items' in item && Array.isArray(item.items)) {
+          const newItems = await traverseTreeItemsFirst(item, itemCallback, groupCallback, errorCallback)
 
-              const newGroup = await groupCallback({ ...item, items: newItems }, tree)
+          const newGroup = await groupCallback({ ...item, items: newItems }, tree)
 
-              return newGroup
-            }
+          return newGroup
+        }
 
-            return item as OutItem
-          } catch (error) {
-            if (error instanceof Error && errorCallback !== undefined) {
-              errorCallback(item, error)
-            } else {
-              throw error
-            }
-          }
-        }),
-      )
+        return item as OutItem
+      } catch (error) {
+        if (error instanceof Error && errorCallback !== undefined) {
+          errorCallback(item, error)
+        } else {
+          throw error
+        }
+      }
     }),
   )
 
-  return result.map((group) =>
-    group.filter((item): item is NonNullable<typeof item> => item !== null),
-  ) as unknown as OutTree
+  return result.filter((item): item is NonNullable<typeof item> => item !== null) as unknown as OutTree
 }
 
 export function flattenTree<
   Tree extends BlankTree<any, any>,
-  InItem extends Extract<Tree[number][number], { href: string }>,
-  InGroup extends Extract<Tree[number][number], { items: BlankTree<InItem, InGroup> }>,
+  InItem extends Extract<Tree[number], { href: string }>,
+  InGroup extends Extract<Tree[number], { items: BlankTree<InItem, InGroup> }>,
 >(tree: Tree): InItem[] {
   const result: InItem[] = []
 
-  for (const group of tree) {
-    for (const itemOrGroup of group) {
-      if ('href' in itemOrGroup) {
-        // It's an item
-        result.push(itemOrGroup)
-      } else if ('items' in itemOrGroup && Array.isArray(itemOrGroup.items)) {
-        // It's a group with its own sub-tree, flatten it
-        result.push(...flattenTree(itemOrGroup.items))
-      }
+  for (const itemOrGroup of tree) {
+    if ('href' in itemOrGroup) {
+      // It's an item
+      result.push(itemOrGroup)
+    } else if ('items' in itemOrGroup && Array.isArray(itemOrGroup.items)) {
+      // It's a group with its own sub-tree, flatten it
+      result.push(...flattenTree(itemOrGroup.items))
     }
   }
 
   return result
+}
+
+// Read SDK-specific manifest files (e.g., manifest.ios.json, manifest.android.json)
+
+export type SDKManifestItem = ManifestItem | ManifestHeading | ManifestGroup
+
+export const readSDKManifest = (config: BuildConfig) => async (manifestPath: string) => {
+  const { manifestItem, manifestHeading, manifestGroup } = createManifestSchema(config)
+
+  const unsafe_manifest = await fs.readFile(manifestPath, { encoding: 'utf-8' })
+
+  const [error, json] = parseJSON(unsafe_manifest)
+
+  if (error) {
+    throw new Error(errorMessages['manifest-parse-error'](error))
+  }
+
+  const sdkManifestSchema = z.array(z.union([manifestItem, manifestHeading, manifestGroup]))
+  const manifest = await z.object({ navigation: sdkManifestSchema }).safeParseAsync(json)
+
+  if (manifest.success === true) {
+    return manifest.data.navigation
+  }
+
+  throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))
 }

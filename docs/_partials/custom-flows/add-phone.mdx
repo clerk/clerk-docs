@@ -1,35 +1,33 @@
 <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
   **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-  1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `phoneNumbers` property that contains all the phone numbers associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
-  1. The [`User.createPhoneNumber()`](/docs/reference/javascript/user#create-phone-number) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add a phone number to their account.
-  1. If the `createPhoneNumber()` function is successful, a new [`PhoneNumber`](/docs/reference/javascript/types/phone-number) object is created and stored in `User.phoneNumbers`.
-  1. Uses the `prepareVerification()` method on the newly created `PhoneNumber` object to send a verification code to the user.
-  1. Uses the `attemptVerification()` method on the same `PhoneNumber` object with the verification code provided by the user to verify the phone number.
-
   ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
   'use client'
 
   import * as React from 'react'
-  import { useUser, useReverification } from '@clerk/nextjs'
+  import { useSession, useUser, useReverification } from '@clerk/nextjs'
   import { PhoneNumberResource } from '@clerk/types'
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { session } = useSession()
+    const createPhoneNumber = useReverification((phone: string) =>
+      user?.createPhoneNumber({ phoneNumber: phone }),
+    )
+
     const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
     const [isVerifying, setIsVerifying] = React.useState(false)
     const [successful, setSuccessful] = React.useState(false)
     const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
-    const createPhoneNumber = useReverification((phone: string) =>
-      user?.createPhoneNumber({ phoneNumber: phone }),
-    )
 
     // Handle loading state
-    if (!isLoaded) <p>Loading...</p>
+    if (!isLoaded) return <p>Loading...</p>
 
     // Handle signed-out state
-    if (!isSignedIn) <p>You must be signed in to access this page</p>
+    // If the user is trying to set up MFA, they should be able to access this page
+    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
+      return <p>You must be signed in to access this page</p>
 
     // Handle addition of the phone number
     const handleSubmit = async (e: React.FormEvent) => {
@@ -78,9 +76,7 @@
     }
 
     // Display a success message if the phone number was added successfully
-    if (successful) {
-      return <h1>Phone added</h1>
-    }
+    if (successful) return <h1>Phone added</h1>
 
     // Display the verification form to capture the code
     if (isVerifying) {
@@ -136,10 +132,10 @@
 </If>
 
 <If sdk="expo">
-  ```tsx {{ filename: 'app/(account)/add-phone/page.tsx', collapsible: true }}
+  ```tsx {{ filename: 'app/(account)/add-phone.tsx', collapsible: true }}
   import { ThemedText } from '@/components/themed-text'
   import { ThemedView } from '@/components/themed-view'
-  import { useUser } from '@clerk/clerk-expo'
+  import { useSession, useUser } from '@clerk/expo'
   import { PhoneNumberResource } from '@clerk/types'
   import { Redirect } from 'expo-router'
   import * as React from 'react'
@@ -147,6 +143,7 @@
 
   export default function Page() {
     const { isLoaded, isSignedIn, user } = useUser()
+    const { session } = useSession()
 
     const [phone, setPhone] = React.useState('')
     const [code, setCode] = React.useState('')
@@ -164,7 +161,8 @@
     }
 
     // Handle signed-out state
-    if (!isSignedIn) {
+    // If the user is trying to set up MFA, they should be able to access this page
+    if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
       return <Redirect href="/sign-in" />
     }
 

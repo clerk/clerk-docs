@@ -1201,20 +1201,47 @@ ${yaml.stringify({
   const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  const warnings = reporter(
-    [
-      ...coreVFiles,
-      ...partialsVFiles,
-      ...tooltipsVFiles,
-      ...typedocVFiles,
-      ...flatSdkSpecificVFiles,
-      manifestVfile,
-      ...headingValidationVFiles,
-    ],
-    {
-      quiet: true,
-    },
-  )
+  // Deduplicate messages across VFiles that share the same file path.
+  // The same doc can be processed multiple times (once as a core doc + once per SDK variant),
+  // each producing its own VFile with the same warnings. Merge them into a single VFile per path
+  // so warnings are only reported once.
+  const allVFiles = [
+    ...coreVFiles,
+    ...partialsVFiles,
+    ...tooltipsVFiles,
+    ...typedocVFiles,
+    ...flatSdkSpecificVFiles,
+    manifestVfile,
+    ...headingValidationVFiles,
+  ]
+
+  const deduplicatedVFiles: VFile[] = []
+  const seenPaths = new Map<string, VFile>()
+
+  for (const vfile of allVFiles) {
+    // Normalize path: core VFiles use "docs/..." while SDK-specific use "/docs/..."
+    const filePath = String(vfile.path ?? '').replace(/^(?!\/)/, '/')
+    const existing = seenPaths.get(filePath)
+
+    if (!existing) {
+      seenPaths.set(filePath, vfile)
+      deduplicatedVFiles.push(vfile)
+    } else {
+      // Merge any new unique messages into the existing VFile
+      const existingMessages = new Set(existing.messages.map((m) => `${m.message}:${m.line}:${m.column}`))
+      for (const msg of vfile.messages) {
+        const key = `${msg.message}:${msg.line}:${msg.column}`
+        if (!existingMessages.has(key)) {
+          existing.messages.push(msg)
+          existingMessages.add(key)
+        }
+      }
+    }
+  }
+
+  const warnings = reporter(deduplicatedVFiles, {
+    quiet: true,
+  })
 
   abortSignal?.throwIfAborted()
 

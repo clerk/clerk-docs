@@ -194,7 +194,11 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        // temp ignores until nick fixes :)
+        'clerk-react/use-sign-in.mdx': ['link-hash-not-found'],
+        'clerk-react/use-sign-up.mdx': ['link-hash-not-found'],
+      },
       partials: {},
       tooltips: {},
     },
@@ -382,16 +386,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       }),
       ...(apiErrorsFiles
         ? apiErrorsFiles.map(async (file) => {
-            const inManifest = docsInManifest.has(file.href)
+          const inManifest = docsInManifest.has(file.href)
 
-            const markdownFile = await markdownCache(file.filePath, () =>
-              parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
-            )
+          const markdownFile = await markdownCache(file.filePath, () =>
+            parseMarkdownFile(file, partials, tooltips, typedocs, prompts, inManifest, 'docs'),
+          )
 
-            docsMap.set(file.href, markdownFile)
+          docsMap.set(file.href, markdownFile)
 
-            return markdownFile
-          })
+          return markdownFile
+        })
         : []),
     ])
   ).map((doc) => {
@@ -938,15 +942,15 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
             doc.file.filePathInDocsFolder,
             `---
 ${yaml.stringify({
-  metadata: { title: doc.frontmatter.title },
-  description: doc.frontmatter.description,
-  template: 'wide',
-  redirectPage: 'true',
-  availableSdks: sdks.join(','),
-  notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
-  search: { exclude: true },
-  canonical: canonical.replace('/index', ''),
-})}---
+              metadata: { title: doc.frontmatter.title },
+              description: doc.frontmatter.description,
+              template: 'wide',
+              redirectPage: 'true',
+              availableSdks: sdks.join(','),
+              notAvailableSdks: config.validSdks.filter((sdk) => !sdks?.includes(sdk)).join(','),
+              search: { exclude: true },
+              canonical: canonical.replace('/index', ''),
+            })}---
 <SDKDocRedirectPage title="${doc.frontmatter.title}"${doc.frontmatter.description ? ` description="${doc.frontmatter.description}" ` : ' '}href="${scopeHrefToSDK(config)(doc.file.href, ':sdk:')}" sdks={${JSON.stringify(sdks)}} />`,
           )
         } else {

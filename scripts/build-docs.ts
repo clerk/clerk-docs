@@ -266,6 +266,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   let staticBloomFilter: unknown | undefined = undefined
   let staticCompactRedirects: Record<string, string> | undefined = undefined
   let dynamicRedirects: Redirect[] | undefined = undefined
+  let allStaticRedirects: Redirect[] | undefined = undefined
 
   if (config.redirects) {
     const redirects = await readRedirects(config)
@@ -276,9 +277,16 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
     staticBloomFilter = createRedirectsBloomFilter(optimizedStaticRedirects)
     staticCompactRedirects = transformRedirectsToCompactObject(optimizedStaticRedirects)
     dynamicRedirects = redirects.dynamicRedirects
+    allStaticRedirects = redirects.staticRedirects
 
     console.info('✓ Read, optimized and transformed redirects')
   }
+
+  // Used by validateLinks to check codeblock URLs against redirects
+  const redirectsForValidation =
+    allStaticRedirects && dynamicRedirects
+      ? { static: allStaticRedirects, dynamic: dynamicRedirects }
+      : undefined
 
   abortSignal?.throwIfAborted()
 
@@ -598,9 +606,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           .use(remarkFrontmatter)
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, partial.path, 'partials', (linkInPartial) => {
-              links.add(linkInPartial)
-            }),
+            validateLinks(
+              config,
+              docsMap,
+              partial.path,
+              'partials',
+              (linkInPartial) => {
+                links.add(linkInPartial)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree) => {
             node = tree
@@ -642,9 +658,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, tooltipPath, 'tooltips', (linkInTooltip) => {
-              links.add(linkInTooltip)
-            }),
+            validateLinks(
+              config,
+              docsMap,
+              tooltipPath,
+              'tooltips',
+              (linkInTooltip) => {
+                links.add(linkInTooltip)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -682,9 +706,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         const vfile = await remark()
           .use(remarkMdx)
           .use(
-            validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-              links.add(linkInTypedoc)
-            }),
+            validateLinks(
+              config,
+              docsMap,
+              filePath,
+              'typedoc',
+              (linkInTypedoc) => {
+                links.add(linkInTypedoc)
+              },
+              undefined,
+              redirectsForValidation,
+            ),
           )
           .use(() => (tree, vfile) => {
             node = tree
@@ -708,9 +740,17 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
           const vfile = await remark()
             .use(
-              validateLinks(config, docsMap, filePath, 'typedoc', (linkInTypedoc) => {
-                links.add(linkInTypedoc)
-              }),
+              validateLinks(
+                config,
+                docsMap,
+                filePath,
+                'typedoc',
+                (linkInTypedoc) => {
+                  links.add(linkInTypedoc)
+                },
+                undefined,
+                redirectsForValidation,
+              ),
             )
             .use(() => (tree, vfile) => {
               node = tree
@@ -824,6 +864,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
                 foundLinks.add(link)
               },
               doc.file.href,
+              redirectsForValidation,
             ),
           )
           .use(
@@ -1011,7 +1052,17 @@ ${yaml.stringify({
             remark()
               .use(remarkFrontmatter)
               .use(remarkMdx)
-              .use(validateLinks(config, docsMap, doc.file.filePath, 'docs', undefined, doc.file.href))
+              .use(
+                validateLinks(
+                  config,
+                  docsMap,
+                  doc.file.filePath,
+                  'docs',
+                  undefined,
+                  doc.file.href,
+                  redirectsForValidation,
+                ),
+              )
               .use(checkPartials(config, partials, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTooltips(config, tooltips, doc.file, { reportWarnings: true, embed: true }))
               .use(checkTypedoc(config, typedocs, doc.file.filePath, { reportWarnings: true, embed: true }))

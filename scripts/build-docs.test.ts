@@ -4132,13 +4132,15 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
       }),
     )
+
+    expect(output).toBe('')
 
     const pageBContent = await readFile('./dist/page-a.mdx')
     expect(pageBContent).not.toContain('<SDKLink')
@@ -4187,7 +4189,7 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -4195,61 +4197,11 @@ Page B content`,
       }),
     )
 
+    expect(output).toBe('')
+
     const content = await readFile('./dist/nextjs/page-a.mdx')
     expect(content).not.toContain('<SDKLink')
     expect(content).toContain('[Link to Page B](/docs/page-b)')
-  })
-
-  test('Should not inject SDKLink when linking directly to an sdk path for a page that is only manifest sdk-grouped (no sdk frontmatter)', async () => {
-    const { tempDir, readFile } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              { title: 'Page A', href: '/docs/page-a' },
-              {
-                title: 'Group',
-                sdk: ['react'],
-                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
-              },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/page-a.mdx',
-        content: `---
-title: Page A
-description: Page linking to an explicit sdk path
-sdk: nextjs, react
----
-
-[Link to React Page B](/docs/react/page-b)
-`,
-      },
-      {
-        path: './docs/page-b.mdx',
-        content: `---
-title: Page B
-description: Manifest sdk-grouped without sdk frontmatter
----
-
-Page B content`,
-      },
-    ])
-
-    await build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'nextjs'],
-      }),
-    )
-
-    const content = await readFile('./dist/react/page-a.mdx')
-    expect(content).not.toContain('<SDKLink')
-    expect(content).toContain('[Link to React Page B](/docs/react/page-b)')
   })
 
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {

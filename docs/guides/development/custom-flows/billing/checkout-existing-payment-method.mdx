@@ -59,9 +59,8 @@ This guide will walk you through how to build a custom user interface for a chec
 
       function CustomCheckout() {
         const { checkout } = useCheckout()
-        const { status } = checkout
 
-        if (status === 'needs_initialization') {
+        if (checkout.status === 'needs_initialization') {
           return <CheckoutInitialization />
         }
 
@@ -74,30 +73,26 @@ This guide will walk you through how to build a custom user interface for a chec
       }
 
       function CheckoutInitialization() {
-        const { checkout } = useCheckout()
-        const { start, status, fetchStatus } = checkout
+        const { checkout, fetchStatus } = useCheckout()
 
-        if (status !== 'needs_initialization') {
+        if (checkout.status !== 'needs_initialization') {
           return null
         }
 
         return (
-          <button onClick={start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
+          <button onClick={checkout.start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
             {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
           </button>
         )
       }
 
       function PaymentSection() {
-        const { checkout } = useCheckout()
+        const { checkout, errors, fetchStatus } = useCheckout()
         const { data, isLoading } = usePaymentMethods({
           for: 'user',
           pageSize: 20,
         })
 
-        const { isConfirming, confirm, finalize, error } = checkout
-
-        const [isProcessing, setIsProcessing] = useState(false)
         const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
 
         const router = useRouter()
@@ -105,15 +100,18 @@ This guide will walk you through how to build a custom user interface for a chec
         const defaultMethod = useMemo(() => data?.find((method) => method.isDefault), [data])
 
         const submitSelectedMethod = async () => {
-          const paymentSourceId = paymentMethodId || defaultMethod?.id
-          if (isProcessing || !paymentSourceId) return
-          setIsProcessing(true)
+          const selectedPaymentMethodId = paymentMethodId || defaultMethod?.id
+          if (fetchStatus === 'fetching' || !selectedPaymentMethodId) return
 
           try {
             // Confirm checkout with payment method
-            await confirm({ paymentSourceId })
+            const { error } = await checkout.confirm({ paymentMethodId: selectedPaymentMethodId })
+            if (error) {
+              console.error(JSON.stringify(error, null, 2))
+              return
+            }
             // Complete checkout and redirect
-            await finalize({
+            await checkout.finalize({
               navigate: ({ decorateUrl }) => {
                 const url = decorateUrl('/dashboard')
                 if (url.startsWith('http')) {
@@ -125,8 +123,6 @@ This guide will walk you through how to build a custom user interface for a chec
             })
           } catch (error) {
             console.error('Payment failed:', error)
-          } finally {
-            setIsProcessing(false)
           }
         }
 
@@ -147,16 +143,22 @@ This guide will walk you through how to build a custom user interface for a chec
               }}
             >
               {data?.map((method) => (
-                <option key={method.id}>
+                <option key={method.id} value={method.id}>
                   **** **** **** {method.last4} {method.cardType}
                 </option>
               ))}
             </select>
 
-            {error && <div>{error.message}</div>}
+            {errors.global && (
+              <ul>
+                {errors.global.map((error, index) => (
+                  <li key={index}>{error.longMessage || error.message}</li>
+                ))}
+              </ul>
+            )}
 
-            <button type="button" disabled={isProcessing || isConfirming} onClick={submitSelectedMethod}>
-              {isProcessing || isConfirming ? 'Processing...' : 'Complete Purchase'}
+            <button type="button" disabled={fetchStatus === 'fetching'} onClick={submitSelectedMethod}>
+              {fetchStatus === 'fetching' ? 'Processing...' : 'Complete Purchase'}
             </button>
           </>
         )
@@ -164,18 +166,17 @@ This guide will walk you through how to build a custom user interface for a chec
 
       function CheckoutSummary() {
         const { checkout } = useCheckout()
-        const { plan, totals } = checkout
 
-        if (!plan) {
+        if (!checkout.plan) {
           return null
         }
 
         return (
           <div>
             <h2>Order Summary</h2>
-            <span>{plan.name}</span>
+            <span>{checkout.plan.name}</span>
             <span>
-              {totals.totalDueNow.currencySymbol} {totals.totalDueNow.amountFormatted}
+              {checkout.totals.totalDueNow.currencySymbol} {checkout.totals.totalDueNow.amountFormatted}
             </span>
           </div>
         )

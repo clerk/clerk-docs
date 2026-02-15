@@ -302,29 +302,54 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'ManageUserOrgInvitationsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func fetchUserOrganizationInvitations(clerk: Clerk) async -> [UserOrganizationInvitation] {
-    do {
-      return try await clerk.user?.getOrganizationInvitations().data ?? []
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
-      return []
+  struct ManageUserOrgInvitationsView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var invitations: [UserOrganizationInvitation] = []
+
+    var body: some View {
+      VStack {
+        Button("Load invitations") {
+          Task { await fetchUserOrganizationInvitations() }
+        }
+
+        ForEach(Array(invitations.enumerated()), id: \.offset) { index, invitation in
+          HStack {
+            Text("Invitation \(index + 1)")
+            Button("Accept") {
+              Task { await acceptInvitation(invitation) }
+            }
+          }
+        }
+      }
     }
   }
 
-  @MainActor
-  func acceptInvitation(_ invitation: UserOrganizationInvitation) async {
-    do {
-      _ = try await invitation.accept()
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+  extension ManageUserOrgInvitationsView {
+
+    func fetchUserOrganizationInvitations() async {
+      do {
+        invitations = try await clerk.user?.getOrganizationInvitations().data ?? []
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        invitations = []
+      }
+    }
+
+    func acceptInvitation(_ invitation: UserOrganizationInvitation) async {
+      do {
+        _ = try await invitation.accept()
+        invitations.removeAll(where: { $0.id == invitation.id })
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

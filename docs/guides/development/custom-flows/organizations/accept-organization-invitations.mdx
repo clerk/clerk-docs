@@ -397,45 +397,77 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'AcceptOrganizationInvitationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func handleOrganizationInvitation(
-    ticket: String,
-    accountStatus: String,
-    firstName: String = "",
-    lastName: String = "",
-    password: String = "",
-    clerk: Clerk
-  ) async {
-    do {
-      switch accountStatus {
-      case "sign_in":
-        let signIn = try await clerk.auth.signInWithTicket(ticket)
-        if signIn.status == .complete, let sessionId = signIn.createdSessionId {
-          try await clerk.auth.setActive(sessionId: sessionId)
+  struct AcceptOrganizationInvitationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var ticket = ""
+    @State private var accountStatus = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var password = ""
+
+    var body: some View {
+      VStack {
+        TextField("Enter invitation ticket", text: $ticket)
+        TextField("Enter account status (sign_in or sign_up)", text: $accountStatus)
+        TextField("Enter first name", text: $firstName)
+        TextField("Enter last name", text: $lastName)
+        SecureField("Enter password", text: $password)
+        Button("Accept organization invitation") {
+          Task {
+            await handleOrganizationInvitation(
+              ticket: ticket,
+              accountStatus: accountStatus,
+              firstName: firstName,
+              lastName: lastName,
+              password: password
+            )
+          }
         }
-
-      case "sign_up":
-        let signUp = try await clerk.auth.signUpWithTicket(ticket)
-        let updatedSignUp = try await signUp.update(
-          firstName: firstName,
-          lastName: lastName,
-          password: password
-        )
-
-        if updatedSignUp.status == .complete, let sessionId = updatedSignUp.createdSessionId {
-          try await clerk.auth.setActive(sessionId: sessionId)
-        }
-
-      default:
-        break
       }
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    }
+  }
+
+  extension AcceptOrganizationInvitationView {
+
+    func handleOrganizationInvitation(
+      ticket: String,
+      accountStatus: String,
+      firstName: String = "",
+      lastName: String = "",
+      password: String = ""
+    ) async {
+      do {
+        switch accountStatus {
+        case "sign_in":
+          let signIn = try await clerk.auth.signInWithTicket(ticket)
+          if signIn.status == .complete, let sessionId = signIn.createdSessionId {
+            try await clerk.auth.setActive(sessionId: sessionId)
+          }
+
+        case "sign_up":
+          let signUp = try await clerk.auth.signUpWithTicket(ticket)
+          let updatedSignUp = try await signUp.update(
+            firstName: firstName,
+            lastName: lastName,
+            password: password
+          )
+
+          if updatedSignUp.status == .complete, let sessionId = updatedSignUp.createdSessionId {
+            try await clerk.auth.setActive(sessionId: sessionId)
+          }
+
+        default:
+          break
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

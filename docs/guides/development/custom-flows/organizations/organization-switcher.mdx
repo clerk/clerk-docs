@@ -642,31 +642,55 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'OrganizationSwitcherView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func fetchOrganizationMemberships(clerk: Clerk) async -> [OrganizationMembership] {
-    do {
-      return try await clerk.user?.getOrganizationMemberships().data ?? []
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
-      return []
+  struct OrganizationSwitcherView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var memberships: [OrganizationMembership] = []
+
+    var body: some View {
+      VStack {
+        Button("Load organizations") {
+          Task { await fetchOrganizationMemberships() }
+        }
+
+        ForEach(Array(memberships.enumerated()), id: \.offset) { index, membership in
+          HStack {
+            Text("Organization \(index + 1)")
+            Button("Set active") {
+              Task { await setActiveOrganization(organizationId: membership.organization.id) }
+            }
+          }
+        }
+      }
     }
   }
 
-  @MainActor
-  func setActiveOrganization(organizationId: String, clerk: Clerk) async {
-    guard let sessionId = clerk.session?.id else { return }
+  extension OrganizationSwitcherView {
 
-    do {
-      try await clerk.auth.setActive(sessionId: sessionId, organizationId: organizationId)
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    func fetchOrganizationMemberships() async {
+      do {
+        memberships = try await clerk.user?.getOrganizationMemberships().data ?? []
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        memberships = []
+      }
+    }
+
+    func setActiveOrganization(organizationId: String) async {
+      guard let sessionId = clerk.session?.id else { return }
+
+      do {
+        try await clerk.auth.setActive(sessionId: sessionId, organizationId: organizationId)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

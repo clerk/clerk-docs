@@ -428,37 +428,66 @@ The following example expects the user to be signing up with a password and also
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'AcceptInvitationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func acceptInvitation(
-    ticket: String,
-    firstName: String,
-    lastName: String,
-    password: String,
-    clerk: Clerk
-  ) async {
-    do {
-      // Start sign-up with the invitation ticket
-      var signUp = try await clerk.auth.signUpWithTicket(ticket)
+  struct AcceptInvitationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var ticket = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var password = ""
 
-      // Collect any additional required fields
-      signUp = try await signUp.update(
-        firstName: firstName,
-        lastName: lastName,
-        password: password
-      )
-
-      if signUp.status == .complete, let sessionId = signUp.createdSessionId {
-        try await clerk.auth.setActive(sessionId: sessionId)
-      } else {
-        dump(signUp.status)
+    var body: some View {
+      VStack {
+        TextField("Enter invitation ticket", text: $ticket)
+        TextField("Enter first name", text: $firstName)
+        TextField("Enter last name", text: $lastName)
+        SecureField("Enter password", text: $password)
+        Button("Accept invitation") {
+          Task {
+            await acceptInvitation(
+              ticket: ticket,
+              firstName: firstName,
+              lastName: lastName,
+              password: password
+            )
+          }
+        }
       }
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    }
+  }
+
+  extension AcceptInvitationView {
+
+    func acceptInvitation(
+      ticket: String,
+      firstName: String,
+      lastName: String,
+      password: String
+    ) async {
+      do {
+        // Start sign-up with the invitation ticket.
+        var signUp = try await clerk.auth.signUpWithTicket(ticket)
+
+        // Collect any additional required fields.
+        signUp = try await signUp.update(
+          firstName: firstName,
+          lastName: lastName,
+          password: password
+        )
+
+        if signUp.status == .complete, let sessionId = signUp.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        } else {
+          dump(signUp.status)
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

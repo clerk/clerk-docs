@@ -664,49 +664,86 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'ManageRolesView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func fetchOrganizationMemberships(clerk: Clerk) async -> [OrganizationMembership] {
-    guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return [] }
+  struct ManageRolesView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var memberships: [OrganizationMembership] = []
 
-    do {
-      guard
-        let memberships = try await clerk.user?.getOrganizationMemberships().data,
-        let activeOrganization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
-      else {
-        return []
+    var body: some View {
+      VStack {
+        Button("Load memberships") {
+          Task { await fetchOrganizationMemberships() }
+        }
+
+        ForEach(Array(memberships.enumerated()), id: \.offset) { index, membership in
+          HStack {
+            Text("Member \(index + 1): \(membership.role)")
+            Button("Toggle role") {
+              Task {
+                let role = membership.role == "org:admin" ? "org:member" : "org:admin"
+                await updateMembershipRole(membership, role: role)
+              }
+            }
+            Button("Remove") {
+              Task { await removeMembership(membership) }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  extension ManageRolesView {
+
+    func fetchOrganizationMemberships() async {
+      guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else {
+        memberships = []
+        return
       }
 
-      return try await activeOrganization.getMemberships().data
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
-      return []
-    }
-  }
+      do {
+        guard
+          let userMemberships = try await clerk.user?.getOrganizationMemberships().data,
+          let activeOrganization = userMemberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
+        else {
+          memberships = []
+          return
+        }
 
-  @MainActor
-  func updateMembershipRole(_ membership: OrganizationMembership, role: String) async {
-    do {
-      _ = try await membership.update(role: role)
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+        memberships = try await activeOrganization.getMemberships().data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        memberships = []
+      }
     }
-  }
 
-  @MainActor
-  func removeMembership(_ membership: OrganizationMembership) async {
-    do {
-      _ = try await membership.destroy()
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    func updateMembershipRole(_ membership: OrganizationMembership, role: String) async {
+      do {
+        let updatedMembership = try await membership.update(role: role)
+        if let index = memberships.firstIndex(where: { $0.id == updatedMembership.id }) {
+          memberships[index] = updatedMembership
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func removeMembership(_ membership: OrganizationMembership) async {
+      do {
+        _ = try await membership.destroy()
+        memberships.removeAll(where: { $0.id == membership.id })
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

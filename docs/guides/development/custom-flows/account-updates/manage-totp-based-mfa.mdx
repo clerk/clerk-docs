@@ -909,34 +909,80 @@ One of the options that Clerk supports for MFA is **Authenticator applications (
   </If>
 
   <If sdk="ios">
-    ```swift
-    import Clerk
+    ```swift {{ filename: 'ManageTOTPBasedMFAView.swift', collapsible: true }}
+    import SwiftUI
+    import ClerkKit
 
-    @MainActor
-    func setupTotpMfa(verificationCode: String, clerk: Clerk) async {
-      do {
-        let totp = try await clerk.user?.createTOTP()
-        print(totp?.uri ?? "")
+    struct ManageTOTPBasedMFAView: View {
+      @Environment(Clerk.self) private var clerk
+      @State private var totpURI = ""
+      @State private var verificationCode = ""
+      @State private var isVerifying = false
 
-        _ = try await clerk.user?.verifyTOTP(code: verificationCode)
+      var body: some View {
+        VStack {
+          if isVerifying {
+            Text("Scan this URI in your authenticator app:")
+            Text(totpURI)
+            TextField("Enter TOTP verification code", text: $verificationCode)
+            Button("Verify") {
+              Task { await verifyTotpMfa(code: verificationCode) }
+            }
+          } else {
+            Button("Set up TOTP MFA") {
+              Task { await setupTotpMfa() }
+            }
+          }
 
-        let backupCodes = try await clerk.user?.createBackupCodes()
-        print(backupCodes?.codes ?? [])
-      } catch {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        dump(error)
+          Button("Disable TOTP MFA") {
+            Task { await disableTotpMfa() }
+          }
+        }
       }
     }
 
-    @MainActor
-    func disableTotpMfa(clerk: Clerk) async {
-      do {
-        _ = try await clerk.user?.disableTOTP()
-      } catch {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        dump(error)
+    extension ManageTOTPBasedMFAView {
+
+      func setupTotpMfa() async {
+        do {
+          guard let user = clerk.user else { return }
+          let totp = try await user.createTOTP()
+
+          // Display and share the TOTP URI with the user for authenticator setup.
+          totpURI = totp.uri ?? ""
+          print(totp.uri ?? "")
+          isVerifying = true
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+
+      func verifyTotpMfa(code: String) async {
+        do {
+          guard let user = clerk.user else { return }
+          let verifiedTotp = try await user.verifyTOTP(code: code)
+
+          // `verifyTOTP` returns `TOTPResource`. `backupCodes` will be populated if the feature
+          // is enabled in your instance and the user doesn't already have backup codes generated;
+          // otherwise `user.createBackupCodes()` can be used.
+          print(verifiedTotp.backupCodes ?? [])
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+
+      func disableTotpMfa() async {
+        do {
+          _ = try await clerk.user?.disableTOTP()
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
       }
     }
     ```

@@ -559,65 +559,114 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'SignInOrSignUpView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func signInOrSignUp(emailAddress: String, password: String, clerk: Clerk) async {
-    do {
-      let signIn = try await clerk.auth.signInWithPassword(identifier: emailAddress, password: password)
+  struct SignInOrSignUpView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var emailAddress = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var isVerifying = false
 
-      switch signIn.status {
-      case .complete:
-        if let sessionId = signIn.createdSessionId {
-          try await clerk.auth.setActive(sessionId: sessionId)
-        }
-      case .needsSecondFactor:
-        _ = try await signIn.sendMfaEmailCode()
-      default:
-        dump(signIn.status)
-      }
-    } catch {
-      // If the identifier doesn't exist yet, create a sign-up and send an email code.
-      if String(describing: error).contains("form_identifier_not_found") {
-        do {
-          var signUp = try await clerk.auth.signUp(emailAddress: emailAddress, password: password)
-          signUp = try await signUp.sendEmailCode()
-          dump(signUp.status)
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
+    var body: some View {
+      if isVerifying {
+        VStack {
+          TextField("Enter your verification code", text: $code)
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
         }
       } else {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        dump(error)
+        VStack {
+          TextField("Enter email address", text: $emailAddress)
+          TextField("Enter password", text: $password)
+          Button("Continue") {
+            Task { await submit(emailAddress: emailAddress, password: password) }
+          }
+        }
       }
     }
   }
 
-  @MainActor
-  func verifyEmailCode(code: String, clerk: Clerk) async {
-    do {
-      if let signUp = clerk.auth.currentSignUp {
-        let updatedSignUp = try await signUp.verifyEmailCode(code)
-        if updatedSignUp.status == .complete, let sessionId = updatedSignUp.createdSessionId {
-          try await clerk.auth.setActive(sessionId: sessionId)
+  extension SignInOrSignUpView {
+
+    @MainActor
+    func submit(emailAddress: String, password: String) async {
+      do {
+        // Start sign-in with email and password.
+        let signIn = try await clerk.auth.signInWithPassword(identifier: emailAddress, password: password)
+
+        switch signIn.status {
+        case .complete:
+          if let sessionId = signIn.createdSessionId {
+            try await clerk.auth.setActive(sessionId: sessionId)
+          }
+        case .needsSecondFactor:
+          // Email code is used as second factor for existing users.
+          _ = try await signIn.sendMfaEmailCode()
+          isVerifying = true
+        default:
+          dump(signIn.status)
+        }
+      } catch {
+        // If the email doesn't exist yet, start sign-up and send an email code.
+        if String(describing: error).contains("form_identifier_not_found") {
+          do {
+            var signUp = try await clerk.auth.signUp(emailAddress: emailAddress, password: password)
+            signUp = try await signUp.sendEmailCode()
+            isVerifying = true
+          } catch {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling.
+            dump(error)
+          }
+        } else {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling.
+          dump(error)
+        }
+      }
+    }
+
+    @MainActor
+    func verify(code: String) async {
+      do {
+        // Verify sign-up email code.
+        if let signUp = clerk.auth.currentSignUp {
+          let updatedSignUp = try await signUp.verifyEmailCode(code)
+
+          switch updatedSignUp.status {
+          case .complete:
+            if let sessionId = updatedSignUp.createdSessionId {
+              try await clerk.auth.setActive(sessionId: sessionId)
+            }
+          default:
+            dump(updatedSignUp.status)
+          }
+
           return
         }
-      }
 
-      if let signIn = clerk.auth.currentSignIn {
-        let updatedSignIn = try await signIn.verifyMfaCode(code, type: .emailCode)
-        if updatedSignIn.status == .complete, let sessionId = updatedSignIn.createdSessionId {
-          try await clerk.auth.setActive(sessionId: sessionId)
+        // Verify sign-in second factor email code.
+        if var signIn = clerk.auth.currentSignIn {
+          signIn = try await signIn.verifyMfaCode(code, type: .emailCode)
+
+          switch signIn.status {
+          case .complete:
+            if let sessionId = signIn.createdSessionId {
+              try await clerk.auth.setActive(sessionId: sessionId)
+            }
+          default:
+            dump(signIn.status)
+          }
         }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
       }
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
     }
   }
   ```

@@ -394,49 +394,85 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'ManageMembershipRequestsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
 
-  @MainActor
-  func fetchMembershipRequests(clerk: Clerk) async -> [OrganizationMembershipRequest] {
-    guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return [] }
+  struct ManageMembershipRequestsView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var membershipRequests: [OrganizationMembershipRequest] = []
 
-    do {
-      guard
-        let memberships = try await clerk.user?.getOrganizationMemberships().data,
-        let organization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
-      else {
-        return []
+    var body: some View {
+      VStack {
+        Button("Load membership requests") {
+          Task { await fetchMembershipRequests() }
+        }
+
+        ForEach(Array(membershipRequests.enumerated()), id: \.offset) { index, request in
+          HStack {
+            Text("Request \(index + 1)")
+            Button("Accept") {
+              Task {
+                await acceptMembershipRequest(request)
+                await fetchMembershipRequests()
+              }
+            }
+            Button("Reject") {
+              Task {
+                await rejectMembershipRequest(request)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  extension ManageMembershipRequestsView {
+
+    func fetchMembershipRequests() async {
+      guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else {
+        membershipRequests = []
+        return
       }
 
-      return try await organization.getMembershipRequests(status: "pending").data
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
-      return []
-    }
-  }
+      do {
+        guard
+          let memberships = try await clerk.user?.getOrganizationMemberships().data,
+          let organization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
+        else {
+          membershipRequests = []
+          return
+        }
 
-  @MainActor
-  func acceptMembershipRequest(_ request: OrganizationMembershipRequest) async {
-    do {
-      _ = try await request.accept()
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+        membershipRequests = try await organization.getMembershipRequests(status: "pending").data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        membershipRequests = []
+      }
     }
-  }
 
-  @MainActor
-  func rejectMembershipRequest(_ request: OrganizationMembershipRequest) async {
-    do {
-      _ = try await request.reject()
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    func acceptMembershipRequest(_ request: OrganizationMembershipRequest) async {
+      do {
+        _ = try await request.accept()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func rejectMembershipRequest(_ request: OrganizationMembershipRequest) async {
+      do {
+        _ = try await request.reject()
+        membershipRequests.removeAll(where: { $0.id == request.id })
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

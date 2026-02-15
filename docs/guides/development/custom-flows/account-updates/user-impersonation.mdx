@@ -541,40 +541,55 @@ This example builds a dashboard that is only accessible to users with the `org:a
 </If>
 
 <If sdk="ios">
-  ```swift
-  import Clerk
+  ```swift {{ filename: 'UserImpersonationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
   import Foundation
 
   struct ActorTokenResponse: Decodable {
     let token: String
   }
 
-  @MainActor
-  func impersonateUser(
-    actorId: String,
-    targetUserId: String,
-    clerk: Clerk
-  ) async {
-    do {
-      // Call your backend endpoint that creates actor tokens.
-      var request = URLRequest(url: URL(string: "https://example.com/generate-actor-token")!)
-      request.httpMethod = "POST"
-      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      request.httpBody = try JSONSerialization.data(
-        withJSONObject: ["actorId": actorId, "userId": targetUserId]
-      )
+  struct UserImpersonationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var actorId = ""
+    @State private var targetUserId = ""
 
-      let (data, _) = try await URLSession.shared.data(for: request)
-      let actorToken = try JSONDecoder().decode(ActorTokenResponse.self, from: data).token
-
-      let signIn = try await clerk.auth.signInWithTicket(actorToken)
-      if signIn.status == .complete, let sessionId = signIn.createdSessionId {
-        try await clerk.auth.setActive(sessionId: sessionId)
+    var body: some View {
+      VStack {
+        TextField("Enter actor user ID", text: $actorId)
+        TextField("Enter target user ID", text: $targetUserId)
+        Button("Impersonate user") {
+          Task { await impersonateUser(actorId: actorId, targetUserId: targetUserId) }
+        }
       }
-    } catch {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      dump(error)
+    }
+  }
+
+  extension UserImpersonationView {
+
+    func impersonateUser(actorId: String, targetUserId: String) async {
+      do {
+        // Call your backend endpoint that creates actor tokens.
+        var request = URLRequest(url: URL(string: "https://example.com/generate-actor-token")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(
+          withJSONObject: ["actorId": actorId, "userId": targetUserId]
+        )
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let actorToken = try JSONDecoder().decode(ActorTokenResponse.self, from: data).token
+
+        let signIn = try await clerk.auth.signInWithTicket(actorToken)
+        if signIn.status == .complete, let sessionId = signIn.createdSessionId {
+          try await clerk.auth.setActive(sessionId: sessionId)
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
     }
   }
   ```

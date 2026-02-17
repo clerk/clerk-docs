@@ -3385,6 +3385,60 @@ title: Simple Test
     expect(output).toContain(`warning Hash "non-existent-hash" not found in /docs/simple-test`)
   })
 
+  test('Warn only once for broken hash in SDK-scoped doc', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'SDK Group',
+                sdk: ['nextjs', 'react'],
+                items: [[{ title: 'SDK Doc', sdk: ['nextjs', 'react'], href: '/docs/sdk-doc' }]],
+              },
+              { title: 'Target', href: '/docs/target' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-doc.mdx',
+        content: `---
+title: SDK Doc
+sdk: nextjs, react
+---
+
+[Target](/docs/target#non-existent-hash)
+
+# SDK Doc Page`,
+      },
+      {
+        path: './docs/target.mdx',
+        content: `---
+title: Target
+---
+
+# Target Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    const hashWarning = 'Hash "non-existent-hash" not found in /docs/target'
+    // Should contain the warning
+    expect(output).toContain(hashWarning)
+    // But only once — not duplicated per SDK variant
+    const occurrences = output!.split(hashWarning).length - 1
+    expect(occurrences).toBe(1)
+  })
+
   test('Pick up on id in heading for hash alias', async () => {
     const { tempDir } = await createTempFiles([
       {

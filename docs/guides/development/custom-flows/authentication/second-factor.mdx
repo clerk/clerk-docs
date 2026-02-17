@@ -1,6 +1,17 @@
 ---
 title: Build a custom sign-in flow with second factor verification
 description: Learn how to build a custom sign-in flow that requires a second factor verification.
+search:
+  keywords:
+    - second factor
+    - 2FA
+    - needs_second_factor
+    - multi-factor authentication
+    - MFA
+    - Client Trust
+    - Authenticator app
+    - TOTP
+    - backup codes
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -30,102 +41,50 @@ Clerk allows you to enable the following second factor strategies:
   - Email link
   - SMS verification code
 
-## Choose your adventure
+This guide will demonstrate how to build a custom user interface for handling the second factor verification process. If you have MFA enabled, see the [MFA](#mfa) section. If you don't have MFA enabled, see the [Client Trust](#client-trust) section.
 
 > [!IMPORTANT]
 > **This guide uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.** For example, if you were using phone numbers instead of email addresses, you would add the second factor logic from this guide to your [phone code sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp).
 
-If you have MFA enabled, see the [MFA](#mfa) section.
-If you don't have MFA enabled, see the [Client Trust](#client-trust) section.
+## MFA
 
-### MFA
+<Steps>
+  ### Enable email and password
 
-#### Enable email and password
+  This guide uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. To follow this guide, you first need to ensure email and password are enabled for your application.
 
-To follow this guide, you first need to ensure email and password are enabled for your application.
+  <Include src="_partials/custom-flows/enable-email-password" />
 
-1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-1. Enable **Sign-in with email**.
-   - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
-1. Select the **Password** tab and enable **Sign-up with password**.
+  ### Enable multi-factor authentication (MFA)
 
-<Tabs items={["SMS verification code", "Authenticator app"]}>
-  <Tab>
-    #### Enable multi-factor authentication (MFA)
+  1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
+  1. Enable the strategy you want to use for your second factor.
+     - To enable **SMS verification code**, you'll need to enable **Sign-up with phone** and **Sign-in with phone**. It's highly recommended to enable **Verify at sign-up** for phone numbers.
+  1. **Require multi-factor authentication** is enabled by default. You will need to handle the `setup-mfa` [session task](!session-tasks). See the [dedicated custom flow](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
+     {/* TODO: Force MFA not released yet */}
+  1. Select **Save**.
 
-    1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
-    1. Enable both the **SMS verification code** and **Backup codes** strategies.
-    1. **Require multi-factor authentication** is enabled by default. You will need to handle the `setup-mfa` [session task](!session-task). See the [dedicated custom flow](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
-    1. Select **Save**.
+  <Include src="_partials/custom-flows/manage-mfa-callout" />
 
-    #### Build the custom flow
+  ### Build the custom flow
 
-    <If notSdk={["ios", "android"]}>
-      **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+  <If notSdk={["ios", "android"]}>
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-      To authenticate a user using their email and password, and then verify their account with an SMS verification code and/or backup codes, you need to:
+    The following example demonstrates how to build a custom sign-in flow that supports SMS verification codes, authenticator app codes, and backup codes. Essentially, you want to:
 
-      1. Initiate the sign-in process by collecting the user's email address and password with the [`signIn.password()`](/docs/reference/javascript/sign-in-future#password) method.
-      1. Collect the TOTP code and verify it with the [`signIn.mfa.verifyTOTP()`](/docs/reference/javascript/sign-in-future#mfa-verify-totp) method.
-      1. If the TOTP verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
+    1. Check the `signIn.status` to see if it's `needs_second_factor`.
+    1. If it is, display a form to collect the MFA code.
+    1. If the user submits the form, verify the code with the appropriate method: [`signIn.mfa.verifyPhoneCode()`](/docs/reference/javascript/sign-in-future#mfa-verify-phone-code), [`signIn.mfa.verifyTOTP()`](/docs/reference/javascript/sign-in-future#mfa-verify-totp), or [`signIn.mfa.verifyBackupCode()`](/docs/reference/javascript/sign-in-future#mfa-verify-backup-code).
+    1. If the verification is successful (the `signIn.status` is `'complete'`), call [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) to set the newly created session as the active session.
 
-      ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-      // TODO
-      ```
-    </If>
-
-    <If sdk={["ios", "android"]}>
-      To authenticate a user using their email and password, and then verify their account with an SMS verification code and/or backup codes, you need to:
-
-      1. Initiate the sign-in process by collecting the user's email address and password and passing them to the [`SignIn.create()`](/docs/reference/javascript/sign-in-future#create) method.
-      1. If the sign-in requires a second factor, display a form to collect the SMS verification code and verify it with the [`SignIn.attemptSecondFactor()`](/docs/reference/javascript/sign-in-future#attempt-second-factor) method.
-      1. If the verification is successful (the `SignIn.status` is `'complete'`), navigate the user as needed.
-
-      > [!TIP]
-      > For this example to work, the user must have MFA enabled on their account. You need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
-
-      <If sdk="ios">
-        {/* TODO (Mike) */}
-      </If>
-
-      <If sdk="android">
-        {/* TODO (Sam) */}
-      </If>
-    </If>
-  </Tab>
-
-  <Tab>
-    #### Enable multi-factor authentication (MFA)
-
-    1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
-    1. Enable both the **Authenticator application** and **Backup codes** strategies.
-    1. **Require multi-factor authentication** is enabled by default. You will need to handle the `setup-mfa` [session task](!session-task). See the [dedicated custom flow](/docs/guides/development/custom-flows/authentication/session-tasks) for more information.
-    1. Select **Save**.
-
-    <Include src="_partials/duo-authenticator-app-callout.mdx" />
-
-    > [!TIP]
-    > For this example to work, the user must have MFA enabled on their account. You can either require it for all users or allow users to enable it for their own accounts. Either way, you need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
-
-    #### Build the custom flow
-
-    <If notSdk={["ios", "android"]}>
-      **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
-      To authenticate a user using their email and password, and then verify their account with an authenticator app and/or backup codes, you need to:
-
-      1. Initiate the sign-in process by collecting the user's email address and password with the [`signIn.password()`](/docs/reference/javascript/sign-in-future#password) method.
-      1. Collect the TOTP code and verify it with the [`signIn.mfa.verifyTOTP()`](/docs/reference/javascript/sign-in-future#mfa-verify-totp) method.
-      1. If the TOTP verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
-
-      ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+    ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
       'use client'
 
-      import * as React from 'react'
       import { useSignIn } from '@clerk/nextjs'
       import { useRouter } from 'next/navigation'
 
-      export default function SignInForm() {
+      export default function Page() {
         const { signIn, errors, fetchStatus } = useSignIn()
         const router = useRouter()
 
@@ -137,69 +96,87 @@ To follow this guide, you first need to ensure email and password are enabled fo
             emailAddress,
             password,
           })
+
+    +     // If you're using the authenticator app strategy, remove this check.
+    +     if (signIn.status === 'needs_second_factor') {
+    +       await signIn.mfa.sendPhoneCode()
+    +     }
+
           if (signIn.status === 'complete') {
             await signIn.finalize({
-              navigate: () => {
-                router.push('/')
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
               },
             })
           }
         }
 
-        const handleSubmitTOTP = async (formData: FormData) => {
-          const code = formData.get('code') as string
-          const useBackupCode = formData.get('useBackupCode') === 'on'
-
-          if (useBackupCode) {
-            await signIn.mfa.verifyBackupCode({ code })
-          } else {
-            await signIn.mfa.verifyTOTP({ code })
-          }
-
-          if (signIn.status === 'complete') {
-            await signIn.finalize({
-              navigate: () => {
-                router.push('/')
-              },
-            })
-          }
-        }
-
-        if (signIn.status === 'needs_second_factor') {
-          return (
-            <div>
-              <h1>Verify your account</h1>
-              <form action={handleSubmitTOTP}>
-                <div>
-                  <label htmlFor="code">Code</label>
-                  <input id="code" name="code" type="text" />
-                  {errors.fields.code && <p>{errors.fields.code.message}</p>}
-                </div>
-                <div>
-                  <label>
-                    Use backup code
-                    <input type="checkbox" name="useBackupCode" />
-                  </label>
-                </div>
-                <button type="submit" disabled={fetchStatus === 'fetching'}>
-                  Verify
-                </button>
-              </form>
-            </div>
-          )
-        }
+    +   const handleMFAVerification = async (formData: FormData) => {
+    +     const code = formData.get('code') as string
+    +     const useBackupCode = formData.get('useBackupCode') === 'on'
+    + 
+    +     if (useBackupCode) {
+    +       await signIn.mfa.verifyBackupCode({ code })
+    +     } else {
+    +       await signIn.mfa.verifyPhoneCode({ code })
+    +       // If you're using the authenticator app strategy, use the following method instead:
+    +       // await signIn.mfa.verifyTOTP({ code })
+    +     }
+    + 
+    +     if (signIn.status === 'complete') {
+    +       await signIn.finalize({
+    +         navigate: ({ decorateUrl }) => {
+    +           const url = decorateUrl('/')
+    +           if (url.startsWith('http')) {
+    +             window.location.href = url
+    +           } else {
+    +             router.push(url)
+    +           }
+    +         },
+    +       })
+    +     }
+    +   }
+    + 
+    +   if (signIn.status === 'needs_second_factor') {
+    +     return (
+    +       <div>
+    +         <h1>Verify your account</h1>
+    +         <form action={handleMFAVerification}>
+    +           <div>
+    +             <label htmlFor="code">Code</label>
+    +             <input id="code" name="code" type="text" />
+    +             {errors.fields.code && <p>{errors.fields.code.message}</p>}
+    +           </div>
+    +           <div>
+    +             <label>
+    +               Use backup code
+    +               <input type="checkbox" name="useBackupCode" />
+    +             </label>
+    +           </div>
+    +           <button type="submit" disabled={fetchStatus === 'fetching'}>
+    +             Verify
+    +           </button>
+    +         </form>
+    +       </div>
+    +     )
+    +   }
 
         return (
           <>
             <h1>Sign in</h1>
             <form action={handleSubmit}>
               <div>
-                <label htmlFor="email">Email</label>
+                <label htmlFor="email">Enter email address</label>
                 <input id="email" name="email" type="email" />
                 {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
               </div>
               <div>
-                <label htmlFor="password">Password</label>
+                <label htmlFor="password">Enter password</label>
                 <input id="password" name="password" type="password" />
                 {errors.fields.password && <p>{errors.fields.password.message}</p>}
               </div>
@@ -207,282 +184,295 @@ To follow this guide, you first need to ensure email and password are enabled fo
                 Continue
               </button>
             </form>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
           </>
         )
+      }
+    ```
+  </If>
+
+  <If sdk={["ios", "android"]}>
+    <If sdk="ios">
+      ```swift {{ filename: 'MFASignInView.swift', collapsible: true }}
+      import SwiftUI
+      import ClerkKit
+
+      struct MFASignInView: View {
+      @Environment(Clerk.self) private var clerk
+      @State private var email = ""
+      @State private var password = ""
+      @State private var code = ""
+      @State private var displayMFAVerification = false
+
+      var body: some View {
+        if displayMFAVerification {
+          TextField("Code", text: $code)
+          Button("Verify") {
+            Task { await verify(code: code) }
+          }
+        } else {
+          TextField("Email", text: $email)
+          SecureField("Password", text: $password)
+          Button("Next") {
+            Task { await submit(email: email, password: password) }
+          }
+        }
+      }
+      }
+
+      extension MFASignInView {
+
+      func submit(email: String, password: String) async {
+        do {
+          // Start sign-in with email/password
+          let signIn = try await clerk.auth.signInWithPassword(
+            identifier: email,
+            password: password
+          )
+
+          switch signIn.status {
+          // Handle user submitting email and password and swapping to MFA form
+          case .needsSecondFactor:
+            // If you're using authenticator app strategy, remove the following line
+            signIn = try await signIn.sendMfaPhoneCode()
+            displayMFAVerification = true
+          default:
+            // If the status is not needsSecondFactor, check why. User may need to
+            // complete further steps
+            dump(signIn.status)
+          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
+
+      // Verify the MFA code
+      func verify(code: String) async {
+        do {
+          guard var signIn = clerk.auth.currentSignIn else { return }
+
+          signIn = try await signIn.verifyMfaCode(code, type: .phoneCode)
+          // If you're using the authenticator app strategy, use the following method instead:
+          // signIn = try await signIn.verifyMfaCode(code, type: .totp)
+
+          switch signIn.status {
+          case .complete:
+            dump(clerk.session)
+          default:
+            dump(signIn.status)
+          }
+        } catch {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          dump(error)
+        }
+      }
       }
       ```
     </If>
 
-    <If sdk={["ios", "android"]}>
-      To authenticate a user using their email and password, and then verify their account with an authenticator app and/or backup codes, you need to:
+    <If sdk="android">
+      <CodeBlockTabs options={["MFASignInViewModel.kt", "MFASignInActivity.kt"]}>
+        ```kotlin {{ filename: 'MFASignInViewModel.kt', collapsible: true }}
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.signin.SignIn
+        import com.clerk.api.signin.attemptSecondFactor
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.launch
 
-      1. Initiate the sign-in process by collecting the user's email address and password and passing them to the [`SignIn.create()`](/docs/reference/javascript/sign-in-future#create) method.
-      1. If the sign-in requires a second factor, display a form to collect the TOTP code and verify it with the [`SignIn.attemptSecondFactor()`](/docs/reference/javascript/sign-in-future#attempt-second-factor) method.
-      1. If the verification is successful (the `SignIn.status` is `'complete'`), navigate the user as needed.
+        class MFASignInViewModel : ViewModel() {
+            private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
+            val uiState = _uiState.asStateFlow()
 
-      > [!TIP]
-      > For this example to work, the user must have MFA enabled on their account. You need to add the ability for your users to manage their MFA settings. See the [manage SMS-based MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa) or the [manage TOTP-based MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) guide, depending on your needs.
-
-      <If sdk="ios">
-        ```swift {{ filename: 'MFASignInView.swift', collapsible: true }}
-        import SwiftUI
-        import ClerkKit
-
-        struct MFASignInView: View {
-        @Environment(Clerk.self) private var clerk
-        @State private var email = ""
-        @State private var password = ""
-        @State private var code = ""
-        @State private var displayAuthenticatorCode = false
-
-        var body: some View {
-          if displayAuthenticatorCode {
-            TextField("Code", text: $code)
-            Button("Verify") {
-              Task { await verify(code: code) }
+            fun submit(email: String, password: String) {
+            viewModelScope.launch {
+                SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
+                .onSuccess {
+                    if (it.status == SignIn.Status.NEEDS_SECOND_FACTOR) {
+                    // If you're using authenticator app strategy, remove the following line
+                    it = try await it.sendMfaPhoneCode()
+                    // Display MFA form
+                    _uiState.value = UiState.NeedsSecondFactor
+                    } else {
+                    // If the status is not needsSecondFactor, check why. User may need to
+                    // complete different steps.
+                    }
+                }
+                .onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                }
             }
-          } else {
-            TextField("Email", text: $email)
-            SecureField("Password", text: $password)
-            Button("Next") {
-              Task { await submit(email: email, password: password) }
             }
-          }
-        }
-        }
 
-        extension MFASignInView {
+            fun verify(code: String) {
+            val inProgressSignIn = Clerk.signIn ?: return
+            viewModelScope.launch {
+              // If you're using authenticator app strategy, use the following method instead:
+              // inProgressSignIn.verifyMfaCode(code, MfaType.TOTP)
 
-        func submit(email: String, password: String) async {
-          do {
-            // Start sign-in with email/password
-            let signIn = try await clerk.auth.signInWithPassword(
-              identifier: email,
-              password: password
-            )
-
-            switch signIn.status {
-            // Handle user submitting email and password and swapping to TOTP form
-            case .needsSecondFactor:
-              displayAuthenticatorCode = true
-            default:
-              // If the status is not needsSecondFactor, check why. User may need to
-              // complete further steps
-              dump(signIn.status)
+              inProgressSignIn.verifyMfaCode(code, MfaType.PHONE_CODE)
+                .onSuccess {
+                    if (it.status == SignIn.Status.COMPLETE) {
+                        // User is now signed in and verified.
+                        // You can navigate to the next screen or perform other actions.
+                    _uiState.value = UiState.Verified
+                    }
+                }
+                .onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                }
             }
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
-        }
-
-        // Verify the authenticator app code
-        func verify(code: String) async {
-          do {
-            guard var signIn = clerk.auth.currentSignIn else { return }
-
-            signIn = try await signIn.verifyMfaCode(code, type: .totp)
-
-            switch signIn.status {
-            case .complete:
-              dump(clerk.session)
-            default:
-              dump(signIn.status)
             }
-          } catch {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            dump(error)
-          }
-        }
+
+            sealed interface UiState {
+            data object Unverified : UiState
+            data object Verified : UiState
+            data object NeedsSecondFactor : UiState
+            }
         }
         ```
-      </If>
 
-      <If sdk="android">
-        <CodeBlockTabs options={["MFASignInViewModel.kt", "MFASignInActivity.kt"]}>
-          ```kotlin {{ filename: 'MFASignInViewModel.kt', collapsible: true }}
-          import androidx.lifecycle.ViewModel
-          import androidx.lifecycle.viewModelScope
-          import com.clerk.api.Clerk
-          import com.clerk.api.network.serialization.onFailure
-          import com.clerk.api.network.serialization.onSuccess
-          import com.clerk.api.signin.SignIn
-          import com.clerk.api.signin.attemptSecondFactor
-          import kotlinx.coroutines.flow.MutableStateFlow
-          import kotlinx.coroutines.flow.asStateFlow
-          import kotlinx.coroutines.launch
+        ```kotlin {{ filename: 'MFASignInActivity.kt', collapsible: true }}
+        import android.os.Bundle
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.activity.viewModels
+        import androidx.compose.foundation.layout.Arrangement
+        import androidx.compose.foundation.layout.Column
+        import androidx.compose.foundation.layout.fillMaxSize
+        import androidx.compose.material3.Button
+        import androidx.compose.material3.Text
+        import androidx.compose.material3.TextField
+        import androidx.compose.runtime.Composable
+        import androidx.compose.runtime.getValue
+        import androidx.compose.runtime.mutableStateOf
+        import androidx.compose.runtime.remember
+        import androidx.compose.runtime.setValue
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.text.input.PasswordVisualTransformation
+        import androidx.compose.ui.unit.dp
+        import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-          class MFASignInViewModel : ViewModel() {
-              private val _uiState = MutableStateFlow<UiState>(UiState.Unverified)
-              val uiState = _uiState.asStateFlow()
+        class MFASignInActivity : ComponentActivity() {
+          val viewModel: MFASignInViewModel by viewModels()
 
-              fun submit(email: String, password: String) {
-              viewModelScope.launch {
-                  SignIn.create(SignIn.CreateParams.Strategy.Password(identifier = email, password = password))
-                  .onSuccess {
-                      if (it.status == SignIn.Status.NEEDS_SECOND_FACTOR) {
-                      // Display TOTP Form
-                      _uiState.value = UiState.NeedsSecondFactor
-                      } else {
-                      // If the status is not needsSecondFactor, check why. User may need to
-                      // complete different steps.
-                      }
-                  }
-                  .onFailure {
-                      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                      // for more info on error handling
-                  }
-              }
-              }
-
-              fun verify(code: String) {
-              val inProgressSignIn = Clerk.signIn ?: return
-              viewModelScope.launch {
-                  inProgressSignIn
-                  .attemptSecondFactor(SignIn.AttemptSecondFactorParams.TOTP(code))
-                  .onSuccess {
-                      if (it.status == SignIn.Status.COMPLETE) {
-                          // User is now signed in and verified.
-                          // You can navigate to the next screen or perform other actions.
-                      _uiState.value = UiState.Verified
-                      }
-                  }
-                  .onFailure {
-                      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                      // for more info on error handling
-                  }
-              }
-              }
-
-              sealed interface UiState {
-              data object Unverified : UiState
-              data object Verified : UiState
-              data object NeedsSecondFactor : UiState
-              }
-          }
-          ```
-
-          ```kotlin {{ filename: 'MFASignInActivity.kt', collapsible: true }}
-          import android.os.Bundle
-          import androidx.activity.ComponentActivity
-          import androidx.activity.compose.setContent
-          import androidx.activity.viewModels
-          import androidx.compose.foundation.layout.Arrangement
-          import androidx.compose.foundation.layout.Column
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.material3.Button
-          import androidx.compose.material3.Text
-          import androidx.compose.material3.TextField
-          import androidx.compose.runtime.Composable
-          import androidx.compose.runtime.getValue
-          import androidx.compose.runtime.mutableStateOf
-          import androidx.compose.runtime.remember
-          import androidx.compose.runtime.setValue
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.text.input.PasswordVisualTransformation
-          import androidx.compose.ui.unit.dp
-          import androidx.lifecycle.compose.collectAsStateWithLifecycle
-
-          class MFASignInActivity : ComponentActivity() {
-            val viewModel: MFASignInViewModel by viewModels()
-
-            override fun onCreate(savedInstanceState: Bundle?) {
-              super.onCreate(savedInstanceState)
-              setContent {
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                MFASignInView(state = state, onSubmit = viewModel::submit, onVerify = viewModel::verify)
-              }
+          override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent {
+              val state by viewModel.uiState.collectAsStateWithLifecycle()
+              MFASignInView(state = state, onSubmit = viewModel::submit, onVerify = viewModel::verify)
             }
           }
+        }
 
-          @Composable
-          fun MFASignInView(
-            state: MFASignInViewModel.UiState,
-            onSubmit: (String, String) -> Unit,
-            onVerify: (String) -> Unit,
+        @Composable
+        fun MFASignInView(
+          state: MFASignInViewModel.UiState,
+          onSubmit: (String, String) -> Unit,
+          onVerify: (String) -> Unit,
+        ) {
+          var email by remember { mutableStateOf("") }
+          var password by remember { mutableStateOf("") }
+          var code by remember { mutableStateOf("") }
+
+          Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
           ) {
-            var email by remember { mutableStateOf("") }
-            var password by remember { mutableStateOf("") }
-            var code by remember { mutableStateOf("") }
-
-            Column(
-              modifier = Modifier.fillMaxSize(),
-              verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-              horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-              when (state) {
-                MFASignInViewModel.UiState.NeedsSecondFactor -> {
-                  TextField(value = code, onValueChange = { code = it }, placeholder = { Text("Code") })
-                  Button(onClick = { onVerify(code) }) { Text("Submit") }
-                }
-                MFASignInViewModel.UiState.Unverified -> {
-                  TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
-                  TextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    placeholder = { Text("Password") },
-                    visualTransformation = PasswordVisualTransformation(),
-                  )
-                  Button(onClick = { onSubmit(email, password) }) { Text("Next") }
-                }
-                MFASignInViewModel.UiState.Verified -> {
-                  Text("Verified")
-                }
+            when (state) {
+              MFASignInViewModel.UiState.NeedsSecondFactor -> {
+                TextField(value = code, onValueChange = { code = it }, placeholder = { Text("Code") })
+                Button(onClick = { onVerify(code) }) { Text("Submit") }
+              }
+              MFASignInViewModel.UiState.Unverified -> {
+                TextField(value = email, onValueChange = { email = it }, placeholder = { Text("Email") })
+                TextField(
+                  value = password,
+                  onValueChange = { password = it },
+                  placeholder = { Text("Password") },
+                  visualTransformation = PasswordVisualTransformation(),
+                )
+                Button(onClick = { onSubmit(email, password) }) { Text("Next") }
+              }
+              MFASignInViewModel.UiState.Verified -> {
+                Text("Verified")
               }
             }
           }
-          ```
-        </CodeBlockTabs>
-      </If>
+        }
+        ```
+      </CodeBlockTabs>
     </If>
-  </Tab>
-</Tabs>
+  </If>
+</Steps>
 
-### Client Trust
+## Client Trust
+
+When Client Trust is enabled, when a user is signing in **with a password** on a new client (e.g. device), users will always be challenged for a [second factor](!second-factor). If you have multi-factor authentication (MFA) enabled, users may have already configured a second factor, such as SMS verification code or authenticator app. **If you don't have MFA enabled, or if the user has not yet configured one,** a one-time email code (default), SMS code, or email link will be used, depending on your application's settings.
 
 {/* What if more than one second factor strategy is enabled? */}
 
 <Tabs items={["Email code", "Email link", "SMS code"]}>
   <Tab>
-    #### Enable email and password
+    ### Enable email and password
 
     To follow this guide, you first need to ensure email and password are enabled for your application.
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-    1. Enable **Sign-up with email**. **Verify at sign-up** and **Email verification code** are enabled by default. This is the second factor strategy that will be used for Client Trust.
-    1. Enable **Sign-in with email**.
-       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Enable **Sign-up with email**.
+       - **Require email address** should be enabled.
+       - For **Verify at sign-up**, **Email verification code** is enabled by default. This is the option you'll want for this example.
+    1. Enable **Sign in with email**.
+       - This guide supports password authentication.
     1. Select the **Password** tab and enable **Sign-up with password**.
+
+    ### Build the custom flow
+
+    <Include src="_partials/custom-flows/email-password-sign-in" />
   </Tab>
 
   <Tab>
-    #### Enable email and password
+    ### Enable email and password
 
     To follow this guide, you first need to ensure email and password are enabled for your application.
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-    1. Enable **Sign-up with email**. **Verify at sign-up** is enabled by default. Enable **Email verification link**. This is the second factor strategy that will be used for Client Trust.
-    1. Enable **Sign-in with email**.
-       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Enable **Sign-up with email**.
+       - **Require email address** should be enabled.
+       - For **Verify at sign-up**, **Email verification code** is enabled by default. Enable **Email verification link** instead.
+    1. Enable **Sign in with email**.
     1. Select the **Password** tab and enable **Sign-up with password**.
+
+    ### Build the custom flow
   </Tab>
 
   <Tab>
-    #### Enable email and password
+    ### Enable email and password
 
     To follow this guide, you first need to ensure email and password are enabled for your application.
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-    1. Enable **Sign-in with email**.
-       - This guide supports password authentication. If you'd like to build a custom flow that allows users to sign in passwordlessly, see the [email code custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp) or the [email links custom flow](/docs/guides/development/custom-flows/authentication/email-links).
+    1. Enable **Sign-up with email**.
+       - **Require email address** should be enabled.
+       - **Verify at sign-up** should be disabled. This is what tells **Client Trust** to fallback to **SMS verification code**.
+    1. Enable **Sign in with email**.
+    1. Select the **Phone** tab. Ensure **Sign-up with phone**, **Verify at sign-up**, and **Sign-in with phone** is enabled.
     1. Select the **Password** tab and enable **Sign-up with password**.
-    1. Select the **Phone** tab. Ensure **Sign-up with phone** and **Verify at sign-up** is enabled. This is the second factor strategy that will be used for Client Trust.
   </Tab>
 </Tabs>
 
 ## Next steps
 
-Now that users can sign in with MFA, you need to add the ability for your users to manage their MFA settings. Learn how to build a custom flow for [managing TOTP MFA](/docs/guides/development/custom-flows/account-updates/manage-totp-based-mfa) or for [managing SMS MFA](/docs/guides/development/custom-flows/account-updates/manage-sms-based-mfa).
+Now that users can sign in with MFA, you need to add the ability for your users to manage their MFA settings. Learn how to build a custom flow for [managing MFA settings](/docs/guides/development/custom-flows/account-updates/manage-mfa).

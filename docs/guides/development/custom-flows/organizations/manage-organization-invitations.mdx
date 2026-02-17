@@ -794,10 +794,10 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   import ClerkKit
 
   struct ManageOrganizationInvitationsView: View {
-    @Environment(Clerk.self) private var clerk
     @State private var emailAddress = ""
     @State private var role = "org:member"
     @State private var invitations: [OrganizationInvitation] = []
+    let organization: Organization
 
     var body: some View {
       VStack {
@@ -810,34 +810,27 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
           }
         }
 
-        Button("Load pending invitations") {
-          Task { await fetchPendingInvitations() }
-        }
-
-        ForEach(Array(invitations.enumerated()), id: \.offset) { index, invitation in
+        ForEach(invitations) { invitation in
           HStack {
-            Text("Invitation \(index + 1)")
+            Text(invitation.emailAddress)
             Button("Revoke") {
-              Task { await revokeInvitation(invitation) }
+              Task {
+                await revokeInvitation(invitation)
+                await fetchPendingInvitations()
+              }
             }
           }
         }
       }
+      .task { await fetchPendingInvitations() }
     }
   }
 
   extension ManageOrganizationInvitationsView {
 
-    func activeOrganization() async throws -> Organization? {
-      guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return nil }
-      let memberships = try await clerk.user?.getOrganizationMemberships().data ?? []
-      return memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
-    }
-
     func inviteMember(emailAddress: String, role: String) async {
       do {
-        guard let organization = try await activeOrganization() else { return }
-        _ = try await organization.inviteMember(emailAddress: emailAddress, role: role)
+        try await organization.inviteMember(emailAddress: emailAddress, role: role)
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
@@ -847,10 +840,6 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
     func fetchPendingInvitations() async {
       do {
-        guard let organization = try await activeOrganization() else {
-          invitations = []
-          return
-        }
         invitations = try await organization.getInvitations(status: "pending").data
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
@@ -862,8 +851,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
     func revokeInvitation(_ invitation: OrganizationInvitation) async {
       do {
-        _ = try await invitation.revoke()
-        invitations.removeAll(where: { $0.id == invitation.id })
+        try await invitation.revoke()
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling

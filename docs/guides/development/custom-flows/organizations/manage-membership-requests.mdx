@@ -399,18 +399,14 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   import ClerkKit
 
   struct ManageMembershipRequestsView: View {
-    @Environment(Clerk.self) private var clerk
     @State private var membershipRequests: [OrganizationMembershipRequest] = []
+    let organization: Organization
 
     var body: some View {
       VStack {
-        Button("Load membership requests") {
-          Task { await fetchMembershipRequests() }
-        }
-
-        ForEach(Array(membershipRequests.enumerated()), id: \.offset) { index, request in
+        ForEach(membershipRequests) { request in
           HStack {
-            Text("Request \(index + 1)")
+            Text(request.publicUserData?.identifier ?? "Unknown user")
             Button("Accept") {
               Task {
                 await acceptMembershipRequest(request)
@@ -420,31 +416,20 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
             Button("Reject") {
               Task {
                 await rejectMembershipRequest(request)
+                await fetchMembershipRequests()
               }
             }
           }
         }
       }
+      .task { await fetchMembershipRequests() }
     }
   }
 
   extension ManageMembershipRequestsView {
 
     func fetchMembershipRequests() async {
-      guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else {
-        membershipRequests = []
-        return
-      }
-
       do {
-        guard
-          let memberships = try await clerk.user?.getOrganizationMemberships().data,
-          let organization = memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
-        else {
-          membershipRequests = []
-          return
-        }
-
         membershipRequests = try await organization.getMembershipRequests(status: "pending").data
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
@@ -456,7 +441,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
     func acceptMembershipRequest(_ request: OrganizationMembershipRequest) async {
       do {
-        _ = try await request.accept()
+        try await request.accept()
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
@@ -466,8 +451,7 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 
     func rejectMembershipRequest(_ request: OrganizationMembershipRequest) async {
       do {
-        _ = try await request.reject()
-        membershipRequests.removeAll(where: { $0.id == request.id })
+        try await request.reject()
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling

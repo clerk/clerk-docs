@@ -571,6 +571,7 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
     @State private var isVerifying = false
 
     var body: some View {
+      // Display email code verification form.
       if isVerifying {
         VStack {
           TextField("Enter your verification code", text: $code)
@@ -579,9 +580,10 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
           }
         }
       } else {
+        // Display a form to capture the user's email and password.
         VStack {
           TextField("Enter email address", text: $emailAddress)
-          TextField("Enter password", text: $password)
+          SecureField("Enter password", text: $password)
           Button("Continue") {
             Task { await submit(emailAddress: emailAddress, password: password) }
           }
@@ -592,28 +594,52 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
 
   extension SignInOrSignUpView {
 
+    // Handle the submission of the form.
     @MainActor
     func submit(emailAddress: String, password: String) async {
       do {
-        // Start sign-in with email and password.
+        // Start the sign-in process using the email and password provided.
+        // If the user is not signed up yet, this will catch the `form_identifier_not_found` error.
         let signIn = try await clerk.auth.signInWithPassword(identifier: emailAddress, password: password)
 
         switch signIn.status {
         case .complete:
+          // If sign-in process is complete, the created session is available on `clerk.session`.
           dump(clerk.session)
         case .needsSecondFactor:
-          // Email code is used as second factor for existing users.
-          _ = try await signIn.sendMfaEmailCode()
-          isVerifying = true
+          // Check if email_code is a valid second factor.
+          // This is required when Client Trust is enabled and the user
+          // is signing in from a new device.
+          // See https://clerk.com/docs/guides/secure/client-trust
+          let emailCodeFactor = signIn.supportedSecondFactors?.first(where: { $0.strategy == .emailCode })
+
+          if emailCodeFactor != nil {
+            try await signIn.sendMfaEmailCode()
+
+            // Display second form to capture the verification code.
+            isVerifying = true
+          }
         default:
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
           dump(signIn.status)
         }
       } catch {
-        // If the email doesn't exist yet, start sign-up and send an email code.
-        if String(describing: error).contains("form_identifier_not_found") {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        let clerkApiError = error as? ClerkAPIError
+
+        // If the identifier is not found, the user is not signed up yet.
+        // So this includes the flow for signing up a new user.
+        if clerkApiError?.code == "form_identifier_not_found" {
           do {
-            var signUp = try await clerk.auth.signUp(emailAddress: emailAddress, password: password)
-            signUp = try await signUp.sendEmailCode()
+            // Start the sign-up process using the email and password provided.
+            let signUp = try await clerk.auth.signUp(emailAddress: emailAddress, password: password)
+
+            // Send the user an email with the verification code.
+            try await signUp.sendEmailCode()
+
+            // Display second form to capture the verification code.
             isVerifying = true
           } catch {
             // See https://clerk.com/docs/guides/development/custom-flows/error-handling
@@ -621,31 +647,34 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
             dump(error)
           }
         } else {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling.
           dump(error)
         }
       }
     }
 
+    // Handle the submission of the email verification code.
     @MainActor
     func verify(code: String) async {
       do {
-        // Verify sign-up email code.
+        // Flow for signing up a new user.
         if let signUp = clerk.auth.currentSignUp {
+          // Use the code the user provided to attempt verification.
           let updatedSignUp = try await signUp.verifyEmailCode(code)
 
           switch updatedSignUp.status {
           case .complete:
+            // If verification was completed, the created session is available on `clerk.session`.
             dump(clerk.session)
           default:
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
             dump(updatedSignUp.status)
           }
 
           return
         }
 
-        // Verify sign-in second factor email code.
+        // Flow for signing in an existing user.
         if var signIn = clerk.auth.currentSignIn {
           signIn = try await signIn.verifyMfaCode(code, type: .emailCode)
 
@@ -653,6 +682,8 @@ To blend a sign-up and sign-in flow into a single flow, you must treat it as a s
           case .complete:
             dump(clerk.session)
           default:
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
             dump(signIn.status)
           }
         }

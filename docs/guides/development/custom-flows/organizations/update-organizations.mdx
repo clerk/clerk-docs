@@ -266,14 +266,19 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
   import ClerkKit
 
   struct UpdateOrganizationView: View {
-    @Environment(Clerk.self) private var clerk
-    @State private var name = ""
+    @State private var name: String
+    let organization: Organization
+
+    init(organization: Organization) {
+      self.organization = organization
+      _name = State(initialValue: organization.name)
+    }
 
     var body: some View {
       VStack {
         TextField("Enter organization name", text: $name)
         Button("Update organization") {
-          Task { await updateActiveOrganization(name: name) }
+          Task { await updateOrganization(name: name) }
         }
       }
     }
@@ -281,17 +286,9 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
 
   extension UpdateOrganizationView {
 
-    func activeOrganization() async throws -> Organization? {
-      guard let activeOrganizationId = clerk.session?.lastActiveOrganizationId else { return nil }
-      let memberships = try await clerk.user?.getOrganizationMemberships().data ?? []
-      return memberships.first(where: { $0.organization.id == activeOrganizationId })?.organization
-    }
-
-    func updateActiveOrganization(name: String) async {
+    func updateOrganization(name: String) async {
       do {
-        guard let organization = try await activeOrganization() else { return }
-        let updatedOrganization = try await organization.update(name: name)
-        print(updatedOrganization.name)
+        try await organization.update(name: name)
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling

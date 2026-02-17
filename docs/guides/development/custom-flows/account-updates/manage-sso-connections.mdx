@@ -440,15 +440,46 @@ This guide uses Discord, Google, and GitHub as examples.
   struct ManageSSOConnectionsView: View {
     @Environment(Clerk.self) private var clerk
 
+    // Edit this array to include all of your enabled SSO connections.
+    let options: [OAuthProvider] = [.discord, .google, .github]
+
+    var unconnectedOptions: [OAuthProvider] {
+      let connectedProviders = Set((clerk.user?.externalAccounts ?? []).map(provider(for:)))
+      return options.filter { !connectedProviders.contains($0) }
+    }
+
     var body: some View {
       VStack {
-        Button("Add Google account") {
-          Task { await addExternalAccount(provider: .google) }
+        Text("Connected accounts")
+
+        ForEach(clerk.user?.externalAccounts ?? []) { account in
+          let provider = provider(for: account)
+
+          VStack(alignment: .leading) {
+            Text("Provider: \(provider.name)")
+            Text("Scopes: \(account.approvedScopes)")
+            Text("Status: \(account.verification?.status == .verified ? "Verified" : (account.verification?.error?.longMessage ?? "Unverified"))")
+
+            if account.verification?.status != .verified,
+               account.verification?.externalVerificationRedirectUrl != nil {
+              Button("Reverify \(provider.name)") {
+                Task { await reverifyExternalAccount(account: account) }
+              }
+            }
+
+            Button("Remove \(provider.name)") {
+              Task { await removeExternalAccount(account: account) }
+            }
+          }
         }
 
-        if let account = clerk.user?.externalAccounts.first {
-          Button("Remove first external account") {
-            Task { await removeExternalAccount(account: account) }
+        if !unconnectedOptions.isEmpty {
+          Text("Add a new external account")
+
+          ForEach(unconnectedOptions) { provider in
+            Button("Add \(provider.name)") {
+              Task { await addExternalAccount(provider: provider) }
+            }
           }
         }
       }
@@ -466,12 +497,12 @@ This guide uses Discord, Google, and GitHub as examples.
           redirectUrl: "/account/manage-external-accounts"
         )
 
-        // Redirect the user to complete provider verification if needed.
-        if let urlString = account.verification?.externalVerificationRedirectUrl,
-           let url = URL(string: urlString) {
-          // Present your preferred browser or web auth flow with `url`.
-          print(url)
+        // Complete provider verification if needed.
+        if account.verification?.externalVerificationRedirectUrl != nil {
+          try await account.reauthorize()
         }
+
+        try await user.reload()
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
@@ -481,12 +512,29 @@ This guide uses Discord, Google, and GitHub as examples.
 
     func removeExternalAccount(account: ExternalAccount) async {
       do {
-        _ = try await account.destroy()
+        try await account.destroy()
+        try await clerk.user?.reload()
       } catch {
         // See https://clerk.com/docs/guides/development/custom-flows/error-handling
         // for more info on error handling
         dump(error)
       }
+    }
+
+    func reverifyExternalAccount(account: ExternalAccount) async {
+      do {
+        try await account.reauthorize()
+        try await clerk.user?.reload()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func provider(for account: ExternalAccount) -> OAuthProvider {
+      let strategy = account.provider.hasPrefix("oauth_") ? account.provider : "oauth_\(account.provider)"
+      return OAuthProvider(strategy: strategy)
     }
   }
   ```

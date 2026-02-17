@@ -589,17 +589,13 @@ One of the options that Clerk supports for MFA is **SMS verification codes**. Th
 
         struct ManageSMSBasedMFAView: View {
           @Environment(Clerk.self) private var clerk
-          @State private var phoneId = ""
 
           var body: some View {
             VStack {
-              TextField("Enter phone ID", text: $phoneId)
-              Button("Reserve for MFA") {
-                Task { await reservePhoneForMfa(phoneId: phoneId) }
-              }
-
-              Button("Generate backup codes") {
-                Task { await generateBackupCodes() }
+              ForEach(clerk.user?.phoneNumbers ?? []) { phone in
+                Button(phone.phoneNumber) {
+                  Task { await reservePhoneForMfa(phone: phone) }
+                }
               }
             }
           }
@@ -607,28 +603,10 @@ One of the options that Clerk supports for MFA is **SMS verification codes**. Th
 
         extension ManageSMSBasedMFAView {
 
-          func reservePhoneForMfa(phoneId: String) async {
-            guard
-              let phone = clerk.user?.phoneNumbers.first(where: { $0.id == phoneId })
-            else { return }
-
+          func reservePhoneForMfa(phone: PhoneNumber) async {
             do {
               // Reserve the phone as a second factor for SMS MFA.
-              let updatedPhone = try await phone.setReservedForSecondFactor(reserved: true)
-
-              // Backup codes can be returned on the updated phone resource.
-              print(updatedPhone.backupCodes ?? [])
-            } catch {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              dump(error)
-            }
-          }
-
-          func generateBackupCodes() async {
-            do {
-              let backupCodes = try await clerk.user?.createBackupCodes()
-              print(backupCodes?.codes ?? [])
+              try await phone.setReservedForSecondFactor(reserved: true)
             } catch {
               // See https://clerk.com/docs/guides/development/custom-flows/error-handling
               // for more info on error handling

@@ -403,30 +403,53 @@ The following example demonstrates how to handle both sign-up and sign-in flows 
 
   struct AcceptOrganizationInvitationView: View {
     @Environment(Clerk.self) private var clerk
-    @State private var ticket = ""
-    @State private var accountStatus = ""
+
+    // In your implementation, extract these values from the incoming redirect URL query parameters.
+    let ticket = "organization_invitation_ticket"
+    let accountStatus = "sign_in"
+
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var password = ""
 
     var body: some View {
       VStack {
-        TextField("Enter invitation ticket", text: $ticket)
-        TextField("Enter account status (sign_in or sign_up)", text: $accountStatus)
-        TextField("Enter first name", text: $firstName)
-        TextField("Enter last name", text: $lastName)
-        SecureField("Enter password", text: $password)
-        Button("Accept organization invitation") {
-          Task {
-            await handleOrganizationInvitation(
-              ticket: ticket,
-              accountStatus: accountStatus,
-              firstName: firstName,
-              lastName: lastName,
-              password: password
-            )
+        if ticket.isEmpty {
+          Text("No invitation token found.")
+        } else {
+          switch accountStatus {
+          case "sign_in":
+            Text("Signing you in...")
+            ProgressView()
+
+          case "sign_up":
+            Text("Sign up")
+            TextField("Enter first name", text: $firstName)
+            TextField("Enter last name", text: $lastName)
+            SecureField("Enter password", text: $password)
+            Button("Continue") {
+              Task {
+                await handleOrganizationInvitation(
+                  ticket: ticket,
+                  accountStatus: accountStatus,
+                  firstName: firstName,
+                  lastName: lastName,
+                  password: password
+                )
+              }
+            }
+
+          case "complete":
+            Text("Organization invitation accepted!")
+
+          default:
+            Text("Invalid invitation status.")
           }
         }
+      }
+      .task {
+        guard !ticket.isEmpty, accountStatus == "sign_in" else { return }
+        await handleOrganizationInvitation(ticket: ticket, accountStatus: accountStatus)
       }
     }
   }

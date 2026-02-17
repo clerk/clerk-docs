@@ -27,6 +27,8 @@ bunx @clerk/upgrade     # bun
 
 This CLI will automatically scan the project, detect breaking changes, and apply fixes where possible. **Run this first before making any manual changes.**
 
+**Astro users:** The CLI will fix `.ts`/`.tsx` files (React islands) but cannot transform `.astro` template files. You'll need to manually update those using the reference below.
+
 The information below is provided as a reference for changes the CLI may not fully automate or for understanding what changed.
 
 ---
@@ -316,7 +318,32 @@ For Next.js 16 with `cacheComponents: true`, `ClerkProvider` must be inside `<bo
 - `Clerk` export removed, use `useClerk()` hook instead
 - Minimum Expo SDK version: 53
 
-### **4.3 – Nuxt**
+### **4.3 – Astro**
+
+- Version: `@clerk/astro` v2 → v3
+- Components are imported from `@clerk/astro/components`
+- **The upgrade CLI does not auto-fix `.astro` template files.** It will fix `.ts`/`.tsx` files (React islands), but `.astro` files must be updated manually:
+
+```astro
+---
+// ❌ OLD
+import { SignedIn, SignedOut, Protect } from '@clerk/astro/components'
+// ✅ NEW
+import { Show } from '@clerk/astro/components'
+---
+
+<!-- ❌ OLD -->
+<SignedIn><Dashboard /></SignedIn>
+<SignedOut><SignInPage /></SignedOut>
+<Protect role="admin"><AdminPanel /></Protect>
+
+<!-- ✅ NEW -->
+<Show when="signed-in"><Dashboard /></Show>
+<Show when="signed-out"><SignInPage /></Show>
+<Show when={{ role: "admin" }}><AdminPanel /></Show>
+```
+
+### **4.4 – Nuxt**
 
 - `getAuth()` removed, use `auth()` instead
 - Default routing strategy changed from `hash` to `path`

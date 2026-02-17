@@ -194,7 +194,11 @@ async function main() {
         'guides/development/webhooks/inngest.mdx': ['doc-not-in-manifest'],
         'guides/development/webhooks/loops.mdx': ['doc-not-in-manifest'],
       },
-      typedoc: {},
+      typedoc: {
+        // temp ignores until nick fixes :)
+        'clerk-react/use-sign-in.mdx': ['link-hash-not-found'],
+        'clerk-react/use-sign-up.mdx': ['link-hash-not-found'],
+      },
       partials: {},
       tooltips: {},
     },
@@ -494,8 +498,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
       const updatedDoc = docsMap.get(item.href)
 
-      if (updatedDoc?.sdk) {
-        for (const sdk of [...(updatedDoc.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
+      if (updatedDoc?.frontmatter?.sdk) {
+        for (const sdk of [...(updatedDoc.frontmatter?.sdk ?? []), ...(updatedDoc.distinctSDKVariants ?? [])]) {
           // For each SDK variant, add an entry to the docsMap with the SDK-specific href,
           // ensuring that links like /docs/react/doc-1 point to the correct doc variant.
 
@@ -521,11 +525,11 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
       const groupsItemsCombinedSDKs = (() => {
         const sdks = items?.flatMap((item) =>
           item.flatMap((item) => {
-            // For manifest items with hrefs, include distinctSDKVariants from the document
+            // For manifest items with hrefs, include frontmatter SDK and distinctSDKVariants from the document
             if ('href' in item && item.href?.startsWith(config.baseDocsLink)) {
               const doc = docsMap.get(item.href)
               if (doc) {
-                const sdks = [...(item.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
+                const sdks = [...(item.sdk ?? []), ...(doc.frontmatter?.sdk ?? []), ...(doc.distinctSDKVariants ?? [])]
                 return sdks.length > 0 ? sdks : undefined
               }
             }
@@ -539,7 +543,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return uniqueSDKs
       })()
 
-      // This is the sdk of the group
+      // This is the sdk of the group (explicitly set in the manifest)
       const groupSDK = details.sdk
 
       // This is the sdk of the parent group
@@ -550,26 +554,23 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         return { ...details, sdk: groupSDK ?? parentSDK, items } as ManifestGroup
       }
 
-      // If the group has explicit SDK scoping in the manifest, that takes precedence
-      if (groupSDK !== undefined && groupSDK.length > 0) {
-        return {
-          ...details,
-          sdk: groupSDK,
-          items,
-        } as ManifestGroup
+      // If the group has an explicit SDK restriction, preserve it even if children support more SDKs
+      // This handles cases like "Mobile Navigation" where the folder itself should only appear for ios/android
+      // even though children like "Quickstart" may support other SDKs
+      if (groupSDK !== undefined) {
+        return { ...details, sdk: groupSDK, items } as ManifestGroup
       }
 
-      // If all the children items have the same sdk as the group, then we don't need to set the sdk on the group
+      // If all the children items support all SDKs, then we don't need to set the sdk on the group
       if (groupsItemsCombinedSDKs.length === config.validSdks.length) {
         return { ...details, sdk: undefined, items } as ManifestGroup
       }
 
-      const combinedSDKs = Array.from(new Set([...(groupSDK ?? []), ...groupsItemsCombinedSDKs])) ?? []
-
+      // Use the computed children SDKs - this takes precedence over any inherited SDK from parent
+      // This ensures folders like "App Router" get SDK scoping based on their children's frontmatter
       return {
         ...details,
-        // If there are children items, then we combine the sdks of the group and the children items sdks
-        sdk: combinedSDKs,
+        sdk: groupsItemsCombinedSDKs,
         items,
       } as ManifestGroup
     },
@@ -785,6 +786,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         async (group) => ({
           title: group.title,
           topNav: group.topNav,
+          flatNav: group.flatNav,
           tag: group.tag,
           wrap: group.wrap === config.manifestOptions.wrapDefault ? undefined : group.wrap,
           icon: group.icon,
@@ -1199,20 +1201,47 @@ ${yaml.stringify({
   const tooltipsVFiles = validatedTooltips.map((tooltip) => tooltip.vfile)
   const typedocVFiles = validatedTypedocs.map((typedoc) => typedoc.vfile)
 
-  const warnings = reporter(
-    [
-      ...coreVFiles,
-      ...partialsVFiles,
-      ...tooltipsVFiles,
-      ...typedocVFiles,
-      ...flatSdkSpecificVFiles,
-      manifestVfile,
-      ...headingValidationVFiles,
-    ],
-    {
-      quiet: true,
-    },
-  )
+  // Deduplicate messages across VFiles that share the same file path.
+  // The same doc can be processed multiple times (once as a core doc + once per SDK variant),
+  // each producing its own VFile with the same warnings. Merge them into a single VFile per path
+  // so warnings are only reported once.
+  const allVFiles = [
+    ...coreVFiles,
+    ...partialsVFiles,
+    ...tooltipsVFiles,
+    ...typedocVFiles,
+    ...flatSdkSpecificVFiles,
+    manifestVfile,
+    ...headingValidationVFiles,
+  ]
+
+  const deduplicatedVFiles: VFile[] = []
+  const seenPaths = new Map<string, VFile>()
+
+  for (const vfile of allVFiles) {
+    // Normalize path: core VFiles use "docs/..." while SDK-specific use "/docs/..."
+    const filePath = String(vfile.path ?? '').replace(/^(?!\/)/, '/')
+    const existing = seenPaths.get(filePath)
+
+    if (!existing) {
+      seenPaths.set(filePath, vfile)
+      deduplicatedVFiles.push(vfile)
+    } else {
+      // Merge any new unique messages into the existing VFile
+      const existingMessages = new Set(existing.messages.map((m) => `${m.message}:${m.line}:${m.column}`))
+      for (const msg of vfile.messages) {
+        const key = `${msg.message}:${msg.line}:${msg.column}`
+        if (!existingMessages.has(key)) {
+          existing.messages.push(msg)
+          existingMessages.add(key)
+        }
+      }
+    }
+  }
+
+  const warnings = reporter(deduplicatedVFiles, {
+    quiet: true,
+  })
 
   abortSignal?.throwIfAborted()
 

@@ -43,6 +43,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<TutorialHero />`](#tutorialhero-)
     - [`<Cards>`](#cards)
     - [`<Properties>`](#properties-1)
+    - [`<ComparisonTable>`](#comparisontable)
     - [`<Include />`](#include-)
     - [`<Typedoc />`](#typedoc-)
     - [`<If />`](#if-)
@@ -58,12 +59,12 @@ Clerk's documentation content is written in a variation of markdown called [MDX]
 
 Clerk's documentation uses [`mdx-annotations`](https://www.npmjs.com/package/mdx-annotations) which provides a consistent way to apply props to markdown elements. This is utilized for various features such as [controlling image quality](#images-and-static-assets) and [defining code block line highlights](#highlighting).
 
-MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `npm run format`.
+MDX files ([including any code blocks](#prettier-integration)) are formatted using [a custom Prettier plugin](https://github.com/clerk/clerk-docs/blob/main/prettier-mdx.mjs). It is recommended to enable "format on save" (or similar) in your code editor, but the formatter can also be run manually on all files using `pnpm run format`.
 
 ## Project setup
 
 1.  Fork or clone the repo.
-2.  Run `npm install` to install dependencies.
+2.  Run `pnpm install` to install dependencies.
 3.  Create a branch for your PR with `git checkout -b pr/your-branch-name`.
 
 > Tip: If you forked the repo, keep your `main` branch pointing at the original repository
@@ -102,7 +103,9 @@ The structure of the PR should be:
 
 - **Title**: Summarize the change you made, using an active voice. E.g. "Fix broken "Home" link on sidenav"
   - If there is an issue that this PR is meant to resolve, the titles will probably be the same.
-- **Description ("Leave a comment")**: Describe what the concern was and summarize how you solved it.
+- **Description**: GitHub PRs are our source of truth, so descriptions should include as much relevant context as possible. Aim to be as detailed as possible (see [example](https://github.com/clerk/clerk-docs/pull/3003)).
+  - If the PR is a result of a new feature or update, include links to the relevant source code PRs in their respective repos (e.g. `clerk/javascript`) and clearly explain the behavior before —> now. If they are `clerk/dashboard` changes, include screenshots/videos showing the before —> now updates. If this context already exists in the source code PR (`clerk/javascript`, `clerk/dashboard`, `clerk/clerk`, etc.), then just copy it over to the `clerk-docs` PR description, or vice-versa (if it’s in `clerk-docs` PR description, add it to the source code PR description). Writing up context shouldn’t be too hard - AI is very much your friend here!
+  - The **Deadline** should always be filled out, even if the date is tentative/flexible. Try to provide a reasonable exact date so that it's trackable in the PR description. If there's truly no rush on it, write something like "No rush".
 
 ## Preview your changes
 
@@ -123,7 +126,7 @@ Before committing your changes, run our linting checks to validate the changes y
 To run all linting steps:
 
 ```shell
-npm run lint
+pnpm run lint
 ```
 
 ## Getting your contributions reviewed
@@ -1296,6 +1299,73 @@ Fallback markup to render while Clerk is loading. Default: `null`
 ```
 
 </details>
+
+### `<ComparisonTable>`
+
+The `<ComparisonTable>` component is used to create feature comparison tables with styled checkmarks, X marks, and section headers. The table header stays sticky when scrolling the page.
+
+#### Related Components
+
+| Component                | Description                                                          |
+| ------------------------ | -------------------------------------------------------------------- |
+| `<ComparisonTable>`      | Wrapper component for the comparison table with sticky header        |
+| `<CompareSection>`       | Creates a section header row that spans all columns                  |
+| `<CompareYes />`         | Displays a green checkmark (✓). Use `inline` prop for inline display |
+| `<CompareNo />`          | Displays a red X (✗). Use `inline` prop for inline display           |
+| `<ComparePartial>`       | Displays orange text. Defaults to "◐", accepts custom children       |
+| `<CompareNotApplicable>` | Displays gray text. Defaults to "—", accepts custom children         |
+
+#### Example
+
+```mdx
+<ComparisonTable>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Basic</th>
+      <th>Pro</th>
+    </tr>
+  </thead>
+  <tbody>
+    <CompareSection>Authentication</CompareSection>
+    <tr>
+      <td>Email/Password</td>
+      <td>
+        <CompareYes />
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+    <tr>
+      <td>Social Login</td>
+      <td>
+        <CompareNo />
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+    <tr>
+      <td>MFA</td>
+      <td>
+        <ComparePartial>Limited</ComparePartial>
+      </td>
+      <td>
+        <CompareYes />
+      </td>
+    </tr>
+  </tbody>
+</ComparisonTable>
+```
+
+#### Inline Usage
+
+Use the `inline` prop on `<CompareYes />` and `<CompareNo />` when you need them inline with text:
+
+```mdx
+The feature was removed (was <CompareYes inline />, now <CompareNo inline />).
+```
 
 ### `<Include />`
 

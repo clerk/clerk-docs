@@ -3,6 +3,8 @@ title: Build a custom flow for handling legal acceptance
 description: Learn how to use the Clerk API to build a custom user interface for handling legal acceptance.
 ---
 
+<Include src="_partials/custom-flows-callout" />
+
 When the legal acceptance feature is enabled, users are required to agree to your Terms of Service and Privacy Policy before they can sign up to your application.
 
 If you're using the `<SignUp />` component, a checkbox appears and the legal acceptance flow is handled for you. However, if you're building a custom user interface, you need to handle legal acceptance in your sign-up form.
@@ -15,13 +17,13 @@ By default, the legal acceptance feature is disabled. To enable it, navigate to 
 
 ## Add legal acceptance to your sign-up flow
 
-To support legal acceptance, you need to add a checkbox to your sign-up form, capture the checkbox value, and pass it to the [`SignUp.create()`](/docs/reference/javascript/sign-up#create) method.
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  The following example adds the legal acceptance logic to the [Email and password custom flow](/docs/guides/development/custom-flows/authentication/email-password), but you can apply the same logic to any custom flow.
 
-The following example adds the legal acceptance logic to the [Email and password custom flow](/docs/guides/development/custom-flows/authentication/email-password), but you can apply the same logic to any custom flow.
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-<Tabs items={["Next.js", "iOS", "Android"]}>
-  <Tab>
-    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+    To support legal acceptance, you need to add a checkbox to your sign-up form, capture the checkbox value, and pass it to the [`SignUp.create()`](/docs/reference/javascript/sign-up#create) method.
 
     ```tsx {{ filename: 'app/sign-up/[[...sign-up]]/page.tsx', mark: [12, 28, [129, 141]], collapsible: true }}
     'use client'
@@ -178,112 +180,357 @@ The following example adds the legal acceptance logic to the [Email and password
       )
     }
     ```
-  </Tab>
+  </If>
 
-  <Tab>
-    ```swift {{ filename: 'LegalAcceptanceSignUpView.swift', collapsible: true }}
-    import SwiftUI
-    import ClerkKit
+  <If sdk="expo">
+    This example uses `expo-checkbox` to create the checkbox. Install it with the following command:
 
-    struct LegalAcceptanceSignUpView: View {
-      @Environment(Clerk.self) private var clerk
-      @State private var email = ""
-      @State private var password = ""
-    +    @State private var legalAccepted = false
-
-      var body: some View {
-        TextField("Enter email address", text: $email)
-        SecureField("Enter password", text: $password)
-    +      Toggle("I accept the Terms of Service and Privacy Policy", isOn: $legalAccepted)
-        Button("Continue") {
-          Task { await submit(email: email, password: password, legalAccepted: legalAccepted) }
-        }
-      }
-    }
-
-    extension LegalAcceptanceSignUpView {
-
-      func submit(email: String, password: String, legalAccepted: Bool) async {
-        do {
-          // Include legal acceptance in the sign-up payload
-          let signUp = try await clerk.auth.signUp(
-            emailAddress: email,
-            password: password,
-    +          legalAccepted: legalAccepted
-          )
-
-          dump(signUp.status)
-        } catch {
-          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-          // for more info on error handling
-          dump(error)
-        }
-      }
-    }
+    ```npm
+    npm install expo-checkbox
     ```
-  </Tab>
 
-  <Tab>
-    ```kotlin {{ filename: 'LegalAcceptanceViewModel.kt', collapsible: true }}
-    import android.util.Log
-    import androidx.lifecycle.ViewModel
-    import androidx.lifecycle.viewModelScope
-    import com.clerk.api.Clerk
-    import com.clerk.api.network.serialization.errorMessage
-    import com.clerk.api.network.serialization.onFailure
-    import com.clerk.api.network.serialization.onSuccess
-    import com.clerk.api.signup.SignUp
-    import kotlinx.coroutines.flow.MutableStateFlow
-    import kotlinx.coroutines.flow.asStateFlow
-    import kotlinx.coroutines.flow.combine
-    import kotlinx.coroutines.flow.launchIn
-    import kotlinx.coroutines.launch
+    Then, update your sign-up page to include the legal acceptance checkbox. The following example uses the [email and password sign-up example](/docs/guides/development/custom-flows/authentication/email-password).
 
-    class LegalAcceptanceViewModel : ViewModel() {
-        private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
-        val uiState = _uiState.asStateFlow()
+    ```tsx {{ filename: 'app/(auth)/sign-up.tsx', collapsible: true }}
+      import { ThemedText } from '@/components/themed-text'
+      import { ThemedView } from '@/components/themed-view'
+      import { useSignUp } from '@clerk/clerk-expo'
+      import { Link, useRouter } from 'expo-router'
+      import * as React from 'react'
+      import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+    + import Checkbox from 'expo-checkbox'
 
-        init {
-            combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
-                _uiState.value = when {
-                    !isInitialized -> UiState.Loading
-                    user != null -> UiState.Authenticated
-                    else -> UiState.SignedOut
-                }
-            }.launchIn(viewModelScope)
+      export default function Page() {
+        const { isLoaded, signUp, setActive } = useSignUp()
+        const router = useRouter()
+
+        const [emailAddress, setEmailAddress] = React.useState('')
+        const [password, setPassword] = React.useState('')
+    +   const [legalAccepted, setLegalAccepted] = React.useState(false)
+        const [pendingVerification, setPendingVerification] = React.useState(false)
+        const [code, setCode] = React.useState('')
+
+        // Handle submission of sign-up form
+        const onSignUpPress = async () => {
+          if (!isLoaded) return
+
+          // Start sign-up process using email and password provided
+          try {
+            await signUp.create({
+              emailAddress,
+              password,
+    +         legalAccepted,
+            })
+
+            // Send user an email with verification code
+            await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
+
+            // Set 'pendingVerification' to true to display second form
+            // and capture code
+            setPendingVerification(true)
+          } catch (err) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          }
         }
 
-        fun signUp(email: String, password: String, legalAccepted: Boolean) {
-            viewModelScope.launch {
-                // Include legal acceptance in the sign-up payload.
-                Clerk.auth.signUp {
-                    this.email = email
-                    this.password = password
-                    this.legalAccepted = legalAccepted
-                }.onSuccess {
-                    if (it.status == SignUp.Status.COMPLETE) {
-                        _uiState.value = UiState.Authenticated
-                    } else {
-                        // If the status is not complete, check why. User may need to
-                        // complete further steps, such as email verification.
-                        Log.d("LegalAcceptance", "Sign-up status: ${it.status}")
+        // Handle submission of verification form
+        const onVerifyPress = async () => {
+          if (!isLoaded) return
+
+          try {
+            // Use the code the user provided to attempt verification
+            const signUpAttempt = await signUp.attemptEmailAddressVerification({
+              code,
+            })
+
+            // If verification was completed, set the session to active
+            // and redirect the user
+            if (signUpAttempt.status === 'complete') {
+              await setActive({
+                session: signUpAttempt.createdSessionId,
+                navigate: async ({ session }) => {
+                  if (session?.currentTask) {
+                    // Handle pending session tasks
+                    // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                    console.log(session?.currentTask)
+                    return
+                  }
+
+                  router.replace('/')
+                },
+              })
+            } else {
+              // If the status is not complete, check why. User may need to
+              // complete further steps.
+              console.error(JSON.stringify(signUpAttempt, null, 2))
+            }
+          } catch (err) {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            console.error(JSON.stringify(err, null, 2))
+          }
+        }
+
+        if (pendingVerification) {
+          return (
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                Verify your email
+              </ThemedText>
+              <ThemedText style={styles.description}>
+                A verification code has been sent to your email.
+              </ThemedText>
+              <TextInput
+                style={styles.input}
+                value={code}
+                placeholder="Enter your verification code"
+                placeholderTextColor="#666666"
+                onChangeText={(code) => setCode(code)}
+                keyboardType="numeric"
+              />
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={onVerifyPress}
+              >
+                <ThemedText style={styles.buttonText}>Verify</ThemedText>
+              </Pressable>
+            </ThemedView>
+          )
+        }
+
+        return (
+          <ThemedView style={styles.container}>
+            <ThemedText type="title" style={styles.title}>
+              Sign up
+            </ThemedText>
+            <ThemedText style={styles.label}>Email address</ThemedText>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              value={emailAddress}
+              placeholder="Enter email"
+              placeholderTextColor="#666666"
+              onChangeText={(email) => setEmailAddress(email)}
+              keyboardType="email-address"
+            />
+            <ThemedText style={styles.label}>Password</ThemedText>
+            <TextInput
+              style={styles.input}
+              value={password}
+              placeholder="Enter password"
+              placeholderTextColor="#666666"
+              secureTextEntry={true}
+              onChangeText={(password) => setPassword(password)}
+            />
+    +       <View style={styles.legalContainer}>
+    +         <Checkbox value={legalAccepted} onValueChange={setLegalAccepted} style={styles.checkbox} />
+    +         <Pressable onPress={() => setLegalAccepted(!legalAccepted)}>
+    +           <ThemedText style={styles.legalText}>
+    +             I accept the{' '}
+    +             <Link href="/terms">
+    +               <ThemedText type="link">Terms of Service</ThemedText>
+    +             </Link>{' '}
+    +             and{' '}
+    +             <Link href="/privacy">
+    +               <ThemedText type="link">Privacy Policy</ThemedText>
+    +             </Link>
+    +           </ThemedText>
+    +         </Pressable>
+    +       </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                (!emailAddress || !password || !legalAccepted) && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={onSignUpPress}
+              disabled={!emailAddress || !password || !legalAccepted}
+            >
+              <ThemedText style={styles.buttonText}>Continue</ThemedText>
+            </Pressable>
+            <View style={styles.linkContainer}>
+              <ThemedText>Have an account? </ThemedText>
+              <Link href="/sign-in">
+                <ThemedText type="link">Sign in</ThemedText>
+              </Link>
+            </View>
+          </ThemedView>
+        )
+      }
+
+      const styles = StyleSheet.create({
+        container: {
+          flex: 1,
+          padding: 20,
+          gap: 12,
+        },
+        title: {
+          marginBottom: 8,
+        },
+        description: {
+          fontSize: 14,
+          marginBottom: 16,
+          opacity: 0.8,
+        },
+        label: {
+          fontWeight: '600',
+          fontSize: 14,
+        },
+        input: {
+          borderWidth: 1,
+          borderColor: '#ccc',
+          borderRadius: 8,
+          padding: 12,
+          fontSize: 16,
+          backgroundColor: '#fff',
+        },
+        legalContainer: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginVertical: 8,
+        },
+        checkbox: {
+          marginRight: 8,
+        },
+        legalText: {
+          flex: 1,
+        },
+        button: {
+          backgroundColor: '#0a7ea4',
+          paddingVertical: 12,
+          paddingHorizontal: 24,
+          borderRadius: 8,
+          alignItems: 'center',
+          marginTop: 8,
+        },
+        buttonPressed: {
+          opacity: 0.7,
+        },
+        buttonDisabled: {
+          opacity: 0.5,
+        },
+        buttonText: {
+          color: '#fff',
+          fontWeight: '600',
+        },
+        linkContainer: {
+          flexDirection: 'row',
+          gap: 4,
+          marginTop: 12,
+          alignItems: 'center',
+        },
+      })
+    ```
+  </If>
+</If>
+
+<If sdk="ios">
+  ```swift {{ filename: 'LegalAcceptanceSignUpView.swift', collapsible: true }}
+      import SwiftUI
+      import ClerkKit
+
+      struct LegalAcceptanceSignUpView: View {
+        @Environment(Clerk.self) private var clerk
+        @State private var email = ""
+        @State private var password = ""
+      +    @State private var legalAccepted = false
+
+        var body: some View {
+          TextField("Enter email address", text: $email)
+          SecureField("Enter password", text: $password)
+      +      Toggle("I accept the Terms of Service and Privacy Policy", isOn: $legalAccepted)
+          Button("Continue") {
+            Task { await submit(email: email, password: password, legalAccepted: legalAccepted) }
+          }
+        }
+      }
+
+      extension LegalAcceptanceSignUpView {
+
+        func submit(email: String, password: String, legalAccepted: Bool) async {
+          do {
+            // Include legal acceptance in the sign-up payload
+            let signUp = try await clerk.auth.signUp(
+              emailAddress: email,
+              password: password,
+      +          legalAccepted: legalAccepted
+            )
+
+            dump(signUp.status)
+          } catch {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            dump(error)
+          }
+        }
+      }
+  ```
+</If>
+
+<If sdk="android">
+  <CodeBlockTabs options={["LegalAcceptanceViewModel.kt", "LegalAcceptanceActivity.kt"]}>
+    ```kotlin {{ filename: 'LegalAcceptanceViewModel.kt', collapsible: true }}
+        import android.util.Log
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewModelScope
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.errorMessage
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.signup.SignUp
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.flow.combine
+        import kotlinx.coroutines.flow.launchIn
+        import kotlinx.coroutines.launch
+
+        class LegalAcceptanceViewModel : ViewModel() {
+            private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+            val uiState = _uiState.asStateFlow()
+
+            init {
+                combine(Clerk.isInitialized, Clerk.userFlow) { isInitialized, user ->
+                    _uiState.value = when {
+                        !isInitialized -> UiState.Loading
+                        user != null -> UiState.Authenticated
+                        else -> UiState.SignedOut
                     }
-                }.onFailure {
-                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                    // for more info on error handling
-                    Log.e("LegalAcceptance", it.errorMessage, it.throwable)
+                }.launchIn(viewModelScope)
+            }
+
+            fun signUp(email: String, password: String, legalAccepted: Boolean) {
+                viewModelScope.launch {
+                    // Include legal acceptance in the sign-up payload.
+                    Clerk.auth.signUp {
+                        this.email = email
+                        this.password = password
+                        this.legalAccepted = legalAccepted
+                    }.onSuccess {
+                        if (it.status == SignUp.Status.COMPLETE) {
+                            _uiState.value = UiState.Authenticated
+                        } else {
+                            // If the status is not complete, check why. User may need to
+                            // complete further steps, such as email verification.
+                            Log.d("LegalAcceptance", "Sign-up status: ${it.status}")
+                        }
+                    }.onFailure {
+                        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                        // for more info on error handling
+                        Log.e("LegalAcceptance", it.errorMessage, it.throwable)
+                    }
                 }
             }
+
+            sealed interface UiState {
+                data object Loading : UiState
+
+                data object SignedOut : UiState
+
+                data object Authenticated : UiState
+            }
         }
-
-        sealed interface UiState {
-            data object Loading : UiState
-
-            data object SignedOut : UiState
-
-            data object Authenticated : UiState
-        }
-    }
     ```
 
     ```kotlin {{ filename: 'LegalAcceptanceActivity.kt', collapsible: true }}
@@ -369,5 +616,9 @@ The following example adds the legal acceptance logic to the [Email and password
         }
     }
     ```
-  </Tab>
-</Tabs>
+  </CodeBlockTabs>
+</If>
+
+<If sdk={["js-frontend", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

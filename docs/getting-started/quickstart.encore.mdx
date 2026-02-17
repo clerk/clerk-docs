@@ -1,0 +1,167 @@
+---
+title: Encore Quickstart
+description: Learn how to integrate Clerk for secure authentication and user management into your Encore backend application.
+sdk: encore
+---
+
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Create an Encore app",
+      link: "https://encore.dev/docs/ts/quick-start",
+      icon: "encore",
+    },
+  ]}
+/>
+
+Learn how to integrate Clerk into your Encore backend for secure user authentication and management. This guide uses TypeScript and Encore's built-in auth handler pattern.
+
+[Encore](https://encore.dev) is an open source backend framework for TypeScript with built-in infrastructure automation and observability.
+
+<Steps>
+  ## Install `@clerk/backend`
+
+  The [Clerk Backend SDK](/docs/reference/backend/overview) provides utilities to verify session tokens and manage users.
+
+  Run the following command to install the SDK:
+
+  ```bash
+  npm install @clerk/backend
+  ```
+
+  ## Set your Clerk API keys
+
+  <Include src="_partials/quickstarts/set-clerk-api-keys" />
+
+  Add your secret key using Encore's secrets management:
+
+  ```bash
+  encore secret set --dev ClerkSecretKey
+  ```
+
+  ## Create a Clerk client
+
+  Create a file to configure the Clerk client:
+
+  ```ts {{ filename: 'auth/clerk.ts' }}
+  import { createClerkClient } from "@clerk/backend";
+  import { secret } from "encore.dev/config";
+
+  const clerkSecretKey = secret("ClerkSecretKey");
+
+  export const clerk = createClerkClient({
+    secretKey: clerkSecretKey(),
+  });
+  ```
+
+  ## Create an auth handler
+
+  Encore has a built-in auth handler pattern for protecting endpoints. Create an auth handler that verifies Clerk session tokens:
+
+  ```ts {{ filename: 'auth/handler.ts' }}
+  import { APIError, Gateway, Header } from "encore.dev/api";
+  import { authHandler } from "encore.dev/auth";
+  import { verifyToken } from "@clerk/backend";
+  import { secret } from "encore.dev/config";
+  import { clerk } from "./clerk";
+
+  const clerkSecretKey = secret("ClerkSecretKey");
+
+  interface AuthParams {
+    authorization: Header<"Authorization">;
+  }
+
+  export interface AuthData {
+    userID: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  }
+
+  export const auth = authHandler<AuthParams, AuthData>(async (params) => {
+    const token = params.authorization?.replace("Bearer ", "");
+
+    if (!token) {
+      throw APIError.unauthenticated("missing session token");
+    }
+
+    try {
+      const payload = await verifyToken(token, {
+        secretKey: clerkSecretKey(),
+      });
+
+      const userId = payload.sub;
+      if (!userId) {
+        throw new Error("No user ID in token");
+      }
+
+      const user = await clerk.users.getUser(userId);
+
+      return {
+        userID: user.id,
+        email:
+          user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)
+            ?.emailAddress || "",
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+      };
+    } catch (err) {
+      throw APIError.unauthenticated("invalid session token");
+    }
+  });
+
+  export const gateway = new Gateway({
+    authHandler: auth,
+  });
+  ```
+
+  ## Protect your routes
+
+  Use `auth: true` to protect any endpoint. Access the authenticated user's data with `getAuthData()`:
+
+  ```ts {{ filename: 'user/profile.ts' }}
+  import { api } from "encore.dev/api";
+  import { getAuthData } from "~encore/auth";
+
+  export const getProfile = api(
+    { expose: true, auth: true, method: "GET", path: "/user/profile" },
+    async () => {
+      const auth = getAuthData()!;
+
+      return {
+        userId: auth.userID,
+        email: auth.email,
+        firstName: auth.firstName,
+        lastName: auth.lastName,
+      };
+    }
+  );
+  ```
+
+  ## Run locally
+
+  Start your Encore app:
+
+  ```bash
+  encore run
+  ```
+
+  The local dashboard at [localhost:9400](http://localhost:9400) shows traces for all requests, including auth handler execution.
+</Steps>
+
+## Next steps
+
+<Cards>
+  - [Clerk Backend SDK reference](/docs/reference/backend/overview)
+  - Learn more about verifying tokens and managing users.
+
+  ---
+
+  - [Full Clerk + Encore tutorial](https://encore.dev/blog/clerk-tutorial)
+  - Complete guide with database integration, webhooks, and organizations.
+</Cards>

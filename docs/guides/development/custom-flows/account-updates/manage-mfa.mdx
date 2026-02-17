@@ -43,28 +43,26 @@ This guide will walk you through how to build a custom flow that allows users to
         'use client'
 
         import * as React from 'react'
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/nextjs'
-        import { BackupCodeResource, PhoneNumberResource } from '@clerk/shared/types'
+        import { useUser, useReverification } from '@clerk/nextjs'
+        import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
         import Link from 'next/link'
-        import { useRouter } from 'next/navigation'
 
         // Display phone numbers reserved for MFA
         const ManageMfaPhoneNumbers = () => {
           const { isSignedIn, user } = useUser()
-          const clerk = useClerk()
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-            return <p>You must be signed in to access this page</p>
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
+          }
 
           // Check if any phone numbers are reserved for MFA
-          const mfaPhones = user?.phoneNumbers
+          const mfaPhones = user.phoneNumbers
             .filter((ph) => ph.verification.status === 'verified')
             .filter((ph) => ph.reservedForSecondFactor)
             .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1))
 
-          if (!mfaPhones || mfaPhones.length === 0) {
+          if (mfaPhones.length === 0) {
             return <p>There are currently no phone numbers reserved for MFA.</p>
           }
 
@@ -104,57 +102,30 @@ This guide will walk you through how to build a custom flow that allows users to
         // Display phone numbers that are not reserved for MFA
         const ManageAvailablePhoneNumbers = () => {
           const { isSignedIn, user } = useUser()
-          const clerk = useClerk()
-          const router = useRouter()
-
           const setReservedForSecondFactor = useReverification((phone: PhoneNumberResource) =>
             phone.setReservedForSecondFactor({ reserved: true }),
           )
           const destroyPhone = useReverification((phone: PhoneNumberResource) => phone.destroy())
 
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async ({ session }) => {
-                  router.push('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
           }
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-            return <p>You must be signed in to access this page</p>
-
-          // Get verified phone numbers that aren't reserved for MFA
-          const availableForMfaPhones = user?.phoneNumbers
+          // Check if any phone numbers aren't reserved for MFA
+          const availableForMfaPhones = user.phoneNumbers
             .filter((ph) => ph.verification.status === 'verified')
             .filter((ph) => !ph.reservedForSecondFactor)
 
-          // Enable a phone number for MFA
+          // Reserve a phone number for MFA
           const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
-            try {
-              // Set the phone number as reserved for MFA
-              await setReservedForSecondFactor(phone)
-              if (clerk.session?.currentTask?.key === 'setup-mfa') completeTask()
-
-              // Refresh the user information to reflect changes
-              await user?.reload()
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
+            // Set the phone number as reserved for MFA
+            await setReservedForSecondFactor(phone)
+            // Refresh the user information to reflect changes
+            await user.reload()
           }
 
-          if (!availableForMfaPhones || availableForMfaPhones.length === 0) {
+          if (availableForMfaPhones.length === 0) {
             return <p>There are currently no verified phone numbers available to be reserved for MFA.</p>
           }
 
@@ -171,7 +142,7 @@ This guide will walk you through how to build a custom flow that allows users to
                         <button onClick={() => reservePhoneForMfa(phone)}>Use for MFA</button>
                       </div>
                       <div>
-                        <button onClick={() => destroyPhone(phone)}>Remove from account</button>
+                        <button onClick={() => destroyPhone()}>Remove from account</button>
                       </div>
                     </li>
                   )
@@ -190,12 +161,14 @@ This guide will walk you through how to build a custom flow that allows users to
           const [loading, setLoading] = React.useState(false)
 
           React.useEffect(() => {
-            if (backupCodes) return
+            if (backupCodes) {
+              return
+            }
 
             setLoading(true)
             void createBackupCode()
-              .then((backupCode: BackupCodeResource | undefined) => {
-                if (backupCode) setBackupCodes(backupCode)
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode)
                 setLoading(false)
               })
               .catch((err) => {
@@ -204,11 +177,15 @@ This guide will walk you through how to build a custom flow that allows users to
                 console.error(JSON.stringify(err, null, 2))
                 setLoading(false)
               })
-          }, [backupCodes, createBackupCode])
+          }, [])
 
-          if (loading) return <p>Loading...</p>
+          if (loading) {
+            return <p>Loading...</p>
+          }
 
-          if (!backupCodes) return <p>There was a problem generating backup codes</p>
+          if (!backupCodes) {
+            return <p>There was a problem generating backup codes</p>
+          }
 
           return (
             <ol>
@@ -219,37 +196,20 @@ This guide will walk you through how to build a custom flow that allows users to
           )
         }
 
-        export default function ManageMFA() {
+        export default function ManageSMSMFA() {
           const [showBackupCodes, setShowBackupCodes] = React.useState(false)
 
           const { isLoaded, isSignedIn, user } = useUser()
-          const { session } = useSession()
-          const clerk = useClerk()
-          const router = useRouter()
 
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async ({ session }) => {
-                  router.push('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
+          if (!isLoaded) {
+            // Handle loading state
+            return null
           }
 
-          // Handle loading state
-          if (!isLoaded) return <p>Loading...</p>
-
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
+          if (!isSignedIn) {
+            // Handle signed out state
             return <p>You must be signed in to access this page</p>
+          }
 
           return (
             <>
@@ -261,7 +221,7 @@ This guide will walk you through how to build a custom flow that allows users to
               <Link href="/account/add-phone">Add a new phone number</Link>
 
               {/* Manage backup codes */}
-              {user?.twoFactorEnabled && (
+              {user.twoFactorEnabled && (
                 <div>
                   <p>
                     Generate new backup codes? -{' '}
@@ -272,14 +232,7 @@ This guide will walk you through how to build a custom flow that allows users to
               {showBackupCodes && (
                 <>
                   <GenerateBackupCodes />
-                  <button
-                    onClick={() => {
-                      setShowBackupCodes(false)
-                      completeTask()
-                    }}
-                  >
-                    Done
-                  </button>
+                  <button onClick={() => setShowBackupCodes(false)}>Done</button>
                 </>
               )}
             </>
@@ -289,82 +242,80 @@ This guide will walk you through how to build a custom flow that allows users to
       </If>
 
       <If sdk="expo">
-        ```tsx {{ filename: 'app/(account)/manage-mfa.tsx', collapsible: true }}
-        import * as React from 'react'
-        import {
-          View,
-          Text,
-          ScrollView,
-          TouchableOpacity,
-          StyleSheet,
-          ActivityIndicator,
-        } from 'react-native'
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
+        ```tsx {{ filename: 'app/(account)/manage-mfa/page.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
+        import { useUser } from '@clerk/clerk-expo'
         import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
-        import { Link, useRouter } from 'expo-router'
+        import { Redirect, useRouter } from 'expo-router'
+        import * as React from 'react'
+        import { Pressable, StyleSheet, View } from 'react-native'
 
         // Display phone numbers reserved for MFA
         const ManageMfaPhoneNumbers = () => {
           const { isSignedIn, user } = useUser()
-          const clerk = useClerk()
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-            return <Text style={styles.warningText}>You must be signed in to access this page</Text>
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
 
           // Check if any phone numbers are reserved for MFA
-          const mfaPhones = user?.phoneNumbers
+          const mfaPhones = user.phoneNumbers
             .filter((ph) => ph.verification.status === 'verified')
             .filter((ph) => ph.reservedForSecondFactor)
             .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1))
 
-          if (!mfaPhones || mfaPhones.length === 0) {
+          if (mfaPhones.length === 0) {
             return (
-              <Text style={styles.infoText}>There are currently no phone numbers reserved for MFA.</Text>
+              <ThemedText style={styles.infoText}>
+                There are currently no phone numbers reserved for MFA.
+              </ThemedText>
             )
           }
 
           return (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Phone numbers reserved for MFA</Text>
-              {mfaPhones.map((phone) => {
-                return (
-                  <View key={phone.id} style={styles.phoneItem}>
-                    <View style={styles.phoneInfo}>
-                      <Text style={styles.phoneNumber}>
-                        {phone.phoneNumber}{' '}
-                        {phone.defaultSecondFactor && <Text style={styles.badge}>(Default)</Text>}
-                      </Text>
-                    </View>
-
-                    <View style={styles.buttonGroup}>
-                      <TouchableOpacity
-                        style={[styles.button, styles.secondaryButton]}
-                        onPress={() => phone.setReservedForSecondFactor({ reserved: false })}
-                      >
-                        <Text style={styles.secondaryButtonText}>Disable for MFA</Text>
-                      </TouchableOpacity>
-
-                      {!phone.defaultSecondFactor && (
-                        <TouchableOpacity
-                          style={[styles.button, styles.primaryButton]}
-                          onPress={() => phone.makeDefaultSecondFactor()}
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Phone numbers reserved for MFA
+              </ThemedText>
+              <View style={styles.list}>
+                {mfaPhones.map((phone) => {
+                  return (
+                    <View key={phone.id} style={styles.listItem}>
+                      <ThemedText style={styles.phoneNumber}>
+                        {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
+                      </ThemedText>
+                      <View style={styles.buttonGroup}>
+                        <Pressable
+                          style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                          onPress={() => phone.setReservedForSecondFactor({ reserved: false })}
                         >
-                          <Text style={styles.primaryButtonText}>Make default</Text>
-                        </TouchableOpacity>
-                      )}
+                          <ThemedText style={styles.smallButtonText}>Disable for MFA</ThemedText>
+                        </Pressable>
 
-                      <TouchableOpacity
-                        style={[styles.button, styles.dangerButton]}
-                        onPress={() => phone.destroy()}
-                      >
-                        <Text style={styles.dangerButtonText}>Remove</Text>
-                      </TouchableOpacity>
+                        {!phone.defaultSecondFactor && (
+                          <Pressable
+                            style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                            onPress={() => phone.makeDefaultSecondFactor()}
+                          >
+                            <ThemedText style={styles.smallButtonText}>Make default</ThemedText>
+                          </Pressable>
+                        )}
+
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.smallButton,
+                            styles.dangerButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                          onPress={() => phone.destroy()}
+                        >
+                          <ThemedText style={styles.dangerButtonText}>Remove</ThemedText>
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                )
-              })}
+                  )
+                })}
+              </View>
             </View>
           )
         }
@@ -372,93 +323,69 @@ This guide will walk you through how to build a custom flow that allows users to
         // Display phone numbers that are not reserved for MFA
         const ManageAvailablePhoneNumbers = () => {
           const { isSignedIn, user } = useUser()
-          const clerk = useClerk()
-          const router = useRouter()
 
-          const setReservedForSecondFactor = useReverification((phone: PhoneNumberResource) =>
-            phone.setReservedForSecondFactor({ reserved: true }),
-          )
-          const destroyPhone = useReverification((phone: PhoneNumberResource) => phone.destroy())
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
 
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async () => {
-                  router.replace('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
-          }
-
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-            return <Text style={styles.warningText}>You must be signed in to access this page</Text>
-
-          // Get verified phone numbers that aren't reserved for MFA
-          const availableForMfaPhones = user?.phoneNumbers
+          // Check if any phone numbers aren't reserved for MFA
+          const availableForMfaPhones = user.phoneNumbers
             .filter((ph) => ph.verification.status === 'verified')
             .filter((ph) => !ph.reservedForSecondFactor)
 
-          // Enable a phone number for MFA
+          // Reserve a phone number for MFA
           const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
-            try {
-              // Set the phone number as reserved for MFA
-              await setReservedForSecondFactor(phone)
-              if (clerk.session?.currentTask?.key === 'setup-mfa') completeTask()
-
-              // Refresh the user information to reflect changes
-              await user?.reload()
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
+            // Set the phone number as reserved for MFA
+            await phone.setReservedForSecondFactor({ reserved: true })
+            // Refresh the user information to reflect changes
+            await user.reload()
           }
 
-          if (!availableForMfaPhones || availableForMfaPhones.length === 0) {
+          // Remove a phone number
+          const removePhone = async (phone: PhoneNumberResource) => {
+            await phone.destroy()
+            await user.reload()
+          }
+
+          if (availableForMfaPhones.length === 0) {
             return (
-              <Text style={styles.infoText}>
+              <ThemedText style={styles.infoText}>
                 There are currently no verified phone numbers available to be reserved for MFA.
-              </Text>
+              </ThemedText>
             )
           }
 
           return (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Phone numbers not reserved for MFA</Text>
-
-              {availableForMfaPhones.map((phone) => {
-                return (
-                  <View key={phone.id} style={styles.phoneItem}>
-                    <View style={styles.phoneInfo}>
-                      <Text style={styles.phoneNumber}>{phone.phoneNumber}</Text>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Phone numbers that are not reserved for MFA
+              </ThemedText>
+              <View style={styles.list}>
+                {availableForMfaPhones.map((phone) => {
+                  return (
+                    <View key={phone.id} style={styles.listItem}>
+                      <ThemedText style={styles.phoneNumber}>{phone.phoneNumber}</ThemedText>
+                      <View style={styles.buttonGroup}>
+                        <Pressable
+                          style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                          onPress={() => reservePhoneForMfa(phone)}
+                        >
+                          <ThemedText style={styles.smallButtonText}>Use for MFA</ThemedText>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.smallButton,
+                            styles.dangerButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                          onPress={() => removePhone(phone)}
+                        >
+                          <ThemedText style={styles.dangerButtonText}>Remove</ThemedText>
+                        </Pressable>
+                      </View>
                     </View>
-
-                    <View style={styles.buttonGroup}>
-                      <TouchableOpacity
-                        style={[styles.button, styles.primaryButton]}
-                        onPress={() => reservePhoneForMfa(phone)}
-                      >
-                        <Text style={styles.primaryButtonText}>Use for MFA</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.button, styles.dangerButton]}
-                        onPress={() => destroyPhone(phone)}
-                      >
-                        <Text style={styles.dangerButtonText}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )
-              })}
+                  )
+                })}
+              </View>
             </View>
           )
         }
@@ -467,17 +394,16 @@ This guide will walk you through how to build a custom flow that allows users to
         function GenerateBackupCodes() {
           const { user } = useUser()
           const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
-          const createBackupCode = useReverification(() => user?.createBackupCode())
-
           const [loading, setLoading] = React.useState(false)
 
           React.useEffect(() => {
             if (backupCodes) return
 
             setLoading(true)
-            void createBackupCode()
-              .then((backupCode: BackupCodeResource | undefined) => {
-                if (backupCode) setBackupCodes(backupCode)
+            user
+              ?.createBackupCode()
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode)
                 setLoading(false)
               })
               .catch((err) => {
@@ -486,167 +412,118 @@ This guide will walk you through how to build a custom flow that allows users to
                 console.error(JSON.stringify(err, null, 2))
                 setLoading(false)
               })
-          }, [backupCodes, createBackupCode])
+          }, [])
 
-          if (loading)
-            return (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#6366f1" />
-                <Text style={styles.loadingText}>Generating backup codes...</Text>
-              </View>
-            )
+          // Handle loading state
+          if (loading) return <ThemedText>Loading...</ThemedText>
 
           if (!backupCodes)
-            return <Text style={styles.warningText}>There was a problem generating backup codes</Text>
+            return (
+              <ThemedText style={styles.errorText}>There was a problem generating backup codes</ThemedText>
+            )
 
           return (
-            <View style={styles.backupCodesContainer}>
-              <Text style={styles.backupCodesTitle}>Save these backup codes:</Text>
+            <View style={styles.codeList}>
               {backupCodes.codes.map((code, index) => (
-                <View key={index} style={styles.backupCodeItem}>
-                  <Text style={styles.backupCodeNumber}>{index + 1}.</Text>
-                  <Text style={styles.backupCode}>{code}</Text>
-                </View>
+                <ThemedText key={index} style={styles.code}>
+                  {index + 1}. {code}
+                </ThemedText>
               ))}
             </View>
           )
         }
 
-        export default function ManageMFA() {
+        export default function ManageSMSMFA() {
           const [showBackupCodes, setShowBackupCodes] = React.useState(false)
-
-          const { isLoaded, isSignedIn, user } = useUser()
-          const { session } = useSession()
-          const clerk = useClerk()
           const router = useRouter()
 
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async () => {
-                  router.replace('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
-          }
+          const { isLoaded, isSignedIn, user } = useUser()
 
           // Handle loading state
-          if (!isLoaded)
+          if (!isLoaded) {
             return (
-              <View style={styles.container}>
-                <ActivityIndicator size="large" color="#6366f1" />
-                <Text style={styles.loadingText}>Loading...</Text>
-              </View>
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
             )
+          }
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
-            return (
-              <View style={styles.container}>
-                <Text style={styles.warningText}>You must be signed in to access this page</Text>
-              </View>
-            )
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
 
           return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-              <Text style={styles.title}>User MFA Settings</Text>
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                User MFA Settings
+              </ThemedText>
 
-              {/* Manage SMS MFA */}
               <ManageMfaPhoneNumbers />
               <ManageAvailablePhoneNumbers />
 
-              <Link href="/add-phone" asChild>
-                <TouchableOpacity style={[styles.button, styles.primaryButton, styles.linkButton]}>
-                  <Text style={styles.primaryButtonText}>Add a new phone number</Text>
-                </TouchableOpacity>
-              </Link>
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={() => router.push('/add-phone' as any)}
+              >
+                <ThemedText style={styles.buttonText}>Add a new phone number</ThemedText>
+              </Pressable>
 
-              {/* Manage backup codes */}
-              {user?.twoFactorEnabled && (
+              {user.twoFactorEnabled && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Backup Codes</Text>
-                  {!showBackupCodes ? (
-                    <View style={styles.backupPrompt}>
-                      <Text style={styles.infoText}>Generate new backup codes for account recovery</Text>
-                      <TouchableOpacity
-                        style={[styles.button, styles.primaryButton]}
-                        onPress={() => setShowBackupCodes(true)}
-                      >
-                        <Text style={styles.primaryButtonText}>Generate Backup Codes</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View>
-                      <GenerateBackupCodes />
-                      <TouchableOpacity
-                        style={[styles.button, styles.successButton, styles.doneButton]}
-                        onPress={() => {
-                          setShowBackupCodes(false)
-                          completeTask()
-                        }}
-                      >
-                        <Text style={styles.successButtonText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                  <ThemedText style={styles.infoText}>Generate new backup codes?</ThemedText>
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setShowBackupCodes(true)}
+                  >
+                    <ThemedText style={styles.buttonText}>Generate</ThemedText>
+                  </Pressable>
                 </View>
               )}
-            </ScrollView>
+
+              {showBackupCodes && (
+                <View style={styles.section}>
+                  <GenerateBackupCodes />
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setShowBackupCodes(false)}
+                  >
+                    <ThemedText style={styles.buttonText}>Done</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+            </ThemedView>
           )
         }
 
         const styles = StyleSheet.create({
           container: {
             flex: 1,
-            backgroundColor: '#f9fafb',
-          },
-          contentContainer: {
             padding: 20,
+            gap: 16,
           },
           title: {
-            fontSize: 28,
-            fontWeight: 'bold',
-            color: '#111827',
-            marginBottom: 24,
+            marginBottom: 8,
           },
           section: {
-            marginBottom: 24,
+            gap: 12,
+            marginBottom: 16,
           },
           sectionTitle: {
-            fontSize: 20,
             fontWeight: '600',
-            color: '#374151',
-            marginBottom: 12,
+            fontSize: 16,
+            marginBottom: 8,
           },
-          phoneItem: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.1,
-            shadowRadius: 3,
-            elevation: 2,
+          list: {
+            gap: 12,
           },
-          phoneInfo: {
-            marginBottom: 12,
+          listItem: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
           },
           phoneNumber: {
             fontSize: 16,
-            color: '#111827',
             fontWeight: '500',
-          },
-          badge: {
-            color: '#6366f1',
-            fontWeight: '600',
           },
           buttonGroup: {
             flexDirection: 'row',
@@ -654,111 +531,57 @@ This guide will walk you through how to build a custom flow that allows users to
             gap: 8,
           },
           button: {
-            paddingVertical: 10,
-            paddingHorizontal: 16,
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
             borderRadius: 8,
             alignItems: 'center',
-            justifyContent: 'center',
+            marginTop: 8,
           },
-          primaryButton: {
-            backgroundColor: '#6366f1',
-          },
-          primaryButtonText: {
-            color: '#ffffff',
-            fontSize: 14,
-            fontWeight: '600',
-          },
-          secondaryButton: {
-            backgroundColor: '#f3f4f6',
-            borderWidth: 1,
-            borderColor: '#d1d5db',
-          },
-          secondaryButtonText: {
-            color: '#374151',
-            fontSize: 14,
-            fontWeight: '600',
+          smallButton: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 6,
+            alignItems: 'center',
           },
           dangerButton: {
-            backgroundColor: '#fef2f2',
-            borderWidth: 1,
-            borderColor: '#fecaca',
+            backgroundColor: '#c62828',
+          },
+          buttonPressed: {
+            opacity: 0.7,
+          },
+          buttonText: {
+            color: '#fff',
+            fontWeight: '600',
+          },
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
           },
           dangerButtonText: {
-            color: '#dc2626',
-            fontSize: 14,
+            color: '#fff',
             fontWeight: '600',
-          },
-          successButton: {
-            backgroundColor: '#10b981',
-          },
-          successButtonText: {
-            color: '#ffffff',
-            fontSize: 14,
-            fontWeight: '600',
-          },
-          linkButton: {
-            marginTop: 8,
+            fontSize: 13,
           },
           infoText: {
             fontSize: 14,
-            color: '#6b7280',
-            marginBottom: 12,
+            opacity: 0.8,
           },
-          warningText: {
+          errorText: {
+            color: '#c62828',
             fontSize: 14,
-            color: '#dc2626',
-            textAlign: 'center',
           },
-          loadingContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
+          codeList: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
           },
-          loadingText: {
-            fontSize: 14,
-            color: '#6b7280',
-            marginTop: 12,
-          },
-          backupCodesContainer: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-          },
-          backupCodesTitle: {
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: 12,
-          },
-          backupCodeItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            backgroundColor: '#f9fafb',
-            borderRadius: 6,
-            marginBottom: 6,
-          },
-          backupCodeNumber: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: '#6b7280',
-            width: 24,
-          },
-          backupCode: {
-            fontSize: 16,
+          code: {
             fontFamily: 'monospace',
-            color: '#111827',
-            fontWeight: '500',
-          },
-          backupPrompt: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 16,
-          },
-          doneButton: {
-            marginTop: 16,
+            fontSize: 14,
           },
         })
         ```
@@ -770,6 +593,8 @@ This guide will walk you through how to build a custom flow that allows users to
     </Tab>
 
     <Tab>
+      <Include src="_partials/custom-flows/phone-number" />
+
       <Include src="_partials/custom-flows/add-phone" />
     </Tab>
   </Tabs>
@@ -786,38 +611,29 @@ This guide will walk you through how to build a custom flow that allows users to
   1. For the purpose of this guide, toggle on both the **Authenticator application** and **Backup codes** strategies.
   1. Select **Save**.
 
-  <If sdk="expo">
-    ### Install dependencies
-
-    Install `expo-checkbox` for the UI and `react-native-qr-svg` for the QR code.
-
-    ```npm
-    npm install expo-checkbox react-native-qr-svg
-    ```
-  </If>
+  <Include src="_partials/duo-authenticator-app-callout.mdx" />
 
   ### Build the custom flow
 
   <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+
     This example consists of two pages:
 
     - The main page where users can manage their MFA settings
-    - The page where users can add TOTP MFA
+    - The page where users can add TOTP MFA.
 
     Use the following tabs to view the code necessary for each page.
 
     <Tabs items={["Manage MFA page", "Add TOTP page"]}>
       <Tab>
-        **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
         ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
         'use client'
 
         import * as React from 'react'
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/nextjs'
+        import { useUser, useReverification } from '@clerk/nextjs'
         import Link from 'next/link'
-        import { BackupCodeResource } from '@clerk/shared/types'
-        import { useRouter } from 'next/navigation'
+        import { BackupCodeResource } from '@clerk/types'
 
         // If TOTP is enabled, provide the option to disable it
         const TotpEnabled = () => {
@@ -825,25 +641,21 @@ This guide will walk you through how to build a custom flow that allows users to
           const disableTOTP = useReverification(() => user?.disableTOTP())
 
           return (
-            <div>
-              <p>
-                TOTP via authentication app enabled - <button onClick={() => disableTOTP()}>Remove</button>
-              </p>
-            </div>
+            <p>
+              TOTP via authentication app enabled - <button onClick={() => disableTOTP()}>Remove</button>
+            </p>
           )
         }
 
         // If TOTP is disabled, provide the option to enable it
         const TotpDisabled = () => {
           return (
-            <div>
-              <p>
-                Add TOTP via authentication app -{' '}
-                <Link href="/account/manage-mfa/add">
-                  <button>Add</button>
-                </Link>
-              </p>
-            </div>
+            <p>
+              Add TOTP via authentication app -{' '}
+              <Link href="/account/manage-mfa/add">
+                <button>Add</button>
+              </Link>
+            </p>
           )
         }
 
@@ -870,9 +682,10 @@ This guide will walk you through how to build a custom flow that allows users to
                 console.error(JSON.stringify(err, null, 2))
                 setLoading(false)
               })
-          }, [backupCodes, createBackupCode])
+          }, [])
 
-          if (loading) return <p>Loading...</p>
+          // Handle loading state
+          if (loading) <p>Loading...</p>
 
           if (!backupCodes) return <p>There was a problem generating backup codes</p>
 
@@ -887,56 +700,27 @@ This guide will walk you through how to build a custom flow that allows users to
 
         export default function ManageMFA() {
           const { isLoaded, isSignedIn, user } = useUser()
-          const clerk = useClerk()
-          const router = useRouter()
-
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async ({ session }) => {
-                  router.push('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
-          }
-
           const [showNewCodes, setShowNewCodes] = React.useState(false)
 
           // Handle loading state
-          if (!isLoaded) return <p>Loading...</p>
+          if (!isLoaded) <p>Loading...</p>
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
-            return <p>You must be signed in to access this page</p>
+          // Handle signed-out state
+          if (!isSignedIn) <p>You must be signed in to access this page</p>
 
           return (
             <>
               <h1>User MFA Settings</h1>
 
               {/* Manage TOTP MFA */}
-              {user?.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
+              {user.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
 
               {/* Manage backup codes */}
-              {user?.backupCodeEnabled && user.twoFactorEnabled && (
-                <div>
-                  <p>
-                    Generate new backup codes? -{' '}
-                    <button
-                      onClick={() => {
-                        setShowNewCodes(true)
-                      }}
-                    >
-                      Generate
-                    </button>
-                  </p>
-                </div>
+              {user.backupCodeEnabled && user.twoFactorEnabled && (
+                <p>
+                  Generate new backup codes? -{' '}
+                  <button onClick={() => setShowNewCodes(true)}>Generate</button>
+                </p>
               )}
               {showNewCodes && (
                 <>
@@ -951,18 +735,15 @@ This guide will walk you through how to build a custom flow that allows users to
       </Tab>
 
       <Tab>
-        **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
         ```tsx {{ filename: 'app/account/manage-mfa/add/page.tsx', collapsible: true }}
         'use client'
 
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/nextjs'
-        import { TOTPResource } from '@clerk/shared/types'
+        import { useUser, useReverification } from '@clerk/nextjs'
+        import { TOTPResource } from '@clerk/types'
         import Link from 'next/link'
         import * as React from 'react'
         import { QRCodeSVG } from 'qrcode.react'
         import { GenerateBackupCodes } from '../page'
-        import { useRouter } from 'next/navigation'
 
         type AddTotpSteps = 'add' | 'verify' | 'backupcodes' | 'success'
 
@@ -980,15 +761,15 @@ This guide will walk you through how to build a custom flow that allows users to
 
           React.useEffect(() => {
             void createTOTP()
-              .then((totp: TOTPResource | undefined) => {
-                if (totp) setTOTP(totp)
+              .then((totp: TOTPResource) => {
+                setTOTP(totp)
               })
               .catch((err) =>
                 // See https://clerk.com/docs/guides/development/custom-flows/error-handling
                 // for more info on error handling
                 console.error(JSON.stringify(err, null, 2)),
               )
-          }, [createTOTP])
+          }, [])
 
           return (
             <>
@@ -1054,25 +835,6 @@ This guide will walk you through how to build a custom flow that allows users to
         }: {
           setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>
         }) {
-          const clerk = useClerk()
-          const router = useRouter()
-
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async ({ session }) => {
-                  router.push('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
-          }
-
           return (
             <>
               <h1>Verification was a success!</h1>
@@ -1082,14 +844,7 @@ This guide will walk you through how to build a custom flow that allows users to
                   an emergency
                 </p>
                 <GenerateBackupCodes />
-                <button
-                  onClick={() => {
-                    setStep('success')
-                    completeTask()
-                  }}
-                >
-                  Finish
-                </button>
+                <button onClick={() => setStep('success')}>Finish</button>
               </div>
             </>
           )
@@ -1105,17 +860,15 @@ This guide will walk you through how to build a custom flow that allows users to
         }
 
         export default function AddMFaScreen() {
+          const { isLoaded, isSignedIn, user } = useUser()
+
           const [step, setStep] = React.useState<AddTotpSteps>('add')
-          const { isLoaded, isSignedIn } = useUser()
-          const { session } = useSession()
 
           // Handle loading state
-          if (!isLoaded) return <p>Loading...</p>
+          if (!isLoaded) <p>Loading...</p>
 
           // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa')
-            return <p>You must be signed in to access this page</p>
+          if (!isSignedIn) <p>You must be signed in to access this page</p>
 
           return (
             <>
@@ -1133,9 +886,19 @@ This guide will walk you through how to build a custom flow that allows users to
   </If>
 
   <If sdk="expo">
+    ### Before you start
+
+    Install `expo-checkbox` for the UI and `react-native-qr-svg` for the QR code.
+
+    ```npm
+    npm install expo-checkbox react-native-qr-svg
+    ```
+
+    ### Build the flow
+
     To allow users to configure their MFA settings, you'll create a basic dashboard.
 
-    This example consists of three pages:
+    The following example consists of three pages:
 
     - The layout page that checks if the user is signed in
     - The page where users can manage their account, including their MFA settings
@@ -1145,19 +908,17 @@ This guide will walk you through how to build a custom flow that allows users to
 
     <Tabs items={["Layout", "Account page", "Add TOTP page"]}>
       <Tab>
-        1. Create the `(account)` route group. This groups your account page and the "Add TOTP" page.
-        1. Create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to check if the user is signed in. If the user isn't signed in, they'll be redirected to the sign-in page. You check if the user has a pending `setup-mfa` task because if they're trying to access their account settings to set up MFA, they should be able to access these routes, so we don't want to redirect them to the sign-in page.
+        1. Create the `(account)` route group. This groups your account page and the "Add TOTP MFA" page.
+        1. Create a `_layout.tsx` file with the following code. The [`useAuth()`](/docs/reference/hooks/use-auth) hook is used to check if the user is signed in. If the user isn't signed in, they'll be redirected to the sign-in page.
 
         ```tsx {{ filename: 'app/(account)/_layout.tsx' }}
         import { Redirect, Stack } from 'expo-router'
-        import { useAuth, useSession } from '@clerk/expo'
+        import { useAuth } from '@clerk/clerk-expo'
 
         export default function AuthenticatedLayout() {
           const { isSignedIn } = useAuth()
-          const { session } = useSession()
 
-          // If the user isn't signed in and they're not trying to set up MFA, redirect them to the sign-in page
-          if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
+          if (!isSignedIn) {
             return <Redirect href={'/sign-in'} />
           }
 
@@ -1167,974 +928,569 @@ This guide will walk you through how to build a custom flow that allows users to
       </Tab>
 
       <Tab>
-        In the `(account)` group, create an `manage-mfa.tsx` file with the following code. This page shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
+        In the `(account)` group, create an `index.tsx` file with the following code. This page shows users whether or not MFA is enabled, and allows them to add MFA with an authenticator app.
 
-        ```tsx {{ filename: 'app/(account)/manage-mfa.tsx', collapsible: true }}
-        import * as React from 'react'
-        import {
-          View,
-          Text,
-          ScrollView,
-          TouchableOpacity,
-          StyleSheet,
-          ActivityIndicator,
-        } from 'react-native'
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
-        import { Link, useRouter } from 'expo-router'
+        ```tsx {{ filename: 'app/(account)/index.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
+        import { useUser } from '@clerk/clerk-expo'
         import { BackupCodeResource } from '@clerk/types'
+        import { Redirect, useRouter } from 'expo-router'
+        import React from 'react'
+        import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 
-        // If TOTP is enabled, provide the option to disable it
-        const TotpEnabled = () => {
-          const { user } = useUser()
-          const disableTOTP = useReverification(() => user?.disableTOTP())
-
-          return (
-            <View style={styles.section}>
-              <View style={styles.card}>
-                <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>Authenticator App (TOTP)</Text>
-                  <Text style={styles.statusBadge}>✓ Enabled</Text>
-                </View>
-                <TouchableOpacity
-                  style={[styles.button, styles.dangerButton]}
-                  onPress={() => disableTOTP()}
-                >
-                  <Text style={styles.dangerButtonText}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )
-        }
-
-        // If TOTP is disabled, provide the option to enable it
-        const TotpDisabled = () => {
-          return (
-            <View style={styles.section}>
-              <View style={styles.card}>
-                <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>Authenticator App (TOTP)</Text>
-                  <Text style={styles.infoText}>
-                    Add an authenticator app for two-factor authentication
-                  </Text>
-                </View>
-                <Link href="/add-mfa" asChild>
-                  <TouchableOpacity style={[styles.button, styles.primaryButton]}>
-                    <Text style={styles.primaryButtonText}>Add</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
-            </View>
-          )
-        }
-
-        // Generate and display backup codes
-        export function GenerateBackupCodes() {
-          const { user } = useUser()
-          const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
-          const createBackupCode = useReverification(() => user?.createBackupCode())
-
-          const [loading, setLoading] = React.useState(false)
-
-          React.useEffect(() => {
-            if (backupCodes) return
-
-            setLoading(true)
-            void createBackupCode()
-              .then((backupCode: BackupCodeResource | undefined) => {
-                setBackupCodes(backupCode)
-                setLoading(false)
-              })
-              .catch((err) => {
-                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-                // for more info on error handling
-                console.error(JSON.stringify(err, null, 2))
-                setLoading(false)
-              })
-          }, [backupCodes, createBackupCode])
-
-          if (loading)
-            return (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#6366f1" />
-                <Text style={styles.loadingText}>Generating backup codes...</Text>
-              </View>
-            )
-
-          if (!backupCodes)
-            return <Text style={styles.warningText}>There was a problem generating backup codes</Text>
-
-          return (
-            <View style={styles.backupCodesContainer}>
-              <Text style={styles.backupCodesTitle}>Save these backup codes:</Text>
-              <Text style={styles.backupCodesSubtitle}>
-                Store them in a safe place. Each code can only be used once.
-              </Text>
-              {backupCodes.codes.map((code, index) => (
-                <View key={index} style={styles.backupCodeItem}>
-                  <Text style={styles.backupCodeNumber}>{index + 1}.</Text>
-                  <Text style={styles.backupCode}>{code}</Text>
-                </View>
-              ))}
-            </View>
-          )
-        }
-
-        export default function ManageMFA() {
+        export default function ManageTOTPMfa() {
           const { isLoaded, isSignedIn, user } = useUser()
-          const clerk = useClerk()
           const router = useRouter()
 
-          const [showNewCodes, setShowNewCodes] = React.useState(false)
+          const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
+          const [loading, setLoading] = React.useState(false)
 
-          // Complete the session task when phone number is picked for MFA
-          const completeTask = async () => {
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async () => {
-                  router.replace('/')
-                },
-              })
-            } catch (err) {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-            }
+          if (!isLoaded) {
+            return (
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
+            )
           }
 
-          // Handle loading state
-          if (!isLoaded)
-            return (
-              <View style={styles.container}>
-                <ActivityIndicator size="large" color="#6366f1" />
-                <Text style={styles.loadingText}>Loading...</Text>
-              </View>
-            )
+          if (!isSignedIn) {
+            return <Redirect href="/sign-in" />
+          }
 
-          // Handle signed out state
-          // If the user is trying to set up MFA, they should be able to access this page
-          if (!isSignedIn && clerk.session?.currentTask?.key !== 'setup-mfa')
+          const generateBackupCodes = () => {
+            setLoading(true)
+            user
+              ?.createBackupCode()
+              .then((backupCodes: BackupCodeResource) => {
+                setBackupCodes(backupCodes)
+                setLoading(false)
+              })
+              .catch((error) => {
+                console.log('Error:', error)
+                setLoading(false)
+              })
+          }
+
+          const disableTOTP = async () => {
+            await user.disableTOTP()
+          }
+
+          const MFAEnabled = () => {
             return (
-              <View style={styles.container}>
-                <Text style={styles.warningText}>You must be signed in to access this page</Text>
+              <View style={styles.mfaRow}>
+                <ThemedText style={styles.infoText}>TOTP via authentication app enabled</ThemedText>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.smallButton,
+                    styles.dangerButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => disableTOTP()}
+                >
+                  <ThemedText style={styles.smallButtonText}>Remove</ThemedText>
+                </Pressable>
               </View>
             )
+          }
+
+          const MFADisabled = () => {
+            return (
+              <View style={styles.mfaRow}>
+                <ThemedText style={styles.infoText}>Add TOTP via authentication app</ThemedText>
+                <Pressable
+                  style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                  onPress={() => router.push('/add-mfa' as any)}
+                >
+                  <ThemedText style={styles.smallButtonText}>Add</ThemedText>
+                </Pressable>
+              </View>
+            )
+          }
 
           return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-              <Text style={styles.title}>User MFA Settings</Text>
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                Current MFA Settings
+              </ThemedText>
 
-              {/* Manage TOTP MFA */}
-              {user?.totpEnabled ? <TotpEnabled /> : <TotpDisabled />}
+              <View style={styles.section}>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Authenticator App
+                </ThemedText>
 
-              {/* Manage backup codes */}
-              {user?.backupCodeEnabled && user.twoFactorEnabled && (
+                {user.totpEnabled ? <MFAEnabled /> : <MFADisabled />}
+              </View>
+
+              {user.backupCodeEnabled && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Backup Codes</Text>
-                  {!showNewCodes ? (
-                    <View style={styles.card}>
-                      <Text style={styles.infoText}>Generate new backup codes for account recovery</Text>
-                      <TouchableOpacity
-                        style={[styles.button, styles.primaryButton]}
-                        onPress={() => {
-                          setShowNewCodes(true)
-                        }}
-                      >
-                        <Text style={styles.primaryButtonText}>Generate New Codes</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View>
-                      <GenerateBackupCodes />
-                      <TouchableOpacity
-                        style={[styles.button, styles.successButton, styles.doneButton]}
-                        onPress={() => setShowNewCodes(false)}
-                      >
-                        <Text style={styles.successButtonText}>Done</Text>
-                      </TouchableOpacity>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>
+                    Backup Codes
+                  </ThemedText>
+
+                  {loading && <ThemedText>Loading...</ThemedText>}
+
+                  {backupCodes && !loading && (
+                    <View style={styles.codeList}>
+                      <FlatList
+                        data={backupCodes.codes}
+                        renderItem={({ item, index }) => (
+                          <ThemedText key={index} style={styles.code}>
+                            {index + 1}. {item}
+                          </ThemedText>
+                        )}
+                        keyExtractor={(item) => item}
+                      />
                     </View>
                   )}
+
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => generateBackupCodes()}
+                  >
+                    <ThemedText style={styles.buttonText}>Regenerate Codes</ThemedText>
+                  </Pressable>
                 </View>
               )}
-            </ScrollView>
+            </ThemedView>
           )
         }
 
         const styles = StyleSheet.create({
           container: {
             flex: 1,
-            backgroundColor: '#f9fafb',
-          },
-          contentContainer: {
             padding: 20,
+            gap: 16,
           },
           title: {
-            fontSize: 28,
-            fontWeight: 'bold',
-            color: '#111827',
-            marginBottom: 24,
+            marginBottom: 8,
           },
           section: {
-            marginBottom: 24,
+            gap: 12,
+            marginBottom: 16,
           },
           sectionTitle: {
-            fontSize: 20,
             fontWeight: '600',
-            color: '#374151',
-            marginBottom: 12,
+            fontSize: 16,
+            marginBottom: 8,
           },
-          card: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 16,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.1,
-            shadowRadius: 3,
-            elevation: 2,
-          },
-          cardContent: {
-            marginBottom: 12,
-          },
-          cardTitle: {
-            fontSize: 18,
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: 4,
-          },
-          statusBadge: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: '#10b981',
-            marginTop: 4,
-          },
-          button: {
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-            borderRadius: 8,
+          mfaRow: {
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
-          },
-          primaryButton: {
-            backgroundColor: '#6366f1',
-          },
-          primaryButtonText: {
-            color: '#ffffff',
-            fontSize: 14,
-            fontWeight: '600',
-          },
-          dangerButton: {
-            backgroundColor: '#fef2f2',
-            borderWidth: 1,
-            borderColor: '#fecaca',
-          },
-          dangerButtonText: {
-            color: '#dc2626',
-            fontSize: 14,
-            fontWeight: '600',
-          },
-          successButton: {
-            backgroundColor: '#10b981',
-          },
-          successButtonText: {
-            color: '#ffffff',
-            fontSize: 14,
-            fontWeight: '600',
+            justifyContent: 'space-between',
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 12,
           },
           infoText: {
             fontSize: 14,
-            color: '#6b7280',
-            marginBottom: 12,
-          },
-          warningText: {
-            fontSize: 14,
-            color: '#dc2626',
-            textAlign: 'center',
-          },
-          loadingContainer: {
             flex: 1,
-            justifyContent: 'center',
+          },
+          button: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
             alignItems: 'center',
+            marginTop: 8,
           },
-          loadingText: {
-            fontSize: 14,
-            color: '#6b7280',
-            marginTop: 12,
-          },
-          backupCodesContainer: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-          },
-          backupCodesTitle: {
-            fontSize: 18,
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: 4,
-          },
-          backupCodesSubtitle: {
-            fontSize: 14,
-            color: '#6b7280',
-            marginBottom: 16,
-          },
-          backupCodeItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
+          smallButton: {
+            backgroundColor: '#0a7ea4',
             paddingVertical: 8,
-            paddingHorizontal: 12,
-            backgroundColor: '#f9fafb',
+            paddingHorizontal: 16,
             borderRadius: 6,
-            marginBottom: 6,
+            alignItems: 'center',
           },
-          backupCodeNumber: {
-            fontSize: 14,
+          dangerButton: {
+            backgroundColor: '#c62828',
+          },
+          buttonPressed: {
+            opacity: 0.7,
+          },
+          buttonText: {
+            color: '#fff',
             fontWeight: '600',
-            color: '#6b7280',
-            width: 24,
           },
-          backupCode: {
-            fontSize: 16,
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          codeList: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
+          },
+          code: {
             fontFamily: 'monospace',
-            color: '#111827',
-            fontWeight: '500',
-          },
-          doneButton: {
-            marginTop: 16,
+            fontSize: 14,
+            paddingVertical: 4,
           },
         })
         ```
       </Tab>
 
       <Tab>
-        In the `(account)` group, create an `add-mfa.tsx` file with the following code. This page adds the functionality for generating the QR code and backup codes.
+        In the `(account)` group, create a `manage-mfa.tsx` file with the following code. This page adds the functionality for generating the QR code and backup codes.
 
-        ```tsx {{ filename: 'app/(account)/add-mfa.tsx', collapsible: true }}
-        import { useUser, useReverification, useClerk, useSession } from '@clerk/expo'
-        import { TOTPResource } from '@clerk/types'
-        import * as React from 'react'
-        import {
-          View,
-          Text,
-          Pressable,
-          TextInput,
-          ScrollView,
-          StyleSheet,
-          ActivityIndicator,
-          Alert,
-        } from 'react-native'
-        import { Link, useRouter } from 'expo-router'
+        ```tsx {{ filename: 'app/(account)/manage-mfa.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
+        import { useUser } from '@clerk/clerk-expo'
+        import { BackupCodeResource, TOTPResource } from '@clerk/types'
+        import { Redirect, useRouter } from 'expo-router'
+        import React from 'react'
+        import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
         import { QrCodeSvg } from 'react-native-qr-svg'
-        import { GenerateBackupCodes } from './manage-mfa'
 
         type AddTotpSteps = 'add' | 'verify' | 'backupcodes' | 'success'
-
         type DisplayFormat = 'qr' | 'uri'
 
-        function AddTotpScreen({
-          setStep,
-        }: {
-          setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>
-        }) {
+        function AddTOTPMfa({ setStep }: { setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>> }) {
+          const [totp, setTotp] = React.useState<TOTPResource | undefined>(undefined)
+          const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('qr')
           const { user } = useUser()
-          const createTOTP = useReverification(() => user?.createTOTP())
-
-          const [totp, setTOTP] = React.useState<TOTPResource | undefined>(undefined)
-          const [displayFormat, setDisplayFormat] = React.useState<DisplayFormat>('uri')
-          const [loading, setLoading] = React.useState(true)
 
           React.useEffect(() => {
-            setLoading(true)
-            void createTOTP()
-              .then((totp: TOTPResource | undefined) => {
-                if (totp) setTOTP(totp)
-                setLoading(false)
-              })
-              .catch((err) => {
-                console.error(JSON.stringify(err, null, 2))
-                Alert.alert('Error', 'Failed to create TOTP. Please try again.')
-                setLoading(false)
-              })
-          }, [createTOTP])
-
-          if (loading) {
-            return (
-              <View style={styles.container}>
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#6366f1" />
-                  <Text style={styles.loadingText}>Setting up authenticator...</Text>
-                </View>
-              </View>
-            )
-          }
+            user
+              ?.createTOTP()
+              .then((totp: TOTPResource) => setTotp(totp))
+              .catch((err) => console.error(JSON.stringify(err, null, 2)))
+          }, [])
 
           return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-              <Text style={styles.title}>Add TOTP MFA</Text>
-              <Text style={styles.subtitle}>
-                Set up two-factor authentication using an authenticator app
-              </Text>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Add TOTP MFA
+              </ThemedText>
 
-              {totp && (
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Step 1: Scan or Copy</Text>
-
-                  {displayFormat === 'qr' && (
-                    <View style={styles.qrSection}>
-                      <View style={styles.qrContainer}>
-                        <QrCodeSvg value={totp?.uri || ''} frameSize={240} />
-                      </View>
-                      <Pressable style={styles.switchButton} onPress={() => setDisplayFormat('uri')}>
-                        <Text style={styles.switchButtonText}>Use URI instead</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  {displayFormat === 'uri' && (
-                    <View style={styles.uriSection}>
-                      <Text style={styles.uriLabel}>Copy this code into your authenticator app:</Text>
-                      <View style={styles.uriContainer}>
-                        <Text style={styles.uriText} selectable>
-                          {totp.uri}
-                        </Text>
-                      </View>
-                      <Pressable style={styles.switchButton} onPress={() => setDisplayFormat('qr')}>
-                        <Text style={styles.switchButtonText}>Use QR Code instead</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  <View style={styles.instructionsSection}>
-                    <Text style={styles.instructionText}>
-                      • Open your authenticator app (Google Authenticator, Authy, etc.)
-                    </Text>
-                    <Text style={styles.instructionText}>
-                      • {displayFormat === 'qr' ? 'Scan the QR code' : 'Enter the code manually'}
-                    </Text>
-                    <Text style={styles.instructionText}>• Your app will generate a 6-digit code</Text>
+              {totp && displayFormat === 'qr' && (
+                <View style={styles.qrContainer}>
+                  <View style={styles.qrCode}>
+                    <QrCodeSvg value={totp?.uri || ''} frameSize={200} />
                   </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                    onPress={() => setDisplayFormat('uri')}
+                  >
+                    <ThemedText style={styles.smallButtonText}>Use URI instead</ThemedText>
+                  </Pressable>
                 </View>
               )}
 
-              <View style={styles.actionButtons}>
-                <Pressable style={styles.secondaryButton} onPress={() => setStep('add')}>
-                  <Text style={styles.secondaryButtonText}>Reset</Text>
-                </Pressable>
-
-                <Pressable style={styles.primaryButton} onPress={() => setStep('verify')}>
-                  <Text style={styles.primaryButtonText}>Continue to Verify</Text>
-                </Pressable>
-              </View>
-            </ScrollView>
-          )
-        }
-
-        function VerifyTotpScreen({
-          setStep,
-        }: {
-          setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>
-        }) {
-          const { user } = useUser()
-          const [code, setCode] = React.useState('')
-          const [loading, setLoading] = React.useState(false)
-          const [error, setError] = React.useState('')
-
-          const verifyTotp = async () => {
-            if (!code || code.length !== 6) {
-              setError('Please enter a valid 6-digit code')
-              return
-            }
-
-            setLoading(true)
-            setError('')
-
-            try {
-              await user?.verifyTOTP({ code })
-              setStep('backupcodes')
-            } catch (err: any) {
-              console.error(JSON.stringify(err, null, 2))
-              setError(err?.errors?.[0]?.message || 'Invalid code. Please try again.')
-            } finally {
-              setLoading(false)
-            }
-          }
-
-          return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-              <Text style={styles.title}>Verify TOTP</Text>
-              <Text style={styles.subtitle}>Enter the 6-digit code from your authenticator app</Text>
-
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Step 2: Verify Code</Text>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Authenticator Code</Text>
-                  <TextInput
-                    style={[styles.input, error && styles.inputError]}
-                    placeholder="000000"
-                    placeholderTextColor="#9ca3af"
-                    value={code}
-                    onChangeText={(text) => {
-                      setCode(text)
-                      setError('')
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    autoFocus
-                  />
-                  {error && <Text style={styles.errorText}>{error}</Text>}
+              {totp && displayFormat === 'uri' && (
+                <View style={styles.uriContainer}>
+                  <View style={styles.uriBox}>
+                    <ThemedText style={styles.uriText}>{totp.uri}</ThemedText>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                    onPress={() => setDisplayFormat('qr')}
+                  >
+                    <ThemedText style={styles.smallButtonText}>Use QR Code instead</ThemedText>
+                  </Pressable>
                 </View>
+              )}
 
-                <View style={styles.hintBox}>
-                  <Text style={styles.hintText}>
-                    The code refreshes every 30 seconds in your authenticator app
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.actionButtons}>
-                <Pressable style={styles.secondaryButton} onPress={() => setStep('add')} disabled={loading}>
-                  <Text style={styles.secondaryButtonText}>Back</Text>
+              <View style={styles.buttonGroup}>
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                  onPress={() => setStep('verify')}
+                >
+                  <ThemedText style={styles.buttonText}>Verify</ThemedText>
                 </Pressable>
 
                 <Pressable
-                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                  onPress={verifyTotp}
-                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.secondaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => setStep('add')}
                 >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Verify Code</Text>
-                  )}
+                  <ThemedText style={styles.secondaryButtonText}>Reset</ThemedText>
                 </Pressable>
               </View>
-            </ScrollView>
+            </View>
           )
         }
 
-        function BackupCodeScreen({
-          setStep,
-        }: {
-          setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>>
-        }) {
-          const clerk = useClerk()
+        function VerifyMFA({ setStep }: { setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>> }) {
+          const [code, setCode] = React.useState('')
+          const { user } = useUser()
+
+          const verifyTotp = async () => {
+            await user
+              ?.verifyTOTP({ code })
+              .then(() => setStep('backupcodes'))
+              .catch((err) => console.error(JSON.stringify(err, null, 2)))
+          }
+
+          return (
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Verify MFA
+              </ThemedText>
+
+              <ThemedText style={styles.label}>Enter the code from your authenticator app</ThemedText>
+              <TextInput
+                style={styles.input}
+                value={code}
+                placeholder="Enter code"
+                placeholderTextColor="#666666"
+                onChangeText={setCode}
+                keyboardType="numeric"
+              />
+
+              <View style={styles.buttonGroup}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    !code && styles.buttonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={verifyTotp}
+                  disabled={!code}
+                >
+                  <ThemedText style={styles.buttonText}>Verify Code</ThemedText>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    styles.secondaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  onPress={() => setStep('add')}
+                >
+                  <ThemedText style={styles.secondaryButtonText}>Reset</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          )
+        }
+
+        function BackupCodes({ setStep }: { setStep: React.Dispatch<React.SetStateAction<AddTotpSteps>> }) {
+          const { user } = useUser()
+          const [backupCode, setBackupCode] = React.useState<BackupCodeResource | undefined>(undefined)
+
+          React.useEffect(() => {
+            if (backupCode) return
+
+            user
+              ?.createBackupCode()
+              .then((backupCode: BackupCodeResource) => setBackupCode(backupCode))
+              .catch((err) => console.error(JSON.stringify(err, null, 2)))
+          }, [])
+
+          return (
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Verification was a success!
+              </ThemedText>
+
+              {backupCode && (
+                <View style={styles.backupCodesContainer}>
+                  <ThemedText style={styles.description}>
+                    Save this list of backup codes somewhere safe in case you need to access your account in
+                    an emergency
+                  </ThemedText>
+
+                  <View style={styles.codeList}>
+                    <FlatList
+                      data={backupCode.codes.map((code, index) => ({
+                        key: code,
+                        index: index + 1,
+                      }))}
+                      renderItem={({ item }) => (
+                        <ThemedText style={styles.code}>
+                          {item.index}. {item.key}
+                        </ThemedText>
+                      )}
+                      keyExtractor={(item) => item.key}
+                    />
+                  </View>
+
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setStep('success')}
+                  >
+                    <ThemedText style={styles.buttonText}>Finish</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          )
+        }
+
+        function Success() {
           const router = useRouter()
 
-          const [loading, setLoading] = React.useState(false)
-
-          const completeSetup = async () => {
-            setLoading(true)
-            setStep('success')
-
-            try {
-              await clerk.setActive({
-                session: clerk.session?.id,
-                navigate: async () => {
-                  router.replace('/')
-                },
-              })
-            } catch (err) {
-              console.error(JSON.stringify(err, null, 2))
-            } finally {
-              setLoading(false)
-            }
-          }
-
           return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-              <View style={styles.successBanner}>
-                <Text style={styles.successIcon}>✓</Text>
-                <Text style={styles.successBannerText}>Verification Successful!</Text>
-              </View>
+            <View style={styles.section}>
+              <ThemedText type="title" style={styles.title}>
+                Success!
+              </ThemedText>
 
-              <Text style={styles.title}>Save Your Backup Codes</Text>
-              <Text style={styles.subtitle}>
-                Keep these codes safe. You can use them to access your account if you lose your device.
-              </Text>
-
-              <View style={styles.card}>
-                <GenerateBackupCodes />
-              </View>
-
-              <View style={styles.warningBox}>
-                <Text style={styles.warningText}>
-                  ⚠ Important: Each backup code can only be used once. Store them securely.
-                </Text>
-              </View>
+              <ThemedText style={styles.description}>
+                You successfully added TOTP MFA via an authentication application
+              </ThemedText>
 
               <Pressable
-                style={[styles.successButton, styles.fullWidthButton, loading && styles.buttonDisabled]}
-                onPress={completeSetup}
-                disabled={loading}
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={() => router.push('/account' as any)}
               >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.successButtonText}>Finish Setup</Text>
-                )}
+                <ThemedText style={styles.buttonText}>Go to Account Settings</ThemedText>
               </Pressable>
-            </ScrollView>
-          )
-        }
-
-        function SuccessScreen() {
-          return (
-            <View style={styles.container}>
-              <View style={styles.successContainer}>
-                <View style={styles.successCircle}>
-                  <Text style={styles.successCheckmark}>✓</Text>
-                </View>
-                <Text style={styles.successScreenTitle}>All Set!</Text>
-                <Text style={styles.successScreenText}>
-                  You have successfully added TOTP MFA via an authentication application.
-                </Text>
-                <Text style={styles.successScreenText}>Your account is now more secure.</Text>
-
-                <Link href="/manage-mfa" asChild>
-                  <Pressable style={[styles.primaryButton, styles.fullWidthButton]}>
-                    <Text style={styles.primaryButtonText}>Manage MFA Settings</Text>
-                  </Pressable>
-                </Link>
-              </View>
             </View>
           )
         }
 
-        export default function AddMFaScreen() {
+        export default function ManageTOTPMFA() {
           const [step, setStep] = React.useState<AddTotpSteps>('add')
           const { isLoaded, isSignedIn } = useUser()
-          const { session } = useSession()
 
-          // Handle loading state
           if (!isLoaded) {
             return (
-              <View style={styles.container}>
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#6366f1" />
-                  <Text style={styles.loadingText}>Loading...</Text>
-                </View>
-              </View>
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
             )
           }
 
-          // Handle signed out state
-          if (!isSignedIn && session?.currentTask?.key !== 'setup-mfa') {
-            return (
-              <View style={styles.container}>
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorTitle}>Access Denied</Text>
-                  <Text style={styles.warningText}>You must be signed in to access this page</Text>
-                  <Link href="/" asChild>
-                    <Pressable style={styles.primaryButton}>
-                      <Text style={styles.primaryButtonText}>Go Home</Text>
-                    </Pressable>
-                  </Link>
-                </View>
-              </View>
-            )
+          if (!isSignedIn) {
+            return <Redirect href="/sign-in" />
           }
 
           return (
-            <View style={styles.container}>
-              {step === 'add' && <AddTotpScreen setStep={setStep} />}
-              {step === 'verify' && <VerifyTotpScreen setStep={setStep} />}
-              {step === 'backupcodes' && <BackupCodeScreen setStep={setStep} />}
-              {step === 'success' && <SuccessScreen />}
-            </View>
+            <ScrollView>
+              <ThemedView style={styles.container}>
+                {step === 'add' && <AddTOTPMfa setStep={setStep} />}
+                {step === 'verify' && <VerifyMFA setStep={setStep} />}
+                {step === 'backupcodes' && <BackupCodes setStep={setStep} />}
+                {step === 'success' && <Success />}
+              </ThemedView>
+            </ScrollView>
           )
         }
 
         const styles = StyleSheet.create({
           container: {
             flex: 1,
-            backgroundColor: '#f9fafb',
-          },
-          contentContainer: {
-            padding: 20,
-            paddingBottom: 40,
-          },
-          loadingContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-          loadingText: {
-            fontSize: 14,
-            color: '#6b7280',
-            marginTop: 12,
-          },
-          errorContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
             padding: 20,
           },
-          errorTitle: {
-            fontSize: 24,
-            fontWeight: 'bold',
-            color: '#dc2626',
-            marginBottom: 12,
+          section: {
+            gap: 16,
           },
           title: {
-            fontSize: 28,
-            fontWeight: 'bold',
-            color: '#111827',
             marginBottom: 8,
           },
-          subtitle: {
-            fontSize: 16,
-            color: '#6b7280',
-            marginBottom: 24,
-            lineHeight: 24,
+          label: {
+            fontWeight: '600',
+            fontSize: 14,
+            marginBottom: 4,
           },
-          card: {
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            padding: 20,
+          description: {
+            fontSize: 14,
+            opacity: 0.8,
             marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#e5e7eb',
+          },
+          qrContainer: {
+            alignItems: 'center',
+            gap: 16,
+            marginVertical: 16,
+          },
+          qrCode: {
+            padding: 16,
+            backgroundColor: '#fff',
+            borderRadius: 12,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.1,
             shadowRadius: 4,
             elevation: 3,
           },
-          cardTitle: {
-            fontSize: 18,
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: 16,
-          },
-          qrSection: {
-            alignItems: 'center',
-          },
-          qrContainer: {
-            padding: 16,
-            backgroundColor: '#ffffff',
-            borderRadius: 12,
-            marginBottom: 16,
-          },
-          uriSection: {
-            marginBottom: 12,
-          },
-          uriLabel: {
-            fontSize: 14,
-            color: '#6b7280',
-            marginBottom: 8,
-          },
           uriContainer: {
-            padding: 12,
-            backgroundColor: '#f9fafb',
+            gap: 12,
+            marginVertical: 16,
+          },
+          uriBox: {
+            padding: 16,
+            backgroundColor: '#f5f5f5',
             borderRadius: 8,
             borderWidth: 1,
-            borderColor: '#e5e7eb',
-            marginBottom: 12,
+            borderColor: '#ccc',
           },
           uriText: {
-            fontSize: 12,
             fontFamily: 'monospace',
-            color: '#111827',
-            lineHeight: 18,
-          },
-          switchButton: {
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            backgroundColor: '#f9fafb',
-            borderRadius: 8,
-            alignItems: 'center',
-          },
-          switchButtonText: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: '#6366f1',
-          },
-          instructionsSection: {
-            marginTop: 20,
-            paddingTop: 20,
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-          },
-          instructionText: {
-            fontSize: 14,
-            color: '#6b7280',
-            lineHeight: 24,
-            marginBottom: 8,
-          },
-          inputGroup: {
-            marginBottom: 16,
-          },
-          label: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: '#111827',
-            marginBottom: 8,
+            fontSize: 12,
           },
           input: {
-            height: 56,
-            backgroundColor: '#f9fafb',
             borderWidth: 1,
-            borderColor: '#e5e7eb',
+            borderColor: '#ccc',
             borderRadius: 8,
-            paddingHorizontal: 16,
-            fontSize: 24,
-            fontWeight: '600',
-            color: '#111827',
-            textAlign: 'center',
-            letterSpacing: 8,
-          },
-          inputError: {
-            borderColor: '#dc2626',
-          },
-          errorText: {
-            fontSize: 12,
-            color: '#dc2626',
-            marginTop: 6,
-          },
-          hintBox: {
             padding: 12,
-            borderRadius: 8,
-            backgroundColor: '#f3f4f6',
-            marginTop: 8,
+            fontSize: 16,
+            backgroundColor: '#fff',
+            marginBottom: 8,
           },
-          hintText: {
-            fontSize: 13,
-            color: '#6b7280',
-            lineHeight: 18,
-            textAlign: 'center',
-          },
-          actionButtons: {
-            flexDirection: 'row',
+          buttonGroup: {
             gap: 12,
             marginTop: 8,
           },
-          primaryButton: {
-            flex: 1,
-            paddingVertical: 14,
-            paddingHorizontal: 20,
-            backgroundColor: '#6366f1',
-            borderRadius: 10,
+          button: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
             alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 50,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 3,
-            elevation: 3,
           },
-          primaryButtonText: {
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#ffffff',
+          smallButton: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 6,
+            alignItems: 'center',
           },
           secondaryButton: {
-            flex: 1,
-            paddingVertical: 14,
-            paddingHorizontal: 20,
-            backgroundColor: '#f9fafb',
+            backgroundColor: 'transparent',
             borderWidth: 1,
-            borderColor: '#e5e7eb',
-            borderRadius: 10,
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 50,
+            borderColor: '#0a7ea4',
           },
-          secondaryButtonText: {
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#6b7280',
-          },
-          successButton: {
-            flex: 1,
-            paddingVertical: 14,
-            paddingHorizontal: 20,
-            backgroundColor: '#10b981',
-            borderRadius: 10,
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 50,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 3,
-            elevation: 3,
-          },
-          successButtonText: {
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#ffffff',
-          },
-          fullWidthButton: {
-            width: '100%',
-            marginTop: 8,
+          buttonPressed: {
+            opacity: 0.7,
           },
           buttonDisabled: {
-            opacity: 0.6,
+            opacity: 0.5,
           },
-          successBanner: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#d1fae5',
-            padding: 16,
-            borderRadius: 12,
-            marginBottom: 20,
-          },
-          successIcon: {
-            fontSize: 24,
-            marginRight: 12,
-          },
-          successBannerText: {
-            fontSize: 18,
+          buttonText: {
+            color: '#fff',
             fontWeight: '600',
-            color: '#10b981',
           },
-          warningBox: {
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          secondaryButtonText: {
+            color: '#0a7ea4',
+            fontWeight: '600',
+          },
+          backupCodesContainer: {
+            gap: 16,
+          },
+          codeList: {
             padding: 16,
-            borderRadius: 10,
-            backgroundColor: '#fef2f2',
-            marginTop: 16,
-            marginBottom: 8,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            maxHeight: 300,
           },
-          warningText: {
+          code: {
+            fontFamily: 'monospace',
             fontSize: 14,
-            color: '#dc2626',
-            lineHeight: 20,
-            textAlign: 'center',
-          },
-          successContainer: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          },
-          successCircle: {
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: '#10b981',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginBottom: 24,
-          },
-          successCheckmark: {
-            fontSize: 48,
-            color: '#ffffff',
-            fontWeight: 'bold',
-          },
-          successScreenTitle: {
-            fontSize: 32,
-            fontWeight: 'bold',
-            color: '#111827',
-            marginBottom: 16,
-          },
-          successScreenText: {
-            fontSize: 16,
-            color: '#6b7280',
-            textAlign: 'center',
-            marginBottom: 8,
-            lineHeight: 24,
+            paddingVertical: 4,
           },
         })
         ```

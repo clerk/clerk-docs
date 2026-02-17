@@ -20,9 +20,7 @@ One of the options that Clerk supports for MFA is **SMS verification codes**. Th
   1. In the Clerk Dashboard, navigate to the [**Multi-factor**](https://dashboard.clerk.com/~/user-authentication/multi-factor) page.
   1. Enable **SMS verification code** and **Backup codes** and select **Save**.
 
-  ## Create the multi-factor management flow
-
-  This example is written for Next.js App Router but it can be adapted for any React-based framework.
+  ## Build the custom flow
 
   This example consists of two pages:
 
@@ -31,347 +29,568 @@ One of the options that Clerk supports for MFA is **SMS verification codes**. Th
 
   Use the following tabs to view the code necessary for each page.
 
-  <Include src="_partials/custom-flows/phone-number" />
-
   <Tabs items={["Manage MFA page", "Add phone number page"]}>
     <Tab>
-      ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
-      'use client'
+      <If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+        **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-      import * as React from 'react'
-      import { useUser, useReverification } from '@clerk/nextjs'
-      import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
-      import Link from 'next/link'
+        ```tsx {{ filename: 'app/account/manage-mfa/page.tsx', collapsible: true }}
+        'use client'
 
-      // Display phone numbers reserved for MFA
-      const ManageMfaPhoneNumbers = () => {
-        const { isSignedIn, user } = useUser()
+        import * as React from 'react'
+        import { useUser, useReverification } from '@clerk/nextjs'
+        import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
+        import Link from 'next/link'
 
-        if (!isSignedIn) {
-          // Handle signed out state
-          return null
-        }
+        // Display phone numbers reserved for MFA
+        const ManageMfaPhoneNumbers = () => {
+          const { isSignedIn, user } = useUser()
 
-        // Check if any phone numbers are reserved for MFA
-        const mfaPhones = user.phoneNumbers
-          .filter((ph) => ph.verification.status === 'verified')
-          .filter((ph) => ph.reservedForSecondFactor)
-          .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1))
-
-        if (mfaPhones.length === 0) {
-          return <p>There are currently no phone numbers reserved for MFA.</p>
-        }
-
-        return (
-          <>
-            <h2>Phone numbers reserved for MFA</h2>
-            <ul>
-              {mfaPhones.map((phone) => {
-                return (
-                  <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
-                    <p>
-                      {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
-                    </p>
-                    <div>
-                      <button onClick={() => phone.setReservedForSecondFactor({ reserved: false })}>
-                        Disable for MFA
-                      </button>
-                    </div>
-
-                    {!phone.defaultSecondFactor && (
-                      <div>
-                        <button onClick={() => phone.makeDefaultSecondFactor()}>Make default</button>
-                      </div>
-                    )}
-
-                    <div>
-                      <button onClick={() => phone.destroy()}>Remove from account</button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </>
-        )
-      }
-
-      // Display phone numbers that are not reserved for MFA
-      const ManageAvailablePhoneNumbers = () => {
-        const { isSignedIn, user } = useUser()
-        const setReservedForSecondFactor = useReverification((phone: PhoneNumberResource) =>
-          phone.setReservedForSecondFactor({ reserved: true }),
-        )
-        const destroyPhone = useReverification((phone: PhoneNumberResource) => phone.destroy())
-
-        if (!isSignedIn) {
-          // Handle signed out state
-          return null
-        }
-
-        // Check if any phone numbers aren't reserved for MFA
-        const availableForMfaPhones = user.phoneNumbers
-          .filter((ph) => ph.verification.status === 'verified')
-          .filter((ph) => !ph.reservedForSecondFactor)
-
-        // Reserve a phone number for MFA
-        const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
-          // Set the phone number as reserved for MFA
-          await setReservedForSecondFactor(phone)
-          // Refresh the user information to reflect changes
-          await user.reload()
-        }
-
-        if (availableForMfaPhones.length === 0) {
-          return <p>There are currently no verified phone numbers available to be reserved for MFA.</p>
-        }
-
-        return (
-          <>
-            <h2>Phone numbers that are not reserved for MFA</h2>
-
-            <ul>
-              {availableForMfaPhones.map((phone) => {
-                return (
-                  <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
-                    <p>{phone.phoneNumber}</p>
-                    <div>
-                      <button onClick={() => reservePhoneForMfa(phone)}>Use for MFA</button>
-                    </div>
-                    <div>
-                      <button onClick={() => destroyPhone()}>Remove from account</button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </>
-        )
-      }
-
-      // Generate and display backup codes
-      function GenerateBackupCodes() {
-        const { user } = useUser()
-        const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
-        const createBackupCode = useReverification(() => user?.createBackupCode())
-
-        const [loading, setLoading] = React.useState(false)
-
-        React.useEffect(() => {
-          if (backupCodes) {
-            return
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
           }
 
-          setLoading(true)
-          void createBackupCode()
-            .then((backupCode: BackupCodeResource) => {
-              setBackupCodes(backupCode)
-              setLoading(false)
-            })
-            .catch((err) => {
-              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-              // for more info on error handling
-              console.error(JSON.stringify(err, null, 2))
-              setLoading(false)
-            })
-        }, [])
+          // Check if any phone numbers are reserved for MFA
+          const mfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => ph.reservedForSecondFactor)
+            .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1))
 
-        if (loading) {
-          return <p>Loading...</p>
+          if (mfaPhones.length === 0) {
+            return <p>There are currently no phone numbers reserved for MFA.</p>
+          }
+
+          return (
+            <>
+              <h2>Phone numbers reserved for MFA</h2>
+              <ul>
+                {mfaPhones.map((phone) => {
+                  return (
+                    <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
+                      <p>
+                        {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
+                      </p>
+                      <div>
+                        <button onClick={() => phone.setReservedForSecondFactor({ reserved: false })}>
+                          Disable for MFA
+                        </button>
+                      </div>
+
+                      {!phone.defaultSecondFactor && (
+                        <div>
+                          <button onClick={() => phone.makeDefaultSecondFactor()}>Make default</button>
+                        </div>
+                      )}
+
+                      <div>
+                        <button onClick={() => phone.destroy()}>Remove from account</button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )
         }
 
-        if (!backupCodes) {
-          return <p>There was a problem generating backup codes</p>
+        // Display phone numbers that are not reserved for MFA
+        const ManageAvailablePhoneNumbers = () => {
+          const { isSignedIn, user } = useUser()
+          const setReservedForSecondFactor = useReverification((phone: PhoneNumberResource) =>
+            phone.setReservedForSecondFactor({ reserved: true }),
+          )
+          const destroyPhone = useReverification((phone: PhoneNumberResource) => phone.destroy())
+
+          if (!isSignedIn) {
+            // Handle signed out state
+            return null
+          }
+
+          // Check if any phone numbers aren't reserved for MFA
+          const availableForMfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => !ph.reservedForSecondFactor)
+
+          // Reserve a phone number for MFA
+          const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
+            // Set the phone number as reserved for MFA
+            await setReservedForSecondFactor(phone)
+            // Refresh the user information to reflect changes
+            await user.reload()
+          }
+
+          if (availableForMfaPhones.length === 0) {
+            return <p>There are currently no verified phone numbers available to be reserved for MFA.</p>
+          }
+
+          return (
+            <>
+              <h2>Phone numbers that are not reserved for MFA</h2>
+
+              <ul>
+                {availableForMfaPhones.map((phone) => {
+                  return (
+                    <li key={phone.id} style={{ display: 'flex', gap: '10px' }}>
+                      <p>{phone.phoneNumber}</p>
+                      <div>
+                        <button onClick={() => reservePhoneForMfa(phone)}>Use for MFA</button>
+                      </div>
+                      <div>
+                        <button onClick={() => destroyPhone()}>Remove from account</button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )
         }
 
-        return (
-          <ol>
-            {backupCodes.codes.map((code, index) => (
-              <li key={index}>{code}</li>
-            ))}
-          </ol>
-        )
-      }
+        // Generate and display backup codes
+        function GenerateBackupCodes() {
+          const { user } = useUser()
+          const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
+          const createBackupCode = useReverification(() => user?.createBackupCode())
 
-      export default function ManageSMSMFA() {
-        const [showBackupCodes, setShowBackupCodes] = React.useState(false)
+          const [loading, setLoading] = React.useState(false)
 
-        const { isLoaded, isSignedIn, user } = useUser()
+          React.useEffect(() => {
+            if (backupCodes) {
+              return
+            }
 
-        if (!isLoaded) {
+            setLoading(true)
+            void createBackupCode()
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode)
+                setLoading(false)
+              })
+              .catch((err) => {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling
+                console.error(JSON.stringify(err, null, 2))
+                setLoading(false)
+              })
+          }, [])
+
+          if (loading) {
+            return <p>Loading...</p>
+          }
+
+          if (!backupCodes) {
+            return <p>There was a problem generating backup codes</p>
+          }
+
+          return (
+            <ol>
+              {backupCodes.codes.map((code, index) => (
+                <li key={index}>{code}</li>
+              ))}
+            </ol>
+          )
+        }
+
+        export default function ManageSMSMFA() {
+          const [showBackupCodes, setShowBackupCodes] = React.useState(false)
+
+          const { isLoaded, isSignedIn, user } = useUser()
+
+          if (!isLoaded) {
+            // Handle loading state
+            return null
+          }
+
+          if (!isSignedIn) {
+            // Handle signed out state
+            return <p>You must be signed in to access this page</p>
+          }
+
+          return (
+            <>
+              <h1>User MFA Settings</h1>
+
+              {/* Manage SMS MFA */}
+              <ManageMfaPhoneNumbers />
+              <ManageAvailablePhoneNumbers />
+              <Link href="/account/add-phone">Add a new phone number</Link>
+
+              {/* Manage backup codes */}
+              {user.twoFactorEnabled && (
+                <div>
+                  <p>
+                    Generate new backup codes? -{' '}
+                    <button onClick={() => setShowBackupCodes(true)}>Generate</button>
+                  </p>
+                </div>
+              )}
+              {showBackupCodes && (
+                <>
+                  <GenerateBackupCodes />
+                  <button onClick={() => setShowBackupCodes(false)}>Done</button>
+                </>
+              )}
+            </>
+          )
+        }
+        ```
+      </If>
+
+      <If sdk="expo">
+        ```tsx {{ filename: 'app/(account)/manage-mfa/page.tsx', collapsible: true }}
+        import { ThemedText } from '@/components/themed-text'
+        import { ThemedView } from '@/components/themed-view'
+        import { useUser } from '@clerk/clerk-expo'
+        import { BackupCodeResource, PhoneNumberResource } from '@clerk/types'
+        import { Redirect, useRouter } from 'expo-router'
+        import * as React from 'react'
+        import { Pressable, StyleSheet, View } from 'react-native'
+
+        // Display phone numbers reserved for MFA
+        const ManageMfaPhoneNumbers = () => {
+          const { isSignedIn, user } = useUser()
+
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
+
+          // Check if any phone numbers are reserved for MFA
+          const mfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => ph.reservedForSecondFactor)
+            .sort((ph: PhoneNumberResource) => (ph.defaultSecondFactor ? -1 : 1))
+
+          if (mfaPhones.length === 0) {
+            return (
+              <ThemedText style={styles.infoText}>
+                There are currently no phone numbers reserved for MFA.
+              </ThemedText>
+            )
+          }
+
+          return (
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Phone numbers reserved for MFA
+              </ThemedText>
+              <View style={styles.list}>
+                {mfaPhones.map((phone) => {
+                  return (
+                    <View key={phone.id} style={styles.listItem}>
+                      <ThemedText style={styles.phoneNumber}>
+                        {phone.phoneNumber} {phone.defaultSecondFactor && '(Default)'}
+                      </ThemedText>
+                      <View style={styles.buttonGroup}>
+                        <Pressable
+                          style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                          onPress={() => phone.setReservedForSecondFactor({ reserved: false })}
+                        >
+                          <ThemedText style={styles.smallButtonText}>Disable for MFA</ThemedText>
+                        </Pressable>
+
+                        {!phone.defaultSecondFactor && (
+                          <Pressable
+                            style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                            onPress={() => phone.makeDefaultSecondFactor()}
+                          >
+                            <ThemedText style={styles.smallButtonText}>Make default</ThemedText>
+                          </Pressable>
+                        )}
+
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.smallButton,
+                            styles.dangerButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                          onPress={() => phone.destroy()}
+                        >
+                          <ThemedText style={styles.dangerButtonText}>Remove</ThemedText>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          )
+        }
+
+        // Display phone numbers that are not reserved for MFA
+        const ManageAvailablePhoneNumbers = () => {
+          const { isSignedIn, user } = useUser()
+
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
+
+          // Check if any phone numbers aren't reserved for MFA
+          const availableForMfaPhones = user.phoneNumbers
+            .filter((ph) => ph.verification.status === 'verified')
+            .filter((ph) => !ph.reservedForSecondFactor)
+
+          // Reserve a phone number for MFA
+          const reservePhoneForMfa = async (phone: PhoneNumberResource) => {
+            // Set the phone number as reserved for MFA
+            await phone.setReservedForSecondFactor({ reserved: true })
+            // Refresh the user information to reflect changes
+            await user.reload()
+          }
+
+          // Remove a phone number
+          const removePhone = async (phone: PhoneNumberResource) => {
+            await phone.destroy()
+            await user.reload()
+          }
+
+          if (availableForMfaPhones.length === 0) {
+            return (
+              <ThemedText style={styles.infoText}>
+                There are currently no verified phone numbers available to be reserved for MFA.
+              </ThemedText>
+            )
+          }
+
+          return (
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Phone numbers that are not reserved for MFA
+              </ThemedText>
+              <View style={styles.list}>
+                {availableForMfaPhones.map((phone) => {
+                  return (
+                    <View key={phone.id} style={styles.listItem}>
+                      <ThemedText style={styles.phoneNumber}>{phone.phoneNumber}</ThemedText>
+                      <View style={styles.buttonGroup}>
+                        <Pressable
+                          style={({ pressed }) => [styles.smallButton, pressed && styles.buttonPressed]}
+                          onPress={() => reservePhoneForMfa(phone)}
+                        >
+                          <ThemedText style={styles.smallButtonText}>Use for MFA</ThemedText>
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.smallButton,
+                            styles.dangerButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                          onPress={() => removePhone(phone)}
+                        >
+                          <ThemedText style={styles.dangerButtonText}>Remove</ThemedText>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          )
+        }
+
+        // Generate and display backup codes
+        function GenerateBackupCodes() {
+          const { user } = useUser()
+          const [backupCodes, setBackupCodes] = React.useState<BackupCodeResource | undefined>(undefined)
+          const [loading, setLoading] = React.useState(false)
+
+          React.useEffect(() => {
+            if (backupCodes) return
+
+            setLoading(true)
+            user
+              ?.createBackupCode()
+              .then((backupCode: BackupCodeResource) => {
+                setBackupCodes(backupCode)
+                setLoading(false)
+              })
+              .catch((err) => {
+                // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                // for more info on error handling
+                console.error(JSON.stringify(err, null, 2))
+                setLoading(false)
+              })
+          }, [])
+
           // Handle loading state
-          return null
+          if (loading) return <ThemedText>Loading...</ThemedText>
+
+          if (!backupCodes)
+            return (
+              <ThemedText style={styles.errorText}>There was a problem generating backup codes</ThemedText>
+            )
+
+          return (
+            <View style={styles.codeList}>
+              {backupCodes.codes.map((code, index) => (
+                <ThemedText key={index} style={styles.code}>
+                  {index + 1}. {code}
+                </ThemedText>
+              ))}
+            </View>
+          )
         }
 
-        if (!isSignedIn) {
-          // Handle signed out state
-          return <p>You must be logged in to access this page</p>
+        export default function ManageSMSMFA() {
+          const [showBackupCodes, setShowBackupCodes] = React.useState(false)
+          const router = useRouter()
+
+          const { isLoaded, isSignedIn, user } = useUser()
+
+          // Handle loading state
+          if (!isLoaded) {
+            return (
+              <ThemedView style={styles.container}>
+                <ThemedText>Loading...</ThemedText>
+              </ThemedView>
+            )
+          }
+
+          // Handle signed-out state
+          if (!isSignedIn) return <Redirect href="/sign-in" />
+
+          return (
+            <ThemedView style={styles.container}>
+              <ThemedText type="title" style={styles.title}>
+                User MFA Settings
+              </ThemedText>
+
+              <ManageMfaPhoneNumbers />
+              <ManageAvailablePhoneNumbers />
+
+              <Pressable
+                style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                onPress={() => router.push('/add-phone' as any)}
+              >
+                <ThemedText style={styles.buttonText}>Add a new phone number</ThemedText>
+              </Pressable>
+
+              {user.twoFactorEnabled && (
+                <View style={styles.section}>
+                  <ThemedText style={styles.infoText}>Generate new backup codes?</ThemedText>
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setShowBackupCodes(true)}
+                  >
+                    <ThemedText style={styles.buttonText}>Generate</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+
+              {showBackupCodes && (
+                <View style={styles.section}>
+                  <GenerateBackupCodes />
+                  <Pressable
+                    style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                    onPress={() => setShowBackupCodes(false)}
+                  >
+                    <ThemedText style={styles.buttonText}>Done</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+            </ThemedView>
+          )
         }
 
-        return (
-          <>
-            <h1>User MFA Settings</h1>
+        const styles = StyleSheet.create({
+          container: {
+            flex: 1,
+            padding: 20,
+            gap: 16,
+          },
+          title: {
+            marginBottom: 8,
+          },
+          section: {
+            gap: 12,
+            marginBottom: 16,
+          },
+          sectionTitle: {
+            fontWeight: '600',
+            fontSize: 16,
+            marginBottom: 8,
+          },
+          list: {
+            gap: 12,
+          },
+          listItem: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
+          },
+          phoneNumber: {
+            fontSize: 16,
+            fontWeight: '500',
+          },
+          buttonGroup: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+          },
+          button: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+            alignItems: 'center',
+            marginTop: 8,
+          },
+          smallButton: {
+            backgroundColor: '#0a7ea4',
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 6,
+            alignItems: 'center',
+          },
+          dangerButton: {
+            backgroundColor: '#c62828',
+          },
+          buttonPressed: {
+            opacity: 0.7,
+          },
+          buttonText: {
+            color: '#fff',
+            fontWeight: '600',
+          },
+          smallButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          dangerButtonText: {
+            color: '#fff',
+            fontWeight: '600',
+            fontSize: 13,
+          },
+          infoText: {
+            fontSize: 14,
+            opacity: 0.8,
+          },
+          errorText: {
+            color: '#c62828',
+            fontSize: 14,
+          },
+          codeList: {
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 8,
+            gap: 8,
+          },
+          code: {
+            fontFamily: 'monospace',
+            fontSize: 14,
+          },
+        })
+        ```
+      </If>
 
-            {/* Manage SMS MFA */}
-            <ManageMfaPhoneNumbers />
-            <ManageAvailablePhoneNumbers />
-            <Link href="/account/add-phone">Add a new phone number</Link>
-
-            {/* Manage backup codes */}
-            {user.twoFactorEnabled && (
-              <div>
-                <p>
-                  Generate new backup codes? -{' '}
-                  <button onClick={() => setShowBackupCodes(true)}>Generate</button>
-                </p>
-              </div>
-            )}
-            {showBackupCodes && (
-              <>
-                <GenerateBackupCodes />
-                <button onClick={() => setShowBackupCodes(false)}>Done</button>
-              </>
-            )}
-          </>
-        )
-      }
-      ```
+      <If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+        <Include src="_partials/sdk-examples-not-available-callout" />
+      </If>
     </Tab>
 
     <Tab>
-      ```tsx {{ filename: 'app/account/add-phone/page.tsx', collapsible: true }}
-      'use client'
+      <Include src="_partials/custom-flows/phone-number" />
 
-      import * as React from 'react'
-      import { useUser, useReverification } from '@clerk/nextjs'
-      import { PhoneNumberResource } from '@clerk/types'
-
-      export default function Page() {
-        const { isLoaded, isSignedIn, user } = useUser()
-        const [phone, setPhone] = React.useState('')
-        const [code, setCode] = React.useState('')
-        const [isVerifying, setIsVerifying] = React.useState(false)
-        const [successful, setSuccessful] = React.useState(false)
-        const [phoneObj, setPhoneObj] = React.useState<PhoneNumberResource | undefined>()
-        const createPhoneNumber = useReverification((phone: string) =>
-          user?.createPhoneNumber({ phoneNumber: phone }),
-        )
-
-        if (!isLoaded) {
-          // Handle loading state
-          return null
-        }
-
-        if (!isSignedIn) {
-          // Handle signed out state
-          return <p>You must be logged in to access this page</p>
-        }
-
-        // Handle addition of the phone number
-        const handleSubmit = async (e: React.FormEvent) => {
-          e.preventDefault()
-
-          try {
-            // Add unverified phone number to user
-            const res = await createPhoneNumber(phone)
-            // Reload user to get updated User object
-            await user.reload()
-
-            // Create a reference to the new phone number to use related methods
-            const phoneNumber = user.phoneNumbers.find((a) => a.id === res.id)
-            setPhoneObj(phoneNumber)
-
-            // Send the user an SMS with the verification code
-            phoneNumber?.prepareVerification()
-
-            // Set to true to display second form
-            // and capture the code
-            setIsVerifying(true)
-          } catch (err) {
-            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-            // for more info on error handling
-            console.error(JSON.stringify(err, null, 2))
-          }
-        }
-
-        // Handle the submission of the verification form
-        const verifyCode = async (e: React.FormEvent) => {
-          e.preventDefault()
-          try {
-            // Verify that the provided code matches the code sent to the user
-            const phoneVerifyAttempt = await phoneObj?.attemptVerification({ code })
-
-            if (phoneVerifyAttempt?.verification.status === 'verified') {
-              setSuccessful(true)
-            } else {
-              // If the status is not complete, check why. User may need to
-              // complete further steps.
-              console.error(JSON.stringify(phoneVerifyAttempt, null, 2))
-            }
-          } catch (err) {
-            console.error(JSON.stringify(err, null, 2))
-          }
-        }
-
-        // Display a success message if the phone number was added successfully
-        if (successful) {
-          return (
-            <>
-              <h1>Phone added</h1>
-            </>
-          )
-        }
-
-        // Display the verification form to capture the OTP code
-        if (isVerifying) {
-          return (
-            <>
-              <h1>Verify phone</h1>
-              <div>
-                <form onSubmit={(e) => verifyCode(e)}>
-                  <div>
-                    <label htmlFor="code">Enter code</label>
-                    <input
-                      onChange={(e) => setCode(e.target.value)}
-                      id="code"
-                      name="code"
-                      type="text"
-                      value={code}
-                    />
-                  </div>
-                  <div>
-                    <button type="submit">Verify</button>
-                  </div>
-                </form>
-              </div>
-            </>
-          )
-        }
-
-        // Display the initial form to capture the phone number
-        return (
-          <>
-            <h1>Add phone</h1>
-            <div>
-              <form onSubmit={(e) => handleSubmit(e)}>
-                <div>
-                  <label htmlFor="phone">Enter phone number</label>
-                  <input
-                    onChange={(e) => setPhone(e.target.value)}
-                    id="phone"
-                    name="phone"
-                    type="phone"
-                    value={phone}
-                  />
-                </div>
-                <div>
-                  <button type="submit">Continue</button>
-                </div>
-              </form>
-            </div>
-          </>
-        )
-      }
-      ```
+      <Include src="_partials/custom-flows/add-phone" />
     </Tab>
   </Tabs>
 </Steps>

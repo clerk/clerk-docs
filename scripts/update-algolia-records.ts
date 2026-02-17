@@ -6,6 +6,11 @@
 // Options:
 //   --dry-run  Run everything except actually pushing/updating the Algolia index
 //
+// Environment variables:
+//   DEBUG_SEARCH_BRANCH  Set to enable search index updates on preview deployments.
+//                        The value is used as the branch name for the records.
+//                        Without this, the script exits early on preview deployments.
+//
 // This script reads the final processed MDX files from dist/ which have:
 // - All partials embedded
 // - All typedocs embedded
@@ -38,7 +43,7 @@ type SearchRecord = {
   type: RecordType
   keywords: string[]
   availableSDKs: string[]
-  canonical: string | null
+  canonical: string
   weight: {
     pageRank: number
     level: number
@@ -57,24 +62,31 @@ type SearchRecord = {
   record_batch: string
 }
 
-type Frontmatter = {
-  title?: string
-  description?: string
-  sdk?: string
-  availableSdks?: string
-  activeSdk?: string
-  redirectPage?: string
-  search?: {
-    exclude?: boolean
-    keywords?: string[]
-    rank?: number
-  }
-  canonical?: string
-}
+const frontmatterSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().nullable(),
+  sdk: z.string().optional(),
+  availableSdks: z.string().optional(),
+  activeSdk: z.string().optional(),
+  redirectPage: z.string().optional(),
+  search: z
+    .object({
+      exclude: z.boolean().optional(),
+      keywords: z.array(z.string()).optional(),
+      rank: z.number().optional(),
+    })
+    .optional(),
+  canonical: z.string(),
+})
+
+type Frontmatter = z.infer<typeof frontmatterSchema>
 
 const DIST_PATH = path.join(__dirname, '../dist')
 const BASE_DOCS_URL = '/docs'
 const ALGOLIA_OUTPUT_DIR = path.join(__dirname, '../.algolia')
+
+const DEBUG_SEARCH_BRANCH = process.env.DEBUG_SEARCH_BRANCH
+const VERCEL_ENV = process.env.VERCEL_ENV as 'production' | 'preview' | 'development' | undefined
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -94,6 +106,10 @@ const HEADING_WEIGHTS: Record<string, number> = {
 
 function getGitBranch(): string {
   try {
+    if (DEBUG_SEARCH_BRANCH !== undefined) {
+      return DEBUG_SEARCH_BRANCH
+    }
+
     // Try to get branch from environment (CI systems often set this)
     const envBranch =
       process.env.VERCEL_GIT_COMMIT_REF ||
@@ -284,7 +300,7 @@ function generateRecordsFromDoc(
   const availableSdksRaw = doc.frontmatter.availableSdks?.split(',').filter(Boolean)
   // Use ["all"] for non-SDK-scoped docs (no availableSdks in frontmatter)
   const availableSdksList = availableSdksRaw && availableSdksRaw.length > 0 ? availableSdksRaw : ['all']
-  const canonical = doc.frontmatter.canonical || null
+  const canonical = doc.frontmatter.canonical
   const keywords = doc.frontmatter.search?.keywords?.map((keyword) => keyword.trim()).filter(Boolean) ?? []
 
   // Helper to create a record
@@ -590,6 +606,17 @@ function generateRecordsFromDoc(
 }
 
 async function main() {
+  if (VERCEL_ENV === 'preview') {
+    if (DEBUG_SEARCH_BRANCH !== undefined) {
+      console.log(`⚠︎ DEBUG MODE - Using branch: ${DEBUG_SEARCH_BRANCH}`)
+    } else {
+      console.log(
+        `To update the dev algolia search index on a preview deployment, you must set the DEBUG_SEARCH_BRANCH environment variable`,
+      )
+      process.exit(0)
+    }
+  }
+
   const gitBranch = getGitBranch()
   const recordBatch = randomUUID()
 
@@ -656,7 +683,7 @@ async function main() {
       continue
     }
 
-    frontmatter = frontmatter as Frontmatter
+    frontmatter = frontmatterSchema.parse(frontmatter)
 
     // Skip redirect pages
     if (frontmatter.redirectPage === 'true') {

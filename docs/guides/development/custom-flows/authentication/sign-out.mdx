@@ -5,20 +5,20 @@ description: Learn how to use the Clerk API to build a custom sign-out flow usin
 
 <Include src="_partials/custom-flows-callout" />
 
-Clerk's [`<UserButton />`](/docs/reference/components/user/user-button) and [`<SignOutButton />`](/docs/reference/components/unstyled/sign-out-button) components provide an out-of-the-box solution for signing out users. However, if you're building a custom solution, you can use the [`signOut()`](/docs/reference/javascript/clerk#sign-out) function to handle the sign-out process.
+Clerk's [`<UserButton />`](/docs/reference/components/user/user-button) and [`<SignOutButton />`](/docs/reference/components/unstyled/sign-out-button) components provide an out-of-the-box solution for signing out users. However, if you're building a custom solution, you can use the `signOut()` function to handle the sign-out process.
 
 The `signOut()` function signs a user out of all sessions in a [multi-session application](/docs/guides/secure/session-options#multi-session-applications), or only the current session in a single-session context. You can also specify a specific session to sign out by passing the `sessionId` parameter.
 
 > [!NOTE]
 > The sign-out flow deactivates only the current session. Other valid sessions associated with the same user (e.g., if the user is signed in on another device) will remain active.
 
-<Tabs items={["Next.js", "JavaScript", "Expo", "iOS", "Android"]}>
-  <Tab>
-    The [`useClerk()`](/docs/reference/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the sign-out button.
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  The [`useClerk()`](/docs/reference/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the "Sign out" button.
 
-    This example is written for Next.js App Router but can be adapted for any React-based framework.
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-    ```jsx {{ filename: 'app/components/SignOutButton.tsx' }}
+    ```jsx {{ filename: 'app/components/sign-out-button.tsx' }}
     'use client'
 
     import { useClerk } from '@clerk/nextjs'
@@ -33,65 +33,64 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
       )
     }
     ```
-  </Tab>
+  </If>
 
-  <Tab>
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <link rel="icon" type="image/svg+xml" href="/clerk.svg" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-
-        <body>
-          <div id="app"></div>
-          <button id="sign-out">Sign out</button>
-          <script type="module" src="main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      const clerk = new Clerk(pubKey)
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        // Attach signOut function to the sign-out button
-        document.getElementById('sign-out').addEventListener('click', async () => {
-          await clerk.signOut()
-          // Optional: refresh page after sign-out
-          window.location.reload()
-        })
-      }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-
-  <Tab>
-    The [`useClerk()`](/docs/reference/hooks/use-clerk) hook is used to access the `signOut()` function, which is called when the user clicks the "Sign out" button.
-
+  <If sdk="expo">
     <Include src="_partials/expo/sign-out-custom-flow" />
-  </Tab>
+  </If>
+</If>
 
-  <Tab>
-    ```swift {{ filename: 'SignOutView.swift', collapsible: true }}
+<If sdk="js-frontend">
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html', collapsible: true }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/clerk.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+
+      <body>
+        <div id="app"></div>
+        <button id="sign-out">Sign out</button>
+        <script type="module" src="main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js', collapsible: true }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    const clerk = new Clerk(pubKey)
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      // Attach signOut function to the sign-out button
+      document.getElementById('sign-out').addEventListener('click', async () => {
+        await clerk.signOut()
+        // Optional: refresh page after sign-out
+        window.location.reload()
+      })
+    }
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk="ios">
+  ```swift {{ filename: 'SignOutView.swift', collapsible: true }}
     import SwiftUI
-    import Clerk
+    import ClerkKit
 
     struct SignOutView: View {
       @Environment(Clerk.self) private var clerk
 
       var body: some View {
-        if let session = clerk.session {
-          Text("Active Session: \(session.id)")
+        if let user = clerk.user {
+          Text("Signed in as: \(user.id)")
           Button("Sign out") {
             Task { await signOut() }
           }
@@ -105,7 +104,8 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
 
       func signOut() async {
         do {
-          try await clerk.signOut()
+          // Sign out the active user
+          try await clerk.auth.signOut()
         } catch {
           // See https://clerk.com/docs/guides/development/custom-flows/error-handling
           // for more info on error handling.
@@ -113,10 +113,13 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
         }
       }
     }
-    ```
-  </Tab>
+  ```
+</If>
 
-  <Tab>
+<If sdk="android">
+  {/* TODO(Sam): Update for new Android API's */}
+
+  <CodeBlockTabs options={["MainViewModel.kt", "MainActivity.kt"]}>
     ```kotlin {{ filename: 'MainViewModel.kt', collapsible: true }}
     import androidx.lifecycle.ViewModel
     import androidx.lifecycle.viewModelScope
@@ -216,5 +219,9 @@ The `signOut()` function signs a user out of all sessions in a [multi-session ap
         }
     }
     ```
-  </Tab>
-</Tabs>
+  </CodeBlockTabs>
+</If>
+
+<If sdk="nuxt">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

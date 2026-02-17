@@ -13,13 +13,11 @@ This guide demonstrates how to use the Clerk API to build a custom user interfac
 
 To use passkeys, first enable the strategy in the [Clerk Dashboard](https://dashboard.clerk.com/~/user-authentication/user-and-authentication?user_auth_tab=passkeys).
 
-<If sdk="android">
-  When setting up passkeys with Android, there are a few additional steps to follow. [Learn more about passkeys for Android](/docs/reference/android/passkeys).
-</If>
-
-<If sdk="expo">
-  When setting up passkeys with Expo, there are a few additional steps to follow. [Learn more about passkeys for Expo](/docs/reference/expo/passkeys).
-</If>
+> [!NOTE]
+> When setting up passkeys with Android or Expo, there are a few additional steps to follow:
+>
+> - [Set up passkeys for Android](/docs/reference/android/passkeys).
+> - [Set up passkeys for Expo](/docs/reference/expo/passkeys).
 
 ### Domain restrictions for passkeys
 
@@ -27,176 +25,698 @@ To use passkeys, first enable the strategy in the [Clerk Dashboard](https://dash
 
 ## Create user passkeys
 
-To create a passkey for a user, you must call [`User.createPasskey()`](/docs/reference/javascript/user#create-passkey), as shown in the following example:
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  To create a passkey for a user, you must call [`User.createPasskey()`](/docs/reference/javascript/user#create-passkey), as shown in the following example:
 
-```tsx {{ filename: 'app/components/CustomCreatePasskeysButton.tsx' }}
-export function CreatePasskeyButton() {
-  const { isSignedIn, user } = useUser()
+  <If notSdk="expo">
+    ```tsx {{ filename: 'components/CustomCreatePasskeysButton.tsx' }}
+    export function CreatePasskeyButton() {
+      const { isSignedIn, user } = useUser()
 
-  const createClerkPasskey = async () => {
-    if (!isSignedIn) {
-      // Handle signed out state
-      return
+      const createClerkPasskey = async () => {
+        if (!isSignedIn) {
+          // Handle signed out state
+          return
+        }
+
+        try {
+          await user?.createPasskey()
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+        }
+      }
+
+      return <button onClick={createClerkPasskey}>Create a passkey</button>
+    }
+    ```
+  </If>
+
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/create-passkeys-button.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { useUser } from '@clerk/clerk-expo'
+    import { Pressable, StyleSheet } from 'react-native'
+
+    export function CreatePasskeyButton() {
+      const { isSignedIn, user } = useUser()
+
+      const createClerkPasskey = async () => {
+        if (!isSignedIn) {
+          return
+        }
+
+        try {
+          await user?.createPasskey()
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+        }
+      }
+
+      return (
+        <Pressable
+          style={({ pressed }) => [
+            styles.button,
+            !isSignedIn && styles.buttonDisabled,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={createClerkPasskey}
+          disabled={!isSignedIn}
+        >
+          <ThemedText style={styles.buttonText}>Create a passkey</ThemedText>
+        </Pressable>
+      )
     }
 
-    try {
-      await user?.createPasskey()
-    } catch (err) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error('Error:', JSON.stringify(err, null, 2))
-    }
-  }
+    const styles = StyleSheet.create({
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
+</If>
 
-  return <button onClick={createClerkPasskey}>Create a passkey</button>
-}
-```
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
 ## Sign a user in with a passkey
 
 To sign a user into your Clerk app with a passkey, you must call [`SignIn.authenticateWithPasskey()`](/docs/reference/javascript/sign-in#authenticate-with-passkey). This method allows users to choose from their discoverable passkeys, such as hardware keys or passkeys in password managers.
 
-```tsx {{ filename: 'components/SignInWithPasskeyButton.tsx' }}
-export function SignInWithPasskeyButton() {
-  const { signIn } = useSignIn()
-  const router = useRouter()
+<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+  ```tsx {{ filename: 'components/SignInWithPasskeyButton.tsx' }}
+  export function SignInWithPasskeyButton() {
+    const { signIn } = useSignIn()
+    const router = useRouter()
 
-  const signInWithPasskey = async () => {
-    // 'discoverable' lets the user choose a passkey
-    // without auto-filling any of the options
-    try {
-      const signInAttempt = await signIn?.authenticateWithPasskey({
-        flow: 'discoverable',
-      })
-
-      if (signInAttempt?.status === 'complete') {
-        await setActive({
-          session: signInAttempt.createdSessionId,
-          redirectUrl: '/',
-          navigate: async ({ session }) => {
-            if (session?.currentTask) {
-              // Check for tasks and navigate to custom UI to help users resolve them
-              // See https://clerk.com/docs/guides/development/custom-flows/overview#session-tasks
-              console.log(session?.currentTask)
-              return
-            }
-
-            router.push('/')
-          },
+    const signInWithPasskey = async () => {
+      // 'discoverable' lets the user choose a passkey
+      // without auto-filling any of the options
+      try {
+        const signInAttempt = await signIn?.authenticateWithPasskey({
+          flow: 'discoverable',
         })
-      } else {
-        // If the status is not complete, check why. User may need to
-        // complete further steps.
-        console.error(JSON.stringify(signInAttempt, null, 2))
+
+        if (signInAttempt?.status === 'complete') {
+          await setActive({
+            session: signInAttempt.createdSessionId,
+            redirectUrl: '/',
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
+          })
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
       }
-    } catch (err) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error('Error:', JSON.stringify(err, null, 2))
     }
+
+    return <button onClick={signInWithPasskey}>Sign in with a passkey</button>
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/components/sign-in-with-passkey-button.tsx', collapsible: true }}
+  import { ThemedText } from '@/components/themed-text'
+  import { useSignIn } from '@clerk/clerk-expo'
+  import { useRouter } from 'expo-router'
+  import { Pressable, StyleSheet } from 'react-native'
+
+  export function SignInWithPasskeyButton() {
+    const { signIn, setActive } = useSignIn()
+    const router = useRouter()
+
+    const signInWithPasskey = async () => {
+      // 'discoverable' lets the user choose a passkey
+      // without auto-filling any of the options
+      try {
+        const signInAttempt = await signIn?.authenticateWithPasskey({
+          flow: 'discoverable',
+        })
+
+        if (signInAttempt?.status === 'complete') {
+          await setActive?.({
+            session: signInAttempt.createdSessionId,
+            redirectUrl: '/',
+            navigate: async ({ session }) => {
+              if (session?.currentTask) {
+                // Handle pending session tasks
+                // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+                console.log(session?.currentTask)
+                return
+              }
+
+              router.push('/')
+            },
+          })
+        } else {
+          // If the status is not complete, check why. User may need to
+          // complete further steps.
+          console.error(JSON.stringify(signInAttempt, null, 2))
+        }
+      } catch (err) {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        console.error('Error:', JSON.stringify(err, null, 2))
+      }
+    }
+
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        onPress={signInWithPasskey}
+      >
+        <ThemedText style={styles.buttonText}>Sign in with a passkey</ThemedText>
+      </Pressable>
+    )
   }
 
-  return <button onClick={signInWithPasskey}>Sign in with a passkey</button>
-}
-```
+  const styles = StyleSheet.create({
+    button: {
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    buttonPressed: {
+      opacity: 0.7,
+    },
+    buttonText: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+  })
+  ```
+</If>
+
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
 ## Rename user passkeys
 
 Clerk generates a name based on the device associated with the passkey when it's created. Sometimes users may want to rename a passkey to make it easier to identify.
 
-To rename a user's passkey in your Clerk app, you must call the [`update()`](/docs/reference/javascript/types/passkey-resource#update) method of the passkey object, as shown in the following example:
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <If notSdk="expo">
+    ```tsx {{ filename: 'components/RenamePasskeyUI.tsx' }}
+    export function RenamePasskeyUI() {
+      const { user } = useUser()
+      const { passkeys } = user
 
-```tsx {{ filename: 'components/RenamePasskeyUI.tsx' }}
-export function RenamePasskeyUI() {
-  const { user } = useUser()
-  const { passkeys } = user
+      const passkeyToUpdateId = useRef<HTMLInputElement>(null)
+      const newPasskeyName = useRef<HTMLInputElement>(null)
+      const [success, setSuccess] = useState(false)
 
-  const passkeyToUpdateId = useRef<HTMLInputElement>(null)
-  const newPasskeyName = useRef<HTMLInputElement>(null)
-  const [success, setSuccess] = useState(false)
-
-  const renamePasskey = async () => {
-    try {
-      const passkeyToUpdate = passkeys?.find(
-        (pk: PasskeyResource) => pk.id === passkeyToUpdateId.current?.value,
-      )
-
-      await passkeyToUpdate?.update({
-        name: newPasskeyName.current?.value,
-      })
-
-      setSuccess(true)
-    } catch (err) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error('Error:', JSON.stringify(err, null, 2))
-      setSuccess(false)
-    }
-  }
-
-  return (
-    <>
-      <p>Passkeys:</p>
-      <ul>
-        {passkeys?.map((pk: PasskeyResource) => {
-          return (
-            <li key={pk.id}>
-              Name: {pk.name} | ID: {pk.id}
-            </li>
+      const renamePasskey = async () => {
+        try {
+          const passkeyToUpdate = passkeys?.find(
+            (pk: PasskeyResource) => pk.id === passkeyToUpdateId.current?.value,
           )
-        })}
-      </ul>
-      <input ref={passkeyToUpdateId} type="text" placeholder="Enter the passkey ID" />
-      <input type="text" placeholder="Enter the passkey's new name" ref={newPasskeyName} />
-      <button onClick={renamePasskey}>Rename passkey</button>
-      <p>Passkey updated: {success ? 'Yes' : 'No'}</p>
-    </>
-  )
-}
-```
+
+          await passkeyToUpdate?.update({
+            name: newPasskeyName.current?.value,
+          })
+
+          setSuccess(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+          setSuccess(false)
+        }
+      }
+
+      return (
+        <>
+          <p>Passkeys:</p>
+          <ul>
+            {passkeys?.map((pk: PasskeyResource) => {
+              return (
+                <li key={pk.id}>
+                  Name: {pk.name} | ID: {pk.id}
+                </li>
+              )
+            })}
+          </ul>
+          <input ref={passkeyToUpdateId} type="text" placeholder="Enter the passkey ID" />
+          <input type="text" placeholder="Enter the passkey's new name" ref={newPasskeyName} />
+          <button onClick={renamePasskey}>Rename passkey</button>
+          <p>Passkey updated: {success ? 'Yes' : 'No'}</p>
+        </>
+      )
+    }
+    ```
+  </If>
+
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/rename-passkey.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useUser } from '@clerk/clerk-expo'
+    import { PasskeyResource } from '@clerk/types'
+    import { useState } from 'react'
+    import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native'
+
+    export function RenamePasskeyUI() {
+      const { user } = useUser()
+      const passkeys = user?.passkeys
+
+      const [passkeyToUpdateId, setPasskeyToUpdateId] = useState('')
+      const [newPasskeyName, setNewPasskeyName] = useState('')
+      const [success, setSuccess] = useState(false)
+
+      const renamePasskey = async () => {
+        try {
+          const passkeyToUpdate = passkeys?.find((pk: PasskeyResource) => pk.id === passkeyToUpdateId)
+
+          await passkeyToUpdate?.update({
+            name: newPasskeyName,
+          })
+
+          setSuccess(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+          setSuccess(false)
+        }
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Passkeys:
+          </ThemedText>
+
+          {passkeys && passkeys.length > 0 ? (
+            <FlatList
+              data={passkeys}
+              scrollEnabled={false}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item: pk }) => (
+                <View style={styles.passkeyCard}>
+                  <ThemedText style={styles.passkeyText}>
+                    Name: {pk.name} | ID: {pk.id}
+                  </ThemedText>
+                </View>
+              )}
+              style={styles.list}
+            />
+          ) : (
+            <ThemedText style={styles.infoText}>No passkeys available</ThemedText>
+          )}
+
+          <ThemedText style={styles.label}>Enter the passkey ID</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={passkeyToUpdateId}
+            placeholder="Enter the passkey ID"
+            placeholderTextColor="#666666"
+            onChangeText={setPasskeyToUpdateId}
+          />
+
+          <ThemedText style={styles.label}>Enter the passkey's new name</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={newPasskeyName}
+            placeholder="Enter the passkey's new name"
+            placeholderTextColor="#666666"
+            onChangeText={setNewPasskeyName}
+          />
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              (!passkeyToUpdateId || !newPasskeyName) && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={renamePasskey}
+            disabled={!passkeyToUpdateId || !newPasskeyName}
+          >
+            <ThemedText style={styles.buttonText}>Rename passkey</ThemedText>
+          </Pressable>
+
+          <View
+            style={[
+              styles.statusContainer,
+              success ? styles.successContainer : styles.neutralContainer,
+            ]}
+          >
+            <ThemedText style={success ? styles.successText : styles.neutralText}>
+              Passkey updated: {success ? 'Yes' : 'No'}
+            </ThemedText>
+          </View>
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      sectionTitle: {
+        fontWeight: '600',
+        fontSize: 16,
+        marginBottom: 8,
+      },
+      list: {
+        marginBottom: 16,
+      },
+      passkeyCard: {
+        padding: 12,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 8,
+        marginBottom: 8,
+      },
+      passkeyText: {
+        fontSize: 14,
+        fontFamily: 'monospace',
+      },
+      infoText: {
+        fontSize: 14,
+        opacity: 0.8,
+        marginBottom: 16,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      statusContainer: {
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 8,
+      },
+      successContainer: {
+        backgroundColor: '#e8f5e9',
+      },
+      neutralContainer: {
+        backgroundColor: '#f5f5f5',
+      },
+      successText: {
+        color: '#2e7d32',
+        fontWeight: '500',
+      },
+      neutralText: {
+        color: '#666',
+        fontWeight: '500',
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
 ## Delete user passkeys
 
-To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/reference/javascript/types/passkey-resource#delete) method of the passkey object, as shown in the following example:
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  To delete a user's passkey from your Clerk app, you must call the [`delete()`](/docs/reference/javascript/types/passkey-resource#delete) method of the passkey object, as shown in the following example:
 
-```tsx {{ filename: 'components/DeletePasskeyUI.tsx' }}
-export function DeletePasskeyUI() {
-  const { user } = useUser()
-  const { passkeys } = user
+  <If notSdk="expo">
+    ```tsx {{ filename: 'components/DeletePasskeyUI.tsx' }}
+    export function DeletePasskeyUI() {
+      const { user } = useUser()
+      const { passkeys } = user
 
-  const passkeyToDeleteId = useRef<HTMLInputElement>(null)
-  const [success, setSuccess] = useState(false)
+      const passkeyToDeleteId = useRef<HTMLInputElement>(null)
+      const [success, setSuccess] = useState(false)
 
-  const deletePasskey = async () => {
-    const passkeyToDelete = passkeys?.find((pk: any) => pk.id === passkeyToDeleteId.current?.value)
-    try {
-      await passkeyToDelete?.delete()
+      const deletePasskey = async () => {
+        const passkeyToDelete = passkeys?.find((pk: any) => pk.id === passkeyToDeleteId.current?.value)
+        try {
+          await passkeyToDelete?.delete()
 
-      setSuccess(true)
-    } catch (err) {
-      // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-      // for more info on error handling
-      console.error('Error:', JSON.stringify(err, null, 2))
-      setSuccess(false)
+          setSuccess(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+          setSuccess(false)
+        }
+      }
+
+      return (
+        <>
+          <p>Passkeys:</p>
+          <ul>
+            {passkeys?.map((pk: any) => {
+              return (
+                <li key={pk.id}>
+                  Name: {pk.name} | ID: {pk.id}
+                </li>
+              )
+            })}
+          </ul>
+          <input ref={passkeyToDeleteId} type="text" placeholder="Enter the passkey ID" />
+          <button onClick={deletePasskey}>Delete passkey</button>
+          <p>Passkey deleted: {success ? 'Yes' : 'No'}</p>
+        </>
+      )
     }
-  }
+    ```
+  </If>
 
-  return (
-    <>
-      <p>Passkeys:</p>
-      <ul>
-        {passkeys?.map((pk: any) => {
-          return (
-            <li key={pk.id}>
-              Name: {pk.name} | ID: {pk.id}
-            </li>
-          )
-        })}
-      </ul>
-      <input ref={passkeyToDeleteId} type="text" placeholder="Enter the passkey ID" />
-      <button onClick={deletePasskey}>Delete passkey</button>
-      <p>Passkey deleted: {success ? 'Yes' : 'No'}</p>
-    </>
-  )
-}
-```
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/delete-passkey.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useUser } from '@clerk/clerk-expo'
+    import { PasskeyResource } from '@clerk/types'
+    import { useState } from 'react'
+    import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native'
+
+    export function DeletePasskeyUI() {
+      const { user } = useUser()
+      const passkeys = user?.passkeys
+
+      const [passkeyToDeleteId, setPasskeyToDeleteId] = useState('')
+      const [success, setSuccess] = useState(false)
+
+      const deletePasskey = async () => {
+        const passkeyToDelete = passkeys?.find((pk: PasskeyResource) => pk.id === passkeyToDeleteId)
+        try {
+          await passkeyToDelete?.delete()
+
+          setSuccess(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error('Error:', JSON.stringify(err, null, 2))
+          setSuccess(false)
+        }
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>
+            Passkeys:
+          </ThemedText>
+
+          {passkeys && passkeys.length > 0 ? (
+            <FlatList
+              data={passkeys}
+              scrollEnabled={false}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item: pk }) => (
+                <View style={styles.passkeyCard}>
+                  <ThemedText style={styles.passkeyText}>
+                    Name: {pk.name} | ID: {pk.id}
+                  </ThemedText>
+                </View>
+              )}
+              style={styles.list}
+            />
+          ) : (
+            <ThemedText style={styles.infoText}>No passkeys available</ThemedText>
+          )}
+
+          <ThemedText style={styles.label}>Enter the passkey ID</ThemedText>
+          <TextInput
+            style={styles.input}
+            value={passkeyToDeleteId}
+            placeholder="Enter the passkey ID"
+            placeholderTextColor="#666666"
+            onChangeText={setPasskeyToDeleteId}
+          />
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.dangerButton,
+              !passkeyToDeleteId && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={deletePasskey}
+            disabled={!passkeyToDeleteId}
+          >
+            <ThemedText style={styles.buttonText}>Delete passkey</ThemedText>
+          </Pressable>
+
+          <View
+            style={[
+              styles.statusContainer,
+              success ? styles.successContainer : styles.neutralContainer,
+            ]}
+          >
+            <ThemedText style={success ? styles.successText : styles.neutralText}>
+              Passkey deleted: {success ? 'Yes' : 'No'}
+            </ThemedText>
+          </View>
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      sectionTitle: {
+        fontWeight: '600',
+        fontSize: 16,
+        marginBottom: 8,
+      },
+      list: {
+        marginBottom: 16,
+      },
+      passkeyCard: {
+        padding: 12,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 8,
+        marginBottom: 8,
+      },
+      passkeyText: {
+        fontSize: 14,
+        fontFamily: 'monospace',
+      },
+      infoText: {
+        fontSize: 14,
+        opacity: 0.8,
+        marginBottom: 16,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      dangerButton: {
+        backgroundColor: '#c62828',
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      statusContainer: {
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 8,
+      },
+      successContainer: {
+        backgroundColor: '#e8f5e9',
+      },
+      neutralContainer: {
+        backgroundColor: '#f5f5f5',
+      },
+      successText: {
+        color: '#2e7d32',
+        fontWeight: '500',
+      },
+      neutralText: {
+        color: '#666',
+        fontWeight: '500',
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

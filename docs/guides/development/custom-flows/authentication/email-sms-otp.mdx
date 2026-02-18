@@ -1,6 +1,9 @@
 ---
-title: Build a custom email or SMS OTP authentication flow
-description: Learn how build a custom email or SMS one time code (OTP) authentication flow using the Clerk API.
+title: Build a custom sign-in flow with email or phone code
+description: Learn how build a custom passwordless sign-in flow with email or phone code using the Clerk API.
+search:
+  keywords:
+    - passwordless
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -18,101 +21,131 @@ description: Learn how build a custom email or SMS one time code (OTP) authentic
   > If you're using an older version of one of these SDKs, or are using the legacy API, refer to the [legacy API documentation](/docs/guides/development/custom-flows/authentication/legacy/email-sms-otp).
 </If>
 
-Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a [one-time password (OTP)](!otp) via email or SMS, which they can use to authenticate themselves.
+Clerk supports passwordless authentication, which lets users sign in and sign up without having to remember a password. Instead, users receive a one-time password ([OTP](!otp)) via email or phone, which they can use to authenticate themselves.
 
-This guide will walk you through how to build a custom SMS OTP sign-up and sign-in flow. The process for using email OTP is similar, and the differences will be highlighted throughout.
-
-<Include src="_partials/custom-flows/phone-number" />
+This guide demonstrates how to build a custom user interface for signing up and signing in using phone OTP. The process for using email OTP is similar, and the differences will be highlighted throughout.
 
 <Steps>
-  ## Enable SMS OTP
+  ## Enable phone OTP
 
-  To use SMS [OTP](!otp), you first need to enable it for your application.
+  To use phone [OTP](!otp), you first need to enable it for your application.
 
   1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-  1. Select the **Phone** tab and enable **Sign-up with phone** and **Sign-in with phone** and keep the default settings.
+  1. Select the **Phone** tab and enable **Sign-up with phone** and **Sign-in with phone**. It's recommended to enable **Verify at sign-up**.
 
   ## Sign-up flow
 
-  To sign up a user using an [OTP](!otp), you must:
-
   <If sdk={["nextjs", "react", "expo", "js-frontend", "react-router", "tanstack-react-start"]}>
+    <Include src="_partials/custom-flows/use-sign-up-hook" />
+
+    Then, to sign up a user using their phone number and verify their sign-up with an SMS code, you must:
+
     1. Initiate the sign-up process by collecting the user's phone number with the [`signUp.create()`](/docs/reference/javascript/sign-up-future#create) method.
-    1. Send a one-time code to the provided phone number for verification with the [`signUp.verifications.sendPhoneCode()`](/docs/reference/javascript/sign-up-future#verifications-send-phone-code) method.
-    1. Collect the one-time code and verify it with the [`signUp.verifications.verifyPhoneCode()`](/docs/reference/javascript/sign-up-future#verifications-verify-phone-code) method.
+    1. Send a one-time code to the provided phone number for verification with the [`signUp.verifications.sendPhoneCode()`](/docs/reference/javascript/sign-up-future#verifications-send-phone-code) method (or [`signUp.verifications.sendEmailCode()`](/docs/reference/javascript/sign-up-future#verifications-send-email-code) if you're modifying this example for email OTP).
+    1. Collect the one-time code and verify it with the [`signUp.verifications.verifyPhoneCode()`](/docs/reference/javascript/sign-up-future#verifications-verify-phone-code) method (or [`signUp.verifications.verifyEmailCode()`](/docs/reference/javascript/sign-up-future#verifications-verify-email-code) if you're modifying this example for email OTP).
+       <Include src="_partials/custom-flows/phone-number" />
     1. If the phone number verification is successful, finalize the sign-up with the [`signUp.finalize()`](/docs/reference/javascript/sign-up-future#finalize) method to create the user and set the newly created session as the active session.
 
-    <Tabs items={["Next.js"]}>
-      <Tab>
-        This example is written for Next.js App Router but it can be adapted for any React-based framework.
+    <If notSdk="expo">
+      **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-        ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
-        'use client'
+      ```tsx {{ filename: 'app/sign-up/page.tsx', collapsible: true }}
+      'use client'
 
-        import * as React from 'react'
-        import { useAuth, useSignUp } from '@clerk/nextjs'
-        import { useRouter } from 'next/navigation'
+      import * as React from 'react'
+      import { useAuth, useSignUp } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-        export default function SignUpPage() {
-          const { signUp, errors, fetchStatus } = useSignUp()
-          const { isSignedIn } = useAuth()
+      export default function SignUpPage() {
+        const { signUp, errors, fetchStatus } = useSignUp()
+        const { isSignedIn } = useAuth()
+        const router = useRouter()
 
-          const handleSubmit = async (formData: FormData) => {
-            const phoneNumber = formData.get('phoneNumber') as string
+        const [storedPhone, setStoredPhone] = React.useState<string>('')
 
-            await signUp.create({ phoneNumber })
+        const handleSubmit = async (formData: FormData) => {
+          const phoneNumber = formData.get('phoneNumber') as string
+          setStoredPhone(phoneNumber)
 
-            await signUp.verifications.sendPhoneCode()
+          const error = await signUp.create({ phoneNumber })
+
+          if (!error) await signUp.verifications.sendPhoneCode({ phoneNumber })
+        }
+
+        const handleVerify = async (formData: FormData) => {
+          const code = formData.get('code') as string
+
+          await signUp.verifications.verifyPhoneCode({ code })
+          if (signUp.status === 'complete') {
+            await signUp.finalize({
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
           }
+        }
 
-          const handleVerify = async (formData: FormData) => {
-            const code = formData.get('code') as string
+        if (signUp.status === 'complete' || isSignedIn) {
+          return null
+        }
 
-            await signUp.verifications.verifyPhoneCode({ code })
-            if (signUp.status === 'complete') {
-              await signUp.finalize({
-                navigate: ({ decorateUrl }) => {
-                  const url = decorateUrl('/dashboard')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
-            }
-          }
-
-          if (signUp.status === 'complete' || isSignedIn) {
-            return null
-          }
-
-          if (
-            signUp.status === 'missing_requirements' &&
-            signUp.unverifiedFields.includes('phone_number')
-          ) {
-            return (
-              <form action={handleVerify}>
-                <input type="text" name="code" placeholder="Enter your verification code" />
-                <button type="submit">Verify</button>
-              </form>
-            )
-          }
-
+        if (
+          signUp.status === 'missing_requirements' &&
+          signUp.unverifiedFields.includes('phone_number') &&
+          signUp.missingFields.length === 0
+        ) {
           return (
-            <form action={handleSubmit}>
-              <input type="tel" name="phoneNumber" placeholder="Phone number" />
-              <button type="submit" disabled={fetchStatus === 'fetching'}>
-                Sign up
+            <>
+              <h1>Verify your account</h1>
+              <form action={handleVerify}>
+                <div>
+                  <label htmlFor="code">Code</label>
+                  <input id="code" name="code" type="text" />
+                </div>
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
+                <button type="submit" disabled={fetchStatus === 'fetching'}>
+                  Verify
+                </button>
+              </form>
+              <button onClick={() => signUp.verifications.sendPhoneCode({ phoneNumber: storedPhone })}>
+                I need a new code
               </button>
-            </form>
+            </>
           )
         }
-        ```
-      </Tab>
-    </Tabs>
 
-    To create a sign-up flow for email OTP, use the [`signUp.emailCode.sendCode()`](/docs/reference/javascript/sign-up-future) and [`signUp.emailCode.verifyCode()`](/docs/reference/javascript/sign-up-future) methods. These methods work the same way as their phone number counterparts do in the previous example. You can find all available methods in the [`SignUpFuture`](/docs/reference/javascript/sign-up-future) object documentation.
+        return (
+          <>
+            <h1>Sign up</h1>
+            <form action={handleSubmit}>
+              <div>
+                <label htmlFor="phoneNumber">Phone number</label>
+                <input id="phoneNumber" name="phoneNumber" type="tel" />
+                {errors.fields.phoneNumber && <p>{errors.fields.phoneNumber.message}</p>}
+              </div>
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Continue
+              </button>
+            </form>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+
+            {/* Required for sign-up flows. Clerk's bot sign-up protection is enabled by default */}
+            <div id="clerk-captcha" />
+          </>
+        )
+      }
+      ```
+    </If>
+
+    <If sdk="expo">
+      {/* TODO */}
+    </If>
   </If>
 
   <If sdk={["ios", "android"]}>
@@ -348,93 +381,116 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
         ```
       </Tab>
     </Tabs>
-
-    To create a sign-up flow for email OTP, use the [`prepareEmailAddressVerification`](/docs/reference/javascript/sign-up#prepare-email-address-verification) and [`attemptEmailAddressVerification`](/docs/reference/javascript/sign-up#attempt-email-address-verification). These helpers work the same way as their phone number counterparts do in the previous example. You can find all available methods in the [`SignUp`](/docs/reference/javascript/sign-in) object documentation.
   </If>
 
   ## Sign-in flow
 
-  To authenticate a user with an [OTP](!otp), you must:
-
   <If sdk={["nextjs", "react", "expo", "js-frontend", "react-router", "tanstack-react-start"]}>
-    1. Initiate the sign-in process by calling the [`signIn.phoneCode.sendCode()`](/docs/reference/javascript/sign-in-future#phone-code-send-code) method using the identifier provided, which for this example is a phone number.
-    1. Verify the phone code provided by the user with the [`signIn.phoneCode.verifyCode()`](/docs/reference/javascript/sign-in-future#phone-code-verify-code) method.
-    1. If the attempt is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
+    <Include src="_partials/custom-flows/use-sign-in-hook" />
 
-    <Tabs items={["Next.js"]}>
-      <Tab>
-        This example is written for Next.js App Router but it can be adapted to any React-based framework.
+    1. Initiate the sign-in process by collecting the user's phone number with the [`signIn.phoneCode.sendCode()`](/docs/reference/javascript/sign-in-future#phone-code-send-code) method.
+    1. Send a one-time code to the provided phone number for verification with the [`signIn.phoneCode.verifyCode()`](/docs/reference/javascript/sign-in-future#phone-code-verify-code) method (or [`signIn.emailCode.verifyCode()`](/docs/reference/javascript/sign-in-future#email-code-verify-code) if you're modifying this example for email OTP).
+    1. Collect the one-time code and verify it with the [`signIn.phoneCode.verifyCode()`](/docs/reference/javascript/sign-in-future#phone-code-verify-code) method (or [`signIn.emailCode.verifyCode()`](/docs/reference/javascript/sign-in-future#email-code-verify-code) if you're modifying this example for email OTP).
+       <Include src="_partials/custom-flows/phone-number" />
+    1. If the phone number verification is successful, finalize the sign-in with the [`signIn.finalize()`](/docs/reference/javascript/sign-in-future#finalize) method to set the newly created session as the active session.
 
-        ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
-        'use client'
+    <If notSdk="expo">
+      **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-        import * as React from 'react'
-        import { useSignIn } from '@clerk/nextjs'
-        import { useRouter } from 'next/navigation'
+      ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+      'use client'
 
-        export default function Page() {
-          const { signIn, errors, fetchStatus } = useSignIn()
-          const router = useRouter()
+      import * as React from 'react'
+      import { useSignIn } from '@clerk/nextjs'
+      import { useRouter } from 'next/navigation'
 
-          async function handleSubmit(formData: FormData) {
-            const phoneNumber = formData.get('phoneNumber') as string
+      export default function Page() {
+        const { signIn, errors, fetchStatus } = useSignIn()
+        const router = useRouter()
 
-            await signIn.phoneCode.sendCode({ phoneNumber })
+        const [storedPhone, setStoredPhone] = React.useState<string>('')
+
+        async function handleSubmit(formData: FormData) {
+          const phoneNumber = formData.get('phoneNumber') as string
+          setStoredPhone(phoneNumber)
+
+          await signIn.phoneCode.sendCode({ phoneNumber })
+
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
           }
+        }
 
-          async function handleVerification(formData: FormData) {
-            const code = formData.get('code') as string
+        async function handleVerification(formData: FormData) {
+          const code = formData.get('code') as string
 
-            await signIn.phoneCode.verifyCode({ code })
-            if (signIn.status === 'complete') {
-              await signIn.finalize({
-                navigate: ({ decorateUrl }) => {
-                  const url = decorateUrl('/')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
-            }
+          await signIn.phoneCode.verifyCode({ code })
+
+          if (signIn.status === 'complete') {
+            await signIn.finalize({
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
           }
+        }
 
-          if (signIn.status === 'needs_second_factor') {
-            return (
-              <>
-                <h1>Verify your phone number</h1>
-                <form action={handleVerification}>
-                  <label htmlFor="code">Enter your verification code</label>
-                  <input id="code" name="code" type="text" />
-                  {errors.fields.code && <p>{errors.fields.code.message}</p>}
-                  <button type="submit" disabled={fetchStatus === 'fetching'}>
-                    Verify
-                  </button>
-                </form>
-              </>
-            )
-          }
-
+        if (signIn.status === 'needs_first_factor') {
           return (
             <>
-              <h1>Sign in</h1>
-              <form action={handleSubmit}>
-                <label htmlFor="phoneNumber">Enter phone number</label>
-                <input id="phoneNumber" name="phoneNumber" type="tel" />
-                {errors.fields.phoneNumber && <p>{errors.fields.phoneNumber.message}</p>}
+              <h1>Verify your phone number</h1>
+              <form action={handleVerification}>
+                <label htmlFor="code">Enter your verification code</label>
+                <input id="code" name="code" type="text" />
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
                 <button type="submit" disabled={fetchStatus === 'fetching'}>
-                  Continue
+                  Verify
                 </button>
               </form>
+              <button onClick={() => signIn.phoneCode.sendCode({ phoneNumber: storedPhone })}>
+                I need a new code
+              </button>
+              <button onClick={() => signIn.reset()}>Start over</button>
             </>
           )
         }
-        ```
-      </Tab>
-    </Tabs>
 
-    To create a sign-in flow for email OTP, use the [`signIn.emailCode.sendCode()`](/docs/reference/javascript/sign-in-future#email-code-send-code) and [`signIn.emailCode.verifyCode()`](/docs/reference/javascript/sign-in-future#email-code-verify-code) methods. These methods work the same way as their phone number counterparts do in the previous example. You can find all available methods in the [`SignInFuture`](/docs/reference/javascript/sign-in-future) object documentation.
+        return (
+          <>
+            <h1>Sign in</h1>
+            <form action={handleSubmit}>
+              <label htmlFor="phoneNumber">Enter phone number</label>
+              <input id="phoneNumber" name="phoneNumber" type="tel" />
+              {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Continue
+              </button>
+            </form>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+          </>
+        )
+      }
+      ```
+    </If>
+
+    <If sdk="expo">
+      {/* TODO */}
+    </If>
   </If>
 
   <If sdk={["ios", "android"]}>
@@ -668,7 +724,5 @@ This guide will walk you through how to build a custom SMS OTP sign-up and sign-
         ```
       </Tab>
     </Tabs>
-
-    To create a sign-in flow for email OTP, pass the value `email_code` as the first factor strategy. You can find all available methods in the [`SignIn`](/docs/reference/javascript/sign-in) object documentation.
   </If>
 </Steps>

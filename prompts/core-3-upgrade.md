@@ -292,7 +292,7 @@ checkout.confirm()
 
 When passing `secretKey` as a runtime option to `clerkMiddleware()`, you must now also provide a `CLERK_ENCRYPTION_KEY` environment variable.
 
-For Next.js 16 with `cacheComponents: true`, `ClerkProvider` must be inside `<body>`:
+**`ClerkProvider` must be inside `<body>`:** In Core 3, `ClerkProvider` must be positioned inside `<body>` rather than wrapping `<html>`. The CLI codemod handles this automatically. This is required for Next.js 16 cache components support, but is recommended for all Next.js versions:
 
 ```typescript
 // ❌ OLD
@@ -369,7 +369,19 @@ For Chrome Extension: `__unstable__createClerkClient` → `createClerkClient` (f
 
 ## 6. AI Model Verification Steps
 
-**First, ensure `npx @clerk/upgrade` has been run.** Then verify any remaining issues:
+### 6.1 – Always Run the CLI First
+
+**The CLI's codemods are more thorough than manual file scanning.** The CLI performs AST-level transformations and will catch usages that simple text search may miss (e.g., re-exported components, aliased imports, dynamically constructed props). **Always run `npx @clerk/upgrade` before attempting any manual changes.**
+
+Do NOT try to manually scan and fix files as a substitute for the CLI. Manual grep-based scanning will miss:
+- Files that re-export Clerk components through intermediate modules
+- Aliased or renamed imports
+- Dynamically referenced props or components
+- Files in unexpected directories (e.g., shared packages in monorepos)
+
+### 6.2 – Post-CLI Verification
+
+After the CLI has run, verify any remaining issues it could not auto-fix:
 
 1. **Node.js version:** Is Node.js 20.9.0+ being used?
 2. **Components:** Are `SignedIn`, `SignedOut`, and `Protect` replaced with `Show`?
@@ -377,5 +389,7 @@ For Chrome Extension: `__unstable__createClerkClient` → `createClerkClient` (f
 4. **Appearance prop:** Is `layout` replaced with `options`?
 5. **Types:** Are type imports from `@clerk/shared/types` (not `@clerk/types`)?
 6. **Redirect props:** Are legacy redirect props (`afterSignInUrl`, `afterSignUpUrl`, `redirectUrl`) replaced with `fallbackRedirectUrl` or `forceRedirectUrl`?
+7. **Next.js `ClerkProvider`:** Is `ClerkProvider` positioned inside `<body>` (not wrapping `<html>`)?
+8. **Astro files:** `.astro` template files are not handled by the CLI — check these manually.
 
 If issues remain after running the CLI, use the reference sections above to manually fix them.

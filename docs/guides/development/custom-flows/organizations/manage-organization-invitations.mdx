@@ -16,24 +16,24 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
 >
 > Also, see the [custom flow for accepting Organization invitations](/docs/guides/development/custom-flows/organizations/accept-organization-invitations).
 
-<Tabs items={["Next.js", "JavaScript"]}>
-  <Tab>
-    To invite a user:
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  To invite a user:
 
-    1. Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to get `organization`, which is the [Active Organization's](!active-organization).
-    1. Use `organization` to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
+  1. Use the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to get `organization`, which is the [Active Organization's](!active-organization).
+  1. Use `organization` to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
 
-    To revoke an invitation:
+  To revoke an invitation:
 
-    1. Use the `useOrganization()` hook to get `invitations`, which is a list of invitations for the [Active Organization's](!active-organization).
-    1. `invitations` is an array of [`OrganizationInvitation`](/docs/reference/javascript/types/organization-invitation) objects. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
+  1. Use the `useOrganization()` hook to get `invitations`, which is a list of invitations for the [Active Organization's](!active-organization).
+  1. `invitations` is an array of [`OrganizationInvitation`](/docs/reference/javascript/types/organization-invitation) objects. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
 
-    The following example includes:
+  The following example includes:
 
-    - An `<InviteMember />` component that allows administrators to invite new members to their Organization.
-    - An `<InvitationList />` component that lists all pending invitations and allows administrators to revoke them.
+  - An `<InviteMember />` component that allows administrators to invite new members to their Organization.
+  - An `<InvitationList />` component that lists all pending invitations and allows administrators to revoke them.
 
-    This example is written for Next.js App Router but can be adapted for any React-based framework.
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
     ```tsx {{ filename: 'app/components/InvitationList.tsx', collapsible: true }}
     'use client'
@@ -213,180 +213,584 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
       )
     }
     ```
-  </Tab>
+  </If>
 
-  <Tab>
-    To check if the current user is an Organization admin:
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/components/manage-organization-invitations.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useOrganization } from '@clerk/expo'
+    import { OrganizationCustomRoleKey } from '@clerk/types'
+    import * as React from 'react'
+    import {
+      ActivityIndicator,
+      Modal,
+      Pressable,
+      ScrollView,
+      StyleSheet,
+      TextInput,
+      View,
+    } from 'react-native'
 
-    1. Get the [Active Organization's](!active-organization) ID from the `clerk` object.
-    1. Call the [`getOrganizationMemberships()`](/docs/reference/javascript/user#get-organization-memberships) method to get a list of Organizations that the user is a member of. This method returns `data`, which is an array of `OrganizationMembership` objects.
-    1. In the list of Organizations that the user is a member of, find the `OrganizationMembership` object that has an ID that matches the Active Organization's ID.
-    1. Check the `role` property of the `OrganizationMembership` object to see if the user is an admin.
+    export const OrgMembersParams = {
+      memberships: {
+        pageSize: 5,
+        keepPreviousData: true,
+      },
+    }
 
-    To invite a user:
+    export const OrgInvitationsParams = {
+      invitations: {
+        pageSize: 5,
+        keepPreviousData: true,
+      },
+    }
 
-    1. Use the active `organization` object to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
+    // Form to invite a new member to the organization.
+    export const InviteMember = () => {
+      const { isLoaded, organization, invitations } = useOrganization(OrgInvitationsParams)
 
-    To revoke an invitation:
+      const [emailAddress, setEmailAddress] = React.useState('')
+      const [selectedRole, setSelectedRole] = React.useState<OrganizationCustomRoleKey | undefined>()
+      const [disabled, setDisabled] = React.useState(false)
+      const [success, setSuccess] = React.useState(false)
 
-    1. Use the active `organization` object to call the [`getInvitations()`](/docs/reference/javascript/organization#get-invitations) method to get an array of `OrganizationInvitation` objects.
-    1. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
-
-    The following example includes:
-
-    - A `renderInvitations()` function that lists all invitations and allows administrators to revoke them.
-    - An `checkAdminAndRenderInvitations()` function that gets the current Organization, checks if the current user is an admin, renders invitations, and sets up a form that allows administrators to invite new members to their Organization.
-
-    Use the tabs to view the code necessary for the `index.html` and `main.js` files.
-
-    <CodeBlockTabs options={["index.html", "main.js"]}>
-      ```html {{ filename: 'index.html', collapsible: true }}
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Clerk + JavaScript App</title>
-        </head>
-        <body>
-          <div id="app"></div>
-
-          <h2>Invitations List</h2>
-          <ul id="invitations_list"></ul>
-
-          <h2>Send a new invitation</h2>
-          <form id="new_invitation">
-            <div>
-              <label>Email address</label>
-
-              <input type="email" id="email_address" name="email_address" />
-            </div>
-            <button>Invite</button>
-          </form>
-
-          <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
-        </body>
-      </html>
-      ```
-
-      ```js {{ filename: 'main.js', collapsible: true }}
-      import { Clerk } from '@clerk/clerk-js'
-
-      const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-
-      if (!pubKey) {
-        throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+      if (!isLoaded || !organization) {
+        return (
+          <ThemedView style={styles.center}>
+            <ActivityIndicator size="large" />
+            <ThemedText>Loading</ThemedText>
+          </ThemedView>
+        )
       }
 
-      const clerk = new Clerk('{{pub_key}}')
-      await clerk.load()
-
-      if (clerk.isSignedIn) {
-        // Check for an Active Organization
-        if (clerk.organization) {
-          // Render list of organization invitations
-          async function renderInvitations(organization, isAdmin) {
-            const list = document.getElementById('invitations_list')
-            try {
-              const { data } = await organization.getInvitations()
-
-              const invitations = data
-
-              if (invitations.length === 0) {
-                list.textContent = 'No invitations'
-              }
-
-              invitations.map((invitation) => {
-                const li = document.createElement('li')
-                li.textContent = `${invitation.emailAddress} - ${invitation.role}`
-
-                // Add administrative actions; revoke invitation
-                if (isAdmin) {
-                  const revokeBtn = document.createElement('button')
-                  revokeBtn.textContent = 'Revoke'
-                  revokeBtn.addEventListener('click', async function (e) {
-                    e.preventDefault()
-                    await invitation.revoke()
-                  })
-                  li.appendChild(revokeBtn)
-                }
-                // Add the entry to the list
-                list.appendChild(li)
-              })
-            } catch (err) {
-              console.error(err)
-            }
-          }
-
-          // Gets the current org, checks if the current user is an admin,
-          // renders invitations, and sets up the new invitation form.
-          async function checkAdminAndRenderInvitations() {
-            // This is the current organization ID.
-            const organizationId = clerk.organization.id
-
-            const { data } = await clerk.user.getOrganizationMemberships()
-            const organizationMemberships = data
-
-            const currentMembership = organizationMemberships.find(
-              (membership) => membership.organization.id === organizationId,
-            )
-            const currentOrganization = currentMembership.organization
-
-            if (!currentOrganization) return
-
-            const isAdmin = currentMembership.role === 'org:admin'
-
-            renderInvitations(currentOrganization, isAdmin)
-
-            if (isAdmin) {
-              const form = document.getElementById('new_invitation')
-              form.addEventListener('submit', async function (e) {
-                e.preventDefault()
-
-                const inputEl = document.getElementById('email_address')
-
-                if (!inputEl) return
-
-                try {
-                  await currentOrganization.inviteMember({
-                    emailAddress: inputEl.value,
-                    role: 'org:member',
-                  })
-                } catch (err) {
-                  console.error(err)
-                }
-              })
-            }
-          }
-
-          checkAdminAndRenderInvitations()
-        } else {
-          // If there is no Active Organization,
-          // mount Clerk's <OrganizationSwitcher />
-          // to allow the user to set an organization as active
-          document.getElementById('app').innerHTML = `
-            <h2>Select an organization to set it as active</h2>
-            <div id="org-switcher"></div>
-          `
-
-          const orgSwitcherDiv = document.getElementById('org-switcher')
-
-          clerk.mountOrganizationSwitcher(orgSwitcherDiv)
+      const onSubmit = async () => {
+        if (!emailAddress || !selectedRole) {
+          return
         }
+
+        setDisabled(true)
+        try {
+          setSuccess(false)
+          await organization.inviteMember({
+            emailAddress: emailAddress,
+            role: selectedRole,
+          })
+          await invitations?.revalidate?.()
+          setEmailAddress('')
+          setSelectedRole(undefined)
+          setSuccess(true)
+          setTimeout(() => {
+            setSuccess(false)
+          }, 3000)
+        } catch (error) {
+          // Handle error - you may want to show an error message to the user
+          console.error('Failed to invite member:', error)
+        } finally {
+          setDisabled(false)
+        }
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText style={styles.label}>Email address</ThemedText>
+          <TextInput
+            style={styles.input}
+            placeholder="Email address"
+            placeholderTextColor="#666666"
+            value={emailAddress}
+            onChangeText={(text) => setEmailAddress(text)}
+          />
+          <ThemedText style={styles.label}>Role</ThemedText>
+          <SelectRole
+            selectedRole={selectedRole}
+            onRoleSelect={setSelectedRole}
+            isDisabled={disabled}
+          />
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              (!emailAddress || !selectedRole || disabled) && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={onSubmit}
+            disabled={!emailAddress || !selectedRole || disabled}
+          >
+            <ThemedText style={styles.buttonText}>Invite</ThemedText>
+          </Pressable>
+          {success && <ThemedText style={styles.success}>Invitation sent successfully</ThemedText>}
+        </ThemedView>
+      )
+    }
+
+    type SelectRoleProps = {
+      selectedRole?: OrganizationCustomRoleKey
+      onRoleSelect: (role: OrganizationCustomRoleKey) => void
+      isDisabled?: boolean
+    }
+
+    const SelectRole = (props: SelectRoleProps) => {
+      const { selectedRole, onRoleSelect, isDisabled = false } = props
+      const { organization } = useOrganization()
+      const [fetchedRoles, setRoles] = React.useState<OrganizationCustomRoleKey[]>([])
+      const [showModal, setShowModal] = React.useState(false)
+      const isPopulated = React.useRef(false)
+
+      React.useEffect(() => {
+        if (isPopulated.current) return
+        organization
+          ?.getRoles({
+            pageSize: 20,
+            initialPage: 1,
+          })
+          .then((res) => {
+            isPopulated.current = true
+            setRoles(res.data.map((roles) => roles.key as OrganizationCustomRoleKey))
+          })
+      }, [organization?.id])
+
+      if (fetchedRoles.length === 0) return null
+
+      return (
+        <View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.selectButton,
+              isDisabled && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => !isDisabled && setShowModal(true)}
+            disabled={isDisabled}
+          >
+            <ThemedText style={styles.selectButtonText}>{selectedRole || 'Select role'}</ThemedText>
+          </Pressable>
+          <Modal visible={showModal} transparent animationType="slide">
+            <ThemedView style={styles.modalOverlay}>
+              <ThemedView style={styles.modalContent}>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  Select Role
+                </ThemedText>
+                <ScrollView>
+                  {fetchedRoles?.map((roleKey) => (
+                    <Pressable
+                      key={roleKey}
+                      style={({ pressed }) => [
+                        styles.roleOption,
+                        selectedRole === roleKey && styles.roleOptionSelected,
+                        pressed && styles.buttonPressed,
+                      ]}
+                      onPress={() => {
+                        onRoleSelect(roleKey)
+                        setShowModal(false)
+                      }}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.roleOptionText,
+                          selectedRole === roleKey && styles.roleOptionTextSelected,
+                        ]}
+                      >
+                        {roleKey}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                  onPress={() => setShowModal(false)}
+                >
+                  <ThemedText style={styles.buttonText}>Cancel</ThemedText>
+                </Pressable>
+              </ThemedView>
+            </ThemedView>
+          </Modal>
+        </View>
+      )
+    }
+
+    // List of pending invitations to an organization.
+    export const OrganizationInvitationList = () => {
+      const { isLoaded, invitations, memberships } = useOrganization({
+        ...OrgInvitationsParams,
+        ...OrgMembersParams,
+      })
+
+      if (!isLoaded) {
+        return (
+          <ThemedView style={styles.center}>
+            <ActivityIndicator size="large" />
+            <ThemedText>Loading</ThemedText>
+          </ThemedView>
+        )
+      }
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Pending Invitations
+          </ThemedText>
+          {invitations?.data && invitations.data.length > 0 ? (
+            <>
+              <ScrollView style={styles.scrollView}>
+                {invitations?.data?.map((inv) => (
+                  <View key={inv.id} style={styles.card}>
+                    <ThemedText style={styles.label}>User:</ThemedText>
+                    <ThemedText style={styles.value}>{inv.emailAddress}</ThemedText>
+
+                    <ThemedText style={styles.label}>Invited:</ThemedText>
+                    <ThemedText style={styles.value}>{inv.createdAt.toLocaleDateString()}</ThemedText>
+
+                    <ThemedText style={styles.label}>Role:</ThemedText>
+                    <ThemedText style={styles.value}>{inv.role}</ThemedText>
+
+                    <Pressable
+                      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+                      onPress={async () => {
+                        await inv.revoke()
+                        await Promise.all([memberships?.revalidate?.(), invitations?.revalidate?.()])
+                      }}
+                    >
+                      <ThemedText style={styles.buttonText}>Revoke</ThemedText>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+
+              <View style={styles.pagination}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.paginationButton,
+                    (!invitations?.hasPreviousPage || invitations?.isFetching) && styles.buttonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  disabled={!invitations?.hasPreviousPage || invitations?.isFetching}
+                  onPress={() => invitations?.fetchPrevious?.()}
+                >
+                  <ThemedText style={styles.buttonText}>Previous</ThemedText>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.paginationButton,
+                    (!invitations?.hasNextPage || invitations?.isFetching) && styles.buttonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                  disabled={!invitations?.hasNextPage || invitations?.isFetching}
+                  onPress={() => invitations?.fetchNext?.()}
+                >
+                  <ThemedText style={styles.buttonText}>Next</ThemedText>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <ThemedText>No pending invitations</ThemedText>
+          )}
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+      },
+      title: {
+        marginBottom: 20,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      value: {
+        fontSize: 16,
+        marginBottom: 8,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      selectButton: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        backgroundColor: '#fff',
+      },
+      selectButtonText: {
+        fontSize: 16,
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      scrollView: {
+        flex: 1,
+      },
+      card: {
+        backgroundColor: 'rgba(128, 128, 128, 0.1)',
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 12,
+        gap: 8,
+      },
+      pagination: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        gap: 12,
+      },
+      paginationButton: {
+        flex: 1,
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+      },
+      modalOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      },
+      modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 20,
+        width: '80%',
+        maxHeight: '70%',
+        gap: 16,
+      },
+      modalTitle: {
+        marginBottom: 16,
+      },
+      roleOption: {
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
+        backgroundColor: '#f0f0f0',
+      },
+      roleOptionSelected: {
+        backgroundColor: '#0a7ea4',
+      },
+      roleOptionText: {
+        fontSize: 16,
+      },
+      roleOptionTextSelected: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+      success: {
+        color: '#28a745',
+        fontSize: 14,
+        marginTop: 12,
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk="js-frontend">
+  To check if the current user is an Organization admin:
+
+  1. Get the [Active Organization's](!active-organization) ID from the `clerk` object.
+  1. Call the [`getOrganizationMemberships()`](/docs/reference/javascript/user#get-organization-memberships) method to get a list of Organizations that the user is a member of. This method returns `data`, which is an array of `OrganizationMembership` objects.
+  1. In the list of Organizations that the user is a member of, find the `OrganizationMembership` object that has an ID that matches the Active Organization's ID.
+  1. Check the `role` property of the `OrganizationMembership` object to see if the user is an admin.
+
+  To invite a user:
+
+  1. Use the active `organization` object to call the [`inviteMember()`](/docs/reference/javascript/organization#invite-member) method, with the recipient's email address and desired Role passed as arguments.
+
+  To revoke an invitation:
+
+  1. Use the active `organization` object to call the [`getInvitations()`](/docs/reference/javascript/organization#get-invitations) method to get an array of `OrganizationInvitation` objects.
+  1. Each `OrganizationInvitation` object has a [`revoke()`](/docs/reference/javascript/types/organization-invitation#revoke) method that can be called to revoke the invitation.
+
+  The following example includes:
+
+  - A `renderInvitations()` function that lists all invitations and allows administrators to revoke them.
+  - An `checkAdminAndRenderInvitations()` function that gets the current Organization, checks if the current user is an admin, renders invitations, and sets up a form that allows administrators to invite new members to their Organization.
+
+  Use the following tabs to view the code necessary for the `index.html` and `main.js` files.
+
+  <CodeBlockTabs options={["index.html", "main.js"]}>
+    ```html {{ filename: 'index.html', collapsible: true }}
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clerk + JavaScript App</title>
+      </head>
+      <body>
+        <div id="app"></div>
+
+        <h2>Invitations List</h2>
+        <ul id="invitations_list"></ul>
+
+        <h2>Send a new invitation</h2>
+        <form id="new_invitation">
+          <div>
+            <label>Email address</label>
+
+            <input type="email" id="email_address" name="email_address" />
+          </div>
+          <button>Invite</button>
+        </form>
+
+        <script type="module" src="/src/main.js" async crossorigin="anonymous"></script>
+      </body>
+    </html>
+    ```
+
+    ```js {{ filename: 'main.js', collapsible: true }}
+    import { Clerk } from '@clerk/clerk-js'
+
+    const pubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+    if (!pubKey) {
+      throw new Error('Add your VITE_CLERK_PUBLISHABLE_KEY to .env file')
+    }
+
+    const clerk = new Clerk('{{pub_key}}')
+    await clerk.load()
+
+    if (clerk.isSignedIn) {
+      // Check for an Active Organization
+      if (clerk.organization) {
+        // Render list of organization invitations
+        async function renderInvitations(organization, isAdmin) {
+          const list = document.getElementById('invitations_list')
+          try {
+            const { data } = await organization.getInvitations()
+
+            const invitations = data
+
+            if (invitations.length === 0) {
+              list.textContent = 'No invitations'
+            }
+
+            invitations.map((invitation) => {
+              const li = document.createElement('li')
+              li.textContent = `${invitation.emailAddress} - ${invitation.role}`
+
+              // Add administrative actions; revoke invitation
+              if (isAdmin) {
+                const revokeBtn = document.createElement('button')
+                revokeBtn.textContent = 'Revoke'
+                revokeBtn.addEventListener('click', async function (e) {
+                  e.preventDefault()
+                  await invitation.revoke()
+                })
+                li.appendChild(revokeBtn)
+              }
+              // Add the entry to the list
+              list.appendChild(li)
+            })
+          } catch (err) {
+            console.error(err)
+          }
+        }
+
+        // Gets the current org, checks if the current user is an admin,
+        // renders invitations, and sets up the new invitation form.
+        async function checkAdminAndRenderInvitations() {
+          // This is the current organization ID.
+          const organizationId = clerk.organization.id
+
+          const { data } = await clerk.user.getOrganizationMemberships()
+          const organizationMemberships = data
+
+          const currentMembership = organizationMemberships.find(
+            (membership) => membership.organization.id === organizationId,
+          )
+          const currentOrganization = currentMembership.organization
+
+          if (!currentOrganization) return
+
+          const isAdmin = currentMembership.role === 'org:admin'
+
+          renderInvitations(currentOrganization, isAdmin)
+
+          if (isAdmin) {
+            const form = document.getElementById('new_invitation')
+            form.addEventListener('submit', async function (e) {
+              e.preventDefault()
+
+              const inputEl = document.getElementById('email_address')
+
+              if (!inputEl) return
+
+              try {
+                await currentOrganization.inviteMember({
+                  emailAddress: inputEl.value,
+                  role: 'org:member',
+                })
+              } catch (err) {
+                console.error(err)
+              }
+            })
+          }
+        }
+
+        checkAdminAndRenderInvitations()
       } else {
-        // If there is no active user, mount Clerk's <SignIn />
+        // If there is no Active Organization,
+        // mount Clerk's <OrganizationSwitcher />
+        // to allow the user to set an organization as active
         document.getElementById('app').innerHTML = `
-          <div id="sign-in"></div>
+          <h2>Select an organization to set it as active</h2>
+          <div id="org-switcher"></div>
         `
 
-        const signInDiv = document.getElementById('sign-in')
+        const orgSwitcherDiv = document.getElementById('org-switcher')
 
-        clerk.mountSignIn(signInDiv)
+        clerk.mountOrganizationSwitcher(orgSwitcherDiv)
       }
-      ```
-    </CodeBlockTabs>
-  </Tab>
-</Tabs>
+    } else {
+      // If there is no active user, mount Clerk's <SignIn />
+      document.getElementById('app').innerHTML = `
+        <div id="sign-in"></div>
+      `
+
+      const signInDiv = document.getElementById('sign-in')
+
+      clerk.mountSignIn(signInDiv)
+    }
+    ```
+  </CodeBlockTabs>
+</If>
+
+<If sdk={["ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
 ## Next steps
 

@@ -4,7 +4,7 @@
 
 ---
 
-## **IMPORTANT: Use the Clerk Upgrade CLI**
+## IMPORTANT: Use the Clerk Upgrade CLI
 
 **The recommended way to upgrade is to run the Clerk upgrade tool.**
 
@@ -27,15 +27,17 @@ bunx @clerk/upgrade     # bun
 
 This CLI will automatically scan the project, detect breaking changes, and apply fixes where possible. **Run this first before making any manual changes.**
 
+**Astro users:** The CLI will fix `.ts`/`.tsx` files (React islands) but cannot transform `.astro` template files. You'll need to manually update those using the reference below.
+
 The information below is provided as a reference for changes the CLI may not fully automate or for understanding what changed.
 
 ---
 
-## **1. Upgrade Overview**
+## 1. Upgrade Overview
 
 Core 3 focuses on consistency and cleanup across Clerk's SDKs.
 
-### **Key Changes:**
+### Key Changes
 
 - **Component consolidation:** `Protect`, `SignedIn`, and `SignedOut` are replaced by a single `Show` component
 - **Package renaming:** `@clerk/clerk-react` → `@clerk/react`, `@clerk/clerk-expo` → `@clerk/expo`
@@ -45,9 +47,9 @@ Core 3 focuses on consistency and cleanup across Clerk's SDKs.
 
 ---
 
-## **2. CRITICAL MIGRATION STEPS**
+## 2. Critical Migration Steps
 
-### **2.1 – Component Replacements**
+### 2.1 – Component Replacements
 
 Replace `SignedIn`, `SignedOut`, and `Protect` with `Show`:
 
@@ -99,7 +101,7 @@ import { Show } from '@clerk/nextjs';
 </Show>
 ```
 
-### **2.2 – Package Renames**
+### 2.2 – Package Renames
 
 Update package names in imports and `package.json`:
 
@@ -113,7 +115,7 @@ import { ClerkProvider, useUser } from '@clerk/react'
 import { ClerkProvider, useUser } from '@clerk/expo'
 ```
 
-### **2.3 – Appearance Prop Changes**
+### 2.3 – Appearance Prop Changes
 
 ```typescript
 // ❌ OLD
@@ -135,7 +137,7 @@ import { ClerkProvider, useUser } from '@clerk/expo'
 />
 ```
 
-### **2.4 – Color Variable Opacity**
+### 2.4 – Color Variable Opacity
 
 If using `colorRing` or `colorModalBackdrop`, add explicit opacity:
 
@@ -155,7 +157,7 @@ appearance={{
 }}
 ```
 
-### **2.5 – Types Import Path**
+### 2.5 – Types Import Path
 
 ```typescript
 // ❌ OLD (deprecated)
@@ -165,7 +167,7 @@ import type { ClerkResource, UserResource } from '@clerk/types'
 import type { ClerkResource, UserResource } from '@clerk/shared/types'
 ```
 
-### **2.6 – createTheme Import Path**
+### 2.6 – createTheme Import Path
 
 ```typescript
 // ❌ OLD
@@ -177,11 +179,11 @@ import { createTheme } from '@clerk/ui/themes/experimental'
 
 ---
 
-## **3. DEPRECATION REMOVALS**
+## 3. Deprecation Removals
 
 These deprecated APIs have been removed and must be updated:
 
-### **3.1 – Redirect Props**
+### 3.1 – Redirect Props
 
 ```typescript
 // ❌ OLD (removed)
@@ -204,7 +206,7 @@ These deprecated APIs have been removed and must be updated:
 />
 ```
 
-### **3.2 – OrganizationSwitcher Props**
+### 3.2 – OrganizationSwitcher Props
 
 ```typescript
 // ❌ OLD
@@ -214,7 +216,7 @@ These deprecated APIs have been removed and must be updated:
 <OrganizationSwitcher afterSelectOrganizationUrl="/org-dashboard" />
 ```
 
-### **3.3 – Client.activeSessions**
+### 3.3 – Client.activeSessions
 
 ```typescript
 // ❌ OLD
@@ -224,7 +226,7 @@ const sessions = client.activeSessions
 const sessions = client.sessions
 ```
 
-### **3.4 – SAML to Enterprise SSO**
+### 3.4 – SAML to Enterprise SSO
 
 ```typescript
 // ❌ OLD
@@ -240,7 +242,7 @@ verification.enterpriseAccount
 userSettings.enterpriseSSO
 ```
 
-### **3.5 – setActive Callback**
+### 3.5 – setActive Callback
 
 ```typescript
 // ❌ OLD
@@ -268,7 +270,7 @@ await setActive({
 })
 ```
 
-### **3.6 – useCheckout Return Values**
+### 3.6 – useCheckout Return Values
 
 ```typescript
 // ❌ OLD
@@ -284,9 +286,9 @@ checkout.confirm()
 
 ---
 
-## **4. SDK-SPECIFIC CHANGES**
+## 4. SDK-Specific Changes
 
-### **4.1 – Next.js**
+### 4.1 – Next.js
 
 When passing `secretKey` as a runtime option to `clerkMiddleware()`, you must now also provide a `CLERK_ENCRYPTION_KEY` environment variable.
 
@@ -310,20 +312,45 @@ For Next.js 16 with `cacheComponents: true`, `ClerkProvider` must be inside `<bo
 </html>
 ```
 
-### **4.2 – Expo**
+### 4.2 – Expo
 
 - Package renamed: `@clerk/clerk-expo` → `@clerk/expo`
 - `Clerk` export removed, use `useClerk()` hook instead
 - Minimum Expo SDK version: 53
 
-### **4.3 – Nuxt**
+### 4.3 – Astro
+
+- Version: `@clerk/astro` v2 → v3
+- Components are imported from `@clerk/astro/components`
+- **The upgrade CLI does not auto-fix `.astro` template files.** It will fix `.ts`/`.tsx` files (React islands), but `.astro` files must be updated manually:
+
+```astro
+---
+// ❌ OLD
+import { SignedIn, SignedOut, Protect } from '@clerk/astro/components'
+// ✅ NEW
+import { Show } from '@clerk/astro/components'
+---
+
+<!-- ❌ OLD -->
+<SignedIn><Dashboard /></SignedIn>
+<SignedOut><SignInPage /></SignedOut>
+<Protect role="admin"><AdminPanel /></Protect>
+
+<!-- ✅ NEW -->
+<Show when="signed-in"><Dashboard /></Show>
+<Show when="signed-out"><SignInPage /></Show>
+<Show when={{ role: 'admin' }}><AdminPanel /></Show>
+```
+
+### 4.4 – Nuxt
 
 - `getAuth()` removed, use `auth()` instead
 - Default routing strategy changed from `hash` to `path`
 
 ---
 
-## **5. INTERNAL API RENAMES**
+## 5. Internal API Renames
 
 All `__unstable_*` methods renamed to `__internal_*`:
 
@@ -340,7 +367,7 @@ For Chrome Extension: `__unstable__createClerkClient` → `createClerkClient` (f
 
 ---
 
-## **6. AI MODEL VERIFICATION STEPS**
+## 6. AI Model Verification Steps
 
 **First, ensure `npx @clerk/upgrade` has been run.** Then verify any remaining issues:
 

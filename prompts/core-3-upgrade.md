@@ -374,6 +374,7 @@ For Chrome Extension: `__unstable__createClerkClient` → `createClerkClient` (f
 **The CLI's codemods are more thorough than manual file scanning.** The CLI performs AST-level transformations and will catch usages that simple text search may miss (e.g., re-exported components, aliased imports, dynamically constructed props). **Always run `npx @clerk/upgrade` before attempting any manual changes.**
 
 Do NOT try to manually scan and fix files as a substitute for the CLI. Manual grep-based scanning will miss:
+
 - Files that re-export Clerk components through intermediate modules
 - Aliased or renamed imports
 - Dynamically referenced props or components

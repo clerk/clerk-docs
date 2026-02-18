@@ -393,6 +393,111 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'ManageMembershipRequestsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageMembershipRequestsView: View {
+    @State private var membershipRequests: [OrganizationMembershipRequest] = []
+    let organization: Organization
+
+    var body: some View {
+      VStack {
+        ForEach(membershipRequests) { request in
+          HStack {
+            Text(request.publicUserData?.identifier ?? "Unknown user")
+            Button("Accept") {
+              Task {
+                await acceptMembershipRequest(request)
+                await fetchMembershipRequests()
+              }
+            }
+            Button("Reject") {
+              Task {
+                await rejectMembershipRequest(request)
+                await fetchMembershipRequests()
+              }
+            }
+          }
+        }
+      }
+      .task { await fetchMembershipRequests() }
+    }
+  }
+
+  extension ManageMembershipRequestsView {
+
+    func fetchMembershipRequests() async {
+      do {
+        membershipRequests = try await organization.getMembershipRequests(status: "pending").data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        membershipRequests = []
+      }
+    }
+
+    func acceptMembershipRequest(_ request: OrganizationMembershipRequest) async {
+      do {
+        try await request.accept()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func rejectMembershipRequest(_ request: OrganizationMembershipRequest) async {
+      do {
+        try await request.reject()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.OrganizationMembershipRequest
+  import com.clerk.api.organizations.accept
+  import com.clerk.api.organizations.getMembershipRequests
+  import com.clerk.api.organizations.reject
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchMembershipRequests(): List<OrganizationMembershipRequest> {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return emptyList()
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+
+    if (membershipsResult !is ClerkResult.Success) return emptyList()
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return emptyList()
+
+    return when (val requestsResult = activeOrganization.getMembershipRequests(status = "pending")) {
+      is ClerkResult.Success -> requestsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun acceptMembershipRequest(request: OrganizationMembershipRequest) {
+    request.accept()
+  }
+
+  suspend fun rejectMembershipRequest(request: OrganizationMembershipRequest) {
+    request.reject()
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

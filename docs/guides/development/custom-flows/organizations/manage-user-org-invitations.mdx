@@ -301,6 +301,79 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'ManageUserOrgInvitationsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageUserOrgInvitationsView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var invitations: [UserOrganizationInvitation] = []
+
+    var body: some View {
+      VStack {
+        ForEach(invitations) { invitation in
+          HStack {
+            Text(invitation.publicOrganizationData.name)
+            Button("Accept") {
+              Task {
+                await acceptInvitation(invitation)
+                await fetchUserOrganizationInvitations()
+              }
+            }
+          }
+        }
+      }
+      .task { await fetchUserOrganizationInvitations() }
+    }
+  }
+
+  extension ManageUserOrgInvitationsView {
+
+    func fetchUserOrganizationInvitations() async {
+      do {
+        invitations = try await clerk.user?.getOrganizationInvitations().data ?? []
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        invitations = []
+      }
+    }
+
+    func acceptInvitation(_ invitation: UserOrganizationInvitation) async {
+      do {
+        try await invitation.accept()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.UserOrganizationInvitation
+  import com.clerk.api.organizations.accept
+  import com.clerk.api.user.User
+
+  suspend fun fetchUserOrganizationInvitations(): List<UserOrganizationInvitation> {
+    return when (val invitationsResult = User.getOrganizationInvitations(status = "pending")) {
+      is ClerkResult.Success -> invitationsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun acceptInvitation(invitation: UserOrganizationInvitation) {
+    invitation.accept()
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

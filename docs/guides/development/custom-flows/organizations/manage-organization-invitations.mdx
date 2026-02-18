@@ -788,7 +788,122 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'ManageOrganizationInvitationsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageOrganizationInvitationsView: View {
+    @State private var emailAddress = ""
+    @State private var role = "org:member"
+    @State private var invitations: [OrganizationInvitation] = []
+    let organization: Organization
+
+    var body: some View {
+      VStack {
+        TextField("Enter email address", text: $emailAddress)
+        TextField("Enter role", text: $role)
+        Button("Invite member") {
+          Task {
+            await inviteMember(emailAddress: emailAddress, role: role)
+            await fetchPendingInvitations()
+          }
+        }
+
+        ForEach(invitations) { invitation in
+          HStack {
+            Text(invitation.emailAddress)
+            Button("Revoke") {
+              Task {
+                await revokeInvitation(invitation)
+                await fetchPendingInvitations()
+              }
+            }
+          }
+        }
+      }
+      .task { await fetchPendingInvitations() }
+    }
+  }
+
+  extension ManageOrganizationInvitationsView {
+
+    func inviteMember(emailAddress: String, role: String) async {
+      do {
+        try await organization.inviteMember(emailAddress: emailAddress, role: role)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func fetchPendingInvitations() async {
+      do {
+        invitations = try await organization.getInvitations(status: "pending").data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        invitations = []
+      }
+    }
+
+    func revokeInvitation(_ invitation: OrganizationInvitation) async {
+      do {
+        try await invitation.revoke()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.Organization
+  import com.clerk.api.organizations.OrganizationInvitation
+  import com.clerk.api.organizations.createInvitation
+  import com.clerk.api.organizations.getInvitations
+  import com.clerk.api.organizations.revoke
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun activeOrganization(): Organization? {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return null
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return null
+    if (membershipsResult !is ClerkResult.Success) return null
+
+    return membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+  }
+
+  suspend fun inviteMember(emailAddress: String, role: String) {
+    val organization = activeOrganization() ?: return
+    organization.createInvitation(emailAddress = emailAddress, role = role)
+  }
+
+  suspend fun fetchPendingInvitations(): List<OrganizationInvitation> {
+    val organization = activeOrganization() ?: return emptyList()
+    return when (
+      val invitationsResult =
+        organization.getInvitations(status = OrganizationInvitation.Status.Pending)
+    ) {
+      is ClerkResult.Success -> invitationsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun revokeInvitation(invitation: OrganizationInvitation) {
+    invitation.revoke()
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>
 

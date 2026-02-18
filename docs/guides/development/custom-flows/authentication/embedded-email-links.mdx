@@ -125,7 +125,82 @@ description: Learn how to build custom embeddable email link sign-in flows to in
       ```
     </If>
 
-    <If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+    <If sdk="ios">
+      ```swift {{ filename: 'EmbeddedEmailLinkSignInView.swift', collapsible: true }}
+      import SwiftUI
+      import ClerkKit
+
+      struct EmbeddedEmailLinkSignInView: View {
+        @Environment(Clerk.self) private var clerk
+        // In your implementation, extract this token from your incoming deep link URL.
+        let token = "ticket_example_from_deep_link"
+
+        var body: some View {
+          VStack {
+            Text("Sign in")
+            ProgressView()
+          }
+          .task { await handleSignInToken(token: token) }
+        }
+      }
+
+      extension EmbeddedEmailLinkSignInView {
+
+        func handleSignInToken(token: String) async {
+          do {
+            let signIn = try await clerk.auth.signInWithTicket(token)
+
+            if signIn.status == .complete {
+              dump(clerk.session)
+            } else {
+              dump(signIn.status)
+            }
+          } catch {
+            // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+            // for more info on error handling
+            dump(error)
+          }
+        }
+      }
+      ```
+    </If>
+
+    <If sdk="android">
+      ```kotlin
+      import android.net.Uri
+      import com.clerk.api.Clerk
+      import com.clerk.api.network.serialization.onFailure
+      import com.clerk.api.network.serialization.onSuccess
+      import com.clerk.api.signin.SignIn
+      import kotlinx.coroutines.CoroutineScope
+      import kotlinx.coroutines.launch
+
+      fun handleSignInToken(uri: Uri, scope: CoroutineScope) {
+        val token = uri.getQueryParameter("token") ?: return
+
+        scope.launch {
+          Clerk.auth
+            .signInWithTicket(token)
+            .onSuccess { signIn ->
+              if (signIn.status == SignIn.Status.COMPLETE && signIn.createdSessionId != null) {
+                Clerk.auth
+                  .setActive(sessionId = signIn.createdSessionId)
+                  .onFailure {
+                    // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+                    // for more info on error handling
+                  }
+              }
+            }
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+      ```
+    </If>
+
+    <If sdk={["js-frontend", "nuxt"]}>
       <Include src="_partials/sdk-examples-not-available-callout" />
     </If>
   </Steps>

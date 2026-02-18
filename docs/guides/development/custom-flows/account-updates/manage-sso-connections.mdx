@@ -432,6 +432,156 @@ This guide uses Discord, Google, and GitHub as examples.
   ```
 </If>
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'ManageSSOConnectionsView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageSSOConnectionsView: View {
+    @Environment(Clerk.self) private var clerk
+
+    // Edit this array to include all of your enabled SSO connections.
+    let options: [OAuthProvider] = [.discord, .google, .github]
+
+    var unconnectedOptions: [OAuthProvider] {
+      let connectedProviders = Set((clerk.user?.externalAccounts ?? []).map(provider(for:)))
+      return options.filter { !connectedProviders.contains($0) }
+    }
+
+    var body: some View {
+      VStack {
+        Text("Connected accounts")
+
+        ForEach(clerk.user?.externalAccounts ?? []) { account in
+          let provider = provider(for: account)
+
+          VStack(alignment: .leading) {
+            Text("Provider: \(provider.name)")
+            Text("Scopes: \(account.approvedScopes)")
+            Text("Status: \(account.verification?.status == .verified ? "Verified" : (account.verification?.error?.longMessage ?? "Unverified"))")
+
+            if account.verification?.status != .verified,
+               account.verification?.externalVerificationRedirectUrl != nil {
+              Button("Reverify \(provider.name)") {
+                Task { await reverifyExternalAccount(account: account) }
+              }
+            }
+
+            Button("Remove \(provider.name)") {
+              Task { await removeExternalAccount(account: account) }
+            }
+          }
+        }
+
+        if !unconnectedOptions.isEmpty {
+          Text("Add a new external account")
+
+          ForEach(unconnectedOptions) { provider in
+            Button("Add \(provider.name)") {
+              Task { await addExternalAccount(provider: provider) }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  extension ManageSSOConnectionsView {
+
+    func addExternalAccount(provider: OAuthProvider) async {
+      guard let user = clerk.user else { return }
+
+      do {
+        let account = try await user.createExternalAccount(
+          provider: provider,
+          redirectUrl: "/account/manage-external-accounts"
+        )
+
+        // Complete provider verification if needed.
+        if account.verification?.externalVerificationRedirectUrl != nil {
+          try await account.reauthorize()
+        }
+
+        try await user.reload()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func removeExternalAccount(account: ExternalAccount) async {
+      do {
+        try await account.destroy()
+        try await clerk.user?.reload()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func reverifyExternalAccount(account: ExternalAccount) async {
+      do {
+        try await account.reauthorize()
+        try await clerk.user?.reload()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func provider(for account: ExternalAccount) -> OAuthProvider {
+      let strategy = account.provider.hasPrefix("oauth_") ? account.provider : "oauth_\(account.provider)"
+      return OAuthProvider(strategy: strategy)
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.externalaccount.ExternalAccount
+  import com.clerk.api.externalaccount.delete
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.sso.OAuthProvider
+  import com.clerk.api.user.User
+  import com.clerk.api.user.createExternalAccount
+
+  suspend fun addExternalAccount(user: User, provider: OAuthProvider) {
+    user
+      .createExternalAccount(
+        User.CreateExternalAccountParams(
+          provider = provider,
+          redirectUrl = "/account/manage-external-accounts",
+        )
+      )
+      .onSuccess { account ->
+        account.verification?.externalVerificationRedirectUrl?.let { redirectUrl ->
+          // Open `redirectUrl` in your browser / web auth flow.
+          println(redirectUrl)
+        }
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+
+  suspend fun removeExternalAccount(account: ExternalAccount) {
+    account
+      .delete()
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
+</If>
+
+<If sdk={["js-frontend", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

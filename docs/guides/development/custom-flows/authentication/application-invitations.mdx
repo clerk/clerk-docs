@@ -427,6 +427,117 @@ The following example expects the user to be signing up with a password and also
   ```
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'AcceptInvitationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct AcceptInvitationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var ticket = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var password = ""
+
+    var body: some View {
+      VStack {
+        TextField("Enter invitation ticket", text: $ticket)
+        TextField("Enter first name", text: $firstName)
+        TextField("Enter last name", text: $lastName)
+        SecureField("Enter password", text: $password)
+        Button("Accept invitation") {
+          Task {
+            await acceptInvitation(
+              ticket: ticket,
+              firstName: firstName,
+              lastName: lastName,
+              password: password
+            )
+          }
+        }
+      }
+    }
+  }
+
+  extension AcceptInvitationView {
+
+    func acceptInvitation(
+      ticket: String,
+      firstName: String,
+      lastName: String,
+      password: String
+    ) async {
+      do {
+        // Start sign-up with the invitation ticket.
+        var signUp = try await clerk.auth.signUpWithTicket(ticket)
+
+        // Collect any additional required fields.
+        signUp = try await signUp.update(
+          firstName: firstName,
+          lastName: lastName,
+          password: password
+        )
+
+        if signUp.status == .complete {
+          dump(clerk.session)
+        } else {
+          dump(signUp.status)
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.signUpWithTicket
+  import com.clerk.api.network.serialization.flatMap
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signup.SignUp
+  import com.clerk.api.signup.update
+
+  suspend fun acceptInvitation(
+    ticket: String,
+    firstName: String,
+    lastName: String,
+    password: String,
+  ) {
+    Clerk.auth
+      .signUpWithTicket(ticket)
+      .flatMap { signUp ->
+        signUp.update(
+          SignUp.SignUpUpdateParams.Standard(
+            firstName = firstName,
+            lastName = lastName,
+            password = password,
+          )
+        )
+      }
+      .onSuccess { signUp ->
+        if (signUp.status == SignUp.Status.COMPLETE && signUp.createdSessionId != null) {
+          Clerk.auth
+            .setActive(sessionId = signUp.createdSessionId)
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
+</If>
+
+<If sdk="nuxt">
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

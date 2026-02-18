@@ -582,7 +582,87 @@ One of the options that Clerk supports for MFA is **SMS verification codes**. Th
         ```
       </If>
 
-      <If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+      <If sdk="ios">
+        ```swift {{ filename: 'ManageSMSBasedMFAView.swift', collapsible: true }}
+        import SwiftUI
+        import ClerkKit
+
+        struct ManageSMSBasedMFAView: View {
+          @Environment(Clerk.self) private var clerk
+
+          var body: some View {
+            VStack {
+              ForEach(clerk.user?.phoneNumbers ?? []) { phone in
+                Button(phone.phoneNumber) {
+                  Task { await reservePhoneForMfa(phone: phone) }
+                }
+              }
+            }
+          }
+        }
+
+        extension ManageSMSBasedMFAView {
+
+          func reservePhoneForMfa(phone: PhoneNumber) async {
+            do {
+              // Reserve the phone as a second factor for SMS MFA.
+              try await phone.setReservedForSecondFactor(reserved: true)
+            } catch {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+              dump(error)
+            }
+          }
+        }
+        ```
+      </If>
+
+      <If sdk="android">
+        ```kotlin
+        import com.clerk.api.Clerk
+        import com.clerk.api.network.serialization.onFailure
+        import com.clerk.api.network.serialization.onSuccess
+        import com.clerk.api.phonenumber.delete
+        import com.clerk.api.phonenumber.makeDefaultSecondFactor
+        import com.clerk.api.phonenumber.setReservedForSecondFactor
+        import com.clerk.api.user.createBackupCodes
+
+        suspend fun reservePhoneForMfa(phoneId: String) {
+          val phone = Clerk.user?.phoneNumbers?.firstOrNull { it.id == phoneId } ?: return
+
+          phone
+            .setReservedForSecondFactor(true)
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+
+        suspend fun makePhoneDefaultSecondFactor(phoneId: String) {
+          val phone = Clerk.user?.phoneNumbers?.firstOrNull { it.id == phoneId } ?: return
+          phone.makeDefaultSecondFactor()
+        }
+
+        suspend fun removePhone(phoneId: String) {
+          val phone = Clerk.user?.phoneNumbers?.firstOrNull { it.id == phoneId } ?: return
+          phone.delete()
+        }
+
+        suspend fun generateBackupCodes() {
+          Clerk.user
+            ?.createBackupCodes()
+            ?.onSuccess { backupCodes ->
+              println(backupCodes.codes)
+            }
+            ?.onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+        ```
+      </If>
+
+      <If sdk={["js-frontend", "nuxt"]}>
         <Include src="_partials/sdk-examples-not-available-callout" />
       </If>
     </Tab>

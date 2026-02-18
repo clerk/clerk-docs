@@ -641,6 +641,87 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'OrganizationSwitcherView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct OrganizationSwitcherView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var memberships: [OrganizationMembership] = []
+
+    var body: some View {
+      VStack {
+        ForEach(memberships) { membership in
+          HStack {
+            Text(membership.organization.name)
+            Button("Set active") {
+              Task { await setActiveOrganization(organizationId: membership.organization.id) }
+            }
+          }
+        }
+      }
+      .task { await fetchOrganizationMemberships() }
+    }
+  }
+
+  extension OrganizationSwitcherView {
+
+    func fetchOrganizationMemberships() async {
+      do {
+        memberships = try await clerk.user?.getOrganizationMemberships().data ?? []
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        memberships = []
+      }
+    }
+
+    func setActiveOrganization(organizationId: String) async {
+      guard let sessionId = clerk.session?.id else { return }
+
+      do {
+        try await clerk.auth.setActive(sessionId: sessionId, organizationId: organizationId)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.organizations.OrganizationMembership
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchOrganizationMemberships(): List<OrganizationMembership> {
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+    return when (membershipsResult) {
+      is ClerkResult.Success -> membershipsResult.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun setActiveOrganization(organizationId: String) {
+    val sessionId = Clerk.session?.id ?: return
+
+    Clerk.auth
+      .setActive(sessionId = sessionId, organizationId = organizationId)
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
+</If>
+
+<If sdk={["nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

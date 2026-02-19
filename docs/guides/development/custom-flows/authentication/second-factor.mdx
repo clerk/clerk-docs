@@ -43,15 +43,12 @@ Clerk allows you to enable the following second factor strategies:
 
 This guide will demonstrate how to build a custom user interface for handling the second factor verification process. If you have MFA enabled, see the [MFA](#mfa) section. If you don't have MFA enabled, see the [Client Trust](#client-trust) section.
 
-> [!IMPORTANT]
-> **This guide uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.** For example, if you were using phone numbers instead of email addresses, you would add the second factor logic from this guide to your [phone code sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-sms-otp).
-
 ## MFA
 
 <Steps>
   ### Enable email and password
 
-  This guide uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. To follow this guide, you first need to ensure email and password are enabled for your application.
+  **This example uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.**
 
   <Include src="_partials/custom-flows/enable-email-password" />
 
@@ -426,16 +423,15 @@ When Client Trust is enabled, when a user is signing in **with a password** on a
 
 <Tabs items={["Email code", "Email link", "SMS code"]}>
   <Tab>
-    ### Enable email and password
+    ### Configure application settings
 
-    To follow this guide, you first need to ensure email and password are enabled for your application.
+    **This example uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.**
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
     1. Enable **Sign-up with email**.
        - **Require email address** should be enabled.
        - For **Verify at sign-up**, **Email verification code** is enabled by default. This is the option you'll want for this example.
     1. Enable **Sign in with email**.
-       - This guide supports password authentication.
     1. Select the **Password** tab and enable **Sign-up with password**.
 
     ### Build the custom flow
@@ -444,9 +440,9 @@ When Client Trust is enabled, when a user is signing in **with a password** on a
   </Tab>
 
   <Tab>
-    ### Enable email and password
+    ### Configure application settings
 
-    To follow this guide, you first need to ensure email and password are enabled for your application.
+    **This example uses the [email and password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) as a base. However, you can modify this approach according to the settings you've configured for your application's instance in the Clerk Dashboard.**
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
     1. Enable **Sign-up with email**.
@@ -459,17 +455,121 @@ When Client Trust is enabled, when a user is signing in **with a password** on a
   </Tab>
 
   <Tab>
-    ### Enable email and password
+    ### Configure application settings
 
-    To follow this guide, you first need to ensure email and password are enabled for your application.
+    Client Trust will fallback to SMS verification code **only if email is completely disabled for the application**, or else Client Trust will fallback to either email code or email link, depending on your application's settings.
 
     1. In the Clerk Dashboard, navigate to the [**User & authentication**](https://dashboard.clerk.com/~/user-authentication/user-and-authentication) page.
-    1. Enable **Sign-up with email**.
-       - **Require email address** should be enabled.
-       - **Verify at sign-up** should be disabled. This is what tells **Client Trust** to fallback to **SMS verification code**.
-    1. Enable **Sign in with email**.
-    1. Select the **Phone** tab. Ensure **Sign-up with phone**, **Verify at sign-up**, and **Sign-in with phone** is enabled.
-    1. Select the **Password** tab and enable **Sign-up with password**.
+    1. Ensure all email options are disabled.
+    1. Select the **Phone** tab. Ensure all the settings are enabled.
+    1. Select the **Password** tab and enable **Sign-up with password**. **Client Trust** is enabled by default.
+
+    ### Build the custom flow
+
+    ```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+    'use client'
+
+    import { useSignIn } from '@clerk/nextjs'
+    import { useRouter } from 'next/navigation'
+
+    export default function Page() {
+      const { signIn, errors, fetchStatus } = useSignIn()
+      const router = useRouter()
+
+      const handleSubmit = async (formData: FormData) => {
+        const phoneNumber = formData.get('phoneNumber') as string
+        const password = formData.get('password') as string
+
+        await signIn.password({
+          phoneNumber,
+          password,
+        })
+
+        // For other second factor strategies,
+        // see https://clerk.com/docs/guides/development/custom-flows/authentication/second-factor
+        if (signIn.status === 'needs_second_factor') {
+          await signIn.mfa.sendPhoneCode()
+        }
+
+        if (signIn.status === 'complete') {
+          await signIn.finalize({
+            navigate: ({ decorateUrl }) => {
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        }
+      }
+
+      const handleVerify = async (formData: FormData) => {
+        const code = formData.get('code') as string
+
+        await signIn.mfa.verifyPhoneCode({ code })
+
+        if (signIn.status === 'complete') {
+          await signIn.finalize({
+            navigate: ({ decorateUrl }) => {
+              const url = decorateUrl('/')
+              if (url.startsWith('http')) {
+                window.location.href = url
+              } else {
+                router.push(url)
+              }
+            },
+          })
+        }
+      }
+
+      if (signIn.status === 'needs_second_factor') {
+        return (
+          <>
+            <h1>Verify your account</h1>
+            <form action={handleVerify}>
+              <div>
+                <label htmlFor="code">Code</label>
+                <input id="code" name="code" type="text" />
+                {errors.fields.code && <p>{errors.fields.code.message}</p>}
+              </div>
+              <button type="submit" disabled={fetchStatus === 'fetching'}>
+                Verify
+              </button>
+            </form>
+            <button onClick={() => signIn.mfa.sendPhoneCode()}>I need a new code</button>
+            <button onClick={() => signIn.reset()}>Start over</button>
+            {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+            {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+          </>
+        )
+      }
+
+      return (
+        <>
+          <h1>Sign in</h1>
+          <form action={handleSubmit}>
+            <div>
+              <label htmlFor="phoneNumber">Enter phone number</label>
+              <input id="phoneNumber" name="phoneNumber" type="tel" />
+              {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+            </div>
+            <div>
+              <label htmlFor="password">Enter password</label>
+              <input id="password" name="password" type="password" />
+              {errors.fields.password && <p>{errors.fields.password.message}</p>}
+            </div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Continue
+            </button>
+          </form>
+          {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
+          {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+        </>
+      )
+    }
+    ```
   </Tab>
 </Tabs>
 

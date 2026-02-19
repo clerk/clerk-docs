@@ -18,36 +18,16 @@ To set up separate sign-in and sign-up pages, follow this guide, and then follow
 
   <Tabs items={["React Router", "No router"]}>
     <Tab>
-      ```tsx {{ filename: 'src/App.tsx' }}
-      import { SignedIn, SignedOut, SignInButton, UserButton, SignIn } from '@clerk/clerk-react'
-      import { BrowserRouter, Route, Routes } from 'react-router'
+      > [!NOTE]
+      > This example builds on the [Add React Router to your Clerk + React application](/docs/react/guides/development/declarative-mode) guide. Make sure you've completed that guide before continuing.
 
-      function SignInPage() {
-        return <SignIn path="/sign-in" />
-      }
+      Create a `src/sign-in.tsx` file and add the following code:
 
-      function IndexPage() {
-        return (
-          <header>
-            <SignedOut>
-              <SignInButton />
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-          </header>
-        )
-      }
+      ```tsx {{ filename: 'src/sign-in.tsx' }}
+      import { SignIn } from '@clerk/clerk-react'
 
-      export default function App() {
-        return (
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<IndexPage />} />
-              <Route path="/sign-in/*" element={<SignInPage />} />
-            </Routes>
-          </BrowserRouter>
-        )
+      export default function SignInPage() {
+        return <SignIn />
       }
       ```
     </Tab>
@@ -89,41 +69,100 @@ To set up separate sign-in and sign-up pages, follow this guide, and then follow
     </Tab>
   </Tabs>
 
-  ## Update your `<ClerkProvider>`
+  ## Configure your sign-in-or-up page
 
-  Update your `<ClerkProvider>` to add the `signInUrl`, `signInFallbackRedirectUrl`, and `signUpFallbackRedirectUrl` props.
+  <Tabs items={["React Router", "No router"]}>
+    <Tab>
+      Update your `src/main.tsx` to import the sign-in page, add a route for it, and configure `<ClerkProvider>` with the following props:
 
-  - Set the `signInUrl` prop to tell Clerk where the `<SignIn />` component is being hosted.
-  - Set `signInFallbackRedirectUrl` as a fallback URL incase users visit the `/sign-in` route directly.
-  - Set `signUpFallbackRedirectUrl` as a fallback URL incase users select the 'Don't have an account? Sign up' link at the bottom of the component.
+      - Set `signInUrl` to tell Clerk where the `<SignIn />` component is being hosted.
+      - Set `signInFallbackRedirectUrl` as a fallback URL incase users visit the `/sign-in` route directly.
+      - Set `signUpFallbackRedirectUrl` as a fallback URL incase users select the 'Don't have an account? Sign up' link at the bottom of the component.
 
-  Learn more about these props and how to customize Clerk's redirect behavior in the [dedicated guide](/docs/guides/development/customize-redirect-urls).
+      Learn more about these props and how to customize Clerk's redirect behavior in the [dedicated guide](/docs/guides/development/customize-redirect-urls).
 
-  ```tsx {{ filename: 'src/main.tsx', mark: [[17, 19]] }}
-  import React from 'react'
-  import ReactDOM from 'react-dom/client'
-  import App from './App.tsx'
-  import { ClerkProvider } from '@clerk/clerk-react'
+      ```tsx {{ filename: 'src/main.tsx', mark: [6, [24, 26], 30] }}
+      import { StrictMode } from 'react'
+      import { createRoot } from 'react-dom/client'
+      import { BrowserRouter, Routes, Route, useNavigate } from 'react-router'
+      import { ClerkProvider } from '@clerk/clerk-react'
+      import './index.css'
+      import SignInPage from './sign-in.tsx'
+      import App from './App.tsx'
 
-  const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+      // Import your Publishable Key
+      const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
-  if (!PUBLISHABLE_KEY) {
-    throw new Error('Add your Clerk Publishable Key to the .env file')
-  }
+      if (!PUBLISHABLE_KEY) {
+        throw new Error('Add your Clerk Publishable Key to the .env file')
+      }
 
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <ClerkProvider
-        publishableKey={PUBLISHABLE_KEY}
-        signInUrl="/sign-in"
-        signInFallbackRedirectUrl="/"
-        signUpFallbackRedirectUrl="/"
-      >
-        <App />
-      </ClerkProvider>
-    </React.StrictMode>,
-  )
-  ```
+      function RootLayout() {
+        const navigate = useNavigate()
+
+        return (
+          <ClerkProvider
+            routerPush={(to) => navigate(to)}
+            routerReplace={(to) => navigate(to, { replace: true })}
+            publishableKey={PUBLISHABLE_KEY}
+            signInUrl="/sign-in"
+            signInFallbackRedirectUrl="/"
+            signUpFallbackRedirectUrl="/"
+          >
+            <Routes>
+              <Route path="/" element={<App />} />
+              <Route path="/sign-in/*" element={<SignInPage />} />
+            </Routes>
+          </ClerkProvider>
+        )
+      }
+
+      createRoot(document.getElementById('root')!).render(
+        <StrictMode>
+          <BrowserRouter>
+            <RootLayout />
+          </BrowserRouter>
+        </StrictMode>,
+      )
+      ```
+    </Tab>
+
+    <Tab>
+      Update your `<ClerkProvider>` to add the `signInUrl`, `signInFallbackRedirectUrl`, and `signUpFallbackRedirectUrl` props.
+
+      - Set `signInUrl` to tell Clerk where the `<SignIn />` component is being hosted.
+      - Set `signInFallbackRedirectUrl` as a fallback URL incase users visit the `/sign-in` route directly.
+      - Set `signUpFallbackRedirectUrl` as a fallback URL incase users select the 'Don't have an account? Sign up' link at the bottom of the component.
+
+      Learn more about these props and how to customize Clerk's redirect behavior in the [dedicated guide](/docs/guides/development/customize-redirect-urls).
+
+      ```tsx {{ filename: 'src/main.tsx' }}
+      import React from 'react'
+      import ReactDOM from 'react-dom/client'
+      import App from './App.tsx'
+      import { ClerkProvider } from '@clerk/clerk-react'
+
+      const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+      if (!PUBLISHABLE_KEY) {
+        throw new Error('Add your Clerk Publishable Key to the .env file')
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')!).render(
+        <React.StrictMode>
+          <ClerkProvider
+            publishableKey={PUBLISHABLE_KEY}
+            signInUrl="/sign-in"
+            signInFallbackRedirectUrl="/"
+            signUpFallbackRedirectUrl="/"
+          >
+            <App />
+          </ClerkProvider>
+        </React.StrictMode>,
+      )
+      ```
+    </Tab>
+  </Tabs>
 
   ## Visit your new page
 

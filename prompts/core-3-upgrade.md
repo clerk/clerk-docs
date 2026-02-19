@@ -27,13 +27,13 @@ The reference below covers changes the CLI may not fully automate.
 
 `SignedIn`, `SignedOut`, and `Protect` are replaced by `Show`:
 
-| Before | After |
-|---|---|
-| `<SignedIn>` | `<Show when="signed-in">` |
-| `<SignedOut>` | `<Show when="signed-out">` |
-| `<Protect role="admin">` | `<Show when={{ role: 'admin' }}>` |
+| Before                                      | After                                                |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `<SignedIn>`                                | `<Show when="signed-in">`                            |
+| `<SignedOut>`                               | `<Show when="signed-out">`                           |
+| `<Protect role="admin">`                    | `<Show when={{ role: 'admin' }}>`                    |
 | `<Protect permission="org:billing:manage">` | `<Show when={{ permission: 'org:billing:manage' }}>` |
-| `<Protect condition={(has) => expr}>` | `<Show when={(has) => expr}>` |
+| `<Protect condition={(has) => expr}>`       | `<Show when={(has) => expr}>`                        |
 
 `Protect`'s `fallback` prop works the same on `Show`.
 
@@ -41,11 +41,11 @@ Import `Show` from the same package you previously imported `SignedIn`/`Protect`
 
 ## Package & Import Renames
 
-| Before | After |
-|---|---|
-| `@clerk/clerk-react` | `@clerk/react` |
-| `@clerk/clerk-expo` | `@clerk/expo` |
-| `import type { ... } from '@clerk/types'` | `import type { ... } from '@clerk/shared/types'` |
+| Before                                                   | After                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| `@clerk/clerk-react`                                     | `@clerk/react`                                                |
+| `@clerk/clerk-expo`                                      | `@clerk/expo`                                                 |
+| `import type { ... } from '@clerk/types'`                | `import type { ... } from '@clerk/shared/types'`              |
 | `import { __experimental_createTheme } from '@clerk/ui'` | `import { createTheme } from '@clerk/ui/themes/experimental'` |
 
 Update both imports and `package.json` dependencies.
@@ -58,24 +58,24 @@ Update both imports and `package.json` dependencies.
 
 ## Removed Redirect Props
 
-| Removed | Replacement |
-|---|---|
-| `afterSignInUrl` | `fallbackRedirectUrl` |
+| Removed          | Replacement                 |
+| ---------------- | --------------------------- |
+| `afterSignInUrl` | `fallbackRedirectUrl`       |
 | `afterSignUpUrl` | `signUpFallbackRedirectUrl` |
-| `redirectUrl` | `fallbackRedirectUrl` |
+| `redirectUrl`    | `fallbackRedirectUrl`       |
 
 For forced redirects (ignoring `redirect_url` query param), use `forceRedirectUrl` / `signUpForceRedirectUrl`.
 
 ## Other Deprecation Removals
 
-| Before | After |
-|---|---|
-| `<OrganizationSwitcher afterSwitchOrganizationUrl="...">` | `afterSelectOrganizationUrl` |
-| `client.activeSessions` | `client.sessions` |
-| `strategy: 'saml'` | `strategy: 'enterprise_sso'` |
-| `user.samlAccounts` | `user.enterpriseAccounts` |
-| `verification.samlAccount` | `verification.enterpriseAccount` |
-| `userSettings.saml` | `userSettings.enterpriseSSO` |
+| Before                                                    | After                            |
+| --------------------------------------------------------- | -------------------------------- |
+| `<OrganizationSwitcher afterSwitchOrganizationUrl="...">` | `afterSelectOrganizationUrl`     |
+| `client.activeSessions`                                   | `client.sessions`                |
+| `strategy: 'saml'`                                        | `strategy: 'enterprise_sso'`     |
+| `user.samlAccounts`                                       | `user.enterpriseAccounts`        |
+| `verification.samlAccount`                                | `verification.enterpriseAccount` |
+| `userSettings.saml`                                       | `userSettings.enterpriseSSO`     |
 
 ### setActive Callback
 

@@ -11,6 +11,9 @@ import { VFile } from 'vfile'
 
 // read in the manifest, create a vfile to write warnings to
 
+export const navigationTypeSchema = z.enum(['sectioned', 'flat'])
+export type NavigationType = z.infer<typeof navigationTypeSchema>
+
 export const readManifest = (config: BuildConfig) => async () => {
   const { manifestSchema } = createManifestSchema(config)
   const unsafe_manifest = await fs.readFile(config.manifestFilePath, { encoding: 'utf-8' })
@@ -21,10 +24,13 @@ export const readManifest = (config: BuildConfig) => async () => {
     throw new Error(errorMessages['manifest-parse-error'](error))
   }
 
-  const manifest = await z.object({ navigation: manifestSchema }).safeParseAsync(json)
+  const manifest = await z
+    .object({ navigationType: navigationTypeSchema, navigation: manifestSchema })
+    .safeParseAsync(json)
 
   if (manifest.success === true) {
     return {
+      navigationType: manifest.data.navigationType,
       manifest: manifest.data.navigation,
       vfile: new VFile({ path: config.manifestRelativePath }),
     }
@@ -243,10 +249,15 @@ export const readSDKManifest = (config: BuildConfig) => async (manifestPath: str
   }
 
   const sdkManifestSchema = z.array(z.union([manifestItem, manifestHeading, manifestGroup]))
-  const manifest = await z.object({ navigation: sdkManifestSchema }).safeParseAsync(json)
+  const manifest = await z
+    .object({ navigationType: navigationTypeSchema, navigation: sdkManifestSchema })
+    .safeParseAsync(json)
 
   if (manifest.success === true) {
-    return manifest.data.navigation
+    return {
+      navigationType: manifest.data.navigationType,
+      navigation: manifest.data.navigation,
+    }
   }
 
   throw new Error(errorMessages['manifest-parse-error'](fromError(manifest.error)))

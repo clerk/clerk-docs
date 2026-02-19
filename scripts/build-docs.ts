@@ -56,7 +56,14 @@ import { watchAndRebuild } from './lib/dev'
 import { errorMessages, safeMessage, shouldIgnoreWarning } from './lib/error-messages'
 import { getLastCommitDate } from './lib/getLastCommitDate'
 import { readDocsFolder, writeDistFile, writeSDKFile } from './lib/io'
-import { flattenTree, readManifest, readSDKManifest, traverseTree, traverseTreeItemsFirst, type ManifestGroup } from './lib/manifest'
+import {
+  flattenTree,
+  readManifest,
+  readSDKManifest,
+  traverseTree,
+  traverseTreeItemsFirst,
+  type ManifestGroup,
+} from './lib/manifest'
 import { parseInMarkdownFile } from './lib/markdown'
 import { readPartialsFolder, readPartialsMarkdown } from './lib/partials'
 import { isValidSdk, VALID_SDKS, type SDK } from './lib/schemas'
@@ -303,7 +310,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
 
   abortSignal?.throwIfAborted()
 
-  const { manifest: userManifest, vfile: manifestVfile } = await getManifest()
+  const { navigationType: userManifestType, manifest: userManifest, vfile: manifestVfile } = await getManifest()
   console.info('✓ Read Manifest')
 
   abortSignal?.throwIfAborted()
@@ -314,7 +321,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   for (const sdkName of config.validSdks) {
     const manifestPath = path.join(config.docsPath, `manifest.${sdkName}.json`)
     if (existsSync(manifestPath)) {
-      sdkManifests.set(sdkName, await getSDKManifest(manifestPath))
+      const sdkManifest = await getSDKManifest(manifestPath)
+      sdkManifests.set(sdkName, sdkManifest)
     }
   }
   if (sdkManifests.size > 0) {
@@ -361,8 +369,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   })
 
   // Also grab docs links from SDK-specific manifests
-  for (const [, sdkItems] of sdkManifests) {
-    await traverseTree({ items: sdkItems }, async (item) => {
+  for (const [, sdkManifest] of sdkManifests) {
+    await traverseTree({ items: sdkManifest.navigation }, async (item) => {
       if (!item.href?.startsWith(config.baseDocsLink)) return item
       if (item.target !== undefined) return item
 
@@ -609,8 +617,8 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   // Add SDK-scoped docsMap entries for pages in SDK manifests
   // These pages bypass the main manifest's SDK scoping passes, so we need to
   // manually add their SDK-scoped variants to docsMap for link validation
-  for (const [sdkName, sdkItems] of sdkManifests) {
-    await traverseTree({ items: sdkItems }, async (item) => {
+  for (const [sdkName, sdkManifest] of sdkManifests) {
+    await traverseTree({ items: sdkManifest.navigation }, async (item) => {
       if (!item.href?.startsWith(config.baseDocsLink)) return item
       const doc = docsMap.get(item.href)
       if (doc) {
@@ -839,7 +847,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   // Build the navigation output with explicit sections and SDK overrides
   const buildSections = (items: typeof processedManifest) => {
     return items
-      .filter((item): item is Extract<typeof item, { items: any }> => 'items' in item && 'topNav' in item && item.topNav === true)
+      .filter(
+        (item): item is Extract<typeof item, { items: any }> =>
+          'items' in item && 'topNav' in item && item.topNav === true,
+      )
       .map((item) => {
         const hasNestedTopNav = item.items.some(
           (child: any) => 'items' in child && 'topNav' in child && child.topNav === true,
@@ -855,10 +866,10 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
   }
 
   // Process SDK override manifests through the same item processing (link validation, SDK href injection, etc.)
-  const processedOverrides: Record<string, any> = {}
-  for (const [sdkName, sdkItems] of sdkManifests) {
+  const processedOverrides: Record<string, { navigationType: string; items: any[] }> = {}
+  for (const [sdkName, sdkManifest] of sdkManifests) {
     const processed = await traverseTree(
-      { items: sdkItems },
+      { items: sdkManifest.navigation },
       async (item) => {
         const doc = docsMap.get(item.href)
         const sdks = [...(doc?.frontmatter?.sdk ?? []), ...(doc?.distinctSDKVariants ?? [])]
@@ -875,7 +886,7 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
           wrap: item.wrap === config.manifestOptions.wrapDefault ? undefined : item.wrap,
           icon: item.icon,
           target: item.target,
-          sdk: injectSDK ? (item.sdk ?? sdks) : item.sdk,
+          sdk: injectSDK ? item.sdk ?? sdks : item.sdk,
           shortcut: item.shortcut,
         }
       },
@@ -889,19 +900,42 @@ export async function build(config: BuildConfig, store: Store = createBlankStore
         items: group.items,
       }),
     )
-    processedOverrides[sdkName] = processed
+    processedOverrides[sdkName] = { navigationType: sdkManifest.navigationType, items: processed }
+  }
+
+  const navigationEntries: Record<string, any> = {}
+
+  if (userManifestType === 'sectioned') {
+    navigationEntries.default = {
+      type: 'sectioned',
+      sections: buildSections(processedManifest),
+    }
+  } else {
+    navigationEntries.default = {
+      type: 'flat',
+      items: processedManifest,
+    }
+  }
+
+  for (const [sdkName, sdkData] of Object.entries(processedOverrides)) {
+    if (sdkData.navigationType === 'sectioned') {
+      navigationEntries[sdkName] = {
+        type: 'sectioned',
+        sections: buildSections(sdkData.items),
+      }
+    } else {
+      navigationEntries[sdkName] = {
+        type: 'flat',
+        items: sdkData.items,
+      }
+    }
   }
 
   await writeFile(
     'manifest.json',
     JSON.stringify({
       flags: siteFlags,
-      navigation: {
-        default: {
-          sections: buildSections(processedManifest),
-        },
-        ...(Object.keys(processedOverrides).length > 0 ? { overrides: processedOverrides } : {}),
-      },
+      navigation: navigationEntries,
     }),
   )
 

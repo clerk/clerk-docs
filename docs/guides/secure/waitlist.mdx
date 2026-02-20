@@ -1,121 +1,60 @@
 ---
-title: Set up a waitlist in your Next.js app
-description: Learn how to add a waitlist to your Next.js application.
-sdk: nextjs
+title: Set up a waitlist in your app
+description: Learn how to add a waitlist to your application.
+sdk: nextjs, react, expo, react-router, astro, nuxt, vue, chrome-extension, tanstack-react-start
 ---
 
-In [**Waitlist** mode](/docs/guides/secure/restricting-access#waitlist), users can register their interest in your app by joining a waitlist. This mode is ideal for apps in early development stages or those wanting to generate interest before launch. This guide shows you how to get Clerk integrated and how to add a waitlist to your Next.js application.
+<TutorialHero
+  beforeYouStart={[
+    {
+      title: "Follow the quickstart guide",
+      link: "/docs/getting-started/quickstart",
+      icon: "clerk",
+    },
+  ]}
+/>
+
+In [**Waitlist** mode](/docs/guides/secure/restricting-access#waitlist), users can register their interest in your app by joining a waitlist. This mode is ideal for apps in early development stages or those wanting to generate interest before launch. This guide shows you how to add a waitlist to your application.
 
 <Steps>
-  <Include src="_partials/nextjs/sdk-installation-step" />
-
-  ## Set your Clerk API keys
-
-  <SignedIn>
-    Add the following keys to your `.env` file. These keys can always be retrieved from the [**API keys**](https://dashboard.clerk.com/~/api-keys) page in the Clerk Dashboard.
-  </SignedIn>
-
-  <SignedOut>
-    1. In the Clerk Dashboard, navigate to the [**API keys**](https://dashboard.clerk.com/~/api-keys){{ track: 'exp_create_account_nextjs_quickstart' }} page.
-    1. In the **Quick Copy** section, copy your Clerk [Publishable Key](!publishable-key) and [Secret Key](!secret-key).
-    1. Paste your keys into your `.env` file.
-
-    The final result should resemble the following:
-  </SignedOut>
-
-  ```env {{ filename: '.env' }}
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={{pub_key}}
-  CLERK_SECRET_KEY={{secret}}
-  ```
-
   ## Enable Waitlist mode
 
   To enable **Waitlist** mode, follow these steps:
 
-  1. In the Clerk Dashboard, navigate to the [**Waitlist**](https://dashboard.clerk.com/~/user-authentication/waitlist) page.
-  1. Toggle on **Enable waitlist** and select **Save**.
+  <Include src="_partials/waitlist/enable-waitlist-mode" />
 
-  To manage users on your waitlist:
+  ## Add the `<Waitlist />` component to your app
 
-  1. In the Clerk Dashboard, navigate to the [**Waitlist**](https://dashboard.clerk.com/~/waitlist) page.
-  1. On the right-side of a user's row, select the menu icon (...).
-  1. Select **Invite** to invite the user to your application. Select **Deny** to deny the user access to your application.
+  The [`<Waitlist />`](/docs/reference/components/authentication/waitlist) component provides a form where users can submit their details to join the waitlist and express their interest in your app. Once approved by admins, users will receive an email with access instructions.
 
-  ## Add the `<Waitlist />` component
+  <If sdk="nextjs">
+    > [!NOTE]
+    > If you're using Next.js, the`<Waitlist />` component is available in `@clerk/nextjs@6.2.0` and above.
+  </If>
 
-  The [`<Waitlist />`](/docs/reference/components/authentication/waitlist) component renders a form that allows users to join for early access to your app.
+  The following example includes a basic implementation of the `<Waitlist />` component hosted under the `/waitlist` route. You can use this as a starting point for your own implementation.
 
-  The following example includes a basic implementation of the `<Waitlist />` component hosted on the `/` route (the home page). You can use this as a starting point for your own implementation.
+  <Include src="_partials/waitlist/waitlist-component-examples" />
 
-  ```jsx {{ filename: 'app/page.tsx' }}
-  import { Waitlist } from '@clerk/nextjs'
+  ## Provide the `waitlistUrl` prop
 
-  export default function Page() {
-    return <Waitlist />
-  }
+  The `waitlistUrl` prop is used to specify the URL of your waitlist page. It should point to the route where your `<Waitlist />` component is mounted. The prop is configured wherever you initialize Clerk. In most React-based SDKs, this means passing it to the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) component. In other SDKs, it may be configured through the framework's Clerk integration or plugin.
+
+  The following example shows how to update your `<ClerkProvider>` to include a `waitlistUrl` prop that matches your waitlist route.
+
+  ```tsx {{ prettier: false }}
+  <ClerkProvider waitlistUrl="/waitlist">
+    {/* rest of your layout */}
+  </ClerkProvider>
   ```
 
-  ## Add `<ClerkProvider>` to your app
+  ## Add a sign-in page
 
-  <Include src="_partials/clerk-provider/explanation" />
+  To allow users to sign in once they've been approved from the waitlist, you need to set up a custom sign-in page.
 
-  To use the `<Waitlist />` component in your app, you must provide the `waitlistUrl` prop, which points to the URL of your waitlist page.
+  The following example demonstrates how to render the `<SignIn />` component, which will only be accessible to users who have been approved from the waitlist.
 
-  ```tsx {{ filename: 'app/layout.tsx', mark: [6] }}
-  import { ClerkProvider } from '@clerk/nextjs'
-  import './globals.css'
-
-  export default function RootLayout({ children }: { children: React.ReactNode }) {
-    return (
-      <ClerkProvider waitlistUrl="/">
-        <html lang="en">
-          <body>{children}</body>
-        </html>
-      </ClerkProvider>
-    )
-  }
-  ```
-
-  ## Add sign-in functionality
-
-  To allow users to sign in once they've been approved from the waitlist, you must:
-
-  - [Add `clerkMiddleware()` to your app.](#add-clerk-middleware-to-your-app)
-  - [Add a sign-in page.](#add-a-sign-in-page)
-
-  ### Add `clerkMiddleware()` to your app
-
-  <Include src="_partials/nextjs/nextjs-15-callout" />
-
-  [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware) grants you access to user authentication state throughout your app. It also allows you to protect specific routes from unauthenticated users. To add `clerkMiddleware()` to your app, follow these steps:
-
-  1. Create a `proxy.ts` file.
-
-     - If you're using the `/src` directory, create `proxy.ts` in the `/src` directory.
-     - If you're not using the `/src` directory, create `proxy.ts` in the root directory alongside `.env`.
-
-  1. In your `proxy.ts` file, export the `clerkMiddleware()` helper:
-
-     ```tsx {{ filename: 'proxy.ts' }}
-     import { clerkMiddleware } from '@clerk/nextjs/server'
-
-     export default clerkMiddleware()
-
-     export const config = {
-       matcher: [
-         // Skip Next.js internals and all static files, unless found in search params
-         '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-         // Always run for API routes
-         '/(api|trpc)(.*)',
-       ],
-     }
-     ```
-
-  1. By default, `clerkMiddleware()` will not protect any routes. All routes are public and you must opt-in to protection for routes. See the [`clerkMiddleware()` reference](/docs/reference/nextjs/clerk-middleware) to learn how to require authentication for specific routes.
-
-  ### Add a sign-in page
-
-  The following example demonstrates how to render the `<SignIn />` component.
+  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
   ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
   import { SignIn } from '@clerk/nextjs'
@@ -130,4 +69,15 @@ In [**Waitlist** mode](/docs/guides/secure/restricting-access#waitlist), users c
   ```env {{ filename: '.env' }}
   NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
   ```
+
+  > [!NOTE]
+  > Alternatively, you can add the `waitlistUrl` prop to the `<SignIn />` component instead of `<ClerkProvider>` if needed.
+
+  ## Manage users on your waitlist
+
+  Once users join your waitlist, you can manage their access from the Clerk Dashboard. You can approve or deny users, which will trigger an email notification to them with instructions on how to access your app if approved.
+
+  1. In the Clerk Dashboard, navigate to the [**Waitlist**](https://dashboard.clerk.com/~/waitlist) page.
+  1. On the right-side of a user's row, select the menu icon (...).
+  1. Select **Invite** to invite the user to your application. Select **Deny** to deny the user access to your application.
 </Steps>

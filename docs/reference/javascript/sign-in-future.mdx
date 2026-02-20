@@ -1,0 +1,694 @@
+---
+title: '`SignInFuture`'
+description: The current active SignIn instance, for use in custom flows.
+sdk: js-frontend
+---
+
+<Include src="_partials/custom-flows/future-api-callout" />
+
+The `SignInFuture` class holds the state of the current sign-in and provides helper methods to navigate and complete the sign-in process. It is used to manage the sign-in lifecycle, including the first and second factor verification, and the creation of a new session.
+
+## Properties
+
+<Properties>
+  - `createdSessionId`
+  - `null | string`
+
+  The ID of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `'complete'`.
+
+  ---
+
+  - `existingSession?`
+  - `{ sessionId: string }`
+
+  If present, reflects that the sign-in was not able to create a new session because the identifier already exists in an existing session. Contains the ID of the existing session.
+
+  ---
+
+  - `firstFactorVerification`
+  - [`VerificationResource`](/docs/reference/javascript/types/verification-resource)
+
+  The state of the verification process for the selected first factor. Initially, this property contains an empty verification object, since there is no first factor selected.
+
+  ---
+
+  - `id?`
+  - `string`
+
+  The unique identifier for the current sign-in attempt.
+
+  ---
+
+  - `identifier`
+  - `null | string`
+
+  The authentication identifier value for the current sign-in. `null` if the `strategy` is `'oauth_<provider>'` or `'enterprise_sso'`.
+
+  ---
+
+  - `isTransferable`
+  - `boolean`
+
+  Indicates that there is not a matching user for the first-factor verification used, and that the sign-in can be transferred to a sign-up.
+
+  ---
+
+  - `secondFactorVerification`
+  - [`VerificationResource`](/docs/reference/javascript/types/verification-resource)
+
+  The state of the verification process for the selected second factor. Initially, this property contains an empty verification object, since there is no second factor selected.
+
+  ---
+
+  - `status`
+  - `SignInStatus`
+
+  The current status of the sign-in. `SignInStatus` supports the following values:
+
+  - `'complete'`: The user is signed in and the [custom flow](!custom-flow) can proceed to `finalize()` to set the newly created session as the active session.
+  - `'needs_identifier'`: The user's identifier (e.g., email address, phone number, username) hasn't been provided.
+  - `'needs_first_factor'`: One of the following first factor verification strategies is missing: `'email_link'`, `'email_code'`, `passkey`, `password`, `'phone_code'`, `'web3_base_signature'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, `'web3_okx_wallet_signature'`, `'web3_solana_signature'`, [`OAuthStrategy`](/docs/reference/javascript/types/sso#o-auth-strategy), or `'enterprise_sso'`.
+  - `'needs_second_factor'`: One of the following second factor verification strategies is missing: `'phone_code'`, `'totp'`, `'backup_code'`, `'email_code'`, or `'email_link'`.
+  - `'needs_new_password'`: The user needs to set a new password.
+
+  ---
+
+  - `supportedFirstFactors`
+  - <code>[SignInFirstFactor](/docs/reference/javascript/types/sign-in-first-factor)\[]</code>
+
+  Array of the first factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used.
+
+  ---
+
+  - `supportedSecondFactors`
+  - <code>[SignInSecondFactor](/docs/reference/javascript/types/sign-in-second-factor)\[]</code>
+
+  Array of the second factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used. This property is populated only when the first factor is verified.
+
+  ---
+
+  - `userData`
+  - `UserData`
+
+  An object containing information about the user of the current sign-in. This property is populated only once an identifier is given to the `SignIn` object through `signIn.create()` or another method that populates the `identifier` property.
+</Properties>
+
+## Methods
+
+### `create()`
+
+Creates a new `SignIn` instance initialized with the provided parameters. The instance maintains the sign-in lifecycle state through its `status` property, which updates as the authentication flow progresses.
+
+What you must pass to `params` depends on which [sign-in options](/docs/guides/configure/auth-strategies/sign-up-sign-in-options) you have enabled in your app's settings in the Clerk Dashboard.
+
+> [!IMPORTANT]
+> The `signIn.create()` method is intended for advanced use cases. For most use cases, prefer the use of the factor-specific methods such as `signIn.password()`, `signIn.emailCode.sendCode()`, etc.
+
+> [!WARNING]
+> Once the sign-in process is complete, call the `signIn.finalize()` method to set the newly created session as the active session.
+
+```ts
+function create(params: SignInFutureCreateParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureCreateParams`
+
+<Properties>
+  - `actionCompleteRedirectUrl?`
+  - `string`
+
+  The URL that the user will be redirected to, after successful authorization from the OAuth provider and Clerk sign-in.
+
+  ---
+
+  - `identifier?`
+  - `string`
+
+  The authentication identifier for the sign-in. This can be the value of the user's email address, phone number, username, or Web3 wallet address.
+
+  ---
+
+  - `redirectUrl?`
+  - `string`
+
+  The full URL or path that the OAuth provider should redirect to after successful authorization on their part.
+
+  ---
+
+  - `strategy?`
+  - <code>[OAuthStrategy](/docs/reference/javascript/types/sso#o-auth-strategy) | "enterprise\_sso" | "passkey"</code>
+
+  The first factor verification strategy to use in the sign-in flow. Depends on the `identifier` value. Each authentication identifier supports different verification strategies.
+
+  ---
+
+  - `ticket?`
+  - `string`
+
+  The [ticket _or token_](/docs/guides/development/custom-flows/authentication/application-invitations) generated from the Backend API. **Required** if `strategy` is set to `'ticket'`.
+
+  ---
+
+  - `transfer?`
+  - `boolean`
+
+  When set to `true`, the `SignIn` will attempt to retrieve information from the active `SignUp` instance and use it to complete the sign-in process. This is useful when you want to seamlessly transition a user from a sign-up attempt to a sign-in attempt.
+</Properties>
+
+### `emailCode.sendCode()`
+
+Sends an email code to sign in with.
+
+```ts
+function sendCode(params: SignInFutureEmailCodeSendParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureEmailCodeSendParams`
+
+<Properties>
+  - `emailAddress?`
+  - `string`
+
+  The user's email address.
+
+  ---
+
+  - `emailAddressId?`
+  - `string`
+
+  The ID for the user's email address that will receive an email with the one-time authentication code.
+</Properties>
+
+### `emailCode.verifyCode()`
+
+Verifies an email code sent with the [`emailCode.sendCode()`](#email-code-send-code) method.
+
+```ts
+function verifyCode(
+  params: SignInFutureEmailCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureEmailCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.emailCode.sendCode()` method.
+</Properties>
+
+### `emailLink.sendLink()`
+
+Sends an email link to sign in with.
+
+```ts
+function sendLink(params: SignInFutureEmailLinkSendParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureEmailLinkSendParams`
+
+<Properties>
+  - `verificationUrl`
+  - `string`
+
+  The full URL that the user will be redirected to when they visit the email link.
+</Properties>
+
+### `emailLink.verification`
+
+The verification status of the email link. This property is populated by reading query parameters from the URL after the user visits the email link. Returns `null` if no verification status is available.
+
+<Properties>
+  - `status`
+  - `'verified' | 'expired' | 'failed' | 'client_mismatch'`
+
+  The verification status.
+
+  ---
+
+  - `createdSessionId`
+  - `string`
+
+  The ID of the session that was created upon successful verification.
+
+  ---
+
+  - `verifiedFromTheSameClient`
+  - `boolean`
+
+  Whether the verification was completed from the same client (browser) that initiated the email link flow.
+</Properties>
+
+### `emailLink.waitForVerification()`
+
+Waits for email link verification to complete or expire.
+
+```ts
+function waitForVerification(): Promise<{ error: ClerkError | null }>
+```
+
+### `finalize()`
+
+Converts a sign-in with `status === 'complete'` into an active session. Will cause anything observing the session state (such as the `useUser()` hook) to update automatically.
+
+```ts
+function finalize(params?: SignInFutureFinalizeParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureFinalizeParams`
+
+<Properties>
+  - `navigate?`
+  - <code>(opts: \{ session: [SessionResource](/docs/reference/javascript/session) }) => Promise\<unknown></code>
+
+  A custom navigation function to be called just before the session and/or organization is set.
+</Properties>
+
+### `mfa.sendEmailCode()`
+
+Sends an email code to sign in with as the second factor.
+
+```ts
+function sendEmailCode(): Promise<{ error: ClerkError | null }>
+```
+
+### `mfa.verifyEmailCode()`
+
+Verifies an email code sent with the [`mfa.sendEmailCode()`](#mfa-send-email-code) method.
+
+```ts
+function verifyEmailCode(
+  params: SignInFutureMFAEmailCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureMFAEmailCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.mfa.sendEmailCode()` method.
+</Properties>
+
+### `mfa.sendPhoneCode()`
+
+Sends a phone code to sign in with as the second factor.
+
+```ts
+function sendPhoneCode(): Promise<{ error: ClerkError | null }>
+```
+
+### `mfa.verifyPhoneCode()`
+
+Verifies a phone code sent with the [`mfa.sendPhoneCode()`](#mfa-send-phone-code) method.
+
+```ts
+function verifyPhoneCode(
+  params: SignInFutureMFAPhoneCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureMFAPhoneCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.mfa.sendPhoneCode()` method.
+</Properties>
+
+### `mfa.verifyBackupCode()`
+
+Verifies a backup code as a second factor to sign in with.
+
+```ts
+function verifyBackupCode(
+  params: SignInFutureBackupCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureBackupCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The backup code that was provided to the user when they set up two-step authentication.
+</Properties>
+
+### `mfa.verifyTOTP()`
+
+Verifies an authenticator app (TOTP) code as a second factor to sign in with.
+
+```ts
+function verifyTOTP(params: SignInFutureTOTPVerifyParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureTOTPVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The TOTP generated by the user's authenticator app.
+</Properties>
+
+### `passkey()`
+
+Initiates a passkey-based authentication flow, enabling users to authenticate using a previously registered passkey. When called without parameters, this method requires a prior call to `signIn.create({ strategy: 'passkey' })` to initialize the sign-in context. This pattern is particularly useful in scenarios where the authentication strategy needs to be determined dynamically at runtime.
+
+```ts
+function passkey(params?: SignInFuturePasskeyParams): Promise<{ error: null | ClerkError }>
+```
+
+#### `SignInFuturePasskeyParams`
+
+<Properties>
+  - `flow?`
+  - `"autofill" | "discoverable"`
+
+  The flow to use for the passkey sign-in.
+
+  - `'autofill'`: The client prompts your users to select a passkey before they interact with your app.
+  - `'discoverable'`: The client requires the user to interact with the client.
+</Properties>
+
+### `password()`
+
+Performs a password-based sign-in.
+
+```ts
+function password(params: SignInFuturePasswordParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFuturePasswordParams`
+
+<Properties>
+  - `password`
+  - `string`
+
+  The user's password. Only supported if [password](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#password) is enabled.
+
+  ---
+
+  - `emailAddress`
+  - `string`
+
+  The user's email address. Only supported if [Email address](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email) is enabled.
+
+  ---
+
+  - `identifier`
+  - `string`
+
+  The authentication identifier for the sign-in. This can be the value of the user's email address, phone number, username, or Web3 wallet address.
+
+  ---
+
+  - `phoneNumber`
+  - `string`
+
+  The user's phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164). Only supported if [phone number](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#phone) is enabled.
+</Properties>
+
+### `phoneCode.sendCode()`
+
+Sends a phone code to sign in with.
+
+```ts
+function sendCode(params: SignInFuturePhoneCodeSendParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFuturePhoneCodeSendParams`
+
+<Properties>
+  - `channel?`
+  - `'sms' | 'whatsapp'`
+
+  The mechanism to use to send the code to the provided phone number. Defaults to `'sms'`.
+
+  ---
+
+  - `phoneNumber?`
+  - `string`
+
+  The user's phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164). Only supported if [phone number](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#phone) is enabled.
+
+  ---
+
+  - `phoneNumberId?`
+  - `string`
+
+  The ID for the user's phone number that will receive a message with the one-time authentication code.
+</Properties>
+
+### `phoneCode.verifyCode()`
+
+Verifies a phone code sent with the [`phoneCode.sendCode()`](#phone-code-send-code) method.
+
+```ts
+function verifyCode(
+  params: SignInFuturePhoneCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFuturePhoneCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.phoneCode.sendCode()` method.
+</Properties>
+
+### `reset()`
+
+Resets the current sign-in attempt by clearing all local state back to null. This is useful when you want to allow users to go back to the beginning of the sign-in flow (e.g., to change their identifier during verification). Unlike other methods, `reset()` does not trigger the `fetchStatus` to change to `'fetching'` and does not make any API calls - it only clears local state.
+
+```ts
+function reset(): Promise<{ error: ClerkError | null }>
+```
+
+### `resetPasswordEmailCode.sendCode()`
+
+Sends a password reset code to the first email address on the account.
+
+```ts
+function sendCode(): Promise<{ error: ClerkError | null }>
+```
+
+### `resetPasswordEmailCode.submitPassword()`
+
+Submits a new password and moves the `signIn.status` to `'complete'`.
+
+```ts
+function submitPassword(
+  params: SignInFutureResetPasswordSubmitParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordSubmitParams`
+
+<Properties>
+  - `password`
+  - `string`
+
+  The new password for the user.
+
+  ---
+
+  - `signOutOfOtherSessions?`
+  - `boolean`
+
+  If `true`, signs the user out of all other authenticated sessions.
+</Properties>
+
+### `resetPasswordEmailCode.verifyCode()`
+
+Verifies a password reset code sent with the [`resetPasswordEmailCode.sendCode()`](#reset-password-email-code-send-code) method. Will cause `signIn.status` to become `'needs_new_password'`. This is when you will call the [`resetPasswordEmailCode.submitPassword()`](#reset-password-email-code-submit-password) method to complete the password reset flow.
+
+```ts
+function verifyCode(
+  params: SignInFutureEmailCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureEmailCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.resetPasswordEmailCode.sendCode()` method.
+</Properties>
+
+### `resetPasswordPhoneCode.sendCode()`
+
+Sends a password reset code to the first phone number on the account.
+
+```ts
+function sendCode(
+  params?: SignInFutureResetPasswordPhoneCodeSendParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordPhoneCodeSendParams`
+
+<Properties>
+  - `phoneNumber?`
+  - `string`
+
+  The user's phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164). Only supported if [phone number](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#phone) is enabled.
+</Properties>
+
+### `resetPasswordPhoneCode.verifyCode()`
+
+Verifies a password reset code sent with the [`resetPasswordPhoneCode.sendCode()`](#reset-password-phone-code-send-code) method. Will cause `signIn.status` to become `'needs_new_password'`. This is when you will call the [`resetPasswordPhoneCode.submitPassword()`](#reset-password-phone-code-submit-password) method to complete the password reset flow.
+
+```ts
+function verifyCode(
+  params: SignInFutureResetPasswordPhoneCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordPhoneCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.resetPasswordPhoneCode.sendCode()` method.
+</Properties>
+
+### `resetPasswordPhoneCode.submitPassword()`
+
+Submits a new password and moves the `signIn.status` to `'complete'`.
+
+```ts
+function submitPassword(
+  params: SignInFutureResetPasswordSubmitParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordSubmitParams`
+
+<Properties>
+  - `password`
+  - `string`
+
+  The new password for the user.
+
+  ---
+
+  - `signOutOfOtherSessions?`
+  - `boolean`
+
+  If `true`, signs the user out of all other authenticated sessions.
+</Properties>
+
+### `sso()`
+
+Performs an SSO-based sign-in (OAuth or Enterprise).
+
+```ts
+function sso(params: SignInFutureSSOParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureSSOParams`
+
+<Properties>
+  - `redirectCallbackUrl`
+  - `string`
+
+  The URL to redirect to if a session was not created, and needs additional information.
+
+  ---
+
+  - `redirectUrl`
+  - `string`
+
+  The URL to redirect to after the user has completed the SSO flow.
+
+  ---
+
+  - `strategy`
+  - <code>[OAuthStrategy](/docs/reference/javascript/types/sso#o-auth-strategy) | 'enterprise\_sso'</code>
+
+  The strategy to use for authentication.
+
+  ---
+
+  - `popup?`
+  - `Window`
+
+  If provided a `Window` opened via `window.open()`, the sign-in flow will be performed in a popup window.
+
+  ---
+
+  - `oidcPrompt?`
+  - `string`
+
+  The value to pass to the [OIDC `prompt` parameter](https://openid.net/specs/openid-connect-core-1_0.html#:~:text=prompt,reauthentication%20and%20consent.) in the generated OAuth redirect URL.
+
+  ---
+
+  - `enterpriseConnectionId?`
+  - `string`
+
+  ---
+
+  - `identifier?`
+  - `string`
+
+  The unique identifier of the user. Only supported with the `enterprise_sso` strategy.
+</Properties>
+
+### `ticket()`
+
+Performs a ticket-based sign-in.
+
+```ts
+function ticket(params?: SignInFutureTicketParams): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureTicketParams`
+
+<Properties>
+  - `ticket`
+  - `string`
+
+  The [ticket _or token_](/docs/guides/development/custom-flows/authentication/application-invitations) generated from the Backend API.
+</Properties>
+
+### `web3()`
+
+Performs a Web3-based sign-in.
+
+```ts
+function web3(params: SignInFutureWeb3Params): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureWeb3Params`
+
+<Properties>
+  - `strategy`
+  - `"web3_base_signature" | "web3_metamask_signature" | "web3_coinbase_wallet_signature" | "web3_okx_wallet_signature" | "web3_solana_signature"`
+
+  The verification strategy to validate the user's sign-in request.
+
+  ---
+
+  - `provider`
+  - `"metamask" | "base" | "coinbase_wallet" | "okx_wallet" | "solana"`
+
+  The Web3 wallet provider to use for the sign-in.
+
+  ---
+
+  - `walletName?`
+  - `string`
+
+  The name of the wallet to use for Solana sign-ins. Required when `provider` is set to `'solana'`.
+</Properties>

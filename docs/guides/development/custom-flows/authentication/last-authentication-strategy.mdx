@@ -1,6 +1,6 @@
 ---
 title: Build a custom flow for displaying the last authentication method
-description: Learn how to use the Clerk API to build a custom flow for displaying the `lastAuthenticationStrategy` property and highlighting the last used OAuth provider with a badge.
+description: Learn how to use the Clerk API to build a custom flow for displaying the lastAuthenticationStrategy property and highlighting the last used OAuth provider with a badge.
 ---
 
 <Include src="_partials/custom-flows-callout" />
@@ -24,15 +24,15 @@ The `Client` object includes a `lastAuthenticationStrategy` property that tracks
 
 The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/reference/javascript/client) object. You can access it through the `client` property of the [`Clerk`](/docs/reference/javascript/clerk) instance.
 
-<Tabs items={["Next.js", "JavaScript"]}>
-  <Tab>
-    This example is written for Next.js App Router but it can be adapted for any React-based framework.
+<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+  The following example demonstrates how to:
 
-    The following example demonstrates how to:
+  1. Access the `client` object using the [`useClerk()`](/docs/reference/hooks/use-clerk) hook.
+  1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
+  1. Display a badge next to the corresponding OAuth button.
 
-    1. Access the `client` object using the [`useClerk()`](/docs/reference/hooks/use-clerk) hook.
-    1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
-    1. Display a badge next to the corresponding OAuth button.
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
     ```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx' }}
     'use client'
@@ -73,15 +73,162 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
       )
     }
     ```
-  </Tab>
+  </If>
 
-  <Tab>
-    The following example demonstrates how to:
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/(auth)/sign-in.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useClerk, useSSO } from '@clerk/expo'
+    import { OAuthStrategy } from '@clerk/types'
+    import * as AuthSession from 'expo-auth-session'
+    import { useRouter } from 'expo-router'
+    import * as WebBrowser from 'expo-web-browser'
+    import { useCallback, useEffect } from 'react'
+    import { Platform, Pressable, StyleSheet } from 'react-native'
 
-    1. Access the `client` object from the `Clerk` instance.
-    1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
-    1. Display a badge next to the corresponding OAuth button.
+    // Preloads the browser for Android devices to reduce authentication load time
+    // See: https://docs.expo.dev/guides/authentication/#improving-user-experience
+    export const useWarmUpBrowser = () => {
+      useEffect(() => {
+        if (Platform.OS !== 'android') return
+        void WebBrowser.warmUpAsync()
+        return () => {
+          // Cleanup: closes browser when component unmounts
+          void WebBrowser.coolDownAsync()
+        }
+      }, [])
+    }
 
+    // Handle any pending authentication sessions
+    WebBrowser.maybeCompleteAuthSession()
+
+    export default function Page() {
+      useWarmUpBrowser()
+
+      // Use the `useSSO()` hook to access the `startSSOFlow()` method
+      const { startSSOFlow } = useSSO()
+      const { client } = useClerk()
+      const router = useRouter()
+
+      const lastStrategy = client?.lastAuthenticationStrategy
+
+      const onPress = useCallback(async (oauthStrategy: OAuthStrategy) => {
+        try {
+          // Start the authentication process by calling `startSSOFlow()`
+          const { createdSessionId, setActive, signIn, signUp } = await startSSOFlow({
+            strategy: oauthStrategy,
+            // For web, defaults to current path
+            // For native, you must pass a scheme, like AuthSession.makeRedirectUri({ scheme, path })
+            // For more info, see https://docs.expo.dev/versions/latest/sdk/auth-session/#authsessionmakeredirecturioptions
+            redirectUrl: AuthSession.makeRedirectUri({
+              scheme: 'com.clerk.clerk-expo-quickstart',
+              path: '/sign-in',
+            }),
+          })
+
+          // If sign in was successful, set the active session
+          if (createdSessionId) {
+            setActive!({
+              session: createdSessionId,
+              //  Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              navigate: async ({ session, decorateUrl }) => {
+                if (session?.currentTask) {
+                  console.log(session?.currentTask)
+                  return
+                }
+
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
+          } else {
+            // If there is no `createdSessionId`,
+            // there are missing requirements, such as MFA
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/oauth-connections#handle-missing-requirements
+            router.push('/sign-in/continue')
+          }
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }, [])
+
+      const providers = [
+        { strategy: 'oauth_google', name: 'Sign in with Google' },
+        { strategy: 'oauth_github', name: 'Sign in with GitHub' },
+      ]
+
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Sign in
+          </ThemedText>
+          <ThemedText style={styles.description}>Choose a provider to continue</ThemedText>
+          {providers.map((provider) => (
+            <Pressable
+              key={provider.strategy}
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={() => onPress(provider.strategy as OAuthStrategy)}
+            >
+              <ThemedText style={styles.buttonText}>
+                {provider.name}
+                {lastStrategy === provider.strategy ? ' (Last used)' : ''}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </ThemedView>
+      )
+    }
+
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      description: {
+        fontSize: 14,
+        marginBottom: 16,
+        opacity: 0.8,
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
+</If>
+
+<If sdk="js-frontend">
+  The following example demonstrates how to:
+
+  1. Access the `client` object from the `Clerk` instance.
+  1. Check the `lastAuthenticationStrategy` property to identify which OAuth provider was last used.
+  1. Display a badge next to the corresponding OAuth button.
+
+  <CodeBlockTabs options={["index.html", "main.js"]}>
     ```html {{ filename: 'index.html', collapsible: true }}
     <!doctype html>
     <html lang="en">
@@ -151,5 +298,9 @@ The `lastAuthenticationStrategy` property is available on the [`Client`](/docs/r
       })
     }
     ```
-  </Tab>
-</Tabs>
+  </CodeBlockTabs>
+</If>
+
+<If sdk={["ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

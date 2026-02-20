@@ -1,0 +1,219 @@
+---
+title: Integrate Convex with Clerk
+description: Learn how to integrate Clerk with Convex in your native app.
+sdk: android, ios
+---
+
+<If sdk="android">
+  <TutorialHero
+    beforeYouStart={[
+      {
+        title: "Set up a Clerk application",
+        link: "/docs/getting-started/quickstart/setup-clerk",
+        icon: "clerk",
+      },
+      {
+        title: "Integrate Clerk into your app",
+        link: "/docs/android/getting-started/quickstart",
+        icon: "android",
+      },
+      {
+        title: "Integrate Convex into your app",
+        link: "https://docs.convex.dev/quickstarts",
+        icon: "code-bracket"
+      }
+    ]}
+    exampleRepo={[
+      {
+        title: "Clerk Convex Kotlin",
+        link: "https://github.com/clerk/clerk-convex-kotlin"
+      }
+    ]}
+  />
+</If>
+
+<If sdk="ios">
+  <TutorialHero
+    beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate Clerk into your app",
+      link: "/docs/ios/getting-started/quickstart",
+      icon: "ios",
+    },
+    {
+      title: "Integrate Convex into your app",
+      link: "https://docs.convex.dev/quickstarts",
+      icon: "code-bracket"
+    }
+  ]}
+    exampleRepo={[
+    {
+      title: "Clerk Convex Swift",
+      link: "https://github.com/clerk/clerk-convex-swift"
+    }
+  ]}
+  />
+</If>
+
+With [Convex](https://www.convex.dev/), you can build a backend with a provided realtime database, file storage, text search, scheduling, and more. Paired with Clerk's authentication and user management features, you can build native mobile apps with a secure auth flow and realtime data access.
+
+This guide shows how to integrate Convex with Clerk in your native mobile app. It assumes you have already integrated both Convex and Clerk in your app.
+
+<Steps>
+  <Include src="_partials/convex-initial-setup" />
+
+  ## Add the Clerk Convex SDK to your app
+
+  <If sdk="android">
+    Add the Clerk Convex Kotlin dependency to your app:
+
+    ```kotlin {{ filename: 'app/build.gradle.kts' }}
+    dependencies {
+        implementation("com.clerk:clerk-convex-kotlin:<latest-version>")
+    }
+    ```
+
+    Initialize Clerk first, then create `ClerkConvexClient`:
+
+    ```kotlin {{ filename: 'MyApplication.kt' }}
+    import android.app.Application
+    import com.clerk.api.Clerk
+    import com.clerk.convex.ClerkConvexClient
+
+    class MyApplication : Application() {
+      lateinit var clerkConvex: ClerkConvexClient
+        private set
+
+      override fun onCreate() {
+        super.onCreate()
+        Clerk.initialize(
+          context = this,
+          publishableKey = "YOUR_CLERK_PUBLISHABLE_KEY",
+        )
+
+        clerkConvex = ClerkConvexClient(
+          deploymentUrl = "YOUR_CONVEX_DEPLOYMENT_URL",
+          context = applicationContext,
+        )
+      }
+    }
+    ```
+
+    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `clerkConvex.convex` for queries, mutations, actions, and auth state.
+  </If>
+
+  <If sdk="ios">
+    Add `clerk-convex-swift` via Swift Package Manager:
+
+    ```swift {{ filename: 'Package.swift' }}
+    dependencies: [
+      .package(url: "https://github.com/clerk/clerk-convex-swift", from: "0.1.0")
+    ]
+
+    targets: [
+      .target(
+        name: "YourApp",
+        dependencies: [
+          .product(name: "ClerkConvex", package: "clerk-convex-swift")
+        ]
+      )
+    ]
+    ```
+
+    Configure Clerk first, then initialize `ConvexClientWithAuth` with `ClerkConvexAuthProvider`:
+
+    ```swift {{ filename: 'MyApp.swift' }}
+    import ClerkConvex
+    import ClerkKit
+    import ConvexMobile
+    import SwiftUI
+
+    @main
+    struct MyApp: App {
+      private let client: ConvexClientWithAuth<String>
+
+      init() {
+        Clerk.configure(publishableKey: "YOUR_CLERK_PUBLISHABLE_KEY")
+        client = ConvexClientWithAuth(
+          deploymentUrl: "YOUR_CONVEX_DEPLOYMENT_URL",
+          authProvider: ClerkConvexAuthProvider()
+        )
+      }
+
+      var body: some Scene {
+        WindowGroup {
+          ContentView()
+        }
+      }
+    }
+    ```
+
+    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `client` for subscriptions, mutations, actions, and auth state.
+  </If>
+
+  ## Show UI based on auth state
+
+  Convex exposes auth state from the authenticated client. Use that state to render loading, signed-out, and signed-in UI.
+
+  <If sdk="android">
+    ```kotlin {{ filename: 'AuthViewModel.kt' }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.convex.ClerkConvexClient
+    import dev.convex.android.AuthState
+    import kotlinx.coroutines.launch
+
+    class AuthViewModel(
+      private val clerk: ClerkConvexClient,
+      ) : ViewModel() {
+        init {
+          viewModelScope.launch {
+          clerk.convex.authState.collect { authState ->
+          when (authState) {
+              is AuthState.AuthLoading -> showLoading()
+              is AuthState.Unauthenticated -> showSignIn()
+              is AuthState.Authenticated -> showAuthenticatedContent()
+            }
+          }
+        }
+      }
+    }
+    ```
+
+    Collect `clerk.convex.authState` in your `ViewModel` and map each state to the appropriate screen.
+  </If>
+
+  <If sdk="ios">
+    ```swift {{ filename: 'AuthModel.swift' }}
+    import Combine
+    import ConvexMobile
+
+    @MainActor
+    final class AuthModel: ObservableObject {
+      @Published var authState: AuthState<String> = .loading
+
+      init(client: ConvexClientWithAuth<String>) {
+        client.authState
+          .replaceError(with: .unauthenticated)
+          .receive(on: DispatchQueue.main)
+          .assign(to: &$authState)
+      }
+    }
+    ```
+
+    Subscribe to `client.authState` and switch your UI between loading, signed-out, and signed-in states.
+  </If>
+
+  ## Use auth state in your Convex functions
+
+  If the client is authenticated, you can access the JWT identity in Convex with `ctx.auth.getUserIdentity()`. If the client is not authenticated, the value is `null`.
+</Steps>
+
+## Next steps
+
+For more information on how to use Convex with Clerk, see the [Convex docs](https://docs.convex.dev/auth/clerk).

@@ -1644,7 +1644,8 @@ The API reference documentation at `/docs/reference/*` is powered by [Scalar](ht
 - [Backend API](https://clerk.com/docs/reference/backend-api)
 - [Platform API](https://clerk.com/docs/reference/platform-api)
 
-For instructions on how to update the API reference docs, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
+> [!NOTE]
+> Only Clerk team members can update API reference docs, as these docs are stored in private repositories. For instructions, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
 
 ## Help wanted!
 

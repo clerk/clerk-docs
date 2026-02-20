@@ -108,12 +108,20 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
             return
           }
 
-          // Check the verification result
-          const verification = signUp.verifications.emailAddress
-
-          // Handle if user visited the link and completed sign-up from /sign-up/verify
-          if (verification.verifiedFromTheSameClient()) {
-            setVerifying(false)
+          if (signUp.status === 'complete') {
+            const { error: finalizeError } = await signUp.finalize({
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
+            if (finalizeError) {
+              console.error(JSON.stringify(finalizeError, null, 2))
+            }
           }
         }
 
@@ -164,7 +172,6 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
       ```tsx {{ filename: 'app/sign-up/verify/page.tsx', collapsible: true }}
       'use client'
 
-      import * as React from 'react'
       import { useSignUp } from '@clerk/nextjs'
       import Link from 'next/link'
       import { useRouter } from 'next/navigation'
@@ -174,36 +181,6 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
         const router = useRouter()
 
         const verification = signUp.verifications.emailLinkVerification
-
-        React.useEffect(() => {
-          if (verification?.status !== 'verified') {
-            return
-          }
-
-          // If email link verification status is 'verified', check the `signUp.status`
-          void (async () => {
-            // If sign-up is complete, finalize the sign-up process
-            if (signUp.status === 'complete') {
-              const { error } = await signUp.finalize({
-                navigate: ({ decorateUrl }) => {
-                  const url = decorateUrl('/')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
-              // If `finalize` fails, check the error
-              if (error) {
-                console.error(JSON.stringify(error, null, 2))
-              }
-            } else {
-              // If sign-up is not complete, redirect to the sign-up page
-              router.push('/sign-up')
-            }
-          })()
-        }, [router, signUp, signUp.status, verification?.status])
 
         if (!verification) {
           return <div>Loading...</div>
@@ -248,7 +225,7 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
         return (
           <div>
             <h1>Verify your email</h1>
-            <p>Successfully signed up. Return to the original tab to continue.</p>
+            <p>Successfully verified email. You can close this tab.</p>
           </div>
         )
       }
@@ -316,10 +293,20 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
             console.error('Verification expired')
           }
 
-          // Handle if user visited the link and completed sign-in from /sign-in/verify
-          if (verification.verifiedFromTheSameClient()) {
-            setVerifying(false)
-            setVerified(true)
+          if (signIn.status === 'complete') {
+            const { error: finalizeError } = await signIn.finalize({
+              navigate: ({ decorateUrl }) => {
+                const url = decorateUrl('/')
+                if (url.startsWith('http')) {
+                  window.location.href = url
+                } else {
+                  router.push(url)
+                }
+              },
+            })
+            if (finalizeError) {
+              console.error(JSON.stringify(finalizeError, null, 2))
+            }
           }
         }
 
@@ -385,46 +372,13 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
       ```tsx {{ filename: 'app/sign-in/verify/page.tsx', collapsible: true }}
       'use client'
 
-      import * as React from 'react'
       import { useSignIn } from '@clerk/nextjs'
       import Link from 'next/link'
-      import { useRouter } from 'next/navigation'
 
       export default function VerifyEmailLink() {
         const { signIn } = useSignIn()
-        const router = useRouter()
 
         const verification = signIn.emailLink.verification
-
-        React.useEffect(() => {
-          if (verification?.status !== 'verified') {
-            return
-          }
-
-          // If email link verification status is 'verified', check the `signIn.status`
-          void (async () => {
-            // If sign-in is complete, finalize the sign-in process
-            if (signIn.status === 'complete') {
-              const { error } = await signIn.finalize({
-                navigate: ({ decorateUrl }) => {
-                  const url = decorateUrl('/')
-                  if (url.startsWith('http')) {
-                    window.location.href = url
-                  } else {
-                    router.push(url)
-                  }
-                },
-              })
-              // If `finalize` fails, check the error
-              if (error) {
-                console.error(JSON.stringify(error, null, 2))
-              }
-            } else {
-              // If sign-in is not complete, redirect to the sign-in page
-              router.push('/sign-in')
-            }
-          })()
-        }, [router, signIn, signIn.status, verification?.status])
 
         if (!verification) {
           return <div>Loading...</div>
@@ -469,7 +423,7 @@ description: Learn how to build a custom flow using Clerk's API to handle email 
         return (
           <div>
             <h1>Verify your email</h1>
-            <p>Successfully signed in. Return to the original tab to continue.</p>
+            <p>Successfully verified email. You can close this tab.</p>
           </div>
         )
       }

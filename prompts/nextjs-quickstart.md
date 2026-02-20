@@ -8,7 +8,7 @@
 ## **1. Official Clerk Integration Overview**
 
 Use only the **App Router** approach from Clerk’s current docs:
-
+- If it not already installed, install the Next.js framework.
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
 - **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
@@ -23,8 +23,8 @@ Clerk supports **keyless mode**, which means developers can start building immed
 
 1. **No signup required** – When the app starts without environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`), Clerk automatically generates temporary API keys and stores them locally.
 2. **Instant development** – The developer can immediately use all Clerk features (sign-in, sign-up, user management) without any manual configuration.
-3. **Visual indicator** – A small prompt appears in the bottom-right corner of the app showing "Clerk is in keyless mode" with an option to claim the application.
-4. **Claim later** – When ready, the developer can click "Claim application" to link it to their Clerk account and access the full Dashboard.
+3. **Visual indicator** – A small prompt appears in the bottom-right corner of the app showing "Configure your application" with an option to claim the application and sign up or login to Clerk.
+4. **Claim later** – When ready, the developer can click "Configure application" to link it to their Clerk account and access the full Dashboard.
 
 **IMPORTANT FOR AI AGENTS:** Do NOT instruct users to:
 
@@ -154,3 +154,21 @@ Before returning any Clerk-related solution, you **must** verify:
 4. **Pages vs. App Router**: Is the approach referencing the App Router (not `_app.tsx` or `pages/`)?
 
 If any check **fails**, **stop** and revise until compliance is achieved.
+
+---
+
+## **5. INSTRUCTIONS TO USER TO CREATE THEIR FIRST TEST SIGN-UP**
+
+After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk <SignIn /> component and end-to-end auth flow.
+
+After the sign-up succeeds and the user is created (a profile icon will appear in the nav), congratulate them on creating their first test user.
+
+## **6. CONFIGURE YOUR APPLICATION AND NEXT STEPS**
+
+If the app shows a “Configure your application” callout, tell the user to click it to finish the quickstart. Alternatively, they can manually sign up at https://dashboard.clerk.com/sign-up.
+
+Then recommend these three next steps to explore:
+
+- Organizations (B2B Auth): multi-tenancy, invites, RBAC, SSO: https://clerk.com/docs/guides/organizations/overview
+- Components: auth, user mgmt, billing, and more: https://clerk.com/docs/reference/components/overview
+- Customize via the Clerk dashboard: SSO providers, invite team members, analytics, and more: https://dashboard.clerk.com/

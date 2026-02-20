@@ -224,6 +224,10 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
   }
 
   const updateNavItem = (item: any): any => {
+    // If it's a nested array, recurse into it
+    if (Array.isArray(item)) {
+      return updateNavigation(item)
+    }
     // If it's a link item (has href)
     if ('href' in item) {
       return updateLinkItem(item)

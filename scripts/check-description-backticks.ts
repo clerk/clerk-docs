@@ -52,7 +52,13 @@ function fixDescription(content: string): string {
     })
     .join('\n')
 
-  return content.slice(0, match.index!) + '---\n' + fixedFrontmatter + '\n---' + content.slice(match.index! + match[0].length)
+  return (
+    content.slice(0, match.index!) +
+    '---\n' +
+    fixedFrontmatter +
+    '\n---' +
+    content.slice(match.index! + match[0].length)
+  )
 }
 
 const processor = remark().use(remarkFrontmatter).use(remarkPluginCheckDescriptionBackticks)

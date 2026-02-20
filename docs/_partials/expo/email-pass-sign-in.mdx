@@ -17,6 +17,7 @@ export default function Page() {
   const [password, setPassword] = React.useState('')
   const [code, setCode] = React.useState('')
   const [useBackupCode, setUseBackupCode] = React.useState(false)
+  const [showEmailCode, setShowEmailCode] = React.useState(false)
 
   // Handle the submission of the sign-in form
   const onSignInPress = React.useCallback(async () => {
@@ -31,11 +32,18 @@ export default function Page() {
           router.push(decorateUrl('/'))
         },
       })
+    } else if (signIn.status === 'needs_client_trust') {
+      // 'needs_client_trust' is returned when Client Trust is enabled
+      // and the user is signing in from a new device.
+      // Client Trust requires email code verification.
+      // See https://clerk.com/docs/guides/secure/client-trust
+      await signIn.mfa.sendEmailCode()
+      setShowEmailCode(true)
     }
   }, [signIn, emailAddress, password, router])
 
-  // Handle the submission of the MFA code
-  const onVerifyPress = React.useCallback(async () => {
+  // Handle the submission of the MFA TOTP code
+  const onVerifyTOTPPress = React.useCallback(async () => {
     if (useBackupCode) {
       await signIn.mfa.verifyBackupCode({ code })
     } else {
@@ -51,11 +59,56 @@ export default function Page() {
     }
   }, [signIn, code, useBackupCode, router])
 
+  // Handle the submission of the email verification code
+  const onVerifyEmailCodePress = React.useCallback(async () => {
+    await signIn.mfa.verifyEmailCode({ code })
+
+    if (signIn.status === 'complete') {
+      await signIn.finalize({
+        navigate: ({ decorateUrl }) => {
+          router.push(decorateUrl('/'))
+        },
+      })
+    }
+  }, [signIn, code, router])
+
   if (signIn.status === 'complete' || isSignedIn) {
     return null
   }
 
-  // Display MFA verification form
+  // Display email code verification form for Client Trust
+  // 'needs_client_trust' is returned when Client Trust is enabled
+  // and the user is signing in from a new device.
+  // See https://clerk.com/docs/guides/secure/client-trust
+  if (signIn.status === 'needs_client_trust' || showEmailCode) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText type="title" style={styles.title}>
+          Verify your email
+        </ThemedText>
+        <ThemedText style={styles.description}>
+          A verification code has been sent to your email.
+        </ThemedText>
+        <TextInput
+          style={styles.input}
+          value={code}
+          placeholder="Enter verification code"
+          placeholderTextColor="#666666"
+          onChangeText={(code) => setCode(code)}
+          keyboardType="numeric"
+        />
+        <Pressable
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+          onPress={onVerifyEmailCodePress}
+        >
+          <ThemedText style={styles.buttonText}>Verify</ThemedText>
+        </Pressable>
+      </ThemedView>
+    )
+  }
+
+  // Display MFA TOTP verification form
+  // 'needs_second_factor' is returned when the user has MFA enabled.
   if (signIn.status === 'needs_second_factor') {
     return (
       <ThemedView style={styles.container}>
@@ -79,7 +132,7 @@ export default function Page() {
         </View>
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={onVerifyPress}
+          onPress={onVerifyTOTPPress}
         >
           <ThemedText style={styles.buttonText}>Verify</ThemedText>
         </Pressable>

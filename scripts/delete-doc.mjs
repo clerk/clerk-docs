@@ -202,9 +202,18 @@ const updateMdxLinks = async (deletedPath, newPath) => {
   await processDirectory(DOCS_DIR)
 }
 
-// Remove the path from manifest.json
+// Find all manifest files (manifest.json + manifest.*.json)
+const findAllManifestFiles = async () => {
+  const files = []
+  for await (const file of fs.glob('manifest*.json', { cwd: DOCS_DIR })) {
+    files.push(path.join(DOCS_DIR, file))
+  }
+  return files
+}
+
+// Remove the path from all manifest files
 const removeFromManifest = async (targetPath) => {
-  const manifest = await readJsonFile(MANIFEST_FILE)
+  const manifestFiles = await findAllManifestFiles()
   const { path: targetBasePath } = splitPathAndHash(targetPath)
   let removed = false
 
@@ -241,23 +250,21 @@ const removeFromManifest = async (targetPath) => {
     return item
   }
 
-  const updateNavGroup = (group) => {
-    return group.map(updateNavItem).filter((item) => item !== null)
-  }
-
   const updateNavigation = (nav) => {
-    return nav.map(updateNavGroup).filter((group) => group.length > 0)
+    return nav.map(updateNavItem).filter((item) => item !== null)
   }
 
-  const updatedManifest = {
-    ...manifest,
-    navigation: updateNavigation(manifest.navigation),
+  for (const manifestFile of manifestFiles) {
+    const manifest = await readJsonFile(manifestFile)
+    const updatedManifest = {
+      ...manifest,
+      navigation: updateNavigation(manifest.navigation),
+    }
+    await writeJsonFile(manifestFile, updatedManifest)
   }
-
-  await writeJsonFile(MANIFEST_FILE, updatedManifest)
 
   if (!removed) {
-    console.warn(`Warning: Path ${targetBasePath} was not found in manifest.json`)
+    console.warn(`Warning: Path ${targetBasePath} was not found in any manifest file`)
   }
 
   return removed

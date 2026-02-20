@@ -192,9 +192,15 @@ const findRedirectChain = (redirects: Redirect[], targetPath: string): Redirect[
   return chain
 }
 
-// Updates manifest.json links
+// Find all manifest files (manifest.json + manifest.*.json)
+const findAllManifestFiles = async (): Promise<string[]> => {
+  const files = await glob('manifest*.json', { cwd: DOCS_DIR })
+  return files.map((f) => path.join(DOCS_DIR, f))
+}
+
+// Updates manifest links across all manifest files
 const updateManifestLinks = async (oldPath: string, newPath: string): Promise<void> => {
-  const manifest: { navigation: Manifest } = await readJsonFile(MANIFEST_FILE)
+  const manifestFiles = await findAllManifestFiles()
 
   // Update href's in link items
   const updateLinkItem = (item: ManifestItem): ManifestItem => {
@@ -218,6 +224,10 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
   }
 
   const updateNavItem = (item: any): any => {
+    // If it's a nested array, recurse into it
+    if (Array.isArray(item)) {
+      return updateNavigation(item)
+    }
     // If it's a link item (has href)
     if ('href' in item) {
       return updateLinkItem(item)
@@ -229,20 +239,18 @@ const updateManifestLinks = async (oldPath: string, newPath: string): Promise<vo
     return item
   }
 
-  const updateNavGroup = (group: any[]): any[] => {
-    return group.map(updateNavItem)
-  }
-
   const updateNavigation = (nav: any[]): any[] => {
-    return nav.map(updateNavGroup)
+    return nav.map(updateNavItem)
   }
 
-  const updatedManifest = {
-    ...manifest,
-    navigation: updateNavigation(manifest.navigation),
+  for (const manifestFile of manifestFiles) {
+    const manifest = await readJsonFile(manifestFile)
+    const updatedManifest = {
+      ...manifest,
+      navigation: updateNavigation(manifest.navigation),
+    }
+    await writeJsonFile(manifestFile, updatedManifest)
   }
-
-  await writeJsonFile(MANIFEST_FILE, updatedManifest)
 }
 
 const updateMdxLinks = async (oldPaths: string[], newPath: string): Promise<void> => {

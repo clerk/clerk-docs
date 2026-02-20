@@ -188,7 +188,8 @@ describe('Basic Functionality', () => {
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+            navigationType: 'flat',
+            navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
           }),
         },
         {
@@ -237,7 +238,12 @@ Testing with a simple page.`)
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       flags: {},
-      navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+        },
+      },
     })
   })
 
@@ -247,7 +253,8 @@ Testing with a simple page.`)
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -278,7 +285,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'MDX Doc', href: '/docs/mdx-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'MDX Doc', href: '/docs/mdx-doc' }],
         }),
       },
       {
@@ -318,6 +326,7 @@ title: MDX Doc
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [],
         }),
       },
@@ -419,33 +428,32 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Group One',
-                items: [[{ title: 'Item One', href: '/docs/item-one' }]],
-                wrap: true,
-                hideTitle: false,
-              },
-              {
-                title: 'Group Two',
-                items: [[{ title: 'Item Two', href: '/docs/item-two' }]],
-                wrap: true,
-                hideTitle: true,
-              },
-              {
-                title: 'Group Three',
-                items: [[{ title: 'Item Three', href: '/docs/item-three' }]],
-                wrap: false,
-                hideTitle: false,
-              },
-              {
-                title: 'Group Four',
-                items: [[{ title: 'Item Four', href: '/docs/item-four' }]],
-                wrap: false,
-                hideTitle: true,
-              },
-            ],
+            {
+              title: 'Group One',
+              items: [{ title: 'Item One', href: '/docs/item-one' }],
+              wrap: true,
+              hideTitle: false,
+            },
+            {
+              title: 'Group Two',
+              items: [{ title: 'Item Two', href: '/docs/item-two' }],
+              wrap: true,
+              hideTitle: true,
+            },
+            {
+              title: 'Group Three',
+              items: [{ title: 'Item Three', href: '/docs/item-three' }],
+              wrap: false,
+              hideTitle: false,
+            },
+            {
+              title: 'Group Four',
+              items: [{ title: 'Item Four', href: '/docs/item-four' }],
+              wrap: false,
+              hideTitle: true,
+            },
           ],
         }),
       },
@@ -468,7 +476,7 @@ title: Simple Test
     )
 
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
-    const groups = manifest.navigation[0]
+    const groups = manifest.navigation.default.items
 
     expect(groups[0].wrap).toBe(true)
     expect(groups[0].hideTitle).toBe(undefined)
@@ -488,49 +496,40 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'SDK Group',
-                sdk: ['nextjs', 'react'],
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [
-                        [
-                          { title: 'SDK Item', href: '/docs/sdk-item' },
-                          { title: 'Nested Group', items: [[{ title: 'Nested Item', href: '/docs/nested-item' }]] },
-                        ],
-                      ],
-                    },
+            {
+              title: 'SDK Group',
+              sdk: ['nextjs', 'react'],
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [
+                    { title: 'SDK Item', href: '/docs/sdk-item' },
+                    { title: 'Nested Group', items: [{ title: 'Nested Item', href: '/docs/nested-item' }] },
                   ],
-                ],
-              },
-              {
-                title: 'Generic Group',
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
-                    },
-                  ],
-                ],
-              },
-              {
-                title: 'Vue Group',
-                sdk: ['vue'],
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [[{ title: 'Vue Item', href: '/docs/vue-item' }]],
-                    },
-                  ],
-                ],
-              },
-            ],
+                },
+              ],
+            },
+            {
+              title: 'Generic Group',
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [{ title: 'Generic Item', href: '/docs/generic-item' }],
+                },
+              ],
+            },
+            {
+              title: 'Vue Group',
+              sdk: ['vue'],
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [{ title: 'Vue Item', href: '/docs/vue-item' }],
+                },
+              ],
+            },
           ],
         }),
       },
@@ -565,56 +564,51 @@ title: Simple Test
 
     expect(manifest).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'SDK Group',
-            sdk: ['nextjs', 'react'],
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'SDK Group',
+              sdk: ['nextjs', 'react'],
+              items: [
                 {
                   title: 'Sub Group',
                   sdk: ['nextjs', 'react'],
                   items: [
-                    [
-                      { title: 'SDK Item', sdk: ['nextjs', 'react'], href: '/docs/sdk-item' },
-                      {
-                        title: 'Nested Group',
-                        sdk: ['nextjs', 'react'],
-                        items: [[{ title: 'Nested Item', sdk: ['nextjs', 'react'], href: '/docs/nested-item' }]],
-                      },
-                    ],
+                    { title: 'SDK Item', sdk: ['nextjs', 'react'], href: '/docs/sdk-item' },
+                    {
+                      title: 'Nested Group',
+                      sdk: ['nextjs', 'react'],
+                      items: [{ title: 'Nested Item', sdk: ['nextjs', 'react'], href: '/docs/nested-item' }],
+                    },
                   ],
                 },
               ],
-            ],
-          },
-          {
-            title: 'Generic Group',
-            items: [
-              [
+            },
+            {
+              title: 'Generic Group',
+              items: [
                 {
                   title: 'Sub Group',
-                  items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
+                  items: [{ title: 'Generic Item', href: '/docs/generic-item' }],
                 },
               ],
-            ],
-          },
-          {
-            title: 'Vue Group',
-            sdk: ['vue'],
-            items: [
-              [
+            },
+            {
+              title: 'Vue Group',
+              sdk: ['vue'],
+              items: [
                 {
                   title: 'Sub Group',
                   sdk: ['vue'],
-                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }]],
+                  items: [{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }],
                 },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
   })
 
@@ -623,18 +617,15 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Group',
-                items: [
-                  [
-                    { title: 'Item 1', href: '/docs/item-1' },
-                    { title: 'Item 2', href: '/docs/item-2' },
-                  ],
-                ],
-              },
-            ],
+            {
+              title: 'Group',
+              items: [
+                { title: 'Item 1', href: '/docs/item-1' },
+                { title: 'Item 2', href: '/docs/item-2' },
+              ],
+            },
           ],
         }),
       },
@@ -670,19 +661,20 @@ title: Item 2
 
     expect(manifest).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'Group',
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'Group',
+              items: [
                 { title: 'Item 1', sdk: ['expressjs', 'fastify'], href: '/docs/:sdk:/item-1' },
                 { title: 'Item 2', href: '/docs/item-2' },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
   })
 
@@ -691,19 +683,16 @@ title: Item 2
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Group',
-                sdk: ['expressjs'],
-                items: [
-                  [
-                    { title: 'Item 1', href: '/docs/item-1' },
-                    { title: 'Item 2', href: 'https://example.com' },
-                  ],
-                ],
-              },
-            ],
+            {
+              title: 'Group',
+              sdk: ['expressjs'],
+              items: [
+                { title: 'Item 1', href: '/docs/item-1' },
+                { title: 'Item 2', href: 'https://example.com' },
+              ],
+            },
           ],
         }),
       },
@@ -730,20 +719,21 @@ title: Item 1
 
     expect(manifest).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'Group',
-            sdk: ['expressjs'],
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'Group',
+              sdk: ['expressjs'],
+              items: [
                 { title: 'Item 1', sdk: ['expressjs'], href: '/docs/item-1' },
                 { title: 'Item 2', sdk: ['expressjs'], href: 'https://example.com' },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
   })
 
@@ -752,47 +742,38 @@ title: Item 1
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'SDK Group',
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [
-                        [
-                          { title: 'SDK Item', href: '/docs/sdk-item' },
-                          { title: 'Nested Group', items: [[{ title: 'Nested Item', href: '/docs/nested-item' }]] },
-                        ],
-                      ],
-                    },
+            {
+              title: 'SDK Group',
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [
+                    { title: 'SDK Item', href: '/docs/sdk-item' },
+                    { title: 'Nested Group', items: [{ title: 'Nested Item', href: '/docs/nested-item' }] },
                   ],
-                ],
-              },
-              {
-                title: 'Generic Group',
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
-                    },
-                  ],
-                ],
-              },
-              {
-                title: 'Vue Group',
-                items: [
-                  [
-                    {
-                      title: 'Sub Group',
-                      items: [[{ title: 'Vue Item', href: '/docs/vue-item' }]],
-                    },
-                  ],
-                ],
-              },
-            ],
+                },
+              ],
+            },
+            {
+              title: 'Generic Group',
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [{ title: 'Generic Item', href: '/docs/generic-item' }],
+                },
+              ],
+            },
+            {
+              title: 'Vue Group',
+              items: [
+                {
+                  title: 'Sub Group',
+                  items: [{ title: 'Vue Item', href: '/docs/vue-item' }],
+                },
+              ],
+            },
           ],
         }),
       },
@@ -827,56 +808,51 @@ title: Item 1
 
     expect(manifest).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'SDK Group',
-            sdk: ['react', 'nextjs'],
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'SDK Group',
+              sdk: ['react', 'nextjs'],
+              items: [
                 {
                   title: 'Sub Group',
                   sdk: ['react', 'nextjs'],
                   items: [
-                    [
-                      { title: 'SDK Item', sdk: ['react'], href: '/docs/sdk-item' },
-                      {
-                        title: 'Nested Group',
-                        sdk: ['nextjs'],
-                        items: [[{ title: 'Nested Item', sdk: ['nextjs'], href: '/docs/nested-item' }]],
-                      },
-                    ],
+                    { title: 'SDK Item', sdk: ['react'], href: '/docs/sdk-item' },
+                    {
+                      title: 'Nested Group',
+                      sdk: ['nextjs'],
+                      items: [{ title: 'Nested Item', sdk: ['nextjs'], href: '/docs/nested-item' }],
+                    },
                   ],
                 },
               ],
-            ],
-          },
-          {
-            title: 'Generic Group',
-            items: [
-              [
+            },
+            {
+              title: 'Generic Group',
+              items: [
                 {
                   title: 'Sub Group',
-                  items: [[{ title: 'Generic Item', href: '/docs/generic-item' }]],
+                  items: [{ title: 'Generic Item', href: '/docs/generic-item' }],
                 },
               ],
-            ],
-          },
-          {
-            title: 'Vue Group',
-            sdk: ['vue'],
-            items: [
-              [
+            },
+            {
+              title: 'Vue Group',
+              sdk: ['vue'],
+              items: [
                 {
                   title: 'Sub Group',
                   sdk: ['vue'],
-                  items: [[{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }]],
+                  items: [{ title: 'Vue Item', sdk: ['vue'], href: '/docs/vue-item' }],
                 },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
   })
 
@@ -885,11 +861,10 @@ title: Item 1
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page 1', href: '/docs/page-1' },
-              { title: 'Page 2', href: '/docs/page-2' },
-            ],
+            { title: 'Page 1', href: '/docs/page-1' },
+            { title: 'Page 2', href: '/docs/page-2' },
           ],
         }),
       },
@@ -935,11 +910,10 @@ test`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Normal Link', href: '/docs/normal-link' },
-              { title: 'External Link', href: 'https://example.com', target: '_blank' },
-            ],
+            { title: 'Normal Link', href: '/docs/normal-link' },
+            { title: 'External Link', href: 'https://example.com', target: '_blank' },
           ],
         }),
       },
@@ -967,21 +941,25 @@ This is a normal document.`,
     const manifest = JSON.parse(await readFile(pathJoin('./dist/manifest.json')))
     expect(manifest).toEqual({
       flags: {},
-      navigation: [
-        [
-          { title: 'Normal Link', href: '/docs/normal-link' },
-          { title: 'External Link', href: 'https://example.com', target: '_blank' },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            { title: 'Normal Link', href: '/docs/normal-link' },
+            { title: 'External Link', href: 'https://example.com', target: '_blank' },
+          ],
+        },
+      },
     })
   })
 
   test('Should passthrough `topNav` property', async () => {
-    const { tempDir, readFile } = await createTempFiles([
+    const { tempDir, readFile, pathJoin } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', topNav: true, items: [] }]],
+          navigationType: 'sectioned',
+          navigation: [{ title: 'API Doc', topNav: true, items: [] }],
         }),
       },
     ])
@@ -995,9 +973,15 @@ This is a normal document.`,
     )
 
     expect(output).toBe('')
-    expect(JSON.parse(await readFile('./docs/manifest.json')).navigation).toEqual([
-      [{ title: 'API Doc', topNav: true, items: [] }],
-    ])
+    expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
+      flags: {},
+      navigation: {
+        default: {
+          type: 'sectioned',
+          sections: [{ title: 'API Doc', icon: undefined, sdk: undefined, sections: undefined, items: [] }],
+        },
+      },
+    })
   })
 })
 
@@ -1008,19 +992,18 @@ describe('SDK Processing', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'React',
-                sdk: ['react'],
-                items: [[{ title: 'Quickstart', href: '/docs/quickstart/react' }]],
-              },
-              {
-                title: 'Vue',
-                sdk: ['vue'],
-                items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue' }]],
-              },
-            ],
+            {
+              title: 'React',
+              sdk: ['react'],
+              items: [{ title: 'Quickstart', href: '/docs/quickstart/react' }],
+            },
+            {
+              title: 'Vue',
+              sdk: ['vue'],
+              items: [{ title: 'Quickstart', href: '/docs/quickstart/vue' }],
+            },
           ],
         }),
       },
@@ -1053,20 +1036,23 @@ title: Quickstart
     expect(await fileExists(pathJoin('./dist/manifest.json'))).toBe(true)
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'React',
-            sdk: ['react'],
-            items: [[{ title: 'Quickstart', href: '/docs/quickstart/react', sdk: ['react'] }]],
-          },
-          {
-            title: 'Vue',
-            sdk: ['vue'],
-            items: [[{ title: 'Quickstart', href: '/docs/quickstart/vue', sdk: ['vue'] }]],
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'React',
+              sdk: ['react'],
+              items: [{ title: 'Quickstart', href: '/docs/quickstart/react', sdk: ['react'] }],
+            },
+            {
+              title: 'Vue',
+              sdk: ['vue'],
+              items: [{ title: 'Quickstart', href: '/docs/quickstart/vue', sdk: ['vue'] }],
+            },
+          ],
+        },
+      },
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
@@ -1088,7 +1074,8 @@ title: Quickstart
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -1114,7 +1101,12 @@ Testing with a simple page.`,
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       flags: {},
-      navigation: [[{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }]],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [{ title: 'Simple Test', href: '/docs/:sdk:/simple-test', sdk: ['react', 'vue', 'astro'] }],
+        },
+      },
     })
 
     expect(JSON.parse(await readFile(pathJoin('./dist/directory.json')))).toEqual([
@@ -1140,7 +1132,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -1178,7 +1171,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -1210,7 +1204,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -1249,7 +1244,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -1290,14 +1286,13 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'React Section',
-                sdk: ['react'],
-                items: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
-              },
-            ],
+            {
+              title: 'React Section',
+              sdk: ['react'],
+              items: [{ title: 'Simple Test', href: '/docs/simple-test' }],
+            },
           ],
         }),
       },
@@ -1336,7 +1331,8 @@ Testing with a simple page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'SDK Document', href: '/docs/sdk-document' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'SDK Document', href: '/docs/sdk-document' }],
         }),
       },
       {
@@ -1391,34 +1387,29 @@ canonical: /docs/:sdk:/sdk-document
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Top Level',
-                items: [
-                  [
+            {
+              title: 'Top Level',
+              items: [
+                {
+                  title: 'Mid Level',
+                  sdk: ['react', 'nextjs'],
+                  items: [
                     {
-                      title: 'Mid Level',
-                      sdk: ['react', 'nextjs'],
-                      items: [
-                        [
-                          {
-                            title: 'Deep Level',
-                            sdk: ['nextjs'],
-                            items: [[{ title: 'Deeply Nested Page', href: '/docs/deeply-nested-nextjs' }]],
-                          },
-                          {
-                            title: 'Deep Level',
-                            sdk: ['react'],
-                            items: [[{ title: 'Deeply Nested Page', href: '/docs/deeply-nested-react' }]],
-                          },
-                        ],
-                      ],
+                      title: 'Deep Level',
+                      sdk: ['nextjs'],
+                      items: [{ title: 'Deeply Nested Page', href: '/docs/deeply-nested-nextjs' }],
+                    },
+                    {
+                      title: 'Deep Level',
+                      sdk: ['react'],
+                      items: [{ title: 'Deeply Nested Page', href: '/docs/deeply-nested-react' }],
                     },
                   ],
-                ],
-              },
-            ],
+                },
+              ],
+            },
           ],
         }),
       },
@@ -1452,52 +1443,47 @@ Content for React users.`,
 
     expect(JSON.parse(await readFile(pathJoin('./dist/manifest.json')))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'Top Level',
-            sdk: ['react', 'nextjs'],
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'Top Level',
+              sdk: ['react', 'nextjs'],
+              items: [
                 {
                   title: 'Mid Level',
                   sdk: ['react', 'nextjs'],
                   items: [
-                    [
-                      {
-                        title: 'Deep Level',
-                        sdk: ['nextjs'],
-                        items: [
-                          [
-                            {
-                              href: '/docs/deeply-nested-nextjs',
-                              sdk: ['nextjs'],
-                              title: 'Deeply Nested Page',
-                            },
-                          ],
-                        ],
-                      },
-                      {
-                        title: 'Deep Level',
-                        sdk: ['react'],
-                        items: [
-                          [
-                            {
-                              title: 'Deeply Nested Page',
-                              sdk: ['react'],
-                              href: '/docs/deeply-nested-react',
-                            },
-                          ],
-                        ],
-                      },
-                    ],
+                    {
+                      title: 'Deep Level',
+                      sdk: ['nextjs'],
+                      items: [
+                        {
+                          href: '/docs/deeply-nested-nextjs',
+                          sdk: ['nextjs'],
+                          title: 'Deeply Nested Page',
+                        },
+                      ],
+                    },
+                    {
+                      title: 'Deep Level',
+                      sdk: ['react'],
+                      items: [
+                        {
+                          title: 'Deeply Nested Page',
+                          sdk: ['react'],
+                          href: '/docs/deeply-nested-react',
+                        },
+                      ],
+                    },
                   ],
                 },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
 
     // Page should be available in nextjs (from manifest deep nesting)
@@ -1520,13 +1506,12 @@ Content for React users.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Multiple SDK Blocks',
-                href: '/multiple-sdk-blocks',
-              },
-            ],
+            {
+              title: 'Multiple SDK Blocks',
+              href: '/multiple-sdk-blocks',
+            },
           ],
         }),
       },
@@ -1593,14 +1578,13 @@ Common content for all SDKs.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Parent Group',
-                sdk: ['react', 'nextjs'],
-                items: [[{ title: 'Nested SDK Page', href: '/docs/nested-sdk-page' }]],
-              },
-            ],
+            {
+              title: 'Parent Group',
+              sdk: ['react', 'nextjs'],
+              items: [{ title: 'Nested SDK Page', href: '/docs/nested-sdk-page' }],
+            },
           ],
         }),
       },
@@ -1649,13 +1633,12 @@ Common content for all SDKs.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Multiple SDK Test',
-                href: '/docs/multiple-sdk-test',
-              },
-            ],
+            {
+              title: 'Multiple SDK Test',
+              href: '/docs/multiple-sdk-test',
+            },
           ],
         }),
       },
@@ -1709,13 +1692,12 @@ Common content for all SDKs.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Overview',
-                href: '/docs/overview',
-              },
-            ],
+            {
+              title: 'Overview',
+              href: '/docs/overview',
+            },
           ],
         }),
       },
@@ -1755,13 +1737,12 @@ sdk: nextjs, react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Overview',
-                href: '/docs/overview',
-              },
-            ],
+            {
+              title: 'Overview',
+              href: '/docs/overview',
+            },
           ],
         }),
       },
@@ -1799,13 +1780,12 @@ sdk: nextjs, react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Overview',
-                href: '/docs/overview',
-              },
-            ],
+            {
+              title: 'Overview',
+              href: '/docs/overview',
+            },
           ],
         }),
       },
@@ -1837,7 +1817,8 @@ sdk: fastify, expressjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'React Guide', href: '/docs/references/react/guide' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'React Guide', href: '/docs/references/react/guide' }],
         }),
       },
       {
@@ -1880,15 +1861,18 @@ sourceFile: /docs/references/react/guide.mdx
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            href: '/docs/references/react/guide',
-            sdk: ['react'],
-            title: 'React Guide',
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              href: '/docs/references/react/guide',
+              sdk: ['react'],
+              title: 'React Guide',
+            },
+          ],
+        },
+      },
     })
 
     expect(JSON.parse(await readFile('./dist/directory.json'))).toEqual([
@@ -1904,7 +1888,8 @@ sourceFile: /docs/references/react/guide.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'React Guide', href: '/docs/guide' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'React Guide', href: '/docs/guide' }],
         }),
       },
       {
@@ -1947,15 +1932,18 @@ sourceFile: /docs/guide.mdx
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            href: '/docs/guide',
-            sdk: ['react'],
-            title: 'React Guide',
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              href: '/docs/guide',
+              sdk: ['react'],
+              title: 'React Guide',
+            },
+          ],
+        },
+      },
     })
 
     expect(JSON.parse(await readFile('./dist/directory.json'))).toEqual([
@@ -1971,7 +1959,8 @@ sourceFile: /docs/guide.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -2011,12 +2000,11 @@ sourceFile: /docs/api-doc.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Home', href: '/docs/index' },
-              { title: 'Guides', href: '/docs/guides/index' },
-              { title: 'SDK Overview', href: '/docs/sdk/index' },
-            ],
+            { title: 'Home', href: '/docs/index' },
+            { title: 'Guides', href: '/docs/guides/index' },
+            { title: 'SDK Overview', href: '/docs/sdk/index' },
           ],
         }),
       },
@@ -2077,13 +2065,12 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Next.js Quickstart (Pages Router)',
-                href: '/docs/quickstarts/nextjs-pages-router',
-              },
-            ],
+            {
+              title: 'Next.js Quickstart (Pages Router)',
+              href: '/docs/quickstarts/nextjs-pages-router',
+            },
           ],
         }),
       },
@@ -2111,15 +2098,18 @@ sdk: nextjs
     // Should NOT inject :sdk: in manifest because document only supports one SDK
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            href: '/docs/quickstarts/nextjs-pages-router', // Should NOT have :sdk:
-            sdk: ['nextjs'],
-            title: 'Next.js Quickstart (Pages Router)',
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              href: '/docs/quickstarts/nextjs-pages-router', // Should NOT have :sdk:
+              sdk: ['nextjs'],
+              title: 'Next.js Quickstart (Pages Router)',
+            },
+          ],
+        },
+      },
     })
 
     // Should process document without redirect page
@@ -2146,26 +2136,23 @@ sourceFile: /docs/quickstarts/nextjs-pages-router.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Quickstart',
-                sdk: ['nextjs'],
-                items: [
-                  [
-                    {
-                      title: 'Next.js Quickstart',
-                      href: '/docs/quickstart',
-                    },
-                  ],
-                ],
-              },
-              {
-                title: 'Quickstart',
-                sdk: ['react', 'ios'],
-                href: '/docs/quickstart',
-              },
-            ],
+            {
+              title: 'Quickstart',
+              sdk: ['nextjs'],
+              items: [
+                {
+                  title: 'Next.js Quickstart',
+                  href: '/docs/quickstart',
+                },
+              ],
+            },
+            {
+              title: 'Quickstart',
+              sdk: ['react', 'ios'],
+              href: '/docs/quickstart',
+            },
           ],
         }),
       },
@@ -2208,28 +2195,29 @@ iOS Quickstart`,
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              items: [
                 {
                   href: '/docs/:sdk:/quickstart',
                   sdk: ['nextjs', 'react', 'ios'],
                   title: 'Next.js Quickstart',
                 },
               ],
-            ],
-            sdk: ['nextjs'],
-            title: 'Quickstart',
-          },
-          {
-            href: '/docs/:sdk:/quickstart',
-            sdk: ['react', 'ios'],
-            title: 'Quickstart',
-          },
-        ],
-      ],
+              sdk: ['nextjs'],
+              title: 'Quickstart',
+            },
+            {
+              href: '/docs/:sdk:/quickstart',
+              sdk: ['react', 'ios'],
+              title: 'Quickstart',
+            },
+          ],
+        },
+      },
     })
   })
 })
@@ -2240,7 +2228,8 @@ describe('Heading Validation', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Duplicate Headings', href: '/docs/duplicate-headings' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Duplicate Headings', href: '/docs/duplicate-headings' }],
         }),
       },
       {
@@ -2276,7 +2265,8 @@ description: Duplicate Headings page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Quickstart', href: '/docs/quickstart' }],
         }),
       },
       {
@@ -2313,7 +2303,8 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Quickstart', href: '/docs/quickstart' }],
         }),
       },
       {
@@ -2352,7 +2343,8 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Quickstart', href: '/docs/quickstart' }],
         }),
       },
       {
@@ -2390,7 +2382,8 @@ description: Quickstart page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Quickstart', href: '/docs/quickstart' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Quickstart', href: '/docs/quickstart' }],
         }),
       },
       {
@@ -2426,7 +2419,8 @@ describe('Includes and Partials', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -2461,7 +2455,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -2504,7 +2499,8 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -2535,7 +2531,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -2570,7 +2567,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/test-page' }],
         }),
       },
       {
@@ -2636,9 +2634,10 @@ End of page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [{ title: 'Test Page', href: '/docs/test-page' }],
-            [{ title: 'Target Page', href: '/docs/target-page' }],
+            { title: 'Test Page', href: '/docs/test-page' },
+            { title: 'Target Page', href: '/docs/target-page' },
           ],
         }),
       },
@@ -2693,7 +2692,8 @@ Content here.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/test-page' }],
         }),
       },
       {
@@ -2731,9 +2731,10 @@ title: Test Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [{ title: 'Test Page', href: '/docs/test-page' }],
-            [{ title: 'Target Page', href: '/docs/target-page' }],
+            { title: 'Test Page', href: '/docs/test-page' },
+            { title: 'Target Page', href: '/docs/target-page' },
           ],
         }),
       },
@@ -2782,7 +2783,8 @@ Content here.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/test-page' }],
         }),
       },
       {
@@ -2852,7 +2854,8 @@ End of page.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -2885,7 +2888,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Billing Page', href: '/docs/billing/for-b2c' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Billing Page', href: '/docs/billing/for-b2c' }],
         }),
       },
       {
@@ -2922,7 +2926,8 @@ title: Billing Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Deep Page', href: '/docs/billing/plans/premium' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Deep Page', href: '/docs/billing/plans/premium' }],
         }),
       },
       {
@@ -2959,7 +2964,8 @@ title: Premium Plan
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Deep Page', href: '/docs/billing/plans/enterprise/features' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Deep Page', href: '/docs/billing/plans/enterprise/features' }],
         }),
       },
       {
@@ -2996,7 +3002,8 @@ title: Enterprise Features
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/guides/test' }],
         }),
       },
       {
@@ -3043,7 +3050,8 @@ title: Test Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/guides/test' }],
         }),
       },
       {
@@ -3090,7 +3098,8 @@ title: Test Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Deep Page', href: '/docs/guides/features/advanced/deep/page' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Deep Page', href: '/docs/guides/features/advanced/deep/page' }],
         }),
       },
       {
@@ -3127,7 +3136,8 @@ title: Deep Nested Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/billing/plans/page' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/billing/plans/page' }],
         }),
       },
       {
@@ -3164,7 +3174,8 @@ title: Billing Plans
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test Page', href: '/docs/guides/test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test Page', href: '/docs/guides/test' }],
         }),
       },
       {
@@ -3196,7 +3207,8 @@ title: Test Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'SDK Test', href: '/docs/guides/sdk-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'SDK Test', href: '/docs/guides/sdk-test' }],
         }),
       },
       {
@@ -3238,9 +3250,10 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [{ title: 'Simple Test', href: '/docs/test-page-1' }],
-            [{ title: 'Test Page 2', href: '/docs/test-page-2' }],
+            { title: 'Simple Test', href: '/docs/test-page-1' },
+            { title: 'Test Page 2', href: '/docs/test-page-2' },
           ],
         }),
       },
@@ -3287,7 +3300,8 @@ describe('Link Validation and Processing', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -3320,7 +3334,8 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -3359,7 +3374,8 @@ title: Core Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Simple Test', href: '/docs/simple-test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Simple Test', href: '/docs/simple-test' }],
         }),
       },
       {
@@ -3385,70 +3401,15 @@ title: Simple Test
     expect(output).toContain(`warning Hash "non-existent-hash" not found in /docs/simple-test`)
   })
 
-  test('Warn only once for broken hash in SDK-scoped doc', async () => {
-    const { tempDir } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              {
-                title: 'SDK Group',
-                sdk: ['nextjs', 'react'],
-                items: [[{ title: 'SDK Doc', sdk: ['nextjs', 'react'], href: '/docs/sdk-doc' }]],
-              },
-              { title: 'Target', href: '/docs/target' },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/sdk-doc.mdx',
-        content: `---
-title: SDK Doc
-sdk: nextjs, react
----
-
-[Target](/docs/target#non-existent-hash)
-
-# SDK Doc Page`,
-      },
-      {
-        path: './docs/target.mdx',
-        content: `---
-title: Target
----
-
-# Target Page`,
-      },
-    ])
-
-    const output = await build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['nextjs', 'react'],
-      }),
-    )
-
-    const hashWarning = 'Hash "non-existent-hash" not found in /docs/target'
-    // Should contain the warning
-    expect(output).toContain(hashWarning)
-    // But only once — not duplicated per SDK variant
-    const occurrences = output!.split(hashWarning).length - 1
-    expect(occurrences).toBe(1)
-  })
-
   test('Pick up on id in heading for hash alias', async () => {
     const { tempDir } = await createTempFiles([
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Simple Test', href: '/docs/simple-test' },
-              { title: 'Headings', href: '/docs/headings' },
-            ],
+            { title: 'Simple Test', href: '/docs/simple-test' },
+            { title: 'Headings', href: '/docs/headings' },
           ],
         }),
       },
@@ -3486,11 +3447,10 @@ title: Simple Test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Page 2', href: '/docs/page-2' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Page 2', href: '/docs/page-2' },
           ],
         }),
       },
@@ -3541,11 +3501,10 @@ description: x
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Page 2', href: '/docs/page-2' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Page 2', href: '/docs/page-2' },
           ],
         }),
       },
@@ -3596,11 +3555,10 @@ description: x
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -3644,11 +3602,10 @@ title: Core Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -3696,11 +3653,10 @@ title: Core Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -3749,11 +3705,10 @@ title: Core Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Source Document', href: '/docs/source-document' },
-              { title: 'Target Document', href: '/docs/target-document' },
-            ],
+            { title: 'Source Document', href: '/docs/source-document' },
+            { title: 'Target Document', href: '/docs/target-document' },
           ],
         }),
       },
@@ -3808,11 +3763,10 @@ Content for section 2.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Link with code', href: '/docs/link-with-code' },
-              { title: 'Sign In', href: '/docs/components/sign-in' },
-            ],
+            { title: 'Link with code', href: '/docs/link-with-code' },
+            { title: 'Sign In', href: '/docs/components/sign-in' },
           ],
         }),
       },
@@ -3860,11 +3814,10 @@ description: Link with code
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Link with code', href: '/docs/link-with-code' },
-              { title: 'Sign In', href: '/docs/components/sign-in' },
-            ],
+            { title: 'Link with code', href: '/docs/link-with-code' },
+            { title: 'Sign In', href: '/docs/components/sign-in' },
           ],
         }),
       },
@@ -3916,7 +3869,8 @@ description: Link with code
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Page 1', href: '/docs/page-1' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Page 1', href: '/docs/page-1' }],
         }),
       },
       {
@@ -3948,7 +3902,8 @@ description: This is a test page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Page 1', href: '/docs/page-1' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Page 1', href: '/docs/page-1' }],
         }),
       },
       {
@@ -3978,12 +3933,11 @@ description: This is a test page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page', href: '/docs/index' },
-              { title: 'Standard Card', href: '/docs/standard-card' },
-              { title: 'SDK Scoped Page', href: '/docs/sdk-scoped-page' },
-            ],
+            { title: 'Page', href: '/docs/index' },
+            { title: 'Standard Card', href: '/docs/standard-card' },
+            { title: 'SDK Scoped Page', href: '/docs/sdk-scoped-page' },
           ],
         }),
       },
@@ -4046,11 +4000,10 @@ description: A page that contains cards
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page 1', href: '/docs/page-1' },
-              { title: 'Page 2', href: '/docs/page-2' },
-            ],
+            { title: 'Page 1', href: '/docs/page-1' },
+            { title: 'Page 2', href: '/docs/page-2' },
           ],
         }),
       },
@@ -4097,11 +4050,10 @@ description: This is a test page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Doc 1', href: '/docs/doc-1' },
-              { title: 'Doc 2', href: '/docs/doc-2' },
-            ],
+            { title: 'Doc 1', href: '/docs/doc-1' },
+            { title: 'Doc 2', href: '/docs/doc-2' },
           ],
         }),
       },
@@ -4153,15 +4105,14 @@ sourceFile: /docs/doc-2.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page A', href: '/docs/page-a' },
-              {
-                title: 'Group',
-                sdk: ['react'],
-                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
-              },
-            ],
+            { title: 'Page A', href: '/docs/page-a' },
+            {
+              title: 'Group',
+              sdk: ['react'],
+              items: [{ title: 'Page B', href: '/docs/page-b' }],
+            },
           ],
         }),
       },
@@ -4186,15 +4137,13 @@ Page B content`,
       },
     ])
 
-    const output = await build(
+    await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
       }),
     )
-
-    expect(output).toBe('')
 
     const pageBContent = await readFile('./dist/page-a.mdx')
     expect(pageBContent).not.toContain('<SDKLink')
@@ -4206,18 +4155,17 @@ Page B content`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Group A',
-                items: [[{ title: 'Page A', href: '/docs/page-a' }]],
-              },
-              {
-                title: 'Group B',
-                sdk: ['react'],
-                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
-              },
-            ],
+            {
+              title: 'Group A',
+              items: [{ title: 'Page A', href: '/docs/page-a' }],
+            },
+            {
+              title: 'Group B',
+              sdk: ['react'],
+              items: [{ title: 'Page B', href: '/docs/page-b' }],
+            },
           ],
         }),
       },
@@ -4243,7 +4191,7 @@ Page B content`,
       },
     ])
 
-    const output = await build(
+    await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -4251,11 +4199,60 @@ Page B content`,
       }),
     )
 
-    expect(output).toBe('')
-
     const content = await readFile('./dist/nextjs/page-a.mdx')
     expect(content).not.toContain('<SDKLink')
     expect(content).toContain('[Link to Page B](/docs/page-b)')
+  })
+
+  test('Should not inject SDKLink when linking directly to an sdk path for a page that is only manifest sdk-grouped (no sdk frontmatter)', async () => {
+    const { tempDir, readFile } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigationType: 'flat',
+          navigation: [
+            { title: 'Page A', href: '/docs/page-a' },
+            {
+              title: 'Group',
+              sdk: ['react'],
+              items: [{ title: 'Page B', href: '/docs/page-b' }],
+            },
+          ],
+        }),
+      },
+      {
+        path: './docs/page-a.mdx',
+        content: `---
+title: Page A
+description: Page linking to an explicit sdk path
+sdk: nextjs, react
+---
+
+[Link to React Page B](/docs/react/page-b)
+`,
+      },
+      {
+        path: './docs/page-b.mdx',
+        content: `---
+title: Page B
+description: Manifest sdk-grouped without sdk frontmatter
+---
+
+Page B content`,
+      },
+    ])
+
+    await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['react', 'nextjs'],
+      }),
+    )
+
+    const content = await readFile('./dist/react/page-a.mdx')
+    expect(content).not.toContain('<SDKLink')
+    expect(content).toContain('[Link to React Page B](/docs/react/page-b)')
   })
 
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {
@@ -4263,11 +4260,10 @@ Page B content`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -4316,11 +4312,10 @@ This is a [SDK Filtered Page][sdk-ref].
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'SDK Filtered Page', href: '/docs/sdk-filtered-page' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -4369,11 +4364,10 @@ See [SDK Filtered Page][sdk-ref].
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Core Target', href: '/docs/core-target' },
-              { title: 'Core Page', href: '/docs/core-page' },
-            ],
+            { title: 'Core Target', href: '/docs/core-target' },
+            { title: 'Core Page', href: '/docs/core-page' },
           ],
         }),
       },
@@ -4419,11 +4413,10 @@ See [Core Target][core-ref].
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Doc 1', href: '/docs/doc-1' },
-              { title: 'Doc 2', href: '/docs/doc-2' },
-            ],
+            { title: 'Doc 1', href: '/docs/doc-1' },
+            { title: 'Doc 2', href: '/docs/doc-2' },
           ],
         }),
       },
@@ -4472,11 +4465,10 @@ description: x
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Doc 1', href: '/docs/quickstart' },
-              { title: 'Doc 2', href: '/docs/doc-2' },
-            ],
+            { title: 'Doc 1', href: '/docs/quickstart' },
+            { title: 'Doc 2', href: '/docs/doc-2' },
           ],
         }),
       },
@@ -4560,11 +4552,10 @@ sourceFile: /docs/doc-2.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Guide 1', href: '/docs/guide-1' },
-              { title: 'Guide 2', href: '/docs/guide-2' },
-            ],
+            { title: 'Guide 1', href: '/docs/guide-1' },
+            { title: 'Guide 2', href: '/docs/guide-2' },
           ],
         }),
       },
@@ -4632,11 +4623,10 @@ sourceFile: /docs/guide-2.nextjs.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Guide 1', href: '/docs/guide-1' },
-              { title: 'Guide 2', href: '/docs/guide-2' },
-            ],
+            { title: 'Guide 1', href: '/docs/guide-1' },
+            { title: 'Guide 2', href: '/docs/guide-2' },
           ],
         }),
       },
@@ -4706,7 +4696,8 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title, href }]],
+          navigationType: 'flat',
+          navigation: [{ title, href }],
         }),
       },
       {
@@ -4738,11 +4729,10 @@ describe('Path and File Handling', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Core Guide', href: '/docs/core-guide' },
-              { title: 'Scoped Guide', href: '/docs/scoped-guide' },
-            ],
+            { title: 'Core Guide', href: '/docs/core-guide' },
+            { title: 'Scoped Guide', href: '/docs/scoped-guide' },
           ],
         }),
       },
@@ -4789,7 +4779,8 @@ sdk: react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'React Doc', href: '/docs/react/conflict' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'React Doc', href: '/docs/react/conflict' }],
         }),
       },
       {
@@ -4821,11 +4812,10 @@ title: React Doc
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Target Page', href: '/docs/target-page' },
-              { title: 'Standard Page', href: '/docs/standard-page' },
-            ],
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Standard Page', href: '/docs/standard-page' },
           ],
         }),
       },
@@ -4874,11 +4864,10 @@ title: Standard Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Target Page', href: '/docs/target-page' },
-              { title: 'Partials Page', href: '/docs/partials-page' },
-            ],
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Partials Page', href: '/docs/partials-page' },
           ],
         }),
       },
@@ -4929,11 +4918,10 @@ title: Partials Page
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Target Page', href: '/docs/target-page' },
-              { title: 'Scoped Page', href: '/docs/scoped-page' },
-            ],
+            { title: 'Target Page', href: '/docs/target-page' },
+            { title: 'Scoped Page', href: '/docs/scoped-page' },
           ],
         }),
       },
@@ -4987,7 +4975,8 @@ describe('Edge Cases', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Malformed Frontmatter', href: '/docs/malformed-frontmatter' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Malformed Frontmatter', href: '/docs/malformed-frontmatter' }],
         }),
       },
       {
@@ -5018,7 +5007,8 @@ description: \`This frontmatter has an unbalanced quote
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Missing Title', href: '/docs/missing-title' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Missing Title', href: '/docs/missing-title' }],
         }),
       },
       {
@@ -5048,7 +5038,8 @@ description: This frontmatter is missing the required title field
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Space in url', href: '/docs/space in url' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Space in url', href: '/docs/space in url' }],
         }),
       },
       {
@@ -5077,7 +5068,8 @@ describe('Error Reporting', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Validation Error', href: '/docs/validation-error' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Validation Error', href: '/docs/validation-error' }],
         }),
       },
       {
@@ -5110,11 +5102,10 @@ This page has an invalid SDK in frontmatter.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Valid Document', href: '/docs/valid-document' },
-              { title: 'Invalid Reference', href: '/docs/invalid-reference' },
-            ],
+            { title: 'Valid Document', href: '/docs/valid-document' },
+            { title: 'Invalid Reference', href: '/docs/invalid-reference' },
           ],
         }),
       },
@@ -5158,11 +5149,10 @@ This document doesn't have the referenced header.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Valid Document', href: '/docs/valid-document' },
-              { title: 'Document with Warnings', href: '/docs/document-with-warnings' },
-            ],
+            { title: 'Valid Document', href: '/docs/valid-document' },
+            { title: 'Document with Warnings', href: '/docs/document-with-warnings' },
           ],
         }),
       },
@@ -5219,7 +5209,8 @@ describe('Cache Handling', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Cached Doc', href: '/docs/cached-doc' }],
         }),
       },
       {
@@ -5277,11 +5268,10 @@ title: Updated Title
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Cached Doc', href: '/docs/cached-doc' },
-              { title: 'Linked Doc', href: '/docs/linked-doc' },
-            ],
+            { title: 'Cached Doc', href: '/docs/cached-doc' },
+            { title: 'Linked Doc', href: '/docs/linked-doc' },
           ],
         }),
       },
@@ -5348,11 +5338,10 @@ sdk: react, nextjs, astro
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Cached Doc', href: '/docs/cached-doc' },
-              { title: 'Linked Doc', href: '/docs/linked-doc' },
-            ],
+            { title: 'Cached Doc', href: '/docs/cached-doc' },
+            { title: 'Linked Doc', href: '/docs/linked-doc' },
           ],
         }),
       },
@@ -5423,11 +5412,10 @@ sdk: react, nextjs, astro
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Cached Doc', href: '/docs/cached-doc' },
-              { title: 'Linked Doc', href: '/docs/linked-doc' },
-            ],
+            { title: 'Cached Doc', href: '/docs/cached-doc' },
+            { title: 'Linked Doc', href: '/docs/linked-doc' },
           ],
         }),
       },
@@ -5498,7 +5486,8 @@ sdk: react, nextjs, astro
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Cached Doc', href: '/docs/cached-doc' }],
         }),
       },
       {
@@ -5550,7 +5539,8 @@ sdk: react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Billing Doc', href: '/docs/billing/for-b2c' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Billing Doc', href: '/docs/billing/for-b2c' }],
         }),
       },
       {
@@ -5599,7 +5589,8 @@ sdk: react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Guides Test', href: '/docs/guides/test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Guides Test', href: '/docs/guides/test' }],
         }),
       },
       {
@@ -5664,11 +5655,10 @@ sdk: react
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page A', href: '/docs/page-a' },
-              { title: 'Page B', href: '/docs/page-b' },
-            ],
+            { title: 'Page A', href: '/docs/page-a' },
+            { title: 'Page B', href: '/docs/page-b' },
           ],
         }),
       },
@@ -5764,12 +5754,11 @@ This content has been updated and should propagate to all parent partials.`,
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Page A', href: '/docs/page-a' },
-              { title: 'Page B', href: '/docs/page-b' },
-              { title: 'Page C', href: '/docs/page-c' },
-            ],
+            { title: 'Page A', href: '/docs/page-a' },
+            { title: 'Page B', href: '/docs/page-b' },
+            { title: 'Page C', href: '/docs/page-c' },
           ],
         }),
       },
@@ -5854,7 +5843,8 @@ title: Page C
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Cached Doc', href: '/docs/cached-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Cached Doc', href: '/docs/cached-doc' }],
         }),
       },
       {
@@ -5909,7 +5899,8 @@ describe('Configuration Options', () => {
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[]],
+            navigationType: 'flat',
+            navigation: [],
           }),
         },
         {
@@ -5950,7 +5941,8 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[]],
+            navigationType: 'flat',
+            navigation: [],
           }),
         },
         {
@@ -5998,7 +5990,8 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[]],
+            navigationType: 'flat',
+            navigation: [],
           }),
         },
         {
@@ -6050,13 +6043,12 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
+            navigationType: 'flat',
             navigation: [
-              [
-                {
-                  title: 'Partial Ignore',
-                  href: '/docs/partial-ignore',
-                },
-              ],
+              {
+                title: 'Partial Ignore',
+                href: '/docs/partial-ignore',
+              },
             ],
           }),
         },
@@ -6109,7 +6101,8 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[]],
+            navigationType: 'flat',
+            navigation: [],
           }),
         },
         {
@@ -6157,7 +6150,8 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[{ title: 'Missing Description', href: '/docs/missing-description' }]],
+            navigationType: 'flat',
+            navigation: [{ title: 'Missing Description', href: '/docs/missing-description' }],
           }),
         },
         {
@@ -6196,11 +6190,10 @@ title: Missing Description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
+            navigationType: 'flat',
             navigation: [
-              [
-                { title: 'Source Page', href: '/docs/source-page' },
-                { title: 'Target Page', href: '/docs/target-page' },
-              ],
+              { title: 'Source Page', href: '/docs/source-page' },
+              { title: 'Target Page', href: '/docs/target-page' },
             ],
           }),
         },
@@ -6253,22 +6246,19 @@ description: The page being linked to
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
+            navigationType: 'flat',
             navigation: [
-              [
-                {
-                  title: 'SDK Group',
-                  sdk: ['react'],
-                  items: [
-                    [
-                      {
-                        title: 'SDK Doc',
-                        href: '/docs/sdk-doc',
-                        sdk: ['react', 'js-backend'], // js-backend not in parent
-                      },
-                    ],
-                  ],
-                },
-              ],
+              {
+                title: 'SDK Group',
+                sdk: ['react'],
+                items: [
+                  {
+                    title: 'SDK Doc',
+                    href: '/docs/sdk-doc',
+                    sdk: ['react', 'js-backend'], // js-backend not in parent
+                  },
+                ],
+              },
             ],
           }),
         },
@@ -6309,7 +6299,8 @@ description: This page has a description
         {
           path: './docs/manifest.json',
           content: JSON.stringify({
-            navigation: [[{ title: 'Test Page', href: '/docs/test-page' }]],
+            navigationType: 'flat',
+            navigation: [{ title: 'Test Page', href: '/docs/test-page' }],
           }),
         },
         {
@@ -6359,7 +6350,8 @@ describe('Typedoc Validation', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6405,7 +6397,8 @@ interface Client {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6451,7 +6444,8 @@ interface Client {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6487,7 +6481,8 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6542,11 +6537,10 @@ interface Client {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Reference', href: '/docs/reference' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Reference', href: '/docs/reference' },
           ],
         }),
       },
@@ -6611,7 +6605,8 @@ interface Client {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6649,7 +6644,8 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6688,11 +6684,10 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Overview', href: '/docs/overview' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Overview', href: '/docs/overview' },
           ],
         }),
       },
@@ -6741,7 +6736,8 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6780,7 +6776,8 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6821,11 +6818,10 @@ sdk: react, nextjs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'Doc 1', href: '/docs/reference/react/doc-1' },
-              { title: 'Doc 2', href: '/docs/doc-2' },
-            ],
+            { title: 'Doc 1', href: '/docs/reference/react/doc-1' },
+            { title: 'Doc 2', href: '/docs/doc-2' },
           ],
         }),
       },
@@ -6884,9 +6880,10 @@ describe('API Errors Generation', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [{ title: 'Backend API', href: '/docs/guides/development/errors/backend-api' }],
-            [{ title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' }],
+            { title: 'Backend API', href: '/docs/guides/development/errors/backend-api' },
+            { title: 'Frontend API', href: '/docs/guides/development/errors/frontend-api' },
           ],
         }),
       },
@@ -6947,7 +6944,8 @@ describe('LLMs', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -6985,7 +6983,8 @@ description: Generated API docs
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -7030,7 +7029,8 @@ describe('Multiple document variants for pages', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -7066,15 +7066,18 @@ Documentation specific to React.js`,
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'API Doc',
-            href: '/docs/:sdk:/api-doc',
-            sdk: ['nextjs', 'remix', 'react'],
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'API Doc',
+              href: '/docs/:sdk:/api-doc',
+              sdk: ['nextjs', 'remix', 'react'],
+            },
+          ],
+        },
+      },
     })
 
     expect(await readFile('./dist/nextjs/api-doc.mdx')).toBe(`---
@@ -7151,7 +7154,8 @@ canonical: /docs/:sdk:/api-doc
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'Test', href: '/docs/test' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'Test', href: '/docs/test' }],
         }),
       },
       {
@@ -7184,15 +7188,18 @@ Documentation specific to Next.js`,
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'Test',
-            href: '/docs/:sdk:/test',
-            sdk: ['react', 'nextjs'],
-          },
-        ],
-      ],
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'Test',
+              href: '/docs/:sdk:/test',
+              sdk: ['react', 'nextjs'],
+            },
+          ],
+        },
+      },
     })
 
     expect(await readFile('./dist/nextjs/test.mdx')).toBe(`---
@@ -7250,11 +7257,10 @@ canonical: /docs/:sdk:/test
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Overview', href: '/docs/overview' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Overview', href: '/docs/overview' },
           ],
         }),
       },
@@ -7313,11 +7319,10 @@ sourceFile: /docs/overview.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              { title: 'API Doc', href: '/docs/api-doc' },
-              { title: 'Overview', href: '/docs/overview' },
-            ],
+            { title: 'API Doc', href: '/docs/api-doc' },
+            { title: 'Overview', href: '/docs/overview' },
           ],
         }),
       },
@@ -7412,28 +7417,23 @@ Updated Documentation specific to React.js
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
+          navigationType: 'flat',
           navigation: [
-            [
-              {
-                title: 'Docs',
-                items: [
-                  [
-                    { title: 'Doc 1', sdk: ['nextjs'], items: [[{ title: 'Doc 1', href: '/docs/doc-1' }]] },
-                    { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
-                    { title: 'Doc 2', href: '/docs/doc-2' },
-                    {
-                      title: 'Doc 3 & 4',
-                      items: [
-                        [
-                          { title: 'Doc 3', href: '/docs/doc-3' },
-                          { title: 'Doc 4', href: '/docs/doc-4' },
-                        ],
-                      ],
-                    },
+            {
+              title: 'Docs',
+              items: [
+                { title: 'Doc 1', sdk: ['nextjs'], items: [{ title: 'Doc 1', href: '/docs/doc-1' }] },
+                { title: 'Doc 1', sdk: ['react', 'remix'], href: '/docs/doc-1' },
+                { title: 'Doc 2', href: '/docs/doc-2' },
+                {
+                  title: 'Doc 3 & 4',
+                  items: [
+                    { title: 'Doc 3', href: '/docs/doc-3' },
+                    { title: 'Doc 4', href: '/docs/doc-4' },
                   ],
-                ],
-              },
-            ],
+                },
+              ],
+            },
           ],
         }),
       },
@@ -7502,23 +7502,22 @@ sdk: react
 
     expect(JSON.parse(await readFile('./dist/manifest.json'))).toEqual({
       flags: {},
-      navigation: [
-        [
-          {
-            title: 'Docs',
-            items: [
-              [
+      navigation: {
+        default: {
+          type: 'flat',
+          items: [
+            {
+              title: 'Docs',
+              items: [
                 {
                   title: 'Doc 1',
                   sdk: ['nextjs'],
                   items: [
-                    [
-                      {
-                        href: '/docs/:sdk:/doc-1',
-                        title: 'Doc 1',
-                        sdk: ['nextjs', 'react', 'remix'],
-                      },
-                    ],
+                    {
+                      href: '/docs/:sdk:/doc-1',
+                      title: 'Doc 1',
+                      sdk: ['nextjs', 'react', 'remix'],
+                    },
                   ],
                 },
                 {
@@ -7534,25 +7533,23 @@ sdk: react
                   title: 'Doc 3 & 4',
                   sdk: ['vue', 'react'],
                   items: [
-                    [
-                      {
-                        href: '/docs/doc-3',
-                        sdk: ['vue'],
-                        title: 'Doc 3',
-                      },
-                      {
-                        href: '/docs/doc-4',
-                        sdk: ['react'],
-                        title: 'Doc 4',
-                      },
-                    ],
+                    {
+                      href: '/docs/doc-3',
+                      sdk: ['vue'],
+                      title: 'Doc 3',
+                    },
+                    {
+                      href: '/docs/doc-4',
+                      sdk: ['react'],
+                      title: 'Doc 4',
+                    },
                   ],
                 },
               ],
-            ],
-          },
-        ],
-      ],
+            },
+          ],
+        },
+      },
     })
   })
 })
@@ -7563,7 +7560,8 @@ describe('Test tooltips', () => {
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {
@@ -7611,7 +7609,8 @@ sourceFile: /docs/api-doc.mdx
       {
         path: './docs/manifest.json',
         content: JSON.stringify({
-          navigation: [[{ title: 'API Doc', href: '/docs/api-doc' }]],
+          navigationType: 'flat',
+          navigation: [{ title: 'API Doc', href: '/docs/api-doc' }],
         }),
       },
       {

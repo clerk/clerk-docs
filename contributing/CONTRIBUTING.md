@@ -49,6 +49,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<If />`](#if-)
     - [`<Accordion />`](#accordion-)
     - [Images and static assets](#images-and-static-assets)
+    - [API reference docs](#api-reference-docs)
   - [Help wanted!](#help-wanted)
 
 </details>
@@ -546,7 +547,50 @@ The `search` frontmatter field can be used to control how a page is indexed by [
 
 You may also set `search` to a boolean value, which acts as an `exclude` value. See the first example below.
 
+#### Preview
+
+The `preview` frontmatter field can be used to render a component preview at the start of the page. It has the following subfields:
+
+| Name     | Type     | Default | Description                                                                                                                                               |
+| -------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src`    | `string` | N/A     | The URL path to the live preview (e.g., `/sign-in`)                                                                                                       |
+| `shadcn` | `object` | N/A     | Optional object containing framework-specific shadcn component names for installation references that renders a button to copy the shadcn install command |
+
+The `shadcn` subfield supports the following framework keys:
+
+| Name     | Type     | Description                                                            |
+| -------- | -------- | ---------------------------------------------------------------------- |
+| `nextjs` | `string` | The name of the Next.js Shadcn component (e.g., `nextjs-sign-in-page`) |
+
 ##### Examples
+
+<details>
+<summary>Add a preview with live demo</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
+  ---
+```
+
+</details>
+
+<details>
+<summary>Add a preview with Shadcn component reference</summary>
+
+```diff
+  ---
+  title: Example
++ preview:
++   src: '/sign-in'
++   shadcn:
++     nextjs: 'nextjs-sign-in-page'
+  ---
+```
+
+</details>
 
 <details>
 <summary>Exclude a page from search</summary>
@@ -1591,6 +1635,17 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 | <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
 
 </details>
+
+### API reference docs
+
+The API reference documentation at `/docs/reference/*` is powered by [Scalar](https://scalar.com/) and displays OpenAPI specs for three APIs:
+
+- [Frontend API](https://clerk.com/docs/reference/frontend-api)
+- [Backend API](https://clerk.com/docs/reference/backend-api)
+- [Platform API](https://clerk.com/docs/reference/platform-api)
+
+> [!NOTE]
+> Only Clerk team members can update API reference docs, as these docs are stored in private repositories. For instructions, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
 
 ## Help wanted!
 

@@ -18,7 +18,7 @@ For the custom flow that allows users to add a new payment method to their accou
 
   To use Billing Features, you first need to ensure they are enabled for your application. Follow the [Billing documentation](/docs/guides/billing/overview) to enable them and setup your Plans.
 
-  ## Checkout flow
+  ## Build the custom flow
 
   To create a checkout session with a new payment card, you must:
 
@@ -28,160 +28,160 @@ For the custom flow that allows users to add a new payment method to their accou
   1. Confirm the payment with the collected payment method.
   1. Complete the checkout process and redirect the user.
 
-  <Tabs items={["Next.js"]}>
-    <Tab>
-      The following example:
+     The following example:
 
-      1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to initiate and manage the checkout session.
-      1. Uses the [`usePaymentElement()`](/docs/reference/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
-      1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
-         - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans?tab=user).
-         - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans){{ target: '_blank' }}.
-         - Use the new [`usePlans()`](/docs/reference/hooks/use-plans) hook to get the Plan details.
+     1. Uses the [`useCheckout()`](/docs/reference/hooks/use-checkout) hook to initiate and manage the checkout session.
+     1. Uses the [`usePaymentElement()`](/docs/reference/hooks/use-payment-element) hook to control the payment element, which is rendered by `<PaymentElement />`.
+     1. Assumes that you have already have a valid `planId`, which you can acquire in many ways.
+        - [Copy from the Clerk Dashboard](https://dashboard.clerk.com/~/billing/plans).
+        - Use the [Clerk Backend API](/docs/reference/backend-api/tag/commerce/get/commerce/plans#tag/commerce/get/commerce/plans){{ target: '_blank' }}.
+        - Use the new [`usePlans()`](/docs/reference/hooks/use-plans) hook to get the Plan details.
 
-      This example is written for Next.js App Router but can be adapted for any React-based framework.
+     **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-      ```tsx {{ filename: 'app/checkout/page.tsx' }}
-      'use client'
-      import * as React from 'react'
-      import { Show, ClerkLoaded } from '@clerk/nextjs'
-      import {
-        CheckoutProvider,
-        useCheckout,
-        PaymentElementProvider,
-        PaymentElement,
-        usePaymentElement,
-      } from '@clerk/nextjs/experimental'
-      import { useRouter } from 'next/navigation'
+     ```tsx {{ filename: 'app/checkout/page.tsx' }}
+     'use client'
+     import * as React from 'react'
+     import { Show, ClerkLoaded } from '@clerk/nextjs'
+     import {
+       CheckoutProvider,
+       useCheckout,
+       PaymentElementProvider,
+       PaymentElement,
+       usePaymentElement,
+     } from '@clerk/nextjs/experimental'
+     import { useRouter } from 'next/navigation'
 
-      export default function CheckoutPage() {
-        return (
-          <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
-            <ClerkLoaded>
-              <Show when="signed-in">
-                <CustomCheckout />
-              </Show>
-            </ClerkLoaded>
-          </CheckoutProvider>
-        )
-      }
+     export default function CheckoutPage() {
+       return (
+         <CheckoutProvider for="user" planId="cplan_xxx" planPeriod="month">
+           <ClerkLoaded>
+             <Show when="signed-in">
+               <CustomCheckout />
+             </Show>
+           </ClerkLoaded>
+         </CheckoutProvider>
+       )
+     }
 
-      function CustomCheckout() {
-        const { checkout } = useCheckout()
+     function CustomCheckout() {
+       const { checkout } = useCheckout()
 
-        if (checkout.status === 'needs_initialization') {
-          return <CheckoutInitialization />
-        }
+       if (checkout.status === 'needs_initialization') {
+         return <CheckoutInitialization />
+       }
 
-        return (
-          <div className="checkout-container">
-            <CheckoutSummary />
+       return (
+         <div className="checkout-container">
+           <CheckoutSummary />
 
-            <PaymentElementProvider checkout={checkout}>
-              <PaymentSection />
-            </PaymentElementProvider>
-          </div>
-        )
-      }
+           <PaymentElementProvider checkout={checkout}>
+             <PaymentSection />
+           </PaymentElementProvider>
+         </div>
+       )
+     }
 
-      function CheckoutInitialization() {
-        const { checkout, fetchStatus } = useCheckout()
+     function CheckoutInitialization() {
+       const { checkout, fetchStatus } = useCheckout()
 
-        if (checkout.status !== 'needs_initialization') {
-          return null
-        }
+       if (checkout.status !== 'needs_initialization') {
+         return null
+       }
 
-        return (
-          <button onClick={checkout.start} disabled={fetchStatus === 'fetching'} className="start-checkout-button">
-            {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
-          </button>
-        )
-      }
+       return (
+         <button
+           onClick={checkout.start}
+           disabled={fetchStatus === 'fetching'}
+           className="start-checkout-button"
+         >
+           {fetchStatus === 'fetching' ? 'Initializing...' : 'Start Checkout'}
+         </button>
+       )
+     }
 
-      function PaymentSection() {
-        const { checkout, errors, fetchStatus } = useCheckout()
+     function PaymentSection() {
+       const { checkout, errors, fetchStatus } = useCheckout()
 
-        const { isFormReady, submit } = usePaymentElement()
-        const [isProcessing, setIsProcessing] = React.useState(false)
+       const { isFormReady, submit } = usePaymentElement()
+       const [isProcessing, setIsProcessing] = React.useState(false)
 
-        const router = useRouter()
+       const router = useRouter()
 
-        const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-          e.preventDefault()
-          if (!isFormReady || isProcessing || fetchStatus === 'fetching') return
-          setIsProcessing(true)
+       const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+         e.preventDefault()
+         if (!isFormReady || isProcessing || fetchStatus === 'fetching') return
+         setIsProcessing(true)
 
-          try {
-            // Submit payment form to get payment method
-            const { data, error } = await submit()
-            // Usually a validation error from stripe that you can ignore
-            if (error) {
-              console.error(JSON.stringify(error, null, 2))
-              return
-            }
-            // Confirm checkout with payment method
-            const { error: confirmError } = await checkout.confirm(data)
-            if (confirmError) {
-              console.error(JSON.stringify(confirmError, null, 2))
-              return
-            }
-            // Complete checkout and redirect
-            await checkout.finalize({
-              navigate: ({ decorateUrl }) => {
-                const url = decorateUrl('/dashboard')
-                if (url.startsWith('http')) {
-                  window.location.href = url
-                } else {
-                  router.push(url)
-                }
-              },
-            })
-          } catch (error) {
-            console.error('Payment failed:', error)
-          } finally {
-            setIsProcessing(false)
-          }
-        }
+         try {
+           // Submit payment form to get payment method
+           const { data, error } = await submit()
+           // Usually a validation error from stripe that you can ignore
+           if (error) {
+             console.error(JSON.stringify(error, null, 2))
+             return
+           }
+           // Confirm checkout with payment method
+           const { error: confirmError } = await checkout.confirm(data)
+           if (confirmError) {
+             console.error(JSON.stringify(confirmError, null, 2))
+             return
+           }
+           // Complete checkout and redirect
+           await checkout.finalize({
+             navigate: ({ decorateUrl }) => {
+               const url = decorateUrl('/dashboard')
+               if (url.startsWith('http')) {
+                 window.location.href = url
+               } else {
+                 router.push(url)
+               }
+             },
+           })
+         } catch (error) {
+           console.error('Payment failed:', error)
+         } finally {
+           setIsProcessing(false)
+         }
+       }
 
-        const isSubmitting = isProcessing || fetchStatus === 'fetching'
+       const isSubmitting = isProcessing || fetchStatus === 'fetching'
 
-        return (
-          <form onSubmit={handleSubmit}>
-            <PaymentElement fallback={<div>Loading payment element...</div>} />
+       return (
+         <form onSubmit={handleSubmit}>
+           <PaymentElement fallback={<div>Loading payment element...</div>} />
 
-            {errors.global && (
-              <ul>
-                {errors.global.map((error, index) => (
-                  <li key={index}>{error.longMessage || error.message}</li>
-                ))}
-              </ul>
-            )}
+           {errors.global && (
+             <ul>
+               {errors.global.map((error, index) => (
+                 <li key={index}>{error.longMessage || error.message}</li>
+               ))}
+             </ul>
+           )}
 
-            <button type="submit" disabled={!isFormReady || isSubmitting}>
-              {isSubmitting ? 'Processing...' : 'Complete Purchase'}
-            </button>
-          </form>
-        )
-      }
+           <button type="submit" disabled={!isFormReady || isSubmitting}>
+             {isSubmitting ? 'Processing...' : 'Complete Purchase'}
+           </button>
+         </form>
+       )
+     }
 
-      function CheckoutSummary() {
-        const { checkout } = useCheckout()
+     function CheckoutSummary() {
+       const { checkout } = useCheckout()
 
-        if (!checkout.plan) {
-          return null
-        }
+       if (!checkout.plan) {
+         return null
+       }
 
-        return (
-          <div>
-            <h2>Order Summary</h2>
-            <span>{checkout.plan.name}</span>
-            <span>
-              {checkout.totals.totalDueNow.currencySymbol} {checkout.totals.totalDueNow.amountFormatted}
-            </span>
-          </div>
-        )
-      }
-      ```
-    </Tab>
-  </Tabs>
+       return (
+         <div>
+           <h2>Order Summary</h2>
+           <span>{checkout.plan.name}</span>
+           <span>
+             {checkout.totals.totalDueNow.currencySymbol} {checkout.totals.totalDueNow.amountFormatted}
+           </span>
+         </div>
+       )
+     }
+     ```
 </Steps>

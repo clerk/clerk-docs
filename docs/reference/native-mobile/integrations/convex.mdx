@@ -209,24 +209,33 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
   </If>
 
   <If sdk="ios">
-    ```swift {{ filename: 'AuthModel.swift' }}
-    import Combine
+    ```swift {{ filename: 'ContentView.swift' }}
     import ConvexMobile
+    import SwiftUI
 
-    @MainActor
-    final class AuthModel: ObservableObject {
-      @Published var authState: AuthState<String> = .loading
+    struct ContentView: View {
+      @State private var authState: AuthState<String> = .loading
 
-      init(client: ConvexClientWithAuth<String>) {
-        client.authState
-          .replaceError(with: .unauthenticated)
-          .receive(on: DispatchQueue.main)
-          .assign(to: &$authState)
+      var body: some View {
+        Group {
+          switch authState {
+          case .loading:
+            ProgressView()
+          case .unauthenticated:
+            Text("Unauthenticated")
+          case .authenticated:
+            Text("Authenticated")
+          }
+        }
+        .task {
+          for await state in client.authState.values {
+            authState = state
+          }
+        }
       }
     }
     ```
 
-    Subscribe to `client.authState` and switch your UI between loading, signed-out, and signed-in states.
   </If>
 </Steps>
 

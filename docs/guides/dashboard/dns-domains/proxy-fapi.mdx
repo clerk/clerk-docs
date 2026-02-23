@@ -40,61 +40,34 @@ When using a proxy, all requests to the Frontend API will be made through your d
   - `Clerk-Secret-Key`: Your Clerk [Secret Key](!secret-key).
   - `X-Forwarded-For`: The IP address of the original client making the request.
 
-  > [!NOTE]
-  > If you're using **Next.js** or **Express**, you can use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware#frontend-api-proxy) instead of manually configuring a proxy server. This handles all the proxy requirements automatically. See the **Next.js (clerkMiddleware)** and **Express (clerkMiddleware)** tabs below.
-
   #### Example configuration
 
-  <Tabs items={["Next.js (clerkMiddleware)", "Express (clerkMiddleware)", "Next.js (App Router route handler)", "Nginx", "Cloudflare Workers"]}>
+  <Tabs items={["Next.js", "Express", "Nginx", "Cloudflare Workers"]}>
     <Tab>
-      The `frontendApiProxy` option in `clerkMiddleware()` handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
+      If you're using **Next.js**, you can configure a frontend API proxy in one of two ways:
 
-      > [!IMPORTANT]
-      > Ensure your middleware matcher includes the proxy path (default `__clerk`) so proxy requests are handled by the middleware.
+      - Use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/nextjs/clerk-middleware#frontend-api-proxy).
+      - Use [`createFrontendApiProxyHandlers()`](/docs/reference/nextjs/clerk-middleware#create-frontend-api-proxy-handlers) in a Next.js App Router route handler. **This is useful if you prefer to keep proxy logic separate from your middleware.**
 
-      ```ts {{ filename: 'proxy.ts' }}
-      import { clerkMiddleware } from '@clerk/nextjs/server'
+      <Tabs items={["Using clerkMiddleware()", "Using createFrontendApiProxyHandlers()"]}>
+        <Tab>
+          The `frontendApiProxy` option in `clerkMiddleware()` handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
 
-      export default clerkMiddleware({
-        frontendApiProxy: {
-          enabled: true,
-        },
-      })
+          <Include src="_partials/frontend-api-proxy/basic-usage-nextjs" />
 
-      export const config = {
-        matcher: [
-          // Skip Next.js internals and all static files, unless found in search params
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          // Always run for API routes and the proxy path
-          '/(api|trpc|__clerk)(.*)',
-        ],
-      }
-      ```
+          <Include src="_partials/frontend-api-proxy/multi-domain-usage-nextjs" />
+        </Tab>
 
-      For multi-domain setups, you can pass a function to `enabled` to conditionally enable proxying based on the request URL:
+        <Tab>
+          As an alternative to the middleware approach, you can use `createFrontendApiProxyHandlers()` in a Next.js App Router route handler.
 
-      ```ts {{ filename: 'proxy.ts' }}
-      import { clerkMiddleware } from '@clerk/nextjs/server'
-
-      export default clerkMiddleware({
-        frontendApiProxy: {
-          enabled: (url) => url.hostname !== 'myapp.com',
-        },
-      })
-
-      export const config = {
-        matcher: [
-          '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-          '/(api|trpc|__clerk)(.*)',
-        ],
-      }
-      ```
-
-      See the [`clerkMiddleware()` reference](/docs/reference/nextjs/clerk-middleware#frontend-api-proxy) for all available options.
+          <Include src="_partials/frontend-api-proxy/create-frontend-api-proxy-handlers" />
+        </Tab>
+      </Tabs>
     </Tab>
 
     <Tab>
-      The `frontendApiProxy` option in `clerkMiddleware()` handles all proxy requirements automatically for Express applications.
+      If you're using **Express**, you can use the built-in `frontendApiProxy` option in [`clerkMiddleware()`](/docs/reference/express/clerk-middleware#frontend-api-proxy) instead of manually configuring a proxy server. This option handles all proxy requirements automatically, including header forwarding, body streaming, and redirect rewriting. The `proxyUrl` for authentication handshake is also auto-derived.
 
       ```ts {{ filename: 'index.ts' }}
       import express from 'express'
@@ -102,27 +75,14 @@ When using a proxy, all requests to the Frontend API will be made through your d
 
       const app = express()
 
-      app.use(clerkMiddleware({
-        frontendApiProxy: {
-          enabled: true,
-        },
-      }))
+      app.use(
+        clerkMiddleware({
+          frontendApiProxy: {
+            enabled: true,
+          },
+        }),
+      )
       ```
-
-      See the [`clerkMiddleware()` reference](/docs/reference/express/clerk-middleware#frontend-api-proxy) for all available options.
-    </Tab>
-
-    <Tab>
-      As an alternative to the middleware approach, you can use `createFrontendApiProxyHandlers()` in a Next.js App Router route handler:
-
-      ```ts {{ filename: 'app/api/__clerk/[[...path]]/route.ts' }}
-      import { createFrontendApiProxyHandlers } from '@clerk/nextjs/server'
-
-      export const { GET, POST, PUT, DELETE, PATCH } = createFrontendApiProxyHandlers()
-      ```
-
-      > [!NOTE]
-      > When using route handlers instead of middleware, you must still set the `proxyUrl` option on `clerkMiddleware()` or set the `NEXT_PUBLIC_CLERK_PROXY_URL` environment variable so that the authentication handshake uses the proxy.
     </Tab>
 
     <Tab>
@@ -270,7 +230,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       To configure your proxy setup using properties in your Next.js application, set the `proxyUrl` property on the [`<ClerkProvider>`](/docs/reference/components/clerk-provider) component.
 
-      ```tsx {{ filename: 'app/layout.tsx', mark: [5] }}
+      ```tsx {{ filename: 'app/layout.tsx', mark: [7] }}
       import { ClerkProvider } from '@clerk/nextjs'
 
       export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -288,7 +248,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       To configure your proxy setup using properties in your Remix application, set the `proxyUrl` property on the [`ClerkApp`](/docs/reference/remix/clerk-app) wrapper.
 
-      ```tsx {{ filename: 'root.tsx' }}
+      ```tsx {{ filename: 'root.tsx', mark: [19] }}
       export const loader = (args) => {
         return rootAuthLoader(
           args,
@@ -315,7 +275,7 @@ When using a proxy, all requests to the Frontend API will be made through your d
     <Tab>
       To configure your proxy setup using properties in your JavaScript application, pass the `proxyUrl` option to the [`load()`](/docs/reference/javascript/clerk#load) method.
 
-      ```js {{ filename: 'main.js' }}
+      ```js {{ filename: 'main.js', mark: [7] }}
       import { Clerk } from '@clerk/clerk-js'
 
       // Initialize Clerk with your Clerk Publishable Key

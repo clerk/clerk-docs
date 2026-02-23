@@ -8,6 +8,7 @@
 ## **1. Official Clerk Integration Overview**
 
 Use only the **App Router** approach from Clerk’s current docs:
+
 - If it not already installed, install the Next.js framework.
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.

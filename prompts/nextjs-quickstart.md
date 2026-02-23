@@ -1,6 +1,6 @@
 # Add Clerk to Next.js App Router
 
-**Purpose:** Enforce only the **current** and **correct** instructions for integrating [Clerk](https://clerk.com/) into a Next.js (App Router) application.  
+**Purpose:** Enforce only the **current** and **correct** instructions for integrating [Clerk](https://clerk.com/) into a Next.js (App Router) application.
 **Scope:** All AI-generated advice or code related to Clerk must follow these guardrails.
 
 ---
@@ -9,7 +9,7 @@
 
 Use only the **App Router** approach from Clerk’s current docs:
 
-- If it not already installed, install the Next.js framework.
+- Install the Next.js framework, if it's not already installed.
 - **Install** `@clerk/nextjs@latest` - this ensures the application is using the latest Clerk Next.js SDK.
 - **Create** a `proxy.ts` file using `clerkMiddleware()` from `@clerk/nextjs/server`. Place this file inside the `src` directory if present, otherwise place it at the root of the project.
 - **Wrap** your application with `<ClerkProvider>` in your `app/layout.tsx`
@@ -160,9 +160,9 @@ If any check **fails**, **stop** and revise until compliance is achieved.
 
 ## **5. INSTRUCTIONS TO USER TO CREATE THEIR FIRST TEST SIGN-UP**
 
-After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk <SignIn /> component and end-to-end auth flow.
+After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk <SignUp /> component and end-to-end auth flow.
 
-After the sign-up succeeds and the user is created (a profile icon will appear in the nav), congratulate them on creating their first test user.
+After the sign-up succeeds, and the test user is created, a profile icon will appear in the nav. Congratulate them on creating their first test user.
 
 ## **6. CONFIGURE YOUR APPLICATION AND NEXT STEPS**
 
@@ -170,6 +170,6 @@ If the app shows a “Configure your application” callout, tell the user to cl
 
 Then recommend these three next steps to explore:
 
-- Organizations (B2B Auth): multi-tenancy, invites, RBAC, SSO: https://clerk.com/docs/guides/organizations/overview
-- Components: auth, user mgmt, billing, and more: https://clerk.com/docs/reference/components/overview
-- Customize via the Clerk dashboard: SSO providers, invite team members, analytics, and more: https://dashboard.clerk.com/
+- Organizations (B2B Auth): multi-tenancy, invites, RBAC, SSO → https://clerk.com/docs/guides/organizations/overview
+- Components: auth, user management, billing, and more → https://clerk.com/docs/reference/components/overview
+- Clerk Dashboard: SSO providers, invite team members, analytics, and more → https://dashboard.clerk.com/

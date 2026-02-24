@@ -28,7 +28,7 @@ Before getting started, it's important to note that M2M tokens will be a paid fe
 
 There will be usage stats and monitoring available in the Clerk Dashboard before the beta period comes to an end to make it easy to understand your usage and what you're being charged.
 
-There will also be a feature that allows the use of [JSON Web Tokens (JWTs)](https://en.wikipedia.org/wiki/JSON_Web_Token) instead of [opaque tokens](!opaque-token) before the beta period comes to an end. While JWTs can't be instantly revoked, they don't require a network request for verification and incur charges only for creation, not verification.
+M2M tokens can be created as either [opaque tokens](!opaque-token) (the default) or [JSON Web Tokens (JWTs)](/docs/guides/how-clerk-works/tokens-and-signatures#json-web-tokens-jwts). JWTs don't require a network request for verification and incur charges only for creation, not verification. See [Token formats](/docs/guides/development/machine-auth/token-formats) for more details on the differences between the two formats.
 
 ## Creating machines
 
@@ -98,10 +98,20 @@ await fetch('<machine-b-url>', {
 })
 ```
 
-There are two additional optional arguments that can be passed to the `createToken()` method:
+There are additional optional arguments that can be passed to the `createToken()` method:
 
+- `tokenFormat` - The format of the token. Can be `'opaque'` (default) or `'jwt'`. See [Token formats](/docs/guides/development/machine-auth/token-formats) for more details.
 - `secondsUntilExpiration` - The number of seconds until the token will expire. By default, the token will not expire.
 - `claims` - A JavaScript object that can be used to store additional information about the token.
+
+To create a JWT token instead of the default opaque token, pass `tokenFormat: 'jwt'`:
+
+```ts
+const m2mToken = await clerkClient.m2m.createToken({
+  tokenFormat: 'jwt',
+})
+console.log(m2mToken)
+```
 
 ## Verifying M2M tokens
 
@@ -136,6 +146,9 @@ If the token is valid, the method will return an object with the following prope
 
 You can then fulfill the request, or reject it if the token is invalid.
 
+> [!NOTE]
+> JWT tokens are not stored by Clerk, so they cannot be fetched via the list endpoint (`clerkClient.m2m.getTokens()`). The list endpoint will only return opaque tokens. Additionally, since JWT verification happens client-side, Clerk cannot track `last_used_at` for JWT tokens.
+
 ## Revoking M2M tokens
 
 To revoke an M2M token, call the [`revokeToken()`](/docs/reference/backend/m2m-tokens/revoke-token) method:
@@ -148,3 +161,6 @@ await clerkClient.m2m.revokeToken({
 ```
 
 This will revoke the token and prevent it from being used to authenticate any future requests.
+
+> [!IMPORTANT]
+> Only opaque tokens can be revoked. JWT tokens are not stored by Clerk and therefore cannot be revoked. If you need revocation capability, use the default opaque token format when creating tokens.

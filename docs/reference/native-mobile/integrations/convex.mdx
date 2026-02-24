@@ -242,40 +242,57 @@ This guide shows how to integrate Convex with Clerk in your native mobile app. I
   With Clerk and Convex configured, authenticated requests stay in sync so you can subscribe and render data with minimal setup.
 
   <If sdk="android">
+    ```kotlin {{ filename: 'MessagesViewModel.kt' }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.convex.ClerkConvexClient
+    import kotlinx.coroutines.flow.SharingStarted
+    import kotlinx.coroutines.flow.StateFlow
+    import kotlinx.coroutines.flow.catch
+    import kotlinx.coroutines.flow.stateIn
+
+    class MessagesViewModel(
+      clerk: ClerkConvexClient,
+    ) : ViewModel() {
+
+      val messages: StateFlow<List<Message>> =
+        clerk.convex
+          .subscribe<List<Message>>("messages:list")
+          .catch { emit(emptyList()) } // keep old behavior: fail -> show nothing
+          .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
+            initialValue = emptyList()
+          )
+    }
+    ```
+
     ```kotlin {{ filename: 'MessagesScreen.kt', collapsible: true }}
     import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.PaddingValues
     import androidx.compose.foundation.layout.fillMaxWidth
     import androidx.compose.foundation.layout.padding
     import androidx.compose.foundation.lazy.LazyColumn
     import androidx.compose.foundation.lazy.items
     import androidx.compose.material3.Text
     import androidx.compose.runtime.Composable
-    import androidx.compose.runtime.LaunchedEffect
-    import androidx.compose.runtime.getValue
-    import androidx.compose.runtime.mutableStateOf
-    import androidx.compose.runtime.remember
-    import androidx.compose.runtime.setValue
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.unit.dp
-    import com.clerk.convex.ClerkConvexClient
-    import kotlinx.coroutines.flow.catch
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
     @Composable
-    fun MessagesScreen(clerk: ClerkConvexClient) {
-      var messages by remember { mutableStateOf(emptyList<Message>()) }
+    fun MessagesScreen(
+      viewModel: MessagesViewModel,
+      modifier: Modifier = Modifier,
+    ) {
+      val messages = viewModel.messages.collectAsStateWithLifecycle().value
 
-      LaunchedEffect(Unit) {
-        clerk.convex
-          .subscribe<List<Message>>("messages:list")
-          .catch { emit(emptyList()) }
-          .collect { latest ->
-            messages = latest
-          }
-      }
-
-      LazyColumn {
-        items(messages, key = { it.id }) { message ->
-          Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+      LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(12.dp),
+      ) {
+        items(items = messages, key = { it.id }) { message ->
+          Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
             Text(message.author)
             Text(message.body)
           }

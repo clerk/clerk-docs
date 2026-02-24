@@ -49,6 +49,7 @@ If you're contributing specifically to our hooks and components documentation, p
     - [`<If />`](#if-)
     - [`<Accordion />`](#accordion-)
     - [Images and static assets](#images-and-static-assets)
+    - [API reference docs](#api-reference-docs)
   - [Help wanted!](#help-wanted)
 
 </details>
@@ -1634,6 +1635,17 @@ The `Gallery` component displays multiple images in a grid layout. On mobile the
 | <img width="1266" height="1468" alt="" src="/.github/media/gallery-desktop.png" /> | <img width="720" height="1578" alt="" src="/.github/media/gallery-mobile.png" /> |
 
 </details>
+
+### API reference docs
+
+The API reference documentation at `/docs/reference/*` is powered by [Scalar](https://scalar.com/) and displays OpenAPI specs for three APIs:
+
+- [Frontend API](https://clerk.com/docs/reference/frontend-api)
+- [Backend API](https://clerk.com/docs/reference/backend-api)
+- [Platform API](https://clerk.com/docs/reference/platform-api)
+
+> [!NOTE]
+> Only Clerk team members can update API reference docs, as these docs are stored in private repositories. For instructions, see the [guide in Notion](https://www.notion.so/clerkdev/Contributing-to-Scalar-docs-2f92b9ab44fe80298124c794fdc7a9fb).
 
 ## Help wanted!
 

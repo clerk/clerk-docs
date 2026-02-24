@@ -160,13 +160,13 @@ If any check **fails**, **stop** and revise until compliance is achieved.
 
 ## **5. INSTRUCTIONS TO USER TO CREATE THEIR FIRST TEST SIGN-UP**
 
-After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk <SignUp /> component and end-to-end auth flow.
+After completing the steps above, tell the developer to use the app (now running) to **sign up as their first test user** in the top nav to experience the Clerk `<SignUp />` component and end-to-end auth flow.
 
 After the sign-up succeeds, and the test user is created, a profile icon will appear in the nav. Congratulate them on creating their first test user.
 
 ## **6. CONFIGURE YOUR APPLICATION AND NEXT STEPS**
 
-If the app shows a “Configure your application” callout, tell the user to click it to finish the quickstart. Alternatively, they can manually sign up at https://dashboard.clerk.com/sign-up.
+If the app shows a “Configure your application” callout, tell the user to click it to finish the quickstart.
 
 Then recommend these three next steps to explore:
 

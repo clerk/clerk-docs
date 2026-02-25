@@ -1,4 +1,5 @@
 const POSTHOG_PROJECT_ID = process.env.DOCS_404_POSTHOG_PROJECT_ID
+const POSTHOG_INSIGHT_ID = process.env.DOCS_404_POSTHOG_INSIGHT_ID
 const POSTHOG_API_KEY = process.env.DOCS_404_POSTHOG_API_KEY
 const SLACK_BOT_TOKEN = process.env.DOCS_404_SLACK_BOT_TOKEN
 const SLACK_CHANNEL = process.env.DOCS_404_SLACK_CHANNEL
@@ -51,6 +52,10 @@ const main = async () => {
     }),
   })
 
+  if (!response.ok) {
+    throw new Error(`PostHog API error: ${response.statusText}`)
+  }
+
   const data = await response.json()
 
   const topFive404s = data.results.map((result: any) => result.label).slice(0, 5) as string[]
@@ -60,6 +65,8 @@ const main = async () => {
 
   if (SLACK_BOT_TOKEN && SLACK_CHANNEL) {
     const slackMessage = {
+      // A fallback message for environments the structured (blocks) message is not supported
+      text: `Top 5 Docs 404s (Last 7 Days):\n${formattedList}`,
       blocks: [
         {
           type: 'header',
@@ -75,15 +82,19 @@ const main = async () => {
             text: formattedList,
           },
         },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: 'https://us.posthog.com/project/86309/insights/3iJsZYub | View all 404s of the week in PostHog',
-            },
-          ],
-        },
+        ...(POSTHOG_INSIGHT_ID
+          ? [
+              {
+                type: 'context',
+                elements: [
+                  {
+                    type: 'mrkdwn',
+                    text: `https://us.posthog.com/project/${POSTHOG_PROJECT_ID}/insights/${POSTHOG_INSIGHT_ID} | View all 404s of the week in PostHog`,
+                  },
+                ],
+              },
+            ]
+          : []),
       ],
     }
 
@@ -99,7 +110,12 @@ const main = async () => {
       }),
     })
 
+    if (!slackResponse.ok) {
+      throw new Error(`Slack API error: ${slackResponse.statusText}`)
+    }
+
     const slackData = await slackResponse.json()
+
     if (!slackData.ok) {
       throw new Error(`Slack API error: ${slackData.error}`)
     }

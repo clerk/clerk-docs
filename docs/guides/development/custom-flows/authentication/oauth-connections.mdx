@@ -708,6 +708,81 @@ Depending on your instance settings, users might need to provide extra informati
   ```
 </If>
 
-<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+<If sdk="ios">
+  ```swift {{ filename: 'OAuthView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct OAuthView: View {
+    @Environment(Clerk.self) private var clerk
+
+    @State private var username = ""
+
+    var body: some View {
+      VStack(spacing: 16) {
+        // Render UI based on the current in-progress sign-up status.
+        switch clerk.auth.currentSignUp?.status {
+        case .missingRequirements:
+          // If username is required, collect it and submit it to the SignUp object.
+          if clerk.auth.currentSignUp?.missingFields.contains(.username) == true {
+            TextField("Choose a username", text: $username)
+
+            Button("Continue") {
+              Task { await submitUsername() }
+            }
+          } else {
+            // Other missing fields (phone, legalAccepted, etc.) should be handled here.
+            Text("Additional steps required.")
+          }
+
+        default:
+          // If user is signed in, show signed-in state.
+          if let user = clerk.user {
+            Text("Signed in as: \(user.id)")
+            Button("Sign Out") {
+              Task { try await clerk.auth.signOut() }
+            }
+          } else {
+            // If user is signed out, start OAuth flow.
+            Button("Sign In with Google") {
+              Task { await signInWithOAuth(provider: .google) }
+            }
+          }
+        }
+      }
+      .padding()
+    }
+
+    private func signInWithOAuth(provider: OAuthProvider) async {
+      do {
+        // Start OAuth sign-in with the selected provider.
+        try await clerk.auth.signInWithOAuth(provider: provider)
+        // UI will react to currentSignUp/current session changes:
+        // - If OAuth completes immediately, `clerk.user` will be available.
+        // - If additional fields are required, `currentSignUp.status` will be `.missingRequirements`.
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+
+    private func submitUsername() async {
+      do {
+        // Update the in-progress SignUp with the missing username field.
+        try await clerk.auth.currentSignUp?.update(
+          username: username.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling.
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk={["js-frontend", "android", "nuxt"]}>
   <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

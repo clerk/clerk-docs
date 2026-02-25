@@ -565,95 +565,93 @@ Depending on your instance settings, users might need to provide extra informati
 >
 > With OAuth flows, it's common for users to try to _sign in_ with an OAuth provider, but they don't have a Clerk account for your app yet. Clerk automatically transfers the flow from the `SignIn` object to the `SignUp` object, which returns the `"missing_requirements"` status and `missingFields` array needed to handle the missing requirements flow. This is why for the OAuth flow, the "Continue" page uses the [`useSignUp()`](/docs/reference/hooks/use-sign-up) hook and treats the missing requirements flow as a sign-up flow.
 
-<If notSdk={["expo", "ios", "android"]}>
-  <If notSdk="nextjs">
-    <Include src="_partials/sdk-examples-not-available-callout" />
-  </If>
+<If notSdk="nextjs">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
-  ```tsx {{ filename: 'app/sign-in/continue/page.tsx' }}
-  'use client'
+```tsx {{ filename: 'app/sign-in/continue/page.tsx' }}
+'use client'
 
-  import { useState } from 'react'
-  import { useSignUp } from '@clerk/nextjs'
-  import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { useSignUp } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 
-  function snakeToCamel(str: string | undefined): string {
-    return str ? str.replace(/([-_][a-z])/g, (match) => match.toUpperCase().replace(/-|_/, '')) : ''
+function snakeToCamel(str: string | undefined): string {
+  return str ? str.replace(/([-_][a-z])/g, (match) => match.toUpperCase().replace(/-|_/, '')) : ''
+}
+
+export default function Page() {
+  const router = useRouter()
+  // Use `useSignUp()` hook to access the `SignUp` object
+  // `missing_requirements` and `missingFields` are only available on the `SignUp` object
+  const { signUp } = useSignUp()
+
+  const handleSubmit = async (formData: FormData) => {
+    const params = Object.fromEntries(formData.entries()) as any
+    // Update the `SignUp` object with the missing fields
+    // The logic that goes here will depend on your instance settings
+    // E.g. if your app requires a phone number, you will need to collect and verify it here
+    await signUp.update(params)
+    if (signUp.status === 'complete') {
+      await signUp.finalize({
+        navigate: async ({ session, decorateUrl }) => {
+          if (session?.currentTask) {
+            // Handle session tasks
+            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+            console.log(session?.currentTask)
+            return
+          }
+
+          const url = decorateUrl('/')
+          if (url.startsWith('http')) {
+            window.location.href = url
+          } else {
+            router.push(url)
+          }
+        },
+      })
+    }
   }
 
-  export default function Page() {
-    const router = useRouter()
-    // Use `useSignUp()` hook to access the `SignUp` object
-    // `missing_requirements` and `missingFields` are only available on the `SignUp` object
-    const { signUp } = useSignUp()
-
-    const handleSubmit = async (formData: FormData) => {
-      const params = Object.fromEntries(formData.entries()) as any
-      // Update the `SignUp` object with the missing fields
-      // The logic that goes here will depend on your instance settings
-      // E.g. if your app requires a phone number, you will need to collect and verify it here
-      await signUp.update(params)
-      if (signUp.status === 'complete') {
-        await signUp.finalize({
-          navigate: async ({ session, decorateUrl }) => {
-            if (session?.currentTask) {
-              // Handle session tasks
-              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-              console.log(session?.currentTask)
-              return
-            }
-
-            const url = decorateUrl('/')
-            if (url.startsWith('http')) {
-              window.location.href = url
-            } else {
-              router.push(url)
-            }
-          },
-        })
-      }
-    }
-
-    if (signUp.status === 'missing_requirements') {
-      // For simplicity, all missing fields in this example are text inputs.
-      // In a real app, you might want to handle them differently:
-      // - legal_accepted: checkbox
-      // - username: text with validation
-      // - phone_number: phone input, etc.
-      return (
-        <div>
-          <h1>Continue sign-up</h1>
-          <form action={handleSubmit}>
-            {signUp.missingFields.map((field) => (
-              <div key={field}>
-                <label>
-                  {field}:
-                  <input type="text" name={snakeToCamel(field)} />
-                </label>
-              </div>
-            ))}
-
-            {/* Required for sign-up flows
-            Clerk's bot sign-up protection is enabled by default */}
-            <div id="clerk-captcha" />
-
-            <button type="submit">Submit</button>
-          </form>
-        </div>
-      )
-    }
-
-    // Handle other statuses if needed
+  if (signUp.status === 'missing_requirements') {
+    // For simplicity, all missing fields in this example are text inputs.
+    // In a real app, you might want to handle them differently:
+    // - legal_accepted: checkbox
+    // - username: text with validation
+    // - phone_number: phone input, etc.
     return (
-      <>
-        {/* Required for sign-up flows
-        Clerk's bot sign-up protection is enabled by default */}
-        <div id="clerk-captcha" />
-      </>
+      <div>
+        <h1>Continue sign-up</h1>
+        <form action={handleSubmit}>
+          {signUp.missingFields.map((field) => (
+            <div key={field}>
+              <label>
+                {field}:
+                <input type="text" name={snakeToCamel(field)} />
+              </label>
+            </div>
+          ))}
+
+          {/* Required for sign-up flows
+          Clerk's bot sign-up protection is enabled by default */}
+          <div id="clerk-captcha" />
+
+          <button type="submit">Submit</button>
+        </form>
+      </div>
     )
   }
-  ```
-</If>
+
+  // Handle other statuses if needed
+  return (
+    <>
+      {/* Required for sign-up flows
+      Clerk's bot sign-up protection is enabled by default */}
+      <div id="clerk-captcha" />
+    </>
+  )
+}
+```
 
 <If sdk="expo">
   {/* TODO */}

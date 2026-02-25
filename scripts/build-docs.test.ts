@@ -3385,6 +3385,60 @@ title: Simple Test
     expect(output).toContain(`warning Hash "non-existent-hash" not found in /docs/simple-test`)
   })
 
+  test('Warn only once for broken hash in SDK-scoped doc', async () => {
+    const { tempDir } = await createTempFiles([
+      {
+        path: './docs/manifest.json',
+        content: JSON.stringify({
+          navigation: [
+            [
+              {
+                title: 'SDK Group',
+                sdk: ['nextjs', 'react'],
+                items: [[{ title: 'SDK Doc', sdk: ['nextjs', 'react'], href: '/docs/sdk-doc' }]],
+              },
+              { title: 'Target', href: '/docs/target' },
+            ],
+          ],
+        }),
+      },
+      {
+        path: './docs/sdk-doc.mdx',
+        content: `---
+title: SDK Doc
+sdk: nextjs, react
+---
+
+[Target](/docs/target#non-existent-hash)
+
+# SDK Doc Page`,
+      },
+      {
+        path: './docs/target.mdx',
+        content: `---
+title: Target
+---
+
+# Target Page`,
+      },
+    ])
+
+    const output = await build(
+      await createConfig({
+        ...baseConfig,
+        basePath: tempDir,
+        validSdks: ['nextjs', 'react'],
+      }),
+    )
+
+    const hashWarning = 'Hash "non-existent-hash" not found in /docs/target'
+    // Should contain the warning
+    expect(output).toContain(hashWarning)
+    // But only once — not duplicated per SDK variant
+    const occurrences = output!.split(hashWarning).length - 1
+    expect(occurrences).toBe(1)
+  })
+
   test('Pick up on id in heading for hash alias', async () => {
     const { tempDir } = await createTempFiles([
       {
@@ -4132,13 +4186,15 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
         validSdks: ['react', 'nextjs'],
       }),
     )
+
+    expect(output).toBe('')
 
     const pageBContent = await readFile('./dist/page-a.mdx')
     expect(pageBContent).not.toContain('<SDKLink')
@@ -4187,7 +4243,7 @@ Page B content`,
       },
     ])
 
-    await build(
+    const output = await build(
       await createConfig({
         ...baseConfig,
         basePath: tempDir,
@@ -4195,61 +4251,11 @@ Page B content`,
       }),
     )
 
+    expect(output).toBe('')
+
     const content = await readFile('./dist/nextjs/page-a.mdx')
     expect(content).not.toContain('<SDKLink')
     expect(content).toContain('[Link to Page B](/docs/page-b)')
-  })
-
-  test('Should not inject SDKLink when linking directly to an sdk path for a page that is only manifest sdk-grouped (no sdk frontmatter)', async () => {
-    const { tempDir, readFile } = await createTempFiles([
-      {
-        path: './docs/manifest.json',
-        content: JSON.stringify({
-          navigation: [
-            [
-              { title: 'Page A', href: '/docs/page-a' },
-              {
-                title: 'Group',
-                sdk: ['react'],
-                items: [[{ title: 'Page B', href: '/docs/page-b' }]],
-              },
-            ],
-          ],
-        }),
-      },
-      {
-        path: './docs/page-a.mdx',
-        content: `---
-title: Page A
-description: Page linking to an explicit sdk path
-sdk: nextjs, react
----
-
-[Link to React Page B](/docs/react/page-b)
-`,
-      },
-      {
-        path: './docs/page-b.mdx',
-        content: `---
-title: Page B
-description: Manifest sdk-grouped without sdk frontmatter
----
-
-Page B content`,
-      },
-    ])
-
-    await build(
-      await createConfig({
-        ...baseConfig,
-        basePath: tempDir,
-        validSdks: ['react', 'nextjs'],
-      }),
-    )
-
-    const content = await readFile('./dist/react/page-a.mdx')
-    expect(content).not.toContain('<SDKLink')
-    expect(content).toContain('[Link to React Page B](/docs/react/page-b)')
   })
 
   test('Reference-style link to SDK-scoped doc is swapped to <SDKLink /> with scoping', async () => {

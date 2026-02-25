@@ -8,15 +8,39 @@ llm:
 
 ## Overview
 
-Core 3 focuses on consistency and cleanup across Clerk's SDKs while keeping upgrade time short (usually under 30 minutes with the CLI).
+Core 3 focuses on consistency and cleanup across Clerk's SDKs. Most projects can be upgraded in under 30 minutes using the [upgrade CLI](#upgrade-using-the-cli).
 
-- **Naming consistency:** `__unstable_*` APIs move to `__internal_*`, and experimental methods share the `__experimental_` prefix.
+Here's a summary of what changed:
+
+- **Component consolidation:** `Protect`, `SignedIn`, and `SignedOut` are replaced by a single `Show` component.
 - **Package renaming:** `@clerk/clerk-react` becomes `@clerk/react`, `@clerk/clerk-expo` becomes `@clerk/expo`, `createTheme` moves to `@clerk/ui/themes/experimental`, and types consolidate under `@clerk/shared/types`.
 - **Appearance updates:** `appearance.layout` is now `appearance.options`, `showOptionalFields` defaults to `false`, and color variables apply at full opacity.
-- **Behavior alignment:** redirect props and legacy billing flags are removed in favor of the newer patterns.
+- **Behavior alignment:** Legacy redirect props and billing flags are removed in favor of the newer patterns.
 - **Platform requirements:** Node.js 20.9.0+ is required across the updated packages.
 
-Use `npx @clerk/upgrade` to scan your project and speed up the migration.
+## Preparing to upgrade
+
+Before upgrading, make sure your project meets the following requirements:
+
+- **Node.js 20.9.0 or later** is installed. You can check your version by running `node -v` in your terminal. If you need to update, see the [Node.js download page](https://nodejs.org/).
+- **Your Clerk SDKs are on the latest Core 2 version.** Updating to the latest Core 2 release first allows you to resolve deprecation warnings incrementally, which will make the Core 3 upgrade smoother. For example, for Next.js, run `npm install @clerk/nextjs@6`.
+
+## Upgrade using the CLI
+
+The recommended way to upgrade is to use the `@clerk/upgrade` CLI. This tool will scan your project, detect the breaking changes that affect your codebase, and apply fixes automatically where possible.
+
+To run the CLI, open your terminal, navigate to your project directory, and run the command that matches your package manager:
+
+```npm
+npx @clerk/upgrade
+```
+
+The CLI will walk you through the changes it detects. For most projects, this will handle the majority of the upgrade automatically.
+
+> [!NOTE]
+> The upgrade CLI modifies `.ts`, `.tsx`, `.js`, and `.jsx` files. If you're using Astro, you'll need to manually update your `.astro` template files — see the [SDK-specific changes](#sdk-specific-changes) section below.
+
+The rest of this guide covers each breaking change in detail, which is useful as a reference for changes the CLI can't fully automate or if you'd like to understand what changed and why.
 
 ## Breaking changes
 
@@ -438,7 +462,7 @@ The following deprecated APIs have been removed from all Clerk SDKs.
 
 The following changes only apply to specific SDKs. Select your SDK below for additional upgrade steps.
 
-<Tabs items={['React', 'Next.js', 'Expo', 'Nuxt']}>
+<Tabs items={['React', 'Next.js', 'Astro', 'TanStack React Start', 'Expo', 'Nuxt']}>
   <Tab>
     {/* React */}
 
@@ -496,6 +520,62 @@ The following changes only apply to specific SDKs. Select your SDK below for add
     ```
 
     If you're using Next.js 16 with `cacheComponents: true`, you may also need to wrap `ClerkProvider` in a `<Suspense>` boundary.
+  </Tab>
+
+  <Tab>
+    {/* Astro */}
+
+    ### Upgrade CLI does not auto-fix `.astro` template files {{ toc: false }}
+
+    The upgrade CLI will fix `.ts`/`.tsx` files (React islands), but `.astro` template files must be updated manually. Components are imported from `@clerk/astro/components`:
+
+    ```diff
+    ---
+    - import { SignedIn, SignedOut, Protect } from '@clerk/astro/components'
+    + import { Show } from '@clerk/astro/components'
+    ---
+
+    - <SignedIn>
+    + <Show when="signed-in">
+        <Dashboard />
+    - </SignedIn>
+    + </Show>
+
+    - <SignedOut>
+    + <Show when="signed-out">
+        <SignInPage />
+    - </SignedOut>
+    + </Show>
+
+    - <Protect role="admin">
+    + <Show when={{ role: "admin" }}>
+        <AdminPanel />
+    - </Protect>
+    + </Show>
+    ```
+  </Tab>
+
+  <Tab>
+    {/* TanStack React Start */}
+
+    ### Minimum TanStack version increased {{ toc: false }}
+
+    `@clerk/tanstack-react-start` v1 requires `@tanstack/react-start` v1.157.0 or later (along with matching versions of `@tanstack/react-router` and `@tanstack/react-router-devtools`).
+
+    If you pin TanStack versions, update them:
+
+    ```diff
+    {
+      "dependencies": {
+    -   "@tanstack/react-router": "1.154.14",
+    -   "@tanstack/react-router-devtools": "1.154.14",
+    -   "@tanstack/react-start": "1.154.14",
+    +   "@tanstack/react-router": "1.160.2",
+    +   "@tanstack/react-router-devtools": "1.160.2",
+    +   "@tanstack/react-start": "1.160.2",
+      }
+    }
+    ```
   </Tab>
 
   <Tab>

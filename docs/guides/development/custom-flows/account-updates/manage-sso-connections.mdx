@@ -28,118 +28,410 @@ This guide uses Discord, Google, and GitHub as examples.
 1. In the UI, the `unconnectedOptions` array is used to create a list of buttons for the user to add new external accounts.
 1. In the UI, the `User` object is used to access the `externalAccounts` property, which is mapped through to create a list of the user's existing external accounts. If there is an error, it is displayed to the user in the 'Status' column. If the account didn't verify when the user added it, a 'Reverify' button is displayed, which will redirect the user to the provider in order to verify their account.
 
-```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
-'use client'
+<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
+  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-import { useUser, useReverification } from '@clerk/nextjs'
-import { CreateExternalAccountParams, ExternalAccountResource, OAuthStrategy } from '@clerk/types'
-import { useRouter } from 'next/navigation'
+  ```tsx {{ filename: 'app/account/manage-external-accounts/page.tsx', collapsible: true }}
+  'use client'
 
-// Capitalize the first letter of the provider name
-// E.g. 'discord' -> 'Discord'
-const capitalize = (provider: string) => {
-  return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
-}
+  import { useUser, useReverification } from '@clerk/nextjs'
+  import { CreateExternalAccountParams, ExternalAccountResource, OAuthStrategy } from '@clerk/types'
+  import { useRouter } from 'next/navigation'
 
-// Remove the 'oauth' prefix from the strategy string
-// E.g. 'oauth_discord' -> 'discord'
-// Used to match the strategy with the 'provider' field in externalAccounts
-const normalizeProvider = (provider: string) => {
-  return provider.split('_')[1]
-}
-
-export default function AddAccount() {
-  const router = useRouter()
-  // Use Clerk's `useUser()` hook to get the current user's `User` object
-  const { isLoaded, user } = useUser()
-  const createExternalAccount = useReverification((params: CreateExternalAccountParams) =>
-    user?.createExternalAccount(params),
-  )
-  const accountDestroy = useReverification((account: ExternalAccountResource) => account.destroy())
-
-  // List the options the user can select when adding a new external account
-  // Edit this array to include all of your enabled SSO connections
-  const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
-
-  // Handle adding the new external account
-  const addSSO = async (strategy: OAuthStrategy) => {
-    await createExternalAccount({
-      strategy,
-      redirectUrl: '/account/manage-external-accounts',
-    })
-      .then((res) => {
-        if (res?.verification?.externalVerificationRedirectURL) {
-          router.push(res.verification.externalVerificationRedirectURL.href)
-        }
-      })
-      .catch((err) => {
-        console.log('ERROR', err)
-      })
-      .finally(() => {
-        console.log('Redirected user to oauth provider')
-      })
+  // Capitalize the first letter of the provider name
+  // E.g. 'discord' -> 'Discord'
+  const capitalize = (provider: string) => {
+    return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
   }
 
-  // Show a loading message until Clerk loads
-  if (!isLoaded) return <p>Loading...</p>
+  // Remove the 'oauth' prefix from the strategy string
+  // E.g. 'oauth_discord' -> 'discord'
+  // Used to match the strategy with the 'provider' field in externalAccounts
+  const normalizeProvider = (provider: string) => {
+    return provider.split('_')[1]
+  }
 
-  // Find the external accounts from the options array that the user has not yet added to their account
-  // This prevents showing an 'add' button for existing external account types
-  const unconnectedOptions = options.filter(
-    (option) =>
-      !user?.externalAccounts.some((account) => account.provider === normalizeProvider(option)),
-  )
+  export default function AddAccount() {
+    const router = useRouter()
+    // Use Clerk's `useUser()` hook to get the current user's `User` object
+    const { isLoaded, user } = useUser()
+    const createExternalAccount = useReverification((params: CreateExternalAccountParams) =>
+      user?.createExternalAccount(params),
+    )
+    const accountDestroy = useReverification((account: ExternalAccountResource) => account.destroy())
 
-  return (
-    <>
-      <div>
-        <p>Connected accounts</p>
-        {user?.externalAccounts.map((account) => {
-          return (
-            <ul key={account.id}>
-              <li>Provider: {capitalize(account.provider)}</li>
-              <li>Scopes: {account.approvedScopes}</li>
-              <li>
-                Status:{' '}
-                {/* This example uses the `longMessage` returned by the API. You can use account.verification.error.code to determine the error and then provide your own message to the user. */}
-                {account.verification?.status === 'verified'
-                  ? capitalize(account.verification?.status)
-                  : account.verification?.error?.longMessage}
-              </li>
-              {account.verification?.status !== 'verified' &&
-                account.verification?.externalVerificationRedirectURL && (
-                  <li>
-                    <a href={account.verification?.externalVerificationRedirectURL?.href}>
-                      Reverify {capitalize(account.provider)}
-                    </a>
-                  </li>
-                )}
-              <li>
-                <button onClick={() => accountDestroy(account)}>
-                  Remove {capitalize(account.provider)}
-                </button>
-              </li>
-            </ul>
-          )
-        })}
-      </div>
-      {unconnectedOptions.length > 0 && (
+    // List the options the user can select when adding a new external account
+    // Edit this array to include all of your enabled SSO connections
+    const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
+
+    // Handle adding the new external account
+    const addSSO = async (strategy: OAuthStrategy) => {
+      await createExternalAccount({
+        strategy,
+        redirectUrl: '/account/manage-external-accounts',
+      })
+        .then((res) => {
+          if (res?.verification?.externalVerificationRedirectURL) {
+            router.push(res.verification.externalVerificationRedirectURL.href)
+          }
+        })
+        .catch((err) => {
+          console.log('ERROR', err)
+        })
+        .finally(() => {
+          console.log('Redirected user to oauth provider')
+        })
+    }
+
+    // Show a loading message until Clerk loads
+    if (!isLoaded) return <p>Loading...</p>
+
+    // Find the external accounts from the options array that the user has not yet added to their account
+    // This prevents showing an 'add' button for existing external account types
+    const unconnectedOptions = options.filter(
+      (option) =>
+        !user?.externalAccounts.some((account) => account.provider === normalizeProvider(option)),
+    )
+
+    return (
+      <>
         <div>
-          <p>Add a new external account</p>
-          <ul>
-            {unconnectedOptions.map((strategy) => {
-              return (
-                <li key={strategy}>
-                  <button onClick={() => addSSO(strategy)}>
-                    Add {capitalize(normalizeProvider(strategy))}
+          <p>Connected accounts</p>
+          {user?.externalAccounts.map((account) => {
+            return (
+              <ul key={account.id}>
+                <li>Provider: {capitalize(account.provider)}</li>
+                <li>Scopes: {account.approvedScopes}</li>
+                <li>
+                  Status:{' '}
+                  {/* This example uses the `longMessage` returned by the API. You can use account.verification.error.code to determine the error and then provide your own message to the user. */}
+                  {account.verification?.status === 'verified'
+                    ? capitalize(account.verification?.status)
+                    : account.verification?.error?.longMessage}
+                </li>
+                {account.verification?.status !== 'verified' &&
+                  account.verification?.externalVerificationRedirectURL && (
+                    <li>
+                      <a href={account.verification?.externalVerificationRedirectURL?.href}>
+                        Reverify {capitalize(account.provider)}
+                      </a>
+                    </li>
+                  )}
+                <li>
+                  <button onClick={() => accountDestroy(account)}>
+                    Remove {capitalize(account.provider)}
                   </button>
                 </li>
-              )
-            })}
-          </ul>
+              </ul>
+            )
+          })}
         </div>
-      )}
-    </>
-  )
-}
-```
+        {unconnectedOptions.length > 0 && (
+          <div>
+            <p>Add a new external account</p>
+            <ul>
+              {unconnectedOptions.map((strategy) => {
+                return (
+                  <li key={strategy}>
+                    <button onClick={() => addSSO(strategy)}>
+                      Add {capitalize(normalizeProvider(strategy))}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+      </>
+    )
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  ```tsx {{ filename: 'app/(account)/manage-external-accounts/page.tsx', collapsible: true }}
+  import { ThemedText } from '@/components/themed-text'
+  import { ThemedView } from '@/components/themed-view'
+  import { useUser } from '@clerk/expo'
+  import { ExternalAccountResource, OAuthStrategy } from '@clerk/types'
+  import { Redirect } from 'expo-router'
+  import { FlatList, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+
+  // Capitalize the first letter of the provider name
+  // E.g. 'discord' -> 'Discord'
+  const capitalize = (provider: string) => {
+    return `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`
+  }
+
+  // Remove the 'oauth' prefix from the strategy string
+  // E.g. 'oauth_discord' -> 'discord'
+  // Used to match the strategy with the 'provider' field in externalAccounts
+  const normalizeProvider = (provider: string) => {
+    return provider.split('_')[1]
+  }
+
+  export default function AddAccount() {
+    const { isLoaded, isSignedIn, user } = useUser()
+
+    // List the options the user can select when adding a new external account
+    // Edit this array to include all of your enabled SSO connections
+    const options: OAuthStrategy[] = ['oauth_discord', 'oauth_google', 'oauth_github']
+
+    // Handle adding the new external account
+    const addSSO = async (strategy: OAuthStrategy) => {
+      await user
+        ?.createExternalAccount({
+          strategy,
+          redirectUrl: '/account/manage-external-accounts',
+        })
+        .then((res) => {
+          if (res?.verification?.externalVerificationRedirectURL) {
+            Linking.openURL(res.verification.externalVerificationRedirectURL.href)
+          }
+        })
+        .catch((err) => {
+          console.log('ERROR', err)
+        })
+        .finally(() => {
+          console.log('Redirected user to oauth provider')
+        })
+    }
+
+    // Handle removing an external account
+    const removeAccount = async (account: ExternalAccountResource) => {
+      try {
+        await account.destroy()
+        await user?.reload()
+      } catch (err) {
+        console.error('Error removing account:', err)
+      }
+    }
+
+    // Handle loading state
+    if (!isLoaded) {
+      return (
+        <ThemedView style={styles.container}>
+          <ThemedText>Loading...</ThemedText>
+        </ThemedView>
+      )
+    }
+
+    // Handle signed-out state
+    if (!isSignedIn) return <Redirect href="/sign-in" />
+
+    // Find the external accounts from the options array that the user has not yet added to their account
+    // This prevents showing an 'add' button for existing external account types
+    const unconnectedOptions = options.filter(
+      (option) =>
+        !user?.externalAccounts.some((account) => account.provider === normalizeProvider(option)),
+    )
+
+    return (
+      <ScrollView>
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.title}>
+            Manage External Accounts
+          </ThemedText>
+
+          <View style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Connected accounts
+            </ThemedText>
+
+            {user?.externalAccounts.length === 0 ? (
+              <ThemedText style={styles.infoText}>No external accounts connected</ThemedText>
+            ) : (
+              <FlatList
+                data={user?.externalAccounts}
+                scrollEnabled={false}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item: account }) => (
+                  <View style={styles.accountCard}>
+                    <View style={styles.accountInfo}>
+                      <ThemedText style={styles.accountProvider}>
+                        {capitalize(account.provider)}
+                      </ThemedText>
+                      <ThemedText style={styles.accountDetail}>
+                        Scopes: {account.approvedScopes}
+                      </ThemedText>
+                      <View style={styles.statusRow}>
+                        <ThemedText style={styles.accountDetail}>Status: </ThemedText>
+                        {account.verification?.status === 'verified' ? (
+                          <ThemedText style={styles.verifiedText}>
+                            {capitalize(account.verification?.status)}
+                          </ThemedText>
+                        ) : (
+                          <ThemedText style={styles.errorText}>
+                            {account.verification?.error?.longMessage}
+                          </ThemedText>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.accountActions}>
+                      {account.verification?.status !== 'verified' &&
+                        account.verification?.externalVerificationRedirectURL && (
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.smallButton,
+                              pressed && styles.buttonPressed,
+                            ]}
+                            onPress={() =>
+                              Linking.openURL(
+                                account.verification?.externalVerificationRedirectURL?.href || '',
+                              )
+                            }
+                          >
+                            <ThemedText style={styles.smallButtonText}>
+                              Reverify {capitalize(account.provider)}
+                            </ThemedText>
+                          </Pressable>
+                        )}
+
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.smallButton,
+                          styles.dangerButton,
+                          pressed && styles.buttonPressed,
+                        ]}
+                        onPress={() => removeAccount(account)}
+                      >
+                        <ThemedText style={styles.dangerButtonText}>
+                          Remove {capitalize(account.provider)}
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+
+          {unconnectedOptions.length > 0 && (
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Add a new external account
+              </ThemedText>
+
+              <View style={styles.optionsList}>
+                {unconnectedOptions.map((strategy) => (
+                  <Pressable
+                    key={strategy}
+                    style={({ pressed }) => [styles.optionButton, pressed && styles.buttonPressed]}
+                    onPress={() => addSSO(strategy)}
+                  >
+                    <ThemedText style={styles.optionButtonText}>
+                      Add {capitalize(normalizeProvider(strategy))}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+        </ThemedView>
+      </ScrollView>
+    )
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+    },
+    title: {
+      marginBottom: 16,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontWeight: '600',
+      fontSize: 16,
+      marginBottom: 12,
+    },
+    infoText: {
+      fontSize: 14,
+      opacity: 0.8,
+    },
+    accountCard: {
+      padding: 16,
+      backgroundColor: '#f5f5f5',
+      borderRadius: 8,
+      marginBottom: 12,
+      gap: 12,
+    },
+    accountInfo: {
+      gap: 6,
+    },
+    accountProvider: {
+      fontSize: 18,
+      fontWeight: '600',
+    },
+    accountDetail: {
+      fontSize: 14,
+      opacity: 0.8,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    verifiedText: {
+      fontSize: 14,
+      color: '#2e7d32',
+      fontWeight: '500',
+    },
+    errorText: {
+      fontSize: 14,
+      color: '#c62828',
+      fontWeight: '500',
+      flex: 1,
+    },
+    accountActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    smallButton: {
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 6,
+      alignItems: 'center',
+    },
+    dangerButton: {
+      backgroundColor: '#c62828',
+    },
+    buttonPressed: {
+      opacity: 0.7,
+    },
+    smallButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    dangerButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+      fontSize: 13,
+    },
+    optionsList: {
+      gap: 8,
+    },
+    optionButton: {
+      backgroundColor: '#0a7ea4',
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    optionButtonText: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+  })
+  ```
+</If>
+
+<If sdk={["js-frontend", "ios", "android", "nuxt"]}>
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>

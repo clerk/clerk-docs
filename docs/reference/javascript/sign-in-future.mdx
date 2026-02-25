@@ -1,6 +1,6 @@
 ---
 title: '`SignInFuture`'
-description: The current active `SignIn` instance, for use in custom flows.
+description: The current active SignIn instance, for use in custom flows.
 sdk: js-frontend
 ---
 
@@ -14,7 +14,7 @@ The `SignInFuture` class holds the state of the current sign-in and provides hel
   - `createdSessionId`
   - `null | string`
 
-  The identifier of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `'complete'`.
+  The ID of the session that was created upon completion of the current sign-in. The value of this property is `null` if the sign-in status is not `'complete'`.
 
   ---
 
@@ -26,7 +26,7 @@ The `SignInFuture` class holds the state of the current sign-in and provides hel
   ---
 
   - `firstFactorVerification`
-  - [`VerificationResource`](/docs/reference/javascript/types/verification)
+  - [`VerificationResource`](/docs/reference/javascript/types/verification-resource)
 
   The state of the verification process for the selected first factor. Initially, this property contains an empty verification object, since there is no first factor selected.
 
@@ -54,7 +54,7 @@ The `SignInFuture` class holds the state of the current sign-in and provides hel
   ---
 
   - `secondFactorVerification`
-  - [`VerificationResource`](/docs/reference/javascript/types/verification)
+  - [`VerificationResource`](/docs/reference/javascript/types/verification-resource)
 
   The state of the verification process for the selected second factor. Initially, this property contains an empty verification object, since there is no second factor selected.
 
@@ -63,7 +63,13 @@ The `SignInFuture` class holds the state of the current sign-in and provides hel
   - `status`
   - `SignInStatus`
 
-  The current status of the sign-in.
+  The current status of the sign-in. `SignInStatus` supports the following values:
+
+  - `'complete'`: The user is signed in and the [custom flow](!custom-flow) can proceed to `finalize()` to set the newly created session as the active session.
+  - `'needs_identifier'`: The user's identifier (e.g., email address, phone number, username) hasn't been provided.
+  - `'needs_first_factor'`: One of the following first factor verification strategies is missing: `'email_link'`, `'email_code'`, `passkey`, `password`, `'phone_code'`, `'web3_base_signature'`, `'web3_metamask_signature'`, `'web3_coinbase_wallet_signature'`, `'web3_okx_wallet_signature'`, `'web3_solana_signature'`, [`OAuthStrategy`](/docs/reference/javascript/types/sso#o-auth-strategy), or `'enterprise_sso'`.
+  - `'needs_second_factor'`: One of the following second factor verification strategies is missing: `'phone_code'`, `'totp'`, `'backup_code'`, `'email_code'`, or `'email_link'`.
+  - `'needs_new_password'`: The user needs to set a new password.
 
   ---
 
@@ -77,7 +83,7 @@ The `SignInFuture` class holds the state of the current sign-in and provides hel
   - `supportedSecondFactors`
   - <code>[SignInSecondFactor](/docs/reference/javascript/types/sign-in-second-factor)\[]</code>
 
-  Array of the second factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used. his property is populated only when the first factor is verified.
+  Array of the second factors that are supported in the current sign-in. Each factor contains information about the verification strategy that can be used. This property is populated only when the first factor is verified.
 
   ---
 
@@ -130,7 +136,7 @@ function create(params: SignInFutureCreateParams): Promise<{ error: ClerkError |
   ---
 
   - `strategy?`
-  - <code>[OAuthStrategy](/docs/reference/javascript/types/sso#o-auth-strategy) | "saml" | "enterprise\_sso"</code>
+  - <code>[OAuthStrategy](/docs/reference/javascript/types/sso#o-auth-strategy) | "enterprise\_sso" | "passkey"</code>
 
   The first factor verification strategy to use in the sign-in flow. Depends on the `identifier` value. Each authentication identifier supports different verification strategies.
 
@@ -151,7 +157,7 @@ function create(params: SignInFutureCreateParams): Promise<{ error: ClerkError |
 
 ### `emailCode.sendCode()`
 
-Used to send an email code to sign-in
+Sends an email code to sign in with.
 
 ```ts
 function sendCode(params: SignInFutureEmailCodeSendParams): Promise<{ error: ClerkError | null }>
@@ -163,7 +169,7 @@ function sendCode(params: SignInFutureEmailCodeSendParams): Promise<{ error: Cle
   - `emailAddress?`
   - `string`
 
-  The user's email address. Only supported if [Email address](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#email) is enabled.
+  The user's email address.
 
   ---
 
@@ -175,7 +181,7 @@ function sendCode(params: SignInFutureEmailCodeSendParams): Promise<{ error: Cle
 
 ### `emailCode.verifyCode()`
 
-Used to verify a code sent via email to sign-in
+Verifies an email code sent with the [`emailCode.sendCode()`](#email-code-send-code) method.
 
 ```ts
 function verifyCode(
@@ -189,12 +195,12 @@ function verifyCode(
   - `code`
   - `string`
 
-  The one-time code that was sent to the user.
+  The one-time code that was sent to the user as part of the `signIn.emailCode.sendCode()` method.
 </Properties>
 
 ### `emailLink.sendLink()`
 
-Used to send an email link to sign-in
+Sends an email link to sign in with.
 
 ```ts
 function sendLink(params: SignInFutureEmailLinkSendParams): Promise<{ error: ClerkError | null }>
@@ -209,9 +215,34 @@ function sendLink(params: SignInFutureEmailLinkSendParams): Promise<{ error: Cle
   The full URL that the user will be redirected to when they visit the email link.
 </Properties>
 
+### `emailLink.verification`
+
+The verification status of the email link. This property is populated by reading query parameters from the URL after the user visits the email link. Returns `null` if no verification status is available.
+
+<Properties>
+  - `status`
+  - `'verified' | 'expired' | 'failed' | 'client_mismatch'`
+
+  The verification status.
+
+  ---
+
+  - `createdSessionId`
+  - `string`
+
+  The ID of the session that was created upon successful verification.
+
+  ---
+
+  - `verifiedFromTheSameClient`
+  - `boolean`
+
+  Whether the verification was completed from the same client (browser) that initiated the email link flow.
+</Properties>
+
 ### `emailLink.waitForVerification()`
 
-Will wait for verification to complete or expire
+Waits for email link verification to complete or expire.
 
 ```ts
 function waitForVerification(): Promise<{ error: ClerkError | null }>
@@ -219,7 +250,7 @@ function waitForVerification(): Promise<{ error: ClerkError | null }>
 
 ### `finalize()`
 
-Used to convert a sign-in with `status === 'complete'` into an active session. Will cause anything observing the session state (such as the `useUser()` hook) to update automatically.
+Converts a sign-in with `status === 'complete'` into an active session. Will cause anything observing the session state (such as the `useUser()` hook) to update automatically.
 
 ```ts
 function finalize(params?: SignInFutureFinalizeParams): Promise<{ error: ClerkError | null }>
@@ -236,7 +267,7 @@ function finalize(params?: SignInFutureFinalizeParams): Promise<{ error: ClerkEr
 
 ### `mfa.sendEmailCode()`
 
-Used to send an email code as a second factor to sign-in
+Sends an email code to sign in with as the second factor.
 
 ```ts
 function sendEmailCode(): Promise<{ error: ClerkError | null }>
@@ -244,7 +275,7 @@ function sendEmailCode(): Promise<{ error: ClerkError | null }>
 
 ### `mfa.verifyEmailCode()`
 
-Used to verify an email code sent as a second factor to sign-in
+Verifies an email code sent with the [`mfa.sendEmailCode()`](#mfa-send-email-code) method.
 
 ```ts
 function verifyEmailCode(
@@ -263,7 +294,7 @@ function verifyEmailCode(
 
 ### `mfa.sendPhoneCode()`
 
-Used to send a phone code as a second factor to sign-in
+Sends a phone code to sign in with as the second factor.
 
 ```ts
 function sendPhoneCode(): Promise<{ error: ClerkError | null }>
@@ -271,7 +302,7 @@ function sendPhoneCode(): Promise<{ error: ClerkError | null }>
 
 ### `mfa.verifyPhoneCode()`
 
-Used to verify a phone code sent as a second factor to sign-in
+Verifies a phone code sent with the [`mfa.sendPhoneCode()`](#mfa-send-phone-code) method.
 
 ```ts
 function verifyPhoneCode(
@@ -290,7 +321,7 @@ function verifyPhoneCode(
 
 ### `mfa.verifyBackupCode()`
 
-Used to verify a backup code as a second factor to sign-in
+Verifies a backup code as a second factor to sign in with.
 
 ```ts
 function verifyBackupCode(
@@ -309,7 +340,7 @@ function verifyBackupCode(
 
 ### `mfa.verifyTOTP()`
 
-Used to verify a TOTP code as a second factor to sign-in
+Verifies an authenticator app (TOTP) code as a second factor to sign in with.
 
 ```ts
 function verifyTOTP(params: SignInFutureTOTPVerifyParams): Promise<{ error: ClerkError | null }>
@@ -346,7 +377,7 @@ function passkey(params?: SignInFuturePasskeyParams): Promise<{ error: null | Cl
 
 ### `password()`
 
-Used to submit a password to sign-in.
+Performs a password-based sign-in.
 
 ```ts
 function password(params: SignInFuturePasswordParams): Promise<{ error: ClerkError | null }>
@@ -384,7 +415,7 @@ function password(params: SignInFuturePasswordParams): Promise<{ error: ClerkErr
 
 ### `phoneCode.sendCode()`
 
-Used to send a phone code to sign-in
+Sends a phone code to sign in with.
 
 ```ts
 function sendCode(params: SignInFuturePhoneCodeSendParams): Promise<{ error: ClerkError | null }>
@@ -397,11 +428,25 @@ function sendCode(params: SignInFuturePhoneCodeSendParams): Promise<{ error: Cle
   - `'sms' | 'whatsapp'`
 
   The mechanism to use to send the code to the provided phone number. Defaults to `'sms'`.
+
+  ---
+
+  - `phoneNumber?`
+  - `string`
+
+  The user's phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164). Only supported if [phone number](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#phone) is enabled.
+
+  ---
+
+  - `phoneNumberId?`
+  - `string`
+
+  The ID for the user's phone number that will receive a message with the one-time authentication code.
 </Properties>
 
 ### `phoneCode.verifyCode()`
 
-Used to verify a code sent via phone to sign-in
+Verifies a phone code sent with the [`phoneCode.sendCode()`](#phone-code-send-code) method.
 
 ```ts
 function verifyCode(
@@ -415,7 +460,7 @@ function verifyCode(
   - `code`
   - `string`
 
-  The one-time code that was sent to the user.
+  The one-time code that was sent to the user as part of the `signIn.phoneCode.sendCode()` method.
 </Properties>
 
 ### `reset()`
@@ -423,12 +468,12 @@ function verifyCode(
 Resets the current sign-in attempt by clearing all local state back to null. This is useful when you want to allow users to go back to the beginning of the sign-in flow (e.g., to change their identifier during verification). Unlike other methods, `reset()` does not trigger the `fetchStatus` to change to `'fetching'` and does not make any API calls - it only clears local state.
 
 ```ts
-function reset(): Promise<{ error: null }>
+function reset(): Promise<{ error: ClerkError | null }>
 ```
 
 ### `resetPasswordEmailCode.sendCode()`
 
-Used to send a password reset code to the first email address on the account
+Sends a password reset code to the first email address on the account.
 
 ```ts
 function sendCode(): Promise<{ error: ClerkError | null }>
@@ -436,7 +481,7 @@ function sendCode(): Promise<{ error: ClerkError | null }>
 
 ### `resetPasswordEmailCode.submitPassword()`
 
-Used to submit a new password, and move the `signIn.status` to `'complete'`.
+Submits a new password and moves the `signIn.status` to `'complete'`.
 
 ```ts
 function submitPassword(
@@ -462,7 +507,7 @@ function submitPassword(
 
 ### `resetPasswordEmailCode.verifyCode()`
 
-Used to verify a password reset code sent via email. Will cause `signIn.status` to become `'needs_new_password'`.
+Verifies a password reset code sent with the [`resetPasswordEmailCode.sendCode()`](#reset-password-email-code-send-code) method. Will cause `signIn.status` to become `'needs_new_password'`. This is when you will call the [`resetPasswordEmailCode.submitPassword()`](#reset-password-email-code-submit-password) method to complete the password reset flow.
 
 ```ts
 function verifyCode(
@@ -476,12 +521,76 @@ function verifyCode(
   - `code`
   - `string`
 
-  The one-time code that was sent to the user.
+  The one-time code that was sent to the user as part of the `signIn.resetPasswordEmailCode.sendCode()` method.
+</Properties>
+
+### `resetPasswordPhoneCode.sendCode()`
+
+Sends a password reset code to the first phone number on the account.
+
+```ts
+function sendCode(
+  params?: SignInFutureResetPasswordPhoneCodeSendParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordPhoneCodeSendParams`
+
+<Properties>
+  - `phoneNumber?`
+  - `string`
+
+  The user's phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164). Only supported if [phone number](/docs/guides/configure/auth-strategies/sign-up-sign-in-options#phone) is enabled.
+</Properties>
+
+### `resetPasswordPhoneCode.verifyCode()`
+
+Verifies a password reset code sent with the [`resetPasswordPhoneCode.sendCode()`](#reset-password-phone-code-send-code) method. Will cause `signIn.status` to become `'needs_new_password'`. This is when you will call the [`resetPasswordPhoneCode.submitPassword()`](#reset-password-phone-code-submit-password) method to complete the password reset flow.
+
+```ts
+function verifyCode(
+  params: SignInFutureResetPasswordPhoneCodeVerifyParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordPhoneCodeVerifyParams`
+
+<Properties>
+  - `code`
+  - `string`
+
+  The one-time code that was sent to the user as part of the `signIn.resetPasswordPhoneCode.sendCode()` method.
+</Properties>
+
+### `resetPasswordPhoneCode.submitPassword()`
+
+Submits a new password and moves the `signIn.status` to `'complete'`.
+
+```ts
+function submitPassword(
+  params: SignInFutureResetPasswordSubmitParams,
+): Promise<{ error: ClerkError | null }>
+```
+
+#### `SignInFutureResetPasswordSubmitParams`
+
+<Properties>
+  - `password`
+  - `string`
+
+  The new password for the user.
+
+  ---
+
+  - `signOutOfOtherSessions?`
+  - `boolean`
+
+  If `true`, signs the user out of all other authenticated sessions.
 </Properties>
 
 ### `sso()`
 
-Used to perform OAuth authentication.
+Performs an SSO-based sign-in (OAuth or Enterprise).
 
 ```ts
 function sso(params: SignInFutureSSOParams): Promise<{ error: ClerkError | null }>
@@ -527,11 +636,18 @@ function sso(params: SignInFutureSSOParams): Promise<{ error: ClerkError | null 
 
   - `enterpriseConnectionId?`
   - `string`
+
+  ---
+
+  - `identifier?`
+  - `string`
+
+  The unique identifier of the user. Only supported with the `enterprise_sso` strategy.
 </Properties>
 
 ### `ticket()`
 
-Used to perform a ticket-based sign-in.
+Performs a ticket-based sign-in.
 
 ```ts
 function ticket(params?: SignInFutureTicketParams): Promise<{ error: ClerkError | null }>
@@ -548,7 +664,7 @@ function ticket(params?: SignInFutureTicketParams): Promise<{ error: ClerkError 
 
 ### `web3()`
 
-Used to perform a Web3-based sign-in.
+Performs a Web3-based sign-in.
 
 ```ts
 function web3(params: SignInFutureWeb3Params): Promise<{ error: ClerkError | null }>
@@ -558,7 +674,21 @@ function web3(params: SignInFutureWeb3Params): Promise<{ error: ClerkError | nul
 
 <Properties>
   - `strategy`
-  - `"web3_base_signature" | "web3_metamask_signature" | "web3_coinbase_wallet_signature" | "web3_okx_wallet_signature"`
+  - `"web3_base_signature" | "web3_metamask_signature" | "web3_coinbase_wallet_signature" | "web3_okx_wallet_signature" | "web3_solana_signature"`
 
   The verification strategy to validate the user's sign-in request.
+
+  ---
+
+  - `provider`
+  - `"metamask" | "base" | "coinbase_wallet" | "okx_wallet" | "solana"`
+
+  The Web3 wallet provider to use for the sign-in.
+
+  ---
+
+  - `walletName?`
+  - `string`
+
+  The name of the wallet to use for Solana sign-ins. Required when `provider` is set to `'solana'`.
 </Properties>

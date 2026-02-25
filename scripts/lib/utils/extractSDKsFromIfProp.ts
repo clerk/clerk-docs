@@ -15,7 +15,17 @@ export const extractSDKsFromIfProp =
     const isValidItems = isValidSdks(config)
 
     if (sdkProp.includes('", "') || sdkProp.includes("', '") || sdkProp.includes('["') || sdkProp.includes('"]')) {
-      const sdks = JSON.parse(sdkProp.replaceAll("'", '"')) as string[]
+      let sdks: string[]
+      try {
+        sdks = JSON.parse(sdkProp.replaceAll("'", '"')) as string[]
+      } catch (err) {
+        const pos = node.position
+          ? `${filePath}:${node.position.start?.line ?? '?'}:${node.position.start?.column ?? '?'}`
+          : filePath
+        throw new Error(
+          `Failed to parse <If sdk={...}> at ${pos}. JSON parse error: ${err instanceof Error ? err.message : err}. Raw value: ${JSON.stringify(sdkProp)}`,
+        )
+      }
       if (isValidItems(sdks)) {
         return sdks
       } else {

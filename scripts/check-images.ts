@@ -71,7 +71,12 @@ interface PreviewWarning {
   reason: PreviewIssueReason
 }
 
-function addReference(referenceMap: Map<string, string[]>, references: Set<string>, assetPath: string, file: string): void {
+function addReference(
+  referenceMap: Map<string, string[]>,
+  references: Set<string>,
+  assetPath: string,
+  file: string,
+): void {
   references.add(assetPath)
 
   if (!referenceMap.has(assetPath)) {

@@ -63,7 +63,10 @@ export function extractExplicitAssetReferences(content: string): string[] {
   return Array.from(references)
 }
 
-export function resolvePreviewAssetReferencesWithIssue(content: string, availableAssets: Set<string>): PreviewResolution {
+export function resolvePreviewAssetReferencesWithIssue(
+  content: string,
+  availableAssets: Set<string>,
+): PreviewResolution {
   const frontmatter = extractFrontmatter(content)
   if (!frontmatter) return { references: [] }
 

@@ -1,333 +1,335 @@
 {/* Adds an email address to a user's account, and verifies it using an email with an OTP. */}
 
-<If notSdk={["js-frontend", "expo", "ios", "android", "nuxt"]}>
-  **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
+<If notSdk={["ios", "android"]}>
   1. Every user has a [`User`](/docs/reference/javascript/user) object that represents their account. The `User` object has a `emailAddresses` property that contains all the email addresses associated with the user. The [`useUser()`](/docs/reference/hooks/use-user) hook is used to get the `User` object.
   1. The [`User.createEmailAddress()`](/docs/reference/javascript/user#create-email-address) method is passed to the [`useReverification()`](/docs/reference/hooks/use-reverification) hook to require the user to reverify their credentials before being able to add an email address to their account.
   1. If the `createEmailAddress()` function is successful, a new [`EmailAddress`](/docs/reference/javascript/types/email-address) object is created and stored in `User.emailAddresses`.
   1. The `prepareVerification()` method is used on the newly created `EmailAddress` object to send a verification code to the user.
   1. The `attemptVerification()` method is used on the same `EmailAddress` object with the verification code provided by the user to verify the email address.
 
-  ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
-  'use client'
+  <If notSdk="expo">
+    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
 
-  import { useReverification, useUser } from '@clerk/nextjs'
-  import { EmailAddressResource } from '@clerk/types'
-  import * as React from 'react'
+    ```tsx {{ filename: 'app/account/add-email/page.tsx', collapsible: true }}
+    'use client'
 
-  export default function Page() {
-    const { isLoaded, isSignedIn, user } = useUser()
+    import { useReverification, useUser } from '@clerk/nextjs'
+    import { EmailAddressResource } from '@clerk/types'
+    import * as React from 'react'
 
-    const [email, setEmail] = React.useState('')
-    const [code, setCode] = React.useState('')
-    const [isVerifying, setIsVerifying] = React.useState(false)
-    const [successful, setSuccessful] = React.useState(false)
-    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
-    const createEmailAddress = useReverification((email: string) =>
-      user?.createEmailAddress({ email }),
-    )
+    export default function Page() {
+      const { isLoaded, isSignedIn, user } = useUser()
 
-    // Handle loading state
-    if (!isLoaded) return <p>Loading...</p>
+      const [email, setEmail] = React.useState('')
+      const [code, setCode] = React.useState('')
+      const [isVerifying, setIsVerifying] = React.useState(false)
+      const [successful, setSuccessful] = React.useState(false)
+      const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
+      const createEmailAddress = useReverification((email: string) =>
+        user?.createEmailAddress({ email }),
+      )
 
-    // Handle signed-out state
-    if (!isSignedIn) return <p>You must be signed in to access this page</p>
+      // Handle loading state
+      if (!isLoaded) return <p>Loading...</p>
 
-    // Handle addition of the email address
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
+      // Handle signed-out state
+      if (!isSignedIn) return <p>You must be signed in to access this page</p>
 
-      try {
-        // Add an unverified email address to user
-        const res = await createEmailAddress(email)
-        // Reload user to get updated User object
-        await user.reload()
+      // Handle addition of the email address
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
 
-        // Find the email address that was just added
-        const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
-        // Create a reference to the email address that was just added
-        setEmailObj(emailAddress)
+        try {
+          // Add an unverified email address to user
+          const res = await createEmailAddress(email)
+          // Reload user to get updated User object
+          await user.reload()
 
-        // Send the user an email with the verification code
-        emailAddress?.prepareVerification({ strategy: 'email_code' })
+          // Find the email address that was just added
+          const emailAddress = user.emailAddresses.find((a) => a.id === res?.id)
+          // Create a reference to the email address that was just added
+          setEmailObj(emailAddress)
 
-        // Set to true to display second form
-        // and capture the code
-        setIsVerifying(true)
-      } catch (err) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
-      }
-    }
+          // Send the user an email with the verification code
+          emailAddress?.prepareVerification({ strategy: 'email_code' })
 
-    // Handle the submission of the verification form
-    const verifyCode = async (e: React.FormEvent) => {
-      e.preventDefault()
-      try {
-        // Verify that the code entered matches the code sent to the user
-        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
-
-        if (emailVerifyAttempt?.verification.status === 'verified') {
-          setSuccessful(true)
-        } else {
-          // If the status is not complete, check why. User may need to
-          // complete further steps.
-          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          // Set to true to display second form
+          // and capture the code
+          setIsVerifying(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
         }
-      } catch (err) {
-        console.error(JSON.stringify(err, null, 2))
       }
-    }
 
-    // Display a success message if the email was added successfully
-    if (successful) {
-      return <h1>Email added!</h1>
-    }
+      // Handle the submission of the verification form
+      const verifyCode = async (e: React.FormEvent) => {
+        e.preventDefault()
+        try {
+          // Verify that the code entered matches the code sent to the user
+          const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
 
-    // Display the verification form to capture the code
-    if (isVerifying) {
+          if (emailVerifyAttempt?.verification.status === 'verified') {
+            setSuccessful(true)
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          }
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      // Display a success message if the email was added successfully
+      if (successful) {
+        return <h1>Email added!</h1>
+      }
+
+      // Display the verification form to capture the code
+      if (isVerifying) {
+        return (
+          <>
+            <h1>Verify email</h1>
+            <div>
+              <form onSubmit={(e) => verifyCode(e)}>
+                <div>
+                  <label htmlFor="code">Enter code</label>
+                  <input
+                    onChange={(e) => setCode(e.target.value)}
+                    id="code"
+                    name="code"
+                    type="text"
+                    value={code}
+                  />
+                </div>
+                <div>
+                  <button type="submit">Verify</button>
+                </div>
+              </form>
+            </div>
+          </>
+        )
+      }
+
+      // Display the initial form to capture the email address
       return (
         <>
-          <h1>Verify email</h1>
+          <h1>Add Email</h1>
           <div>
-            <form onSubmit={(e) => verifyCode(e)}>
+            <form onSubmit={(e) => handleSubmit(e)}>
               <div>
-                <label htmlFor="code">Enter code</label>
+                <label htmlFor="email">Enter email address</label>
                 <input
-                  onChange={(e) => setCode(e.target.value)}
-                  id="code"
-                  name="code"
-                  type="text"
-                  value={code}
+                  onChange={(e) => setEmail(e.target.value)}
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
                 />
               </div>
               <div>
-                <button type="submit">Verify</button>
+                <button type="submit">Continue</button>
               </div>
             </form>
           </div>
         </>
       )
     }
+    ```
+  </If>
 
-    // Display the initial form to capture the email address
-    return (
-      <>
-        <h1>Add Email</h1>
-        <div>
-          <form onSubmit={(e) => handleSubmit(e)}>
-            <div>
-              <label htmlFor="email">Enter email address</label>
-              <input
-                onChange={(e) => setEmail(e.target.value)}
-                id="email"
-                name="email"
-                type="email"
-                value={email}
-              />
-            </div>
-            <div>
-              <button type="submit">Continue</button>
-            </div>
-          </form>
-        </div>
-      </>
-    )
-  }
-  ```
-</If>
+  <If sdk="expo">
+    ```tsx {{ filename: 'app/(account)/add-email/page.tsx', collapsible: true }}
+    import { ThemedText } from '@/components/themed-text'
+    import { ThemedView } from '@/components/themed-view'
+    import { useUser } from '@clerk/expo'
+    import { EmailAddressResource } from '@clerk/types'
+    import { Redirect } from 'expo-router'
+    import * as React from 'react'
+    import { Pressable, StyleSheet, TextInput } from 'react-native'
 
-<If sdk="expo">
-  ```tsx {{ filename: 'app/(account)/add-email/page.tsx', collapsible: true }}
-  import { ThemedText } from '@/components/themed-text'
-  import { ThemedView } from '@/components/themed-view'
-  import { useUser } from '@clerk/expo'
-  import { EmailAddressResource } from '@clerk/types'
-  import { Redirect } from 'expo-router'
-  import * as React from 'react'
-  import { Pressable, StyleSheet, TextInput } from 'react-native'
+    export default function Page() {
+      const { isLoaded, isSignedIn, user } = useUser()
 
-  export default function Page() {
-    const { isLoaded, isSignedIn, user } = useUser()
+      const [email, setEmail] = React.useState('')
+      const [code, setCode] = React.useState('')
+      const [isVerifying, setIsVerifying] = React.useState(false)
+      const [successful, setSuccessful] = React.useState(false)
+      const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
 
-    const [email, setEmail] = React.useState('')
-    const [code, setCode] = React.useState('')
-    const [isVerifying, setIsVerifying] = React.useState(false)
-    const [successful, setSuccessful] = React.useState(false)
-    const [emailObj, setEmailObj] = React.useState<EmailAddressResource | undefined>()
-
-    // Handle loading state
-    if (!isLoaded) {
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText>Loading...</ThemedText>
-        </ThemedView>
-      )
-    }
-
-    // Handle signed-out state
-    if (!isSignedIn) return <Redirect href="/sign-in" />
-
-    // Handle addition of the email address
-    const handleSubmit = async () => {
-      try {
-        // Add an unverified email address to user
-        const res = await user?.createEmailAddress({ email })
-        // Reload user to get updated User object
-        await user?.reload()
-
-        // Find the email address that was just added
-        const emailAddress = user?.emailAddresses.find((a) => a.id === res?.id)
-        // Create a reference to the email address that was just added
-        setEmailObj(emailAddress)
-
-        // Send the user an email with the verification code
-        await emailAddress?.prepareVerification({ strategy: 'email_code' })
-
-        // Set to true to display second form
-        // and capture the code
-        setIsVerifying(true)
-      } catch (err) {
-        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
-        // for more info on error handling
-        console.error(JSON.stringify(err, null, 2))
+      // Handle loading state
+      if (!isLoaded) {
+        return (
+          <ThemedView style={styles.container}>
+            <ThemedText>Loading...</ThemedText>
+          </ThemedView>
+        )
       }
-    }
 
-    // Handle the submission of the verification form
-    const verifyCode = async () => {
-      try {
-        // Verify that the code entered matches the code sent to the user
-        const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
+      // Handle signed-out state
+      if (!isSignedIn) return <Redirect href="/sign-in" />
 
-        if (emailVerifyAttempt?.verification.status === 'verified') {
-          setSuccessful(true)
-        } else {
-          // If the status is not complete, check why. User may need to
-          // complete further steps.
-          console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+      // Handle addition of the email address
+      const handleSubmit = async () => {
+        try {
+          // Add an unverified email address to user
+          const res = await user?.createEmailAddress({ email })
+          // Reload user to get updated User object
+          await user?.reload()
+
+          // Find the email address that was just added
+          const emailAddress = user?.emailAddresses.find((a) => a.id === res?.id)
+          // Create a reference to the email address that was just added
+          setEmailObj(emailAddress)
+
+          // Send the user an email with the verification code
+          await emailAddress?.prepareVerification({ strategy: 'email_code' })
+
+          // Set to true to display second form
+          // and capture the code
+          setIsVerifying(true)
+        } catch (err) {
+          // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+          // for more info on error handling
+          console.error(JSON.stringify(err, null, 2))
         }
-      } catch (err) {
-        console.error(JSON.stringify(err, null, 2))
       }
-    }
 
-    // Display a success message if the email was added successfully
-    if (successful) {
+      // Handle the submission of the verification form
+      const verifyCode = async () => {
+        try {
+          // Verify that the code entered matches the code sent to the user
+          const emailVerifyAttempt = await emailObj?.attemptVerification({ code })
+
+          if (emailVerifyAttempt?.verification.status === 'verified') {
+            setSuccessful(true)
+          } else {
+            // If the status is not complete, check why. User may need to
+            // complete further steps.
+            console.error(JSON.stringify(emailVerifyAttempt, null, 2))
+          }
+        } catch (err) {
+          console.error(JSON.stringify(err, null, 2))
+        }
+      }
+
+      // Display a success message if the email was added successfully
+      if (successful) {
+        return (
+          <ThemedView style={styles.container}>
+            <ThemedText type="title" style={styles.title}>
+              Email added!
+            </ThemedText>
+          </ThemedView>
+        )
+      }
+
+      // Display the verification form to capture the code
+      if (isVerifying) {
+        return (
+          <ThemedView style={styles.container}>
+            <ThemedText type="title" style={styles.title}>
+              Verify email
+            </ThemedText>
+            <ThemedText style={styles.label}>Enter code</ThemedText>
+            <TextInput
+              style={styles.input}
+              value={code}
+              placeholder="Enter code"
+              placeholderTextColor="#666666"
+              onChangeText={setCode}
+              keyboardType="numeric"
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                !code && styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={verifyCode}
+              disabled={!code}
+            >
+              <ThemedText style={styles.buttonText}>Verify</ThemedText>
+            </Pressable>
+          </ThemedView>
+        )
+      }
+
+      // Display the initial form to capture the email address
       return (
         <ThemedView style={styles.container}>
           <ThemedText type="title" style={styles.title}>
-            Email added!
+            Add Email
           </ThemedText>
-        </ThemedView>
-      )
-    }
-
-    // Display the verification form to capture the code
-    if (isVerifying) {
-      return (
-        <ThemedView style={styles.container}>
-          <ThemedText type="title" style={styles.title}>
-            Verify email
-          </ThemedText>
-          <ThemedText style={styles.label}>Enter code</ThemedText>
+          <ThemedText style={styles.label}>Enter email address</ThemedText>
           <TextInput
             style={styles.input}
-            value={code}
-            placeholder="Enter code"
+            value={email}
+            placeholder="Enter email"
             placeholderTextColor="#666666"
-            onChangeText={setCode}
-            keyboardType="numeric"
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
           />
           <Pressable
             style={({ pressed }) => [
               styles.button,
-              !code && styles.buttonDisabled,
+              !email && styles.buttonDisabled,
               pressed && styles.buttonPressed,
             ]}
-            onPress={verifyCode}
-            disabled={!code}
+            onPress={handleSubmit}
+            disabled={!email}
           >
-            <ThemedText style={styles.buttonText}>Verify</ThemedText>
+            <ThemedText style={styles.buttonText}>Continue</ThemedText>
           </Pressable>
         </ThemedView>
       )
     }
 
-    // Display the initial form to capture the email address
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.title}>
-          Add Email
-        </ThemedText>
-        <ThemedText style={styles.label}>Enter email address</ThemedText>
-        <TextInput
-          style={styles.input}
-          value={email}
-          placeholder="Enter email"
-          placeholderTextColor="#666666"
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            !email && styles.buttonDisabled,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={handleSubmit}
-          disabled={!email}
-        >
-          <ThemedText style={styles.buttonText}>Continue</ThemedText>
-        </Pressable>
-      </ThemedView>
-    )
-  }
-
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: 20,
-      gap: 12,
-    },
-    title: {
-      marginBottom: 8,
-    },
-    label: {
-      fontWeight: '600',
-      fontSize: 14,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: '#ccc',
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      backgroundColor: '#fff',
-    },
-    button: {
-      backgroundColor: '#0a7ea4',
-      paddingVertical: 12,
-      paddingHorizontal: 24,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    buttonPressed: {
-      opacity: 0.7,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    buttonText: {
-      color: '#fff',
-      fontWeight: '600',
-    },
-  })
-  ```
+    const styles = StyleSheet.create({
+      container: {
+        flex: 1,
+        padding: 20,
+        gap: 12,
+      },
+      title: {
+        marginBottom: 8,
+      },
+      label: {
+        fontWeight: '600',
+        fontSize: 14,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 16,
+        backgroundColor: '#fff',
+      },
+      button: {
+        backgroundColor: '#0a7ea4',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+      },
+      buttonPressed: {
+        opacity: 0.7,
+      },
+      buttonDisabled: {
+        opacity: 0.5,
+      },
+      buttonText: {
+        color: '#fff',
+        fontWeight: '600',
+      },
+    })
+    ```
+  </If>
 </If>
 
 <If sdk="ios">
@@ -572,8 +574,4 @@
     }
     ```
   </CodeBlockTabs>
-</If>
-
-<If sdk={["js-frontend", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
 </If>

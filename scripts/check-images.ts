@@ -1,5 +1,10 @@
 import fs from 'node:fs'
 import { glob } from 'node:fs/promises'
+import {
+  extractExplicitAssetReferences,
+  resolvePreviewAssetReferencesWithIssue,
+  type PreviewIssueReason,
+} from './lib/image-reference-resolver'
 
 const DOCS_DIR = 'docs'
 const PUBLIC_ASSETS_DIR = 'public/images'
@@ -34,6 +39,11 @@ Options:
 Examples:
   npm run lint:check-images
   npm run lint:check-images -- --fix
+
+Reference rules:
+  - Explicit asset paths like /docs/images/...
+  - docs/**/*.mdx frontmatter preview.src values mapped to /docs/images/ui-components/<slug>.<ext>
+  - preview.src values that do not resolve to an image are shown as warnings
 `)
 }
 
@@ -52,31 +62,54 @@ async function getPublicAssets(): Promise<string[]> {
 interface AssetReferences {
   references: string[]
   referenceMap: Map<string, string[]>
+  previewWarnings: PreviewWarning[]
 }
 
-async function getAssetReferences(): Promise<AssetReferences> {
+interface PreviewWarning {
+  file: string
+  previewSrc: string
+  reason: PreviewIssueReason
+}
+
+function addReference(referenceMap: Map<string, string[]>, references: Set<string>, assetPath: string, file: string): void {
+  references.add(assetPath)
+
+  if (!referenceMap.has(assetPath)) {
+    referenceMap.set(assetPath, [])
+  }
+
+  if (!referenceMap.get(assetPath)!.includes(file)) {
+    referenceMap.get(assetPath)!.push(file)
+  }
+}
+
+async function getAssetReferences(publicAssets: string[]): Promise<AssetReferences> {
   const references = new Set<string>()
   const referenceMap = new Map<string, string[]>()
+  const previewWarnings: PreviewWarning[] = []
+  const publicAssetsSet = new Set(publicAssets)
 
   for await (const entry of glob(`${DOCS_DIR}/**/*.{md,mdx}`)) {
     const file = entry.toString()
     const content = fs.readFileSync(file, 'utf8')
+    const explicitReferences = extractExplicitAssetReferences(content)
+    for (const assetPath of explicitReferences) {
+      addReference(referenceMap, references, assetPath, file)
+    }
 
-    const assetPathRegex = /\/docs\/images\/[^\s)"'}\]]+/g
-    const matches = content.matchAll(assetPathRegex)
+    if (file.endsWith('.mdx')) {
+      const previewResolution = resolvePreviewAssetReferencesWithIssue(content, publicAssetsSet)
 
-    for (const match of matches) {
-      let assetPath = match[0].replace(/[,;:]+$/, '')
+      for (const assetPath of previewResolution.references) {
+        addReference(referenceMap, references, assetPath, file)
+      }
 
-      if (assetPath.startsWith('/docs/images/')) {
-        references.add(assetPath)
-
-        if (!referenceMap.has(assetPath)) {
-          referenceMap.set(assetPath, [])
-        }
-        if (!referenceMap.get(assetPath)!.includes(file)) {
-          referenceMap.get(assetPath)!.push(file)
-        }
+      if (previewResolution.issue) {
+        previewWarnings.push({
+          file,
+          previewSrc: previewResolution.issue.previewSrc,
+          reason: previewResolution.issue.reason,
+        })
       }
     }
   }
@@ -84,6 +117,7 @@ async function getAssetReferences(): Promise<AssetReferences> {
   return {
     references: Array.from(references).sort(),
     referenceMap,
+    previewWarnings,
   }
 }
 
@@ -107,7 +141,7 @@ async function main(): Promise<void> {
 
   try {
     const publicAssets = await getPublicAssets()
-    const { references: docReferences, referenceMap } = await getAssetReferences()
+    const { references: docReferences, referenceMap, previewWarnings } = await getAssetReferences(publicAssets)
     const { unreferenced, missing } = findDifferences(publicAssets, docReferences)
 
     if (fix && unreferenced.length > 0) {
@@ -149,6 +183,19 @@ async function main(): Promise<void> {
             log('gray', `referenced in ${file}`, 3)
           }
         }
+      }
+      console.log()
+    }
+
+    if (previewWarnings.length > 0) {
+      log('yellow', '⚠ Unresolved preview.src image mappings:')
+      for (const warning of previewWarnings) {
+        if (warning.reason === 'invalid-src') {
+          log('yellow', `${warning.previewSrc} (invalid preview.src format)`, 2)
+        } else {
+          log('yellow', `${warning.previewSrc} (no matching image in public/images/ui-components/)`, 2)
+        }
+        log('gray', `referenced in ${warning.file}`, 3)
       }
       console.log()
     }

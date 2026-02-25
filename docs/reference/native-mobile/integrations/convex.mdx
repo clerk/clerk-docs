@@ -1,0 +1,349 @@
+---
+title: Integrate Convex with Clerk
+description: Learn how to integrate Clerk with Convex in your native app.
+sdk: android, ios
+---
+
+<If sdk="android">
+  <TutorialHero
+    beforeYouStart={[
+      {
+        title: "Set up a Clerk application",
+        link: "/docs/getting-started/quickstart/setup-clerk",
+        icon: "clerk",
+      },
+      {
+        title: "Integrate Clerk into your app",
+        link: "/docs/android/getting-started/quickstart",
+        icon: "android",
+      },
+      {
+        title: "Integrate Convex into your app",
+        link: "https://docs.convex.dev/quickstarts",
+        icon: "code-bracket"
+      }
+    ]}
+    exampleRepo={[
+      {
+        title: "Clerk Convex Kotlin",
+        link: "https://github.com/clerk/clerk-convex-kotlin"
+      }
+    ]}
+  />
+</If>
+
+<If sdk="ios">
+  <TutorialHero
+    beforeYouStart={[
+    {
+      title: "Set up a Clerk application",
+      link: "/docs/getting-started/quickstart/setup-clerk",
+      icon: "clerk",
+    },
+    {
+      title: "Integrate Clerk into your app",
+      link: "/docs/ios/getting-started/quickstart",
+      icon: "apple",
+    },
+    {
+      title: "Integrate Convex into your app",
+      link: "https://docs.convex.dev/quickstarts",
+      icon: "code-bracket"
+    }
+  ]}
+    exampleRepo={[
+    {
+      title: "Clerk Convex Swift",
+      link: "https://github.com/clerk/clerk-convex-swift"
+    }
+  ]}
+  />
+</If>
+
+With [Convex](https://www.convex.dev/), you can build a backend with a provided realtime database, file storage, text search, scheduling, and more. Paired with Clerk's authentication and user management features, you can build native mobile apps with a secure auth flow and realtime data access.
+
+This guide shows how to integrate Convex with Clerk in your native mobile app. It assumes you have already integrated both Convex and Clerk in your app.
+
+<Steps>
+  <Include src="_partials/convex-initial-setup" />
+
+  ## Configure Convex with Clerk's Frontend API URL
+
+  In your app's `convex` folder, create a `auth.config.ts` file with the following configuration, using the saved [Frontend API URL](!frontend-api-url) from earlier:
+
+  ```ts {{ filename: 'convex/auth.config.ts' }}
+  export default {
+    providers: [
+      {
+        domain: '{{fapi_url}}',
+        applicationID: 'convex',
+      },
+    ],
+  }
+  ```
+
+  ## Deploy your changes to Convex
+
+  Run `npx convex dev` to automatically sync your configuration to your backend.
+
+  ## Add the Clerk Convex SDK to your app
+
+  <If sdk="android">
+    Add the `clerk-convex-kotlin` dependency to your app:
+
+    ```kotlin {{ filename: 'app/build.gradle.kts' }}
+    dependencies {
+        implementation("com.clerk:clerk-convex-kotlin:<latest-version>")
+    }
+    ```
+
+    Initialize Clerk first with your Clerk [Publishable Key](!publishable-key), then create `ClerkConvexClient` using your Convex deployment URL. Refer to the [Convex deployment docs](https://docs.convex.dev/dashboard/deployments/deployment-settings) for more info.
+
+    ```kotlin {{ filename: 'MyApplication.kt' }}
+    import android.app.Application
+    import com.clerk.api.Clerk
+    import com.clerk.convex.ClerkConvexClient
+
+    class MyApplication : Application() {
+      lateinit var clerkConvex: ClerkConvexClient
+        private set
+
+      override fun onCreate() {
+        super.onCreate()
+        Clerk.initialize(
+          context = this,
+          publishableKey = "{{pub_key}}",
+        )
+
+        clerkConvex = ClerkConvexClient(
+          deploymentUrl = "YOUR_CONVEX_DEPLOYMENT_URL",
+          context = applicationContext,
+        )
+      }
+    }
+    ```
+
+    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `clerkConvex.convex` for queries, mutations, actions, and auth state.
+  </If>
+
+  <If sdk="ios">
+    Add `clerk-convex-swift` via Swift Package Manager to your app:
+
+    ```swift {{ filename: 'Package.swift' }}
+    dependencies: [
+      .package(url: "https://github.com/clerk/clerk-convex-swift", from: "0.1.0")
+    ]
+
+    targets: [
+      .target(
+        name: "YourApp",
+        dependencies: [
+          .product(name: "ClerkConvex", package: "clerk-convex-swift")
+        ]
+      )
+    ]
+    ```
+
+    Configure Clerk first with your Clerk [Publishable Key](!publishable-key), then initialize `ConvexClientWithAuth` with `ClerkConvexAuthProvider` using your Convex deployment URL. Refer to the [Convex deployment docs](https://docs.convex.dev/dashboard/deployments/deployment-settings) for more info.
+
+    ```swift {{ filename: 'MyApp.swift' }}
+    import ClerkConvex
+    import ClerkKit
+    import ConvexMobile
+    import SwiftUI
+
+    @MainActor
+    let client = ConvexClientWithAuth(
+      deploymentUrl: "YOUR_CONVEX_DEPLOYMENT_URL",
+      authProvider: ClerkConvexAuthProvider()
+    )
+
+    @main
+    struct MyApp: App {
+      init() {
+        Clerk.configure(publishableKey: "{{pub_key}}")
+      }
+
+      var body: some Scene {
+        WindowGroup {
+          ContentView()
+            .environment(Clerk.shared)
+        }
+      }
+    }
+    ```
+
+    After users authenticate with Clerk, auth state is automatically synced to Convex. Use `client` for subscriptions, mutations, actions, and auth state.
+  </If>
+
+  ## Show UI based on auth state
+
+  Convex exposes auth state from the authenticated client. Use that state to render loading, signed-out, and signed-in UI.
+
+  <If sdk="android">
+    ```kotlin {{ filename: 'AuthViewModel.kt' }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.convex.ClerkConvexClient
+    import dev.convex.android.AuthState
+    import kotlinx.coroutines.launch
+
+    class AuthViewModel(
+      private val clerk: ClerkConvexClient,
+      ) : ViewModel() {
+        init {
+          viewModelScope.launch {
+          clerk.convex.authState.collect { authState ->
+          when (authState) {
+              is AuthState.AuthLoading -> showLoading()
+              is AuthState.Unauthenticated -> showSignIn()
+              is AuthState.Authenticated -> showAuthenticatedContent()
+            }
+          }
+        }
+      }
+    }
+    ```
+
+    Collect `clerk.convex.authState` in your `ViewModel` and map each state to the appropriate screen.
+  </If>
+
+  <If sdk="ios">
+    ```swift {{ filename: 'ContentView.swift' }}
+    import ConvexMobile
+    import SwiftUI
+
+    struct ContentView: View {
+      @State private var authState: AuthState<String> = .loading
+
+      var body: some View {
+        Group {
+          switch authState {
+          case .loading:
+            ProgressView()
+          case .unauthenticated:
+            Text("Unauthenticated")
+          case .authenticated:
+            AuthenticatedView()
+          }
+        }
+        .task {
+          for await state in client.authState.values {
+            authState = state
+          }
+        }
+      }
+    }
+    ```
+  </If>
+
+  ## Make requests and present data in the UI
+
+  With Clerk and Convex configured, authenticated requests stay in sync so you can subscribe and render data with minimal setup.
+
+  <If sdk="android">
+    ```kotlin {{ filename: 'MessagesViewModel.kt' }}
+    import androidx.lifecycle.ViewModel
+    import androidx.lifecycle.viewModelScope
+    import com.clerk.convex.ClerkConvexClient
+    import kotlinx.coroutines.flow.SharingStarted
+    import kotlinx.coroutines.flow.StateFlow
+    import kotlinx.coroutines.flow.catch
+    import kotlinx.coroutines.flow.stateIn
+
+    class MessagesViewModel(
+      clerk: ClerkConvexClient,
+    ) : ViewModel() {
+
+      val messages: StateFlow<List<Message>> =
+        clerk.convex
+          .subscribe<List<Message>>("messages:list")
+          .catch { emit(emptyList()) } // keep old behavior: fail -> show nothing
+          .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000),
+            initialValue = emptyList()
+          )
+    }
+    ```
+
+    ```kotlin {{ filename: 'MessagesScreen.kt', collapsible: true }}
+    import androidx.compose.foundation.layout.Column
+    import androidx.compose.foundation.layout.PaddingValues
+    import androidx.compose.foundation.layout.fillMaxWidth
+    import androidx.compose.foundation.layout.padding
+    import androidx.compose.foundation.lazy.LazyColumn
+    import androidx.compose.foundation.lazy.items
+    import androidx.compose.material3.Text
+    import androidx.compose.runtime.Composable
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.unit.dp
+    import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+    @Composable
+    fun MessagesScreen(
+      viewModel: MessagesViewModel,
+      modifier: Modifier = Modifier,
+    ) {
+      val messages = viewModel.messages.collectAsStateWithLifecycle().value
+
+      LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(12.dp),
+      ) {
+        items(items = messages, key = { it.id }) { message ->
+          Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Text(message.author)
+            Text(message.body)
+          }
+        }
+      }
+    }
+
+    data class Message(
+      val id: String,
+      val author: String,
+      val body: String,
+    )
+    ```
+  </If>
+
+  <If sdk="ios">
+    ```swift {{ filename: 'AuthenticatedView.swift' }}
+    import ConvexMobile
+    import SwiftUI
+
+    struct AuthenticatedView: View {
+      @State private var messages: [Message] = []
+
+      var body: some View {
+        List(messages) { message in
+          VStack(alignment: .leading) {
+            Text(message.author)
+            Text(message.body)
+          }
+        }
+        .task {
+          let publisher = client
+            .subscribe(to: "messages:list")
+            .replaceError(with: [Message]())
+
+          for await latest in publisher.values {
+            messages = latest
+          }
+        }
+      }
+    }
+
+    struct Message: Identifiable, Codable {
+      let id: String
+      let author: String
+      let body: String
+    }
+    ```
+  </If>
+</Steps>
+
+## Next steps
+
+For more information on how to use Convex with Clerk, see the [Convex docs](https://docs.convex.dev/auth/clerk).

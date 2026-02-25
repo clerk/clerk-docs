@@ -1,0 +1,208 @@
+---
+title: '`<AuthView />` component'
+description: A native authentication component that provides complete sign-in and sign-up flows for iOS and Android.
+sdk: expo
+---
+
+The `<AuthView />` component renders a complete native authentication interface using SwiftUI on iOS and Jetpack Compose on Android. It handles all authentication flows including email, phone, OAuth, passkeys, and multi-factor authentication.
+
+## Usage
+
+Import from `@clerk/expo/native`:
+
+```tsx
+import { AuthView } from '@clerk/expo/native'
+```
+
+### Basic example
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useRouter } from 'expo-router'
+
+export default function SignInScreen() {
+  const router = useRouter()
+
+  return (
+    <AuthView
+      mode="signInOrUp"
+      onSuccess={() => router.replace('/(home)')}
+      onError={(error) => console.error('Auth error:', error)}
+    />
+  )
+}
+```
+
+### With conditional rendering
+
+```tsx {{ filename: 'app/(auth)/sign-in.tsx' }}
+import { AuthView } from '@clerk/expo/native'
+import { useUser } from '@clerk/expo'
+import { useRouter } from 'expo-router'
+import { useEffect } from 'react'
+
+export default function SignInScreen() {
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isLoaded && user) {
+      router.replace('/(home)')
+    }
+  }, [isLoaded, user])
+
+  if (!isLoaded) {
+    return null
+  }
+
+  return (
+    <AuthView
+      mode="signInOrUp"
+      onSuccess={() => router.replace('/(home)')}
+    />
+  )
+}
+```
+
+### Sign-in only
+
+```tsx
+<AuthView mode="signIn" />
+```
+
+### Sign-up only
+
+```tsx
+<AuthView mode="signUp" />
+```
+
+## Properties
+
+<Properties>
+  - `mode`
+  - `'signIn' | 'signUp' | 'signInOrUp'`
+
+  The authentication mode. Defaults to `'signInOrUp'`.
+
+  - `'signIn'` - Only shows sign-in options
+  - `'signUp'` - Only shows sign-up options
+  - `'signInOrUp'` - Shows both with ability to switch between them
+
+  ---
+
+  - `presentation`
+  - `'modal' | 'inline'`
+
+  How the auth view is presented. Defaults to `'modal'`.
+
+  - `'modal'` - Presents a full-screen native modal
+  - `'inline'` - Renders directly within the React Native view hierarchy
+
+  ---
+
+  - `isDismissable`
+  - `boolean`
+
+  Whether the authentication view can be dismissed. Defaults to `true`. Set to `false` when authentication is required.
+
+  ---
+
+  - `onSuccess`
+  - `() => void`
+
+  Callback fired when authentication completes successfully. The session is already synchronized with the JS SDK when this callback fires.
+
+  ---
+
+  - `onError`
+  - `(error: Error) => void`
+
+  Callback fired when an error occurs during authentication.
+
+  ---
+
+  - `onDismiss`
+  - `() => void`
+
+  Callback fired when the modal is dismissed without completing authentication. Only applies when `presentation` is `'modal'`.
+
+  ---
+
+  - `style`
+  - `StyleProp<ViewStyle>`
+
+  Style applied to the container view. Only applies when `presentation` is `'inline'`.
+</Properties>
+
+## Supported authentication methods
+
+The `<AuthView />` component automatically supports all authentication methods enabled in your [Clerk Dashboard](https://dashboard.clerk.com):
+
+| Method | Description |
+| --- | --- |
+| Email/password | Standard email and password authentication |
+| Phone number | SMS-based authentication |
+| Username | Username-based authentication |
+| OAuth | Google, Apple, GitHub, Microsoft, and 20+ providers |
+| Passkeys | WebAuthn/FIDO2 biometric authentication |
+| MFA | SMS codes, authenticator apps (TOTP), backup codes |
+| Enterprise SSO | SAML and OIDC providers |
+
+## Session synchronization
+
+When authentication succeeds, the native session is automatically synchronized with the JavaScript SDK. This means:
+
+- `useUser()` will return the authenticated user
+- `useSession()` will return the active session
+- `useAuth()` will show `isSignedIn: true`
+- All Clerk hooks and methods work immediately
+
+```tsx
+import { AuthView } from '@clerk/expo/native'
+import { useUser, useSession } from '@clerk/expo'
+
+function App() {
+  const { user } = useUser()
+  const { session } = useSession()
+
+  if (!user) {
+    return <AuthView onSuccess={() => console.log('Session synced!')} />
+  }
+
+  // Full JS SDK available after native auth
+  return (
+    <View>
+      <Text>Welcome, {user.firstName}!</Text>
+      <Button
+        title="Get Token"
+        onPress={async () => {
+          const token = await session.getToken()
+          console.log(token)
+        }}
+      />
+    </View>
+  )
+}
+```
+
+## Requirements
+
+- Expo SDK 53 or later
+- Development build (not Expo Go)
+- `@clerk/expo` plugin in `app.json`
+
+```json {{ filename: 'app.json' }}
+{
+  "expo": {
+    "plugins": ["@clerk/expo"]
+  }
+}
+```
+
+## Platform support
+
+| Platform | Status |
+| --- | --- |
+| iOS | Supported (SwiftUI) |
+| Android | Supported (Jetpack Compose) |
+| Web | Use [`<SignIn />`](/docs/reference/components/authentication/sign-in) from `@clerk/expo/web` |

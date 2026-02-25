@@ -5,30 +5,30 @@ description: "Learn how email providers evaluate new domains, how to warm up you
 
 ## Why your domain reputation matters
 
-Clerk automatically warms the dedicated IP addresses used to send emails, but IP reputation is only half the equation. Email providers also evaluate the reputation of the domain in the `From:` header of every message — and that domain is yours.
+Clerk automatically [warms the dedicated IP addresses](!ip-warming) used to send emails, but IP reputation is only half the equation. Email providers also evaluate the reputation of the domain in the `From:` header of every message — and that domain is yours.
 
-In production, Clerk sends emails from your domain (e.g. `notifications@yourdomain.com`). If your domain is brand new or has no sending history, providers may throttle, defer, or spam-filter these messages regardless of how clean Clerk's IP addresses are.
+In production, Clerk sends emails from your domain (e.g. `notifications@yourdomain.com`). If your domain is brand new or has no sending history, providers may throttle, defer, or spam-filter these messages regardless of how clean Clerk's IP addresses' reputations are.
 
-Clerk has no way to warm your domain for you. Domain reputation is built over time through consistent sending and positive recipient engagement.
+Domain reputation is built over time through consistent sending and positive recipient engagement - Clerk unfortunately has no way to warm your domain for you. 
 
 ## How email providers classify new domains
 
 ### Reputation starts at zero, not neutral
 
-A brand new domain has no reputation at all, which means providers have no reason to trust it. In practice, this is worse than neutral — providers throttle or defer mail from unknown senders as a precaution.
+A brand new domain has no reputation at all, which means providers have no reason to trust it. In practice, this is worse than neutral — providers regularly throttle or defer mail from unknown senders as a precaution.
 
 > [!NOTE]
-> If you're launching a new product on a newly registered domain and enabling Clerk's email verification immediately, expect some initial friction. This doesn't mean something is broken — it means your domain hasn't built trust yet.
+> If you're launching a new product on a newly registered domain and enabling Clerk's email verification immediately, expect some initial emails to land in users' spam filters. This doesn't mean something is broken — it means your domain hasn't built trust yet.
 
 ### What providers look at
 
 Email providers evaluate incoming mail using a combination of signals. No single factor determines whether your email reaches the inbox.
 
 - **Domain age and sending history** — Providers track how long a domain has existed and how much mail has historically come from it. If you know you'll need email verification at launch, register your domain well in advance.
-- **Authentication records** — Whether your SPF, DKIM, and DMARC records are properly configured and passing. Clerk configures SPF and DKIM for you during production setup. You should also [set up DMARC](#dmarc) yourself. For more on authentication, see [Email deliverability](/docs/guides/development/troubleshooting/email-deliverability#spf-and-dkim-email-authentication).
+- **Authentication records** — Whether your [SPF](!spf), [DKIM](!dkim), and [DMARC](!dmarc) records are properly configured and passing. Clerk configures SPF and DKIM for you during production setup. You should also [set up DMARC](#dmarc) yourself. For more on authentication records, see [Email deliverability](/docs/guides/development/troubleshooting/email-deliverability#spf-and-dkim-email-authentication).
 - **Recipient engagement** — Whether people open your emails, reply, or mark them as spam. Verification emails tend to have high engagement since the recipient is actively waiting for them, which is good for domain reputation.
 - **Bounce rate** — A high bounce rate suggests you're sending to invalid addresses. Providers interpret this as a spam signal.
-- **Content and formatting** — Emails are scanned for spam indicators such as suspicious links, URL shorteners, and poorly rendered HTML. Clerk's default email templates are optimized for deliverability.
+- **Content and formatting** — Emails are scanned for spam indicators such as suspicious links, URL shorteners, and poorly rendered HTML. Clerk's default email templates are optimized for deliverability, but this cannot be guaranteed for customized templates.
 - **Sending patterns** — Consistent, predictable volume looks legitimate. Erratic volume (e.g. nothing for two weeks followed by a burst of 10,000 emails) can trigger filters.
 
 ### How Gmail, Microsoft, and Yahoo differ
@@ -41,7 +41,7 @@ Email providers evaluate incoming mail using a combination of signals. No single
 
 Before sending a single email from a new domain, your authentication records need to be configured correctly. These aren't optional.
 
-Clerk configures SPF and DKIM records for your domain during production instance setup. You should also set up DMARC yourself, which Clerk recommends but doesn't configure automatically.
+Clerk configures SPF and DKIM records for your domain during production instance setup. You should also [set up DMARC yourself](#dmarc), which Clerk recommends but cannot configure automatically.
 
 > [!IMPORTANT]
 > For detailed information on SPF, DKIM, and DMARC configuration, see [Email deliverability](/docs/guides/development/troubleshooting/email-deliverability). The sections below cover warm-up-specific considerations only.
@@ -52,7 +52,7 @@ Domain-based Message Authentication, Reporting & Conformance (DMARC) ties SPF an
 
 At minimum, you need a DMARC record with `p=none` to satisfy Gmail and Yahoo's bulk sender requirements. For actual protection, work toward `p=reject`. Clerk uses `p=reject` for its own emails.
 
-DMARC also requires "alignment" — the domain in the visible `From:` header must match the domain that passed SPF or DKIM checks.
+DMARC also requires "alignment" — the domain in the visible `From:` header must match the domain that passed SPF or DKIM checks. Setting up your DMARC record before creating your production instance on Clerk is ideal to ensure this is configured correctly for your instance.
 
 Example DMARC record:
 
@@ -66,19 +66,19 @@ content:
 v=DMARC1; p=reject; pct=100; rua=mailto:you@yourdomain.com; ruf=mailto:you@yourdomain.com;
 ```
 
-The `rua` address receives aggregate reports about authentication results. These reports are useful during warm-up because they reveal any unexpected authentication failures.
+The `rua` address receives aggregate reports about authentication results. These reports can be useful during warm-up because they reveal any unexpected authentication failures.
 
 For more on DMARC setup, see [Setup DMARC email authentication](/docs/guides/development/troubleshooting/email-deliverability#setup-dmarc-email-authentication).
 
 ### Reverse DNS (PTR records)
 
-Your sending IP address should have a valid PTR record that resolves back to a hostname, and that hostname should resolve forward to the same IP. This is called forward-confirmed reverse DNS (FCrDNS). Gmail requires it for all senders.
+Your sending IP address should have a valid [PTR record](!ptr-record) that resolves back to a hostname, and that hostname should resolve forward to the same IP. This round-trip verification is called forward-confirmed reverse DNS (FCrDNS) — it proves that the owner of the IP address and the owner of the hostname are the same entity. Gmail requires FCrDNS for all senders, and other major providers use it as a signal when evaluating sender trustworthiness.
 
-Clerk's sending infrastructure through SendGrid handles PTR records automatically. You don't need to configure this yourself unless you're [managing your own email delivery](/docs/guides/development/troubleshooting/email-deliverability#managing-your-own-email-delivery).
+Clerk's email sending infrastructure handles PTR records automatically. You don't need to configure this yourself unless you're [managing your own email delivery](/docs/guides/development/troubleshooting/email-deliverability#managing-your-own-email-delivery).
 
 ### TLS
 
-All email sent to Gmail must use a TLS-encrypted connection. Clerk sends all email over TLS by default.
+All email sent to Gmail must use a [TLS](!tls)-encrypted connection. Clerk sends all email over TLS by default.
 
 ## Warming up your domain
 
@@ -93,7 +93,7 @@ Domain warm-up is the process of gradually increasing your email sending volume 
 
   ### Set up a real mailbox behind your "from" address
 
-  By default, Clerk sends from `notifications@yourdomain.com`. That address needs to be a functioning mailbox that can receive replies. Providers check this — if a recipient replies and the email bounces, it's a negative signal. You can change the "from" address via the Backend API.
+  By default, Clerk sends from several different aliases such as `noreply@yourdomain.com`, `invitations@yourdomain.com`, and `notifications@yourdomain.com`. The specific addresses depend on the email templates, by default. For each active email template, it's recommended to [check the Clerk dashboard](https://dashboard.clerk.com/~/customization/email), where default aliases can be seen and customized for each email template. All sending addresses should be functioning mailboxes that can receive replies. Providers check this — if a recipient replies and the email bounces, it's a negative signal. You can change the "from" address [in the Clerk dashboard](https://dashboard.clerk.com/~/customization/email).
 
   ### Set up DMARC
 
@@ -130,9 +130,9 @@ If your launch timeline doesn't allow for 8 weeks of warm-up, prioritize:
 
 If you're using Clerk's default email delivery and templates, your verification emails are already optimized for deliverability. Modifications during this period carry more risk than usual since your domain hasn't built the trust to absorb a poorly-received template change.
 
-- **Send verification codes instead of links.** Codes produce shorter, plaintext-friendly messages that look less like marketing mail. Configure this in the Clerk Dashboard under **Customization > Emails**.
+- **Send verification codes instead of links.** Codes produce shorter, plaintext-friendly messages that look less like marketing mail. Configure this [in the Clerk Dashboard](https://dashboard.clerk.com/~/customization/email).
 - **Keep templates short.** Avoid heavy HTML, lots of images, or complex layouts. Don't use URL shorteners or unnecessary tracking links.
-- **Don't change the "from" address.** Stick to Clerk's default during warm-up. Changing it frequently confuses providers who are still learning your sending patterns.
+- **Don't change the "from" address.** Stick to a single address during warm-up. Changing it frequently confuses providers who are still learning your sending patterns.
 
 ## Monitoring your reputation
 

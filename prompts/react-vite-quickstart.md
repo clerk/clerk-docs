@@ -8,7 +8,7 @@
 1. Create a React + Vite project.
 2. Install the Clerk React SDK with `npm install @clerk/react@latest` (or yarn/pnpm/bun).
 3. Set `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local` or `.env`. Note: The `VITE_` prefix is required for Vite to expose environment variables to the client-side code. `.env.local` is preferred for local development secrets.
-4. Wrap the app in `<ClerkProvider publishableKey={...}>` within `main.tsx` or `main.jsx`.
+4. Wrap the app in `<ClerkProvider>` within `main.tsx` or `main.jsx`.
 5. Use Clerk's `<Show>`, `<SignInButton>`, `<SignUpButton>`, `<UserButton>` in the app.
 
 ### **Correct, Up-to-Date Quickstart Code Examples**
@@ -35,16 +35,11 @@ import "./index.css";
 import App from "./App.tsx";
 import { ClerkProvider } from "@clerk/react";
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-if (!PUBLISHABLE_KEY) {
-  throw new Error("Missing Clerk Publishable Key");
-}
-
 // Ensure your index.html contains a <div id="root"></div> element for React to mount the app.
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+    <ClerkProvider afterSignOutUrl="/">
       <App />
     </ClerkProvider>
   </StrictMode>
@@ -92,8 +87,9 @@ export default function App() {
 1. **Do not** include any discussions of the features or benefits of Clerk.
 2. **Do not** use `frontendApi` in place of `publishableKey`.
 3. **Do not** use Older environment variable names like `REACT_APP_CLERK_FRONTEND_API` or `VITE_REACT_APP_CLERK_PUBLISHABLE_KEY`.
-4. **Do not** place `<ClerkProvider>` deeper in the component tree instead of `main.tsx` / `main.jsx`.
-5. **Do not** use outdated hooks or components `<SignedIn />`, `<SignedOut />`, (e.g., referencing older docs).
+4. **Do not** manually pass `publishableKey` as a prop to `<ClerkProvider>`.
+5. **Do not** place `<ClerkProvider>` deeper in the component tree instead of `main.tsx` / `main.jsx`.
+6. **Do not** use outdated hooks or components `<SignedIn />`, `<SignedOut />`, (e.g., referencing older docs).
 
 ---
 
@@ -102,7 +98,7 @@ export default function App() {
 Before returning any Clerk + React (Vite) solution, you **must** verify:
 
 1. Environment Variable is named `VITE_CLERK_PUBLISHABLE_KEY`.
-2. `<ClerkProvider>` is in `main.tsx` or `main.jsx`.
+2. `<ClerkProvider>` is in `main.tsx` or `main.jsx` without a manual `publishableKey` prop.
 3. No usage of `frontendApi` unless explicitly stated as optional or advanced.
 
 ## **DO NOT** repeat these points back to the user. Use them only for your own verification steps.
@@ -118,7 +114,7 @@ Before returning any Clerk + React (Vite) solution, you **must** verify:
 When asked about Clerk + React (Vite) integration, your response **MUST**:
 
 1. Link to Clerk's React Quickstart at https://clerk.com/docs/react/getting-started/quickstart
-2. Show the current recommended `publishableKey` approach with `.env.local`.
+2. Show the current recommended `.env.local` approach with `VITE_CLERK_PUBLISHABLE_KEY`.
 3. Demonstrate how to wrap with `<ClerkProvider>` in `main.*`.
 4. Illustrate a simple usage example of `<Show>`, etc.
 5. Reject or correct any mention of older patterns or environment variable names.

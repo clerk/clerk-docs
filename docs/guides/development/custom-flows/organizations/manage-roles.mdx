@@ -9,7 +9,11 @@ Organization members with appropriate [Permissions](/docs/guides/organizations/c
 
 This guide will demonstrate how to use the Clerk API to build a custom flow for managing member Roles in an Organization.
 
-<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+<If notSdk={["js-frontend", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
   The following example:
 
   1. Uses the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to get `memberships`, which is a list of the [Active Organization's](!active-organization) memberships.
@@ -18,8 +22,6 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   1. Maps over the `data` array to display the memberships in a table, providing an "Update Role" and "Remove Member" button for each membership that calls the `update()` and `destroy()` methods, respectively.
 
   <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
-
     ```tsx {{ filename: 'app/components/ManageRoles.tsx', collapsible: true }}
     'use client'
 
@@ -663,6 +665,109 @@ This guide will demonstrate how to use the Clerk API to build a custom flow for 
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk="ios">
+  ```swift {{ filename: 'ManageRolesView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct ManageRolesView: View {
+    @State private var memberships: [OrganizationMembership] = []
+    let organization: Organization
+
+    var body: some View {
+      VStack {
+        ForEach(memberships) { membership in
+          HStack {
+            Text("\(membership.publicUserData?.identifier ?? "Unknown user"): \(membership.role)")
+            Button("Toggle role") {
+              Task {
+                let role = membership.role == "org:admin" ? "org:member" : "org:admin"
+                await updateMembershipRole(membership, role: role)
+                await fetchOrganizationMemberships()
+              }
+            }
+            Button("Remove") {
+              Task {
+                await removeMembership(membership)
+                await fetchOrganizationMemberships()
+              }
+            }
+          }
+        }
+      }
+      .task { await fetchOrganizationMemberships() }
+    }
+  }
+
+  extension ManageRolesView {
+
+    func fetchOrganizationMemberships() async {
+      do {
+        memberships = try await organization.getMemberships().data
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+        memberships = []
+      }
+    }
+
+    func updateMembershipRole(_ membership: OrganizationMembership, role: String) async {
+      do {
+        try await membership.update(role: role)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+
+    func removeMembership(_ membership: OrganizationMembership) async {
+      do {
+        try await membership.destroy()
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.OrganizationMembership
+  import com.clerk.api.organizations.getOrganizationMemberships
+  import com.clerk.api.organizations.removeMember
+  import com.clerk.api.organizations.updateMembership
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun fetchOrganizationMemberships(): List<OrganizationMembership> {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return emptyList()
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return emptyList()
+    if (membershipsResult !is ClerkResult.Success) return emptyList()
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return emptyList()
+
+    return when (val activeMemberships = activeOrganization.getOrganizationMemberships()) {
+      is ClerkResult.Success -> activeMemberships.value.data
+      is ClerkResult.Failure -> emptyList()
+    }
+  }
+
+  suspend fun updateMembershipRole(membership: OrganizationMembership, role: String) {
+    val userId = membership.publicUserData?.userId ?: return
+    membership.updateMembership(userId = userId, role = role)
+  }
+
+  suspend fun removeMembership(membership: OrganizationMembership) {
+    val userId = membership.publicUserData?.userId ?: return
+    membership.organization.removeMember(userId)
+  }
+  ```
 </If>

@@ -32,79 +32,207 @@ Once the user visits the invitation link and is redirected to the specified URL,
 
 For example, if the redirect URL was `https://www.example.com/accept-invitation`, the URL that the user would be redirected to would be `https://www.example.com/accept-invitation?__clerk_ticket=.....`.
 
-To create a sign-up flow using the invitation token, you need to call the [`signUp.ticket()`](/docs/reference/javascript/sign-up-future#ticket) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
+<If notSdk={["ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
 
-<Tabs items={["Next.js"]}>
-  <Tab>
-    ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
-    'use client'
+  To create a sign-up flow using that invitation token, you need to call the [`signUp.ticket()`](/docs/reference/javascript/sign-up-future#ticket) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
 
-    import * as React from 'react'
-    import { useSignUp, useUser } from '@clerk/nextjs'
-    import { useRouter } from 'next/navigation'
+  ```tsx {{ filename: 'app/accept-invitation/page.tsx', collapsible: true }}
+  'use client'
 
-    export default function Page() {
-      const { isSignedIn, user } = useUser()
-      const { signUp, errors, fetchStatus } = useSignUp()
-      const router = useRouter()
+  import * as React from 'react'
+  import { useSignUp, useUser } from '@clerk/nextjs'
+  import { useRouter } from 'next/navigation'
 
-      const handleSubmit = async (formData: FormData) => {
-        const firstName = formData.get('firstName') as string
-        const lastName = formData.get('lastName') as string
-        const password = formData.get('password') as string
+  export default function Page() {
+    const { isSignedIn, user } = useUser()
+    const { signUp, errors, fetchStatus } = useSignUp()
+    const router = useRouter()
 
-        await signUp.ticket({
-          firstName,
-          lastName,
-          password,
+    const handleSubmit = async (formData: FormData) => {
+      const firstName = formData.get('firstName') as string
+      const lastName = formData.get('lastName') as string
+      const password = formData.get('password') as string
+
+      await signUp.ticket({
+        firstName,
+        lastName,
+        password,
+      })
+      if (signUp.status === 'complete') {
+        await signUp.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              // Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
         })
-        if (signUp.status === 'complete') {
-          await signUp.finalize({
-            navigate: ({ decorateUrl }) => {
-              const url = decorateUrl('/')
-              if (url.startsWith('http')) {
-                window.location.href = url
-              } else {
-                router.push(url)
-              }
-            },
-          })
+      }
+    }
+
+    if (signUp.status === 'complete' || isSignedIn) {
+      return null
+    }
+
+    return (
+      <>
+        <h1>Sign up</h1>
+        <form action={handleSubmit}>
+          <div>
+            <label htmlFor="firstName">Enter first name</label>
+            <input id="firstName" type="text" name="firstName" />
+            {errors.fields.firstName && <p>{errors.fields.firstName.message}</p>}
+          </div>
+          <div>
+            <label htmlFor="lastName">Enter last name</label>
+            <input id="lastName" type="text" name="lastName" />
+            {errors.fields.lastName && <p>{errors.fields.lastName.message}</p>}
+          </div>
+          <div>
+            <label htmlFor="password">Enter password</label>
+            <input id="password" type="password" name="password" />
+            {errors.fields.password && <p>{errors.fields.password.message}</p>}
+          </div>
+          <div id="clerk-captcha" />
+          <div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Next
+            </button>
+          </div>
+        </form>
+      </>
+    )
+  }
+  ```
+</If>
+
+<If sdk="expo">
+  {/* TODO  */}
+</If>
+
+<If sdk="ios">
+  To create a sign-up flow using that invitation token, you need to call the [`signUpWithTicket()`](/docs/ios/reference/native-mobile/auth#sign-up-with-ticket) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
+
+  ```swift {{ filename: 'AcceptInvitationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct AcceptInvitationView: View {
+    @Environment(Clerk.self) private var clerk
+    @State private var ticket = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var password = ""
+
+    var body: some View {
+      VStack {
+        TextField("Enter invitation ticket", text: $ticket)
+        TextField("Enter first name", text: $firstName)
+        TextField("Enter last name", text: $lastName)
+        SecureField("Enter password", text: $password)
+        Button("Accept invitation") {
+          Task {
+            await acceptInvitation(
+              ticket: ticket,
+              firstName: firstName,
+              lastName: lastName,
+              password: password
+            )
+          }
         }
       }
-
-      if (signUp.status === 'complete' || isSignedIn) {
-        return null
-      }
-
-      return (
-        <>
-          <h1>Sign up</h1>
-          <form action={handleSubmit}>
-            <div>
-              <label htmlFor="firstName">Enter first name</label>
-              <input id="firstName" type="text" name="firstName" />
-              {errors.fields.firstName && <p>{errors.fields.firstName.message}</p>}
-            </div>
-            <div>
-              <label htmlFor="lastName">Enter last name</label>
-              <input id="lastName" type="text" name="lastName" />
-              {errors.fields.lastName && <p>{errors.fields.lastName.message}</p>}
-            </div>
-            <div>
-              <label htmlFor="password">Enter password</label>
-              <input id="password" type="password" name="password" />
-              {errors.fields.password && <p>{errors.fields.password.message}</p>}
-            </div>
-            <div id="clerk-captcha" />
-            <div>
-              <button type="submit" disabled={fetchStatus === 'fetching'}>
-                Next
-              </button>
-            </div>
-          </form>
-        </>
-      )
     }
-    ```
-  </Tab>
-</Tabs>
+  }
+
+  extension AcceptInvitationView {
+
+    func acceptInvitation(
+      ticket: String,
+      firstName: String,
+      lastName: String,
+      password: String
+    ) async {
+      do {
+        // Start sign-up with the invitation ticket.
+        var signUp = try await clerk.auth.signUpWithTicket(ticket)
+
+        // Collect any additional required fields.
+        signUp = try await signUp.update(
+          firstName: firstName,
+          lastName: lastName,
+          password: password
+        )
+
+        if signUp.status == .complete {
+          dump(clerk.session)
+        } else {
+          dump(signUp.status)
+        }
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  To create a sign-up flow using that invitation token, you need to call the [`signUpWithTicket()`](/docs/android/reference/native-mobile/auth#sign-up-with-ticket) method, as shown in the following example. The following example also demonstrates how to collect additional user information for the sign-up; you can either remove these fields or adjust them to fit your application.
+
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.auth.signUpWithTicket
+  import com.clerk.api.network.serialization.flatMap
+  import com.clerk.api.network.serialization.onFailure
+  import com.clerk.api.network.serialization.onSuccess
+  import com.clerk.api.signup.SignUp
+  import com.clerk.api.signup.update
+
+  suspend fun acceptInvitation(
+    ticket: String,
+    firstName: String,
+    lastName: String,
+    password: String,
+  ) {
+    Clerk.auth
+      .signUpWithTicket(ticket)
+      .flatMap { signUp ->
+        signUp.update(
+          SignUp.SignUpUpdateParams.Standard(
+            firstName = firstName,
+            lastName = lastName,
+            password = password,
+          )
+        )
+      }
+      .onSuccess { signUp ->
+        if (signUp.status == SignUp.Status.COMPLETE && signUp.createdSessionId != null) {
+          Clerk.auth
+            .setActive(sessionId = signUp.createdSessionId)
+            .onFailure {
+              // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+              // for more info on error handling
+            }
+        }
+      }
+      .onFailure {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+      }
+  }
+  ```
+</If>

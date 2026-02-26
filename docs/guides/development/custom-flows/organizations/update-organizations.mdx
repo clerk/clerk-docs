@@ -9,14 +9,20 @@ Organization members with appropriate [Permissions](/docs/guides/organizations/c
 
 This guide will demonstrate how to use Clerk's API to build a custom flow for updating an Organization.
 
-<If notSdk={["js-frontend", "ios", "android", "nuxt"]}>
+<If notSdk={["js-frontend", "ios", "android"]}>
+  <If notSdk="nextjs">
+    <Include src="_partials/sdk-examples-not-available-callout" />
+  </If>
+
   The following example:
 
   1. Uses the [`useOrganization()`](/docs/reference/hooks/use-organization) hook to fetch the active `organization`.
   1. Uses `organization` to call the `update()` method with the desired name to update the Organization. To see what other attributes can be updated, see the [`update()` reference doc](/docs/reference/javascript/organization#update).
 
   <If notSdk="expo">
-    **This example is written for Next.js App Router but it can be adapted for any React-based framework, such as React Router or Tanstack React Start.**
+    <If notSdk="nextjs">
+      <Include src="_partials/sdk-examples-not-available-callout" />
+    </If>
 
     ```tsx {{ filename: 'app/components/UpdateOrganization.tsx', collapsible: true }}
     'use client'
@@ -260,6 +266,63 @@ This guide will demonstrate how to use Clerk's API to build a custom flow for up
   </CodeBlockTabs>
 </If>
 
-<If sdk={["ios", "android", "nuxt"]}>
-  <Include src="_partials/sdk-examples-not-available-callout" />
+<If sdk="ios">
+  ```swift {{ filename: 'UpdateOrganizationView.swift', collapsible: true }}
+  import SwiftUI
+  import ClerkKit
+
+  struct UpdateOrganizationView: View {
+    @State private var name: String
+    let organization: Organization
+
+    init(organization: Organization) {
+      self.organization = organization
+      _name = State(initialValue: organization.name)
+    }
+
+    var body: some View {
+      VStack {
+        TextField("Enter organization name", text: $name)
+        Button("Update organization") {
+          Task { await updateOrganization(name: name) }
+        }
+      }
+    }
+  }
+
+  extension UpdateOrganizationView {
+
+    func updateOrganization(name: String) async {
+      do {
+        try await organization.update(name: name)
+      } catch {
+        // See https://clerk.com/docs/guides/development/custom-flows/error-handling
+        // for more info on error handling
+        dump(error)
+      }
+    }
+  }
+  ```
+</If>
+
+<If sdk="android">
+  ```kotlin
+  import com.clerk.api.Clerk
+  import com.clerk.api.network.serialization.ClerkResult
+  import com.clerk.api.organizations.update
+  import com.clerk.api.user.getOrganizationMemberships
+
+  suspend fun updateActiveOrganization(name: String) {
+    val activeOrganizationId = Clerk.session?.lastActiveOrganizationId ?: return
+    val membershipsResult = Clerk.user?.getOrganizationMemberships() ?: return
+
+    if (membershipsResult !is ClerkResult.Success) return
+
+    val activeOrganization =
+      membershipsResult.value.data.firstOrNull { it.organization.id == activeOrganizationId }?.organization
+        ?: return
+
+    activeOrganization.update(name = name)
+  }
+  ```
 </If>

@@ -28,7 +28,7 @@ npm run dev
 npm install @clerk/react@latest
 ```
 
-3. In .env.local (or .env):
+3. In `.env.local` (or `.env`), add your Clerk Publishable Key:
 
 From your Clerk Dashboard, open the [API keys page](https://dashboard.clerk.com/~/api-keys), choose **React** and copy your Publishable Key.
 

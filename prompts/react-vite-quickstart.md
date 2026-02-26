@@ -13,22 +13,32 @@
 
 ### **Correct, Up-to-Date Quickstart Code Examples**
 
+1. Create a React Vite app (TypeScript example)
+
 ```bash
-# 1. Create a React Vite app (TypeScript example)
 npm create vite@latest clerk-react -- --template react-ts
 cd clerk-react
 npm install
 npm run dev
+```
 
-# 2. Install the Clerk React SDK
+2. Install the Clerk React SDK
+
+```bash
 npm install @clerk/react@latest
+```
 
-# 3. In .env.local (or .env):
+3. In `.env.local` (or `.env`), add your Clerk Publishable Key:
+
+From your Clerk Dashboard, open the [API keys page](https://dashboard.clerk.com/~/api-keys), choose **React** and copy your Publishable Key.
+
+```bash
 VITE_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
+4. Wrap with `<ClerkProvider>` in `main.tsx` or `main.jsx`
+
 ```typescript
-// 4. Wrap with <ClerkProvider> in main.tsx or main.jsx
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
@@ -44,8 +54,11 @@ createRoot(document.getElementById("root")!).render(
     </ClerkProvider>
   </StrictMode>
 );
+```
 
-// 5. Example usage of Clerk's prebuilt components in App.tsx
+5. Example usage of Clerk's prebuilt components in `App.tsx`
+
+```typescript
 import {
   Show,
   SignInButton,

@@ -17,103 +17,139 @@ The individual methods of [`signIn`](/docs/reference/javascript/sign-in-future) 
 
 The following example uses the [email & password sign-in custom flow](/docs/guides/development/custom-flows/authentication/email-password) to demonstrate how to handle errors returned during the sign-in process.
 
-This example is written for Next.js App Router but it can be adapted for any React-based framework.
+<If notSdk="nextjs">
+  <Include src="_partials/sdk-examples-not-available-callout" />
+</If>
 
-```tsx {{ filename: 'app/sign-in/[[...sign-in]]/page.tsx', mark: [[23, 26], 64, 75, [80, 86]] }}
-'use client'
+```tsx {{ filename: 'app/sign-in/page.tsx', collapsible: true }}
+  'use client'
 
-import * as React from 'react'
-import { useSignIn } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation'
+  import { useSignIn } from '@clerk/nextjs'
+  import { EmailCodeFactor } from '@clerk/nextjs/types'
+  import { useRouter } from 'next/navigation'
 
-export default function SignInForm() {
-  const { signIn, errors, fetchStatus } = useSignIn()
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
+  export default function Page() {
++   const { signIn, errors, fetchStatus } = useSignIn()
+    const router = useRouter()
 
-  const router = useRouter()
+    const handleSubmit = async (formData: FormData) => {
+      const emailAddress = formData.get('email') as string
+      const password = formData.get('password') as string
 
-  // Handle the submission of the sign-in form
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Start the sign-in process using the email and password provided
-    const { error } = await signIn.create({
-      identifier: email,
-      password,
-    })
-    if (error) {
-      console.error(JSON.stringify(error, null, 2))
-      return
-    }
-
-    // If sign-in process is complete, set the created session as active
-    // and redirect the user
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: async ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            //  Handle pending session tasks
-            // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
-            console.log(session?.currentTask)
-            return
-          }
-
-          const url = decorateUrl('/')
-          if (url.startsWith('http')) {
-            window.location.href = url
-          } else {
-            router.push(url)
-          }
-        },
++     const { error } = await signIn.password({
+        emailAddress,
+        password,
       })
-    } else {
-      // If the status is not complete, check why. User may need to
-      // complete further steps.
-      console.error(JSON.stringify(signIn, null, 2))
++     if (error) {
++       console.error(JSON.stringify(error, null, 2))
++       return
++     }
+
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              // Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
+        })
+      } else if (signIn.status === 'needs_second_factor') {
+        // See https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication
+      } else if (signIn.status === 'needs_client_trust') {
+        // For other second factor strategies,
+        // see https://clerk.com/docs/guides/development/custom-flows/authentication/client-trust
+        const emailCodeFactor = signIn.supportedSecondFactors.find(
+          (factor): factor is EmailCodeFactor => factor.strategy === 'email_code',
+        )
+
+        if (emailCodeFactor) {
+          await signIn.mfa.sendEmailCode()
+        }
+      } else {
+        // Check why the sign-in is not complete
+        console.error('Sign-in attempt not complete:', signIn)
+      }
     }
+
+    const handleVerify = async (formData: FormData) => {
+      const code = formData.get('code') as string
+
+      await signIn.mfa.verifyEmailCode({ code })
+
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              // Handle pending session tasks
+              // See https://clerk.com/docs/guides/development/custom-flows/authentication/session-tasks
+              console.log(session?.currentTask)
+              return
+            }
+
+            const url = decorateUrl('/')
+            if (url.startsWith('http')) {
+              window.location.href = url
+            } else {
+              router.push(url)
+            }
+          },
+        })
+      }
+    }
+
+    if (signIn.status === 'needs_client_trust') {
+      return (
+        <>
+          <h1>Verify your account</h1>
+          <form action={handleVerify}>
+            <div>
+              <label htmlFor="code">Code</label>
+              <input id="code" name="code" type="text" />
+              {errors.fields.code && <p>{errors.fields.code.message}</p>}
+            </div>
+            <button type="submit" disabled={fetchStatus === 'fetching'}>
+              Verify
+            </button>
+          </form>
+          <button onClick={() => signIn.mfa.sendEmailCode()}>I need a new code</button>
+          <button onClick={() => signIn.reset()}>Start over</button>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <h1>Sign in</h1>
+        <form action={handleSubmit}>
+          <div>
+            <label htmlFor="email">Enter email address</label>
+            <input id="email" name="email" type="email" />
+            {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
+          </div>
+          <div>
+            <label htmlFor="password">Enter password</label>
+            <input id="password" name="password" type="password" />
+            {errors.fields.password && <p>{errors.fields.password.message}</p>}
+          </div>
+          <button type="submit" disabled={fetchStatus === 'fetching'}>
+            Continue
+          </button>
+        </form>
++       {/* For your debugging purposes. You can just console.log errors, but we put them in the UI for convenience */}
++       {errors && <p>{JSON.stringify(errors, null, 2)}</p>}
+      </>
+    )
   }
-
-  // Display a form to capture the user's email and password
-  return (
-    <>
-      <h1>Sign in</h1>
-      <form onSubmit={(e) => handleSubmit(e)}>
-        <div>
-          <label htmlFor="email">Enter email address</label>
-          <input
-            onChange={(e) => setEmail(e.target.value)}
-            id="email"
-            name="email"
-            type="email"
-            value={email}
-          />
-          {errors.fields.identifier && <p>{errors.fields.identifier.message}</p>}
-        </div>
-        <div>
-          <label htmlFor="password">Enter password</label>
-          <input
-            onChange={(e) => setPassword(e.target.value)}
-            id="password"
-            name="password"
-            type="password"
-            value={password}
-          />
-          {errors.fields.password && <p>{errors.fields.password.message}</p>}
-        </div>
-        <button type="submit">Sign in</button>
-      </form>
-
-      {errors.global && (
-        <ul>
-          {errors.global.map((el, index) => (
-            <li key={index}>{el.longMessage}</li>
-          ))}
-        </ul>
-      )}
-    </>
-  )
-}
 ```
 
 ## Special error cases
